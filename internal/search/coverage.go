@@ -16,7 +16,7 @@ const coverageBatchSize = 500
 // NonAggregatorCompanies implements internal/pipeline's CoverageLookup: for a batch of
 // company_slug values, returns the subset that already have an open posting from a source
 // NOT in aggregators. The answer is keyed by the slugs the caller asked about, whichever
-// spelling actually matched (see coverageSpellings).
+// field actually matched.
 func (c *Client) NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string) (map[string]bool, error) {
 	return nonAggregatorCompanies(ctx, companySlugs, aggregators, func(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
 		return c.facet.SearchWithContext(ctx, query, &meilisearch.SearchRequest{Filter: filter, Facets: facets, Limit: 0})
@@ -27,14 +27,23 @@ func (c *Client) NonAggregatorCompanies(ctx context.Context, companySlugs, aggre
 // split out (and taking an injected searcher) so it is unit-testable without a live engine —
 // the same seam disjunctiveFacetCounts uses.
 func nonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string, search facetSearcher) (map[string]bool, error) {
-	queries, owners := coverageQuery(companySlugs)
 	covered := make(map[string]bool)
-	for _, batch := range chunkStrings(queries, coverageBatchSize) {
-		groups := [][]string{{InStrings("company_slug", batch)}}
+	for _, batch := range chunkStrings(companySlugs, coverageBatchSize) {
+		folded, owners := foldedBatch(batch)
+		// Both clauses sit in ONE group, so they are OR'd: an employer counts as covered
+		// when either side's spelling matches. Keeping the exact clause is not redundant —
+		// company_slug_folded reaches a document only once a rebuild has written it, and a
+		// row that predates the backfill has none at all, so the exact match is what carries
+		// the gate meanwhile.
+		match := []string{InStrings("company_slug", batch)}
+		if len(folded) > 0 {
+			match = append(match, InStrings("company_slug_folded", folded))
+		}
+		groups := [][]string{match}
 		if notIn := NotInStrings("source", aggregators); notIn != "" {
 			groups = append(groups, []string{notIn})
 		}
-		resp, err := search(ctx, "", Filter(groups...), []string{"company_slug"})
+		resp, err := search(ctx, "", Filter(groups...), []string{"company_slug", "company_slug_folded"})
 		if err != nil {
 			return nil, fmt.Errorf("search: aggregator coverage lookup: %w", err)
 		}
@@ -42,10 +51,24 @@ func nonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []str
 		if err != nil {
 			return nil, err
 		}
-		// A spelling may answer for more than one requested slug ("q-tech" and "qtech" both
-		// ask about "qtech"), so the hit is credited to every slug that asked for it.
-		for spelling := range fr.Facets["company_slug"] {
-			for _, slug := range owners[spelling] {
+		// An exact hit answers for itself, and ONLY when that exact slug was asked about:
+		// Meili returns the whole facet distribution of the matched set, and the folded
+		// clause pulls in documents whose exact slug was never in the batch. Crediting those
+		// would put keys in the answer the caller never asked for, which its contract
+		// forbids — and would be a coverage claim about a company nobody enquired about.
+		requested := make(map[string]bool, len(batch))
+		for _, slug := range batch {
+			requested[slug] = true
+		}
+		for slug := range fr.Facets["company_slug"] {
+			if requested[slug] {
+				covered[slug] = true
+			}
+		}
+		// A folded hit answers for every requested slug that folds to it ("q-tech" and
+		// "qtech" both fold to "qtech").
+		for value := range fr.Facets["company_slug_folded"] {
+			for _, slug := range owners[value] {
 				covered[slug] = true
 			}
 		}
@@ -53,51 +76,29 @@ func nonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []str
 	return covered, nil
 }
 
-// coverageQuery expands the requested slugs into the spellings to filter on, deduped and in
-// first-asked order, plus the reverse index that credits a hit back to every slug that asked
-// for that spelling. The caller's own slugs stay the keys of the answer, so a spelling is an
-// implementation detail the pipeline never sees.
-func coverageQuery(companySlugs []string) (queries []string, owners map[string][]string) {
+// foldedBatch returns the distinct folded spellings to filter on for one batch of requested
+// slugs, plus the reverse index that credits a folded hit back to every slug that folds to it.
+// A slug folding to "" (nothing but hyphens) is left out: as a filter value it would match
+// every document that has no folded slug at all.
+func foldedBatch(companySlugs []string) (folded []string, owners map[string][]string) {
 	owners = make(map[string][]string, len(companySlugs))
 	for _, slug := range companySlugs {
-		for _, spelling := range coverageSpellings(slug) {
-			if _, asked := owners[spelling]; !asked {
-				queries = append(queries, spelling)
-			}
-			owners[spelling] = append(owners[spelling], slug)
+		f := foldSlug(slug)
+		if f == "" {
+			continue
 		}
+		if _, seen := owners[f]; !seen {
+			folded = append(folded, f)
+		}
+		owners[f] = append(owners[f], slug)
 	}
-	return queries, owners
+	return folded, owners
 }
 
-// coverageSpellings returns the company_slug spellings one requested slug should be looked up
-// under: the slug itself, plus its hyphen-stripped form when that differs.
-//
-// A Meili filter matches a stored value literally — it cannot compute the hyphen-stripping
-// fold the reindex suppression pass compares on. Asking about the folded SPELLING instead of
-// folding the comparison gets most of the way there for free: the query stays an exact match
-// against a stored value, no new filterable attribute is needed (adding one 500s search until
-// the rebuild lands), and nothing about the index changes.
-//
-// Measured on prod: of the postings the exact-only gate let through and the weekly dedup pass
-// later marked, 77% were an aggregator spelling the employer with hyphens where its own ATS
-// spelled it without ("reid-health" vs "reidhealth"). The remaining directions are not
-// reachable this way — where the ATS is the one using hyphens, there is no way to guess where
-// they go — and stay the dedup pass's job.
-//
-// The risk this accepts is that stripping hyphens merges two genuinely different employers.
-// It was measured rather than assumed: across the whole open non-aggregator catalogue, 1,173
-// of 263,669 folded groups hold more than one spelling (0.44%), and a sample of them was
-// entirely one company written several ways — "JP Morgan Chase"/"JPMorgan Chase", "Q-Tech"/
-// "Qtech", "Spin Master"/"spinmaster". That is the same bet the reindex pass already makes;
-// this only makes it a week earlier.
-func coverageSpellings(slug string) []string {
-	folded := strings.ReplaceAll(slug, "-", "")
-	if folded == "" || folded == slug {
-		return []string{slug}
-	}
-	return []string{slug, folded}
-}
+// foldSlug is the fold jobs.company_slug_folded stores (migration 0109) and the
+// aggregator-suppression pass compares on: the company slug with its hyphens removed. The two
+// must agree exactly, so this is the only place the query side computes it.
+func foldSlug(slug string) string { return strings.ReplaceAll(slug, "-", "") }
 
 // chunkStrings splits values into chunks of at most size elements each (the last chunk may
 // be smaller). size <= 0 is treated as "one chunk" — chunkStrings is only ever called with

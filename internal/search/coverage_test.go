@@ -34,8 +34,8 @@ func TestNonAggregatorCompanies_QueryShape(t *testing.T) {
 	if !covered["acme"] || len(covered) != 1 {
 		t.Fatalf("covered = %v, want only acme", covered)
 	}
-	if !slices.Equal(gotFacets, []string{"company_slug"}) {
-		t.Errorf("facets = %v, want [company_slug]", gotFacets)
+	if !slices.Equal(gotFacets, []string{"company_slug", "company_slug_folded"}) {
+		t.Errorf("facets = %v, want both the exact and folded fields", gotFacets)
 	}
 	filterStr := fmt.Sprintf("%v", gotFilter)
 	if !strings.Contains(filterStr, `company_slug IN ["acme", "globex"]`) {
@@ -46,58 +46,64 @@ func TestNonAggregatorCompanies_QueryShape(t *testing.T) {
 	}
 }
 
-// A hyphenated slug is looked up under its hyphen-stripped spelling too, and a hit on that
-// spelling answers for the slug the caller asked about — the caller's key, not the spelling's.
-// This is the 77% case: the aggregator writes "reid-health" where the employer's own ATS
-// writes "reidhealth".
-func TestNonAggregatorCompanies_MatchesTheHyphenStrippedSpelling(t *testing.T) {
+// The query asks BOTH ways in one OR'd group: the exact slug against company_slug and its
+// fold against company_slug_folded. The exact clause is not redundant — company_slug_folded
+// reaches a document only once a rebuild has written it.
+func TestNonAggregatorCompanies_FiltersExactAndFoldedTogether(t *testing.T) {
 	var gotFilter any
-	searcher := func(_ context.Context, _ string, filter any, _ []string) (*meilisearch.SearchResponse, error) {
-		gotFilter = filter
-		// Only the folded spelling exists in the index.
-		dist, _ := json.Marshal(map[string]map[string]int64{"company_slug": {"reidhealth": 4}})
+	var gotFacets []string
+	searcher := func(_ context.Context, _ string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+		gotFilter, gotFacets = filter, facets
+		return &meilisearch.SearchResponse{}, nil
+	}
+	if _, err := nonAggregatorCompanies(context.Background(), []string{"reid-health"}, nil, searcher); err != nil {
+		t.Fatalf("nonAggregatorCompanies: %v", err)
+	}
+	groups, ok := gotFilter.([][]string)
+	if !ok || len(groups) != 1 || len(groups[0]) != 2 {
+		t.Fatalf("filter = %#v, want one group of two OR'd clauses", gotFilter)
+	}
+	if !strings.Contains(groups[0][0], `company_slug IN ["reid-health"]`) {
+		t.Errorf("first clause = %q, want the exact slug", groups[0][0])
+	}
+	if !strings.Contains(groups[0][1], `company_slug_folded IN ["reidhealth"]`) {
+		t.Errorf("second clause = %q, want the folded slug", groups[0][1])
+	}
+	if !slices.Equal(gotFacets, []string{"company_slug", "company_slug_folded"}) {
+		t.Errorf("facets = %v, want both fields back", gotFacets)
+	}
+}
+
+// The direction the old spelling-only lookup could not reach: the AGGREGATOR writes the
+// unhyphenated form and the employer's own ATS is the hyphenated side. Nothing can guess where
+// to put hyphens, so this only works because the fold is stored on the document.
+func TestNonAggregatorCompanies_MatchesWhenTheATSIsTheHyphenatedSide(t *testing.T) {
+	searcher := func(_ context.Context, _ string, _ any, _ []string) (*meilisearch.SearchResponse, error) {
+		// The stored document is "reid-health"; its folded field is what answers.
+		dist, _ := json.Marshal(map[string]map[string]int64{
+			"company_slug":        {"reid-health": 4},
+			"company_slug_folded": {"reidhealth": 4},
+		})
 		return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
 	}
-
-	covered, err := nonAggregatorCompanies(context.Background(), []string{"reid-health"}, nil, searcher)
+	covered, err := nonAggregatorCompanies(context.Background(), []string{"reidhealth"}, nil, searcher)
 	if err != nil {
 		t.Fatalf("nonAggregatorCompanies: %v", err)
 	}
-	if !covered["reid-health"] || len(covered) != 1 {
-		t.Fatalf("covered = %v, want the caller's own slug reid-health", covered)
-	}
-	if filterStr := fmt.Sprintf("%v", gotFilter); !strings.Contains(filterStr, `"reid-health", "reidhealth"`) {
-		t.Errorf("filter %v should ask about both spellings, exact first", gotFilter)
+	if !covered["reidhealth"] || len(covered) != 1 {
+		t.Fatalf("covered = %v, want the caller's own slug reidhealth", covered)
 	}
 }
 
-// A slug with no hyphens is asked about exactly once — the expansion must not double every
-// query on a board whose companies are mostly unhyphenated.
-func TestNonAggregatorCompanies_UnhyphenatedSlugAsksOneSpelling(t *testing.T) {
+// A folded hit answers for every requested slug that folds to it, and the folded value is
+// asked about ONCE however many slugs share it.
+func TestNonAggregatorCompanies_FoldedHitAnswersEveryAsker(t *testing.T) {
 	var gotFilter any
 	searcher := func(_ context.Context, _ string, filter any, _ []string) (*meilisearch.SearchResponse, error) {
 		gotFilter = filter
-		return &meilisearch.SearchResponse{}, nil
-	}
-	if _, err := nonAggregatorCompanies(context.Background(), []string{"acme"}, nil, searcher); err != nil {
-		t.Fatalf("nonAggregatorCompanies: %v", err)
-	}
-	if got := companySlugCount(t, gotFilter); got != 1 {
-		t.Errorf("asked about %d spellings, want 1", got)
-	}
-}
-
-// Two slugs that fold together ("q-tech" and "qtech") share the folded spelling, which must be
-// asked about ONCE and credited to BOTH — a naive expansion would duplicate the query value
-// and drop one of the two owners.
-func TestNonAggregatorCompanies_SharedSpellingAnswersEveryAsker(t *testing.T) {
-	var gotFilter any
-	searcher := func(_ context.Context, _ string, filter any, _ []string) (*meilisearch.SearchResponse, error) {
-		gotFilter = filter
-		dist, _ := json.Marshal(map[string]map[string]int64{"company_slug": {"qtech": 2}})
+		dist, _ := json.Marshal(map[string]map[string]int64{"company_slug_folded": {"qtech": 2}})
 		return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
 	}
-
 	covered, err := nonAggregatorCompanies(context.Background(), []string{"q-tech", "qtech"}, nil, searcher)
 	if err != nil {
 		t.Fatalf("nonAggregatorCompanies: %v", err)
@@ -105,16 +111,43 @@ func TestNonAggregatorCompanies_SharedSpellingAnswersEveryAsker(t *testing.T) {
 	if !covered["q-tech"] || !covered["qtech"] || len(covered) != 2 {
 		t.Fatalf("covered = %v, want both askers credited", covered)
 	}
-	if got := companySlugCount(t, gotFilter); got != 2 {
-		t.Errorf("asked about %d spellings, want 2 (q-tech, qtech — not qtech twice)", got)
+	groups := gotFilter.([][]string)
+	if n := strings.Count(groups[0][1], ",") + 1; n != 1 {
+		t.Errorf("asked about %d folded values, want 1 (qtech, not twice)", n)
 	}
 }
 
-// A slug that is nothing but hyphens folds to "", which would match every document with no
-// company. It must not be asked about.
-func TestCoverageSpellingsKeepsAnAllHyphenSlugIntact(t *testing.T) {
-	if got := coverageSpellings("---"); !slices.Equal(got, []string{"---"}) {
-		t.Errorf("coverageSpellings(\"---\") = %v, want the slug alone — an empty spelling matches everything", got)
+// An exact hit on a company nobody asked about must not be credited to anyone. Meili returns
+// the WHOLE facet distribution of the matched set, and the folded clause can match documents
+// whose exact slug was never in the batch.
+func TestNonAggregatorCompanies_IgnoresAnExactHitNobodyAskedAbout(t *testing.T) {
+	searcher := func(_ context.Context, _ string, _ any, _ []string) (*meilisearch.SearchResponse, error) {
+		dist, _ := json.Marshal(map[string]map[string]int64{
+			"company_slug": {"reid-health": 4, "unrelated-co": 9},
+		})
+		return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
+	}
+	covered, err := nonAggregatorCompanies(context.Background(), []string{"reid-health"}, nil, searcher)
+	if err != nil {
+		t.Fatalf("nonAggregatorCompanies: %v", err)
+	}
+	if covered["unrelated-co"] {
+		t.Errorf("covered = %v, want no credit for a company nobody asked about", covered)
+	}
+	if !covered["reid-health"] {
+		t.Errorf("covered = %v, want reid-health", covered)
+	}
+}
+
+// A slug that is nothing but hyphens folds to "", which as a filter value would match every
+// document carrying no folded slug at all. It must be left out of the folded clause.
+func TestFoldedBatchDropsASlugThatFoldsToNothing(t *testing.T) {
+	folded, owners := foldedBatch([]string{"---", "acme"})
+	if !slices.Equal(folded, []string{"acme"}) {
+		t.Errorf("folded = %v, want only acme — an empty fold matches everything", folded)
+	}
+	if _, present := owners[""]; present {
+		t.Errorf("owners = %v, want no empty-string key", owners)
 	}
 }
 

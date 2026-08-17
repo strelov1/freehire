@@ -105,6 +105,11 @@ Either run the reindex **before** rolling out the app image, or push the new ind
 to the **live** index first (settings updates are cheap; documents lag, so results are stale
 or empty — never a 500).
 
+`company_slug_folded` (added for the ingest-time coverage gate) is the gentler case worth
+knowing about: nothing on a user path filters it, and its only caller — the gate — fails open
+on a lookup error. So a missed settings patch costs an ingest gate that is off until the next
+rebuild, not a broken page. The order is still the one above; the blast radius just differs.
+
 ## Limitations
 
 - A Meili filter error 500s the page instead of degrading. That's the robustness seam.

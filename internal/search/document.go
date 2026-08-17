@@ -53,6 +53,18 @@ type JobDocument struct {
 	// it backs the `ai_archetype` facet but is never part of the served public
 	// wire shape.
 	AIArchetype string `json:"ai_archetype"`
+	// CompanySlugFolded is company_slug with its hyphens removed — the same fold
+	// jobs.company_slug_folded stores and the aggregator-suppression pass compares on
+	// (migration 0109). Like Roles, it is declared on the document, not jobview.Job, so
+	// it is filterable but never part of the served public wire shape.
+	//
+	// It exists so the ingest-time coverage gate can match an employer whichever way the
+	// two sides spell it. Filtering company_slug alone matches only where the aggregator
+	// and the ATS agree letter for letter, and asking about the folded SPELLING (the
+	// stopgap this replaces) reaches only the direction where the ATS is the unhyphenated
+	// side — "reid-health" finding "reidhealth", never the reverse, because there is no
+	// guessing where hyphens go. Folding BOTH sides needs the fold stored, and here it is.
+	CompanySlugFolded string `json:"company_slug_folded"`
 }
 
 // FromJob maps a database job row to its index document. An empty or absent
@@ -77,6 +89,11 @@ func FromJob(j db.Job) (JobDocument, error) {
 		Job:         view,
 		Roles:       roletag.Derive(j.Seniority, j.Category, j.Title),
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
+		// Read from the stored column rather than re-folded here, so the index can never
+		// disagree with the pass that compares on it. A row that predates the column (the
+		// backfill is chunked and paced) simply carries no folded value and is matched by
+		// its exact slug alone, which is what happened before this field existed.
+		CompanySlugFolded: j.CompanySlugFolded.String,
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
