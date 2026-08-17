@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -15,7 +16,10 @@ import (
 // Shared Next.js App Router RSC-flight primitives. A Next.js server-rendered page inlines
 // its data as a sequence of self.__next_f.push([1,"…"]) chunks; concatenating and
 // JS-string-decoding the chunks yields one flight string that embeds the page's JSON.
-// The deel, vouch, and topco adapters read their postings out of this stream.
+// The deel, vouch, and topco adapters read their postings out of this stream. remotedotcom
+// reaches the same stream by a second route: an App Router page answers the flight DIRECTLY,
+// without the surrounding HTML, when asked for it with the RSC header — so it skips
+// decodeNextFlight and reads the raw response with the same primitives below.
 
 // fetchFlight fetches a Next.js page and returns its decoded RSC-flight stream — the shared
 // opener for the flight adapters (they wrap the error with their own board context).
@@ -41,6 +45,32 @@ func flightArray[T any](flight, key string) ([]T, error) {
 		return nil, fmt.Errorf("decode flight array %s: %w", key, err)
 	}
 	return out, nil
+}
+
+// flightJobPosting decodes into v the schema.org JobPosting a page carries in its flight as a
+// TEXT ROW, returning false when the flight holds none. It is the RSC counterpart of
+// ldJobPosting: a page fetched with the RSC header answers the flight rather than HTML, so the
+// same JobPosting arrives as a row's JSON instead of inside an application/ld+json <script> —
+// but once isolated it is the same document, and it is decoded by the same reader (so an array
+// or @graph wrapper is handled here too). Rows are tried in id order, so a page carrying more
+// than one JobPosting decodes deterministically rather than by map iteration.
+func flightJobPosting(flight string, v any) bool {
+	rows := nextFlightTextRows(flight)
+	ids := make([]string, 0, len(rows))
+	for id := range rows {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		msg, ok := jobPostingNode(sanitizeJSONControlChars([]byte(rows[id])))
+		if !ok {
+			continue // not a JobPosting row (most rows are markup or props)
+		}
+		if json.Unmarshal(msg, v) == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // nextFlightPush captures the JS-string body of one self.__next_f.push([1,"…"]) flight
