@@ -124,24 +124,15 @@ var namedRoleTable = []struct {
 	// lands on product_engineer. "ai-agent engineer" needs no such entry — the bare
 	// "agent engineer" already resolves it.
 	{"ai_product_engineer", "AI Product Engineer", []string{"ai product engineer", "ai-product engineer"}},
-	// The adoption side of AI work, and the one AI role here that is not
-	// engineering: getting an organisation to actually USE the tools — training
-	// staff, owning the enterprise licences, governance, measuring whether any of
-	// it landed. The ai_engineering family above BUILDS AI; this role deploys it
-	// into a company.
+	// The one AI role here that is not engineering: the entries above BUILD AI,
+	// this one gets an organisation USING it — training staff, owning the
+	// enterprise licences, governance. A named role rather than a category
+	// because it is not a function: these postings sit in HR, finance operations
+	// and central IT alike, so no single category is true of them.
 	//
-	// A named role rather than a category because it is not a function: these
-	// postings sit in HR, finance operations and central IT alike, and on this
-	// catalogue the titles mentioning it resolve across management, sales,
-	// marketing and architecture. A category would assert a single home they do
-	// not share.
-	//
-	// "ai trainer" is deliberately NOT an alias. It names two opposite jobs —
-	// labelling data so a model learns, and teaching people to use AI — and only
-	// the second is this role. Folding in the annotation work would make the role
-	// useless to both searches. The longer phrasings ("AI Enablement Coach",
-	// "AI Enablement Specialist") need no entry: the bare alias already contains
-	// them.
+	// "ai trainer" is deliberately NOT an alias: it names two opposite jobs —
+	// labelling data so a model learns, and teaching people to use AI — and
+	// folding the annotation work in would make the role useless to both searches.
 	{"ai_enablement", "AI Enablement", []string{"ai enablement", "ai adoption", "ai transformation", "ai skills coach"}},
 
 	{"founding_designer", "Founding Designer", []string{"founding designer"}},
