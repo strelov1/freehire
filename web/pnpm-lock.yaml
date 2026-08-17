@@ -36,8 +36,8 @@ importers:
         specifier: ^18.0.9
         version: 18.0.9
       posthog-js:
-        specifier: ^1.414.0
-        version: 1.414.0
+        specifier: ^1.417.1
+        version: 1.417.1
       satori:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1011,14 +1011,14 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@posthog/browser-common@0.4.0':
-    resolution: {integrity: sha512-W9DCGVks15docUMPvJ2nd8NS16Gn74bsGWuaeg31beEKFSjdW8wvnQ1ETY6WSql5pYxZb3GdJmEUZVVstKSrBQ==}
+  '@posthog/browser-common@0.5.0':
+    resolution: {integrity: sha512-8DaxVZS1bQPbA514RePurLNbYjei3P4jhnC206DwVv5XThmZM3QdlsXenI2ujE3pLbgQ79hYn9o1Kda8I3WK/Q==}
 
-  '@posthog/core@1.47.0':
-    resolution: {integrity: sha512-LW62V+9yx7G7mLd+EYpwW0PiaPZI8XRJ1tLuhw+9fXHpugLp8XQD5JuCQ2kIXvoUfyx1DpKfGQY3dUnzMOIn7Q==}
+  '@posthog/core@1.48.1':
+    resolution: {integrity: sha512-mxw31XdYgt/SnlwqLPAcltK67q+QmsiYjVLGQ4GbBc8OJ7O4yRFSDwAXt8QsokHokeyEZtTRWM6jDHL7LYMx1A==}
 
-  '@posthog/types@1.402.3':
-    resolution: {integrity: sha512-nnqKIGUqggeNbCZg6of/hYN+4shYZUoPFkILIIpYq0p9HDX8PgOrnrtBAUH8kr1MOmDh2nm+fY5Ceks7A5y6BQ==}
+  '@posthog/types@1.404.1':
+    resolution: {integrity: sha512-i2Gei6ARfOSBeTN4s2yUP1p97s2UNI+1NWmtLjhnR/V6t3RFOfI1sBWKcJNWHjtoOCCWoAFU+PNPY6SgT2VtEQ==}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     resolution: {integrity: sha512-FrJibrAk6v29eabIPgcTUMPXiEz8ssrAk7TXxsiZzww9UTQ1Z5KAbFJs+Z0Ez+VZTYgnE5IQJqBcoSiMebtPHA==}
@@ -2356,8 +2356,8 @@ packages:
     engines: {node: '>=0.10.0'}
     hasBin: true
 
-  electron-to-chromium@1.5.405:
-    resolution: {integrity: sha512-bNglH7lPH5l+yHOes7Zr4VqxhOy4BQ9ZBUX4VdoFgxMpzJk7W1ZoO3Vgd9Pxa9PyjQ76sfm2aKH/nzEcCNRlew==}
+  electron-to-chromium@1.5.406:
+    resolution: {integrity: sha512-hWH5ORBi3d0IipnMh7BN5GDTaAmrSSSWmznwt2zltdiRNEWoEQyTwF0FFSBxzHO7hLSRT6loQu3IQGV0wg/Tvg==}
 
   emoji-regex-xs@2.0.1:
     resolution: {integrity: sha512-1QFuh8l7LqUcKe24LsPUNzjrzJQ7pgRwp1QMcZ5MX6mFplk2zQ08NVCM84++1cveaUUYtcCYHmeFEuNg16sU4g==}
@@ -3356,8 +3356,8 @@ packages:
     resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.414.0:
-    resolution: {integrity: sha512-dtZd4asdskr8lNyltAEX6zyn48uO1pO0EMvx6AXJU65PFhu6yn2LPbKtQcyLysjcN57FJPNT9QYL6St5SBJHqw==}
+  posthog-js@1.417.1:
+    resolution: {integrity: sha512-QpZnHA2PieGq9+W03LBw23DnN9CD1zM37DcXnpZkg+C5iAwYXLiZs8qof0Yi/BhY35PYuhVmv93nhztyHjVaJw==}
 
   preact@10.29.8:
     resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
@@ -5096,16 +5096,16 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@posthog/browser-common@0.4.0':
+  '@posthog/browser-common@0.5.0':
     dependencies:
-      '@posthog/core': 1.47.0
-      '@posthog/types': 1.402.3
+      '@posthog/core': 1.48.1
+      '@posthog/types': 1.404.1
 
-  '@posthog/core@1.47.0':
+  '@posthog/core@1.48.1':
     dependencies:
-      '@posthog/types': 1.402.3
+      '@posthog/types': 1.404.1
 
-  '@posthog/types@1.402.3': {}
+  '@posthog/types@1.404.1': {}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     optional: true
@@ -6146,7 +6146,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.11.14
       caniuse-lite: 1.0.30001809
-      electron-to-chromium: 1.5.405
+      electron-to-chromium: 1.5.406
       node-releases: 2.0.53
       update-browserslist-db: 1.3.1(browserslist@4.28.8)
 
@@ -6327,7 +6327,7 @@ snapshots:
     dependencies:
       jake: 10.9.4
 
-  electron-to-chromium@1.5.405: {}
+  electron-to-chromium@1.5.406: {}
 
   emoji-regex-xs@2.0.1: {}
 
@@ -7356,11 +7356,11 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.414.0:
+  posthog-js@1.417.1:
     dependencies:
-      '@posthog/browser-common': 0.4.0
-      '@posthog/core': 1.47.0
-      '@posthog/types': 1.402.3
+      '@posthog/browser-common': 0.5.0
+      '@posthog/core': 1.48.1
+      '@posthog/types': 1.404.1
       core-js: 3.50.0
       dompurify: 3.4.13
       fflate: 0.4.9
