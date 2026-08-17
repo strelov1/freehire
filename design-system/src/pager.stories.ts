@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
-import Pagination from './pagination.svelte';
+import Pager from './pager.svelte';
 
 const meta = {
-  title: 'Primitives/Pagination',
-  component: Pagination,
+  title: 'Primitives/Pager',
+  component: Pager,
   tags: ['autodocs'],
-} satisfies Meta<typeof Pagination>;
+} satisfies Meta<typeof Pager>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,4 +1,14 @@
 <script lang="ts">
+  // Prev/Next stepper over a bound `page`, for a list paged in local state:
+  // nothing here touches the URL and there are no links, so the pages it steps
+  // through exist only for as long as the component is mounted.
+  //
+  // NOT the thing a public listing wants. `web/src/lib/components/Pagination.svelte`
+  // is the other shape — real `<a href="?page=N">` in the SSR markup, with window
+  // elision and rel=prev/next — and it exists because a crawler pages by following
+  // links, and a button it cannot press advertises nothing. The two were both called
+  // Pagination, which read as duplication and invited a merge that would have traded
+  // that away; this one is `Pager` now, after what it actually is.
   import type { Snippet } from 'svelte';
   import { cn } from './cn.js';
 

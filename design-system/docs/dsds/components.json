@@ -593,12 +593,12 @@
       ]
     },
     {
-      "id": "component.pagination",
+      "id": "component.pager",
       "type": "component",
-      "name": "Pagination",
-      "description": "Prev/next pagination with page count and ARIA nav label.",
+      "name": "Pager",
+      "description": "Prev/next stepper over a bound page, in local state only — no URL, no links. A crawlable listing wants the app's own Pagination component instead.",
       "source": {
-        "file": "../../src/pagination.svelte"
+        "file": "../../src/pager.svelte"
       },
       "props": [
         {
@@ -629,7 +629,7 @@
       ],
       "stories": [
         {
-          "file": "../../src/pagination.stories.ts"
+          "file": "../../src/pager.stories.ts"
         }
       ]
     },

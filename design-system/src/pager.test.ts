@@ -1,10 +1,10 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import Pagination from './pagination.svelte';
+import Pager from './pager.svelte';
 import { must } from './test-utils';
 
 function setup(props: { page?: number; total: number; perPage?: number }) {
-  const { container, getByLabelText } = render(Pagination, props);
+  const { container, getByLabelText } = render(Pager, props);
   return {
     label: () => must(must(container.querySelector('span')).textContent).replace(/\s+/g, ' ').trim(),
     prev: getByLabelText('Previous page') as HTMLButtonElement,
@@ -12,7 +12,7 @@ function setup(props: { page?: number; total: number; perPage?: number }) {
   };
 }
 
-describe('Pagination', () => {
+describe('Pager', () => {
   it('counts the pages from the total and the page size', () => {
     expect(setup({ total: 50, perPage: 20 }).label()).toBe('Page 1 of 3');
   });

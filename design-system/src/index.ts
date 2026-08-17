@@ -21,7 +21,7 @@ export { default as Input } from './input.svelte';
 export { default as LoadMore } from './load-more.svelte';
 export { default as NoticeDialog } from './notice-dialog.svelte';
 export { default as NumberedGrid } from './numbered-grid.svelte';
-export { default as Pagination } from './pagination.svelte';
+export { default as Pager } from './pager.svelte';
 export { default as ProviderIcon } from './provider-icon.svelte';
 export { default as SectionLabel } from './section-label.svelte';
 export { default as SettingRow } from './setting-row.svelte';

@@ -1,10 +1,17 @@
 <script lang="ts">
   import { pageHref, pageWindow } from '$lib/pagination';
 
-  // Real <a href> page links rendered into the SSR markup, beside the feed's
-  // infinite scroll. The scroll is how a visitor pages; this is how a crawler
-  // does — link discovery happens when HTML is parsed, so without these the only
-  // rows any listing ever advertises are its first twenty.
+  // Real <a href> page links rendered into the SSR markup. This is how BOTH a
+  // visitor and a crawler page a listing: link discovery happens when HTML is
+  // parsed, so without these the only rows any listing ever advertises are its
+  // first twenty. (It used to sit beside a scroll-to-bottom auto-load that was the
+  // visitor's path; that grew the page endlessly and put the footer out of reach,
+  // so these links are now the only way through.)
+  //
+  // Deliberately NOT `Pager` from the design system, which steps a bound `page` in
+  // local state with buttons. Nothing there reaches the URL, so a shared link opens
+  // page one and a crawler sees twenty rows — which is the whole reason this file
+  // exists separately rather than reusing the primitive.
   //
   // Not hidden from visitors: a hidden link a crawler is meant to follow is the
   // shape of cloaking, and this doubles as the keyboard/no-JS way through the
