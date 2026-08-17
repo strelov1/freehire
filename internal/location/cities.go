@@ -15,11 +15,21 @@ import (
 //go:embed cities15000.tsv
 var citiesTSV string
 
-// cityEntry is a resolved city: its canonical display name (feeds the cities facet)
-// and ISO 3166-1 alpha-2 country code (feeds countries/regions).
+// cityEntry is a resolved city: its canonical display name (feeds the cities facet),
+// its ISO 3166-1 alpha-2 country code, and whether more than one country claims the
+// alias.
+//
+// Country is always the most-populous claimant, contested or not, because
+// isRecognizedUSCACity asks a different question — "does the parser know this name as
+// a North American place?" — where a shared name is still evidence. Contested is what
+// gates *emitting* that country as the posting's geography: "Birmingham" (gb, us),
+// "Valencia" (six countries) and "Burlington" (ca, us) state nothing, while
+// "Colorado Springs", "Eden Prairie" and "Benidorm" — 98% of the dictionary's 238k
+// aliases — state theirs.
 type cityEntry struct {
-	Name    string
-	Country string
+	Name      string
+	Country   string
+	Contested bool
 }
 
 // cityDict maps a lowercase city alias to its canonical name + country, built once
@@ -27,10 +37,14 @@ type cityEntry struct {
 var cityDict = loadCityDict(citiesTSV, cityOverrides)
 
 // loadCityDict parses the embedded TSV into the alias lookup. An alias already seen
-// is not overwritten (first-wins → most-populous, since the file is population
-// sorted); comment/blank lines are skipped. Overrides are applied last and win.
+// keeps its first entry (first-wins → most-populous, since the file is population
+// sorted), but seeing it again under a different country marks it Contested: a name
+// two countries share cannot state one. Comment/blank lines are skipped. Overrides
+// are applied last and win outright, uncontested — they are hand-pinned spellings, so
+// their country is asserted rather than inferred.
 func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEntry {
 	dict := map[string]cityEntry{}
+	contested := map[string]struct{}{}
 	sc := bufio.NewScanner(strings.NewReader(tsv))
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) // the widest alias row (Shanghai) is a few KB
 	for sc.Scan() {
@@ -44,10 +58,22 @@ func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEnt
 		}
 		entry := cityEntry{Name: parts[0], Country: parts[1]}
 		for _, alias := range strings.Split(parts[2], "|") {
-			if _, seen := dict[alias]; !seen {
+			prev, seen := dict[alias]
+			if !seen {
 				dict[alias] = entry
+				continue
+			}
+			if prev.Country != entry.Country {
+				contested[alias] = struct{}{}
 			}
 		}
+	}
+	// Marking is a separate pass because a third row can contest an alias the second
+	// row agreed with, and the flag must end up set either way.
+	for alias := range contested {
+		e := dict[alias]
+		e.Contested = true
+		dict[alias] = e
 	}
 	for alias, e := range overrides {
 		dict[alias] = e

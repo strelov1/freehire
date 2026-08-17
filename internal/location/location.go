@@ -61,6 +61,14 @@ func Parse(location string) Geo {
 	// disambiguating context resolveGeoToken needs for a colliding subdivision code
 	// ("Tel Aviv, IL" vs "Chicago, IL"). Updated at the end of the loop body.
 	prevTok := ""
+	// cityFallback is the country of the first unambiguous long-tail city seen, held
+	// back until the whole string has been read. A city is the WEAKEST geographic
+	// statement in a location line: "Anna, Illinois, United States" names a town in
+	// Russia AND the state that actually places it, and "Crossroads - London" names a
+	// US locality next to the city that matters. Applying the city only when nothing
+	// else stated a country keeps those strings correct while still rescuing the
+	// lines that carry no other signal at all ("Colorado Springs", "Benidorm").
+	cityFallback := ""
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
@@ -99,9 +107,14 @@ func Parse(location string) Geo {
 				}
 			} else {
 				// A long-tail city the curated maps do not place ("Recife", "Joinville"):
-				// emit its name for the facet; its country/region are left unresolved.
+				// emit its name for the facet now, and remember its country as a
+				// LAST-RESORT candidate. It is applied after the whole string is read
+				// and only if nothing else stated a country — see cityFallback below.
 				citySet[ce.Name] = struct{}{}
 				resolved = true
+				if !ce.Contested && ce.Country != "" && cityFallback == "" {
+					cityFallback = ce.Country
+				}
 			}
 		}
 		for c := range tokCountry {
@@ -140,6 +153,17 @@ func Parse(location string) Geo {
 				// the lead's country-code reading (Israel) alongside it, garbling the result.
 				resolveGeoToken(lead, strings.Join(segs[1:], " "), countrySet, regionSet)
 			}
+		}
+	}
+
+	// Nothing in the line stated a country, so the long-tail city gets to. This is
+	// deliberately the last word and never a contributing one: it cannot add a second
+	// country beside a stated one, which is what keeps "Anna, Illinois, United States"
+	// from picking up Russia.
+	if len(countrySet) == 0 && cityFallback != "" {
+		countrySet[cityFallback] = struct{}{}
+		if r, ok := countryToRegion[cityFallback]; ok {
+			regionSet[r] = struct{}{}
 		}
 	}
 

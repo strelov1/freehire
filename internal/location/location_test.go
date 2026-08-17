@@ -222,12 +222,13 @@ func TestParse(t *testing.T) {
 		},
 		{
 			// A hyphenated city whose inner segment is a bare code ("on", Ontario) never
-			// misfires a phantom country: cityDict resolves the whole name to the real city
-			// as a facet value, but emits no country of its own — so there is no stray "ca"
-			// from the "on" segment, only the city name.
+			// misfires a phantom country: cityDict resolves the WHOLE name to the real
+			// city, so the geography that lands is Stoke-on-Trent's own (gb/uk) and never
+			// a stray "ca" from the "on" segment. That is the point of this case — the
+			// country is right, not merely absent.
 			name:     "hyphenated city does not misfire",
 			location: "stoke-on-trent",
-			want:     Geo{Cities: []string{"Stoke-on-Trent"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Stoke-on-Trent"}},
 		},
 	}
 
@@ -462,9 +463,11 @@ func TestParseCyrillic(t *testing.T) {
 			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}},
 		},
 		{
+			// The leading "г" is part of the city name, not the "г." city marker. The
+			// name resolves whole, so its own geography (ru/cis) is what lands.
 			name:     "city starting with г is not mistaken for the marker",
 			location: "Грозный",
-			want:     Geo{Cities: []string{"Grozny"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Grozny"}},
 		},
 		{
 			name:     "city starting with м is not mistaken for the marker",
@@ -566,17 +569,70 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}},
 		},
 		{
-			// A long-tail city absent from the hand-curated maps — its facet name is now
-			// covered, but the parser emits no country/region of its own (never guessed).
-			name:     "long-tail city emits the facet name without guessing a country",
+			// A long-tail city absent from the hand-curated maps. "Recife" is claimed by
+			// exactly one country in the dataset, so it now states br/latam on its own —
+			// no country token needed. Nothing is guessed: a name two countries share
+			// still states nothing (see the contested cases below).
+			name:     "unambiguous long-tail city states its own country",
 			location: "Recife",
-			want:     Geo{Cities: []string{"Recife"}},
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}},
 		},
 		{
 			// With an explicit country token the geography resolves deterministically too.
 			name:     "long-tail city with a country token resolves geography",
 			location: "Recife, Brazil",
 			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}},
+		},
+		{
+			// A name two countries share states NO country. This is the guard on the
+			// unambiguous-city rule: without it "most populous wins" would file a
+			// Birmingham (UK) role under the US, which is worse than filing it nowhere.
+			name:     "contested city name states no country",
+			location: "Birmingham",
+			want:     Geo{Cities: []string{"Birmingham"}},
+		},
+		{
+			// Canada and the US both have a Burlington; the same silence applies. (A
+			// contested name the CURATED maps already pin — "San Jose", "Valencia" —
+			// still resolves from them: this rule only fills what they left empty.)
+			name:     "contested city name states no country, second case",
+			location: "Burlington",
+			want:     Geo{Cities: []string{"Burlington"}},
+		},
+		{
+			// A country token resolves a contested name — the token is authoritative,
+			// the city merely agrees with it.
+			name:     "contested city with a country token resolves",
+			location: "Birmingham, UK",
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Birmingham"}},
+		},
+		{
+			// The city is the LAST word, never a contributing one. "Anna" is a town in
+			// Russia; the state and country in the same line are what place this job,
+			// and the city must not add a second country beside them. Measured against
+			// production, this rule is what took the change from 9 wrong countries per
+			// 2000 postings down to 3.
+			name:     "stated country wins over a long-tail city elsewhere in the line",
+			location: "Anna, Illinois, United States",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Anna"}},
+		},
+		{
+			// Same rule with the signal on the other side of the separator: "Crossroads"
+			// is an alias of Woonsocket, RI, but London is what this line is about, so
+			// only gb lands. Woonsocket still reaches the CITIES facet — that is
+			// pre-existing behaviour and harmless, since a stray city name narrows a
+			// search while a stray country would misfile the posting entirely.
+			name:     "stated country wins over a long-tail city before it",
+			location: "Crossroads - London",
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London", "Woonsocket"}},
+		},
+		{
+			// With no other signal in the line, the city is all there is — and it speaks.
+			// This is the case the whole rule exists for: ~39% of geographically
+			// unpinned production postings name a real place and nothing else.
+			name:     "lone long-tail city speaks when nothing else does",
+			location: "Colorado Springs",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs"}},
 		},
 		{
 			// "usa" appears among a Japanese city's GeoNames alternate names; the

@@ -9,21 +9,29 @@ func TestLoadCityDict(t *testing.T) {
 		"Moscow\tus\tmoscow|paradise valley\n" + // lower-pop duplicate: first-wins keeps ru
 		"Florianópolis\tbr\tflorianópolis|floripa\n"
 	overrides := map[string]cityEntry{
-		"zurich": {"Zurich", "ch"}, // override wins even though absent from the TSV
+		"zurich": {Name: "Zurich", Country: "ch"}, // override wins even though absent from the TSV
 	}
 	dict := loadCityDict(tsv, overrides)
 
-	if got := dict["moscow"]; got.Name != "Moscow" || got.Country != "ru" {
-		t.Errorf(`dict["moscow"] = %+v, want {Moscow ru} (most-populous first-wins)`, got)
+	// "moscow" is claimed by ru and us: the name still resolves most-populous-first,
+	// but the alias is contested so its country must never be emitted as geography.
+	if got := dict["moscow"]; got.Name != "Moscow" || got.Country != "ru" || !got.Contested {
+		t.Errorf(`dict["moscow"] = %+v, want {Moscow ru contested}`, got)
 	}
-	if got := dict["москва"]; got.Country != "ru" {
-		t.Errorf(`dict["москва"] country = %q, want ru`, got.Country)
+	// An alias only the ru row carries is not contested by the us row above it.
+	if got := dict["москва"]; got.Country != "ru" || got.Contested {
+		t.Errorf(`dict["москва"] = %+v, want {ru, uncontested}`, got)
 	}
-	if got := dict["floripa"]; got.Name != "Florianópolis" || got.Country != "br" {
-		t.Errorf(`dict["floripa"] = %+v, want {Florianópolis br}`, got)
+	// Nor is an alias unique to the us row.
+	if got := dict["paradise valley"]; got.Country != "us" || got.Contested {
+		t.Errorf(`dict["paradise valley"] = %+v, want {us, uncontested}`, got)
 	}
-	if got := dict["zurich"]; got.Name != "Zurich" || got.Country != "ch" {
-		t.Errorf(`dict["zurich"] = %+v, want override {Zurich ch}`, got)
+	if got := dict["floripa"]; got.Name != "Florianópolis" || got.Country != "br" || got.Contested {
+		t.Errorf(`dict["floripa"] = %+v, want {Florianópolis br uncontested}`, got)
+	}
+	// An override is hand-asserted, so it lands uncontested even for a shared name.
+	if got := dict["zurich"]; got.Name != "Zurich" || got.Country != "ch" || got.Contested {
+		t.Errorf(`dict["zurich"] = %+v, want override {Zurich ch uncontested}`, got)
 	}
 	if _, ok := dict["# header comment"]; ok {
 		t.Error("comment line was parsed as an entry")
@@ -34,10 +42,10 @@ func TestLoadCityDict(t *testing.T) {
 // change must resolve to their canonical name and country.
 func TestEmbeddedCityDict(t *testing.T) {
 	cases := map[string]cityEntry{
-		"florianópolis": {"Florianópolis", "br"},
-		"florianopolis": {"Florianópolis", "br"},
-		"são paulo":     {"São Paulo", "br"},
-		"cologne":       {"Cologne", "de"}, // curated override spelling
+		"florianópolis": {Name: "Florianópolis", Country: "br"},
+		"florianopolis": {Name: "Florianópolis", Country: "br"},
+		"são paulo":     {Name: "São Paulo", Country: "br"},
+		"cologne":       {Name: "Cologne", Country: "de"}, // curated override spelling
 	}
 	for alias, want := range cases {
 		got, ok := cityDict[alias]
