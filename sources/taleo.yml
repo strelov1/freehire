@@ -68,3 +68,9 @@
   board: ttec.taleo.net/2
 - company: University of Alabama at Birmingham
   board: uab.taleo.net/ext
+- company: Chicago Transit Authority
+  board: chicagotransit.taleo.net/ex
+- company: Cincinnati Financial
+  board: cinfin.taleo.net/ex
+- company: UGL Limited
+  board: ugl.taleo.net/public
