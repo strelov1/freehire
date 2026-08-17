@@ -2,6 +2,7 @@ package atsdetect
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/atsboard"
@@ -22,10 +23,10 @@ import (
 // Delegating also means an ATS added to atsboard is immediately visible to the harvest tools,
 // which was the standing cost of the split.
 //
-// What stays here are the five shapes atsboard deliberately EXCLUDES. That exclusion is not an
+// What stays here are the six shapes atsboard deliberately EXCLUDES. That exclusion is not an
 // oversight to correct: atsboard is the accept-set for internal/contribution, which PAYS for
 // onboarded boards, so widening it is a money-affecting decision that needs its own proposal.
-// These five are harvest-only, and the harvest path validates every candidate against the
+// These six are harvest-only, and the harvest path validates every candidate against the
 // platform's API before committing it.
 func FromURL(rawurl string) (provider, board string, ok bool) {
 	if src, brd, _, found := atsboard.Recognize(rawurl); found {
@@ -66,6 +67,14 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 		if agency := segAfter(segs, "careers"); agency != "" {
 			return "neogov", strings.TrimPrefix(host, "www.") + "/" + agency, true
 		}
+	case host == "www.comeet.com", host == "comeet.com":
+		// board is "<slug>/<companyUID>" — Comeet's adapter needs both halves, so the slug alone
+		// is not a shorter board id but one the crawl rejects. The uid's fixed shape ("B1.001")
+		// is what proves the path names a board: comeet.com also serves the vendor's own pages,
+		// whose second segment would otherwise read as a company uid.
+		if len(segs) >= 3 && segs[0] == "jobs" && comeetUID.MatchString(segs[2]) {
+			return "comeet", segs[1] + "/" + segs[2], true
+		}
 	case host == "www.paycomonline.net", host == "paycomonline.net":
 		// board is the 32-hex client key in /v4/ats/web.php/portal/<clientkey>/...
 		if key := segAfter(segs, "portal"); key != "" {
@@ -74,6 +83,10 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 	}
 	return "", "", false
 }
+
+// comeetUID matches a Comeet company UID: two alphanumerics, a dot, three more ("B1.001",
+// "32.00E"). Requiring the shape is what separates a board URL from any other comeet.com path.
+var comeetUID = regexp.MustCompile(`^[0-9A-Za-z]{2}\.[0-9A-Za-z]{3}$`)
 
 // pathSegments splits a URL path into its non-empty segments.
 func pathSegments(p string) []string {

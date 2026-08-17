@@ -173,6 +173,38 @@ func TestICIMSProbe(t *testing.T) {
 	if name, n, err := p.probe(context.Background(), getter, "gone"); err != nil || name != "" || n != 0 {
 		t.Errorf("gone: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
 	}
+
+	// A vanity board IS the host. Rebuilding it as careers-<host>.icims.com asks for a name that
+	// resolves nowhere, so the board would be reported dead rather than probed.
+	vanity := fakeGetter{
+		"https://pppl-princeton.icims.com/sitemap.xml": icimsSitemap(
+			"https://pppl-princeton.icims.com/jobs/303/role/job",
+		),
+	}
+	if name, n, err := p.probe(context.Background(), vanity, "pppl-princeton.icims.com"); err != nil || name != "" || n != 1 {
+		t.Errorf("vanity: got (%q,%d,%v), want (\"\",1,nil)", name, n, err)
+	}
+}
+
+// TestICIMSDedupKey: the catalogue spells the same board both ways, so the two must share a
+// dedup key — but only for the "careers-" form, which is the one the adapter rebuilds. A vanity
+// host without that prefix names a DIFFERENT site than the same string used as a bare slug, and
+// folding those together would suppress a real board as a duplicate.
+func TestICIMSDedupKey(t *testing.T) {
+	cases := map[string]string{
+		"careers-vet.icims.com":    "vet",
+		"CAREERS-VET.ICIMS.COM":    "vet",
+		"vet":                      "vet",
+		"pppl-princeton.icims.com": "pppl-princeton.icims.com",
+		"pppl-princeton":           "pppl-princeton",
+		"careers-.icims.com":       "careers-.icims.com",
+		"careers.docusign.com":     "careers.docusign.com",
+	}
+	for in, want := range cases {
+		if got := (icimsProber{}).dedupKey(in); got != want {
+			t.Errorf("dedupKey(%q) = %q, want %q", in, got, want)
+		}
+	}
 }
 
 // These platforms publish no employer name in their payloads, so a live board reports "" as

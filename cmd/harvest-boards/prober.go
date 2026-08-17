@@ -296,13 +296,39 @@ type icimsProber struct{}
 // internal/sources, to avoid widening that package's API for a dev tool.
 var icimsJobLocPattern = regexp.MustCompile(`/jobs/\d+/`)
 
+// icimsHost mirrors internal/sources/icims.go: a board containing a dot IS the careers host, and
+// anything else is a bare slug the host is rebuilt from. Probing every candidate as the rebuilt
+// form asks for "careers-<host>.icims.com" whenever the board is a vanity one, which resolves
+// nowhere — so every vanity board would be reported dead instead of probed.
+func icimsHost(board string) string {
+	if strings.Contains(board, ".") {
+		return board
+	}
+	return "careers-" + board + ".icims.com"
+}
+
+// dedupKey folds "careers-<slug>.icims.com" to "<slug>". The catalogue holds both spellings of
+// the same board (57 of 1921 entries carry the full host), so a candidate derived from a job URL
+// as the bare slug would otherwise look new and be filed alongside the board we already crawl.
+// Only the "careers-" form folds: "pppl-princeton.icims.com" and a bare "pppl-princeton" name
+// DIFFERENT hosts, so collapsing them would hide a real board instead of a duplicate.
+func (icimsProber) dedupKey(boardID string) string {
+	id := strings.ToLower(boardID)
+	if host, isHost := strings.CutSuffix(id, ".icims.com"); isHost {
+		if slug, prefixed := strings.CutPrefix(host, "careers-"); prefixed && slug != "" {
+			return slug
+		}
+	}
+	return id
+}
+
 func (icimsProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var sitemap struct {
 		URLs []struct {
 			Loc string `xml:"loc"`
 		} `xml:"url"`
 	}
-	if err := c.GetXML(ctx, fmt.Sprintf("https://careers-%s.icims.com/sitemap.xml", slug), &sitemap); err != nil {
+	if err := c.GetXML(ctx, "https://"+icimsHost(slug)+"/sitemap.xml", &sitemap); err != nil {
 		return "", 0, nil
 	}
 	n := 0

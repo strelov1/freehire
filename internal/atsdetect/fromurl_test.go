@@ -173,6 +173,30 @@ func TestFromURL(t *testing.T) {
 			ok:   false,
 		},
 		{
+			name:     "comeet vacancy keeps slug and company uid",
+			url:      "https://www.comeet.com/jobs/capslock/59.001/senior-marketing-strategist/9B.F62-B8.406",
+			provider: "comeet",
+			board:    "capslock/59.001",
+			ok:       true,
+		},
+		{
+			name:     "comeet board listing",
+			url:      "https://www.comeet.com/jobs/overwolf/B1.001",
+			provider: "comeet",
+			board:    "overwolf/B1.001",
+			ok:       true,
+		},
+		{
+			name: "comeet slug without a company uid is not a board",
+			url:  "https://www.comeet.com/jobs/overwolf",
+			ok:   false,
+		},
+		{
+			name: "comeet vendor path is not a board",
+			url:  "https://www.comeet.com/pricing/plans/x",
+			ok:   false,
+		},
+		{
 			name: "unknown host",
 			url:  "https://www.caci.com/careers/123",
 			ok:   false,
@@ -213,6 +237,7 @@ func TestLocalShapesStayOutsideTheSharedTable(t *testing.T) {
 		"taleo":  "https://valero.taleo.net/careersection/2/jobsearch.ftl",
 		"neogov": "https://www.governmentjobs.com/careers/cityofboise/jobs/4567",
 		"paycom": "https://www.paycomonline.net/v4/ats/web.php/portal/0123456789abcdef0123456789abcdef/jobs",
+		"comeet": "https://www.comeet.com/jobs/overwolf/B1.001",
 	}
 	for provider, rawurl := range local {
 		t.Run(provider, func(t *testing.T) {
