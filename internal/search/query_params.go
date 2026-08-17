@@ -88,23 +88,40 @@ func knownParams(alsoKnown []string) map[string]bool {
 	return known
 }
 
+// facetModifiers are the suffixes a facet param can carry. A number mistake
+// survives them (`country_exclude` for `countries_exclude`), so suggestParam has
+// to pluralize the facet name inside the key rather than at its end.
+var facetModifiers = []string{"_exclude", "_mode"}
+
 // suggestParam returns the known param that differs from this one only in
 // grammatical number, or "" when there is none. It deliberately does not do
 // fuzzy matching: the observed mistake is reaching for `country` when the facet
 // is `countries`, and an edit-distance guess close enough to catch that also
 // invents suggestions for params that were never a typo at all.
 func suggestParam(param string, known map[string]bool) string {
-	candidates := []string{param + "s", param + "es"}
-	if stem, ok := strings.CutSuffix(param, "y"); ok {
-		candidates = append(candidates, stem+"ies")
+	name, modifier := param, ""
+	for _, mod := range facetModifiers {
+		if stem, ok := strings.CutSuffix(param, mod); ok {
+			name, modifier = stem, mod
+			break
+		}
 	}
-	if stem, ok := strings.CutSuffix(param, "s"); ok {
-		candidates = append(candidates, stem)
-	}
-	for _, c := range candidates {
-		if known[c] {
-			return c
+	for _, candidate := range numberVariants(name) {
+		if known[candidate+modifier] {
+			return candidate + modifier
 		}
 	}
 	return ""
+}
+
+// numberVariants returns the other grammatical numbers of a facet name.
+func numberVariants(name string) []string {
+	variants := []string{name + "s", name + "es"}
+	if stem, ok := strings.CutSuffix(name, "y"); ok {
+		variants = append(variants, stem+"ies")
+	}
+	if stem, ok := strings.CutSuffix(name, "s"); ok {
+		variants = append(variants, stem)
+	}
+	return variants
 }

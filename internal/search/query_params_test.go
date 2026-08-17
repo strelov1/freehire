@@ -135,3 +135,24 @@ func TestUnknownParams_CapsTheReport(t *testing.T) {
 		t.Errorf("first = %q, want junk000 — the cap must apply after sorting", got[0].Param)
 	}
 }
+
+func TestUnknownParams_SuggestsThroughFacetModifiers(t *testing.T) {
+	// The number mistake survives the `_exclude` / `_mode` conventions, so the
+	// suggestion has to as well: the facet name is pluralized inside the key,
+	// not at its end.
+	cases := map[string]string{
+		"country_exclude": "countries_exclude",
+		"country_mode":    "countries_mode",
+		"region_exclude":  "regions_exclude",
+	}
+
+	for param, want := range cases {
+		got := UnknownParams(url.Values{param: {"x"}}, nil)
+		if len(got) != 1 {
+			t.Fatalf("UnknownParams(%s) = %#v, want one entry", param, got)
+		}
+		if got[0].DidYouMean != want {
+			t.Errorf("DidYouMean for %s = %q, want %q", param, got[0].DidYouMean, want)
+		}
+	}
+}
