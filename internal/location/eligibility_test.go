@@ -2,6 +2,7 @@ package location
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/vocab"
@@ -62,7 +63,8 @@ func TestEligibilityFromDescription(t *testing.T) {
 		{"right to work eu", "You must have the right to work in the EU.", nil, []string{"eu"}},
 		{"eu work permit", "A valid EU work permit is required.", nil, []string{"eu"}},
 
-		// Australia — "citizen" subsumes "citizenship" by substring.
+		// Australia — both noun forms, since whole-word matching stopped one covering
+		// the other (see TestCitizenPhrasesCarryTheirCitizenshipForm).
 		{"australian citizen", "Australian citizens only; NV1 clearance required.", []string{"au"}, []string{"apac"}},
 		{"australian citizenship", "Eligibility: Australian citizenship and a security clearance.", []string{"au"}, []string{"apac"}},
 
@@ -95,6 +97,7 @@ func TestEligibilityFromDescription(t *testing.T) {
 		// is a different word and does not.
 		{"plural citizens matches", "Open to Australian citizens only.", []string{"au"}, []string{"apac"}},
 		{"citizenship matches its own entry, not the citizen prefix", "US citizenship is required.", []string{"us"}, []string{"north_america"}},
+		{"spelled-out citizenship has its own entry too", "United States citizenship is required.", []string{"us"}, []string{"north_america"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,6 +109,25 @@ func TestEligibilityFromDescription(t *testing.T) {
 				t.Errorf("regions = %v, want %v", gotRegions, tt.wantRegions)
 			}
 		})
+	}
+}
+
+// TestCitizenPhrasesCarryTheirCitizenshipForm guards the trap that whole-word matching
+// introduced: "australian citizen" used to cover "Australian citizenship" by substring,
+// and once matching became whole-word every such pair had to be spelled out. The pairs
+// were then added one review finding at a time — "united states citizenship" was missed
+// twice — so the invariant is asserted instead of remembered.
+func TestCitizenPhrasesCarryTheirCitizenshipForm(t *testing.T) {
+	for _, rule := range eligibilityRules {
+		for _, p := range rule.phrases {
+			if !strings.HasSuffix(p, " citizen") {
+				continue
+			}
+			want := p + "ship"
+			if !slices.Contains(rule.phrases, want) {
+				t.Errorf("phrase %q has no %q alongside it; whole-word matching will miss the noun form", p, want)
+			}
+		}
 	}
 }
 

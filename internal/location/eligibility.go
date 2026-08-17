@@ -24,7 +24,7 @@ import (
 // naming a nationality and so cannot match these.
 var usOnlyPhrases = []string{
 	"u.s. citizen", "us citizen", "united states citizen", "citizen of the united states",
-	"u.s. citizenship", "us citizenship",
+	"u.s. citizenship", "us citizenship", "united states citizenship",
 	"authorized to work in the united states", "authorised to work in the united states",
 	"authorization to work in the united states",
 	"secret clearance", "ts/sci",
