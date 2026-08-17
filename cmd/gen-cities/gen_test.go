@@ -58,3 +58,36 @@ func TestBuildAliases(t *testing.T) {
 		t.Errorf("buildAliases = %v, want %v", got, want)
 	}
 }
+
+func TestContestedAliases(t *testing.T) {
+	places := []place{
+		{name: "Moscow", country: "ru", pop: 12_000_000, aliases: []string{"moscow", "москва"}},
+		{name: "Moscow", country: "us", pop: 25_000, aliases: []string{"moscow", "paradise valley"}},
+		// A hamlet far below statingPopulation. It is never written out, but it is
+		// exactly what makes "taft" contested — the whole reason the generator reads
+		// the pop>=1,000 dump rather than the pop>=15,000 one.
+		{name: "Taft", country: "us", pop: 9_000, aliases: []string{"taft"}},
+		{name: "Taft", country: "ir", pop: 20_000, aliases: []string{"taft"}},
+		// Two places in the SAME country agreeing on a name is not a contest.
+		{name: "Springfield", country: "us", pop: 160_000, aliases: []string{"springfield"}},
+		{name: "Springfield", country: "us", pop: 120_000, aliases: []string{"springfield"}},
+	}
+	got := contestedAliases(places)
+	for _, alias := range []string{"moscow", "taft"} {
+		if !got[alias] {
+			t.Errorf("alias %q should be contested", alias)
+		}
+	}
+	for _, alias := range []string{"москва", "paradise valley", "springfield"} {
+		if got[alias] {
+			t.Errorf("alias %q should not be contested", alias)
+		}
+	}
+}
+
+func TestAliasesWithContestMarks(t *testing.T) {
+	got := aliasesWithContestMarks([]string{"moscow", "москва"}, map[string]bool{"moscow": true})
+	if want := "moscow*|москва"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

@@ -3,39 +3,36 @@ package location
 import "testing"
 
 func TestLoadCityDict(t *testing.T) {
+	// The generator marks a contested alias with a trailing "*"; the loader only reads
+	// that mark. Which aliases earn one is cmd/gen-cities' problem — see its own test.
 	tsv := "# header comment\n" +
 		"# second comment\n" +
-		"Moscow\tru\tmoscow|москва\t12000000\n" +
-		"Moscow\tus\tmoscow|paradise valley\t5000000\n" + // lower-pop duplicate: first-wins keeps ru
-		"Florianópolis\tbr\tflorianópolis|floripa\t500000\n" +
-		// Below statingPopulation: contests "floripa" without ever claiming it, and
-		// its own alias never enters the dictionary at all.
-		"Floripa\tpt\tfloripa|tiny hamlet\t900\n"
+		"Moscow\tru\tmoscow*|москва\n" +
+		"Moscow\tus\tmoscow*|paradise valley\n" + // lower-pop duplicate: first-wins keeps ru
+		"Florianópolis\tbr\tflorianópolis|floripa*\n"
 	overrides := map[string]cityEntry{
 		"zurich": {Name: "Zurich", Country: "ch"}, // override wins even though absent from the TSV
 	}
 	dict := loadCityDict(tsv, overrides)
 
-	// "moscow" is claimed by ru and us: the name still resolves most-populous-first,
-	// but the alias is contested so its country must never be emitted as geography.
+	// A marked alias keeps its most-populous name and country — isRecognizedUSCACity
+	// still wants them — but Contested is what stops the country being stated.
 	if got := dict["moscow"]; got.Name != "Moscow" || got.Country != "ru" || !got.Contested {
 		t.Errorf(`dict["moscow"] = %+v, want {Moscow ru contested}`, got)
 	}
-	// An alias only the ru row carries is not contested by the us row above it.
+	// An unmarked alias on the same row is unaffected: the mark is per-alias.
 	if got := dict["москва"]; got.Country != "ru" || got.Contested {
 		t.Errorf(`dict["москва"] = %+v, want {ru, uncontested}`, got)
 	}
-	// Nor is an alias unique to the us row.
 	if got := dict["paradise valley"]; got.Country != "us" || got.Contested {
 		t.Errorf(`dict["paradise valley"] = %+v, want {us, uncontested}`, got)
 	}
-	// A hamlet in another country contests the alias even though it never registers.
+	// The mark is stripped from the key, so lookups use the bare alias.
 	if got := dict["floripa"]; got.Name != "Florianópolis" || got.Country != "br" || !got.Contested {
-		t.Errorf(`dict["floripa"] = %+v, want {Florianópolis br contested by the hamlet}`, got)
+		t.Errorf(`dict["floripa"] = %+v, want {Florianópolis br contested}`, got)
 	}
-	// ...and the hamlet's own alias is absent entirely: it is evidence, not a claim.
-	if _, ok := dict["tiny hamlet"]; ok {
-		t.Error(`dict["tiny hamlet"] exists; a sub-threshold place must never register an alias`)
+	if _, ok := dict["floripa*"]; ok {
+		t.Error(`dict["floripa*"] exists; the contest mark must not survive into the key`)
 	}
 	// An override is hand-asserted, so it lands uncontested even for a shared name.
 	if got := dict["zurich"]; got.Name != "Zurich" || got.Country != "ch" || got.Contested {
