@@ -29,8 +29,6 @@
   board: alpla.rec.pro.ukg.net/alp1505apnc/4b4f22b7-1a92-48fc-86e5-8d2d15a4b89e
 - company: ALPLA
   board: alpla.rec.pro.ukg.net/alp1505apnc/9273be85-ad40-4638-932c-9bfc7a015338
-- company: Mahaska Health
-  board: mahaskaukg.rec.pro.ukg.net/MAH1000MAHC/JobBoard/0d34e7b0-f433-4e51-a750-b2785087496d
 - company: Opportunities, Inc.
   board: altstaffing.rec.pro.ukg.net/opp1501oijc/b27f106a-1ecc-43f2-a3f7-5efc6037d59f
 - company: American Textile Maintenance
@@ -6081,9 +6079,6 @@
   board: yoshinoya.rec.pro.ukg.net/yos1000yosh/bdb01443-3761-41d4-8820-dc825c271823
 - company: Zynex
   board: zynexmed.rec.pro.ukg.net/zyn1500zyxm/95f96ec9-5d7c-4c1f-b2d7-44b718da86ad
-# Plesk hires under its parent WebPros (Plesk/cPanel/WHMCS) on this shared UKG board. Validated
-# live (endpoint 200) but currently 0 open postings — the lone exception to the ">0" rule above;
-# ingests nothing until WebPros posts. Labelled Plesk so the eastern-roots `plesk` slug tags it.
 - company: Advarra
   board: recruiting.ultipro.com/adv1023avr/6051d363-03fe-4650-945e-f836306a8388
 - company: African Wildlife Foundation
@@ -6292,7 +6287,7 @@
   board: recruiting2.ultipro.com/cle1021cleda/1ecaf756-ba05-491f-9f88-5b1733c68f70
 - company: CSWI w/Subsidiaries
   board: recruiting2.ultipro.com/csw1002cswi/45220d28-f191-42b7-878c-f4d4a4987652
-- company: Didi Hirsch Brand
+- company: Didi Hirsch Mental Health Services
   board: recruiting2.ultipro.com/did1000didi/8d18ec3b-eca9-4792-8df1-814e2097ccc1
 - company: Braemac
   board: recruiting2.ultipro.com/exp1007extg/3147f1de-7168-4d42-a087-1c2109381410
@@ -6448,8 +6443,6 @@
   board: recruiting.ultipro.com/sgf1000sgfs/8daa09e3-0c07-4497-8d06-48273e07968f
 - company: Steel Technologies
   board: recruiting.ultipro.com/ste1020steel/214d1a03-87cf-444a-9dc0-d56d960c4864
-- company: Atlantic Union Bank
-  board: 'recruiting.ultipro.com/uni1046ufmb/d8f90aad-672e-4f0a-bbc1-a17aa8cf1111 '
 - company: Circana
   board: recruiting2.ultipro.com/inf1019irinc/17a8d008-9efe-4e51-8460-47ee205d5229
 - company: Mercy Corps

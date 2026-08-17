@@ -45,9 +45,9 @@
   board: "865"
 - company: Virginia Tech
   board: "968"
-- company: ANSTO
+- company: Department of Education Tasmania
   board: "1035"
-- company: Town of Clarkdale
+- company: Arizona Department of Administration
   board: "1045"
 - company: Whiddon
   board: "1072"
@@ -55,9 +55,9 @@
   board: "1075"
 - company: The University of Toledo
   board: "1086"
-- company: KCTCS
+- company: Kentucky Community and Technical College System
   board: "1124"
-- company: Commonwealth of Virginia
+- company: Virginia Information Technologies Agency
   board: "1125"
 - company: Tennessee Board of Regents (TBR)
   board: "1126"
@@ -69,7 +69,7 @@
   board: "669"
 - company: University of Oregon
   board: "726"
-- company: ANSTO
+- company: Tasmanian Government
   board: "759"
 - company: Michigan State University
   board: "782"

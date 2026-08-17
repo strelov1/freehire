@@ -788,6 +788,7 @@ var probers = map[string]prober{
 	"paylocity":       paylocityProber{},
 	"hireology":       hireologyProber{},
 	"pageup":          pageupProber{},
+	"manatal":         manatalProber{},
 	"cornerstone":     adapterProber{provider: "cornerstone", newSource: func() sources.Source { return sources.NewCornerstone(sources.NewClient()) }},
 	"taleo":           adapterProber{provider: "taleo", newSource: func() sources.Source { return sources.NewTaleo(sources.NewCookieClient()) }},
 	"neogov":          adapterProber{provider: "neogov", newSource: func() sources.Source { return sources.NewNeogov(sources.NewClient()) }},

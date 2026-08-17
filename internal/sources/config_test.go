@@ -94,6 +94,29 @@ func TestParseConfigDropsBoardSpellingsAddressingTheSameSite(t *testing.T) {
 	}
 }
 
+// A board id never legitimately carries surrounding whitespace, and one that does is a board
+// that 404s: the pipeline namespaces external_id with the literal string and the adapters
+// paste it into a URL. It also hides a duplicate — a harvested UKG board arrived with a
+// trailing space and so did not collide with the same board already in the file.
+func TestParseConfigTrimsBoardWhitespace(t *testing.T) {
+	data := []byte(`
+- company: Atlantic Union Bank
+  board: recruiting.ultipro.com/uni1046ufmb/d8f90aad
+- company: Atlantic Union Bank (harvested)
+  board: 'recruiting.ultipro.com/uni1046ufmb/d8f90aad '
+`)
+	cfg, err := ParseConfig("ukg", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 1 {
+		t.Fatalf("len(Sources) = %d, want 1: %+v", len(cfg.Sources), cfg.Sources)
+	}
+	if got := cfg.Sources[0].Board; got != "recruiting.ultipro.com/uni1046ufmb/d8f90aad" {
+		t.Errorf("Board = %q, want it trimmed", got)
+	}
+}
+
 // The fold is per-provider: a bare "vet" and a "careers-vet.icims.com" on a provider that
 // does NOT resolve both to one host are two different boards, and collapsing them would
 // silently drop a live crawl target.

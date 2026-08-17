@@ -13,7 +13,6 @@
 # Note: many Manatal tenants are recruitment agencies posting many clients' roles; the adapter
 # labels each job with the configured company (the agency), the same as bullhorn/careerspage —
 # the per-vacancy employer is not resolved (a hub seam for later).
-
 - company: Syfe
   board: syfe
 - company: IDR
@@ -34,23 +33,16 @@
   board: recruitment-apple-lovers
 - company: AGC Recruitment
   board: job-listings
-
-# Migrated from careerspage.yml: careers-page.com IS Manatal, and the JSON API is far more
-# complete than the old <slug>.careers-page.com HTML crawl (davidjoseph-co 182 vs 6, zarego 9 vs 0).
 - company: David Joseph & Company
   board: davidjoseph-co
 - company: Zarego
   board: zarego
 - company: Alcor
   board: alcor
-
-# --- contributed boards ---
 - company: Tidal
   board: hiretidal
 - company: Nearshore Business Solutions
   board: nearshore-business-solutions
-
-# --- boards behind an application history, live-validated 2026-08-02 ---
 - company: Initiumsoft
   board: initiumsoft
 - company: Keppri
@@ -625,7 +617,7 @@
   board: arise
 - company: Asa Healthcare Staffing
   board: asa-healthcare-staffing
-- company: AsiaLocalize
+- company: Asialocalize
   board: asialocalize
 - company: Asians Group LLC
   board: asian-group-llc
@@ -681,7 +673,7 @@
   board: citygrouprecruitment
 - company: CLICKnCRUISE
   board: clickncruise
-- company: CloudCure
+- company: Cloudcure
   board: cloudcure
 - company: Code Red Recruitment
   board: code-red-recruitment
@@ -835,7 +827,7 @@
   board: instage
 - company: Intellecruit
   board: intellecruit
-- company: Interaction24
+- company: Interaction24,LLC
   board: interaction24llc
 - company: Interdot Solutions
   board: interdot-solutions
@@ -863,7 +855,7 @@
   board: koality
 - company: Kosmos Corp
   board: kosmos-corp
-- company: Laguna Resorts & Hotels
+- company: Laguna Phuket
   board: lagunaphuket
 - company: Legacy Staffing
   board: legacystaffingsol
@@ -1189,33 +1181,33 @@
   board: agiloya-afrique
 - company: AIDA Recruitment
   board: aida-projektai-mb
-- company: Malayan Flour Mills Berhad
+- company: Aisling Group
   board: aisling-group
-- company: Antal International
+- company: Antal International Network - IME
   board: antal-international-network-ime
-- company: confidential
+- company: Aplus Careers
   board: aplus-consulting-2
 - company: Arbete Careers
   board: arbete-careers
 - company: ARSAN International Consulting Group
   board: arsan-international-consulting-group
-- company: Unison Group
+- company: Aurora
   board: auroraap
-- company: Balr Basketball
+- company: Balr
   board: balr
-- company: Barker Staffing Solutions, LLC
+- company: Barker Staffing Solutions LLC
   board: barker-staffing-solutions
 - company: Bloom Education
   board: bloomeducation
-- company: Boardroom Appointments - Global Human and Talent Capital
+- company: Boardroom Appointments
   board: boardroom-appointments
-- company: Cadmus Resources
+- company: CADMUS RESOURCES
   board: cadmusresources
-- company: Caliberly -  Recruitment Agency
+- company: Caliberly
   board: caliberly
 - company: Campion Pickworth
   board: campion-pickworth
-- company: Capcon
+- company: Capcon Asia
   board: capcon-asia
 - company: Carrier Johnson + Culture
   board: carrier-johnson-culture
@@ -1223,37 +1215,37 @@
   board: catalyst-labs
 - company: Central Square Foundation
   board: central-square-foundation
-- company: Cityfix
+- company: CitiFix
   board: cityfix
-- company: Clariter Group
+- company: Clariter
   board: claritergroup
 - company: Cobden & Carter International
   board: cobdenandcarter
 - company: Comtech LLC
   board: comtech-llc
-- company: Delfos HR
+- company: Delfos
   board: delfos
 - company: Destination Group
   board: destination-group
-- company: Domo Ventures
+- company: Domo Ventures W.L.L.
   board: domo-ventures-careers
-- company: Dribbler
+- company: Dribbler LLC
   board: dribbler-llc
-- company: East West Banking Corporation
+- company: EastWest Bank
   board: eastwest-bank
 - company: Esha Parama Technology
   board: eshaparamatechnology-careers
-- company: Externa Talent Excellence
+- company: Externa Talent Hunters
   board: externatalenthunters
-- company: Fairmedics
+- company: Fairmedics GmbH
   board: fairmedics-gmbh
-- company: fastn
+- company: Fastn
   board: fastn
 - company: Fellows Hawaii inc.
   board: fellows-hawaii-inc
-- company: FFI Advisory GmbH
+- company: FFI Advisory
   board: ffi-advisory
-- company: Ge-n.nl | Graduate engineer - network
+- company: Graduate engineer - network
   board: ge-n
 - company: GETD - Global Exchange Tecnologías Digitales
   board: getd-global-exchange-tecnologias-digitales
@@ -1263,121 +1255,121 @@
   board: groundzero
 - company: Gulf Workforce
   board: gulf-workforce
-- company: HCB  Group
+- company: HCB Outsourcing
   board: hcb-outsourcing
-- company: Malayan Flour Mills Berhad
+- company: Hirehub Management Sdn. Bhd.
   board: hirehub-management-sdn-bhd
 - company: Hovland Barnes
   board: hovland-barnes
-- company: Hunters International
+- company: Hunters International Sdn Bhd
   board: hunters-international
 - company: icreatives
   board: icreatives-2
-- company: iFIVE Global
+- company: iFive Global
   board: ifiveglobal
-- company: Ignite Digital Talent
+- company: Ignite Digital
   board: ignite-digital
-- company: Inhousify Recruitment & HR
+- company: Inhousify
   board: inhousify
 - company: Initiate International
   board: initiate-2
-- company: Inspire Talent Consulting inc
+- company: Inspiretci
   board: inspiretci-careers
-- company: InstaSwim
+- company: InstaSwim LLC
   board: instaswim-llc
-- company: IT Consultis
+- company: ITC
   board: itc-2
 - company: JDJ Diagnostics
   board: jdj-diagnostics
-- company: Jollibee Group
+- company: Career Opportunities
   board: jollibee-foods-corporation
-- company: JUST VARGAS
+- company: Just Vargas
   board: justvargasjustsearch
-- company: KateWorthington
+- company: Kate Worthington
   board: kate-worthington
 - company: Keystone Solutions
   board: keystone-solutions
-- company: KreativeHR Services
+- company: Creative Resurse Umane SRL
   board: kreativehr
-- company: LEADER CLINICS
+- company: Leader Clinics
   board: leader-clinics
 - company: Little Rays ABA
   board: little-rays-aba
-- company: PT Bank Danamon Indonesia Tbk
+- company: Luminare Consulting
   board: luminare-consulting
 - company: m2TALENTS
   board: m2talents
-- company: Mavromatis Employment Bureau LTD
+- company: Mavromatis Employment Bureau
   board: mavromatis-employment-bureau
 - company: MaxIT Consulting - Max Corporate Group
   board: maxit-consulting-jobs
-- company: Meatplus Trading Corp.
+- company: MEATPLUS TRADING CORP.
   board: meatplus-trading-corp
 - company: Medical Staffing Solutions, USA
   board: medical-staffing-solutions-usa
-- company: Melioris Private Limited
+- company: Melioris Recruitment Pte. Ltd.
   board: melioris-recruitment-private-limited
 - company: Mentory Grupo Consultor
   board: mentory-grupo-consultor
 - company: Meratus Group
   board: meratus
-- company: MG Head Hunting
+- company: MG head hunting
   board: mgheadhunting
 - company: MR DIY Philippines
   board: mr-diy-philippines
 - company: MyRobin.ID
   board: myrobinid
-- company: NAXCON GROUP
+- company: NAXCON GmbH
   board: naxcon-gmbh-2
-- company: NTT DATA
+- company: NTT Data Singapore
   board: ntt-data-singapore
-- company: Osiris Recruitment
+- company: Osiris Recruitment Ltd
   board: osiris-recruitment-ltd
 - company: People Working Corp
   board: people-working-corp
-- company: Expansion People
+- company: EXPANSION PEOPLE
   board: peopleseleccion
 - company: Pinhome
   board: pinhome-3
-- company: PointStar
+- company: Pointstar
   board: point-star
 - company: Polyglot Group
   board: polyglot-group-7
 - company: Premier NX
   board: premiernx
-- company: PrimeSync
+- company: PrimeSync Solutions
   board: primesync-solutions
 - company: Pro Coffee Gear
   board: pro-coffee-gear
-- company: PT Bank Danamon Indonesia Tbk
+- company: PT Yamaha Motor Indonesia
   board: pt-yamaha-motor-indonesia
-- company: Q2 HR Solutions
+- company: Q2 HR Solutions - Group of Companies
   board: q2hrsolutions
-- company: Raya CX
+- company: RayaCX
   board: rayacx
-- company: SMBC Group
+- company: ReachExt K.K.
   board: reachext-consulting
-- company: Recruitment Partnership UK & Ireland
+- company: Recruitment Partnership Ireland
   board: recruitment-partnership-ireland
-- company: RippedBoxStation
+- company: Rippedboxstation
   board: rippedboxstation
-- company: Rising Star Talent, LLC
+- company: Rising Star Talent LLC
   board: rising-star-talent
 - company: RMA Group Company Limited
   board: rma-group-company-limited
 - company: Rubicon Path
   board: rubiconpath-systems
-- company: confidential
+- company: Savills Vietnam
   board: savillsvn
 - company: SCC LLC
   board: scc
-- company: Unison Group
+- company: Seacare Manpower Services Pte Ltd
   board: seacare-manpower-services-pte-ltd
-- company: SEARCH4 Global - S4G Talent Solutions GmbH
+- company: SEARCH4 Global - POOL YOUR TALENT
   board: searchfour
-- company: The Vet Office
+- company: Secruits
   board: secruits
-- company: Grupo Serlima
+- company: Serlima
   board: serlimapt
 - company: Siegen HR Solutions, Inc.
   board: siegensolutions
@@ -1389,41 +1381,41 @@
   board: snappymob
 - company: Source Code
   board: source-code
-- company: ÆON Thana Sinsap (Thailand) Public Company Limited (AEONTS)
+- company: Sprout Solutions Phil. Inc.
   board: sprout-solutions-phil-inc
 - company: Stantec
   board: stantec
 - company: STXZ LLC
   board: stxz-llc
-- company: Talent Bridge HR Consultancy | Jobs in Dubai | Recruitment Agency | Headhunters Dubai
+- company: Talent Bridge HR Consultancy Dubai
   board: talent-bridge-dubai
 - company: Talents Tide
   board: talentstides
-- company: Tap Health
+- company: Taphealthcare
   board: taphealthcare
-- company: Dexon Technology
+- company: To be advice
   board: to-be-advice
 - company: TradeBeyond
   board: tradebeyond
 - company: TriVA Global
   board: triva-global
-- company: UnitedYou Ventures
+- company: UnitedYou
   board: unitedyouventures
 - company: Uplive
   board: uplive
 - company: Upright Talent
   board: uprighttalent
-- company: confidential
+- company: UpSkill MNL
   board: upskillmnlinc
-- company: Unison Group
+- company: User Experience Researchers Pte.Ltd
   board: user-experience-researchers-pteltd
 - company: Venture Dynamics
   board: venture-dynamics
-- company: KSI Auto Parts
+- company: Virtually Helpful LLC
   board: virtually-helpful-llc
-- company: PT Bank Danamon Indonesia Tbk
+- company: Wirehire
   board: wirehire
-- company: Wizpresso 濃說
+- company: Wizpresso
   board: wizpresso
 - company: Yeah! Global
   board: yeah-global

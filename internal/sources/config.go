@@ -74,6 +74,12 @@ func ParseRawEntries(provider string, data []byte) ([]CompanyEntry, error) {
 		if entries[i].Provider == "" {
 			entries[i].Provider = provider
 		}
+		// A board id never legitimately carries surrounding whitespace, and one that does is
+		// a board that 404s: the adapters paste it into a URL and the pipeline namespaces
+		// external_id with the literal string. It also hides a duplicate from the collapse
+		// below — a harvested UKG board arrived with a trailing space and so did not collide
+		// with the same board already in the file.
+		entries[i].Board = strings.TrimSpace(entries[i].Board)
 	}
 	return entries, nil
 }
