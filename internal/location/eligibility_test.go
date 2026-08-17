@@ -85,6 +85,16 @@ func TestEligibilityFromDescription(t *testing.T) {
 
 		// ...but "without" still denies when it genuinely negates the requirement.
 		{"without still negates elsewhere", "You may join this team without US citizenship.", nil, nil},
+
+		// Word boundaries. "right to work in the uk" is a prefix of "...in the Ukraine",
+		// and matching inside that word would file a Ukrainian posting under the UK.
+		{"uk does not match ukraine", "You must have the right to work in the Ukraine.", nil, nil},
+		{"uk still matches its own sentence", "You must have the right to work in the UK.", []string{"gb"}, []string{"uk"}},
+
+		// A trailing plural "s" is part of the word and still matches; anything longer
+		// is a different word and does not.
+		{"plural citizens matches", "Open to Australian citizens only.", []string{"au"}, []string{"apac"}},
+		{"citizenship matches its own entry, not the citizen prefix", "US citizenship is required.", []string{"us"}, []string{"north_america"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -61,15 +61,18 @@ var euOnlyPhrases = []string{
 var ukOnlyPhrases = []string{
 	"right to work in the uk", "right to work in the united kingdom",
 	"eligible to work in the uk", "authorised to work in the uk",
-	"british citizen",
+	"british citizen", "british citizenship",
 }
 
-// auOnlyPhrases mark a role as restricted to Australia. "Australian citizen" subsumes
-// "Australian citizenship" by substring, so only the shorter form is listed. Australian
-// government and defence contracts drive this: a sample of 44 verbatim matches had 16
-// with no resolved geography, the highest unpinned share of any area measured.
+// auOnlyPhrases mark a role as restricted to Australia. Australian government and
+// defence contracts drive this: a sample of 44 verbatim matches had 16 with no resolved
+// geography, the highest unpinned share of any area measured.
+//
+// Both noun forms are listed. Matching is whole-word (with a plural "s" allowed), so the
+// shorter entry does NOT reach inside the longer one — that is what stops "uk" matching
+// "Ukraine", and it costs an explicit variant here.
 var auOnlyPhrases = []string{
-	"australian citizen",
+	"australian citizen", "australian citizenship",
 }
 
 // caOnlyPhrases mark a role as restricted to Canada. Both forms are clean in the
@@ -78,7 +81,7 @@ var auOnlyPhrases = []string{
 // than the others. It is here because the phrasings are unambiguous, not because the
 // volume is large.
 var caOnlyPhrases = []string{
-	"canadian citizen", "eligible to work in canada",
+	"canadian citizen", "canadian citizenship", "eligible to work in canada",
 }
 
 // eligibilityRule pairs a set of anchored eligibility phrases with the geography an
@@ -182,11 +185,35 @@ func phraseAsserted(lower, p string) bool {
 		}
 		start := offset + i
 		end := start + len(p)
-		if !negatedSentence(sentenceAround(lower, start, end)) {
+		if wholeWordMatch(lower, start, end) && !negatedSentence(sentenceAround(lower, start, end)) {
 			return true
 		}
 		offset = end
 	}
+}
+
+// wholeWordMatch reports whether lower[start:end] sits on word boundaries, so a phrase
+// cannot match inside a longer word. Without it "right to work in the uk" matches "right
+// to work in the Ukraine" and files a Ukrainian posting under the United Kingdom.
+//
+// A single trailing "s" is allowed, because the plural is how these statements are
+// usually written ("United States citizens", "Australian citizens") and the phrase lists
+// carry the singular. Nothing longer is: "us citizen" must NOT swallow "US citizenship",
+// which is a separate list entry that matches itself exactly.
+func wholeWordMatch(lower string, start, end int) bool {
+	if start > 0 && isWordByte(lower[start-1]) {
+		return false
+	}
+	if end < len(lower) && lower[end] == 's' {
+		end++
+	}
+	return end == len(lower) || !isWordByte(lower[end])
+}
+
+// isWordByte reports whether b continues a word. ASCII-only is enough: every eligibility
+// phrase is ASCII, so only an ASCII neighbour can extend one into a longer word.
+func isWordByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
 }
 
 // sentenceAround returns the text around lower[start:end], trimmed to the nearest sentence
