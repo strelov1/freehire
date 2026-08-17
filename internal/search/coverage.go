@@ -27,6 +27,8 @@ func (c *Client) NonAggregatorCompanies(ctx context.Context, companySlugs, aggre
 // split out (and taking an injected searcher) so it is unit-testable without a live engine —
 // the same seam disjunctiveFacetCounts uses.
 func nonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string, search facetSearcher) (map[string]bool, error) {
+	// The source clause is the same for every batch, so it is built once.
+	sourceClause := NotInStrings("source", aggregators)
 	covered := make(map[string]bool)
 	for _, batch := range chunkStrings(companySlugs, coverageBatchSize) {
 		folded, owners := foldedBatch(batch)
@@ -40,8 +42,8 @@ func nonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []str
 			match = append(match, InStrings("company_slug_folded", folded))
 		}
 		groups := [][]string{match}
-		if notIn := NotInStrings("source", aggregators); notIn != "" {
-			groups = append(groups, []string{notIn})
+		if sourceClause != "" {
+			groups = append(groups, []string{sourceClause})
 		}
 		resp, err := search(ctx, "", Filter(groups...), []string{"company_slug", "company_slug_folded"})
 		if err != nil {
@@ -51,17 +53,15 @@ func nonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []str
 		if err != nil {
 			return nil, err
 		}
-		// An exact hit answers for itself, and ONLY when that exact slug was asked about:
-		// Meili returns the whole facet distribution of the matched set, and the folded
-		// clause pulls in documents whose exact slug was never in the batch. Crediting those
-		// would put keys in the answer the caller never asked for, which its contract
-		// forbids — and would be a coverage claim about a company nobody enquired about.
-		requested := make(map[string]bool, len(batch))
+		// Walking the BATCH rather than the facet is what keeps the answer to the slugs the
+		// caller asked about: Meili reports the whole facet distribution of the matched set,
+		// and the folded clause pulls in documents whose exact slug was never in the batch.
+		// Crediting those would put keys in the answer the caller never asked for, which its
+		// contract forbids — and each would be a coverage claim about a company nobody
+		// enquired about.
+		exact := fr.Facets["company_slug"]
 		for _, slug := range batch {
-			requested[slug] = true
-		}
-		for slug := range fr.Facets["company_slug"] {
-			if requested[slug] {
+			if _, hit := exact[slug]; hit {
 				covered[slug] = true
 			}
 		}
