@@ -90,6 +90,26 @@ export function companyPageTitle(name: string, total: number | undefined): strin
   return `${name} — ${roles} · ${SITE}`;
 }
 
+/** The `<meta name="robots">` a listing page should carry, given how many results
+ *  it actually rendered — `undefined` for the normal case of leaving it off.
+ *
+ *  A company page is reached from the sitemap, which is built from the companies
+ *  search index, which is built from `companies.job_count`. That count and this
+ *  page disagree by construction: the count scopes to open, non-duplicate rows,
+ *  while the list is served by the JOB search index, which additionally drops
+ *  private jobs, jobs with no body, and jobs whose category no dictionary resolved.
+ *  A company hiring only for roles the dictionary never classified therefore ships
+ *  a sitemap URL whose page says "0 open jobs" — a title, a heading and nothing to
+ *  read. Telling crawlers so is the honest answer, and it self-corrects: the day a
+ *  classifiable role opens, the count is non-zero and the directive is gone.
+ *
+ *  `undefined` on an unknown count is the load-bearing part. The company load lets
+ *  a failed search resolve to null so the header and facts still render, and a
+ *  transient search failure must not be spelled the same way as an empty company. */
+export function listingRobots(total: number | undefined): string | undefined {
+  return total === 0 ? 'noindex, follow' : undefined;
+}
+
 /** "<total> <title> jobs" — a collection's heading with its live open-job
  *  count, comma-grouped. Falls back to the plain "<title> jobs" when no count
  *  is available (the count is optional on the underlying job-search response). */

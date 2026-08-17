@@ -9,6 +9,7 @@ import {
   datasetJsonLd,
   jobListItems,
   jobPostingJsonLd,
+  listingRobots,
   metaDescription,
   organizationJsonLd,
 } from './seo';
@@ -555,5 +556,35 @@ describe('articleJsonLd', () => {
   it('omits keywords when the post has no tags', () => {
     const ld = articleJsonLd(post({ tags: [] }), ORIGIN);
     expect(ld.keywords).toBeUndefined();
+  });
+});
+
+describe('listingRobots', () => {
+  // The bug this closes: companies.job_count counts open, non-duplicate rows, while
+  // the company page lists what the SEARCH index holds — open, non-duplicate,
+  // non-private, categorized, with a body. A company whose only openings the
+  // category dictionary never resolved passes the first test and fails the second,
+  // so it reaches the sitemap and then renders a heading, "0 open jobs" and nothing
+  // else. Measured on prod: 17 of 25 sampled company pages.
+  it('asks crawlers to skip a listing that has nothing to list', () => {
+    expect(listingRobots(0)).toBe('noindex, follow');
+  });
+
+  it('leaves a listing with results alone', () => {
+    expect(listingRobots(1)).toBeUndefined();
+    expect(listingRobots(444)).toBeUndefined();
+  });
+
+  // A failed search resolves to null and the page still renders its header, About
+  // and facts — worth serving, and NOT evidence the company has nothing. Deciding
+  // noindex off an absent count would deindex real pages on a search blip.
+  it('never deindexes on an unknown count', () => {
+    expect(listingRobots(undefined)).toBeUndefined();
+  });
+
+  // follow, not none: the page still carries the breadcrumb and footer links, and
+  // dropping them would strand whatever they reach.
+  it('keeps the page a link source', () => {
+    expect(listingRobots(0)).toContain('follow');
   });
 });

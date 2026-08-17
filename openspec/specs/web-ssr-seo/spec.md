@@ -247,3 +247,46 @@ The public list pages (`/jobs` and `/companies`) SHALL each render exactly one v
 - **WHEN** `GET /companies` is requested
 - **THEN** the returned HTML body contains exactly one `<h1>` describing the companies list
 
+
+### Requirement: A listing URL with nothing on it is not served as a page
+
+`parsePage` clamps `?page=N` to the deepest page the search window reaches rather
+than rejecting it, so every listing route hands out addresses for pages its results
+do not fill. Those SHALL NOT be served: a listing route (`/`, `/collections/:slug`,
+`/companies/:slug`) SHALL respond 404 when the requested page number is past the
+last page its matches populate. Page 1 SHALL always be served, whatever the result
+count — a listing that is empty today is a real landing page that refills.
+
+A company page SHALL emit `<meta name="robots" content="noindex, follow">` when its
+job list rendered zero results, because `companies.job_count` — which gates the
+sitemap — counts open, non-duplicate rows while the page lists what the JOB search
+index holds, which additionally excludes private jobs, jobs with no body, and jobs
+whose category no dictionary resolved. An employer hiring only for roles that fail
+the second test reaches the sitemap with nothing to show. The directive SHALL be
+omitted when the count is unknown: a failed search resolves to null so the header
+and facts still render, and that must not be spelled the same way as an empty
+company.
+
+#### Scenario: A page past the last populated one is a 404
+
+- **WHEN** `GET /collections/:slug?page=N` is requested with N greater than the
+  number of pages the collection's matches fill
+- **THEN** the server responds 404, rather than 200 with an empty feed under a
+  self-referencing canonical
+
+#### Scenario: An empty listing still serves its first page
+
+- **WHEN** `GET /collections/:slug` is requested for a collection with no open jobs
+- **THEN** the server responds 200 and renders the page's own empty state
+
+#### Scenario: A company with nothing findable asks not to be indexed
+
+- **WHEN** `GET /companies/:slug` is requested for a company whose job search
+  returns zero results
+- **THEN** the `<head>` contains `<meta name="robots" content="noindex, follow">`
+
+#### Scenario: A company with open roles stays indexable
+
+- **WHEN** `GET /companies/:slug` is requested for a company whose job search
+  returns results
+- **THEN** the `<head>` contains no `robots` meta tag

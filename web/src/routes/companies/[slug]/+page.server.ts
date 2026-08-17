@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { ApiError } from '$lib/api';
-import { pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
@@ -36,23 +36,31 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   // Start the search first so it overlaps the company fetch below.
   const search = client.searchJobs(facets, LIMIT, pageOffset(pageNumber)).catch(() => null);
 
+  let entity;
   try {
     // Only `company` is used (the list comes from `search`), so the returned job
     // is discarded. We can't ask for zero jobs: the API clamps `limit` to >= 1
     // (pageParams), so limit=1 is already the minimal fetch. Trimming this fully
     // needs a backend company-entity-only path — deferred to the latency follow-up.
-    const { company, referral_available } = await client.getCompany(params.slug, 1, 0);
-    return {
-      company,
-      initial: await search,
-      slug: params.slug,
-      pageNumber,
-      referralAvailable: referral_available,
-    };
+    entity = await client.getCompany(params.slug, 1, 0);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) {
       error(404, 'Company not found');
     }
     throw e;
   }
+
+  const initial = await search;
+  // A page past the last one this employer's postings fill is an empty, self-canonical
+  // 200 — see the collections loader. A null `initial` is the failed-search path, not
+  // an empty company, so it keeps serving the header and facts at whatever page.
+  if (initial && !pageExists(pageNumber, initial.total)) error(404, 'Page not found');
+
+  return {
+    company: entity.company,
+    initial,
+    slug: params.slug,
+    pageNumber,
+    referralAvailable: entity.referral_available,
+  };
 };

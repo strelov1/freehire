@@ -7,6 +7,7 @@
     companyMetaDescription,
     companyPageTitle,
     jsonLdScript,
+    listingRobots,
     organizationJsonLd,
   } from '$lib/seo';
   import type { PageData } from './$types';
@@ -22,6 +23,9 @@
   // Page 2 onward says so, or every page of a large employer's postings competes
   // for one SERP entry under an identical title.
   const listingTitle = $derived(companyPageTitle(data.company.name, data.initial?.total));
+  // A company can reach the sitemap with nothing this page can list; see
+  // listingRobots for why the two counts disagree.
+  const robots = $derived(listingRobots(data.initial?.total));
   const pageTitle = $derived(
     data.pageNumber > 1
       ? `${data.company.name} — page ${data.pageNumber} · freehire`
@@ -43,6 +47,7 @@
   title={pageTitle}
   {description}
   {canonical}
+  {robots}
   image={`${origin}/companies/${data.slug}/og.png`}
 />
 

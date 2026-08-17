@@ -10,6 +10,7 @@
     canonical,
     ogType = 'website',
     image,
+    robots,
   }: {
     title: string;
     description?: string;
@@ -19,6 +20,10 @@
     // company) pass their own; when absent the site-wide static brand image is
     // used, so every page emits a summary_large_image preview.
     image?: string;
+    // Crawler directive, emitted only when a route asks for one — absent means the
+    // default (indexable), which is what nearly every page wants. Routes that
+    // suppress themselves conditionally build this with `listingRobots`.
+    robots?: string;
   } = $props();
 
   const previewImage = $derived(image ?? `${page.url.origin}/og.png`);
@@ -32,6 +37,9 @@
   {#if canonical}
     <link rel="canonical" href={canonical} />
     <meta property="og:url" content={canonical} />
+  {/if}
+  {#if robots}
+    <meta name="robots" content={robots} />
   {/if}
   <meta property="og:title" content={title} />
   {#if description}

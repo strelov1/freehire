@@ -3,6 +3,7 @@ import {
   MAX_PAGE,
   canFetchMore,
   pageCount,
+  pageExists,
   pageOffset,
   pageWindow,
   parsePage,
@@ -96,5 +97,41 @@ describe('canFetchMore', () => {
 
   it('allows the fetch that lands exactly on the last row', () => {
     expect(canFetchMore(pageOffset(MAX_PAGE - 1), 20)).toBe(true);
+  });
+});
+
+describe('pageExists', () => {
+  it('accepts every page the results fill', () => {
+    // 9,402 matches at 20 a page is 471 pages, the last holding two rows.
+    expect(pageExists(1, 9402)).toBe(true);
+    expect(pageExists(470, 9402)).toBe(true);
+    expect(pageExists(471, 9402)).toBe(true);
+  });
+
+  // The real bug this guards: parsePage clamps anything up to MAX_PAGE, so
+  // /collections/remote-latam?page=472 through ?page=500 each answered 200 with no
+  // rows, a self-referencing canonical and no noindex — ~29 empty indexable URLs
+  // per collection, and one collection per landing page.
+  it('rejects the pages past the last one holding rows', () => {
+    expect(pageExists(472, 9402)).toBe(false);
+    expect(pageExists(MAX_PAGE, 9402)).toBe(false);
+  });
+
+  // An empty listing is still a page: a collection nobody is hiring for today is a
+  // real landing page that should keep answering 200, and be there when it refills.
+  it('keeps page 1 whatever the result count', () => {
+    expect(pageExists(1, 0)).toBe(true);
+    expect(pageExists(1, undefined)).toBe(true);
+  });
+
+  it('rejects a later page of an empty listing', () => {
+    expect(pageExists(2, 0)).toBe(false);
+  });
+
+  // pageCount caps at MAX_PAGE because the search API refuses a deeper offset, so a
+  // catalogue far larger than the window still stops where the window does.
+  it('stops at the deepest page the search window reaches', () => {
+    expect(pageExists(MAX_PAGE, 5_000_000)).toBe(true);
+    expect(pageExists(MAX_PAGE + 1, 5_000_000)).toBe(false);
   });
 });

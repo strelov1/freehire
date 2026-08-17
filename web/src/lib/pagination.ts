@@ -53,6 +53,22 @@ export function pageCount(total: number | undefined): number {
   return Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGE);
 }
 
+/** Whether `page` addresses rows that exist, which is what a listing `load` has to
+ *  ask before serving one.
+ *
+ *  `parsePage` deliberately clamps anything malformed or oversized to a page in
+ *  range rather than failing, so a visitor never meets a 400 for a hand-edited URL.
+ *  That leaves the pages between the last one holding rows and MAX_PAGE answering
+ *  200 with an empty feed, a self-referencing canonical and no noindex — the shape
+ *  Google reads as a soft 404 and, at one listing per collection, thousands of them.
+ *  Clamping is right for the number; serving what it clamps to is not.
+ *
+ *  Page 1 always exists: a listing with nothing in it today is still a real landing
+ *  page, and 404-ing it would drop a URL that refills tomorrow. */
+export function pageExists(page: number, total: number | undefined): boolean {
+  return page <= pageCount(total);
+}
+
 /** Page numbers to render as links, with `null` marking an elided run.
  *  Always includes the first and last page, plus a couple either side of the
  *  current one, so a crawler reaches both ends of the range from any page. */

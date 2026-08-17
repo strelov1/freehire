@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { collectionBySlug } from '$lib/collections';
-import { pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -33,5 +33,9 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   // SvelteKit's navigation state, and two different `page`s in one file is a trap.
   const pageNumber = parsePage(url.searchParams);
   const initial = await serverApi(fetch).searchJobs(facets, LIMIT, pageOffset(pageNumber));
+  // Past the last page the matches fill there is no page, only an empty feed under
+  // a self-referencing canonical. parsePage clamps to MAX_PAGE rather than failing,
+  // which is right for the number and wrong for what we then serve.
+  if (!pageExists(pageNumber, initial.total)) error(404, 'Page not found');
   return { slug: params.slug, collection, initial, pageNumber };
 };

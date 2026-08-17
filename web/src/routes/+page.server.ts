@@ -1,5 +1,6 @@
+import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
-import { pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -19,5 +20,10 @@ export const load: PageServerLoad = async ({ url, fetch }) => {
   // leads somewhere: each of those links has to render its own rows.
   const pageNumber = parsePage(url.searchParams);
   const initial = await serverApi(fetch).searchJobs(params, LIMIT, pageOffset(pageNumber));
+  // See the collections loader: a page past the last one the matches fill is an
+  // empty, self-canonical 200 — a soft 404 dressed as a listing. Page 1 always
+  // stands, so a filter combination nothing matches still renders the feed's own
+  // empty state rather than the site's 404.
+  if (!pageExists(pageNumber, initial.total)) error(404, 'Page not found');
   return { initial, filterParams: params.toString(), pageNumber };
 };
