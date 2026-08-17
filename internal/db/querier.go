@@ -63,6 +63,13 @@ type Querier interface {
 	// runs before any posting has been cleared out from under the events it is repairing, and
 	// a row whose job_id is already NULL is skipped rather than guessed at.
 	BackfillApplicationEventLinks(ctx context.Context, batchSize int32) (int64, error)
+	// Fills company/company_slug/company_slug_folded for rows still blank under one board of a
+	// provider whose adapter sets Company statically per board (see cmd/backfill-blank-company for
+	// which providers qualify and why). board_pattern is sources.BoardIDPattern(board) — the
+	// board's external_id namespace, so only this board's rows move. Also enqueues every touched
+	// OPEN job into search_outbox, mirroring UpsertJob/EnqueueSearchOutbox's denormalized
+	// job_posted_at, since this write bypasses the normal ingest path that would do it inline.
+	BackfillBoardCompany(ctx context.Context, arg BackfillBoardCompanyParams) (BackfillBoardCompanyRow, error)
 	// Fill jobs.company_slug_folded for one id range. The column is maintained by every
 	// write path (see migrations/0109), but the rows that predate it need this pass.
 	//
@@ -474,6 +481,9 @@ type Querier interface {
 	// Promote a suggested link to a confirmed one: the suggestion becomes job_id with
 	// link_source 'manual'. No-op (0 rows) when there is no pending suggestion.
 	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
+	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
+	// would touch without writing anything.
+	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)

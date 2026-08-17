@@ -315,6 +315,39 @@ RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     ((SELECT old_hash FROM existing) IS DISTINCT FROM sqlc.arg(content_hash)) AS changed;
 
+-- name: BackfillBoardCompany :one
+-- Fills company/company_slug/company_slug_folded for rows still blank under one board of a
+-- provider whose adapter sets Company statically per board (see cmd/backfill-blank-company for
+-- which providers qualify and why). board_pattern is sources.BoardIDPattern(board) — the
+-- board's external_id namespace, so only this board's rows move. Also enqueues every touched
+-- OPEN job into search_outbox, mirroring UpsertJob/EnqueueSearchOutbox's denormalized
+-- job_posted_at, since this write bypasses the normal ingest path that would do it inline.
+WITH updated AS (
+    UPDATE jobs
+    SET company             = sqlc.arg(company),
+        company_slug        = sqlc.arg(company_slug),
+        company_slug_folded = replace(sqlc.arg(company_slug), '-', ''),
+        updated_at          = now()
+    WHERE source = sqlc.arg(source)
+      AND company = ''
+      AND external_id LIKE sqlc.arg(board_pattern)
+    RETURNING id, closed_at, COALESCE(posted_at, created_at) AS eff_posted_at
+),
+enqueued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL
+    ON CONFLICT (job_id) DO NOTHING
+    RETURNING job_id
+)
+SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
+       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count;
+
+-- name: CountBlankCompanyByBoard :one
+-- Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
+-- would touch without writing anything.
+SELECT count(*)::bigint FROM jobs
+WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(board_pattern);
+
 -- name: RefreshUnchangedJob :one
 -- The cheap half of the ingest write path, tried before UpsertJob: a crawl that re-sees a
 -- posting identical to the stored row refreshes its liveness and writes NOTHING else. Matching

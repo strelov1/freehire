@@ -11,6 +11,58 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const backfillBoardCompany = `-- name: BackfillBoardCompany :one
+WITH updated AS (
+    UPDATE jobs
+    SET company             = $1,
+        company_slug        = $2,
+        company_slug_folded = replace($2, '-', ''),
+        updated_at          = now()
+    WHERE source = $3
+      AND company = ''
+      AND external_id LIKE $4
+    RETURNING id, closed_at, COALESCE(posted_at, created_at) AS eff_posted_at
+),
+enqueued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL
+    ON CONFLICT (job_id) DO NOTHING
+    RETURNING job_id
+)
+SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
+       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count
+`
+
+type BackfillBoardCompanyParams struct {
+	Company      string `json:"company"`
+	CompanySlug  string `json:"company_slug"`
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+type BackfillBoardCompanyRow struct {
+	UpdatedCount  int64 `json:"updated_count"`
+	EnqueuedCount int64 `json:"enqueued_count"`
+}
+
+// Fills company/company_slug/company_slug_folded for rows still blank under one board of a
+// provider whose adapter sets Company statically per board (see cmd/backfill-blank-company for
+// which providers qualify and why). board_pattern is sources.BoardIDPattern(board) — the
+// board's external_id namespace, so only this board's rows move. Also enqueues every touched
+// OPEN job into search_outbox, mirroring UpsertJob/EnqueueSearchOutbox's denormalized
+// job_posted_at, since this write bypasses the normal ingest path that would do it inline.
+func (q *Queries) BackfillBoardCompany(ctx context.Context, arg BackfillBoardCompanyParams) (BackfillBoardCompanyRow, error) {
+	row := q.db.QueryRow(ctx, backfillBoardCompany,
+		arg.Company,
+		arg.CompanySlug,
+		arg.Source,
+		arg.BoardPattern,
+	)
+	var i BackfillBoardCompanyRow
+	err := row.Scan(&i.UpdatedCount, &i.EnqueuedCount)
+	return i, err
+}
+
 const backfillCompanySlugFoldedChunk = `-- name: BackfillCompanySlugFoldedChunk :execrows
 UPDATE jobs
 SET company_slug_folded = replace(company_slug, '-', '')
@@ -416,6 +468,25 @@ func (q *Queries) CompanySlugFoldedBackfillBounds(ctx context.Context) (CompanyS
 	var i CompanySlugFoldedBackfillBoundsRow
 	err := row.Scan(&i.MinID, &i.MaxID, &i.Remaining)
 	return i, err
+}
+
+const countBlankCompanyByBoard = `-- name: CountBlankCompanyByBoard :one
+SELECT count(*)::bigint FROM jobs
+WHERE source = $1 AND company = '' AND external_id LIKE $2
+`
+
+type CountBlankCompanyByBoardParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
+// would touch without writing anything.
+func (q *Queries) CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countBlankCompanyByBoard, arg.Source, arg.BoardPattern)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const countCatalogueScale = `-- name: CountCatalogueScale :one
