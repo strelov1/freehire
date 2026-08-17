@@ -63,6 +63,56 @@ func TestParseConfigDropsCaseInsensitiveBoardDuplicates(t *testing.T) {
 	}
 }
 
+// Two spellings of one iCIMS board address the same site: the adapter builds
+// "careers-<slug>.icims.com" from a bare slug and takes a dotted board as the host verbatim,
+// so "vet" and "careers-vet.icims.com" are one crawl target under two names. Case folding
+// alone does not see that, and 37 such pairs sat in sources/icims.yml being crawled twice.
+func TestParseConfigDropsBoardSpellingsAddressingTheSameSite(t *testing.T) {
+	data := []byte(`
+- company: Vet Jobs
+  board: careers-vet.icims.com
+- company: Stripe
+  board: stripe
+- company: vet
+  board: vet
+`)
+	cfg, err := ParseConfig("icims", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	want := []CompanyEntry{
+		{Company: "Vet Jobs", Provider: "icims", Board: "careers-vet.icims.com"}, // first wins
+		{Company: "Stripe", Provider: "icims", Board: "stripe"},
+	}
+	if len(cfg.Sources) != len(want) {
+		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
+	}
+	for i, w := range want {
+		if cfg.Sources[i] != w {
+			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
+		}
+	}
+}
+
+// The fold is per-provider: a bare "vet" and a "careers-vet.icims.com" on a provider that
+// does NOT resolve both to one host are two different boards, and collapsing them would
+// silently drop a live crawl target.
+func TestParseConfigFoldsBoardSpellingsOnlyForTheOwningProvider(t *testing.T) {
+	data := []byte(`
+- company: Vet Jobs
+  board: careers-vet.icims.com
+- company: vet
+  board: vet
+`)
+	cfg, err := ParseConfig("greenhouse", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(Sources) = %d, want 2: %+v", len(cfg.Sources), cfg.Sources)
+	}
+}
+
 // A same-name board on two different regional hosts (distinct Region) is a genuinely
 // different crawl target, not a case duplicate, so both are kept.
 func TestParseConfigKeepsSameBoardOnDifferentRegions(t *testing.T) {

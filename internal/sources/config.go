@@ -78,10 +78,11 @@ func ParseRawEntries(provider string, data []byte) ([]CompanyEntry, error) {
 	return entries, nil
 }
 
-// dedupeBoards collapses entries that address the same case-insensitive board on the same
-// provider and region, keeping the first occurrence. ATS board ids are case-insensitive at
-// the platform (e.g. SmartRecruiters serves the same tenant for "SopraSteria1" and
-// "soprasteria1"), but the pipeline namespaces external_id with the literal board string
+// dedupeBoards collapses entries that address the same board on the same provider and
+// region, keeping the first occurrence. Two things make one board look like two: case (ATS
+// board ids are case-insensitive at the platform — SmartRecruiters serves the same tenant for
+// "SopraSteria1" and "soprasteria1") and, on some platforms, the FORM of the id (see
+// boardIdentity). Either way the pipeline namespaces external_id with the literal board string
 // (see NamespaceExternalID), so a case-variant duplicate crawls identical postings yet
 // stores them as a SECOND row-set under a different namespace but the SAME company_slug.
 // The post-run unseen sweep is scoped by company_slug (not board), so whenever a run
@@ -101,7 +102,7 @@ func dedupeBoards(entries []CompanyEntry) []CompanyEntry {
 			continue
 		}
 		if _, dup := seen[key]; dup {
-			log.Printf("sources: dropping duplicate board %q (provider %s, company %q) — case-variant of an earlier entry",
+			log.Printf("sources: dropping duplicate board %q (provider %s, company %q) — addresses the same site as an earlier entry",
 				e.Board, e.Provider, e.Company)
 			continue
 		}
@@ -111,14 +112,29 @@ func dedupeBoards(entries []CompanyEntry) []CompanyEntry {
 	return kept
 }
 
+// boardIdentity maps a provider to the function that folds every spelling of a board into
+// the one thing it addresses. Case folding is not enough where a platform accepts more than
+// one FORM of board id: iCIMS boards are stored both as a bare slug and as the full
+// "careers-<slug>.icims.com" host, and icimsHost resolves both to that host, so the two
+// spellings are one crawl target — 37 pairs were committed and crawled as if they were two.
+// A provider absent here folds on case alone.
+var boardIdentity = map[string]func(board string) string{
+	"icims": icimsHost,
+}
+
 // boardDedupeKey is the identity dedupeBoards and DuplicateBoards collapse on:
-// case-insensitive board, provider, and region. ok is false for a boardless entry, which
-// has no tenant id and so is never a duplicate of anything.
+// case-insensitive board (folded through boardIdentity), provider, and region. ok is false
+// for a boardless entry, which has no tenant id and so is never a duplicate of anything.
 func boardDedupeKey(e CompanyEntry) (key string, ok bool) {
 	if e.Board == "" {
 		return "", false
 	}
-	return strings.ToLower(e.Provider) + "\x00" + strings.ToLower(e.Board) + "\x00" + strings.ToLower(e.Region), true
+	provider := strings.ToLower(e.Provider)
+	board := e.Board
+	if fold := boardIdentity[provider]; fold != nil {
+		board = fold(board)
+	}
+	return provider + "\x00" + strings.ToLower(board) + "\x00" + strings.ToLower(e.Region), true
 }
 
 // DuplicateBoards reports every entry that collides with an earlier one under
