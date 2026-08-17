@@ -226,7 +226,9 @@ export const GROUPS: Group[] = [
           'Combine free-text `q` with any of the filter params below. Repeated ' +
           'facet params are ORed; add `<param>_mode=and` to require all, or ' +
           '`<param>_exclude=<value>` to exclude. Without `q`, results default to ' +
-          'newest first; with `q`, to relevance.',
+          'newest first; with `q`, to relevance. A param no filter reads is ignored ' +
+          'rather than refused, and listed in `meta.ignored_params` — check it, ' +
+          'since a dropped filter otherwise looks like a broad result.',
         filterable: true,
         query: [
           { name: 'q', type: 'string', description: 'Full-text query over title, company, and description.', example: 'golang' },

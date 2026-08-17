@@ -125,3 +125,22 @@ func TestAgentSearchJobs_FormatApplies(t *testing.T) {
 		t.Errorf("text format not applied to hydrated description: %q", got)
 	}
 }
+
+func TestAgentSearchJobs_ReportsIgnoredParamsButNotItsOwn(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := agentSearchApp(fake, &fakeDescriptions{})
+
+	// description_format is this endpoint's own param, so it is legitimate;
+	// `region` (the facet is `regions`) is not and must be reported.
+	_, body := doGet(t, app, "/agent/jobs/search?description_format=text&region=eu")
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "region" || first["did_you_mean"] != "regions" {
+		t.Errorf("ignored_params[0] = %v, want region -> regions", first)
+	}
+}

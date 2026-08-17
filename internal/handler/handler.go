@@ -182,6 +182,25 @@ func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, 
 	})
 }
 
+// listResponseWithIgnored is listResponse plus the query params the filter did
+// not read, omitted entirely when there are none.
+//
+// Omitted rather than sent empty: a caller only needs the key when something
+// actually went wrong, and an always-present empty array is a field every reader
+// learns to skip — at which point the one response that does carry a warning
+// gets skipped too.
+func listResponseWithIgnored(c *fiber.Ctx, data any, total int64, limit, offset int, ignored []search.UnknownParam) error {
+	meta := fiber.Map{
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	}
+	if len(ignored) > 0 {
+		meta["ignored_params"] = ignored
+	}
+	return c.JSON(fiber.Map{"data": data, "meta": meta})
+}
+
 // Config is the dependency bundle Register wires onto the app: the DB pool, the
 // required rate-limit Throttler, the single browser origin allowed cross-origin
 // (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only

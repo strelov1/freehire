@@ -60,6 +60,28 @@ type searcher interface {
 // refused. ~500 pages at the default limit is far beyond any real browsing.
 const maxSearchWindow = 10000
 
+// searchParams are the query params the search endpoints read themselves rather
+// than hand to the filter: the query text, the sort directive and the pagination
+// window. search.UnknownParams owns the filter vocabulary and knows nothing of
+// these, so they are declared here — the endpoint that adds a param of its own
+// (see agentSearchParams) extends this list rather than teaching the search
+// package about transport.
+var searchParams = []string{"q", "sort", "order", "limit", "offset"}
+
+// agentSearchParams is searchParams plus the agent endpoint's response-format
+// selector. Spelled out rather than appended, so it cannot alias searchParams'
+// backing array.
+var agentSearchParams = []string{"q", "sort", "order", "limit", "offset", "description_format"}
+
+// ignoredParams reports the query params of this request that neither the filter
+// nor the endpoint itself reads. They are echoed in the response meta instead of
+// being refused: rejecting them would break saved searches and shared links that
+// still carry retired params, while staying silent is what let a mistyped
+// `country=it` pass for a search of Italy.
+func ignoredParams(c *fiber.Ctx, own []string) []search.UnknownParam {
+	return search.UnknownParams(queryValues(c), own)
+}
+
 // searchSortable is the allowlist of sort params mapped to their index attribute;
 // anything else is ignored so a bad param cannot make Meilisearch reject the query.
 var searchSortable = map[string]string{
@@ -85,7 +107,7 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	return listResponse(c, views, res.Total, limit, offset)
+	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, searchParams))
 }
 
 // runJobSearch performs the request handling shared by both job-search endpoints:

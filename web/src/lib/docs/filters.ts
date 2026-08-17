@@ -77,8 +77,10 @@ export const FILTER_MODIFIERS = [
   'Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.',
   'Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.',
   'Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.',
-  'Different facets are ANDed together; numeric and boolean filters are ANDed too.',
+  'Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.',
+  'Geography is a single OR group: `regions`, `countries` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means "in Europe **or** in Italy", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. (`regions=eu&countries=BR` is the case this serves — "Europe or Brazil". Intersecting them would be empty for any country inside the region, so `_mode=and` does not apply to geography.)',
   'Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.',
+  'A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result.',
 ];
 
 /** Worked filter recipes shown as ready-to-run examples. */
@@ -90,6 +92,7 @@ export interface Recipe {
 export const RECIPES: Recipe[] = [
   { title: 'Senior Go, remote, in the CIS region', query: 'q=go&seniority=senior&work_mode=remote&regions=cis' },
   { title: 'Backend roles, freshest first, in Germany', query: 'category=backend&countries=DE&sort=posted_at&order=desc' },
+  { title: 'One country only — no region param, or it widens back out', query: 'countries=IT&employment_type=contract' },
   { title: 'Must use both Go and Rust', query: 'skills=go,rust&skills_mode=and' },
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
   { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },

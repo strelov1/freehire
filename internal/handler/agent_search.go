@@ -44,7 +44,7 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 		views[i] = hit.Job
 	}
 
-	return listResponse(c, views, res.Total, limit, offset)
+	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, agentSearchParams))
 }
 
 // hydrateDescriptions replaces each hit's truncated preview description with the

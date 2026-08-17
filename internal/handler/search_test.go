@@ -203,3 +203,41 @@ func TestSearchJobs_DefaultSortIsPostedAtForEmptyQuery(t *testing.T) {
 		t.Errorf("Sort = %v, want [created_at:asc] for explicit sort", fake.got.Sort)
 	}
 }
+
+func TestSearchJobs_ReportsIgnoredParams(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+
+	// `country` is not the facet name (`countries` is), so it filters nothing.
+	// The query still runs — old links and saved searches must keep working —
+	// but the response has to say the param was dropped, or an unfiltered
+	// result set reads as a real answer about Italy.
+	status, body := doGet(t, app, "/jobs/search?country=it")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "country" || first["did_you_mean"] != "countries" {
+		t.Errorf("ignored_params[0] = %v, want country -> countries", first)
+	}
+}
+
+func TestSearchJobs_CleanQueryReportsNothingIgnored(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+
+	// Transport params belong to the handler rather than to the filter
+	// vocabulary; a well-formed query must not accuse them of anything.
+	_, body := doGet(t, app, "/jobs/search?q=go&limit=10&offset=0&sort=posted_at&order=asc&countries=it")
+
+	meta, _ := body["meta"].(map[string]any)
+	if _, present := meta["ignored_params"]; present {
+		t.Errorf("meta.ignored_params = %v, want the key absent", meta["ignored_params"])
+	}
+}
