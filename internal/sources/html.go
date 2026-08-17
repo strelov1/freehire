@@ -50,24 +50,16 @@ func textContent(n *html.Node) string {
 // scriptTextByID returns the text of the first <script> element with the given id, or "".
 func scriptTextByID(root *html.Node, id string) string {
 	var found *html.Node
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
+	walk(root, func(n *html.Node) bool {
 		if found != nil {
-			return
+			return false
 		}
-		if n.Type == html.ElementNode && n.Data == "script" {
-			for _, a := range n.Attr {
-				if a.Key == "id" && a.Val == id {
-					found = n
-					return
-				}
-			}
+		if n.Type == html.ElementNode && n.Data == "script" && attr(n, "id") == id {
+			found = n
+			return false
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(root)
+		return true
+	})
 	if found == nil {
 		return ""
 	}

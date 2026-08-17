@@ -76,7 +76,7 @@ func (u uber) detail(ctx context.Context, e CompanyEntry, entry sitemapLoc) (Job
 	if len(p.JobLocation) > 0 {
 		location = p.JobLocation[0].Address.Location()
 	}
-	posted := parseDate(p.DatePosted)
+	posted := parseRFC3339OrDate(p.DatePosted)
 	if posted == nil {
 		posted = parseRFC3339(entry.LastMod)
 	}

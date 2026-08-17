@@ -157,3 +157,12 @@ func TestUberEmptySitemapYieldsNoJobsNoError(t *testing.T) {
 		t.Fatalf("got %d jobs, want 0", len(jobs))
 	}
 }
+
+func TestUberSitemapFetchErrorFailsBoard(t *testing.T) {
+	// No route for the sitemap URL at all: the sitemap fetch itself fails, and Fetch must
+	// return that error rather than reading it as an empty catalogue.
+	fake := &routedHTTP{}
+	if _, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"}); err == nil {
+		t.Fatal("Fetch: want error on sitemap fetch failure, got nil")
+	}
+}
