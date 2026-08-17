@@ -47,6 +47,21 @@ type Owned struct {
 	Languages      []string                  `json:"languages,omitempty"`
 	Certifications []string                  `json:"certifications,omitempty"`
 	Education      []resumeextract.Education `json:"education,omitempty"`
+
+	// The five body fields above are owned per field (see ApplyBody), and a non-empty
+	// value has always implied ownership — Sanitize keeps deriving that. But a candidate
+	// clearing a field they'd previously set has no non-empty value left to signal it, so
+	// an explicit save of that one field carries its own *Set flag: true even while the
+	// value is "". Sanitize only ever turns these on (from a non-empty value); it never
+	// turns one off, so an explicit clear survives every Sanitize call between the PUT
+	// and the read that overlays it. Identity fields need no equivalent — they are
+	// overlaid as one IdentityEmpty()-gated block, never field by field, so clearing one
+	// while another stays set was never representable to lose in the first place.
+	HeadlineSet       bool `json:"headline_set,omitempty"`
+	SummarySet        bool `json:"summary_set,omitempty"`
+	LanguagesSet      bool `json:"languages_set,omitempty"`
+	CertificationsSet bool `json:"certifications_set,omitempty"`
+	EducationSet      bool `json:"education_set,omitempty"`
 }
 
 const (
@@ -80,6 +95,27 @@ func (o *Owned) Sanitize() {
 	o.Languages = clipList(o.Languages, maxOwnedShort, maxOwnedLanguages, true)
 	o.Certifications = clipList(o.Certifications, maxOwnedShort, maxOwnedCertifCount, true)
 	o.Education = clipEducation(o.Education, maxOwnedEducation)
+
+	// Additive only: a non-empty value has always meant "owned" (every caller before the
+	// *Set fields existed relied on exactly that), so a value surviving Sanitize
+	// non-empty still forces its flag on. Never turned off here — that would erase an
+	// explicit clear (value "" with Set already true) the moment it round-trips through
+	// Sanitize, which every read and write path does.
+	if o.Headline != "" {
+		o.HeadlineSet = true
+	}
+	if o.Summary != "" {
+		o.SummarySet = true
+	}
+	if len(o.Languages) > 0 {
+		o.LanguagesSet = true
+	}
+	if len(o.Certifications) > 0 {
+		o.CertificationsSet = true
+	}
+	if len(o.Education) > 0 {
+		o.EducationSet = true
+	}
 }
 
 // clipEducation trims each entry's fields, drops entries left with no content, and caps
@@ -131,11 +167,25 @@ func clipList(items []string, maxRunes, maxCount int, dedupe bool) []string {
 	return out
 }
 
-// Empty reports whether every owned field is blank — "nothing to override yet".
+// Empty reports whether every owned field is blank — "nothing to override yet". A body
+// field explicitly cleared to "" still counts as owned here (its *Set flag is true), same
+// as the case ApplyBody overlays: an owned empty summary is not "nothing to override," it
+// is an override to nothing.
 func (o Owned) Empty() bool {
-	return o.IdentityEmpty() && o.Headline == "" && o.Summary == "" &&
-		len(o.Languages) == 0 && len(o.Certifications) == 0 && len(o.Education) == 0
+	return o.IdentityEmpty() && !o.headlineOwned() && !o.summaryOwned() &&
+		!o.languagesOwned() && !o.certificationsOwned() && !o.educationOwned()
 }
+
+// headlineOwned and its four siblings report whether a body field is this candidate's own
+// — either explicitly, via its *Set flag, or implicitly, because it carries a non-empty
+// value (every caller before the *Set flags existed relied on exactly that, and a value
+// built as a plain struct literal rather than through Sanitize still needs to read as
+// owned). Shared by Empty and ApplyBody so the two can never disagree about what counts.
+func (o Owned) headlineOwned() bool       { return o.HeadlineSet || o.Headline != "" }
+func (o Owned) summaryOwned() bool        { return o.SummarySet || o.Summary != "" }
+func (o Owned) languagesOwned() bool      { return o.LanguagesSet || len(o.Languages) > 0 }
+func (o Owned) certificationsOwned() bool { return o.CertificationsSet || len(o.Certifications) > 0 }
+func (o Owned) educationOwned() bool      { return o.EducationSet || len(o.Education) > 0 }
 
 // IdentityEmpty reports whether every identity field (name/email/phone/location/links)
 // is blank — distinct from Empty(), which also considers the body fields. A caller that
@@ -155,19 +205,19 @@ func (o Owned) IdentityEmpty() bool {
 // sets them unconditionally once Owned is non-empty, structuredCV's contact-free view
 // never touches them at all).
 func (o Owned) ApplyBody(st *resumeextract.Structured) {
-	if o.Headline != "" {
+	if o.headlineOwned() {
 		st.Headline = o.Headline
 	}
-	if o.Summary != "" {
+	if o.summaryOwned() {
 		st.Summary = o.Summary
 	}
-	if len(o.Languages) > 0 {
+	if o.languagesOwned() {
 		st.Languages = append([]string(nil), o.Languages...)
 	}
-	if len(o.Certifications) > 0 {
+	if o.certificationsOwned() {
 		st.Certifications = append([]string(nil), o.Certifications...)
 	}
-	if len(o.Education) > 0 {
+	if o.educationOwned() {
 		st.Education = append([]resumeextract.Education(nil), o.Education...)
 	}
 }
@@ -226,19 +276,22 @@ func FillEmpty(dst *Owned, src Owned) {
 	if len(dst.Links) == 0 && len(src.Links) > 0 {
 		dst.Links = append([]string(nil), src.Links...)
 	}
-	if dst.Headline == "" {
+	// Gated on ownership, not emptiness: a candidate who explicitly cleared a body field
+	// (its *Set flag true, value "") has made a choice a fresh extract must not overrule,
+	// the same protection an explicitly non-empty field already had.
+	if !dst.headlineOwned() {
 		dst.Headline = src.Headline
 	}
-	if dst.Summary == "" {
+	if !dst.summaryOwned() {
 		dst.Summary = src.Summary
 	}
-	if len(dst.Languages) == 0 && len(src.Languages) > 0 {
+	if !dst.languagesOwned() && len(src.Languages) > 0 {
 		dst.Languages = append([]string(nil), src.Languages...)
 	}
-	if len(dst.Certifications) == 0 && len(src.Certifications) > 0 {
+	if !dst.certificationsOwned() && len(src.Certifications) > 0 {
 		dst.Certifications = append([]string(nil), src.Certifications...)
 	}
-	if len(dst.Education) == 0 && len(src.Education) > 0 {
+	if !dst.educationOwned() && len(src.Education) > 0 {
 		dst.Education = append([]resumeextract.Education(nil), src.Education...)
 	}
 	dst.Sanitize()
@@ -343,6 +396,10 @@ func (s *Store) FillEmptyOwnedFromStructured(ctx context.Context, userID int64, 
 func ownedEqual(a, b Owned) bool {
 	if a.FullName != b.FullName || a.Email != b.Email || a.Phone != b.Phone || a.Location != b.Location ||
 		a.Headline != b.Headline || a.Summary != b.Summary {
+		return false
+	}
+	if a.HeadlineSet != b.HeadlineSet || a.SummarySet != b.SummarySet || a.LanguagesSet != b.LanguagesSet ||
+		a.CertificationsSet != b.CertificationsSet || a.EducationSet != b.EducationSet {
 		return false
 	}
 	return stringsEqual(a.Links, b.Links) && stringsEqual(a.Languages, b.Languages) &&

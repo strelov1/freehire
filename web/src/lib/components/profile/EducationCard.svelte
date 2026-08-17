@@ -61,7 +61,10 @@
           year: (e.year ?? '').trim(),
         }))
         .filter((e) => e.degree || e.institution || e.year);
-      await api.putResumeContacts({ ...contacts, education: cleaned });
+      // Owned even when `cleaned` is empty — otherwise clearing every row here is
+      // indistinguishable, server-side, from never having edited Education at all, and the
+      // CV's own education reappears on the next read (internal/resume/owned.go).
+      await api.putResumeContacts({ ...contacts, education: cleaned, education_set: true });
       editingEducation = false;
       onSaved?.();
     } catch (e) {
@@ -97,6 +100,8 @@
           .split('\n')
           .map((l) => l.trim())
           .filter(Boolean),
+        // Owned even when the list above ends up empty — see saveEducation's comment.
+        languages_set: true,
       });
       editingLanguages = false;
       onSaved?.();
@@ -133,6 +138,8 @@
           .split('\n')
           .map((l) => l.trim())
           .filter(Boolean),
+        // Owned even when the list above ends up empty — see saveEducation's comment.
+        certifications_set: true,
       });
       editingCertifications = false;
       onSaved?.();

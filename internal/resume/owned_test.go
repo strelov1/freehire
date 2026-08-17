@@ -182,6 +182,74 @@ func TestOwnedEmptyVsIdentityEmpty(t *testing.T) {
 	}
 }
 
+// A candidate who deliberately empties a body field they had previously set (e.g. clears
+// Headline in CvSummaryCard) must see that clear stick, not the field silently reappear
+// from whatever the CV extract says. Before the *Set flags, ApplyBody's own non-empty
+// check made "" indistinguishable from "never touched" — this is the regression test for
+// that bug (freehire#2026 review).
+func TestApplyBody_OwnedEmptyOverridesExtract(t *testing.T) {
+	st := resumeextract.Structured{Headline: "From CV", Summary: "From CV summary", Languages: []string{"French"}}
+	owned := Owned{HeadlineSet: true, SummarySet: true, LanguagesSet: true} // cleared, not untouched
+	owned.ApplyBody(&st)
+
+	if st.Headline != "" || st.Summary != "" || len(st.Languages) != 0 {
+		t.Fatalf("an owned-empty field fell back to the extract: %+v", st)
+	}
+}
+
+// The counterpart: a field the candidate never touched at all (Set false, value "") must
+// still pass the extract's own value through untouched — ApplyBody's fix must not turn
+// every unedited field into a forced blank.
+func TestApplyBody_UntouchedFieldPassesExtractThrough(t *testing.T) {
+	st := resumeextract.Structured{Headline: "From CV", Education: []resumeextract.Education{{Degree: "BSc"}}}
+	Owned{}.ApplyBody(&st)
+
+	if st.Headline != "From CV" || len(st.Education) != 1 {
+		t.Fatalf("an untouched field was blanked instead of passed through: %+v", st)
+	}
+}
+
+// A fresh CV upload must not resurrect a field the candidate explicitly cleared — the same
+// protection FillEmpty already gave a non-empty edit, extended to an owned-empty one.
+func TestFillEmptyDoesNotRefillAnExplicitClear(t *testing.T) {
+	dst := Owned{HeadlineSet: true} // cleared: Headline is "" on purpose
+	src := Owned{Headline: "Newly extracted headline"}
+	FillEmpty(&dst, src)
+
+	if dst.Headline != "" {
+		t.Fatalf("an explicit clear was refilled from a fresh extract: %+v", dst)
+	}
+}
+
+// Round-tripped through the store exactly as PutResumeContacts does: Sanitize runs on
+// write (SetCandidateOwned) and again on read (decodeOwned via CandidateOwned), and an
+// explicit clear must survive both without a non-empty value to re-derive Set from.
+func TestSetCandidateOwned_ExplicitClearSurvivesTheStore(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(nil, repo)
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{
+		Headline: "Staff Engineer", HeadlineSet: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The candidate reopens the card and clears it.
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{
+		Headline: "", HeadlineSet: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.CandidateOwned(context.Background(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Headline != "" || !got.HeadlineSet {
+		t.Fatalf("clear did not survive a write+read round trip: %+v", got)
+	}
+	if got.Empty() {
+		t.Fatalf("Empty() = true for an owned block with an explicit (empty) clear: %+v", got)
+	}
+}
+
 func TestStructureForSeedPendingBlobIsContactsOnly(t *testing.T) {
 	repo := newFakeRepo()
 	s := New(nil, repo)

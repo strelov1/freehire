@@ -1025,6 +1025,15 @@ export interface CandidateContacts {
   languages?: string[];
   certifications?: string[];
   education?: ResumeEducation[];
+  // The five body fields above are owned per field, and a non-empty value has always
+  // implied that. But clearing one to "" leaves no non-empty value to signal it, so the
+  // editor that owns that field sends its *_set flag alongside a save that empties it —
+  // see internal/resume/owned.go's Owned for why identity fields need no equivalent.
+  headline_set?: boolean;
+  summary_set?: boolean;
+  languages_set?: boolean;
+  certifications_set?: boolean;
+  education_set?: boolean;
 }
 
 /** The résumé status (`GET /me/resume`): storage flags, owned contacts, parse status,

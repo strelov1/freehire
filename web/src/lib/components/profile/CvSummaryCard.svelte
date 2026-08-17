@@ -63,6 +63,11 @@
         ...contacts,
         headline: headline.trim(),
         summary: summary.trim(),
+        // Owned per field even when the trimmed value above is "" — otherwise clearing
+        // Headline here is indistinguishable, server-side, from never having set it, and
+        // the CV's own headline reappears on the next read (internal/resume/owned.go).
+        headline_set: true,
+        summary_set: true,
       });
       editing = false;
       onSaved?.();
