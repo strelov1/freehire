@@ -122,6 +122,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"portaldetalentos.senior.com.br", "senior", modeSubdomain},
 	{"vagas.solides.com.br", "solides", modeSubdomain},
 	{"softgarden.io", "softgarden", modeSubdomain},
+	// softgarden's regional career host. The tenant label is the same board the adapter fetches
+	// at <board>.softgarden.io, so this apex only changes where the label sits — keyed on
+	// softgarden.io alone, a .de tenant hid behind a second DNS label and was declined.
+	{"career.softgarden.de", "softgarden", modeSubdomain},
 	{"careers.hibob.com", "hibob", modeSubdomain}, // HiBob's careers module: <tenant>.careers.hibob.com
 
 	// --- subdomainchain: board = every label under the apex (tenant nested under a region) ---
@@ -137,6 +141,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// board no crawl can resolve. (Its custom-domain tenants, e.g. jobs.evoplay.com.ua, stay
 	// underivable from a URL, like every other custom-domain ATS here.)
 	{"catsone", "catsone", modeHost},
+	// Avature's board is the career-site host, the shape avature.yml stores
+	// (deloittecm.avature.net). Only tenants on the platform's own domain are derivable; a
+	// vanity host (jobs.ea.com) is not, like every other custom-domain ATS here.
+	{"avature", "avature", modeHost},
 
 	// --- hostpath: board = "<host>/<site>" (Workday tenant host + first-path-segment site) ---
 	{"myworkdayjobs.com", "workday", modeHostPath},

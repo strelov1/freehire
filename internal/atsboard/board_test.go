@@ -72,6 +72,11 @@ func TestRecognize(t *testing.T) {
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
 		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
+		// softgarden also serves tenants under a regional career host, <tenant>.career.softgarden.de.
+		// The tenant label is the same board the adapter fetches at <board>.softgarden.io (verified
+		// live: agilitaschweiz answers on both), so only the apex differs. Keyed on softgarden.io
+		// alone, the .de host left the label behind a second DNS label and was declined.
+		{"softgarden regional career host", "https://agilitaschweiz.career.softgarden.de/jobs/65679426/sap-consultant/", "softgarden", "agilitaschweiz", "https://agilitaschweiz.career.softgarden.de", true},
 		{"hibob careers subdomain", "https://qogita.careers.hibob.com/jobs/ceb6c947-c906-44d1-a56b-bb33ae5599fa", "hibob", "qogita", "https://qogita.careers.hibob.com", true},
 		{"hibob apply tail collapses to the same board", "https://unique.careers.hibob.com/jobs/f8d9a0bc/apply", "hibob", "unique", "https://unique.careers.hibob.com", true},
 
@@ -105,6 +110,12 @@ func TestRecognize(t *testing.T) {
 		// "authoritypartnersinc", which no crawl can resolve.
 		{"catsone vacancy", "https://authoritypartnersinc.catsone.com/careers/12345-senior-engineer", "catsone", "authoritypartnersinc.catsone.com", "https://authoritypartnersinc.catsone.com", true},
 		{"catsone board listing", "https://bfc.catsone.com/careers", "catsone", "bfc.catsone.com", "https://bfc.catsone.com", true},
+
+		// Avature's board is the career-site host, exactly as avature.yml stores it
+		// (deloittecm.avature.net). Its tenants on the platform's own domain are derivable;
+		// the vanity ones (jobs.ea.com) stay out, like every other custom-domain ATS here.
+		{"avature vacancy", "https://koch.avature.net/en_us/careers/jobdetail/sr-engineer/186706", "avature", "koch.avature.net", "https://koch.avature.net", true},
+		{"avature board listing", "https://deloittecm.avature.net/careers", "avature", "deloittecm.avature.net", "https://deloittecm.avature.net", true},
 
 		// host+tenant+board mode — UKG: the board is "<host>/<tenant>/<guid>", the three parts
 		// the adapter needs to reach LoadSearchResults. The old rule took the first path segment
