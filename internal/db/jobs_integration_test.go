@@ -38,10 +38,15 @@ func ingestParams(externalID, title string) UpsertJobParams {
 		// Stable per external_id (not per title) so a re-ingest with an edited
 		// title carries the same slug — mirroring the pipeline, which mints the
 		// slug from (source, external_id), not from volatile fields.
-		PublicSlug:  "pslug-" + externalID,
-		Location:    "Remote",
-		Remote:      true,
+		PublicSlug: "pslug-" + externalID,
+		Location:   "Remote",
+		Remote:     true,
+		// A body and a resolved category are what the pipeline produces for an
+		// ordinary posting, and what makes this row searchable — RefreshCompanyFacets
+		// counts only postings the job search index holds, so a fixture missing
+		// either would be counted by no company.
 		Description: "Build things.",
+		Category:    "backend",
 		PostedAt:    pgtype.Timestamptz{},
 	}
 }

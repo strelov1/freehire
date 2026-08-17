@@ -307,7 +307,10 @@ type ListCompaniesRow struct {
 // matches the page. `job_count > 0` scopes the catalog to companies that are
 // actually hiring, excluding the ~92k job-less reference rows imported by the YC
 // and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
-// (partial index) instead of scanning the full 2.3 GB heap.
+// (partial index) instead of scanning the full 2.3 GB heap. job_count counts the
+// postings the JOB SEARCH INDEX holds (see RefreshCompanyFacets), so the number here
+// is the number the company's own page shows — the two used to disagree, listing
+// Stripe at 570 against 444 on its page.
 // `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
 // companies sort last), falling through to the default job_count DESC, name
 // for the tiebreak. Any other value (including ”, the default) leaves the
@@ -613,6 +616,19 @@ WITH oj AS MATERIALIZED (
     SELECT company_slug, regions, countries, enrichment, work_mode, source
     FROM jobs
     WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
+      -- Visible only to its creator (the jd-tailor-intake path).
+      AND NOT is_private
+      -- search.DescriptionMissing strips the body to plain text first, which SQL
+      -- cannot reproduce, so a body that is only empty markup still counts here. That
+      -- residual is small and self-limiting: such a company reaches the sitemap, and
+      -- its page answers noindex off the same search that excluded the row.
+      AND description <> ''
+      -- search.CategoryUnresolved: the column answers, or the enrichment does — and
+      -- "other" is the classifier declining, not an answer. This is the predicate that
+      -- excluded almost everything in the sample, the dictionaries being deliberately
+      -- dict-only: a Samara kindergarten's vacancy resolves to no tech category, so
+      -- nobody can find it and its employer is not a page worth handing a crawler.
+      AND (category <> '' OR COALESCE(enrichment->>'category', '') NOT IN ('', 'other'))
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
@@ -733,6 +749,17 @@ WHERE c.slug = c2.slug
 // GROUP BY so the row-multiplying unnest of one array never distorts another's count.
 // oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
 // keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
+//
+// `oj` is scoped to the postings the JOB SEARCH INDEX will hold, which is what every
+// consumer of these columns actually means. job_count gates the companies index and so
+// the sitemap, the facet arrays are what the /companies filters offer, and a company
+// page's list is served by search — so a row search drops must not put a company in
+// the sitemap, under a filter, or behind a number its own page contradicts. Counting
+// the wider table scope did all three: 294,021 company URLs in the sitemap of which
+// most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
+// through could not find, and Stripe listed at 570 on /companies against 444 on its
+// own page. The three predicates below are the ones cmd/reindex's splitJobs applies
+// on top of closed/duplicate; keep the two in step.
 // gov marks a company whose open jobs come from an exclusively-government source
 // (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 // greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.

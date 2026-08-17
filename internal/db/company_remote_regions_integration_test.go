@@ -15,12 +15,15 @@ import (
 )
 
 // insertJobWithMode seeds an open job carrying a regions array and a work mode, so
-// the recompute can scope remote_regions to remote jobs.
+// the recompute can scope remote_regions to remote jobs. Body and category are fixed:
+// the recompute aggregates only what the job search index holds (see the oj CTE).
 func insertJobWithMode(t *testing.T, pool *pgxpool.Pool, externalID, companySlug, workMode string, regions []string) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, regions, work_mode)
-		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3, $4)`,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, regions, work_mode,
+		                   description, category)
+		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3, $4,
+		         'We are hiring.', 'backend')`,
 		externalID, companySlug, regions, workMode); err != nil {
 		t.Fatalf("insert job %q: %v", externalID, err)
 	}

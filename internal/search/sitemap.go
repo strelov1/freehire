@@ -33,8 +33,15 @@ const (
 // The sitemap pages the SEARCH INDEXES rather than their Postgres tables because the
 // indexes already hold exactly the sets worth handing a crawler — for jobs: open,
 // non-duplicate, non-private, categorized (cmd/reindex's splitJobs); for companies:
-// those with an open role (cmd/reindex-companies). The jobs table's equivalent scope
-// is ~2.7x larger and includes postings the site's own search cannot find.
+// those with a role that passes that same test (cmd/reindex-companies, gated on
+// companies.job_count). The jobs table's equivalent scope is ~2.7x larger and includes
+// postings the site's own search cannot find.
+//
+// "That same test" is load-bearing and was once only half true: job_count counted
+// open, non-duplicate rows while the company page's list came from search, so an
+// employer hiring only for roles no dictionary could categorize shipped a sitemap URL
+// rendering "0 open jobs" — 17 of 25 sampled pages on prod. RefreshCompanyFacets now
+// applies splitJobs' three extra predicates; if either side gains a fourth, both move.
 //
 // The engine addresses an offset directly instead of walking to it — measured on
 // prod (2026-08-16, 1.26M job documents): offset 0 and offset 1.2M both answer in

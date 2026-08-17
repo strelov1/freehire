@@ -153,3 +153,45 @@ func TestListCompaniesOrdersByJobCount(t *testing.T) {
 		}
 	})
 }
+
+// The bug this closes. companies.job_count gates the companies search index, which
+// gates the sitemap; the company PAGE lists what the JOB search index holds. The two
+// scopes differed by three predicates — is_private, no body, unresolved category —
+// so a company hiring only for roles the category dictionary never classified shipped
+// a sitemap URL whose page rendered a heading, "0 open jobs" and nothing else.
+// Measured on prod before the fix: 17 of 25 sampled company pages, and 294,021
+// company URLs in the sitemap against 442,153 rows counted here.
+func TestRefreshCompanyFacetsCountsOnlySearchableJobs(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, jobs RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	insertCompany(t, pool, "mixed-co", "Mixed Co")
+	insertCompany(t, pool, "clinic", "Some Clinic")
+
+	// Mixed Co: two findable roles alongside one of each exclusion.
+	insertJobForCompany(t, pool, "mixed:1", "mixed-co")
+	insertJobForCompany(t, pool, "mixed:2", "mixed-co")
+	insertUnsearchableJob(t, pool, "mixed:private", "mixed-co", "private")
+	insertUnsearchableJob(t, pool, "mixed:nobody", "mixed-co", "no-body")
+	insertUnsearchableJob(t, pool, "mixed:uncat", "mixed-co", "uncategorized")
+
+	// The clinic is the shape that reached the sitemap: open roles, none classifiable.
+	insertUnsearchableJob(t, pool, "clinic:1", "clinic", "uncategorized")
+	insertUnsearchableJob(t, pool, "clinic:2", "clinic", "uncategorized")
+
+	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+		t.Fatalf("recount: %v", err)
+	}
+
+	if got := companyJobCount(t, pool, "mixed-co"); got != 2 {
+		t.Errorf("mixed-co job_count = %d, want 2 (the private, body-less and uncategorized rows excluded)", got)
+	}
+	// Zero is what keeps it out of ListCompaniesForReindex, and so out of the sitemap.
+	if got := companyJobCount(t, pool, "clinic"); got != 0 {
+		t.Errorf("clinic job_count = %d, want 0 — a company with nothing findable must not reach the sitemap", got)
+	}
+}

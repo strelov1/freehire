@@ -40,12 +40,16 @@ func setCompanySignals(t *testing.T, pool *pgxpool.Pool, slug, orgType string, e
 }
 
 // insertJobFromSource seeds one open job for a company under a specific source (the
-// gov-source signal reads jobs.source).
+// gov-source signal reads jobs.source). Body and category are fixed: the recompute
+// aggregates only what the job search index holds (see the oj CTE), so a row missing
+// either would carry its source into no company.
 func insertJobFromSource(t *testing.T, pool *pgxpool.Pool, source, externalID, companySlug string) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
-		 VALUES ($1, $2, 'http://example.test', 'A job', 'job-' || $2, $3)`,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug,
+		                   description, category)
+		 VALUES ($1, $2, 'http://example.test', 'A job', 'job-' || $2, $3,
+		         'We are hiring.', 'backend')`,
 		source, externalID, companySlug); err != nil {
 		t.Fatalf("insert job %q: %v", externalID, err)
 	}

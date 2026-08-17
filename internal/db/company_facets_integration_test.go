@@ -20,12 +20,16 @@ import (
 
 // insertJobWithFacets seeds a job carrying geography columns and an enrichment blob,
 // so the recompute has something to aggregate. An empty enrichment ("{}") models an
-// unenriched job.
+// unenriched job. The body and category are fixed rather than parameterized: the
+// recompute only aggregates postings the job search index holds, so a row missing
+// either would contribute to nothing and these tests would assert against empties.
 func insertJobWithFacets(t *testing.T, pool *pgxpool.Pool, externalID, companySlug string, regions, countries []string, enrichment string) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, regions, countries, enrichment)
-		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3, $4, $5)`,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, regions, countries, enrichment,
+		                   description, category)
+		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3, $4, $5,
+		         'We are hiring.', 'backend')`,
 		externalID, companySlug, regions, countries, enrichment); err != nil {
 		t.Fatalf("insert job %q: %v", externalID, err)
 	}

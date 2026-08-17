@@ -24,13 +24,47 @@ func insertCompanyWithCollections(t *testing.T, pool *pgxpool.Pool, slug, name s
 	}
 }
 
+// insertJobForCompany seeds an ordinary, SEARCHABLE posting: public, with a body and
+// a resolved category. Those last two are not decoration — RefreshCompanyFacets scopes
+// its counts to what the job search index will hold, so a row missing either would be
+// counted by no company. Tests that want an unsearchable row ask for one by name.
 func insertJobForCompany(t *testing.T, pool *pgxpool.Pool, externalID, companySlug string) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
-		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2)`,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug,
+		                   description, category)
+		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2,
+		         'We are hiring.', 'backend')`,
 		externalID, companySlug); err != nil {
 		t.Fatalf("insert job %q: %v", externalID, err)
+	}
+}
+
+// insertUnsearchableJob seeds a posting the job search index drops, so it must not
+// reach a company's counts or facets either. `flaw` picks which exclusion to trip:
+// "private", "no-body", or "uncategorized".
+func insertUnsearchableJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlug, flaw string) {
+	t.Helper()
+	body, category, private := "We are hiring.", "backend", false
+	switch flaw {
+	case "private":
+		private = true
+	case "no-body":
+		body = ""
+	case "uncategorized":
+		// Both halves must miss: search.CategoryUnresolved accepts the enrichment's
+		// category when the column is empty, and treats "other" as no answer.
+		category = ""
+	default:
+		t.Fatalf("insertUnsearchableJob: unknown flaw %q", flaw)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug,
+		                   description, category, is_private, enrichment)
+		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2,
+		         $3, $4, $5, '{"category":"other"}'::jsonb)`,
+		externalID, companySlug, body, category, private); err != nil {
+		t.Fatalf("insert unsearchable job %q: %v", externalID, err)
 	}
 }
 

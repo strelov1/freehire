@@ -163,8 +163,13 @@ that is a valid **sitemap index** (`<sitemapindex>`) referencing sub-sitemaps fo
 the static pages, the jobs, and the companies. Neither the index nor any
 sub-sitemap SHALL return the HTML application shell, and each SHALL be valid XML.
 Every sub-sitemap SHALL hold at most 50,000 URLs (the sitemap-protocol limit).
-All companies (`/companies/:slug`) SHALL be enumerated across keyset-cursor-paged
-company sub-sitemaps. The job sub-sitemap SHALL list the **freshest** open jobs
+Every company with at least one FINDABLE role (`/companies/:slug`) SHALL be
+enumerated across keyset-cursor-paged company sub-sitemaps, and a company with
+none SHALL NOT appear. "Findable" is the job search index's own scope — open,
+non-duplicate, non-private, categorized, with a body — because the company page's
+job list is served by that index, so a company outside it has a page that renders
+its name and "0 open jobs". The scope is carried by `companies.job_count`, which
+`RefreshCompanyFacets` computes under exactly those predicates. The job sub-sitemap SHALL list the **freshest** open jobs
 (`/jobs/:slug`, newest first) up to the per-file limit, rather than the full
 catalogue: the jobs table is too large to enumerate per request without a
 heap-bound scan that also evicts the buffer cache, so full job coverage is a
@@ -189,11 +194,18 @@ deliberate follow-up (a precomputed narrow table), not a live scan.
 - **THEN** the response is a valid `<urlset>` of at most 50,000 open-job
   (`/jobs/:slug`) URLs, newest first, each with a `<lastmod>`, and no closed job
 
-#### Scenario: company sub-sitemaps cover all companies
+#### Scenario: company sub-sitemaps cover every company worth crawling
 
 - **WHEN** the index's company sub-sitemaps are followed in sequence by their
   slug cursors
-- **THEN** every company appears in exactly one sub-sitemap, with no artificial cap
+- **THEN** every company holding at least one findable role appears in exactly one
+  sub-sitemap, with no artificial cap
+
+#### Scenario: a company with nothing findable is not in the sitemap
+
+- **WHEN** a company's only open postings are private, body-less, or of a category
+  no dictionary resolved — so its page's job list renders empty
+- **THEN** no company sub-sitemap lists its `/companies/:slug` URL
 
 ### Requirement: Collection landing pages are indexable
 
