@@ -1,10 +1,10 @@
 ## 1. The mapping dictionary
 
-- [ ] 1.1 Add the curated domain→industry table to `internal/industrytag` (18 pairs;
+- [x] 1.1 Add the curated domain→industry table to `internal/industrytag` (17 pairs;
       `other`, `media`, `mobility` deliberately absent) and `DomainsForIndustries`,
       which returns the sorted, de-duplicated domain values the requested industries
       can also be recognised by, inverting the table once at init
-- [ ] 1.2 Invariant tests: every mapped target is a canonical industry, every key is a
+- [x] 1.2 Invariant tests: every mapped target is a canonical industry, every key is a
       `vocab.DomainValues` member, `media`/`mobility`/`other` map to nothing, an
       unknown input (`saas`, `""`) yields nothing, and the result never contains a
       value absent from `vocab.DomainValues`

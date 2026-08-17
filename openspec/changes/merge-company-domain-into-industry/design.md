@@ -67,7 +67,7 @@ It lives in `internal/industrytag` beside the vocabulary it produces into, writt
 natural direction (domain → industry, since a domain has at most one industry) and
 inverted once at package init for the lookup the filter needs.
 
-18 of 20 domains map. `other` does not, being the classifier declining to answer.
+17 of the 20 domains map. `other` does not, being the classifier declining to answer.
 `media` and `mobility` do not either: the curated vocabulary's nearest values
 (`entertainment`, `automotive`) are narrower than the domains they would stand in for,
 and stretching them would put companies under an industry that misdescribes them. That
