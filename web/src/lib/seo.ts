@@ -90,6 +90,25 @@ export function companyPageTitle(name: string, total: number | undefined): strin
   return `${name} — ${roles} · ${SITE}`;
 }
 
+/** "<n> companies hiring in tech · freehire" for the /companies directory title.
+ *
+ *  The bare "Companies · freehire" it replaces was 20 characters that named no
+ *  subject: nothing in it could match a query, and most of the SERP title width went
+ *  to the brand. The count is the fact a searcher weighs, and it is the same total
+ *  the page's own heading and its ItemList describe.
+ *
+ *  No count (search failed) or a zero one falls back to the subject alone — the
+ *  directory is a real page when a filter matches nothing, and "0 companies hiring"
+ *  is an argument against clicking. */
+export function companiesPageTitle(total: number | undefined): string {
+  if (!total) return `Companies hiring in tech · ${SITE}`;
+  // Pinned locale, like companyPageTitle: crawler-visible metadata, so SSR and the
+  // client recompute must group digits identically.
+  const count = total.toLocaleString('en-US');
+  const subject = total === 1 ? 'company hiring in tech' : 'companies hiring in tech';
+  return `${count} ${subject} · ${SITE}`;
+}
+
 /** The `<meta name="robots">` a listing page should carry, given how many results
  *  it actually rendered — `undefined` for the normal case of leaving it off.
  *

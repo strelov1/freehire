@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { popularCollectionLinks } from '$lib/collections';
   import { reopen } from '$lib/consent.svelte';
   import { ProviderIcon } from '$lib/ui';
 
@@ -61,6 +62,12 @@
     { provider: 'discord', label: 'Discord', href: 'https://discord.gg/aAXS2rghW' },
   ];
 
+  // A strip below the four groups rather than a fifth column: the grid is
+  // sm:grid-cols-4, and ten links would not fit one anyway. Kept out of `groups`
+  // because these are collection landing pages, not site navigation — and because
+  // it is the one place every page links them from (see popularCollectionLinks).
+  const popular = popularCollectionLinks();
+
   const year = new Date().getFullYear();
 
   // Product Hunt "featured" badge. Two embed URLs — one per theme — swapped by the
@@ -102,6 +109,25 @@
         </nav>
       {/each}
     </div>
+
+    <!-- Popular collections. Real <a href> in the server-rendered HTML: crawlers
+         discover links by parsing markup, and these landing pages had none from the
+         homepage at all. -->
+    <nav class="mt-8 border-t border-border pt-6" aria-label="Popular collections">
+      <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Popular</p>
+      <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+        {#each popular as collection (collection.slug)}
+          <li>
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- collection landing path built from a slug collectionBySlug already resolved; the linter can't trace it through the array -->
+            <a href={collection.href}
+              class="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {collection.title}
+            </a>
+          </li>
+        {/each}
+      </ul>
+    </nav>
 
     <div class="mt-8">
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->

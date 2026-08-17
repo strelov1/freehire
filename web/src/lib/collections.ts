@@ -715,6 +715,26 @@ export const POPULAR_COLLECTION_FALLBACK = [
   'aws',
 ];
 
+/** The popular collections as footer links, in curated order.
+ *
+ *  Collection landing pages are the site's programmatic-SEO surface, and until this
+ *  existed the only internal links they had came from the /collections hub and the
+ *  job-detail "see also" block. The homepage — the strongest page on the domain —
+ *  linked 20 jobs, 4 feature pages and not one collection. A footer strip fixes that
+ *  for every page at once.
+ *
+ *  Resolved through collectionBySlug, the same resolver the landing route and the
+ *  sitemap use, and unknown slugs are dropped rather than linked: a footer on every
+ *  page is the worst place to advertise a 404. A test also asserts the pool resolves,
+ *  so dropping here is belt-and-braces, not the expected path. */
+export function popularCollectionLinks(): { slug: string; title: string; href: string }[] {
+  return POPULAR_COLLECTION_FALLBACK.flatMap((slug) => {
+    const collection = collectionBySlug(slug);
+    if (!collection) return [];
+    return [{ slug, title: collection.title, href: `/collections/${slug}` }];
+  });
+}
+
 // Whether a single FILTER_COLLECTIONS param entry is satisfied by the job's
 // facets. `role` (and any other key the job carries no data for) never
 // matches — see JobFacets' doc comment.

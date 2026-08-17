@@ -72,7 +72,9 @@
   }
 </script>
 
-<Seo title="Trends · freehire" {description} {canonical} />
+<!-- "Trends · freehire" was 17 characters: it named no subject, so nothing in it
+     could match a query, and it left two thirds of the SERP title width unused. -->
+<Seo title="Tech hiring trends — jobs added and removed daily · freehire" {description} {canonical} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->

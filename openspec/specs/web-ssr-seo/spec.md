@@ -247,7 +247,7 @@ collection landing page SHALL be enumerated in the sitemap.
 
 ### Requirement: Public list pages carry a primary heading
 
-The public list pages (`/jobs` and `/companies`) SHALL each render exactly one visible `<h1>` describing the page's content, so the primary heading is present for search engines and assistive technology.
+The public list pages (`/jobs` and `/companies`) SHALL each render exactly one visible `<h1>` describing the page's content, so the primary heading is present for search engines and assistive technology. Every API-reference endpoint page (`/docs/api/:group/:endpoint`) SHALL likewise carry one, taken from the endpoint's summary — the method and path are the identifier and already carry the `<title>`, while the summary is what the page is about.
 
 #### Scenario: The jobs list has a top-level heading
 
@@ -302,3 +302,26 @@ company.
 - **WHEN** `GET /companies/:slug` is requested for a company whose job search
   returns results
 - **THEN** the `<head>` contains no `robots` meta tag
+
+#### Scenario: An API endpoint page has a top-level heading
+
+- **WHEN** `GET /docs/api/:group/:endpoint` is requested for a documented endpoint
+- **THEN** the returned HTML body contains exactly one `<h1>`, holding that
+  endpoint's summary
+
+### Requirement: Collection landing pages are linked from every page
+
+The site footer SHALL render the popular collections as real `<a href>` anchors to
+their `/collections/:slug` landing pages, in the server-rendered HTML. Collection
+landings are the site's programmatic-SEO surface, and their only internal links came
+from the `/collections` hub and the job-detail "see also" block — the homepage, the
+strongest page on the domain, linked twenty jobs, four feature pages and no
+collection at all. Every slug SHALL resolve through the same resolver the landing
+route and the sitemap use, and an unresolvable slug SHALL be dropped rather than
+linked: a footer is the worst place to advertise a 404.
+
+#### Scenario: Any page links the popular collections
+
+- **WHEN** any public page is requested
+- **THEN** its HTML contains `<a href>` anchors to several distinct
+  `/collections/:slug` landing pages

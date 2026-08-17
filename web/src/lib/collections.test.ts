@@ -5,6 +5,7 @@ import {
   collectionBySlug,
   collectionSlugs,
   jobFacetsFromJob,
+  popularCollectionLinks,
   relatedCollectionLinks,
   relatedCollectionSlugs,
 } from './collections';
@@ -273,5 +274,34 @@ describe('jobFacetsFromJob', () => {
     expect(facets.category).toBeUndefined();
     expect(facets.seniority).toBeUndefined();
     expect(facets.workMode).toBeUndefined();
+  });
+});
+
+describe('popularCollectionLinks', () => {
+  // The gap this closes: the homepage — the site's strongest page — carried 20
+  // /jobs/* links, 4 /features/* and zero links to any individual collection, so
+  // the 101 collection landing pages got nothing from it. Footer links reach every
+  // page, not only the homepage.
+  it('resolves every popular slug to a title and its landing URL', () => {
+    const links = popularCollectionLinks();
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.title, `title for "${link.slug}"`).toBeTruthy();
+      expect(link.href).toBe(`/collections/${link.slug}`);
+    }
+  });
+
+  // A link to a page that 404s is worse than no link. collectionBySlug is the same
+  // resolver the landing route and the sitemap use, so this cannot drift from them.
+  it('never emits a slug that has no landing page', () => {
+    for (const link of popularCollectionLinks()) {
+      expect(collectionBySlug(link.slug), `slug "${link.slug}"`).toBeDefined();
+    }
+  });
+
+  it('keeps the curated order and holds no duplicates', () => {
+    const slugs = popularCollectionLinks().map((l) => l.slug);
+    expect(slugs).toEqual(POPULAR_COLLECTION_FALLBACK.filter((s) => collectionBySlug(s)));
+    expect(new Set(slugs).size).toBe(slugs.length);
   });
 });

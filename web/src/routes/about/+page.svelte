@@ -18,9 +18,11 @@
   );
 </script>
 
+<!-- The description was 215 characters and got cut mid-sentence in the SERP snippet,
+     and where Google cuts is not where we would. Trimmed to ~155, the width it shows. -->
 <Seo
   title="About freehire — the open-source search engine for tech jobs"
-  description="Freehire is an open-source search engine for tech jobs: it indexes millions of openings straight from company career boards, deduplicates them, and tags each with stack, seniority and location. Free and open source."
+  description="An open-source search engine for tech jobs: millions of openings indexed straight from company career boards, deduplicated and tagged by stack and location."
   {canonical}
 />
 

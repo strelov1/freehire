@@ -5,6 +5,7 @@
   import {
     breadcrumbJsonLd,
     collectionPageJsonLd,
+    companiesPageTitle,
     companyListItems,
     jsonLdScript,
     listingRobots,
@@ -28,9 +29,12 @@
   // page 1 of an empty result set.
   const robots = $derived(listingRobots(data.initial.total));
   // The number belongs in the title too, or every page advertises itself as the same
-  // one. Mirrors the job feed.
+  // one. Mirrors the job feed. Page 1 leads with the live count and the subject —
+  // see companiesPageTitle for why the bare "Companies · freehire" was a waste.
   const title = $derived(
-    data.pageNumber > 1 ? `Companies — page ${data.pageNumber} · freehire` : 'Companies · freehire'
+    data.pageNumber > 1
+      ? `Companies — page ${data.pageNumber} · freehire`
+      : companiesPageTitle(data.initial.total)
   );
   // Structured data for the directory: a CollectionPage wrapping the server-rendered
   // first page of companies as an ItemList, plus a breadcrumb (freehire → Companies),

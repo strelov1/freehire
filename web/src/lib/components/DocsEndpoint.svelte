@@ -68,7 +68,13 @@
     <Badge variant={authVariant(ep.auth)}>{AUTH_LABELS[ep.auth]}</Badge>
   </div>
 
-  <p class="mt-5 text-lg leading-relaxed text-foreground">{ep.summary}</p>
+  <!-- The endpoint's summary IS this page's heading, and it was a <p>: all 140
+       /docs/api/:group/:endpoint pages shipped without an h1, which a crawl flagged
+       and which leaves the page outline headless for assistive technology too. The
+       summary is the right text for it — the method and path are the identifier and
+       already carry the <title>, while "Search open jobs" is what the page is about.
+       Styling is unchanged; only the element is. -->
+  <h1 class="mt-5 text-lg font-normal leading-relaxed text-foreground">{ep.summary}</h1>
   {#if ep.description}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static api-spec constants; no user data -->
     <p class="mt-3 leading-relaxed text-muted-foreground">{@html inlineCode(ep.description)}</p>
