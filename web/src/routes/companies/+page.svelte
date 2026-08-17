@@ -48,5 +48,5 @@
        hidden: the list and filters make the page's purpose clear, so the on-screen
        title was redundant. sr-only takes no layout space. Mirrors /jobs. -->
   <h1 class="sr-only">Companies hiring in tech</h1>
-  <CompaniesView initial={data.initial} />
+  <CompaniesView initial={data.initial} currentPage={data.pageNumber} />
 </div>

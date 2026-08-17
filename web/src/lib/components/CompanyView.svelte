@@ -25,7 +25,9 @@
     company: Company;
     initial: Slice<Job> | null;
     slug: string;
-    currentPage?: number;
+    // Passed straight to JobsView, where page links are the only way through the
+    // results — so it is required here too rather than defaulting to page one.
+    currentPage: number;
     referralAvailable?: boolean;
   } = $props();
 </script>
