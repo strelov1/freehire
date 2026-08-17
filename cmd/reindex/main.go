@@ -50,6 +50,17 @@ func run() int {
 	}
 	defer cleanup()
 
+	q := db.New(pool)
+	rcfg := config.LoadReindex()
+
+	// Marker-only mode stops here, before anything Meilisearch-related — see
+	// config.Reindex.DedupOnly for why this can run far more often than a full
+	// Dedup+rebuild invocation.
+	if rcfg.DedupOnly {
+		refreshDuplicateMarkers(ctx, q)
+		return 0
+	}
+
 	// Captured before anything else runs (including the duplicate-marker recompute
 	// passes below, which can themselves take minutes under load): a full facet
 	// reindex reads every job's CURRENT content, so any search_outbox row queued
@@ -69,11 +80,9 @@ func run() int {
 	// true of the removed --semantic pass), so there is nothing here for EMBED_URL/
 	// EMBED_API_KEY/EMBED_CONCURRENCY to configure.
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
-	q := db.New(pool)
 
 	// Guard free disk for the swap rebuild up front — BEFORE the expensive recompute —
 	// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
-	rcfg := config.LoadReindex()
 	if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
 		log.Printf("reindex: %v", err)
 		return 1

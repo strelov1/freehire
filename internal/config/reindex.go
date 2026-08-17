@@ -32,6 +32,20 @@ type Reindex struct {
 	// is best-effort and degrades to the prior markers — so running them less often
 	// costs freshness, not correctness.
 	Dedup bool
+	// DedupOnly runs the marker passes and exits, WITHOUT the facet rebuild that
+	// Dedup alone runs afterward. The marker passes are pure Postgres (no Meilisearch,
+	// no disk guard, no search-drain pause needed); the facet rebuild is the expensive,
+	// Meilisearch-bound half, and it already runs on its own schedule via the plain
+	// (Dedup=false) invocation, reading whatever markers are current at that moment.
+	// So a DedupOnly run can afford a tighter cadence than a Dedup run — the freshness
+	// a repost needs to disappear from search is bounded by MIN(next DedupOnly run,
+	// next plain rebuild), not by the full marker+rebuild round trip.
+	//
+	// Takes precedence over Dedup when both are set — a single invocation is never
+	// meant to run the markers and then skip the rebuild it just paid the disk guard
+	// and Meilisearch client setup for, so DedupOnly short-circuits before either
+	// happens and Dedup is not consulted at all.
+	DedupOnly bool
 }
 
 // LoadReindex reads the reindex disk-guard config from the environment, all optional
@@ -42,6 +56,7 @@ func LoadReindex() Reindex {
 		MeiliDataDir: env("MEILI_DATA_DIR", "/var/lib/freehire/meili"),
 		MinFreeGB:    envInt("REINDEX_MIN_FREE_GB", 70),
 		Dedup:        envBool("REINDEX_DEDUP", false),
+		DedupOnly:    envBool("REINDEX_DEDUP_ONLY", false),
 	}
 	// A negative floor would make the guard's `free < floor` comparison always false,
 	// silently disabling it in a way that reads like a real threshold. Clamp to 0, the

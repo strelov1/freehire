@@ -9,6 +9,7 @@ func TestLoadReindex_Defaults(t *testing.T) {
 	// the test process inherited, and a developer (or CI job) with REINDEX_DEDUP set
 	// would see a failure that says nothing about the code.
 	t.Setenv("REINDEX_DEDUP", "")
+	t.Setenv("REINDEX_DEDUP_ONLY", "")
 
 	r := LoadReindex()
 
@@ -23,6 +24,9 @@ func TestLoadReindex_Defaults(t *testing.T) {
 	// and they grew until the rebuild never happened at all.
 	if r.Dedup {
 		t.Error("Dedup default = true, want false — the marker passes are opt-in")
+	}
+	if r.DedupOnly {
+		t.Error("DedupOnly default = true, want false — the marker-only mode is opt-in")
 	}
 }
 
@@ -58,6 +62,27 @@ func TestLoadReindex_DedupOptIn(t *testing.T) {
 			t.Setenv("REINDEX_DEDUP", tt.value)
 			if got := LoadReindex().Dedup; got != tt.want {
 				t.Errorf("Dedup = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// Same opt-in shape as REINDEX_DEDUP, and independent of it.
+func TestLoadReindex_DedupOnlyOptIn(t *testing.T) {
+	for _, tt := range []struct {
+		value string
+		want  bool
+	}{
+		{"1", true},
+		{"true", true},
+		{"0", false},
+		{"", false},
+		{"yes please", false},
+	} {
+		t.Run("REINDEX_DEDUP_ONLY="+tt.value, func(t *testing.T) {
+			t.Setenv("REINDEX_DEDUP_ONLY", tt.value)
+			if got := LoadReindex().DedupOnly; got != tt.want {
+				t.Errorf("DedupOnly = %v, want %v", got, tt.want)
 			}
 		})
 	}
