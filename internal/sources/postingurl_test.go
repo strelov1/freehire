@@ -116,6 +116,18 @@ func TestCanonicalPostingURL_DropsTheApplyForm(t *testing.T) {
 			want: "https://apply.workable.com/1kosmos/j/435C7BA5E4",
 		},
 		{
+			// CatsOne is multi-tenant per host (<tenant>.catsone.com), so this has to
+			// match by domain label rather than a fixed hostname.
+			name: "catsone apply, a tenant subdomain",
+			url:  "https://emergitel.catsone.com/careers/7701/jobs/16841332-full-stack-software-engineer-react-nodejs-typescript/apply",
+			want: "https://emergitel.catsone.com/careers/7701/jobs/16841332-full-stack-software-engineer-react-nodejs-typescript",
+		},
+		{
+			name: "catsone apply, a different tenant",
+			url:  "https://acme.catsone.com/careers/1/jobs/2-title/apply",
+			want: "https://acme.catsone.com/careers/1/jobs/2-title",
+		},
+		{
 			// The check that got us here is case-insensitive, so the cut must be too —
 			// otherwise the suffix matches, nothing is removed, and the URL comes back
 			// quietly altered instead of untouched.
@@ -148,6 +160,11 @@ func TestCanonicalPostingURL_LeavesEverythingElseAlone(t *testing.T) {
 		"https://careers.example.test/jobs/42/apply",
 		"https://boards.greenhouse.io/stripe/jobs/7826765",
 		"https://jobs.ashbyhq.com/truelogic",
+		"https://acme.catsone.com/careers/1/jobs/2-title",
+		// Ends in the apex's own label, not bracketed by it — must not match on a
+		// coincidental hostname.
+		"https://notcatsone.com/careers/1/jobs/2-title/apply",
+		"https://catsone.com/careers/1/jobs/2-title/apply",
 		"not a url",
 		"",
 	} {

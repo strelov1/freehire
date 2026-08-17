@@ -96,6 +96,15 @@ var applyFormSuffix = map[string]string{
 	"jobs.workable.com":  "/apply",
 }
 
+// applyFormSuffixApex is applyFormSuffix's counterpart for a multi-tenant ATS whose
+// tenants each get their own host, so no single hostname names it — CatsOne serves
+// <tenant>.catsone.com per company, the same shape internal/atsboard's "catsone"
+// modeHost entry already recognises. Matched by domain label rather than a tenant
+// list, so a new CatsOne tenant needs no entry here either.
+var applyFormSuffixApex = map[string]string{
+	"catsone": "/apply",
+}
+
 // CanonicalPostingURL rewrites a posting's application-form URL to the posting
 // itself, and returns everything else unchanged.
 //
@@ -114,7 +123,11 @@ func CanonicalPostingURL(raw string) string {
 	if err != nil || u.Host == "" {
 		return raw
 	}
-	suffix, known := applyFormSuffix[strings.ToLower(u.Hostname())]
+	host := strings.ToLower(u.Hostname())
+	suffix, known := applyFormSuffix[host]
+	if !known {
+		suffix, known = applyFormSuffixByApex(host)
+	}
 	if !known {
 		return raw
 	}
@@ -133,4 +146,19 @@ func CanonicalPostingURL(raw string) string {
 	}
 	u.Path = stripped
 	return u.String()
+}
+
+// applyFormSuffixByApex matches host against applyFormSuffixApex's domain labels,
+// the same "apex sits somewhere in the middle" test internal/atsboard's matchHost
+// uses for its own modeHost entries: a HasSuffix(host, ".catsone") check would never
+// match "<tenant>.catsone.com" at all — the label is followed by a TLD, not the end
+// of the string — so this looks for the apex bracketed by dots instead, exactly like
+// atsboard's own "catsone" entry does when it recognises the same hosts for ingest.
+func applyFormSuffixByApex(host string) (string, bool) {
+	for apex, suffix := range applyFormSuffixApex {
+		if strings.Contains(host, "."+apex+".") {
+			return suffix, true
+		}
+	}
+	return "", false
 }
