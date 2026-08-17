@@ -50,3 +50,57 @@
   board: dreamgroup/99.002
 - company: Cognyte
   board: cognyte/F2.009
+- company: Tenengroup Ltd.
+  board: Tenengroup/93.00C
+- company: AgencyBloc
+  board: agencybloc/08.008
+- company: Akeyless
+  board: akeyless/27.006
+- company: Alma Lasers
+  board: almalasers/67.006
+- company: BDR Solutions, LLC
+  board: bdrsolutionsllc/79.00B
+- company: Blockaid
+  board: blockaid/69.00B
+- company: Bright Data
+  board: brightdata/88.007
+- company: Caesarstone
+  board: caesarstone/25.000
+- company: CapsLock
+  board: capslock/59.001
+- company: Checkmarx
+  board: checkmarx/C0.008
+- company: Cycode
+  board: cycode/A8.00D
+- company: Driivz
+  board: driivz/C4.00B
+- company: Fluent Trade Technologies
+  board: fluenttech/E5.00E
+- company: Fullpath
+  board: fullpath/54.002
+- company: i4DM
+  board: i4DM/85.006
+- company: Ivix
+  board: ivix/09.002
+- company: Navina
+  board: navina/E6.00C
+- company: Onebeat
+  board: onebeat/0A.000
+- company: Orchid Security
+  board: orchid_security/4A.001
+- company: OuterBox
+  board: outerbox/49.00D
+- company: PolySwarm
+  board: polyswarm/95.008
+- company: Snapscale
+  board: snapscale/C9.006
+- company: VAST Data
+  board: vastdata/43.001
+- company: Vi
+  board: vi/B1.002
+- company: Visana Health
+  board: visanahealth/0B.008
+- company: Webbing
+  board: webbing/46.00E
+- company: Zenity
+  board: zenity/19.000
