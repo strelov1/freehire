@@ -111,16 +111,16 @@
       keyOf: (job) => job.public_slug,
     });
 
-  // Seeded with the server-rendered page (an intentional one-time snapshot of the
-  // initial prop); filter changes fetch client-side.
   // The page being read. Starts at the route's `?page=N` and survives a reload that
   // didn't change the query; a changed query resets it to 1, because the visitor is
   // now looking at a different result set (and FilterStore has already dropped
   // `page` from the URL — it only ever writes facet params).
   let activePage = $state(untrack(() => currentPage));
 
+  // Seeded from the server-rendered page — an intentional one-time snapshot of the
+  // props, which the effects below re-take when the page or the query changes.
   const seeded = makePaginator();
-  seeded.seed(untrack(() => initial), pageOffset(untrack(() => currentPage)));
+  untrack(() => seeded.seed(initial, pageOffset(currentPage)));
   let jobs = $state.raw(seeded);
 
   // The live facet distribution (value → count per facet), feeding the dynamic
@@ -497,12 +497,11 @@
         </div>
       {/if}
 
-      <!-- Page links, and the only way through the results. There was a
-           scroll-to-bottom auto-load here as well, which meant the page grew for as
-           long as you scrolled and the footer moved down every time you approached
-           it — everything under the feed, /for-companies included, was unreachable
-           by scrolling. `pageCount` already caps at the deepest page the search API
-           will serve, so no link here walks into its "pagination too deep" 400. -->
+      <!-- Page links, and the only way through the results: a scroll-to-bottom
+           auto-load used to sit here, which grew the page every time the reader
+           neared the end of it and put the footer permanently out of reach.
+           `pageCount` caps at the deepest page the search API will serve, so no
+           link here walks into its "pagination too deep" 400. -->
       <Pagination
         current={activePage}
         total={pageCount(jobs.total)}

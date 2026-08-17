@@ -40,20 +40,22 @@
       api.listCompanies('', limit, offset, companyFiltersToParams(filters.applied)),
     );
 
+  // Seeded from the server-rendered page — an intentional one-time snapshot of the
+  // props, which the effects below re-take when the page or the query changes.
   const seeded = makePaginator();
-  seeded.seed(untrack(() => initial), pageOffset(untrack(() => currentPage)));
+  untrack(() => seeded.seed(initial, pageOffset(currentPage)));
   let companies = $state.raw(seeded);
 
   // The page being read. Starts at the route's `?page=N` and is reset only by a
   // genuinely NEW query — see the effect below for why "the filters changed" is not
   // the same question.
   let activePage = $state(untrack(() => currentPage));
+  let modalOpen = $state(false);
   let started = false;
   // The applied filters as a string, so a re-seed to the same set can be told from a
   // real change. Seeded with what the route searched with, not left empty: an empty
   // one would make the first client run look like a new query and snap page 3 to 1.
   let lastSearchKey = untrack(() => companyFiltersToParams(filters.applied).toString());
-  let modalOpen = $state(false);
 
   // `initial` was fetched for page.url; if a shallow-routing back/forward left
   // page.url lagging the address bar, it's stale — reload on the first run instead.
@@ -97,10 +99,10 @@
       }
       // "The filters object changed" is not "the visitor searched for something
       // else": the store re-seeds on navigation and rewrites the URL, and both fire
-      // this effect with the same filters. Only a changed query means the result set
-      // is different and page 1 is where to be; anything else reloads the page being
-      // read, or `/companies?page=3` would render page 3 server-side and then snap
-      // itself back to page 1 the moment it hydrated. Mirrors JobsView.
+      // this effect with the filters unchanged. Only a changed query means a
+      // different result set, and so page 1; anything else reloads the page being
+      // read. Without the distinction `/companies?page=3` rendered page 3 and snapped
+      // back to page 1 the moment it hydrated. Mirrors JobsView.
       const searchKey = companyFiltersToParams(filters.applied).toString();
       const sameQuery = searchKey === lastSearchKey;
       lastSearchKey = searchKey;
@@ -109,12 +111,10 @@
     });
   });
 
-  // Following a page link is a real navigation, but SvelteKit reuses this component
-  // across `?page=N` rather than remounting it — so `initial` and `currentPage` are
-  // re-supplied while the state seeded from them is not, and the address bar would
-  // move without the list moving. Re-seeds from the `initial` the route just loaded
-  // rather than fetching: the server already listed exactly this page. Mirrors
-  // JobsView.
+  // Re-seed when a page link is followed: SvelteKit reuses this component across
+  // `?page=N`, so the props arrive again and the state seeded from them does not.
+  // No fetch — the route already listed exactly this page. See JobsView, which
+  // carries the same effect and the longer explanation.
   $effect(() => {
     const nextPage = currentPage;
     const slice = initial;
@@ -214,9 +214,9 @@
         {/each}
       </div>
 
-      <!-- Page links, and the only way through the list. There was a scroll-to-bottom
-           auto-load here as well, which meant the page grew for as long as you
-           scrolled and the footer moved down every time you approached it. -->
+      <!-- Page links, and the only way through the list: a scroll-to-bottom auto-load
+           used to sit here, which grew the page every time the reader neared the end
+           of it and put the footer permanently out of reach. -->
       <Pagination
         current={activePage}
         total={pageCount(companies.total)}
