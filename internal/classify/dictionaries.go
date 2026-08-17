@@ -289,6 +289,10 @@ var categoryTable = []aliasEntry{
 	// "chief information security officer" needs no entry of its own: the bare
 	// "security" alias above already catches it as a whole word.
 	{"ciso", "security"},
+	// IT-specific audit (controls/access/compliance review), unlike the bare
+	// "internal auditor"/"auditor" nouns this file deliberately omits — those span
+	// every industry's financial and quality audit functions and are not IT-anchored.
+	{"it auditor", "security"},
 	// DevSecOps stays security, not devops: the security responsibility (SAST/DAST,
 	// container/IaC scanning, policy-as-code) is why the title exists, not incidental.
 	{"devsecops", "security"},
@@ -328,12 +332,35 @@ var categoryTable = []aliasEntry{
 	{"content strategist", "technical_writing"},
 	{"localization specialist", "technical_writing"},
 	{"localization manager", "technical_writing"},
+	{"localization engineer", "technical_writing"},
+	// Instructional/curriculum design is a content craft, not product design — it
+	// builds courses and learning materials, not interfaces — so it must precede the
+	// bare "designer" entry below for the same reason "content designer" does. It
+	// stays out of `hr`'s "learning and development" alias on purpose: L&D is the
+	// internal-training FUNCTION, this is the authoring CRAFT, and it shows up at
+	// edtech/product companies with no L&D team at all.
+	{"instructional designer", "technical_writing"},
+	{"instructional design", "technical_writing"},
+	{"curriculum designer", "technical_writing"},
+	{"learning designer", "technical_writing"},
+	{"learning experience designer", "technical_writing"},
+	{"e-learning developer", "technical_writing"},
+	{"elearning developer", "technical_writing"},
+	// Bare "translator"/"переводчик": the role noun names one unambiguous craft in
+	// every industry, so no qualifying phrase is needed the way
+	// software_engineering's language-anchored forms are. NOT "translation" — that
+	// noun also names an NLP/MT discipline ("Machine Translation Engineer",
+	// "Translation Engineer" are ml_ai/software roles, not human translators), so a
+	// bare entry for it would misfile them the same way a bare "growth"/"compliance"
+	// would elsewhere in this file.
+	{"translator", "technical_writing"},
 	{"технический писатель", "technical_writing"},
 	{"техписатель", "technical_writing"},
 	{"технический редактор", "technical_writing"},
 	{"разработчик документации", "technical_writing"},
 	{"специалист по документации", "technical_writing"},
 	{"ux-редактор", "technical_writing"},
+	{"переводчик", "technical_writing"},
 	// The word "design" names two unrelated crafts. Everything below down to the
 	// engineering block is a title whose "… design …" is NOT product design: it is
 	// engineering draughting (mechanical/electrical/civil), chip and board design, or
@@ -494,6 +521,21 @@ var categoryTable = []aliasEntry{
 	{"pr specialist", "marketing"},
 	{"link building", "marketing"},
 	{"content creator", "marketing"},
+	{"growth hacker", "marketing"},
+	// Event marketing: bare "event"/"events" is too common a word to trust alone
+	// (an "Event-Driven Architecture Engineer" would false-positive), so only the
+	// role-noun-qualified forms resolve.
+	{"event manager", "marketing"},
+	{"event coordinator", "marketing"},
+	{"events manager", "marketing"},
+	{"events coordinator", "marketing"},
+	// App store growth (mobile) and web conversion growth. Bare "aso"/"cro" are both
+	// overloaded elsewhere (ASO also names an Application Security Officer, CRO a
+	// Chief Revenue Officer or a Contract Research Organization), so only the
+	// spelled-out and fully role-qualified forms resolve.
+	{"app store optimization", "marketing"},
+	{"aso specialist", "marketing"},
+	{"conversion rate optimization", "marketing"},
 	// Generative-engine optimization: the industry names one job three ways. Only the
 	// spelled-out forms and the bound abbreviation resolve — a bare "geo" is
 	// geography, and "Geo Data Analyst" must stay with the analysts.
@@ -550,6 +592,9 @@ var categoryTable = []aliasEntry{
 	{"support", "support"},
 	{"customer service", "support"},
 	{"help desk", "support"},
+	// The unspaced compound: "help desk" above cannot reach it, the same trap the
+	// "back-end"/"back end"/"backend" trio guards against.
+	{"helpdesk", "support"},
 	{"call center", "support"},
 	{"call-центр", "support"},
 	{"колл-центр", "support"},
@@ -568,6 +613,14 @@ var categoryTable = []aliasEntry{
 	{"onboarding manager", "customer_success"},
 	{"implementation specialist", "customer_success"},
 	{"implementation consultant", "customer_success"},
+	// NOT "onboarding engineer": unlike "implementation engineer" above (still a
+	// customer-facing role, the technical sibling of "implementation
+	// specialist"/"consultant"), "onboarding engineer" is genuinely dual-use — it is
+	// also a real internal-platform title ("Developer Onboarding Engineer" builds
+	// onboarding tooling for a company's own engineers), so a bare entry would
+	// misfile that population the way a bare "growth"/"compliance" would elsewhere
+	// in this file.
+	{"implementation engineer", "customer_success"},
 	{"renewals manager", "customer_success"},
 	{"renewal manager", "customer_success"},
 	{"менеджер по успеху клиентов", "customer_success"},
@@ -585,6 +638,14 @@ var categoryTable = []aliasEntry{
 	{"talent sourcer", "recruiting"},
 	{"recruitment consultant", "recruiting"},
 	{"recruitment specialist", "recruiting"},
+	{"sourcer", "recruiting"},
+	{"talent partner", "recruiting"},
+	// Employer branding sells the company to candidates, not customers — the
+	// recruiting-side twin of the marketing "brand manager" alias above, which this
+	// phrase does not contain a substring of ("employer branding manager" has no
+	// "brand manager" inside it), so it needs its own entry rather than falling to
+	// the generic manager->management catch-all.
+	{"employer branding", "recruiting"},
 	{"рекрутер", "recruiting"},
 	{"рекрутёр", "recruiting"},
 	{"специалист по подбору персонала", "recruiting"},
@@ -644,6 +705,11 @@ var categoryTable = []aliasEntry{
 	{"compliance analyst", "legal"},
 	{"regulatory affairs", "legal"},
 	{"data protection officer", "legal"},
+	{"privacy officer", "legal"},
+	{"data privacy officer", "legal"},
+	{"data privacy manager", "legal"},
+	{"contracts administrator", "legal"},
+	{"contract administrator", "legal"},
 	{"юрист", "legal"},
 	{"юрисконсульт", "legal"},
 	{"корпоративный юрист", "legal"},
@@ -666,6 +732,7 @@ var categoryTable = []aliasEntry{
 	{"procurement manager", "operations"},
 	{"purchasing manager", "operations"},
 	{"facilities manager", "operations"},
+	{"facilities coordinator", "operations"},
 	{"операционный директор", "operations"},
 	{"операционный менеджер", "operations"},
 	{"офис-менеджер", "operations"},

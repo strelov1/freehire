@@ -373,6 +373,82 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 	}
 }
 
+// TestParse_ITAdjacentCoverage covers professions found adjacent to the core IT
+// disciplines during a coverage audit: content/localization crafts that were
+// falling to the bare "designer" entry or resolving to nothing, and back-office
+// functions (recruiting, legal, operations, customer_success, marketing,
+// security) that were falling through to the generic manager/analyst
+// catch-alls or staying unresolved. Deliberately excluded titles that stay
+// unresolved are pinned in the precision block: they span too many non-IT
+// industries (Editor, Proofreader, Controller) or are genuinely overloaded
+// abbreviations (AR/CRO/AP) for a bare or narrow alias to be safe.
+func TestParse_ITAdjacentCoverage(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// technical_writing — content/localization crafts, guard: beat bare designer
+		{"Instructional Designer", "technical_writing"},
+		{"Senior Instructional Designer", "technical_writing"},
+		{"Learning Designer", "technical_writing"},
+		{"Curriculum Designer", "technical_writing"},
+		{"Learning Experience Designer", "technical_writing"},
+		{"E-Learning Developer", "technical_writing"},
+		{"Translator", "technical_writing"},
+		{"French Translator", "technical_writing"},
+		{"Localization Engineer", "technical_writing"},
+		{"Переводчик", "technical_writing"},
+
+		// recruiting — guard: beat manager-> fall-through
+		{"Sourcer", "recruiting"},
+		{"Talent Partner", "recruiting"},
+		{"Employer Branding Manager", "recruiting"},
+
+		// legal — guard: beat manager-> fall-through
+		{"Privacy Officer", "legal"},
+		{"Data Privacy Officer", "legal"},
+		{"Data Privacy Manager", "legal"},
+		{"Contracts Administrator", "legal"},
+		{"Contract Administrator", "legal"},
+
+		// operations
+		{"Facilities Coordinator", "operations"},
+
+		// support — the unspaced compound "help desk" cannot reach
+		{"Helpdesk Technician", "support"},
+
+		// customer_success — guard: beat unresolved
+		{"Implementation Engineer", "customer_success"},
+
+		// marketing — guard: beat manager-> fall-through / bare event false positive
+		{"Growth Hacker", "marketing"},
+		{"Event Manager", "marketing"},
+		{"Events Coordinator", "marketing"},
+		{"App Store Optimization Specialist", "marketing"},
+		{"ASO Specialist", "marketing"},
+		{"Conversion Rate Optimization Specialist", "marketing"},
+
+		// security — IT-anchored audit only
+		{"IT Auditor", "security"},
+
+		// precision — deliberately left unresolved, existing behavior unchanged
+		{"Editor", ""},                             // spans every industry, not IT-anchored
+		{"Proofreader", ""},                        // ditto
+		{"Controller", ""},                         // ambiguous with game/hardware controller
+		{"AR Specialist", ""},                      // AR also means Augmented Reality
+		{"AP Specialist", ""},                      // too thin a signal on its own
+		{"CRO Specialist", ""},                     // bare CRO also Chief Revenue Officer
+		{"Internal Auditor", ""},                   // spans every industry's audit function
+		{"Reliability Engineer", ""},               // ambiguous without "site" (mechanical reliability exists)
+		{"Event-Driven Architecture Engineer", ""}, // guard: bare "event" must not fire
+		{"Machine Translation Engineer", ""},       // guard: bare "translation" must not fire (this is an ML role)
+		{"Translation Engineer", ""},               // ditto
+		{"Developer Onboarding Engineer", ""},      // guard: "onboarding engineer" is dual-use (internal platform tooling too)
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
 // TestParse_AliasGapFill covers title phrasing for IT sub-roles that already have a
 // home category (project_management, security, devops, data_engineering,
 // data_analytics) but whose common surface forms the dictionary never learned —
