@@ -18,16 +18,11 @@ import { describe, expect, it } from 'vitest';
 // their own and wrong together. Neither PR conflicted, and no test failed.
 const ROUTES = join(import.meta.dirname, '..', 'routes');
 
-function serverLoaders(): string[] {
-  return readdirSync(ROUTES, { recursive: true, encoding: 'utf8' }).filter((f) =>
-    f.endsWith('+page.server.ts')
-  );
-}
-
 describe('paged listing routes', () => {
-  const paged = serverLoaders().filter((f) =>
-    readFileSync(join(ROUTES, f), 'utf8').includes('parsePage(')
-  );
+  const paged = readdirSync(ROUTES, { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('+page.server.ts'))
+    .map((file) => ({ file, source: readFileSync(join(ROUTES, file), 'utf8') }))
+    .filter(({ source }) => source.includes('parsePage('));
 
   it('finds the listings that page', () => {
     // Guards the audit itself: a rename that stops matching would otherwise leave
@@ -37,9 +32,9 @@ describe('paged listing routes', () => {
   });
 
   it('refuses a page number past the last page with rows', () => {
-    const unguarded = paged.filter(
-      (f) => !readFileSync(join(ROUTES, f), 'utf8').includes('pageExists(')
-    );
+    const unguarded = paged
+      .filter(({ source }) => !source.includes('pageExists('))
+      .map(({ file }) => file);
     expect(unguarded, 'routes reading ?page=N without checking the page exists').toEqual([]);
   });
 });

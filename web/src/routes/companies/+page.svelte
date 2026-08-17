@@ -27,9 +27,8 @@
   // `pageExists` already 404s a page number past the end, so this only ever fires on
   // page 1 of an empty result set.
   const robots = $derived(listingRobots(data.initial.total));
-  // The page number belongs in the title too: twenty results in, every page carries
-  // the same one otherwise, and a search result reading "Companies · freehire" says
-  // nothing about which twenty. Mirrors the job feed.
+  // The number belongs in the title too, or every page advertises itself as the same
+  // one. Mirrors the job feed.
   const title = $derived(
     data.pageNumber > 1 ? `Companies — page ${data.pageNumber} · freehire` : 'Companies · freehire'
   );
@@ -53,7 +52,7 @@
   );
 </script>
 
-<Seo title={title} {description} {canonical} {robots} />
+<Seo {title} {description} {canonical} {robots} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
