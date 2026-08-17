@@ -27,6 +27,43 @@ func TestRecordToParamsCanonicalizesIndustries(t *testing.T) {
 	}
 }
 
+// The subindustry leaf reaches the curated column on the real path — ycdir.Map
+// unions it into Record.Industries, and this worker canonicalizes that union. The
+// web filter drops the separate `subindustries` facet on the strength of exactly
+// this: a company's YC leaf is already expressible as a curated industry, so the
+// leaf needs no filter of its own. Driven through Map, not a hand-built Record,
+// because the union is Map's job and this asserts the seam between them.
+func TestSubindustryLeafReachesIndustriesThroughMap(t *testing.T) {
+	rec, ok := ycdir.Map(ycdir.Entry{Name: "Acme", Subindustry: "B2B -> Fintech", Batch: "Winter 2024"})
+	if !ok {
+		t.Fatal("Map dropped the entry")
+	}
+
+	got := recordToParams(rec)
+	if want := []string{"fintech"}; !reflect.DeepEqual(got.Industries, want) {
+		t.Errorf("Industries = %q, want %q", got.Industries, want)
+	}
+	// The scalar column still holds the directory's own leaf verbatim: the facet is
+	// gone from the filter, the classification is not gone from the row.
+	if !got.Subindustry.Valid || got.Subindustry.String != "Fintech" {
+		t.Errorf("Subindustry = %+v, want a valid %q", got.Subindustry, "Fintech")
+	}
+}
+
+// A leaf the dictionary does not know reaches the curated column from no path —
+// the leaf's own vocabulary carries YC's bucket names ("B2B", "Engineering,
+// Product and Design"), which name no industry.
+func TestUnknownSubindustryLeafReachesIndustriesFromNoPath(t *testing.T) {
+	rec, ok := ycdir.Map(ycdir.Entry{Name: "Acme", Subindustry: "B2B -> Engineering, Product and Design", Batch: "Winter 2024"})
+	if !ok {
+		t.Fatal("Map dropped the entry")
+	}
+
+	if got := recordToParams(rec); len(got.Industries) != 0 {
+		t.Errorf("Industries = %q, want empty", got.Industries)
+	}
+}
+
 type fakeStore struct {
 	exists    map[string]bool
 	jobCounts map[string]int32

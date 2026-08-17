@@ -2,7 +2,7 @@
   import { COMPANY_FACETS } from '$lib/facets';
   import type { CompanyFilterStore } from '$lib/companyFilters';
   import { StagedCompanyFilters } from '$lib/stagedCompanyFilters.svelte';
-  import type { RailEntry, RailSection } from '$lib/filterSections';
+  import { COMPANY_RAIL_GROUPS, type RailEntry, type RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
   import FacetSection from '../facets/FacetSection.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
@@ -21,20 +21,10 @@
 
   const staged = new StagedCompanyFilters();
 
-  // Rail groups: each pane renders the FacetSections for its `params`, in order. A
-  // single-facet group is just its own pane (Collection/Country/Industry). Every
-  // COMPANY_FACETS param appears in exactly one group.
-  const GROUPS: { key: string; label: string; params: string[] }[] = [
-    { key: 'collections', label: 'Collection', params: ['collections'] },
-    { key: 'region', label: 'Region', params: ['regions', 'remote_regions'] },
-    { key: 'countries', label: 'Country', params: ['countries'] },
-    { key: 'subindustries', label: 'Industry', params: ['subindustries'] },
-    { key: 'domains', label: 'Domain', params: ['domains'] },
-    { key: 'company', label: 'Company', params: ['company_type', 'company_size'] },
-    { key: 'yc', label: 'Y Combinator', params: ['yc_status', 'yc_stage', 'yc_flags', 'yc_batch'] },
-  ];
-
-  const rail: RailEntry[] = GROUPS.map((g) => ({
+  // Rail groups live in filterSections.ts beside the job modal's RAIL, where a test
+  // can assert they cover every COMPANY_FACETS param — an ungrouped facet is not
+  // merely misplaced, it is unreachable.
+  const rail: RailEntry[] = COMPANY_RAIL_GROUPS.map((g) => ({
     key: g.key,
     label: g.label,
     section: 'FILTERS',
@@ -42,7 +32,7 @@
   }));
   const sections: RailSection[] = ['FILTERS'];
 
-  const paramsOf = (key: string) => GROUPS.find((g) => g.key === key)?.params ?? [];
+  const paramsOf = (key: string) => COMPANY_RAIL_GROUPS.find((g) => g.key === key)?.params ?? [];
 
   // Company facets are include-only, so the badge is the total selected across the
   // group's params.

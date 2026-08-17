@@ -181,30 +181,6 @@ async function companySearch(query: string): Promise<FacetOption[]> {
   return items.map((c) => ({ value: c.slug, label: c.name, count: c.job_count }));
 }
 
-// Option source for the company "Industry" facet: the full YC subindustry
-// vocabulary with company counts, fetched ONCE and searched client-side. Unlike
-// the company entity facet (thousands of rows, queried server-side per keystroke),
-// this is a bounded ~100-value list, so the whole vocabulary is loaded up front and
-// cached at module scope — the filter modal reuses it instead of re-fetching per
-// open. The subindustry leaf is already human-readable, so value == label.
-let subindustryOptions: Promise<FacetOption[]> | null = null;
-function loadSubindustries(): Promise<FacetOption[]> {
-  return (subindustryOptions ??= api
-    .listCompanySubindustries()
-    .then((rows) => rows.map((r) => ({ value: r.value, label: r.value, count: r.count })))
-    .catch((e) => {
-      // Don't cache a failed fetch — clear it so a later open retries instead of
-      // leaving the facet permanently empty until a page reload.
-      subindustryOptions = null;
-      throw e;
-    }));
-}
-async function subindustrySearch(query: string): Promise<FacetOption[]> {
-  const all = await loadSubindustries();
-  const q = query.trim().toLowerCase();
-  return q ? all.filter((o) => o.label.toLowerCase().includes(q)) : all;
-}
-
 // Composes one /geo/cities result into a FacetOption: the value stays the bare city
 // name (what a profile's location_preferences already stores), the label adds the
 // country via the same countryLabel() resolver COUNTRY_OPTIONS uses, so two
@@ -533,9 +509,6 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'remote_regions', label: 'Remote hiring', control: 'pills', options: REGION, excludable: false },
   { param: 'countries', label: 'Country', control: 'select', options: COUNTRY, excludable: false, placeholder: 'Search countries' },
   { param: 'industries', label: 'Industry', control: 'select', options: INDUSTRIES, excludable: false, placeholder: 'Search industries' },
-  // Written by the YC importer alone, so it never covered the catalogue. Named for
-  // what it is rather than holding the label the curated vocabulary earns.
-  { param: 'subindustries', label: 'YC industry', control: 'remote', excludable: false, placeholder: 'Search YC industries', remote: subindustrySearch },
   { param: 'domains', label: 'Domain', control: 'select', options: DOMAINS, excludable: false, placeholder: 'Search domains' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },

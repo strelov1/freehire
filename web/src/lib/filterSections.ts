@@ -126,6 +126,29 @@ export interface RailEntry {
   facetParam?: string;
 }
 
+/** One pane of the company modal's rail: the FacetSections it stacks, in order. */
+export interface CompanyRailGroup {
+  key: string;
+  label: string;
+  params: string[];
+}
+
+// The company modal's rail. Unlike RAIL every pane is plain facet controls, so a
+// group is just its params — related facets fold into one pane so the geography,
+// company-shape and YC-directory facets read as three panes instead of nine rows.
+//
+// A COMPANY_FACETS param missing here is unreachable in the UI, not merely
+// ungrouped, so companyRailGroups.test.ts asserts the two sets match.
+export const COMPANY_RAIL_GROUPS: CompanyRailGroup[] = [
+  { key: 'collections', label: 'Collection', params: ['collections'] },
+  { key: 'region', label: 'Region', params: ['regions', 'remote_regions'] },
+  { key: 'countries', label: 'Country', params: ['countries'] },
+  { key: 'industries', label: 'Industry', params: ['industries'] },
+  { key: 'domains', label: 'Domain', params: ['domains'] },
+  { key: 'company', label: 'Company', params: ['company_type', 'company_size', 'maturity'] },
+  { key: 'yc', label: 'Y Combinator', params: ['yc_status', 'yc_stage', 'yc_flags', 'yc_batch'] },
+];
+
 export const RAIL: RailEntry[] = [
   // One "Role" pane holds the whole "what role" concept: the role picker
   // (natural/named/composite roles), the seniority pills, and the specialization

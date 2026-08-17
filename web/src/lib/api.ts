@@ -569,12 +569,6 @@ export function createApi(
     );
   }
 
-  /** The subindustry facet vocabulary (each clean YC leaf + its company count),
-   *  count-ordered, backing the company "Industry" filter's searchable options. */
-  async function listCompanySubindustries(): Promise<{ value: string; count: number }[]> {
-    return requestData<{ value: string; count: number }[]>('/api/v1/companies/subindustries');
-  }
-
   /** Population-ranked city-name search over the embedded GeoNames dictionary,
    *  backing the profile's base-city and relocation-cities autocomplete. `country`
    *  narrows to one ISO 3166-1 alpha-2 code; each result carries its own raw code
@@ -2034,7 +2028,6 @@ export function createApi(
     ingestStatus,
     listCompanies,
     getCompany,
-    listCompanySubindustries,
     searchCities,
     insightsRoles,
     insightsSkills,

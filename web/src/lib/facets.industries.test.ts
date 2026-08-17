@@ -14,19 +14,18 @@ describe('company industry facets', () => {
     expect(facet?.options?.length).toBe(INDUSTRY_VALUES.length);
   });
 
-  it('labels the YC-only subindustry facet as such', () => {
-    // subindustry is written by the YC importer alone, so calling it plain
-    // "Industry" promised catalogue-wide coverage it never had — and it held the
-    // label the curated vocabulary now earns.
-    const facet = COMPANY_FACETS.find((f) => f.param === 'subindustries');
-
-    expect(facet?.label).toBe('YC industry');
+  it('offers no second industry vocabulary beside it', () => {
+    // The YC subindustry leaf named the same thing in the directory's own words and
+    // for the ~1% of companies it covers. cmd/import-yc now folds that leaf into the
+    // curated column, so offering it as its own facet would be two filters for one
+    // idea — the column stays, the filter does not.
+    expect(COMPANY_FACETS.find((f) => f.param === 'subindustries')).toBeUndefined();
   });
 
   it('keeps the coarse domain facet distinct from the fine one', () => {
-    const labels = COMPANY_FACETS.filter((f) =>
-      ['industries', 'domains', 'subindustries'].includes(f.param),
-    ).map((f) => f.label);
+    const labels = COMPANY_FACETS.filter((f) => ['industries', 'domains'].includes(f.param)).map(
+      (f) => f.label,
+    );
 
     expect(new Set(labels).size).toBe(labels.length);
   });
