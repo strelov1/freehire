@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -9,16 +10,17 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// dbStore adapts the generated queries to similarjobs.Store. Unlike cmd/embed's
-// dbStore, no transaction is needed here: each operation is a single independent
-// statement (a SELECT, a job-to-job join query, or a one-row UPDATE), not a
-// multi-table commit that must land atomically.
+// dbStore adapts the generated queries to similarjobs.Store. Every operation but
+// NearestJobs is a single independent statement (a SELECT, a job-to-job join query, or
+// a one-row UPDATE) — no transaction needed. NearestJobs is the one exception: it needs
+// a transaction-scoped SET LOCAL, so it keeps its own connection via pool.
 type dbStore struct {
-	q *db.Queries
+	pool *pgxpool.Pool
+	q    *db.Queries
 }
 
 func newDBStore(pool *pgxpool.Pool) *dbStore {
-	return &dbStore{q: db.New(pool)}
+	return &dbStore{pool: pool, q: db.New(pool)}
 }
 
 func (s *dbStore) PendingJobIDs(ctx context.Context, limit int) ([]int64, error) {
@@ -47,15 +49,36 @@ const overFetchMultiplier = 10
 
 // NearestJobs wraps db.NearestJobsToJob, which already returns rows ordered nearest
 // (lowest distance) first — this just projects out the job ids in that same order.
+//
+// hnsw.ef_search (pgvector's HNSW candidate-list size, default 40) bounds how many
+// candidates the index scan itself can return — below overFetch, each LATERAL probe's
+// `LIMIT over_fetch` silently gets fewer rows than requested, no error, just a
+// short-filled (and less accurate) result. Raised via SET LOCAL inside a transaction so
+// it never leaks onto a pooled connection's next, unrelated query.
 func (s *dbStore) NearestJobs(ctx context.Context, jobID int64, limit int) ([]int64, error) {
-	rows, err := s.q.NearestJobsToJob(ctx, db.NearestJobsToJobParams{
+	overFetch := limit * overFetchMultiplier
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL hnsw.ef_search = %d", overFetch)); err != nil {
+		return nil, fmt.Errorf("set hnsw.ef_search: %w", err)
+	}
+	rows, err := s.q.WithTx(tx).NearestJobsToJob(ctx, db.NearestJobsToJobParams{
 		JobID:      jobID,
 		LimitCount: int32(limit),
-		OverFetch:  int32(limit * overFetchMultiplier),
+		OverFetch:  int32(overFetch),
 	})
 	if err != nil {
 		return nil, err
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+
 	ids := make([]int64, len(rows))
 	for i, r := range rows {
 		ids[i] = r.JobID

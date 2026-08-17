@@ -15,6 +15,10 @@
 -- (systemd-run or nohup) — a CONCURRENTLY build dies with its ssh session and leaves an
 -- INVALID index behind. Raise maintenance_work_mem for the session running this: the
 -- default (64MB) spills the build graph to disk past roughly half a million tuples
--- (this session's own earlier local spike, see design.md Risks).
+-- (this session's own earlier local spike, see design.md Risks). Recovering an INVALID
+-- index (confirmed live on prod for the semantic_outbox/search_outbox claim indexes,
+-- same failure mode): `DROP INDEX CONCURRENTLY job_semantic_chunks_embedding_hnsw_idx;`
+-- then re-run this file's CREATE INDEX CONCURRENTLY — `IF NOT EXISTS` alone will not
+-- retry a build once an invalid index already holds the name.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS job_semantic_chunks_embedding_hnsw_idx
     ON public.job_semantic_chunks USING hnsw (embedding vector_cosine_ops);
