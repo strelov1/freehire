@@ -1,6 +1,7 @@
+import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { companyFiltersFromParams, companyFiltersToParams } from '$lib/companyFilters';
-import { PAGE_SIZE, pageOffset, parsePage } from '$lib/pagination';
+import { PAGE_SIZE, pageExists, pageOffset, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 // Server-render the requested page of companies for the current filters (the ?q
@@ -16,5 +17,12 @@ export const load: PageServerLoad = async ({ url, fetch }) => {
   const facets = companyFiltersToParams(companyFiltersFromParams(url.searchParams));
   const pageNumber = parsePage(url.searchParams);
   const initial = await serverApi(fetch).listCompanies('', PAGE_SIZE, pageOffset(pageNumber), facets);
+  // Same rule the job feed and the collections hold: past the last page the matches
+  // fill there is no page, only an empty list under a canonical of its own — the
+  // shape Google reads as a soft 404. This listing gained `?page=N` after that rule
+  // was written, so it was the one route accepting a page number without checking
+  // that the number addressed anything. Page 1 always stands: a filter combination
+  // nothing matches renders the list's own empty state, not the site's 404.
+  if (!pageExists(pageNumber, initial.total)) error(404, 'Page not found');
   return { initial, pageNumber };
 };
