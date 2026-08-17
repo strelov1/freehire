@@ -85,37 +85,48 @@ WHERE job_count > 0
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
   AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
-  -- industries is the finer level beneath domains, filtered the same way. It must
-  -- exist on THIS path too: when only industries is set the request never reaches
-  -- Meili, and a facet the fallback does not know is silently ignored.
-  AND (coalesce(cardinality($6::text[]), 0) = 0 OR industries && $6::text[])
-  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_types && $7::text[])
-  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_sizes && $8::text[])
-  AND (coalesce(cardinality($9::text[]), 0) = 0 OR remote_regions && $9::text[])
-  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_batch && $10::text[])
-  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_status && $11::text[])
-  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_stage && $12::text[])
-  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
-  AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
-  AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
+  -- industries answers from EITHER source, which is why two arrays arrive for one
+  -- facet: ` + "`" + `industries` + "`" + ` is what an importer wrote, ` + "`" + `industry_domains` + "`" + ` is the caller's
+  -- industries translated into the coarse job-derived vocabulary by
+  -- internal/industrytag, matched against the domains the company's own postings
+  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
+  -- of the facet's reach, not a fallback. An industry the mapping does not cover
+  -- contributes nothing to the second array, and ` + "`" + `domains && '{}'` + "`" + ` is false, so the
+  -- curated arm answers alone without a special case.
+  --
+  -- It must exist on THIS path too: when only industries is set the request never
+  -- reaches Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality($6::text[]), 0) = 0
+       OR industries && $6::text[]
+       OR domains && $7::text[])
+  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_types && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR company_sizes && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR remote_regions && $10::text[])
+  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_batch && $11::text[])
+  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_status && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_stage && $13::text[])
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR yc_flags && $14::text[])
+  AND (coalesce(cardinality($15::text[]), 0) = 0 OR maturity = ANY($15::text[]))
+  AND (coalesce(cardinality($16::text[]), 0) = 0 OR subindustry = ANY($16::text[]))
 `
 
 type CountCompaniesParams struct {
-	Search        string   `json:"search"`
-	Collections   []string `json:"collections"`
-	Regions       []string `json:"regions"`
-	Countries     []string `json:"countries"`
-	Domains       []string `json:"domains"`
-	Industries    []string `json:"industries"`
-	CompanyTypes  []string `json:"company_types"`
-	CompanySizes  []string `json:"company_sizes"`
-	RemoteRegions []string `json:"remote_regions"`
-	YcBatch       []string `json:"yc_batch"`
-	YcStatus      []string `json:"yc_status"`
-	YcStage       []string `json:"yc_stage"`
-	YcFlags       []string `json:"yc_flags"`
-	Maturity      []string `json:"maturity"`
-	Subindustries []string `json:"subindustries"`
+	Search          string   `json:"search"`
+	Collections     []string `json:"collections"`
+	Regions         []string `json:"regions"`
+	Countries       []string `json:"countries"`
+	Domains         []string `json:"domains"`
+	Industries      []string `json:"industries"`
+	IndustryDomains []string `json:"industry_domains"`
+	CompanyTypes    []string `json:"company_types"`
+	CompanySizes    []string `json:"company_sizes"`
+	RemoteRegions   []string `json:"remote_regions"`
+	YcBatch         []string `json:"yc_batch"`
+	YcStatus        []string `json:"yc_status"`
+	YcStage         []string `json:"yc_stage"`
+	YcFlags         []string `json:"yc_flags"`
+	Maturity        []string `json:"maturity"`
+	Subindustries   []string `json:"subindustries"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -129,6 +140,7 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.Countries,
 		arg.Domains,
 		arg.Industries,
+		arg.IndustryDomains,
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
@@ -236,47 +248,58 @@ WHERE job_count > 0
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
   AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
-  -- industries is the finer level beneath domains, filtered the same way. It must
-  -- exist on THIS path too: when only industries is set the request never reaches
-  -- Meili, and a facet the fallback does not know is silently ignored.
-  AND (coalesce(cardinality($6::text[]), 0) = 0 OR industries && $6::text[])
-  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_types && $7::text[])
-  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_sizes && $8::text[])
-  AND (coalesce(cardinality($9::text[]), 0) = 0 OR remote_regions && $9::text[])
-  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_batch && $10::text[])
-  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_status && $11::text[])
-  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_stage && $12::text[])
-  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
+  -- industries answers from EITHER source, which is why two arrays arrive for one
+  -- facet: ` + "`" + `industries` + "`" + ` is what an importer wrote, ` + "`" + `industry_domains` + "`" + ` is the caller's
+  -- industries translated into the coarse job-derived vocabulary by
+  -- internal/industrytag, matched against the domains the company's own postings
+  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
+  -- of the facet's reach, not a fallback. An industry the mapping does not cover
+  -- contributes nothing to the second array, and ` + "`" + `domains && '{}'` + "`" + ` is false, so the
+  -- curated arm answers alone without a special case.
+  --
+  -- It must exist on THIS path too: when only industries is set the request never
+  -- reaches Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality($6::text[]), 0) = 0
+       OR industries && $6::text[]
+       OR domains && $7::text[])
+  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_types && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR company_sizes && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR remote_regions && $10::text[])
+  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_batch && $11::text[])
+  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_status && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_stage && $13::text[])
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR yc_flags && $14::text[])
   -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
   -- (unknown) maturity matches no requested value, so ` + "`" + `NULL = ANY(...)` + "`" + ` excludes it.
-  AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
+  AND (coalesce(cardinality($15::text[]), 0) = 0 OR maturity = ANY($15::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
-  AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
+  AND (coalesce(cardinality($16::text[]), 0) = 0 OR subindustry = ANY($16::text[]))
 ORDER BY
-  CASE WHEN $16::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
+  CASE WHEN $17::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
   job_count DESC, name
-LIMIT $18 OFFSET $17
+LIMIT $19 OFFSET $18
 `
 
 type ListCompaniesParams struct {
-	Search        string   `json:"search"`
-	Collections   []string `json:"collections"`
-	Regions       []string `json:"regions"`
-	Countries     []string `json:"countries"`
-	Domains       []string `json:"domains"`
-	Industries    []string `json:"industries"`
-	CompanyTypes  []string `json:"company_types"`
-	CompanySizes  []string `json:"company_sizes"`
-	RemoteRegions []string `json:"remote_regions"`
-	YcBatch       []string `json:"yc_batch"`
-	YcStatus      []string `json:"yc_status"`
-	YcStage       []string `json:"yc_stage"`
-	YcFlags       []string `json:"yc_flags"`
-	Maturity      []string `json:"maturity"`
-	Subindustries []string `json:"subindustries"`
-	Sort          string   `json:"sort"`
-	Offset        int32    `json:"offset"`
-	Limit         int32    `json:"limit"`
+	Search          string   `json:"search"`
+	Collections     []string `json:"collections"`
+	Regions         []string `json:"regions"`
+	Countries       []string `json:"countries"`
+	Domains         []string `json:"domains"`
+	Industries      []string `json:"industries"`
+	IndustryDomains []string `json:"industry_domains"`
+	CompanyTypes    []string `json:"company_types"`
+	CompanySizes    []string `json:"company_sizes"`
+	RemoteRegions   []string `json:"remote_regions"`
+	YcBatch         []string `json:"yc_batch"`
+	YcStatus        []string `json:"yc_status"`
+	YcStage         []string `json:"yc_stage"`
+	YcFlags         []string `json:"yc_flags"`
+	Maturity        []string `json:"maturity"`
+	Subindustries   []string `json:"subindustries"`
+	Sort            string   `json:"sort"`
+	Offset          int32    `json:"offset"`
+	Limit           int32    `json:"limit"`
 }
 
 type ListCompaniesRow struct {
@@ -327,6 +350,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.Countries,
 		arg.Domains,
 		arg.Industries,
+		arg.IndustryDomains,
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,

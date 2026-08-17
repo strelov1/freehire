@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/industrytag"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/search"
@@ -175,6 +176,20 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	maturity := facetValues(vals, "maturity")
 	subindustries := facetValues(vals, "subindustries")
 
+	// The industry facet reads two columns, so it needs the requested industries
+	// translated into the job-derived vocabulary as well. Meili's own translation
+	// happens inside search.CompanyFilterFromValues; both call the same helper, and
+	// an integration test compares the two backends' matched sets.
+	industryDomains := industrytag.DomainsForIndustries(industries)
+
+	// One list feeds both isCompanyFilter calls below. They used to be written out
+	// separately and the second forgot `industries`, so a request filtered only by
+	// industry was counted as unfiltered and answered with the catalogue-wide planner
+	// estimate instead of its own total — silently, since the argument is variadic.
+	facets := [][]string{collections, regions, countries, domains, industries,
+		companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage,
+		ycFlags, maturity, subindustries}
+
 	// Company search is served by the Meilisearch companies index when configured and
 	// a filter (q or any facet) is present — it gives relevance-first, typo-tolerant
 	// ranking with job_count as the tiebreaker. The unfiltered catalogue keeps the
@@ -185,8 +200,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// sort=rating also stays off Meili even when a filter is present: rating isn't a
 	// Meili-sortable attribute yet (see companySettings), so routing there would
 	// silently ignore the caller's requested order instead of honouring it.
-	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, collections, regions, countries,
-		domains, industries, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
+	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, facets...) {
 		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
 		if err == nil {
 			return listResponse(c, items, total, limit, offset)
@@ -195,24 +209,25 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	}
 
 	companies, err := h.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
-		Search:        search,
-		Collections:   collections,
-		Regions:       regions,
-		Countries:     countries,
-		Domains:       domains,
-		Industries:    industries,
-		CompanyTypes:  companyTypes,
-		CompanySizes:  companySizes,
-		RemoteRegions: remoteRegions,
-		YcBatch:       ycBatch,
-		YcStatus:      ycStatus,
-		YcStage:       ycStage,
-		YcFlags:       ycFlags,
-		Maturity:      maturity,
-		Subindustries: subindustries,
-		Sort:          sort,
-		Limit:         int32(limit),
-		Offset:        int32(offset),
+		Search:          search,
+		Collections:     collections,
+		Regions:         regions,
+		Countries:       countries,
+		Domains:         domains,
+		Industries:      industries,
+		IndustryDomains: industryDomains,
+		CompanyTypes:    companyTypes,
+		CompanySizes:    companySizes,
+		RemoteRegions:   remoteRegions,
+		YcBatch:         ycBatch,
+		YcStatus:        ycStatus,
+		YcStage:         ycStage,
+		YcFlags:         ycFlags,
+		Maturity:        maturity,
+		Subindustries:   subindustries,
+		Sort:            sort,
+		Limit:           int32(limit),
+		Offset:          int32(offset),
 	})
 	if err != nil {
 		return err
@@ -223,24 +238,24 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// it cheap. So a filtered request gets the exact count (accurate pagination total),
 	// and the pathological unfiltered case gets the O(1) planner estimate, as /jobs does.
 	var total int64
-	if isCompanyFilter(search, collections, regions, countries, domains, companyTypes,
-		companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
+	if isCompanyFilter(search, facets...) {
 		total, err = h.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
-			Search:        search,
-			Collections:   collections,
-			Regions:       regions,
-			Countries:     countries,
-			Domains:       domains,
-			Industries:    industries,
-			CompanyTypes:  companyTypes,
-			CompanySizes:  companySizes,
-			RemoteRegions: remoteRegions,
-			YcBatch:       ycBatch,
-			YcStatus:      ycStatus,
-			YcStage:       ycStage,
-			YcFlags:       ycFlags,
-			Maturity:      maturity,
-			Subindustries: subindustries,
+			Search:          search,
+			Collections:     collections,
+			Regions:         regions,
+			Countries:       countries,
+			Domains:         domains,
+			Industries:      industries,
+			IndustryDomains: industryDomains,
+			CompanyTypes:    companyTypes,
+			CompanySizes:    companySizes,
+			RemoteRegions:   remoteRegions,
+			YcBatch:         ycBatch,
+			YcStatus:        ycStatus,
+			YcStage:         ycStage,
+			YcFlags:         ycFlags,
+			Maturity:        maturity,
+			Subindustries:   subindustries,
 		})
 	} else {
 		total, err = h.queries.EstimateHiringCompanies(c.Context())

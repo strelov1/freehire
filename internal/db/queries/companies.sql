@@ -28,10 +28,20 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
-  -- industries is the finer level beneath domains, filtered the same way. It must
-  -- exist on THIS path too: when only industries is set the request never reaches
-  -- Meili, and a facet the fallback does not know is silently ignored.
-  AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0 OR industries && sqlc.arg('industries')::text[])
+  -- industries answers from EITHER source, which is why two arrays arrive for one
+  -- facet: `industries` is what an importer wrote, `industry_domains` is the caller's
+  -- industries translated into the coarse job-derived vocabulary by
+  -- internal/industrytag, matched against the domains the company's own postings
+  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
+  -- of the facet's reach, not a fallback. An industry the mapping does not cover
+  -- contributes nothing to the second array, and `domains && '{}'` is false, so the
+  -- curated arm answers alone without a special case.
+  --
+  -- It must exist on THIS path too: when only industries is set the request never
+  -- reaches Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0
+       OR industries && sqlc.arg('industries')::text[]
+       OR domains && sqlc.arg('industry_domains')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
@@ -69,10 +79,20 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
-  -- industries is the finer level beneath domains, filtered the same way. It must
-  -- exist on THIS path too: when only industries is set the request never reaches
-  -- Meili, and a facet the fallback does not know is silently ignored.
-  AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0 OR industries && sqlc.arg('industries')::text[])
+  -- industries answers from EITHER source, which is why two arrays arrive for one
+  -- facet: `industries` is what an importer wrote, `industry_domains` is the caller's
+  -- industries translated into the coarse job-derived vocabulary by
+  -- internal/industrytag, matched against the domains the company's own postings
+  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
+  -- of the facet's reach, not a fallback. An industry the mapping does not cover
+  -- contributes nothing to the second array, and `domains && '{}'` is false, so the
+  -- curated arm answers alone without a special case.
+  --
+  -- It must exist on THIS path too: when only industries is set the request never
+  -- reaches Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0
+       OR industries && sqlc.arg('industries')::text[]
+       OR domains && sqlc.arg('industry_domains')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])

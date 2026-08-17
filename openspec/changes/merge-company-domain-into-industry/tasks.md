@@ -20,19 +20,19 @@
 
 ## 3. Postgres path
 
-- [ ] 3.1 Widen the `industries` predicate in `ListCompanies` and `CountCompanies` to
+- [x] 3.1 Widen the `industries` predicate in `ListCompanies` and `CountCompanies` to
       match either column, taking the mapped domains as a second argument, then
       `make sqlc`
-- [ ] 3.2 Resolve the mapped domains in the companies handler and pass them to both
+- [x] 3.2 Resolve the mapped domains in the companies handler and pass them to both
       queries
-- [ ] 3.3 Integration tests (`-tags=integration`): a company matches on its curated
+- [x] 3.3 Integration tests (`-tags=integration`): a company matches on its curated
       industry alone; on its domain alone; a company whose only domain is unmapped
       (`other`/`media`/`saas`) matches nothing; `meta.total` counts the same set the
       list returns
 
 ## 4. The two paths agree
 
-- [ ] 4.1 A test that runs the same `industries` filter through the Meilisearch path
+- [x] 4.1 A test that runs the same `industries` filter through the Meilisearch path
       and the Postgres path over one fixture set and asserts the matched sets are equal
 
 ## 5. Web
