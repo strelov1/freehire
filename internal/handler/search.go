@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"slices"
 	"time"
 
 	"context"
@@ -69,9 +70,8 @@ const maxSearchWindow = 10000
 var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 
 // agentSearchParams is searchParams plus the agent endpoint's response-format
-// selector. Spelled out rather than appended, so it cannot alias searchParams'
-// backing array.
-var agentSearchParams = []string{"q", "sort", "order", "limit", "offset", "description_format"}
+// selector.
+var agentSearchParams = slices.Concat(searchParams, []string{"description_format"})
 
 // ignoredParams reports the query params of this request that neither the filter
 // nor the endpoint itself reads. They are echoed in the response meta instead of
