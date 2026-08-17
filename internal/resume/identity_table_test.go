@@ -28,7 +28,7 @@ func TestIdentityTableReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owned := Contacts{FullName: "Ada Lovelace", Email: "ada@example.com"}
+	owned := Owned{FullName: "Ada Lovelace", Email: "ada@example.com"}
 
 	type want struct {
 		structuredOK      bool
@@ -121,7 +121,7 @@ func TestIdentityTableReaders(t *testing.T) {
 			s := New(nil, repo)
 			ctx := context.Background()
 			if tc.owned {
-				if _, err := s.SetCandidateContacts(ctx, 7, owned); err != nil {
+				if _, err := s.SetCandidateOwned(ctx, 7, owned); err != nil {
 					t.Fatal(err)
 				}
 			}

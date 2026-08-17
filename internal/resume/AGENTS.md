@@ -2,23 +2,29 @@
 
 ## Scope
 `internal/resume` — one stored CV per user, the structured extract stamped to that
-upload, and the candidate-owned contact block that outlives the file.
+upload, and `Owned` — the candidate-owned override block that outlives the file and now
+covers identity *and* the flat/scalar part of the semantic body (headline, summary,
+languages, certifications, education), not identity alone. See `owned.go`'s own doc
+comment for the field-by-field boundary (why Skills/Experience stay outside it).
 
 ## Three layers
 
-Contact fields (name, email, phone, location, links) have exactly three sources.
-Read-time compose picks one block, not a field-by-field mix. Persist-time
-`FillEmptyContactsFromStructured` may fill blanks on a new extract.
+Owned-overridable fields (name, email, phone, location, links, headline, summary,
+languages, certifications, education) have exactly three sources. Read-time compose
+picks one block, not a field-by-field mix across sources — but Owned itself DOES win
+field by field against whichever source it's layered over, since a candidate editing
+their email must not blank their independently-edited summary. Persist-time
+`FillEmptyOwnedFromStructured` may fill blanks on a new extract.
 
-| Layer | What it is | Survives delete | Semantic body |
+| Layer | What it is | Survives delete | Everything else |
 |---|---|---|---|
-| **Candidate-owned contacts** | `users.candidate_contacts`, written by the candidate (or fill-empty from a current extract) | yes | never |
-| **Current structure** | `resume_structured` whose stamp equals `resume_uploaded_at` | no | yes — summary, education, skills, languages, projects, certifications, years |
+| **Owned overrides** | `users.candidate_contacts` (column keeps its original name), written by the candidate (or fill-empty from a current extract) | yes | never |
+| **Current structure** | `resume_structured` whose stamp equals `resume_uploaded_at` | no | yes — skills, projects, years (the fields Owned does NOT cover) |
 | **Provisional contacts** | identity-only slice of a superseded blob while extract is pending or failed | no | never |
 
-Precedence on Profile, CV seed, and header heal: **owned block** (if any field is set) → else current extract contacts → else provisional contacts.
+Precedence on Profile, CV seed, and header heal: **owned block** (per-field, over whichever of the other two is in play) → else current extract → else provisional contacts.
 
-A reader that needs “is the file-owned parse current?” uses stamp-gated `Structured` (`ok` is false while pending). A reader that needs identity uses the precedence above. No fourth mix.
+A reader that needs “is the file-owned parse current?” uses stamp-gated `Structured` (`ok` is false while pending). A reader that needs identity-or-owned-body uses the precedence above. No fourth mix.
 
 ## Who may use which layer
 

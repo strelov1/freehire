@@ -48,17 +48,17 @@ func (f fakeStructuredResume) Geography(context.Context, int64) (resume.Geograph
 	return f.geo, f.geoOK, nil
 }
 
-func (f fakeStructuredResume) CandidateContacts(context.Context, int64) (resume.Contacts, error) {
+func (f fakeStructuredResume) CandidateOwned(context.Context, int64) (resume.Owned, error) {
 	if f.err != nil {
-		return resume.Contacts{}, f.err
+		return resume.Owned{}, f.err
 	}
 	if f.ok {
-		return resume.ContactsFromStructured(f.ret), nil
+		return resume.OwnedFromStructured(f.ret), nil
 	}
 	if f.provisionalOK {
-		return resume.ContactsFromStructured(f.provisional), nil
+		return resume.OwnedFromStructured(f.provisional), nil
 	}
-	return resume.Contacts{}, nil
+	return resume.Owned{}, nil
 }
 
 func (f fakeStructuredResume) StructureForSeed(context.Context, int64) (resumeextract.Structured, bool, error) {
@@ -154,6 +154,28 @@ func TestGetProfile_CVBlockCarriesTheResumeWithoutContacts(t *testing.T) {
 		if _, ok := cv[key]; !ok {
 			t.Errorf("cv block is missing the professional field %q", key)
 		}
+	}
+}
+
+// A candidate can now set Summary/Languages/Certifications directly via the
+// owned-overlay editors (CvSummaryCard/EducationCard) without ever having a Headline,
+// Experience, or Education — the "worth serving" gate must still surface the cv block
+// for them, not just for the fields a CV parse would have populated.
+func TestGetProfile_CVBlockPresentForSummaryOnlyCandidate(t *testing.T) {
+	app, token := profileAppWithResume(t, savedProfile(), fakeStructuredResume{
+		ret: resumeextract.Structured{Summary: "Ten years of backend work."},
+		ok:  true,
+	})
+
+	resp := doProfile(t, app, http.MethodGet, "", token)
+	defer resp.Body.Close()
+	cv, present := profileCV(t, resp)
+
+	if !present {
+		t.Fatal("cv block is null for a caller whose only résumé content is a summary")
+	}
+	if _, ok := cv["summary"]; !ok {
+		t.Error("cv block is missing the summary field")
 	}
 }
 

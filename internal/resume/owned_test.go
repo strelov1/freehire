@@ -12,8 +12,8 @@ import (
 )
 
 func TestFillEmptyDoesNotOverwriteOwned(t *testing.T) {
-	dst := Contacts{Email: "mine@example.com", Links: []string{"https://mine.example"}}
-	src := Contacts{FullName: "Ada", Email: "other@example.com", Links: []string{"https://other.example"}}
+	dst := Owned{Email: "mine@example.com", Links: []string{"https://mine.example"}}
+	src := Owned{FullName: "Ada", Email: "other@example.com", Links: []string{"https://other.example"}}
 	FillEmpty(&dst, src)
 	if dst.Email != "mine@example.com" || len(dst.Links) != 1 || dst.Links[0] != "https://mine.example" {
 		t.Fatalf("owned fields overwritten: %+v", dst)
@@ -28,7 +28,7 @@ func TestSetStructuredFillsEmptyContactsOnly(t *testing.T) {
 	s := New(nil, repo)
 	t1 := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	repo.uploadedAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
-	if _, err := s.SetCandidateContacts(context.Background(), 7, Contacts{
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{
 		Email: "keep@example.com",
 	}); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestSetStructuredFillsEmptyContactsOnly(t *testing.T) {
 	}, "m", t1); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.CandidateContacts(context.Background(), 7)
+	got, err := s.CandidateOwned(context.Background(), 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,9 +74,9 @@ func TestSetStructuredWithStaleStampDoesNotFillContacts(t *testing.T) {
 	if len(repo.structured[7]) != 0 {
 		t.Fatalf("structured blob = %q, want the guard to have dropped the write", repo.structured[7])
 	}
-	got, err := s.CandidateContacts(ctx, 7)
+	got, err := s.CandidateOwned(ctx, 7)
 	if err != nil {
-		t.Fatalf("CandidateContacts: %v", err)
+		t.Fatalf("CandidateOwned: %v", err)
 	}
 	if !got.Empty() {
 		t.Fatalf("contacts = %+v, want empty — a dropped stale write must not leak into owned contacts", got)
@@ -90,13 +90,13 @@ func TestClearKeepsCandidateContacts(t *testing.T) {
 	if _, err := s.Put(context.Background(), 7, "text/plain", []byte("cv")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SetCandidateContacts(context.Background(), 7, Contacts{FullName: "Ada"}); err != nil {
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{FullName: "Ada"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Delete(context.Background(), 7); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.CandidateContacts(context.Background(), 7)
+	got, err := s.CandidateOwned(context.Background(), 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestStructureForSeedOwnedOverlayOnCurrentExtract(t *testing.T) {
 	})
 	repo.structured[7] = blob
 	repo.structAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
-	if _, err := s.SetCandidateContacts(context.Background(), 7, Contacts{
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{
 		FullName: "Ada Lovelace", Email: "ada@example.com",
 	}); err != nil {
 		t.Fatal(err)
@@ -131,6 +131,54 @@ func TestStructureForSeedOwnedOverlayOnCurrentExtract(t *testing.T) {
 	}
 	if st.Summary != "Staff engineer" {
 		t.Fatalf("current body dropped: %+v", st)
+	}
+}
+
+// A candidate who has only ever edited a body field (e.g. Summary via CvSummaryCard) has
+// an Owned whose identity fields are still blank — Owned itself is non-Empty (Summary is
+// set), but that must not gate a block-overwrite of a real name/email pulled from the
+// current extract. Regression for the Owned.Empty()-vs-IdentityEmpty() bug: widening
+// Empty() to also cover the new body fields once made this identical to gating on
+// IdentityEmpty(), which silently blanked identity for anyone who saved a body field
+// before ever touching Contacts.
+func TestStructureForSeedBodyOnlyOwnedDoesNotBlankIdentity(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(nil, repo)
+	t1 := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC)
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "From Blob",
+		Email:    "blob@example.com",
+	})
+	repo.structured[7] = blob
+	repo.structAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{Summary: "Staff engineer"}); err != nil {
+		t.Fatal(err)
+	}
+	st, ok, err := s.StructureForSeed(context.Background(), 7)
+	if err != nil || !ok {
+		t.Fatalf("StructureForSeed = ok:%v err:%v", ok, err)
+	}
+	if st.FullName != "From Blob" || st.Email != "blob@example.com" {
+		t.Fatalf("body-only owned blanked identity: %+v", st)
+	}
+	if st.Summary != "Staff engineer" {
+		t.Fatalf("owned summary not applied: %+v", st)
+	}
+}
+
+func TestOwnedEmptyVsIdentityEmpty(t *testing.T) {
+	bodyOnly := Owned{Summary: "hi"}
+	if bodyOnly.Empty() {
+		t.Fatal("Empty() = true for an owned block with a body field set")
+	}
+	if !bodyOnly.IdentityEmpty() {
+		t.Fatal("IdentityEmpty() = false for an owned block with no identity fields set")
+	}
+
+	identityOnly := Owned{FullName: "Ada"}
+	if identityOnly.IdentityEmpty() {
+		t.Fatal("IdentityEmpty() = true for an owned block with FullName set")
 	}
 }
 
@@ -148,7 +196,7 @@ func TestStructureForSeedPendingBlobIsContactsOnly(t *testing.T) {
 	})
 	repo.structured[7] = blob
 	repo.structAt[7] = pgtype.Timestamptz{Time: tOld, Valid: true}
-	if _, err := s.SetCandidateContacts(context.Background(), 7, Contacts{FullName: "Ada", Links: []string{"https://ada.example"}}); err != nil {
+	if _, err := s.SetCandidateOwned(context.Background(), 7, Owned{FullName: "Ada", Links: []string{"https://ada.example"}}); err != nil {
 		t.Fatal(err)
 	}
 	st, ok, err := s.StructureForSeed(context.Background(), 7)

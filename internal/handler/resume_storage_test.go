@@ -56,7 +56,7 @@ func (f *fakeResumeBlobs) Delete(_ context.Context, key string) error {
 var resumeUploadedAt = time.Unix(1_700_000_000, 0).UTC()
 
 // fakeResumeRepo is an in-memory résumé-pointer Repository. Set stamps a timestamp,
-// mirroring the SQL now(). RetryResumeParse spawns a background goroutine
+// mirroring the SQL now(). An upload spawns a background goroutine
 // (extractStructuredResume) that writes the extract-status fields independently of the
 // request goroutine, so every accessor takes mu — a test reading these fields right after
 // an HTTP call would otherwise race that goroutine's write.
@@ -272,7 +272,6 @@ func resumeContactsApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 	app.Get("/me/resume", g, h.GetResume)
 	app.Put("/me/resume/contacts", g, h.PutResumeContacts)
 	app.Post("/me/resume/contacts/replace-from-cv", g, h.ReplaceResumeContactsFromCV)
-	app.Post("/me/resume/parse", g, h.RetryResumeParse)
 	return app, token
 }
 
@@ -311,95 +310,76 @@ func TestResume_PutContactsAndGetParseStatus(t *testing.T) {
 	}
 }
 
-func TestResume_RetryParseRequiresUpload(t *testing.T) {
-	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
-	app, token := resumeContactsApp(t, store)
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/parse", nil)
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("POST parse: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != fiber.StatusConflict {
-		t.Fatalf("POST parse status = %d, want 409", resp.StatusCode)
-	}
-}
-
-func TestResume_RetryParseMissingObject(t *testing.T) {
-	// Pointer without bytes — LocalStack/MinIO wiped while the DB row survives.
+// Languages ride the same owned-contacts write PutContacts already handles — one PUT,
+// one blob, no separate endpoint. See Contacts.Languages.
+func TestResume_PutContactsLanguagesAndGetReflectsIt(t *testing.T) {
 	repo := &fakeResumeRepo{key: "resumes/1", set: true}
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeContactsApp(t, store)
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/parse", nil)
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
+		`{"languages":["English","English","  Russian  "]}`,
+	))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
-		t.Fatalf("POST parse: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != fiber.StatusConflict {
-		t.Fatalf("POST parse status = %d, want 409", resp.StatusCode)
-	}
-	var body struct {
-		Error string `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if !strings.Contains(strings.ToLower(body.Error), "upload") {
-		t.Errorf("error = %q, want upload-again guidance", body.Error)
-	}
-}
-
-func TestResume_RetryParseMarksPending(t *testing.T) {
-	blobs := newFakeResumeBlobs()
-	blobs.objs["resumes/1"] = []byte("Go engineer CV text")
-	repo := &fakeResumeRepo{
-		key: "resumes/1", set: true,
-		extractStatus: resume.ExtractStatusFailed,
-		extractDetail: "extract failed",
-		extractFor:    pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true},
-	}
-	store := resume.New(blobs, repo)
-	app, token := resumeContactsApp(t, store)
-
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/parse", nil)
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("POST parse: %v", err)
+		t.Fatalf("PUT contacts: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("POST parse status = %d, want 200", resp.StatusCode)
-	}
-	var out struct {
-		Data struct {
-			ParseStatus string `json:"parse_status"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	// The handler's own response reflects the SYNCHRONOUS MarkExtractPending call, made
-	// before RetryResumeParse spawns the background extraction goroutine — race-free.
-	if out.Data.ParseStatus != resume.ExtractStatusPending {
-		t.Fatalf("parse_status = %q, want pending", out.Data.ParseStatus)
+		t.Fatalf("PUT contacts status = %d, want 200", resp.StatusCode)
 	}
 
-	// RetryResumeParse's background goroutine (extractStructuredResume) settles the repo's
-	// status on its own schedule, independently of the request goroutine — reading
-	// repo.extractStatus directly right here raced that write. This fixture wires no
-	// structuredExtractor, so the goroutine always takes the "extractor unavailable" path
-	// and settles on "failed"; wait for that instead of asserting a value that depended on
-	// which goroutine the scheduler happened to run first.
-	deadline := time.Now().Add(2 * time.Second)
-	for repo.ExtractStatus() != resume.ExtractStatusFailed {
-		if time.Now().After(deadline) {
-			t.Fatalf("repo extract status = %q, want failed (extractor unavailable) before timeout", repo.ExtractStatus())
-		}
-		time.Sleep(time.Millisecond)
+	status, meta := resumeReq(t, app, fiber.MethodGet, "", token)
+	if status != fiber.StatusOK {
+		t.Fatalf("GET status = %d, want 200", status)
+	}
+	if meta.Structured == nil {
+		t.Fatal("structured is nil, want the composed view to carry owned languages")
+	}
+	if len(meta.Structured.Languages) != 2 || meta.Structured.Languages[0] != "English" || meta.Structured.Languages[1] != "Russian" {
+		t.Fatalf("structured.languages = %v, want deduped [English Russian]", meta.Structured.Languages)
+	}
+}
+
+// A candidate who PUTs only a body field (no identity) must not see their real name/
+// email — pulled from the current extract — blanked out on the composed view. Regression
+// for Owned.Empty() (now true once ANY field, including a body field, is set) getting
+// confused with "identity is set" at the compose site.
+func TestResume_PutContactsSummaryOnlyDoesNotBlankIdentity(t *testing.T) {
+	blob, _ := json.Marshal(resumeextract.Structured{FullName: "Jane Doe", Email: "jane@example.com"})
+	repo := &fakeResumeRepo{key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true}}
+	store := resume.New(newFakeResumeBlobs(), repo)
+	app, token := resumeContactsApp(t, store)
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
+		`{"summary":"Staff engineer"}`,
+	))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("PUT contacts: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("PUT contacts status = %d, want 200", resp.StatusCode)
+	}
+
+	status, meta := resumeReq(t, app, fiber.MethodGet, "", token)
+	if status != fiber.StatusOK {
+		t.Fatalf("GET status = %d, want 200", status)
+	}
+	if meta.Structured == nil {
+		t.Fatal("structured is nil")
+	}
+	if meta.Structured.FullName != "Jane Doe" || meta.Structured.Email != "jane@example.com" {
+		t.Fatalf("structured identity = %+v, want the extract's Jane Doe / jane@example.com untouched", meta.Structured)
+	}
+	if meta.Structured.Summary != "Staff engineer" {
+		t.Fatalf("structured.summary = %q, want the owned summary applied", meta.Structured.Summary)
 	}
 }
 
@@ -428,14 +408,6 @@ func (r *fakeResumeRepo) SetCandidateContacts(_ context.Context, _ int64, blob [
 	defer r.mu.Unlock()
 	r.contacts = blob
 	return nil
-}
-
-// ExtractStatus is a thread-safe snapshot for tests to poll — reading the field
-// directly races the background extraction goroutine RetryResumeParse spawns.
-func (r *fakeResumeRepo) ExtractStatus() string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.extractStatus
 }
 
 func (r *fakeResumeRepo) SetExtractFailed(_ context.Context, _ int64, detail string, uploadedAt time.Time) error {

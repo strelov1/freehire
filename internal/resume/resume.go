@@ -183,9 +183,10 @@ func (s *Store) SetStructured(ctx context.Context, userID int64, st resumeextrac
 		// stuck there forever (FillEmpty never overwrites a non-empty owned field again).
 		return nil
 	}
-	// Fill-empty into owned contacts; never overwrite hand edits.
-	if err := s.FillEmptyContactsFromStructured(ctx, userID, st); err != nil {
-		return fmt.Errorf("resume: fill contacts: %w", err)
+	// Fill-empty into owned overrides (identity, headline, summary, languages,
+	// certifications); never overwrite a candidate's own edit.
+	if err := s.FillEmptyOwnedFromStructured(ctx, userID, st); err != nil {
+		return fmt.Errorf("resume: fill owned: %w", err)
 	}
 	return nil
 }

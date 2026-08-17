@@ -1,9 +1,15 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 func TestContactHeaderEmpty(t *testing.T) {
@@ -40,5 +46,29 @@ func TestFillEmptyHeaderFieldsKeepsExistingName(t *testing.T) {
 	}
 	if got.Email != "blob@example.com" {
 		t.Errorf("Email = %q, want filled", got.Email)
+	}
+}
+
+// A candidate whose owned overrides hold only a body field (no identity) must have
+// resumeContactHeader fall through to the current extract rather than committing to
+// owned's own (blank) identity subset. Regression: gating that fallthrough on
+// owned.Empty() — now true for ANY owned field, not just identity — used to return a
+// fully blank header with ok=false and never try the extract at all.
+func TestResumeContactHeaderFallsThroughWhenOwnedIsBodyOnly(t *testing.T) {
+	blob, _ := json.Marshal(resumeextract.Structured{FullName: "Jane Doe", Email: "jane@example.com"})
+	repo := &fakeResumeRepo{key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true}}
+	store := resume.New(newFakeResumeBlobs(), repo)
+	if _, err := store.SetCandidateOwned(context.Background(), 1, resume.Owned{Summary: "Staff engineer"}); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &cvHandlers{resume: store}
+	hdr, ok, err := h.resumeContactHeader(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("resumeContactHeader: %v", err)
+	}
+	if !ok || hdr.FullName != "Jane Doe" || hdr.Email != "jane@example.com" {
+		t.Fatalf("header = %+v, ok:%v, want the extract's identity, not owned's blank one", hdr, ok)
 	}
 }

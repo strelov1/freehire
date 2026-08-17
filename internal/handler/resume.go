@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log"
 	"strings"
@@ -98,7 +97,6 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/resume", mw.cookie, h.GetResume)
 	api.Put("/me/resume/contacts", mw.cookie, h.PutResumeContacts)
 	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, h.ReplaceResumeContactsFromCV)
-	api.Post("/me/resume/parse", mw.cookie, h.RetryResumeParse)
 	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
@@ -266,7 +264,10 @@ type resumeMetaResponse struct {
 	StructurePending bool                      `json:"structure_pending"`
 	ParseStatus      string                    `json:"parse_status,omitempty"`
 	ParseDetail      string                    `json:"parse_detail,omitempty"`
-	Contacts         *resume.Contacts          `json:"contacts,omitempty"`
+	// Contacts is the wire name for historical/API-stability reasons; the Go/DB concept
+	// underneath is resume.Owned, which now also carries headline/summary/languages/
+	// certifications — see resume/owned.go.
+	Contacts *resume.Owned `json:"contacts,omitempty"`
 }
 
 func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
@@ -385,8 +386,8 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		resp.StructurePending = es.Status == resume.ExtractStatusPending || es.Status == resume.ExtractStatusFailed
 	}
 
-	if owned, err := h.resume.CandidateContacts(c.Context(), userID); err != nil {
-		log.Printf("resume contacts: user %d: %v", userID, err)
+	if owned, err := h.resume.CandidateOwned(c.Context(), userID); err != nil {
+		log.Printf("resume owned: user %d: %v", userID, err)
 	} else if !owned.Empty() {
 		contacts := owned
 		resp.Contacts = &contacts
@@ -403,13 +404,20 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		// ProfileReadForUser / provisionalContacts) — nothing further to strip here.
 		st = pr.Structure
 		st.Experience = nil
-		// Prefer owned contacts on the composed structured view for Profile.
+		// Owned overrides win as a block on the composed view, field by field — a
+		// candidate's own edit to any of these, not just identity, must survive showing
+		// up next to whatever the latest extract says. Identity and body are gated
+		// separately: a candidate who has only ever edited their summary has blank owned
+		// identity fields, which must NOT blank out a real name/email from the extract.
 		if resp.Contacts != nil {
-			st.FullName = resp.Contacts.FullName
-			st.Email = resp.Contacts.Email
-			st.Phone = resp.Contacts.Phone
-			st.Location = resp.Contacts.Location
-			st.Links = append([]string(nil), resp.Contacts.Links...)
+			if !resp.Contacts.IdentityEmpty() {
+				st.FullName = resp.Contacts.FullName
+				st.Email = resp.Contacts.Email
+				st.Phone = resp.Contacts.Phone
+				st.Location = resp.Contacts.Location
+				st.Links = append([]string(nil), resp.Contacts.Links...)
+			}
+			resp.Contacts.ApplyBody(&st)
 		}
 	}
 	if h.bank != nil {
@@ -427,24 +435,27 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": resp})
 }
 
-// PutResumeContacts replaces candidate-owned contacts without a CV upload.
+// PutResumeContacts replaces the candidate's owned overrides without a CV upload — the
+// route name predates Owned growing past identity fields; the body now accepts
+// headline/summary/languages/certifications too (resume.Owned, see owned.go).
 func (h *resumeHandlers) PutResumeContacts(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	var in resume.Contacts
+	var in resume.Owned
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid contacts body")
 	}
-	out, err := h.resume.SetCandidateContacts(c.Context(), userID, in)
+	out, err := h.resume.SetCandidateOwned(c.Context(), userID, in)
 	if err != nil {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": out})
 }
 
-// ReplaceResumeContactsFromCV overwrites owned contacts from the current structured résumé.
+// ReplaceResumeContactsFromCV overwrites every owned override from the current structured
+// résumé — a full reset, not just identity fields.
 func (h *resumeHandlers) ReplaceResumeContactsFromCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -457,44 +468,11 @@ func (h *resumeHandlers) ReplaceResumeContactsFromCV(c *fiber.Ctx) error {
 	if !ok {
 		return fiber.NewError(fiber.StatusConflict, "no current structured résumé to copy contacts from")
 	}
-	out, err := h.resume.ReplaceContactsFromStructured(c.Context(), userID, st)
+	out, err := h.resume.ReplaceOwnedFromStructured(c.Context(), userID, st)
 	if err != nil {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": out})
-}
-
-// RetryResumeParse re-runs structured extraction for the stored CV without re-uploading.
-func (h *resumeHandlers) RetryResumeParse(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	if !h.resume.Enabled() {
-		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
-	}
-	uploadedAt, err := h.resume.UploadedAt(c.Context(), userID)
-	if err != nil {
-		return err
-	}
-	if uploadedAt == nil {
-		return fiber.NewError(fiber.StatusConflict, "upload a résumé before retrying parse")
-	}
-	text, err := h.resume.Text(c.Context(), userID)
-	if errors.Is(err, resume.ErrNotStored) {
-		return fiber.NewError(fiber.StatusConflict, "stored résumé file is missing — upload it again")
-	}
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(text) == "" {
-		return fiber.NewError(fiber.StatusConflict, "stored résumé has no extractable text")
-	}
-	if err := h.resume.MarkExtractPending(c.Context(), userID, *uploadedAt); err != nil {
-		return err
-	}
-	go h.extractStructuredResume(userID, text, uploadedAt)
-	return c.JSON(fiber.Map{"data": fiber.Map{"parse_status": resume.ExtractStatusPending}})
 }
 
 // resumeStructureWorthServing reports whether the composed structure has anything the

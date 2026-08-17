@@ -203,7 +203,7 @@ func TestGetResumeOwnedContactsOverlayCurrentExtract(t *testing.T) {
 	blob, _ := json.Marshal(resumeextract.Structured{
 		FullName: "From Blob", Email: "blob@example.com", Summary: "Staff engineer",
 	})
-	owned, _ := json.Marshal(resume.Contacts{FullName: "Ada Lovelace", Email: "ada@example.com"})
+	owned, _ := json.Marshal(resume.Owned{FullName: "Ada Lovelace", Email: "ada@example.com"})
 	repo := &fakeResumeRepo{
 		key: "resumes/1", set: true, structured: blob, structModel: "m",
 		structAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true},

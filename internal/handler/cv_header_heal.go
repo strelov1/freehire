@@ -15,9 +15,9 @@ func (h *cvHandlers) resumeContactHeader(ctx context.Context, userID int64) (cv.
 	if h.resume == nil {
 		return cv.Header{}, false, nil
 	}
-	if owned, err := h.resume.CandidateContacts(ctx, userID); err != nil {
+	if owned, err := h.resume.CandidateOwned(ctx, userID); err != nil {
 		return cv.Header{}, false, err
-	} else if !owned.Empty() {
+	} else if !owned.IdentityEmpty() {
 		hdr := contactHeaderFromStructured(owned.AsStructured())
 		return hdr, !contactHeaderEmpty(hdr), nil
 	}

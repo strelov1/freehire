@@ -24,7 +24,7 @@ type structuredResumeReader interface {
 	// Geography is where the CV says the candidate IS, under the same freshness rule as
 	// Structured — a geography derived from a superseded CV reads as absent.
 	Geography(ctx context.Context, userID int64) (resume.Geography, bool, error)
-	CandidateContacts(ctx context.Context, userID int64) (resume.Contacts, error)
+	CandidateOwned(ctx context.Context, userID int64) (resume.Owned, error)
 	StructureForSeed(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
 
@@ -123,6 +123,13 @@ func (h *profileHandlers) structuredCV(ctx context.Context, userID int64) *resum
 		if stored, ok, err := h.resume.Structured(ctx, userID); err == nil && ok {
 			structured = stored
 		}
+		// Owned overrides win field by field over the current extract for the flat
+		// semantic-body fields it covers — same precedence GetResume composes with. A
+		// candidate who edited their summary via PUT /me/resume/contacts must see that
+		// edit here too, not just on the résumé page.
+		if owned, err := h.resume.CandidateOwned(ctx, userID); err == nil {
+			owned.ApplyBody(&structured)
+		}
 	}
 
 	// A missing bank reads as an EMPTY bank, not as "no CV". The two are different claims:
@@ -139,8 +146,13 @@ func (h *profileHandlers) structuredCV(ctx context.Context, userID int64) *resum
 		}
 	}
 	// Nothing known at all reads as no CV, exactly as before — an empty object would tell
-	// an agent there is a profile to work from when there is not.
-	if len(professional.Experience) == 0 && len(professional.Education) == 0 && professional.Headline == "" {
+	// an agent there is a profile to work from when there is not. Summary/Languages/
+	// Certifications are checked too: unlike Headline/Education, a candidate can now set
+	// these directly via the owned-overlay editors without ever touching a CV parse (see
+	// CvSummaryCard/EducationCard), so a summary-only candidate must still get a cv block.
+	if len(professional.Experience) == 0 && len(professional.Education) == 0 &&
+		professional.Headline == "" && professional.Summary == "" &&
+		len(professional.Languages) == 0 && len(professional.Certifications) == 0 {
 		return nil
 	}
 	return &professional
