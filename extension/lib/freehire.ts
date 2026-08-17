@@ -121,28 +121,36 @@ async function unwrap<T>(path: string, res: Response): Promise<T> {
   return (JSON.parse(body) as { data: T }).data;
 }
 
-async function getData<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(`${HIRE_ORIGIN}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+// `credentials: 'omit'` is explicit, not the default's redundant restatement: this
+// extension holds host_permissions for every origin, and Chrome attaches a target
+// site's cookies to a privileged extension-page fetch even without `include` — so a
+// signed-in website tab's session cookie rides along with the Bearer token unless
+// this forces it off. Endpoints that gate on "the extension's own Bearer connection"
+// (e.g. POST /me/autofill/run) read a cookie's mere presence as a *different* caller
+// and 403, regardless of the Bearer token also being valid.
+function authedFetch(path: string, token: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${HIRE_ORIGIN}${path}`, {
+    ...init,
+    credentials: 'omit',
+    headers: { Authorization: `Bearer ${token}`, ...init?.headers },
   });
-  return unwrap<T>(path, res);
+}
+
+async function getData<T>(path: string, token: string): Promise<T> {
+  return unwrap<T>(path, await authedFetch(path, token));
 }
 
 async function postData<T>(path: string, body: unknown, token: string): Promise<T> {
-  const res = await fetch(`${HIRE_ORIGIN}${path}`, {
+  const res = await authedFetch(path, token, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   return unwrap<T>(path, res);
 }
 
 async function deleteData<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(`${HIRE_ORIGIN}${path}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return unwrap<T>(path, res);
+  return unwrap<T>(path, await authedFetch(path, token, { method: 'DELETE' }));
 }
 
 export function getJob(slug: string, token: string): Promise<FreehireJob> {

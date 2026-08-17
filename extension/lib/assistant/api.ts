@@ -32,6 +32,7 @@ export class SessionNotFound extends Error {
 async function request<T = void>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    credentials: 'omit',
     headers: {
       'content-type': 'application/json',
       Authorization: `Bearer ${token}`,

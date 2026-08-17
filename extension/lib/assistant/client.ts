@@ -44,6 +44,7 @@ export function sendTurn(
     try {
       res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
         method: 'POST',
+        credentials: 'omit',
         headers: {
           'content-type': 'application/json',
           Authorization: `Bearer ${token}`,

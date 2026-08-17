@@ -21,6 +21,10 @@ afterEach(() => vi.unstubAllGlobals());
 describe('the assistant API', () => {
   // The whole divergence from the web's client: extension code cannot see hire's
   // httpOnly cookie across origins, so the credential rides a header instead.
+  // `credentials: 'omit'` is explicit, not incidental: host_permissions makes Chrome
+  // attach a signed-in website tab's session cookie to this call by default, which
+  // would make the request carry BOTH credentials and get misread server-side as
+  // the website rather than the extension.
   it('presents the session JWT as a Bearer credential, not as a cookie', async () => {
     const calls = stubFetch({ status: 200, body: { data: { id: 's1', preset: 'browse', label: '' } } });
 
@@ -28,7 +32,7 @@ describe('the assistant API', () => {
 
     expect(calls).toHaveLength(1);
     expect(must(calls[0]).init.headers).toMatchObject({ Authorization: 'Bearer tok-123' });
-    expect(must(calls[0]).init.credentials).toBeUndefined();
+    expect(must(calls[0]).init.credentials).toBe('omit');
   });
 
   // The panel's agent is the one with eyes; a chat session would have no page tool.

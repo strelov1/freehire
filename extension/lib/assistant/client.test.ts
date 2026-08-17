@@ -56,6 +56,10 @@ describe('sendTurn', () => {
 
     expect(must(calls[0]).init.headers).toMatchObject({ Authorization: 'Bearer tok-9' });
     expect(JSON.parse(must(calls[0]).init.body as string)).toEqual({ text: 'hello there' });
+    // `credentials: 'omit'`, not the default: host_permissions makes Chrome attach a
+    // signed-in website tab's session cookie to this call otherwise, and hire's auth
+    // middleware reads that cookie's mere presence as "not the extension" and 403s.
+    expect(must(calls[0]).init.credentials).toBe('omit');
   });
 
   // Stopping is something the user chose. It has to arrive as a terminal event, or

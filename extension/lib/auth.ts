@@ -73,6 +73,7 @@ export async function getToken(): Promise<string | null> {
  */
 export async function fetchMe(token: string): Promise<HireUser | null> {
   const res = await fetch(`${HIRE_ORIGIN}/api/v1/auth/me`, {
+    credentials: 'omit',
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) return null;
