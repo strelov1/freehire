@@ -83,6 +83,17 @@ func TestParse(t *testing.T) {
 		// subdivision table is consulted BEFORE the bare two-letter country code, so the
 		// US-state readings of these tokens must be untouched by the new countries la/mn/mo.
 		{
+			// A CONTESTED city name must not cost the subdivision code its reading.
+			// "Taft" is claimed by Iran, the Philippines and the US, so the dictionary
+			// states no country for it — but "CA" here is still California, resolved from
+			// the preceding token rather than from the city's own country. Raised in
+			// review as a suspected regression; measured identical before and after the
+			// contested-alias change, and nailed down here so it stays that way.
+			name:     "contested city keeps the state code readable",
+			location: "Taft, CA",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Taft"}},
+		},
+		{
 			name:     "LA stays louisiana rather than laos",
 			location: "Baton Rouge, LA",
 			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Baton Rouge"}},
