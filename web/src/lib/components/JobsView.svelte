@@ -491,10 +491,17 @@
       {/if}
     {:else}
       {#if visibleJobs.length === 0}
-        <!-- The server returned jobs but the user has hidden every one on this page.
-             The empty state replaces the feed; the paginator below still renders, so
-             this is somewhere to leave rather than a dead end. -->
-        <States state="empty" message="No matching jobs." />
+        <!-- The search DID match on this page — the client-side post-filters removed
+             every row. Saying "no matching jobs" here would blame the search for the
+             reader's own settings, and the two causes are worth telling apart because
+             one of them is a slider they can move. The paginator below still renders,
+             so this is somewhere to leave rather than a dead end. -->
+        <States
+          state="empty"
+          message={minMatch === null
+            ? 'Every job on this page is one you hid.'
+            : 'Every job on this page is hidden or below your match threshold.'}
+        />
       {:else}
         <div class="flex flex-col gap-3">
           {#each visibleJobs as job (job.public_slug)}
