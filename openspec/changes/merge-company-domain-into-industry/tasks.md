@@ -37,15 +37,15 @@
 
 ## 5. Web
 
-- [ ] 5.1 Remove the `domains` facet from `COMPANY_FACETS` and its pane from
+- [x] 5.1 Remove the `domains` facet from `COMPANY_FACETS` and its pane from
       `COMPANY_RAIL_GROUPS`; the rail-coverage test added in #2071 must stay green
-- [ ] 5.2 Update the company facet tests to assert Industry is the catalogue's only
+- [x] 5.2 Update the company facet tests to assert Industry is the catalogue's only
       industry control, and that the `domains` API parameter is untouched
 
 ## 6. Documentation
 
-- [ ] 6.1 Update `docs/agents/company-facets.md` — the industry facet now reads a
+- [x] 6.1 Update `docs/agents/company-facets.md` — the industry facet now reads a
       job-derived column without owning it, which is the one crossing the ownership
       rule permits and therefore worth stating explicitly
-- [ ] 6.2 Record the retired Domain control in `docs/API.md` if it names the companies
+- [x] 6.2 Record the retired Domain control in `docs/API.md` if it names the companies
       filter set, leaving the `domains` parameter documented as still accepted

@@ -144,7 +144,6 @@ export const COMPANY_RAIL_GROUPS: CompanyRailGroup[] = [
   { key: 'region', label: 'Region', params: ['regions', 'remote_regions'] },
   { key: 'countries', label: 'Country', params: ['countries'] },
   { key: 'industries', label: 'Industry', params: ['industries'] },
-  { key: 'domains', label: 'Domain', params: ['domains'] },
   { key: 'company', label: 'Company', params: ['company_type', 'company_size', 'maturity'] },
   { key: 'yc', label: 'Y Combinator', params: ['yc_status', 'yc_stage', 'yc_flags', 'yc_batch'] },
 ];

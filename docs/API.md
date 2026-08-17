@@ -402,7 +402,7 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/copies"
 
 ## AI analysis
 
-Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the fit endpoints run the LLM chain and cost AI credits. All take the same facet filter params as search where they narrow a market or candidate set.
+Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the match-analysis endpoints run the LLM chain and cost AI credits. All take the same facet filter params as search where they narrow a market or candidate set.
 
 ### `GET /jobs/{slug}/match`
 
@@ -440,7 +440,7 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $F
 
 **Auth:** Session or API key
 
-The cached AI fit analysis for the job (never runs the LLM).
+The cached AI match analysis for the job (never runs the LLM).
 
 Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `credits` reports your AI-points balance and when it resets.
 
@@ -477,9 +477,9 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match-analysis" -H "Authorization: 
 
 **Auth:** Session or API key
 
-Run the three-stage AI fit analysis and cache it.
+Run the three-stage AI match analysis and cache it.
 
-Runs the fit prompt-chain over your stored CV and the job, caches the result, and returns it fresh (no `credits` on this response). Analysing a new job costs one AI credit; if you have none left it is a `402`, and recomputing an already-analyzed job is free. `has_cv` is false when no CV is stored; a failing or unconfigured LLM returns a null analysis (200).
+Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh (no `credits` on this response). Analysing a new job costs one AI credit; if you have none left it is a `402`, and recomputing an already-analyzed job is free. `has_cv` is false when no CV is stored; a failing or unconfigured LLM returns a null analysis (200).
 
 **Path parameters**
 
@@ -505,9 +505,9 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/match-analysis" -H "Authori
 
 **Auth:** Session or API key
 
-Run the fit analysis over Server-Sent Events.
+Run the match analysis over Server-Sent Events.
 
-The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the fit endpoints). Not a JSON endpoint.
+The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the match-analysis endpoints). Not a JSON endpoint.
 
 **Path parameters**
 
@@ -590,7 +590,8 @@ Most active first. Facet params are repeatable and filter by array overlap (OR w
 | `collections` | string | no | Curated-collection slug (e.g. `yc`, `bigtech`). Repeatable. (e.g. `yc`) |
 | `regions` | string | no | Region the company hires in. Repeatable. (e.g. `eu`) |
 | `countries` | string | no | ISO 3166-1 alpha-2 country. Repeatable. (e.g. `DE`) |
-| `domains` | string | no | Business domain (e.g. `fintech`). Repeatable. (e.g. `fintech`) |
+| `industries` | string | no | Curated industry. Matches a company through its curated industries **or** the equivalent job-derived domain. Repeatable. (e.g. `fintech`) |
+| `domains` | string | no | Raw job-derived domain, including values no industry names (`other`, `media`, `mobility`). Repeatable. (e.g. `fintech`) |
 | `company_type` | string | no | Company type (e.g. `product`, `outstaff`). Repeatable. (e.g. `product`) |
 | `company_size` | string | no | Size bucket (e.g. `51-200`). Repeatable. (e.g. `51-200`) |
 | `remote_regions` | string | no | Job-derived remote-hiring region. Repeatable. (e.g. `eu`) |
@@ -1152,7 +1153,7 @@ curl "https://freehire.me/api/v1/me/tracking/viewed" -H "Authorization: Bearer $
 
 **Auth:** Session or API key
 
-Jobs you have run the AI fit analysis on.
+Jobs you have run the AI match analysis on.
 
 Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.credits` reports your AI-points balance. Never runs the LLM.
 
@@ -1184,7 +1185,7 @@ curl "https://freehire.me/api/v1/me/tracking/analyses" -H "Authorization: Bearer
 
 Your current AI-credits balance.
 
-The points left this month (`remaining`) and when the monthly grant renews (`resets_at`). AI credits are spent on the fit analysis (1) and CV tailoring (3), topped up by the monthly grant and by accepted board contributions. Never runs the LLM.
+The points left this month (`remaining`) and when the monthly grant renews (`resets_at`). AI credits are spent on the match analysis (1) and CV tailoring (3), topped up by the monthly grant and by accepted board contributions. Never runs the LLM.
 
 ```bash
 curl "https://freehire.me/api/v1/me/credits" -H "Authorization: Bearer $FREEHIRE_API_KEY"
@@ -2185,7 +2186,7 @@ curl -X DELETE "https://freehire.me/api/v1/me" -b cookies.txt
 
 Your AI-credit ledger, newest first.
 
-Each debit is labelled with what it bought — the job a fit analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.
+Each debit is labelled with what it bought — the job a match analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.
 
 **Query parameters**
 
@@ -3277,7 +3278,7 @@ curl "https://freehire.me/api/v1/cv-fonts" -b cookies.txt
 
 Start tailoring a CV toward one vacancy.
 
-Copies your base CV into a vacancy-bound tailored one and mints the short-lived credential its agent session runs on. Requires a cached fit analysis for the job (409 otherwise) and a base CV — one is seeded from your stored history when you have none, and it is a 409 when there is nothing to seed from. Calls no LLM itself.
+Copies your base CV into a vacancy-bound tailored one and mints the short-lived credential its agent session runs on. Requires a cached match analysis for the job (409 otherwise) and a base CV — one is seeded from your stored history when you have none, and it is a 409 when there is nothing to seed from. Calls no LLM itself.
 
 **Body**
 
@@ -3358,7 +3359,7 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/reset-from-resume" -b co
 
 **Auth:** Session or API key
 
-The fit analysis a tailored CV should reframe toward.
+The match analysis a tailored CV should reframe toward.
 
 The split that keeps tailoring honest: `missing_have` are requirements your history already covers but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a tailored copy or has no analysis.
 

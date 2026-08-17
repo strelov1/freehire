@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { COMPANY_FACETS } from './facets';
+import { COMPANY_FACETS, FACETS } from './facets';
 import { INDUSTRY_VALUES } from './generated/contracts';
 
 describe('company industry facets', () => {
@@ -22,11 +22,18 @@ describe('company industry facets', () => {
     expect(COMPANY_FACETS.find((f) => f.param === 'subindustries')).toBeUndefined();
   });
 
-  it('keeps the coarse domain facet distinct from the fine one', () => {
-    const labels = COMPANY_FACETS.filter((f) => ['industries', 'domains'].includes(f.param)).map(
-      (f) => f.label,
-    );
+  it('offers no separate Domain control either', () => {
+    // The Domain facet asked the same question of the job-derived column, so the two
+    // read as rival answers rather than one. The Industry facet now matches through
+    // that column as well (see internal/industrytag's domain mapping), which leaves
+    // Domain nothing of its own to offer.
+    expect(COMPANY_FACETS.find((f) => f.param === 'domains')).toBeUndefined();
+  });
 
-    expect(new Set(labels).size).toBe(labels.length);
+  it('leaves the job catalogue its own domain facet', () => {
+    // Same param name, different catalogue: on /jobs it filters a job's own
+    // enrichment, which no curated company vocabulary covers. Retiring it here must
+    // not take that one with it.
+    expect(FACETS.find((f) => f.param === 'domains')).toBeDefined();
   });
 });

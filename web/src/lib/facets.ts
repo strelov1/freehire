@@ -382,8 +382,9 @@ export const EMPLOYMENT_TYPE_OPTIONS: FacetOption[] = EMPLOYMENT;
 
 const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 
-// The curated company-industry vocabulary (internal/industrytag) — the level
-// beneath domains, for the companies whose domain lands in the coarse "other".
+// The curated company-industry vocabulary (internal/industrytag) — not a level
+// beneath domains but the company catalogue's single industry axis, which the
+// backend answers from the curated column and the job-derived domains alike.
 // Generated, like DOMAINS, so the options cannot drift from the Go dictionary.
 const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
 
@@ -508,8 +509,12 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
   { param: 'remote_regions', label: 'Remote hiring', control: 'pills', options: REGION, excludable: false },
   { param: 'countries', label: 'Country', control: 'select', options: COUNTRY, excludable: false, placeholder: 'Search countries' },
+  // The catalogue's only industry control. The backend matches it against the curated
+  // industries column AND the job-derived domains one (internal/industrytag maps
+  // between the vocabularies), so the Domain facet that used to sit here asked the
+  // same question of one of the same columns and is gone. `domains` remains a working
+  // query parameter for a caller who wants the raw job-derived value.
   { param: 'industries', label: 'Industry', control: 'select', options: INDUSTRIES, excludable: false, placeholder: 'Search industries' },
-  { param: 'domains', label: 'Domain', control: 'select', options: DOMAINS, excludable: false, placeholder: 'Search domains' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
   { param: 'maturity', label: 'Company stage', control: 'pills', options: MATURITY, excludable: false },
