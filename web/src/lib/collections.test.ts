@@ -282,12 +282,11 @@ describe('popularCollectionLinks', () => {
   // /jobs/* links, 4 /features/* and zero links to any individual collection, so
   // the 101 collection landing pages got nothing from it. Footer links reach every
   // page, not only the homepage.
-  it('resolves every popular slug to a title and its landing URL', () => {
+  it('resolves every popular slug to a title', () => {
     const links = popularCollectionLinks();
     expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       expect(link.title, `title for "${link.slug}"`).toBeTruthy();
-      expect(link.href).toBe(`/collections/${link.slug}`);
     }
   });
 

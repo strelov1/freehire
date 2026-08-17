@@ -723,15 +723,19 @@ export const POPULAR_COLLECTION_FALLBACK = [
  *  linked 20 jobs, 4 feature pages and not one collection. A footer strip fixes that
  *  for every page at once.
  *
+ *  Returns the slug and title only, not an href: the caller builds the URL with
+ *  `resolve('/collections/[slug]', …)` like every other dynamic route in the app, so
+ *  the link stays correct under a non-empty `paths.base` and needs no lint exemption.
+ *
  *  Resolved through collectionBySlug, the same resolver the landing route and the
  *  sitemap use, and unknown slugs are dropped rather than linked: a footer on every
  *  page is the worst place to advertise a 404. A test also asserts the pool resolves,
  *  so dropping here is belt-and-braces, not the expected path. */
-export function popularCollectionLinks(): { slug: string; title: string; href: string }[] {
+export function popularCollectionLinks(): { slug: string; title: string }[] {
   return POPULAR_COLLECTION_FALLBACK.flatMap((slug) => {
     const collection = collectionBySlug(slug);
     if (!collection) return [];
-    return [{ slug, title: collection.title, href: `/collections/${slug}` }];
+    return [{ slug, title: collection.title }];
   });
 }
 

@@ -118,8 +118,7 @@
       <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-2">
         {#each popular as collection (collection.slug)}
           <li>
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- collection landing path built from a slug collectionBySlug already resolved; the linter can't trace it through the array -->
-            <a href={collection.href}
+            <a href={resolve('/collections/[slug]', { slug: collection.slug })}
               class="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {collection.title}

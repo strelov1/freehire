@@ -593,15 +593,16 @@ describe('listingRobots', () => {
 describe('companiesPageTitle', () => {
   // "Companies · freehire" was 20 characters naming no subject — two thirds of the
   // SERP title width spent on the brand, and nothing a query could match.
+  //
+  // The comma grouping is asserted exactly because the helper pins 'en-US': this is
+  // crawler-visible metadata, so SSR and the client recompute must format the number
+  // identically whatever the visitor's locale. Worth knowing what this does and does
+  // not catch: on a runner whose own locale groups differently it fails the moment the
+  // pin is dropped, but on an en-US runner a bare toLocaleString() reads the same, so
+  // it would pass. Asserting the output rather than spying on the formatter is still
+  // the right trade — the alternative tests the call, not the metadata.
   it('leads with the live count and the subject', () => {
     expect(companiesPageTitle(294_021)).toBe('294,021 companies hiring in tech · freehire');
-  });
-
-  // Pinned locale, like companyPageTitle and collectionHeading: this is
-  // crawler-visible metadata, so SSR and the client recompute must group digits
-  // identically whatever the visitor's browser locale.
-  it('groups digits the same way regardless of locale', () => {
-    expect(companiesPageTitle(1234)).toContain('1,234');
   });
 
   it('singularizes one company', () => {
