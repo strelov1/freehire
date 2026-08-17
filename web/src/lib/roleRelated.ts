@@ -28,7 +28,13 @@ export const ROLE_RELATED: Record<string, string[]> = {
   data_analytics: ['data_science', 'data_engineering', 'business_analyst'],
   data_engineering: ['data_science', 'data_platform_engineer', 'ml_ai'],
   ml_ai: ['ai_engineering', 'data_science', 'mlops_engineer'],
-  ai_engineering: ['ml_ai', 'prompt_engineer', 'data_science'],
+  ai_engineering: ['ml_ai', 'prompt_engineer', 'data_science', 'ai_enablement'],
+
+  // AI adoption, not AI construction. Someone searching for enablement work is
+  // looking at the same last-mile craft that solutions consulting and developer
+  // advocacy already do, and the delivery roles it is usually posted alongside —
+  // none of which share a word with "AI", so no text search connects them.
+  ai_enablement: ['solutions_consultant', 'developer_advocate', 'project_management', 'ai_engineering'],
 
   // Infra: "devops" hides the SRE/platform/cloud family.
   devops: ['sre', 'platform_engineer', 'cloud_engineer', 'infrastructure_engineer'],
