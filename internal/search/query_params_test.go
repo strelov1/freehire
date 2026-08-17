@@ -1,6 +1,7 @@
 package search
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 )
@@ -99,5 +100,38 @@ func TestUnknownParams_OrdersReportDeterministically(t *testing.T) {
 	}
 	if got[0].Param != "alpha" || got[1].Param != "zebra" {
 		t.Errorf("order = %q, %q; want alpha, zebra", got[0].Param, got[1].Param)
+	}
+}
+
+func TestUnknownParams_SkipsTheEmptyName(t *testing.T) {
+	// "?=value" parses to a param whose name is the empty string. Reporting it
+	// tells the caller nothing — there is no name to correct.
+	v, err := url.ParseQuery("=value&countries=it")
+	if err != nil {
+		t.Fatalf("ParseQuery: %v", err)
+	}
+
+	if got := UnknownParams(v, nil); len(got) != 0 {
+		t.Errorf("UnknownParams = %#v, want none", got)
+	}
+}
+
+func TestUnknownParams_CapsTheReport(t *testing.T) {
+	// These endpoints are public and unauthenticated, and every reported param
+	// is echoed back into the response body. Without a cap a hostile query turns
+	// each junk param into response bytes; with one, a real mistake (a param or
+	// three) is still reported in full.
+	flood := url.Values{}
+	for i := range 200 {
+		flood[fmt.Sprintf("junk%03d", i)] = []string{"x"}
+	}
+
+	got := UnknownParams(flood, nil)
+	if len(got) != maxUnknownParamsReported {
+		t.Fatalf("len = %d, want it capped at %d", len(got), maxUnknownParamsReported)
+	}
+	// The cap keeps the sorted order rather than an arbitrary slice of the map.
+	if got[0].Param != "junk000" {
+		t.Errorf("first = %q, want junk000 — the cap must apply after sorting", got[0].Param)
 	}
 }

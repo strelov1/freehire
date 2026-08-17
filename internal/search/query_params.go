@@ -19,6 +19,14 @@ var scalarFilters = []string{
 	"posted_within_days",
 }
 
+// maxUnknownParamsReported bounds how many ignored params one response echoes.
+//
+// The search endpoints are public and unauthenticated, and every reported param
+// is copied from the request into the response body — so an unbounded report
+// lets a hostile query turn junk params into response bytes. A real mistake is
+// one param, or a handful; anything past this many is not someone to help.
+const maxUnknownParamsReported = 10
+
 // UnknownParam is a query param no filter reads, reported back to the caller so
 // a silently dropped filter cannot pass for a real result. DidYouMean carries the
 // vocabulary's name for it when the caller only got the grammatical number wrong
@@ -45,12 +53,19 @@ func UnknownParams(v url.Values, alsoKnown []string) []UnknownParam {
 
 	var out []UnknownParam
 	for param := range v {
-		if known[param] {
+		// "?=value" parses to an empty name. There is nothing to report about it
+		// and nothing the caller could correct.
+		if param == "" || known[param] {
 			continue
 		}
 		out = append(out, UnknownParam{Param: param, DidYouMean: suggestParam(param, known)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Param < out[j].Param })
+	// Cap after sorting, so the report is the same prefix every time rather than
+	// whichever entries map iteration happened to reach first.
+	if len(out) > maxUnknownParamsReported {
+		out = out[:maxUnknownParamsReported]
+	}
 	return out
 }
 
