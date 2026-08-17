@@ -106,16 +106,19 @@ type Derived struct {
 // and skills (structured ∪ dictionary).
 func Derive(in Input) Derived {
 	geo := location.Parse(in.Location)
-	// Geography precedence: the location dictionary → a US-only description signal.
-	// When the location left the geography unpinned (no country, and either no region
-	// or only the bare-"Remote" global bucket) but the description states a hard
-	// US-only eligibility requirement, the job is US-restricted, not open-anywhere —
-	// pin it to the US so it leaves Global/Worldwide. Like the work-mode fallback
-	// below, prose is the lowest-priority source and only fills what the location
-	// dictionary left blank; a resolved place is never overridden.
+	// Geography precedence: the location dictionary → an eligibility signal in the
+	// description. When the location left the geography unpinned (no country, and
+	// either no region or only the bare-"Remote" global bucket) but the description
+	// states a hard eligibility requirement — US citizenship, EU work rights, a UK
+	// right to work — the job is restricted to that place, not open-anywhere, so pin
+	// it there and let it leave Global/Worldwide. Like the work-mode fallback below,
+	// prose is the lowest-priority source and only fills what the location dictionary
+	// left blank; a resolved place is never overridden.
 	countries, regions := geo.Countries, geo.Regions
-	if usOnly(countries, regions, in.Description) {
-		countries, regions = []string{"us"}, []string{"north_america"}
+	if geoUnpinned(countries, regions) {
+		if c, r := location.EligibilityFromDescription(in.Description); len(r) > 0 {
+			countries, regions = c, r
+		}
 	}
 	// An explicit country signal is authoritative: it fully replaces the derived/US-override
 	// countries, the same way a stated work mode replaces the hint — and pulls its region
@@ -257,20 +260,16 @@ func regionsForCountries(countries []string) []string {
 	return stringset.Sorted(set)
 }
 
-// usOnly reports whether a job's geography is unpinned by the location dictionary —
-// no country resolved, and either no region or only the bare-"Remote" global bucket —
-// while its description carries a hard US-only eligibility signal. It is the gate for
-// the US geography override in Derive: a resolved country or a specific region (e.g.
-// "eu" from "Europe") is left untouched, so the override only rescues the exact case a
-// bare-"Remote" posting with a US-citizenship/clearance requirement falls into.
-func usOnly(countries, regions []string, desc string) bool {
+// geoUnpinned reports whether the location dictionary left a job's geography unpinned —
+// no country resolved, and either no region or only the bare-"Remote" global bucket. It
+// is the gate for the eligibility override in Derive: a resolved country or a specific
+// region (e.g. "eu" from "Europe") is left untouched, so the override only rescues the
+// exact case a bare-"Remote" posting with a stated eligibility requirement falls into.
+func geoUnpinned(countries, regions []string) bool {
 	if len(countries) != 0 {
 		return false
 	}
-	if len(regions) > 1 || (len(regions) == 1 && regions[0] != "global") {
-		return false
-	}
-	return location.USOnlyFromDescription(desc)
+	return len(regions) == 0 || (len(regions) == 1 && regions[0] == "global")
 }
 
 // unionSkills merges the structured source skills with the dictionary skills into a
