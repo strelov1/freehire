@@ -62,7 +62,7 @@
     "posthog-js": "^1.414.0",
     "satori": "^0.29.0",
     "satori-html": "^0.3.2",
-    "shiki": "^4.4.2",
+    "shiki": "^4.4.3",
     "simple-icons": "^16.28.0",
     "svelte-dnd-action": "^0.9.78",
     "workbox-window": "^7.4.1"
