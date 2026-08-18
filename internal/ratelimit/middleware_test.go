@@ -23,30 +23,35 @@ func newMemoryThrottler() *memoryThrottler {
 	return &memoryThrottler{counts: make(map[string]int)}
 }
 
-func (m *memoryThrottler) Allow(_ context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
+func (m *memoryThrottler) Allow(_ context.Context, key string, limit int, window time.Duration) (Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.counts[key] >= limit {
-		return false, window, nil
+		return Decision{Limit: limit, Remaining: 0, ResetAfter: window, RetryAfter: window}, nil
 	}
 	m.counts[key]++
-	return true, 0, nil
+	return Decision{
+		Allowed:    true,
+		Limit:      limit,
+		Remaining:  limit - m.counts[key],
+		ResetAfter: window,
+	}, nil
 }
 
 // erroringThrottler always returns an error, simulating a backend failure.
 type erroringThrottler struct{}
 
-func (erroringThrottler) Allow(context.Context, string, int, time.Duration) (bool, time.Duration, error) {
-	return false, 0, errors.New("backend unreachable")
+func (erroringThrottler) Allow(context.Context, string, int, time.Duration) (Decision, error) {
+	return Decision{}, errors.New("backend unreachable")
 }
 
 // hangingThrottler blocks until the context passed to Allow is done, then
 // reports the context error — simulating a backend that never responds in time.
 type hangingThrottler struct{}
 
-func (hangingThrottler) Allow(ctx context.Context, _ string, _ int, _ time.Duration) (bool, time.Duration, error) {
+func (hangingThrottler) Allow(ctx context.Context, _ string, _ int, _ time.Duration) (Decision, error) {
 	<-ctx.Done()
-	return false, 0, ctx.Err()
+	return Decision{}, ctx.Err()
 }
 
 func TestMiddleware_AllowsUnderLimit(t *testing.T) {
@@ -174,10 +179,35 @@ func TestMiddleware_FloorsRetryAfterToAtLeastOneSecond(t *testing.T) {
 	}
 }
 
+// fractionalRetryThrottler reports a retryAfter with a fraction, to pin that the
+// header rounds UP. Truncating 1.7s to "1" tells a compliant client to retry a
+// full second before its budget exists, straight into the denial it just got.
+type fractionalRetryThrottler struct{}
+
+func (fractionalRetryThrottler) Allow(_ context.Context, _ string, limit int, window time.Duration) (Decision, error) {
+	return Decision{Limit: limit, ResetAfter: window, RetryAfter: 1700 * time.Millisecond}, nil
+}
+
+func TestMiddleware_RoundsRetryAfterUp(t *testing.T) {
+	app := fiber.New()
+	app.Get("/probe", Middleware(fractionalRetryThrottler{}, KeyByIP("test"), 1, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if got := resp.Header.Get("Retry-After"); got != "2" {
+		t.Errorf("Retry-After for 1.7s = %q, want %q", got, "2")
+	}
+}
+
 type subSecondRetryThrottler struct{}
 
-func (subSecondRetryThrottler) Allow(context.Context, string, int, time.Duration) (bool, time.Duration, error) {
-	return false, 200 * time.Millisecond, nil
+func (subSecondRetryThrottler) Allow(_ context.Context, _ string, limit int, window time.Duration) (Decision, error) {
+	return Decision{Limit: limit, ResetAfter: window, RetryAfter: 200 * time.Millisecond}, nil
 }
 
 // TestMiddleware_WithRedisThrottler_FailsOpenWhenRedisUnreachable exercises the
@@ -204,5 +234,113 @@ func TestMiddleware_WithRedisThrottler_FailsOpenWhenRedisUnreachable(t *testing.
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 (fail open through the real RedisThrottler + Middleware pair)", resp.StatusCode)
+	}
+}
+
+func TestMiddleware_SetsBudgetHeadersOnAllowedRequest(t *testing.T) {
+	// The headers exist so a ceiling can be respected rather than merely
+	// discovered: a client reading Remaining can slow down before it is refused,
+	// whereas one that only ever sees Retry-After has already failed a request.
+	th := newMemoryThrottler()
+	app := fiber.New()
+	app.Get("/probe", Middleware(th, KeyByIP("test"), 3, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("X-RateLimit-Limit"); got != "3" {
+		t.Errorf("X-RateLimit-Limit = %q, want %q", got, "3")
+	}
+	if got := resp.Header.Get("X-RateLimit-Remaining"); got != "2" {
+		t.Errorf("X-RateLimit-Remaining = %q, want %q", got, "2")
+	}
+	if resp.Header.Get("X-RateLimit-Reset") == "" {
+		t.Error("expected X-RateLimit-Reset on an allowed response")
+	}
+}
+
+func TestMiddleware_RemainingDecreasesAcrossRequests(t *testing.T) {
+	th := newMemoryThrottler()
+	app := fiber.New()
+	app.Get("/probe", Middleware(th, KeyByIP("test"), 5, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	remaining := func() string {
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
+		if err != nil {
+			t.Fatalf("Test: %v", err)
+		}
+		defer resp.Body.Close()
+		return resp.Header.Get("X-RateLimit-Remaining")
+	}
+
+	if first, second := remaining(), remaining(); first != "4" || second != "3" {
+		t.Errorf("Remaining across two requests = %q, %q; want %q, %q", first, second, "4", "3")
+	}
+}
+
+func TestMiddleware_SetsBudgetHeadersOnRejection(t *testing.T) {
+	th := newMemoryThrottler()
+	app := fiber.New()
+	app.Get("/probe", Middleware(th, KeyByIP("test"), 1, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	first, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
+	if err != nil {
+		t.Fatalf("first request: %v", err)
+	}
+	first.Body.Close()
+
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
+	if err != nil {
+		t.Fatalf("second request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-After"); got == "" {
+		t.Error("Retry-After must survive alongside the new headers")
+	}
+	if got := resp.Header.Get("X-RateLimit-Limit"); got != "1" {
+		t.Errorf("X-RateLimit-Limit = %q, want %q", got, "1")
+	}
+	if got := resp.Header.Get("X-RateLimit-Remaining"); got != "0" {
+		t.Errorf("X-RateLimit-Remaining = %q, want %q", got, "0")
+	}
+	if resp.Header.Get("X-RateLimit-Reset") == "" {
+		t.Error("expected X-RateLimit-Reset on a 429 response")
+	}
+}
+
+func TestMiddleware_FailOpenReportsNoBudget(t *testing.T) {
+	// No check happened, so there is no budget to report. Inventing one would be
+	// worse than silence: a client would pace itself against a fabricated number.
+	app := fiber.New()
+	app.Get("/probe", Middleware(erroringThrottler{}, KeyByIP("test"), 1, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 (fail open)", resp.StatusCode)
+	}
+	for _, h := range []string{"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"} {
+		if got := resp.Header.Get(h); got != "" {
+			t.Errorf("%s = %q on a fail-open response, want it absent", h, got)
+		}
 	}
 }

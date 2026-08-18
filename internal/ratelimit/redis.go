@@ -22,17 +22,31 @@ func NewRedisThrottler(client *redis.Client) *RedisThrottler {
 }
 
 // Allow implements Throttler.
-func (t *RedisThrottler) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
+//
+// Every field of the Decision comes from the one round trip redis_rate already
+// makes: Remaining and ResetAfter are computed by the same Lua script that
+// decides Allowed, so the budget a caller is told about cannot disagree with the
+// verdict it accompanies.
+func (t *RedisThrottler) Allow(ctx context.Context, key string, limit int, window time.Duration) (Decision, error) {
 	res, err := t.limiter.Allow(ctx, key, redisrate.Limit{Rate: limit, Burst: limit, Period: window})
 	if err != nil {
-		return false, 0, err
+		return Decision{}, err
 	}
-	if res.Allowed > 0 {
-		return true, 0, nil
+
+	decision := Decision{
+		Allowed:    res.Allowed > 0,
+		Limit:      limit,
+		Remaining:  res.Remaining,
+		ResetAfter: res.ResetAfter,
 	}
-	retryAfter := res.RetryAfter
-	if retryAfter < 0 {
-		retryAfter = window
+	if decision.Allowed {
+		return decision, nil
 	}
-	return false, retryAfter, nil
+	// A negative RetryAfter means redis_rate could not say when the next request
+	// fits; the whole window is the safe over-estimate.
+	decision.RetryAfter = res.RetryAfter
+	if decision.RetryAfter < 0 {
+		decision.RetryAfter = window
+	}
+	return decision, nil
 }
