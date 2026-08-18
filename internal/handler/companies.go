@@ -3,10 +3,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/url"
+	"path"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
@@ -328,8 +331,17 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
 	company, err := h.queries.GetCompany(c.Context(), slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A slug a merge retired keeps working, rather than becoming a dead end that also
+		// drops whatever the page had earned in search. The lookup runs only AFTER the miss,
+		// so a live company always wins over a stale alias — a company that came back is
+		// never shadowed by the row that once retired it.
+		if canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug); aliasErr == nil {
+			return c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
+		}
+		return err // RenderError maps pgx.ErrNoRows to 404.
+	}
 	if err != nil {
-		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
 	}
 
@@ -488,4 +500,17 @@ var companiesParams = []string{"q", "sort", "limit", "offset"}
 // to be named as such.
 func ignoredCompanyParams(c *fiber.Ctx) []search.UnknownParam {
 	return search.UnknownCompanyParams(queryValues(c), companiesParams)
+}
+
+// companyPath is the request's own path with the final segment swapped for the canonical
+// slug, query string preserved. Built from the live path rather than a hardcoded prefix so a
+// mounted-elsewhere API redirects within itself; escaped because the slug reaches the
+// Location header.
+func companyPath(c *fiber.Ctx, canonical string) string {
+	base := path.Dir(c.Path())
+	target := path.Join(base, url.PathEscape(canonical))
+	if raw := string(c.Request().URI().QueryString()); raw != "" {
+		return target + "?" + raw
+	}
+	return target
 }

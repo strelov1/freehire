@@ -210,6 +210,22 @@ export class ApiError extends Error {
   }
 }
 
+/** A resource that has permanently moved, carrying the slug it moved TO.
+ *
+ *  Only raised for a request that opted into `redirect: 'manual'`. Left to the default,
+ *  `fetch` follows the 301 and returns the canonical resource with a 200 — which renders
+ *  the right page under the WRONG url, the one outcome a permanent redirect exists to
+ *  prevent. A caller that cares about the url has to see the 301 itself. */
+export class MovedError extends Error {
+  constructor(
+    /** The final path segment of Location: the canonical slug. */
+    public readonly canonicalSlug: string,
+  ) {
+    super(`moved permanently to ${canonicalSlug}`);
+    this.name = 'MovedError';
+  }
+}
+
 /** Parse a failed response into an ApiError. The backend's standard error envelope is
  *  `{ "error": msg }`; surface that as the message (falling back to the status line for a
  *  non-JSON error, e.g. a proxy 502) and keep the whole parsed body for callers that need
@@ -335,6 +351,14 @@ export function createApi(
         throw new ApiError(504, `The API did not answer within ${timeoutMs}ms: ${path}`);
       }
       throw err;
+    }
+    // A caller that asked for `redirect: 'manual'` wants the move itself, not the resource
+    // behind it. Translating it here keeps the same shape as the non-ok translation below.
+    if (res.status === 301 || res.status === 308) {
+      const location = res.headers.get('location') ?? '';
+      const [pathname = ''] = location.split('?');
+      const slug = pathname.split('/').filter(Boolean).pop() ?? '';
+      throw new MovedError(decodeURIComponent(slug));
     }
     if (!res.ok) {
       throw await toApiError(res);
@@ -564,8 +588,11 @@ export function createApi(
     limit: number,
     offset: number,
   ): Promise<{ company: Company; jobs: Job[]; referral_available: boolean }> {
+    // `redirect: 'manual'` so a slug a merge retired surfaces as MovedError rather than
+    // silently rendering the canonical company under the old url.
     return requestData<{ company: Company; jobs: Job[]; referral_available: boolean }>(
       `/api/v1/companies/${slug}${query(limit, offset)}`,
+      { redirect: 'manual' },
     );
   }
 

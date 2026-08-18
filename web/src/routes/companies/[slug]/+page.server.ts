@@ -1,5 +1,5 @@
-import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
+import { error, redirect } from '@sveltejs/kit';
+import { ApiError, MovedError } from '$lib/api';
 import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
@@ -44,6 +44,14 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
     // needs a backend company-entity-only path — deferred to the latency follow-up.
     entity = await client.getCompany(params.slug, 1, 0);
   } catch (e) {
+    // A slug a merge retired: send the visitor — and the crawler holding the old link —
+    // to the company that absorbed it, keeping whatever the url had earned in search.
+    // The API answers 301 and the client surfaces it rather than following it, because a
+    // followed redirect would render the right company under the retired url.
+    if (e instanceof MovedError) {
+      const query = url.search;
+      redirect(301, `/companies/${e.canonicalSlug}${query}`);
+    }
     if (e instanceof ApiError && e.status === 404) {
       error(404, 'Company not found');
     }

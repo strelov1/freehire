@@ -126,12 +126,18 @@ module's single legal-form rule and closes the hole each existing implementation
 
 ## 5. Read path
 
-- [ ] 5.1 In `internal/handler/companies.go`, fall through a company miss to an `alias_slug`
+- [x] 5.1 In `internal/handler/companies.go`, fall through a company miss to an `alias_slug`
       lookup and answer 301. An existing `companies` row wins over the registry, so a re-created
       company is never shadowed. Integration test: 301 on a merged slug, 404 on an unknown one,
       200 on a slug present in both.
-- [ ] 5.2 Propagate the redirect in `web/src/routes/companies/[slug]/+page.server.ts` instead of
-      `error(404)`.
+- [x] 5.2 Propagate the redirect in `web/src/routes/companies/[slug]/+page.server.ts` instead of
+      `error(404)`. The client must ask for `redirect: 'manual'`: left to the default, `fetch`
+      FOLLOWS the 301 and returns 200, rendering the right company under the retired url —
+      the one outcome a permanent redirect exists to prevent. `call` translates the 3xx into a
+      typed `MovedError`, the same shape in which it already translates a non-ok into
+      `ApiError`. Verified with `svelte-check` (0 errors) and eslint; web CI runs neither, so
+      the worktree needed a real pnpm install to check it at all — which immediately caught a
+      `noUncheckedIndexedAccess` violation in the new code.
 
 ## 6. Collections
 
