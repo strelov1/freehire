@@ -25,12 +25,12 @@
 
 ## 3. Draining
 
-- [ ] 3.1 Extend `internal/searchdrain` with a deletion wave: claim, call the deleter,
+- [x] 3.1 Extend `internal/searchdrain` with a deletion wave: claim, call the deleter,
       complete. Unit-test against fakes the way the indexing runner is tested — including that
       a delete for an unindexed job completes rather than retrying forever.
-- [ ] 3.2 Inherit the existing failure policy: batch failure falls back to per-item, a
+- [x] 3.2 Inherit the existing failure policy: batch failure falls back to per-item, a
       call-context timeout skips the wave without fallback (`skipOnTimeout`). Test both.
-- [ ] 3.3 Wire `cmd/search-drain` to the new store and to `search.Client.DeleteJobs`, and
+- [x] 3.3 Wire `cmd/search-drain` to the new store and to `search.Client.DeleteJobs`, and
       assert the drain runs both waves in one pass.
 
 ## 4. Documentation

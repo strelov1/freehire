@@ -109,24 +109,30 @@ func (q *Queries) DeleteDeadSearchDeleteOutbox(ctx context.Context, cutoff pgtyp
 	return result.RowsAffected(), nil
 }
 
-const failSearchDeleteOutbox = `-- name: FailSearchDeleteOutbox :exec
+const recordSearchDeleteOutboxFailure = `-- name: RecordSearchDeleteOutboxFailure :one
 UPDATE search_delete_outbox
 SET attempts   = attempts + 1,
     claimed_at = NULL,
     last_error = $1,
     failed_at  = CASE WHEN attempts + 1 >= $2::int THEN now() ELSE NULL END
-WHERE id = ANY($3::bigint[])
+WHERE id = $3
+RETURNING failed_at
 `
 
-type FailSearchDeleteOutboxParams struct {
-	LastError   string  `json:"last_error"`
-	MaxAttempts int32   `json:"max_attempts"`
-	Ids         []int64 `json:"ids"`
+type RecordSearchDeleteOutboxFailureParams struct {
+	LastError   string `json:"last_error"`
+	MaxAttempts int32  `json:"max_attempts"`
+	ID          int64  `json:"id"`
 }
 
-// Record an attempt against entries whose removal failed, dead-lettering them once they pass
-// max_attempts so a permanently poisonous entry stops being reclaimed by the lease forever.
-func (q *Queries) FailSearchDeleteOutbox(ctx context.Context, arg FailSearchDeleteOutboxParams) error {
-	_, err := q.db.Exec(ctx, failSearchDeleteOutbox, arg.LastError, arg.MaxAttempts, arg.Ids)
-	return err
+// Record a failed attempt against one entry, dead-lettering it once it passes max_attempts so
+// a permanently poisonous entry stops being reclaimed by the lease forever.
+//
+// Returns failed_at so the caller reads the dead-letter decision back rather than recomputing
+// it, which is what keeps the threshold in one place. Mirrors RecordSearchOutboxFailure.
+func (q *Queries) RecordSearchDeleteOutboxFailure(ctx context.Context, arg RecordSearchDeleteOutboxFailureParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, recordSearchDeleteOutboxFailure, arg.LastError, arg.MaxAttempts, arg.ID)
+	var failed_at pgtype.Timestamptz
+	err := row.Scan(&failed_at)
+	return failed_at, err
 }

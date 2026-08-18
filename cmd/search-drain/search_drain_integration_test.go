@@ -237,3 +237,56 @@ func TestIntegration_SearchDrainWorkerBatchesRoleClusterLookupsWithoutCrossConta
 		t.Errorf("solo job cities = %v, want %v (untouched singleton)", cities, want)
 	}
 }
+
+// The end-to-end guarantee this change exists for: a job that closes stops being searchable
+// without waiting for a rebuild. Everything before the close is setup — what is being proven
+// is that closing enqueues a removal and that draining it takes the document out of the live
+// index.
+func TestIntegration_ClosingAJobRemovesItsDocument(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	jobID := seedJob(t, pool, "closing", "Platform Engineer", "acme", "fp-close", []string{"Lisbon"}, nil)
+	enqueue(t, pool, jobID)
+
+	opt := searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3}
+	indexer := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	if _, err := indexer.Run(ctx, opt); err != nil {
+		t.Fatalf("index run: %v", err)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, jobID); !found {
+		t.Fatalf("job %d is not in the index before the close, so this test proves nothing", jobID)
+	}
+
+	// The close is what queues the removal — no separate call, it rides the statement.
+	if _, err := db.New(pool).CloseJobByID(ctx, jobID); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	deletions := searchdrain.DeletionRunner{Store: newDeletionStore(pool), Deleter: facetDeleter{client: client}}
+	del, err := deletions.Run(ctx, opt)
+	if err != nil {
+		t.Fatalf("deletion run: %v", err)
+	}
+	if del.Deleted != 1 || del.Failed != 0 {
+		t.Fatalf("deletion stats = %+v, want deleted=1 failed=0", del)
+	}
+
+	if found, _ := meiliDoc(t, meiliURL, key, jobID); found {
+		t.Errorf("job %d is still in the index after being closed and drained", jobID)
+	}
+
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM search_delete_outbox").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("search_delete_outbox has %d rows, want 0 (drained)", n)
+	}
+}

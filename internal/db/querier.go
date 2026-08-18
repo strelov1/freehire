@@ -1109,9 +1109,6 @@ type Querier interface {
 	// failed_at is how the caller learns an entry dead-lettered, which is what decides the
 	// worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
-	// Record an attempt against entries whose removal failed, dead-lettering them once they pass
-	// max_attempts so a permanently poisonous entry stops being reclaimed by the lease forever.
-	FailSearchDeleteOutbox(ctx context.Context, arg FailSearchDeleteOutboxParams) error
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
@@ -2924,6 +2921,12 @@ type Querier interface {
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
 	RecordReminderDeliveryFailure(ctx context.Context, arg RecordReminderDeliveryFailureParams) error
+	// Record a failed attempt against one entry, dead-lettering it once it passes max_attempts so
+	// a permanently poisonous entry stops being reclaimed by the lease forever.
+	//
+	// Returns failed_at so the caller reads the dead-letter decision back rather than recomputing
+	// it, which is what keeps the threshold in one place. Mirrors RecordSearchOutboxFailure.
+	RecordSearchDeleteOutboxFailure(ctx context.Context, arg RecordSearchDeleteOutboxFailureParams) (pgtype.Timestamptz, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
 	// left in place — its expiry gates the retry to a later run and doubles as the

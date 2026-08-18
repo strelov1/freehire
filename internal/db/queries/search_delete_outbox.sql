@@ -39,15 +39,19 @@ RETURNING o.id, o.job_id, o.attempts;
 DELETE FROM search_delete_outbox
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
--- name: FailSearchDeleteOutbox :exec
--- Record an attempt against entries whose removal failed, dead-lettering them once they pass
--- max_attempts so a permanently poisonous entry stops being reclaimed by the lease forever.
+-- name: RecordSearchDeleteOutboxFailure :one
+-- Record a failed attempt against one entry, dead-lettering it once it passes max_attempts so
+-- a permanently poisonous entry stops being reclaimed by the lease forever.
+--
+-- Returns failed_at so the caller reads the dead-letter decision back rather than recomputing
+-- it, which is what keeps the threshold in one place. Mirrors RecordSearchOutboxFailure.
 UPDATE search_delete_outbox
 SET attempts   = attempts + 1,
     claimed_at = NULL,
     last_error = sqlc.arg(last_error),
     failed_at  = CASE WHEN attempts + 1 >= sqlc.arg(max_attempts)::int THEN now() ELSE NULL END
-WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+WHERE id = sqlc.arg(id)
+RETURNING failed_at;
 
 -- name: DeleteDeadSearchDeleteOutbox :execrows
 -- Housekeeping: drop dead-lettered entries older than the cutoff.

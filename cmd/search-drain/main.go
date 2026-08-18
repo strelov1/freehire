@@ -54,18 +54,34 @@ func run() int {
 		Indexer: searchIndexer{client: client, q: db.New(pool)},
 	}
 
-	stats, err := runner.Run(ctx, searchdrain.RunOptions{
+	opt := searchdrain.RunOptions{
 		BatchSize:    dcfg.BatchSize,
 		LeaseSeconds: dcfg.LeaseSeconds,
 		MaxAttempts:  dcfg.MaxAttempts,
 		CallTimeout:  dcfg.CallTimeout,
-	})
+	}
+
+	stats, err := runner.Run(ctx, opt)
 	if err != nil {
 		log.Printf("search-drain: %v", err)
 		return 1
 	}
 
-	log.Printf("search-drain done: indexed=%d failed=%d dead_lettered=%d",
-		stats.Indexed, stats.Failed, stats.DeadLettered)
-	return worker.ExitCode(stats.Failed, stats.DeadLettered)
+	// Removals run after the pushes, in the same pass. Both waves touch the same index and
+	// are paused together by freehire-reindexw, so they belong to one worker rather than two
+	// units that would each need their own copy of that coupling. Indexing goes first so a
+	// fault in the newer path cannot delay the established one.
+	deletions := searchdrain.DeletionRunner{
+		Store:   newDeletionStore(pool),
+		Deleter: facetDeleter{client: client},
+	}
+	del, err := deletions.Run(ctx, opt)
+	if err != nil {
+		log.Printf("search-drain: deletions: %v", err)
+		return 1
+	}
+
+	log.Printf("search-drain done: indexed=%d deleted=%d failed=%d dead_lettered=%d",
+		stats.Indexed, del.Deleted, stats.Failed+del.Failed, stats.DeadLettered+del.DeadLettered)
+	return worker.ExitCode(stats.Failed+del.Failed, stats.DeadLettered+del.DeadLettered)
 }

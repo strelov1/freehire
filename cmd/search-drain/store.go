@@ -61,3 +61,53 @@ func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAt
 	}
 	return row.FailedAt.Valid, nil
 }
+
+// deletionStore adapts the generated queries + pool to searchdrain.DeletionStore.
+//
+// A separate type rather than more methods on dbStore: the two queues are different tables
+// with the same shape, so one type carrying both would need Claim/Complete/Fail twice under
+// invented names, and every call site would have to remember which was which.
+type deletionStore struct {
+	q *db.Queries
+}
+
+func newDeletionStore(pool *pgxpool.Pool) *deletionStore {
+	return &deletionStore{q: db.New(pool)}
+}
+
+func (s *deletionStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]searchdrain.Claimed, error) {
+	rows, err := s.q.ClaimSearchDeleteOutboxBatch(ctx, db.ClaimSearchDeleteOutboxBatchParams{
+		LeaseSeconds: int32(leaseSeconds),
+		BatchSize:    int32(batch),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]searchdrain.Claimed, len(rows))
+	for i, r := range rows {
+		out[i] = searchdrain.Claimed{OutboxID: r.ID, JobID: r.JobID}
+	}
+	return out, nil
+}
+
+func (s *deletionStore) Complete(ctx context.Context, entries []searchdrain.Claimed) error {
+	ids := make([]int64, len(entries))
+	for i, e := range entries {
+		ids[i] = e.OutboxID
+	}
+	return s.q.CompleteSearchDeleteOutbox(ctx, ids)
+}
+
+func (s *deletionStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (bool, error) {
+	// The statement owns the dead-letter threshold and returns the decision, so this does
+	// not recompute it — the same shape as dbStore.Fail above.
+	failedAt, err := s.q.RecordSearchDeleteOutboxFailure(ctx, db.RecordSearchDeleteOutboxFailureParams{
+		LastError:   errMsg,
+		MaxAttempts: int32(maxAttempts),
+		ID:          outboxID,
+	})
+	if err != nil {
+		return false, err
+	}
+	return failedAt.Valid, nil
+}

@@ -133,3 +133,15 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	}
 	return ix.client.IndexJobs(ctx, docs)
 }
+
+// facetDeleter adapts the search client to searchdrain.Deleter.
+//
+// Unlike searchIndexer it needs no queries: a removal is identified by primary key alone,
+// and by the time an entry drains its job row is often gone (cmd/prune hard-deletes).
+type facetDeleter struct {
+	client *search.Client
+}
+
+func (d facetDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
+	return d.client.DeleteJobs(ctx, jobIDs)
+}
