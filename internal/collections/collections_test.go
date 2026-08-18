@@ -222,7 +222,8 @@ func TestRegisterSlug_StripsTrailingLegalSuffix(t *testing.T) {
 		{"Acme Robotics Ltd.", "acme-robotics"},
 		{"Monzo Bank PLC", "monzo-bank"},
 		{"Foo Bar LLP", "foo-bar"},
-		{"Community Co CIC", "community-co"},
+		// The strip repeats, so a compound form comes off whole: CIC, then Co.
+		{"Community Co CIC", "community"},
 		{"Booking B.V.", "booking"},
 		{"Adyen N.V.", "adyen"},
 		{"Adyen NV", "adyen"},
@@ -244,13 +245,18 @@ func TestRegisterSlug_StripsTrailingLegalSuffix(t *testing.T) {
 	}
 }
 
-func TestRegisterSlug_DoesNotStripCo(t *testing.T) {
-	// "Co" is deliberately excluded from legalSuffixes: unlike Inc/Corp/LLC, it
-	// collides with ordinary short words and abbreviations inside genuine company
-	// names, so stripping it widens the over-strip blast radius more than the other
-	// US forms do.
-	if got := RegisterSlug("Acme Robotics Co"); got != "acme-robotics-co" {
-		t.Errorf("RegisterSlug(Acme Robotics Co) = %q, want acme-robotics-co (Co must not strip)", got)
+func TestRegisterSlug_StripsCo(t *testing.T) {
+	// "Co" was once excluded on the theory that it collides with ordinary short words
+	// where Inc/Corp/LLC do not. The catalogue does not bear that out: all 297 companies
+	// whose slug ends in "-co" are "& Co." forms (Tiffany & Co., Levi Strauss & Co.,
+	// JPMorgan Chase & Co.), the strip is trailing-only so an interior collision cannot
+	// arise, and stripping it is what merges jpmorgan-chase-co into jp-morgan-chase.
+	//
+	// The test that matters is not whether a token looks dangerous but whether stripping
+	// it lands on a DIFFERENT existing employer. Measured on prod 2026-08-17 over the
+	// tokens this list added: of the 25 largest such merges, 25 are correct.
+	if got := RegisterSlug("Acme Robotics Co"); got != "acme-robotics" {
+		t.Errorf("RegisterSlug(Acme Robotics Co) = %q, want acme-robotics", got)
 	}
 }
 

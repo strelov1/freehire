@@ -3,6 +3,8 @@ package collections
 import (
 	"reflect"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/normalize"
 )
 
 func TestRegistry_HasEverySponsorCredential(t *testing.T) {
@@ -282,5 +284,28 @@ func TestRequireCountry_DoesNotMatchOnASubstring(t *testing.T) {
 		if gate(co, Record{Name: "X LTD"}) {
 			t.Errorf("hq_country %q matched by substring", hq)
 		}
+	}
+}
+
+// TestRegisterSlugIsTheCatalogueRule pins the unification. Collection.Members looks
+// RegisterSlug(record) up in a map keyed by the catalogue's own company slug, so the two
+// must be one rule: a register row whose form this strips but the catalogue's does not
+// (or the reverse) simply never matches, and nothing logs the miss.
+func TestRegisterSlugIsTheCatalogueRule(t *testing.T) {
+	cases := []string{
+		"ACME ROBOTICS LIMITED",
+		"ACME ROBOTICS GMBH",
+		"Booking B.V.",
+		"Sun Technologies,Inc.",
+		"Limited Brands",
+		"Tiffany & Co.",
+	}
+	for _, name := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got, want := RegisterSlug(name), normalize.CompanySlug(name); got != want {
+				t.Errorf("RegisterSlug(%q) = %q, want %q (normalize.CompanySlug) — "+
+					"a second legal-form rule has appeared", name, got, want)
+			}
+		})
 	}
 }

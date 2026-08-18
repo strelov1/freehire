@@ -11,9 +11,16 @@ import (
 //
 // There is deliberately no entry for the punctuated Nordic and Romance forms ("A/S", "S.A.")
 // — reducing the word to its letters already makes them "as" and "sa".
+// It is the union of what the three former lists carried. "co" is in it on evidence: it was
+// once excluded for colliding with ordinary words, but all 297 catalogue companies whose slug
+// ends in it are "& Co." forms, and of the 25 largest merges the wider tokens produce, every
+// one lands on the right employer (Accenture GmbH → Accenture, Goldman Sachs & Co. → Goldman
+// Sachs). A token earns its place by landing on the right employer in the data, not by
+// looking safe.
 var legalSuffixes = map[string]struct{}{
 	"corporation": {}, "limited": {}, "gmbh": {}, "corp": {}, "llc": {}, "ltd": {},
-	"inc": {}, "plc": {}, "llp": {}, "srl": {}, "pty": {}, "bv": {}, "nv": {},
+	"inc": {}, "incorporated": {}, "plc": {}, "llp": {}, "lp": {}, "cic": {}, "cio": {},
+	"srl": {}, "pty": {}, "bv": {}, "nv": {},
 	"ab": {}, "ag": {}, "kg": {}, "oy": {}, "sa": {}, "as": {}, "co": {},
 }
 
@@ -49,6 +56,18 @@ func CompanySlug(name string) string {
 // Splitting here rather than on Slug's output is also what keeps "Foo.com" one word.
 func isWordBreak(r rune) bool {
 	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '/'
+}
+
+// IsLegalForm reports whether a single word of a company name is a corporate form ("Ltd.",
+// "GmbH", "B.V."), by the same letters-only comparison [CompanySlug] strips with.
+//
+// It is exported for callers that need the judgement without the slug — collections'
+// RequireCountry counts how many WHITESPACE tokens of a register name are the name proper,
+// and must not use [CompanySlug]'s word breaks, which split "T-Mobile" in two and would make
+// a single-token name look specific enough to skip its headquarters check.
+func IsLegalForm(word string) bool {
+	_, ok := legalSuffixes[letters(word)]
+	return ok
 }
 
 // letters lowercases a word down to its ASCII letters, so the punctuated and bare spellings

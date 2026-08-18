@@ -6,75 +6,37 @@ import (
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
-// legalSuffixes are the corporate-form words a public register appends to an
-// organisation's legal name but that our catalogue's company names never carry.
-// Matched as whole trailing tokens after normalization, so "bv" strips from
-// "Booking B.V." but not from "BV Sports".
-//
-// Kept deliberately short: only the forms the UK Companies House, Dutch KvK, and
-// USCIS registers actually emit. A speculative list (GmbH, S.A., Pty, …) would
-// widen the blast radius of an over-strip for registers we do not read. "Co" is a
-// deliberate omission even though USCIS data emits it: unlike the others, it
-// collides with ordinary short words and abbreviations inside genuine company
-// names, not just as a trailing legal-form token.
-var legalSuffixes = map[string]struct{}{
-	"ltd": {}, "limited": {}, "plc": {}, "llp": {}, "lp": {}, "cic": {}, "cio": {},
-	"bv": {}, "nv": {},
-	"inc": {}, "incorporated": {}, "corp": {}, "corporation": {}, "llc": {},
-}
-
 // RegisterSlug normalizes an organisation name as a public register publishes it
-// into the canonical company slug our catalogue uses, stripping one trailing legal
-// form on the way.
+// into the canonical company slug our catalogue uses, stripping trailing legal
+// forms on the way.
 //
 // The strip is why this exists at all: normalize.Slug("ACME ROBOTICS LIMITED") is
 // "acme-robotics-limited", which never equals our "acme-robotics", so an exact
 // match against a register would find almost nothing without it.
 //
-// Two deliberate limits. Only the *last* token is considered, so "Limited Brands"
-// keeps its first word — a form word inside a name is part of the name. And a name
-// consisting only of a legal form is returned unstripped rather than reduced to the
-// empty slug, because an empty slug silently matches nothing while a bad register
-// row is worth leaving visible.
+// It is normalize.CompanySlug, not a rule of its own, and that is load-bearing:
+// Collection.Members looks this value up in a map keyed by the CATALOGUE's company
+// slug, so the two must be one rule. When they disagreed, a register row whose form
+// only one side stripped matched nothing — and nothing logged the miss, so the
+// company simply never earned a credential it qualified for.
 func RegisterSlug(name string) string {
-	fields := significantFields(name)
-	if len(fields) == 0 {
-		// Nothing to strip without erasing the name entirely.
-		return normalize.Slug(name)
-	}
-	return normalize.Slug(strings.Join(fields, " "))
+	return normalize.CompanySlug(name)
 }
 
-// significantFields splits name on whitespace and drops one trailing legal-form
-// token, the same strip RegisterSlug applies before slugging. Shared so that
-// token-counting (RequireCountry) agrees with what RegisterSlug considers the
-// name's actual content, rather than re-deriving it from the slug — which has
-// already collapsed internal punctuation ("T-Mobile" -> "t-mobile") into the same
-// hyphen it uses as a field separator.
+// significantFields splits name on WHITESPACE and drops one trailing legal-form
+// token. Only RequireCountry uses it, to judge how specific a register name is.
+//
+// It deliberately does not reuse normalize.CompanySlug's word breaks, which split on
+// punctuation too: "T-Mobile Inc" must count as ONE significant token, or a
+// single-token name would look specific enough to skip its headquarters check. The
+// form test is shared (normalize.IsLegalForm) even though the tokenization is not —
+// the list is what had to stop being duplicated, not the splitting.
 func significantFields(name string) []string {
 	fields := strings.Fields(name)
-	if len(fields) < 2 {
-		return fields
-	}
-	if _, isSuffix := legalSuffixes[letters(fields[len(fields)-1])]; !isSuffix {
+	if len(fields) < 2 || !normalize.IsLegalForm(fields[len(fields)-1]) {
 		return fields
 	}
 	return fields[:len(fields)-1]
-}
-
-// letters lowercases a token down to its ASCII letters, so the punctuated and bare
-// spellings of a legal form ("B.V.", "BV", "Ltd.") compare as one. The check runs
-// on the raw token rather than on the slug because normalize.Slug turns "B.V." into
-// "b-v" — two tokens, matching no suffix — while leaving a name like "Foo.com"
-// intact, which stripping dots globally would not.
-func letters(token string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(token) {
-		if r >= 'a' && r <= 'z' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }
 
 // ukWorkRoutes are the GOV.UK sponsorship routes that mean a licence useful to a

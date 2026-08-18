@@ -20,11 +20,20 @@ module's single legal-form rule and closes the hole each existing implementation
       removing them, so the removal is proven inert rather than assumed.
       (Subsumed by 1.1: a token map of whole words cannot express a two-word entry, and
       `TestSameCompany`'s existing "Trafalgar A/S" case plus a new `CompanySlug` row prove it.)
-- [ ] 1.3 Make `collections.RegisterSlug` delegate to `normalize.CompanySlug`, deleting
+- [x] 1.3 Make `collections.RegisterSlug` delegate to `normalize.CompanySlug`, deleting
       `collections.legalSuffixes`, `significantFields` and `letters`. `RequireCountry`'s
       token-counting must keep agreeing with the strip — it currently shares
       `significantFields`, so give it the shared helper rather than re-deriving. The existing
       `register_test.go` and `nlsponsor`/`uksponsor`/`ush1bsponsor` corpora must stay green.
+      Done: `significantFields` SURVIVES, because RequireCountry's whitespace token count is a
+      different concern from the strip's word breaks ("T-Mobile Inc" is one significant token,
+      and CompanySlug's breaks would split it). Only the LIST was duplicated, so only the list
+      is shared, via the new `normalize.IsLegalForm`. The union added `lp`, `cic`, `cio`,
+      `incorporated`; each verified against prod — Bloomberg LP, Texas Instruments
+      Incorporated and friends all land on the right employer, none on a different one.
+      Two tests changed rather than deleted: `DoesNotStripCo` inverts to `StripsCo` on the
+      catalogue evidence, and `Community Co CIC` now yields `community` because the strip
+      repeats.
 - [ ] 1.4 Make `cmd/harvest-ats`'s `trimLegalForm` delegate too, deleting
       `legalFormSuffixes`. Note `-se` and `-group` are in that list and in no other; decide
       each on evidence and record the decision in the token set's comment.
