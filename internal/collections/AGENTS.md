@@ -17,12 +17,18 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
   `Dataset.Records` source must read completely and error otherwise — a partial read is
   indistinguishable from a shrunken source (collections.go:46-52). `Dataset.Valid` enforces
   exactly one of URL / embedded Data / ResolveURL / Records (collections.go:64-79).
-- **Credentials match on `RegisterSlug`, not `normalize.Slug`** (register.go:39-49): it
-  strips one trailing legal form ("ACME ROBOTICS LIMITED" → `acme-robotics`), without which
-  an exact match against a register finds almost nothing. Only the LAST token is considered
-  ("Limited Brands" keeps its name); "co" is a deliberate omission — it collides with
-  ordinary words inside genuine names. Editorial collections match on `normalize.Slug`
-  unchanged — a changed rule would silently rewrite their membership.
+- **Both kinds match on `normalize.CompanySlug`** — `RegisterSlug` is now a thin caller of it
+  (register.go). Editorial matching used `normalize.Slug` until the catalogue began stripping
+  corporate forms; a dataset naming "Acme Robotics Limited" then asked for a slug ingest can no
+  longer produce, matched nothing, and said nothing. The rule has to be ONE rule because
+  `Members` looks its output up in a map keyed by the catalogue's own company slug — see
+  [docs/agents/company-identity.md](../../docs/agents/company-identity.md). What still separates
+  a credential is `DropAmbiguous` and the gates, not the spelling.
+- **Hand lists are guarded, because they silently depend on that rule.** Every entry must be a
+  fixed point of `CompanySlug`; the test that pins this found three `eastern_roots.txt` entries
+  already tagging the wrong company (`epam-systems-pte-ltd`, 19 open jobs, instead of
+  `epam-systems`, 1,172). An entry the rule would never produce matches nothing, and a
+  collection that matches nothing reports no error.
 - **`RequireCountry`'s asymmetry is the point** (register.go:78-101): a multi-token name
   ("Acme Robotics") needs only open jobs in the register's country; a single-token name
   ("Apple", "Spark") additionally requires HQ there, or a multinational with a local office

@@ -159,12 +159,18 @@ module's single legal-form rule and closes the hole each existing implementation
 
 ## 7. Documentation
 
-- [ ] 7.1 Document the alias registry where it will be found: the company-slug rule, the frozen
+- [x] 7.1 Document the alias registry where it will be found: the company-slug rule, the frozen
       canon, and the fact that this is the one non-derived table in a derived neighbourhood.
       Update `internal/collections/AGENTS.md`'s note that editorial collections match on
       `normalize.Slug` — they now match on `CompanySlug`.
-- [ ] 7.2 Add `merge-companies` to the worker list in `CLAUDE.md`, with the dry-run default, the
-      wave flags, and the "no manual reindex" rule.
+      Written as `docs/agents/company-identity.md`, following how mail-stack / notifications /
+      job-lifecycle are documented, and linked from the module table plus a new Conventions
+      bullet. Carries the gotchas that cost time in this change: electing by readability picks
+      backwards, the word break is not whitespace, `significantFields` must stay a separate
+      tokenization, and a fixture with no corporate form proves nothing.
+- [x] 7.2 Add `merge-companies` to the worker list in `CLAUDE.md`, with the dry-run default, the
+      wave flags, and the "no manual reindex" rule. Written to `AGENTS.md` — `CLAUDE.md` is a
+      git-tracked symlink to it and the editor refuses to write through one.
 
 ## 8. Prod rollout (manual, after merge)
 
