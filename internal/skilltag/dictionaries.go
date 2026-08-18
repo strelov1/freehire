@@ -1045,6 +1045,17 @@ var engineeringPhraseAliases = []phraseAlias{
 // craft, posted by technical employers, and the conservative error for every caller of
 // HasEngineering is to keep a board rather than retire a live one.
 var professionalPhraseAliases = []phraseAlias{
+	// AI enablement — the adoption side of AI, and a skill rather than a role.
+	// These postings are Program Managers, Architects, Change Managers and even
+	// Interns whose SUBJECT is getting an organisation to use AI; tagging the
+	// subject lets it filter alongside the role instead of displacing it, which
+	// is what a named role did when this first shipped.
+	//
+	// "ai trainer" is deliberately absent: it names the opposite job — labelling
+	// data so a model learns, not teaching people to use one.
+	{"ai enablement", "ai-enablement"},
+	{"ai adoption", "ai-enablement"},
+	{"ai transformation", "ai-enablement"},
 	// recruiting
 	{"boolean search", "boolean-search"},
 	{"talent sourcing", "talent-sourcing"},

@@ -124,17 +124,6 @@ var namedRoleTable = []struct {
 	// lands on product_engineer. "ai-agent engineer" needs no such entry — the bare
 	// "agent engineer" already resolves it.
 	{"ai_product_engineer", "AI Product Engineer", []string{"ai product engineer", "ai-product engineer"}},
-	// The one AI role here that is not engineering: the entries above BUILD AI,
-	// this one gets an organisation USING it — training staff, owning the
-	// enterprise licences, governance. A named role rather than a category
-	// because it is not a function: these postings sit in HR, finance operations
-	// and central IT alike, so no single category is true of them.
-	//
-	// "ai trainer" is deliberately NOT an alias: it names two opposite jobs —
-	// labelling data so a model learns, and teaching people to use AI — and
-	// folding the annotation work in would make the role useless to both searches.
-	{"ai_enablement", "AI Enablement", []string{"ai enablement", "ai adoption", "ai transformation", "ai skills coach"}},
-
 	{"founding_designer", "Founding Designer", []string{"founding designer"}},
 	{"founding_pm", "Founding Product Manager", []string{"founding product manager", "founding pm"}},
 	{"staff_engineer", "Staff Engineer", []string{"staff engineer"}},
