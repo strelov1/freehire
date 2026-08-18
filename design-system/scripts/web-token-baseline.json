@@ -5,7 +5,7 @@
   "web/src/lib/avatar.ts": 10,
   "web/src/lib/components/AboutValues.svelte": 1,
   "web/src/lib/components/ActivityBars.svelte": 6,
-  "web/src/lib/components/AdvancedSearchLandingView.svelte": 4,
+  "web/src/lib/components/AdvancedSearchLandingView.svelte": 5,
   "web/src/lib/components/AnalysesView.svelte": 2,
   "web/src/lib/components/AnalyticsView.svelte": 1,
   "web/src/lib/components/ATSReportView.svelte": 4,
