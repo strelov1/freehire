@@ -53,9 +53,13 @@ type Throttler interface {
 // throttler (no backend configured) also fails open, with no warning logged. A
 // fail-open response carries no budget headers: no check happened, so there is
 // no budget to report, and an invented one is worse than silence.
+//
+// A request from a trusted peer (see TrustedCIDRs) skips the check entirely and
+// carries no headers, because our own server-rendered front end reaches the API
+// over loopback and would otherwise spend one shared budget for the whole site.
 func Middleware(throttler Throttler, keyFunc func(c *fiber.Ctx) string, limit int, window time.Duration) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if throttler == nil {
+		if throttler == nil || trustedPeer(c) {
 			return c.Next()
 		}
 

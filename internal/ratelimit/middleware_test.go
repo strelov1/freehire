@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -199,6 +200,9 @@ func TestMiddleware_RoundsRetryAfterUp(t *testing.T) {
 		t.Fatalf("Test: %v", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", resp.StatusCode)
+	}
 	if got := resp.Header.Get("Retry-After"); got != "2" {
 		t.Errorf("Retry-After for 1.7s = %q, want %q", got, "2")
 	}
@@ -342,5 +346,82 @@ func TestMiddleware_FailOpenReportsNoBudget(t *testing.T) {
 		if got := resp.Header.Get(h); got != "" {
 			t.Errorf("%s = %q on a fail-open response, want it absent", h, got)
 		}
+	}
+}
+
+// peerApp builds a test app whose c.IP() reads X-Real-IP, which is exactly how
+// c.IP() resolves in production: cmd/server sets ProxyHeader to X-Real-IP and
+// nginx populates it. Fiber's app.Test always reports a 0.0.0.0 remote address
+// and ignores httptest's RemoteAddr, so this is the only way to drive the peer
+// a middleware sees.
+func peerApp(th Throttler, limit int) *fiber.App {
+	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
+	app.Get("/probe", Middleware(th, KeyByIP("test"), limit, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+	return app
+}
+
+func getAsPeer(t *testing.T, app *fiber.App, peer string) *http.Response {
+	t.Helper()
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil)
+	req.Header.Set(fiber.HeaderXForwardedFor, peer)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request as %s: %v", peer, err)
+	}
+	return resp
+}
+
+func TestMiddleware_TrustedPeerIsNeverLimited(t *testing.T) {
+	// SSR reaches the API over loopback without a client-address header, so every
+	// server-rendered page presents the same peer. Counting those would put the
+	// whole site in one caller's budget and throttle it as a single abusive
+	// client — the limiter exists to bound external abuse, and our own front end
+	// flooding the API is a different bug that a 429 makes worse, not better.
+	app := peerApp(newMemoryThrottler(), 1)
+
+	for i := range 5 {
+		resp := getAsPeer(t, app, "127.0.0.1")
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("request %d status = %d, want 200 (loopback is never limited, limit is 1)", i, resp.StatusCode)
+		}
+		if got := resp.Header.Get("X-RateLimit-Limit"); got != "" {
+			t.Errorf("request %d: X-RateLimit-Limit = %q, want it absent — no check happened", i, got)
+		}
+		resp.Body.Close()
+	}
+}
+
+func TestMiddleware_PrivateNetworkPeerIsNeverLimited(t *testing.T) {
+	app := peerApp(newMemoryThrottler(), 1)
+
+	// Three requests each against a limit of 1: one apiece would pass even
+	// unexempted, since every peer is its own key.
+	for _, peer := range []string{"10.1.2.3", "172.16.9.9", "192.168.1.10"} {
+		for i := range 3 {
+			resp := getAsPeer(t, app, peer)
+			if resp.StatusCode != fiber.StatusOK {
+				t.Errorf("peer %s request %d status = %d, want 200 (private peer is never limited)", peer, i, resp.StatusCode)
+			}
+			resp.Body.Close()
+		}
+	}
+}
+
+func TestMiddleware_ExternalPeerIsStillLimited(t *testing.T) {
+	// The companion to the exemption: it must not become a blanket bypass.
+	app := peerApp(newMemoryThrottler(), 1)
+
+	first := getAsPeer(t, app, "203.0.113.7")
+	first.Body.Close()
+	if first.StatusCode != fiber.StatusOK {
+		t.Fatalf("first request status = %d, want 200", first.StatusCode)
+	}
+
+	second := getAsPeer(t, app, "203.0.113.7")
+	defer second.Body.Close()
+	if second.StatusCode != fiber.StatusTooManyRequests {
+		t.Errorf("second request status = %d, want 429 — an external caller is still limited", second.StatusCode)
 	}
 }

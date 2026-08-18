@@ -120,7 +120,10 @@ func main() {
 		// (the nginx container); a direct public caller is not trusted.
 		ProxyHeader:             "X-Real-IP", // Fiber has no constant for this header
 		EnableTrustedProxyCheck: true,
-		TrustedProxies:          []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32"},
+		// Shared with internal/ratelimit, which does not count a peer we trust to
+		// assert someone else's address — chiefly our own SSR, which reaches the
+		// API over loopback. One definition so the two cannot disagree.
+		TrustedProxies: ratelimit.TrustedCIDRs,
 	})
 
 	// The recover middleware marks each unwound panic via c.Locals so RenderError
