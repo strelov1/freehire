@@ -159,3 +159,33 @@ func TestPlanMerges_FrozenCanonWinsEvenIfItCarriesAForm(t *testing.T) {
 		t.Errorf("Canonical = %q, want acme-inc (frozen)", got[0].Canonical)
 	}
 }
+
+// TestPlanMerges_FallsBackToTheDerivedSlug covers the group where NOTHING is a fixed point.
+//
+// The >=100-job wave surfaced four: carnival-corporation, dcs-corporation, quess-corp-limited,
+// avaron-pte-ltd. Every member carried a form, so "the biggest fixed point" found none and the
+// election fell back to the biggest member — leaving a canonical url with the form still on it,
+// which is the outcome the fixed-point rule exists to prevent.
+//
+// The right canon is the one the rule itself yields, whether or not a company row holds it yet:
+// that is the slug every future posting derives, and the reconcile creates the row.
+func TestPlanMerges_FallsBackToTheDerivedSlug(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "carnival-corporation", Name: "Carnival Corporation", JobCount: 300},
+		{Slug: "carnival-corporation-plc", Name: "Carnival Corporation plc", JobCount: 40},
+	}, nil, 0)
+
+	if len(got) != 1 {
+		t.Fatalf("planned %d merges, want 1", len(got))
+	}
+	if got[0].Canonical != "carnival" {
+		t.Errorf("Canonical = %q, want carnival — with no member the rule can reproduce, the "+
+			"canon is what the rule yields, not the least bad row that happens to exist",
+			got[0].Canonical)
+	}
+	// Both rows retire into it, including the one the election started from.
+	if len(got[0].Aliases) != 2 {
+		t.Errorf("got %d aliases, want 2 — every existing slug retires when none of them is "+
+			"the canon", len(got[0].Aliases))
+	}
+}

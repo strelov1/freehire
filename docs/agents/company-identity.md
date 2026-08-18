@@ -100,7 +100,11 @@ crawl would put it back, and the display name comes from `companies.name` regard
   jobs) purely because it was larger — making the canonical url the one carrying a corporate
   form, and 301ing the better-known slug into it. It is unstable too: every new posting derives
   the stripped slug, so the canon would depend forever on an alias row to reach itself. The
-  election prefers the biggest slug `CompanySlug` can reproduce, and only then the biggest.
+  election prefers the biggest slug `CompanySlug` can reproduce; where NO member qualifies —
+  `carnival-corporation` beside `carnival-corporation-plc`, four such groups in the >=100-job
+  wave — it takes the slug the rule yields even though no row holds it yet, and the reconcile
+  creates that row. Returning a slug no member holds is safe: a company already using it would
+  fold to the same key, so it would be a member and would have won outright.
 - **Electing by anything but job count elects backwards.** "Prefer the more readable slug" is
   the tempting rule and it picks `domino-s` (1 job) over `dominos` (14,396) and `al-fa-bank`
   (20) over `alfa-bank` (1,617). Hyphens mark the corrupted spelling about as often as the

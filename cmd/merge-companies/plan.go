@@ -89,10 +89,10 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 		})
 
 		winner := electCanonical(members, frozen)
-		m := merge{Canonical: winner.Slug, FoldedKey: key}
+		m := merge{Canonical: winner, FoldedKey: key}
 		for _, c := range members {
 			m.Jobs += c.JobCount
-			if c.Slug == winner.Slug {
+			if c.Slug == winner {
 				continue
 			}
 			m.Aliases = append(m.Aliases, alias{
@@ -125,28 +125,35 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 //     catalogue's canonical url the one carrying the form and 301'd the better-known slug into
 //     it. It is also unstable, since every new posting derives the stripped slug and would need
 //     an alias row for the canon to reach itself.
-//  3. Failing that, the biggest. A group where nothing is a fixed point is odd but real, and
-//     merging it under an imperfect canon still beats leaving the employer split.
-func electCanonical(members []company, frozen map[string]bool) company {
+//  3. Failing that, the slug the rule YIELDS for the biggest member, even though no row holds
+//     it yet. A group where every member carries a form is real — carnival-corporation and
+//     carnival-corporation-plc were two of four in the >=100-job wave — and picking the least
+//     bad existing row would leave the form on the canonical url, which is the outcome rule 2
+//     exists to prevent. The derived slug is what every future posting keys to, and the
+//     reconcile that follows the re-key creates its row.
+//
+// Returning a slug no member holds is safe: if a company already used it, its name would fold
+// to the same key and it would BE a member — and would have won rule 2.
+func electCanonical(members []company, frozen map[string]bool) string {
 	for _, c := range members {
 		if frozen[c.Slug] {
-			return c
+			return c.Slug
 		}
 	}
 	for _, c := range members {
 		if normalize.CompanySlug(c.Slug) == c.Slug {
-			return c
+			return c.Slug
 		}
 	}
-	return members[0]
+	return normalize.CompanySlug(members[0].Name)
 }
 
 // reasonFor classifies why a slug is retiring. The test is whether the current pure rule,
 // applied to the alias's OWN name, already reaches the canonical slug: if it does, this
 // duplicate exists only because the catalogue was keyed before that rule did, and nothing but
 // the redirect needs the registry.
-func reasonFor(c, winner company) string {
-	if normalize.CompanySlug(c.Name) == winner.Slug {
+func reasonFor(c company, winner string) string {
+	if normalize.CompanySlug(c.Name) == winner {
 		return reasonLegalForm
 	}
 	return reasonSpelling
