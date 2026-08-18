@@ -125,7 +125,11 @@ worked the more reliably the remainder hid.
   (14,396) and `al-fa-bank` (20) over `alfa-bank` (1,617): in a slug an apostrophe is
   indistinguishable from a word break. What actually decides is whether the employer WRITES
   its name in several words — `Western Digital`, `Ace Hardware` and `Kimberly-Clark` do, `AT&T`,
-  `Brink's` and `Dominos` do not. A hyphen in the NAME separates words; an apostrophe does not,
+  `Brink's` and `Dominos` do not. A hyphen in the NAME separates words; an apostrophe does not —
+  and `CompanySlug` DROPS apostrophes before slugging, so "Kohl's" keys at `kohls` rather than
+  the `kohl-s` plain `Slug` would give. That artefact stopped being survivable once the canon
+  became derived rather than chosen among stored slugs: it elected `kohl-s` over `kohls` across
+  2,939 postings. Beyond that,
   and that is precisely the distinction a slug destroys, since it renders both as a hyphen — and that preference only speaks when it discriminates. Where no name is multi-word, or
   every name is, the job count decides as before.
 - **The word break is not whitespace.** It is every rune `Slug` drops EXCEPT `.` and `/`, which
