@@ -160,7 +160,7 @@ func All(c HTTPClient) map[string]Source {
 		NewJazzHR(c),
 		NewWPYoast(c),
 		NewBreezy(c),
-		NewJoin(c),
+		NewJoin(pacedJoinGetter(c)),
 		NewGlobalPayments(c),
 		NewRapyd(c),
 		NewCareerPlug(c),

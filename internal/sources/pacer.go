@@ -77,6 +77,58 @@ const (
 	clinchRequestBurst    = 1
 )
 
+// rateLimitedJSONGetter is the JSON-GET counterpart of rateLimitedHTMLGetter: it wraps a
+// JSONGetter with a shared limiter so its aggregate GetJSON rate stays under the endpoint's
+// budget, independent of the caller's worker concurrency. One instance carries one limiter, so
+// every request routed through it — across boards, listing pages and the detail fan-out —
+// shares the same token bucket.
+//
+// Distinct from concurrencyLimitedJSONGetter below: that one caps how many requests are in
+// FLIGHT, the right lever for an API that degrades under sustained concurrent load. This one
+// caps the request rate, the right lever for an API that meters requests per unit time and is
+// indifferent to how many arrive at once.
+type rateLimitedJSONGetter struct {
+	inner   JSONGetter
+	limiter waiter
+}
+
+// GetJSON blocks on the limiter before delegating, so a cancelled context surfaces as the Wait
+// error and the inner fetch is skipped.
+func (g rateLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) error {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return err
+	}
+	return g.inner.GetJSON(ctx, url, v)
+}
+
+// join.com meters by RATE, and the two were easy to confuse: an unpaced crawl fans 8 board
+// workers out over its list endpoint and the refusals looked like a concurrency limit, but
+// holding the rate steady and varying only the worker count clears it — 4 workers at 2 req/s
+// were refused nothing, while 2 workers left to run flat out (5.7 req/s) lost 17%. Measured
+// against live boards 2026-08-18:
+//
+//	1.1 req/s, 700 requests  →   0% refused      3 req/s, 100 requests → 10% refused
+//	2   req/s, 240 requests  →   0% refused      5 req/s, 100 requests → 20% refused
+//
+// So the knee sits between 2 and 3, and the pace takes the clean side of it. Under-shooting
+// only lengthens a run; over-shooting re-enters the refusals that had 3436 of 4749 boards
+// failing before this existed.
+const (
+	joinRequestInterval = 500 * time.Millisecond // 2 req/s
+	joinRequestBurst    = 2
+)
+
+// pacedJoinGetter wraps a getter with a fresh limiter shared across one registry build, so every
+// board's listing pages and detail fan-out in a run compete for the same token bucket. Both paths
+// are wrapped because both hit the same metered host — unlike seek, whose listing was never
+// refused.
+func pacedJoinGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(joinRequestInterval), joinRequestBurst),
+	}
+}
+
 // rateLimitedJSONPoster is the JSON-POST counterpart of rateLimitedHTMLGetter: it wraps a
 // JSONPoster with a shared limiter so its aggregate PostJSON rate stays under the endpoint's
 // budget, independent of the caller's worker concurrency. It exists because a detail endpoint is
