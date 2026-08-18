@@ -209,7 +209,11 @@
      header covers all of them rather than repeating the explanation on every
      excludable section. -->
 {#snippet titleHint()}
-  <Tooltip side="bottom">
+  <!-- side="right", not "bottom": the trigger sits at the modal's left edge, and a
+       centered tooltip (left-1/2 -translate-x-1/2) grows equally both ways —
+       overflowing the modal to the left no matter how short the content is.
+       Growing rightward only stays inside it. -->
+  <Tooltip side="right">
     <button
       type="button"
       aria-label="How filters work"
@@ -218,10 +222,9 @@
       <Info class="size-3.5" aria-hidden="true" />
     </button>
     {#snippet content()}
-      <span class="block">Click a filter once to include it, again to exclude it, again to clear it.</span>
       <a
         href={resolve('/features/advanced-search')}
-        class="mt-1.5 block font-medium text-foreground underline-offset-2 hover:underline"
+        class="block whitespace-nowrap font-medium text-foreground underline-offset-2 hover:underline"
       >
         See how filters work →
       </a>
