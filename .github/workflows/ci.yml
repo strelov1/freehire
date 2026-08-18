@@ -28,8 +28,23 @@ jobs:
 
       # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
       # the image / on the host); install it so the extraction tests run instead of skip.
+      # Bounded and retried: a hung apt mirror otherwise holds the runner for the
+      # job's whole 6-hour budget instead of failing in a minute. Observed five
+      # times in a row on 2026-08-18, each run stuck on this step while sibling
+      # branches installed fine — so it is a per-runner stall, and a fresh
+      # attempt is the fix. `timeout` bounds each command; the loop retries.
       - name: Install poppler-utils
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+        timeout-minutes: 6
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 100 sudo apt-get update \
+              && timeout 60 sudo apt-get install -y --no-install-recommends poppler-utils; then
+              exit 0
+            fi
+            echo "apt attempt $attempt failed or hung; retrying"
+            sleep 5
+          done
+          exit 1
 
       # CV rendering shells out to typst, and the render tests skip without it — including the
       # registry-driven guard that every template emits clickable links, which is the only
