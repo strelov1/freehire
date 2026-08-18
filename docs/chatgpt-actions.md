@@ -21,10 +21,12 @@ https://freehire.me/openapi.yaml
 1. Create or edit a custom GPT.
 2. Add an Action and import the OpenAPI schema from `https://freehire.me/openapi.yaml`.
 3. Set authentication to API key / Bearer token.
-4. Create a freehire API key in the web app and paste it into the GPT Action
-   authentication field (Auth Type: Bearer). Search endpoints (`searchJobs`,
-   `getJobFacets`, `getJob`, companies) are public and work without a key;
-   tracking endpoints return 401 until a key is set.
+4. Leave authentication set to None. **`openapi.yaml` declares only the eight
+   public read operations** — `searchJobs`, `agentSearchJobs`, `getJobFacets`,
+   `getJob`, `getSimilarJobs`, `searchCompanies`, `getCompany`, `searchCities`
+   — all of which work without a key. The authenticated tracking surface is not
+   in the schema, so a GPT cannot call it; the pipeline instructions below
+   describe behaviour that needs those operations added first.
 5. Under **Capabilities**, turn **Web Search off**. If it stays on, the GPT tends
    to browse instead of calling the Action, and answers with fabricated listings
    that carry no freehire links.
