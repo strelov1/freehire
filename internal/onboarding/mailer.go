@@ -1,4 +1,4 @@
-// Package onboarding sends the founder's signup sequence: three mails over a new
+// Package onboarding sends the founder's signup sequence: four mails over a new
 // account's first days, written in the first person and inviting a reply.
 //
 // It is deliberately unlike the other mail features in this codebase. A digest or a
@@ -8,11 +8,11 @@
 //
 //   - the mails carry a Reply-To pointing at a human inbox, not the send address;
 //   - the copy lives here as prose rather than being assembled from data, because
-//     there is no data — every recipient gets the same three letters.
+//     there is no data — every recipient gets the same four letters.
 //
-// The sequence is: welcome (immediately), no_alert (day 3, only if the account
-// never created an alert), open_source (day 10, everyone). Runner owns when; this
-// file owns what they say.
+// The sequence is: welcome (immediately), advanced_search (day 3, everyone),
+// no_alert (day 6, only if the account never created an alert), open_source
+// (day 10, everyone). Runner owns when; this file owns what they say.
 package onboarding
 
 import (
@@ -39,9 +39,10 @@ type Sender interface {
 type Step string
 
 const (
-	StepWelcome    Step = "welcome"
-	StepNoAlert    Step = "no_alert"
-	StepOpenSource Step = "open_source"
+	StepWelcome        Step = "welcome"
+	StepAdvancedSearch Step = "advanced_search"
+	StepNoAlert        Step = "no_alert"
+	StepOpenSource     Step = "open_source"
 )
 
 // Links the sequence points at. They are constants rather than configuration
@@ -99,14 +100,15 @@ type rendered struct {
 // content is what the body templates render from: the absolute URLs that cannot be
 // baked into the prose because they depend on the site origin.
 type content struct {
-	AlertsURL    string
-	GitHubIcon   string
-	DiscordIcon  string
-	LinkedInIcon string
-	PortraitURL  string
-	RepoURL      string
-	DiscordURL   string
-	LinkedInURL  string
+	AlertsURL         string
+	AdvancedSearchURL string
+	GitHubIcon        string
+	DiscordIcon       string
+	LinkedInIcon      string
+	PortraitURL       string
+	RepoURL           string
+	DiscordURL        string
+	LinkedInURL       string
 }
 
 func (m *Mailer) render(step Step) (rendered, error) {
@@ -131,13 +133,14 @@ func (m *Mailer) render(step Step) (rendered, error) {
 
 func (m *Mailer) content() content {
 	return content{
-		AlertsURL:    m.baseURL + "/my/notifications?utm_source=email",
-		GitHubIcon:   m.baseURL + "/email-icon-github.png",
-		DiscordIcon:  m.baseURL + "/email-icon-discord.png",
-		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
-		PortraitURL:  m.baseURL + "/ilya.jpg",
-		RepoURL:      repoURL,
-		DiscordURL:   discordURL,
-		LinkedInURL:  linkedInURL,
+		AlertsURL:         m.baseURL + "/my/notifications?utm_source=email",
+		AdvancedSearchURL: m.baseURL + "/features/advanced-search?utm_source=email",
+		GitHubIcon:        m.baseURL + "/email-icon-github.png",
+		DiscordIcon:       m.baseURL + "/email-icon-discord.png",
+		LinkedInIcon:      m.baseURL + "/email-icon-linkedin.png",
+		PortraitURL:       m.baseURL + "/ilya.jpg",
+		RepoURL:           repoURL,
+		DiscordURL:        discordURL,
+		LinkedInURL:       linkedInURL,
 	}
 }

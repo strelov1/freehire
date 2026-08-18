@@ -74,6 +74,28 @@ var specs = map[Step]spec{
 		},
 	},
 
+	StepAdvancedSearch: {
+		subject:   "The filters go deeper than you’d think",
+		preheader: "Exclude a value, not just include one — and save the search.",
+		heading:   "The filters go deeper",
+		body: body("advanced_search", `
+{{template "p" "Most job boards give you a handful of dropdowns. freehire has twenty — role, seniority, stack, region, company type, salary currency, even whether a posting looks real."}}
+{{template "p" "The one people miss: almost every filter can also mean “not this.” Click a value once to require it, again to rule it out — a company you already applied to, a stack you’re done with, a source you don’t trust."}}
+{{template "lead" "Save the search once, and freehire keeps running it for you — Telegram, email or push, your choice."}}
+{{template "button" (mailLink .AdvancedSearchURL "See how the filters work")}}`),
+		text: func(base string) string {
+			return "Most job boards give you a handful of dropdowns. freehire has twenty — role, seniority,\n" +
+				"stack, region, company type, salary currency, even whether a posting looks real.\n\n" +
+				"The one people miss: almost every filter can also mean \"not this.\" Click a value once to\n" +
+				"require it, again to rule it out — a company you already applied to, a stack you're done\n" +
+				"with, a source you don't trust.\n\n" +
+				"Save the search once, and freehire keeps running it for you — Telegram, email or push,\n" +
+				"your choice.\n\n" +
+				"See how the filters work: " + base + "/features/advanced-search\n\n" +
+				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+		},
+	},
+
 	StepNoAlert: {
 		subject:   "Want me to set up your search?",
 		preheader: "Tell me the role — I’ll tell you honestly if we cover it.",

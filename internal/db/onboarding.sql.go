@@ -9,6 +9,58 @@ import (
 	"context"
 )
 
+const listAdvancedSearchCandidates = `-- name: ListAdvancedSearchCandidates :many
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => $1::int)
+  AND w.sent_at < now() - make_interval(days => $2::int)
+  AND COALESCE(ns.enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'advanced_search'
+  )
+ORDER BY u.created_at
+LIMIT $3::int
+`
+
+type ListAdvancedSearchCandidatesParams struct {
+	WindowDays int32 `json:"window_days"`
+	AfterDays  int32 `json:"after_days"`
+	MaxRows    int32 `json:"max_rows"`
+}
+
+type ListAdvancedSearchCandidatesRow struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+// Greeted a while ago: an introduction to the filter panel (role, region, skills,
+// and how to exclude a value). Sent to everyone regardless of alert status, unlike
+// no_alert below — this is background on a feature, not a nudge toward one missing
+// action, so it asks nothing of the reader that would make it conditional.
+func (q *Queries) ListAdvancedSearchCandidates(ctx context.Context, arg ListAdvancedSearchCandidatesParams) ([]ListAdvancedSearchCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listAdvancedSearchCandidates, arg.WindowDays, arg.AfterDays, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAdvancedSearchCandidatesRow{}
+	for rows.Next() {
+		var i ListAdvancedSearchCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNoAlertCandidates = `-- name: ListNoAlertCandidates :many
 SELECT u.id, u.email
 FROM users u

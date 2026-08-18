@@ -28,6 +28,26 @@ WHERE u.email_verified
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
+-- name: ListAdvancedSearchCandidates :many
+-- Greeted a while ago: an introduction to the filter panel (role, region, skills,
+-- and how to exclude a value). Sent to everyone regardless of alert status, unlike
+-- no_alert below — this is background on a feature, not a nudge toward one missing
+-- action, so it asks nothing of the reader that would make it conditional.
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => sqlc.arg(window_days)::int)
+  AND w.sent_at < now() - make_interval(days => sqlc.arg(after_days)::int)
+  AND COALESCE(ns.enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'advanced_search'
+  )
+ORDER BY u.created_at
+LIMIT sqlc.arg(max_rows)::int;
+
 -- name: ListNoAlertCandidates :many
 -- Greeted a while ago, and still without an active alert — the one action the
 -- product is built around.

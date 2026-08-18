@@ -1605,6 +1605,11 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
+	// Greeted a while ago: an introduction to the filter panel (role, region, skills,
+	// and how to exclude a value). Sent to everyone regardless of alert status, unlike
+	// no_alert below — this is background on a feature, not a nudge toward one missing
+	// action, so it asks nothing of the reader that would make it conditional.
+	ListAdvancedSearchCandidates(ctx context.Context, arg ListAdvancedSearchCandidatesParams) ([]ListAdvancedSearchCandidatesRow, error)
 	// Keyset page of one AGGREGATOR SOURCE's open postings.
 	//
 	// Scoped to a single source on purpose. The earlier `source = ANY(...)` form defeated its

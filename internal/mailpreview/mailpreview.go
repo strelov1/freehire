@@ -83,6 +83,7 @@ var renderers = []func(string) (Sample, error){
 	phHeadsUpSample,
 	phLiveSample,
 	welcomeSample,
+	advancedSearchSample,
 	noAlertSample,
 	openSourceSample,
 	verificationSample,
@@ -170,12 +171,16 @@ func welcomeSample(baseURL string) (Sample, error) {
 	return onboardingSample("onboarding-welcome", "Onboarding / 1 · Welcome", onboarding.StepWelcome, baseURL)
 }
 
+func advancedSearchSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-advanced-search", "Onboarding / 2 · Advanced search", onboarding.StepAdvancedSearch, baseURL)
+}
+
 func noAlertSample(baseURL string) (Sample, error) {
-	return onboardingSample("onboarding-no-alert", "Onboarding / 2 · No alert yet", onboarding.StepNoAlert, baseURL)
+	return onboardingSample("onboarding-no-alert", "Onboarding / 3 · No alert yet", onboarding.StepNoAlert, baseURL)
 }
 
 func openSourceSample(baseURL string) (Sample, error) {
-	return onboardingSample("onboarding-open-source", "Onboarding / 3 · Open source", onboarding.StepOpenSource, baseURL)
+	return onboardingSample("onboarding-open-source", "Onboarding / 4 · Open source", onboarding.StepOpenSource, baseURL)
 }
 
 func verificationSample(baseURL string) (Sample, error) {

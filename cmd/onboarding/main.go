@@ -1,7 +1,8 @@
 // Command onboarding is the founder signup-sequence worker. One run does a single
-// pass over the three steps — greet, ask about the missing alert, talk about the
-// project — sending each eligible mail once and recording it. Run it on a schedule
-// (hourly is plenty; the first step is the only time-sensitive one) and it exits.
+// pass over the four steps — greet, introduce the filter panel, ask about the
+// missing alert, talk about the project — sending each eligible mail once and
+// recording it. Run it on a schedule (hourly is plenty; the first step is the only
+// time-sensitive one) and it exits.
 //
 // It exits non-zero when any send failed, so the timer's failure handling surfaces
 // a broken sender rather than the sequence quietly stopping.
@@ -36,7 +37,7 @@ import (
 //	./onboarding -to you@example.com -step open_source
 var (
 	sendTo   = flag.String("to", "", "send one mail to this address and exit (no database, no ledger)")
-	sendStep = flag.String("step", string(onboarding.StepWelcome), "which step -to sends: welcome | no_alert | open_source")
+	sendStep = flag.String("step", string(onboarding.StepWelcome), "which step -to sends: welcome | advanced_search | no_alert | open_source")
 )
 
 func main() {

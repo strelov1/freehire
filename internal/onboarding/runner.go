@@ -12,6 +12,7 @@ import (
 // rather than taking *db.Queries so the runner can be tested without Postgres.
 type Store interface {
 	ListWelcomeCandidates(ctx context.Context, arg db.ListWelcomeCandidatesParams) ([]db.ListWelcomeCandidatesRow, error)
+	ListAdvancedSearchCandidates(ctx context.Context, arg db.ListAdvancedSearchCandidatesParams) ([]db.ListAdvancedSearchCandidatesRow, error)
 	ListNoAlertCandidates(ctx context.Context, arg db.ListNoAlertCandidatesParams) ([]db.ListNoAlertCandidatesRow, error)
 	ListOpenSourceCandidates(ctx context.Context, arg db.ListOpenSourceCandidatesParams) ([]db.ListOpenSourceCandidatesRow, error)
 	RecordOnboardingEmail(ctx context.Context, arg db.RecordOnboardingEmailParams) error
@@ -23,27 +24,32 @@ type Config struct {
 	// the whole feature: the sequence was added long after the user table filled up,
 	// and without a window the first run would greet every account ever created.
 	WindowDays int32
-	// NoAlertAfterDays and OpenSourceAfterDays are how long an account must have
-	// existed before those steps are eligible.
-	NoAlertAfterDays    int32
-	OpenSourceAfterDays int32
+	// AdvancedSearchAfterDays, NoAlertAfterDays and OpenSourceAfterDays are how long
+	// an account must have existed (since the welcome greeting) before those steps
+	// are eligible. They must strictly increase — Run iterates the steps in that
+	// order, and a later step racing ahead of an earlier one is what the pacing
+	// exists to prevent.
+	AdvancedSearchAfterDays int32
+	NoAlertAfterDays        int32
+	OpenSourceAfterDays     int32
 	// MaxPerStep caps one pass per step. A cap is what keeps a backlog — or a bug
 	// in the candidate query — from becoming one enormous send.
 	MaxPerStep int32
 }
 
-// DefaultConfig is the shipped schedule: greet immediately, ask about the missing
-// alert on day 3, talk about the project on day 10.
+// DefaultConfig is the shipped schedule: greet immediately, show the filter panel
+// on day 3, ask about the missing alert on day 6, talk about the project on day 10.
 func DefaultConfig() Config {
 	return Config{
-		WindowDays:          14,
-		NoAlertAfterDays:    3,
-		OpenSourceAfterDays: 10,
-		MaxPerStep:          200,
+		WindowDays:              14,
+		AdvancedSearchAfterDays: 3,
+		NoAlertAfterDays:        6,
+		OpenSourceAfterDays:     10,
+		MaxPerStep:              200,
 	}
 }
 
-// Runner performs one pass over all three steps.
+// Runner performs one pass over all four steps.
 type Runner struct {
 	store  Store
 	mailer *Mailer
@@ -61,7 +67,7 @@ type Stats struct {
 	Failed map[Step]int
 }
 
-// Run sends every eligible mail in all three steps.
+// Run sends every eligible mail in all four steps.
 //
 // A step whose candidate query fails aborts the pass — that is a broken query or a
 // broken database, and continuing would only produce more of the same error. A
@@ -70,7 +76,7 @@ type Stats struct {
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	stats := Stats{Sent: map[Step]int{}, Failed: map[Step]int{}}
 
-	for _, step := range []Step{StepWelcome, StepNoAlert, StepOpenSource} {
+	for _, step := range []Step{StepWelcome, StepAdvancedSearch, StepNoAlert, StepOpenSource} {
 		recipients, err := r.candidates(ctx, step)
 		if err != nil {
 			return stats, fmt.Errorf("onboarding: listing %s candidates: %w", step, err)
@@ -97,6 +103,21 @@ func (r *Runner) candidates(ctx context.Context, step Step) ([]recipient, error)
 	case StepWelcome:
 		rows, err := r.store.ListWelcomeCandidates(ctx, db.ListWelcomeCandidatesParams{
 			WindowDays: r.cfg.WindowDays,
+			MaxRows:    r.cfg.MaxPerStep,
+		})
+		if err != nil {
+			return nil, err
+		}
+		out := make([]recipient, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, recipient{userID: row.ID, email: row.Email})
+		}
+		return out, nil
+
+	case StepAdvancedSearch:
+		rows, err := r.store.ListAdvancedSearchCandidates(ctx, db.ListAdvancedSearchCandidatesParams{
+			WindowDays: r.cfg.WindowDays,
+			AfterDays:  r.cfg.AdvancedSearchAfterDays,
 			MaxRows:    r.cfg.MaxPerStep,
 		})
 		if err != nil {

@@ -12,15 +12,16 @@ import (
 
 // fakeStore serves fixed candidate lists and records what was written back.
 type fakeStore struct {
-	welcome, noAlert, openSource []int64
-	recorded                     []db.RecordOnboardingEmailParams
-	listErr                      error
-	recordErr                    error
+	welcome, advancedSearch, noAlert, openSource []int64
+	recorded                                     []db.RecordOnboardingEmailParams
+	listErr                                      error
+	recordErr                                    error
 
 	// params captures what the runner asked for, so the tests can assert on the
 	// window and caps rather than trusting them.
-	welcomeParams db.ListWelcomeCandidatesParams
-	noAlertParams db.ListNoAlertCandidatesParams
+	welcomeParams        db.ListWelcomeCandidatesParams
+	advancedSearchParams db.ListAdvancedSearchCandidatesParams
+	noAlertParams        db.ListNoAlertCandidatesParams
 }
 
 func rows(ids []int64) []db.ListWelcomeCandidatesRow {
@@ -34,6 +35,15 @@ func rows(ids []int64) []db.ListWelcomeCandidatesRow {
 func (s *fakeStore) ListWelcomeCandidates(_ context.Context, arg db.ListWelcomeCandidatesParams) ([]db.ListWelcomeCandidatesRow, error) {
 	s.welcomeParams = arg
 	return rows(s.welcome), s.listErr
+}
+
+func (s *fakeStore) ListAdvancedSearchCandidates(_ context.Context, arg db.ListAdvancedSearchCandidatesParams) ([]db.ListAdvancedSearchCandidatesRow, error) {
+	s.advancedSearchParams = arg
+	out := make([]db.ListAdvancedSearchCandidatesRow, 0, len(s.advancedSearch))
+	for _, id := range s.advancedSearch {
+		out = append(out, db.ListAdvancedSearchCandidatesRow{ID: id, Email: "user@example.test"})
+	}
+	return out, nil
 }
 
 func (s *fakeStore) ListNoAlertCandidates(_ context.Context, arg db.ListNoAlertCandidatesParams) ([]db.ListNoAlertCandidatesRow, error) {
@@ -77,7 +87,7 @@ func newRunner(store *fakeStore, sender *fakeSender) *onboarding.Runner {
 }
 
 func TestRun_SendsOneMailPerCandidatePerStep(t *testing.T) {
-	store := &fakeStore{welcome: []int64{1, 2}, noAlert: []int64{3}, openSource: []int64{4}}
+	store := &fakeStore{welcome: []int64{1, 2}, advancedSearch: []int64{5}, noAlert: []int64{3}, openSource: []int64{4}}
 	sender := &fakeSender{}
 
 	stats, err := newRunner(store, sender).Run(context.Background())
@@ -85,13 +95,13 @@ func TestRun_SendsOneMailPerCandidatePerStep(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if len(sender.sent) != 4 {
-		t.Fatalf("sent %d mails, want 4", len(sender.sent))
+	if len(sender.sent) != 5 {
+		t.Fatalf("sent %d mails, want 5", len(sender.sent))
 	}
-	if stats.Sent[onboarding.StepWelcome] != 2 || stats.Sent[onboarding.StepNoAlert] != 1 {
-		t.Errorf("stats = %+v, want 2 welcome and 1 no_alert", stats.Sent)
+	if stats.Sent[onboarding.StepWelcome] != 2 || stats.Sent[onboarding.StepAdvancedSearch] != 1 || stats.Sent[onboarding.StepNoAlert] != 1 {
+		t.Errorf("stats = %+v, want 2 welcome, 1 advanced_search and 1 no_alert", stats.Sent)
 	}
-	if len(store.recorded) != 4 {
+	if len(store.recorded) != 5 {
 		t.Errorf("recorded %d ledger rows, want one per send", len(store.recorded))
 	}
 }
@@ -156,6 +166,9 @@ func TestRun_BoundsCandidatesByTheSignupWindow(t *testing.T) {
 	if store.welcomeParams.MaxRows != cfg.MaxPerStep {
 		t.Errorf("welcome cap = %d, want %d", store.welcomeParams.MaxRows, cfg.MaxPerStep)
 	}
+	if store.advancedSearchParams.AfterDays != cfg.AdvancedSearchAfterDays {
+		t.Errorf("advanced_search delay = %d days, want %d", store.advancedSearchParams.AfterDays, cfg.AdvancedSearchAfterDays)
+	}
 	if store.noAlertParams.AfterDays != cfg.NoAlertAfterDays {
 		t.Errorf("no_alert delay = %d days, want %d", store.noAlertParams.AfterDays, cfg.NoAlertAfterDays)
 	}
@@ -176,7 +189,7 @@ func TestRun_MailsCarryTheReplyToAddress(t *testing.T) {
 }
 
 func TestRun_EachStepHasItsOwnSubjectAndBothBodies(t *testing.T) {
-	store := &fakeStore{welcome: []int64{1}, noAlert: []int64{2}, openSource: []int64{3}}
+	store := &fakeStore{welcome: []int64{1}, advancedSearch: []int64{4}, noAlert: []int64{2}, openSource: []int64{3}}
 	sender := &fakeSender{}
 
 	if _, err := newRunner(store, sender).Run(context.Background()); err != nil {
@@ -211,8 +224,15 @@ func TestRun_LaterStepsArePacedFromTheGreeting(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	cfg := onboarding.DefaultConfig()
+	if store.advancedSearchParams.AfterDays != cfg.AdvancedSearchAfterDays {
+		t.Fatalf("advanced_search delay = %d, want %d", store.advancedSearchParams.AfterDays, cfg.AdvancedSearchAfterDays)
+	}
 	if store.noAlertParams.AfterDays != cfg.NoAlertAfterDays {
 		t.Fatalf("no_alert delay = %d, want %d", store.noAlertParams.AfterDays, cfg.NoAlertAfterDays)
+	}
+	if cfg.AdvancedSearchAfterDays >= cfg.NoAlertAfterDays {
+		t.Errorf("step delays must increase: advanced_search %d, no_alert %d",
+			cfg.AdvancedSearchAfterDays, cfg.NoAlertAfterDays)
 	}
 	if cfg.NoAlertAfterDays >= cfg.OpenSourceAfterDays {
 		t.Errorf("step delays must increase: no_alert %d, open_source %d",
