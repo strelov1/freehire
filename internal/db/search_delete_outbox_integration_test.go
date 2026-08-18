@@ -201,6 +201,84 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 	}
 }
 
+// The enqueue is a CTE inside the closing statement, so it cannot outlive a transaction the
+// close did not survive. This pins that: the whole point of not using a watermark scan is
+// that the queue and the close commit together or not at all.
+func TestARolledBackCloseQueuesNothing(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, New(pool), ingestParams("acme:rolled-back", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if _, err := New(tx).CloseJobByID(ctx, job.ID); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("close in transaction: %v", err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+
+	var closed bool
+	if err := pool.QueryRow(ctx,
+		`SELECT closed_at IS NOT NULL FROM jobs WHERE id = $1`, job.ID).Scan(&closed); err != nil {
+		t.Fatalf("read closed_at: %v", err)
+	}
+	if closed {
+		t.Fatal("the job stayed closed after a rollback, so this case proves nothing")
+	}
+	if got := countDeletionQueue(t, pool); got != 0 {
+		t.Errorf("a rolled-back close left %d queued removals, want 0", got)
+	}
+}
+
+// cmd/prune is the only hard-delete path, and it deletes by id list with no closed_at
+// condition — so it can remove an OPEN, indexed job outright. That document has to leave the
+// index too, and the queue row has to survive the row it names disappearing.
+func TestPruneJobsQueuesTheRemovalAndOutlivesTheJob(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:pruned-open", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	pruned, err := q.PruneJobs(ctx, PruneJobsParams{
+		Ids:   []int64{job.ID},
+		Rules: []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if len(pruned) != 1 {
+		t.Fatalf("pruned %d jobs, want 1", len(pruned))
+	}
+
+	var stillThere bool
+	if err := pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM jobs WHERE id = $1)`, job.ID).Scan(&stillThere); err != nil {
+		t.Fatalf("check the job row: %v", err)
+	}
+	if stillThere {
+		t.Fatal("prune left the job row behind, so this case proves nothing")
+	}
+
+	if got := countDeletionQueue(t, pool); got != 1 {
+		t.Errorf("prune queued %d removals for a hard-deleted job, want 1 — "+
+			"its document would otherwise stay in the index with nothing left to notice", got)
+	}
+}
+
 func TestClaimSearchDeleteOutboxBatchReturnsQueuedJobIDs(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

@@ -164,6 +164,11 @@ deleted AS (
     DELETE FROM jobs
     WHERE id IN (SELECT id FROM cluster)
     RETURNING id, source, external_id, title, company_slug
+),
+queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM deleted
+    ON CONFLICT (job_id) DO NOTHING
 )
 INSERT INTO pruned_jobs (id, source, external_id, title, company_slug, rule)
 SELECT d.id, d.source, d.external_id, d.title, d.company_slug, c.rule
@@ -211,6 +216,10 @@ type PruneJobsParams struct {
 // The two parameter arrays are positionally paired. They are unnested separately and
 // rejoined on ordinality because sqlc cannot infer the types of a multi-argument
 // unnest over query parameters.
+// A pruned job's document has to leave the facet index too, and this is the only place that
+// knows it existed: after this statement the row is gone, so nothing downstream could work
+// out that it was ever indexed. search_delete_outbox deliberately carries no foreign key to
+// jobs, which is what lets this entry outlive the row it names — see migration 0113.
 func (q *Queries) PruneJobs(ctx context.Context, arg PruneJobsParams) ([]int64, error) {
 	rows, err := q.db.Query(ctx, pruneJobs, arg.Ids, arg.Rules)
 	if err != nil {

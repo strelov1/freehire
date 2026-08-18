@@ -17,8 +17,8 @@
 - [x] 2.3 Add a test that enumerates the closing family and fails if any member closes a job
       without enqueuing it — so a sixth closing query added later cannot silently skip the
       queue. This is the task that keeps the change honest; do not fold it into 2.2.
-- [ ] 2.4 Assert a rolled-back close leaves no queue row.
-- [ ] 2.5 Make `PruneJobs` enqueue the ids it hard-deletes, in its existing `DELETE ...
+- [x] 2.4 Assert a rolled-back close leaves no queue row.
+- [x] 2.5 Make `PruneJobs` enqueue the ids it hard-deletes, in its existing `DELETE ...
       RETURNING` CTE. Test that pruning an OPEN indexed job queues its removal, and that the
       queue row survives the job row being gone — the case a mirrored `ON DELETE CASCADE`
       would have silently eaten.

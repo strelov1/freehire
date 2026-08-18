@@ -2693,6 +2693,10 @@ type Querier interface {
 	// The two parameter arrays are positionally paired. They are unnested separately and
 	// rejoined on ordinality because sqlc cannot infer the types of a multi-argument
 	// unnest over query parameters.
+	// A pruned job's document has to leave the facet index too, and this is the only place that
+	// knows it existed: after this statement the row is gone, so nothing downstream could work
+	// out that it was ever indexed. search_delete_outbox deliberately carries no foreign key to
+	// jobs, which is what lets this entry outlive the row it names — see migration 0113.
 	PruneJobs(ctx context.Context, arg PruneJobsParams) ([]int64, error)
 	// One row per company with its current open-count and the open-count as of @prev_ts,
 	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
