@@ -6,9 +6,11 @@ import (
 )
 
 // joinShards is how many staggered runs sources/join.yml is split across on prod
-// (freehire-ingest-join-shard@N.timer, --shard=N/4, one firing per hour so only one is ever
-// crawling and the pace below is the whole fleet's rate, not each shard's).
-const joinShards = 4
+// (freehire-ingest-join-shard@N.timer, --shard=N/5, one firing per hour so only one is ever
+// crawling and the pace below is the whole fleet's rate, not each shard's). Raised from 4 to
+// 5 alongside the pace drop to 1.5 req/s (issue #2094) — at 4 shards that pace misses the run
+// budget below.
+const joinShards = 5
 
 // TestJoinPaceFitsTheRunBudget pins the arithmetic that picked both the pace and the shard
 // count. Too fast and the refusals come back; too slow and systemd kills the run mid-crawl,

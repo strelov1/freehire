@@ -113,8 +113,15 @@ func (g rateLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) e
 // So the knee sits between 2 and 3, and the pace takes the clean side of it. Under-shooting
 // only lengthens a run; over-shooting re-enters the refusals that had 3436 of 4749 boards
 // failing before this existed.
+//
+// 2 req/s still left a residue in production: refusals were not random but accelerated
+// through a run (8 failures at 368 boards, 44 at 1115, 70 at 1187 — see issue #2090), which
+// looks like a cumulative budget layered on top of the per-second one and would not show up
+// in the short isolated samples above. 1.5 req/s buys back headroom against that budget; see
+// issue #2094 for why that pace needed joinShards raised from 4 to 5 rather than just slowing
+// the existing 4 down (TestJoinPaceFitsTheRunBudget pins the arithmetic).
 const (
-	joinRequestInterval = 500 * time.Millisecond // 2 req/s
+	joinRequestInterval = time.Second * 2 / 3 // 1.5 req/s
 	joinRequestBurst    = 2
 )
 
