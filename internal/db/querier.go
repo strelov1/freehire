@@ -2273,6 +2273,10 @@ type Querier interface {
 	// The caller's own notifications, newest first, standard offset/limit paging
 	// (matching every other /me/* list endpoint in this codebase).
 	ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error)
+	// excluded_skills for a batch of users, one round trip regardless of batch size. A user_id
+	// with no profile row simply produces no row here; the caller treats absence as an empty
+	// exclude set.
+	ListUserProfilesExcludedSkills(ctx context.Context, userIds []int64) ([]ListUserProfilesExcludedSkillsRow, error)
 	// Users whose stored structured résumé currently describes their stored CV, for the
 	// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
 	// deriving geography from one would route around the staleness rule that governs the

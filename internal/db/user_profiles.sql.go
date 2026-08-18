@@ -49,6 +49,39 @@ func (q *Queries) GetUserProfile(ctx context.Context, userID int64) (UserProfile
 	return i, err
 }
 
+const listUserProfilesExcludedSkills = `-- name: ListUserProfilesExcludedSkills :many
+SELECT user_id, excluded_skills FROM user_profiles
+WHERE user_id = ANY($1::bigint[])
+`
+
+type ListUserProfilesExcludedSkillsRow struct {
+	UserID         int64    `json:"user_id"`
+	ExcludedSkills []string `json:"excluded_skills"`
+}
+
+// excluded_skills for a batch of users, one round trip regardless of batch size. A user_id
+// with no profile row simply produces no row here; the caller treats absence as an empty
+// exclude set.
+func (q *Queries) ListUserProfilesExcludedSkills(ctx context.Context, userIds []int64) ([]ListUserProfilesExcludedSkillsRow, error) {
+	rows, err := q.db.Query(ctx, listUserProfilesExcludedSkills, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserProfilesExcludedSkillsRow{}
+	for rows.Next() {
+		var i ListUserProfilesExcludedSkillsRow
+		if err := rows.Scan(&i.UserID, &i.ExcludedSkills); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertUserProfile = `-- name: UpsertUserProfile :one
 INSERT INTO user_profiles (user_id, specializations, skills, excluded_skills, location_preferences)
 VALUES ($1, $2, $3, $4, $5)

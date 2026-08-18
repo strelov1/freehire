@@ -47,6 +47,14 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   subscriptions sharing a saved-search query so the search index is hit once regardless of
   how many people subscribed to it. A per-subscription loop would multiply index load by
   subscriber count.
+- **Avoid-skills is enforced as a per-subscriber post-filter, not folded into the shared search.**
+  `Runner.match` batch-fetches every active subscriber's live `user_profiles.excluded_skills` once
+  per pass (`Store.ListUserProfilesExcludedSkills`) and `matchQuery` skips a `(hit, subscription)`
+  pair whose job carries a skill that subscriber currently avoids — evaluated against the *live*
+  preference, not whatever `skills_exclude` (if any) got frozen into the saved search's own query
+  string at creation time. Do not move this into the Meilisearch `Filter`: that would make the
+  filter subscriber-specific and defeat the canonical-query grouping above, turning matching back
+  into O(subscribers).
 - **The dedup ledger's primary key is what makes matching idempotent.** MATCH records
   matched jobs, DELIVER leases them and marks them notified — so re-scanning recent jobs
   never delivers twice. Preserve the two-stage split; merging match and send loses the

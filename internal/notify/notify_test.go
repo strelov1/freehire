@@ -43,6 +43,10 @@ type fakeStore struct {
 	delivery    map[int64]db.GetSubscriptionForDeliveryRow
 	digestJobs  map[int64]db.GetJobsForDigestRow
 
+	// excludedSkills maps a user id to their avoid-skills preference; a user id absent from
+	// this map has no profile row, mirroring the real query.
+	excludedSkills map[int64][]string
+
 	notified   []db.MarkMatchesNotifiedParams
 	failures   []db.RecordMatchDeliveryFailureParams
 	released   []db.ReleaseMatchClaimParams
@@ -54,6 +58,18 @@ type fakeStore struct {
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
 	return s.active, nil
+}
+
+func (s *fakeStore) ListUserProfilesExcludedSkills(_ context.Context, userIDs []int64) ([]db.ListUserProfilesExcludedSkillsRow, error) {
+	out := make([]db.ListUserProfilesExcludedSkillsRow, 0, len(userIDs))
+	for _, id := range userIDs {
+		skills, ok := s.excludedSkills[id]
+		if !ok {
+			continue
+		}
+		out = append(out, db.ListUserProfilesExcludedSkillsRow{UserID: id, ExcludedSkills: skills})
+	}
+	return out, nil
 }
 
 func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubscriptionMatchesParams) (int64, error) {
@@ -143,6 +159,10 @@ func hit(id int64, created time.Time) search.JobDocument {
 	return search.JobDocument{ID: id, Job: jobview.Job{CreatedAt: rfc(created)}}
 }
 
+func hitWithSkills(id int64, created time.Time, skills ...string) search.JobDocument {
+	return search.JobDocument{ID: id, Job: jobview.Job{CreatedAt: rfc(created), Skills: skills}}
+}
+
 // --- tests ---------------------------------------------------------------
 
 func TestMatch_SharedQueryHitsIndexOnce(t *testing.T) {
@@ -225,6 +245,102 @@ func TestMatch_StartAtGate(t *testing.T) {
 	}
 	if len(store.recorded) != 1 || store.recorded[0].job != 11 {
 		t.Errorf("recorded = %+v, want only job 11 (after start_at)", store.recorded)
+	}
+}
+
+func TestMatch_ExcludedSkillIsNotRecorded(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, UserID: 1, Query: "seniority=senior", StartAt: ts(base)},
+		},
+		excludedSkills: map[int64][]string{1: {"php"}},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hitWithSkills(100, base.Add(time.Hour), "php", "go")}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 0 {
+		t.Errorf("recorded = %+v, want none (job carries the subscriber's avoided skill)", store.recorded)
+	}
+}
+
+func TestMatch_ExcludedSkillsArePerSubscriberNotPerQuery(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, UserID: 1, Query: "seniority=senior", StartAt: ts(base)},
+			{ID: 2, UserID: 2, Query: "seniority=senior", StartAt: ts(base)},
+		},
+		excludedSkills: map[int64][]string{1: {"php"}}, // user 2 has no avoid list
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hitWithSkills(100, base.Add(time.Hour), "php")}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 1 || store.recorded[0].sub != 2 {
+		t.Errorf("recorded = %+v, want only subscription 2 (subscriber 1 avoids php)", store.recorded)
+	}
+}
+
+func TestMatch_ExcludedSkillsReflectLatestProfileWithoutRecreatingSubscription(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, UserID: 1, Query: "seniority=senior", StartAt: ts(base)},
+		},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hitWithSkills(100, base.Add(time.Hour), "php")}},
+		{Hits: []search.JobDocument{hitWithSkills(101, base.Add(2*time.Hour), "php")}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	// First pass: no avoid list yet, the job matches.
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 1 {
+		t.Fatalf("after first pass recorded = %+v, want 1 match", store.recorded)
+	}
+
+	// The subscriber adds "php" to their avoid list without touching the subscription.
+	store.excludedSkills = map[int64][]string{1: {"php"}}
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 1 {
+		t.Errorf("after avoid-list update recorded = %+v, want still 1 (no new php match)", store.recorded)
+	}
+}
+
+func TestMatch_SubscriberWithNoProfileMatchesNormally(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, UserID: 1, Query: "seniority=senior", StartAt: ts(base)},
+		},
+		// No entry for user 1 in excludedSkills — mirrors a user with no saved profile.
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hitWithSkills(100, base.Add(time.Hour), "php")}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 1 {
+		t.Errorf("recorded = %+v, want 1 (no profile means no exclusion)", store.recorded)
 	}
 }
 
