@@ -10,6 +10,7 @@
   import { confirmTailorDialog, settleConfirmTailorDialog } from '$lib/confirmTailorDialog.svelte';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
   import { ConfirmDialog } from '$lib/ui';
+  import SkillIcon from './SkillIcon.svelte';
 
   const match = $derived(confirmTailorDialog.match);
   const blockers = $derived(partitionBlockers(match?.blockers));
@@ -57,10 +58,14 @@
         </div>
         <div class="flex flex-wrap gap-1.5">
           {#each matched as skill (skill)}
-            <span class={haveChipClass} aria-label="{skill} — you have this skill">{skill}</span>
+            <span class={haveChipClass} aria-label="{skill} — you have this skill">
+              <SkillIcon slug={skill} />{skill}
+            </span>
           {/each}
           {#each missing as skill (skill)}
-            <span class={missingChipClass} aria-label="{skill} — missing">{skill}</span>
+            <span class={missingChipClass} aria-label="{skill} — missing">
+              <SkillIcon slug={skill} />{skill}
+            </span>
           {/each}
         </div>
       </div>

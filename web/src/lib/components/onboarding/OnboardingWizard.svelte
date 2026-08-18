@@ -298,6 +298,7 @@
             clearOnSelect
             cap={24}
             placeholder="Search skills…"
+            techIcons
           />
         {/if}
       </div>

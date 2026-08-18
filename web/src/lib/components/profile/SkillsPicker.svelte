@@ -60,6 +60,7 @@
       fallbackLabel={(v) => v}
       clearOnSelect
       ready={skillDistReady}
+      techIcons
     />
   </div>
 
@@ -81,6 +82,7 @@
       fallbackLabel={(v) => v}
       clearOnSelect
       ready={skillDistReady}
+      techIcons
     />
     <span class="text-xs text-muted-foreground">
       Filtered out when you apply your profile to the job filters.

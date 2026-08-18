@@ -121,6 +121,14 @@ export interface FacetDef {
    * ROLE_ALIASES (generated from the same dictionaries that tag titles).
    */
   searchAliases?: Record<string, readonly string[]>;
+  /**
+   * Show a brand logo (via SkillIcon) beside an option's label, for a facet whose
+   * values are the `skills` dictionary — the only one techmarks.ts has real marks
+   * for. A `select`/`remote` control on any other facet (company, role, industry)
+   * leaves this unset: their slugs are a different vocabulary, and one could
+   * coincidentally collide with a tech mark's key (a company named "Docker").
+   */
+  techIcons?: boolean;
 }
 
 // Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
@@ -550,7 +558,7 @@ export const FACETS: FacetDef[] = [
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'ai_archetype', label: 'AI Specialization', control: 'select', options: AI_ARCHETYPE, excludable: true, placeholder: 'Search AI specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
-  { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },
+  { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills', techIcons: true },
   { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: true, placeholder: 'Search industries' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: true },
   { param: 'countries', label: 'Countries', control: 'select', dynamic: true, excludable: true, placeholder: 'Search countries' },

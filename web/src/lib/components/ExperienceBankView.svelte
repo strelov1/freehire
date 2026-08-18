@@ -15,6 +15,7 @@
   import States from '$lib/components/States.svelte';
   import { profileKickoff } from '$lib/assistant/presets';
   import { companyLogoUrl } from '$lib/logo';
+  import SkillIcon from '$lib/components/SkillIcon.svelte';
   import type {
     ExperienceAtom,
     ExperienceBank,
@@ -918,7 +919,9 @@
           {#if atom.skills?.length}
             <p class="mt-1 flex flex-wrap gap-1.5">
               {#each atom.skills as skill (skill)}
-                <span class="rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-medium text-brand-strong">{skill}</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-medium text-brand-strong">
+                  <SkillIcon slug={skill} />{skill}
+                </span>
               {/each}
             </p>
           {/if}

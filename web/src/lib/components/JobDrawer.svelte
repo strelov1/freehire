@@ -21,6 +21,7 @@
   import { statusLabel, stageImplication } from '$lib/emailStatus';
   import { eventLabel, eventTone } from '$lib/events';
   import StatusChip from '$lib/components/StatusChip.svelte';
+  import SkillIcon from './SkillIcon.svelte';
   import { avatarInitials, avatarColor } from '$lib/avatar';
   import type {
     Job,
@@ -681,7 +682,10 @@
               <p class={sectionLabel}>Skills</p>
               <div class="flex flex-wrap gap-1.5">
                 {#each posting.skills as skill (skill)}
-                  <Badge variant="brand">{skill}</Badge>
+                  <Badge variant="brand" class="gap-1">
+                    <SkillIcon slug={skill} />
+                    {skill}
+                  </Badge>
                 {/each}
               </div>
             </div>

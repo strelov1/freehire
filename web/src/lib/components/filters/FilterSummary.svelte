@@ -29,17 +29,19 @@
       if (chips.length) out.push({ label, chips });
     };
     // Chips for one facet: included values first, then excluded (destructive style).
-    const facetChips = (param: string): SummaryChip[] => {
+    // `withIcon` carries the raw value through as `slug` for the skills group, so its
+    // chips can show a brand logo — see SummaryChip.slug.
+    const facetChips = (param: string, withIcon = false): SummaryChip[] => {
       const st = f.facets[param];
       if (!st) return [];
       return [
-        ...st.include.map((v) => ({ text: valueLabel(param, v), exclude: false, remove: () => store.remove(param, v) })),
-        ...st.exclude.map((v) => ({ text: valueLabel(param, v), exclude: true, remove: () => store.remove(param, v) })),
+        ...st.include.map((v) => ({ text: valueLabel(param, v), exclude: false, remove: () => store.remove(param, v), slug: withIcon ? v : undefined })),
+        ...st.exclude.map((v) => ({ text: valueLabel(param, v), exclude: true, remove: () => store.remove(param, v), slug: withIcon ? v : undefined })),
       ];
     };
-    const facetGroup = (param: string, label: string) => {
+    const facetGroup = (param: string, label: string, withIcon = false) => {
       if (exclude.includes(param)) return;
-      push(label, facetChips(param));
+      push(label, facetChips(param, withIcon));
     };
 
     // The text query (from the header search on the standalone list) as a removable
@@ -53,7 +55,7 @@
 
     facetGroup('seniority', 'Seniority');
     facetGroup('work_mode', 'Work format');
-    facetGroup('skills', 'Skills');
+    facetGroup('skills', 'Skills', true);
     facetGroup('domains', 'Industry');
     facetGroup('company_type', 'Company type');
     facetGroup('employment_type', 'Employment');

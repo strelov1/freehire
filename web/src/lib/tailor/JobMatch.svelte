@@ -9,6 +9,7 @@
   import { viewJobMatch, scoreTone, type JobMatchTone } from './jobmatch';
   import ScoreCategoryRow from './ScoreCategoryRow.svelte';
   import type { CvJobMatch } from '$lib/cv';
+  import SkillIcon from '../components/SkillIcon.svelte';
 
   let { data }: { data: CvJobMatch | null | undefined } = $props();
 
@@ -69,9 +70,9 @@
         <ul class="flex flex-wrap gap-1">
           {#each view.missingSkills as skill, i (i)}
             <li
-              class="rounded border border-warning/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-warning-strong"
+              class="flex items-center gap-1 rounded border border-warning/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-warning-strong"
             >
-              {skill}
+              <SkillIcon slug={skill} />{skill}
             </li>
           {/each}
         </ul>

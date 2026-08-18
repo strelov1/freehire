@@ -20,6 +20,7 @@
   import { credentialBadges } from '$lib/credentials';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
+  import SkillIcon from './SkillIcon.svelte';
   import { timeAgo } from '$lib/utils';
   import { hasViewed } from '$lib/viewedJobs.svelte';
   import { isSaved, markSaved, markUnsaved } from '$lib/savedJobs.svelte';
@@ -329,7 +330,8 @@
            phone. Each chip stays one line and ellipsises past max-w; the full skill is
            in `title` for anyone who needs it. -->
       {#each shownSkills as skill (skill)}
-        <Badge variant={chipVariant(skill)} class="max-w-[9rem]">
+        <Badge variant={chipVariant(skill)} class="max-w-[9rem] gap-1">
+          <SkillIcon slug={skill} />
           <span class="truncate" title={skill}>{skill}</span>
         </Badge>
       {/each}

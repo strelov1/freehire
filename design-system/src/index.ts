@@ -5,6 +5,7 @@ export { cn } from './cn.js';
 export { default as Alert } from './alert.svelte';
 export { default as Avatar } from './avatar.svelte';
 export { default as Badge } from './badge.svelte';
+export { default as BrandMark } from './brand-mark.svelte';
 export { default as Button } from './button.svelte';
 export { default as Card } from './card.svelte';
 export { default as Chip } from './chip.svelte';

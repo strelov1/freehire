@@ -4,6 +4,10 @@
     /** Excluded value — rendered in the destructive (struck-through) style. */
     exclude: boolean;
     remove: () => void;
+    /** Skill dictionary slug, when this chip is a `skills` facet value — shows its
+     *  brand logo (via SkillIcon) beside the label, same as everywhere else a skill
+     *  chip renders. Unset for every other facet's chips. */
+    slug?: string;
   }
   export interface SummaryGroup {
     label: string;
@@ -14,6 +18,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { SlidersHorizontal, X } from '@lucide/svelte';
+  import SkillIcon from '../SkillIcon.svelte';
 
   // The reusable filter-summary sidebar chrome: heading + Reset all, the All-filters
   // button (with active badge), the empty state, and the applied-filter chip groups.
@@ -94,6 +99,7 @@
                 c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive line-through' : 'border-transparent bg-brand-muted text-brand-strong',
               ]}
             >
+              {#if c.slug}<SkillIcon slug={c.slug} />{/if}
               {c.text}
               <button type="button" aria-label="Remove {c.text}" onclick={c.remove} class="text-muted-foreground transition-colors hover:text-foreground">
                 <X class="size-3" />

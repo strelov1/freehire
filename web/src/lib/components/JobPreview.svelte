@@ -16,6 +16,7 @@
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, EntityLogo } from '$lib/ui';
   import JobDescription from './JobDescription.svelte';
+  import SkillIcon from './SkillIcon.svelte';
 
   let {
     title,
@@ -114,7 +115,12 @@
   {#if skills.length}
     <ul class="flex flex-wrap gap-1.5 border-t border-border pt-4">
       {#each skills as skill (skill)}
-        <li><Badge variant="brand">{skill}</Badge></li>
+        <li>
+          <Badge variant="brand" class="gap-1">
+            <SkillIcon slug={skill} />
+            {skill}
+          </Badge>
+        </li>
       {/each}
     </ul>
   {/if}

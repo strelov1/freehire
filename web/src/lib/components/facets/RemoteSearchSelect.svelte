@@ -2,6 +2,7 @@
   import { X } from '@lucide/svelte';
   import type { FacetOption } from '$lib/facets';
   import { Input } from '$lib/ui';
+  import SkillIcon from '../SkillIcon.svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { pillClass } from './pill';
 
@@ -30,6 +31,7 @@
     clearOnSelect = false,
     expand = false,
     ready = true,
+    techIcons = false,
   }: {
     search: (query: string) => Promise<FacetOption[]>;
     include: string[];
@@ -47,6 +49,11 @@
     // that outruns the 250ms debounce gets its popular first page fetched once it
     // lands, instead of the query staying stuck on the empty result it raced into.
     ready?: boolean;
+    // Show a brand logo beside a chip/option's label, where SkillIcon has one for
+    // the value — set only by the skills picker (see SkillsPicker.svelte). Left
+    // off for the other callers (company, location) whose slugs are a different
+    // vocabulary that could coincidentally collide with a tech mark's key.
+    techIcons?: boolean;
   } = $props();
 
   let query = $state('');
@@ -115,6 +122,7 @@
           title={labelOf(value)}
           class={pillClass(true, excluded, 'inline-flex max-w-full items-center px-2.5 py-1 text-sm')}
         >
+          {#if techIcons}<SkillIcon slug={value} class="mr-1 size-3.5 shrink-0" />{/if}
           <span class="min-w-0 truncate">{labelOf(value)}</span>
           <X class="ml-1 size-3 shrink-0" />
         </button>
@@ -137,7 +145,10 @@
       }}
       class="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-accent"
     >
-      <span class="truncate">{opt.label}</span>
+      <span class="flex min-w-0 items-center gap-1.5">
+        {#if techIcons}<SkillIcon slug={opt.value} class="size-3.5 shrink-0" />{/if}
+        <span class="truncate">{opt.label}</span>
+      </span>
       {#if opt.count !== undefined}
         <span class="shrink-0 tabular-nums opacity-60">{opt.count.toLocaleString()}</span>
       {/if}

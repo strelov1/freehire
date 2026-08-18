@@ -83,6 +83,7 @@
       cap={def.cap}
       related={def.related}
       searchAliases={def.searchAliases}
+      techIcons={def.techIcons}
       {onToggle}
       {expand}
     />

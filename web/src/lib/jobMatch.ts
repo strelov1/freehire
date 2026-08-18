@@ -27,8 +27,10 @@ export function toneText(severity: BlockerSeverity): string {
 }
 
 /** Skill-chip Tailwind classes by match kind — held, adjacent, or missing.
- *  Shared by JobMatch.svelte's skill rows and ConfirmTailorDialog. */
-const CHIP_BASE = 'rounded-full border px-2 py-0.5 text-xs font-medium';
+ *  Shared by JobMatch.svelte's skill rows and ConfirmTailorDialog. `inline-flex
+ *  items-center gap-1` accommodates the optional SkillIcon each of those renders
+ *  before the label — a no-op when a chip's value has no brand mark. */
+const CHIP_BASE = 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium';
 export const haveChipClass = `${CHIP_BASE} border-brand/30 bg-brand-muted text-brand-strong`;
 export const adjacentChipClass = `${CHIP_BASE} border-warning/30 bg-warning/10 text-warning-strong`;
 export const missingChipClass = `${CHIP_BASE} border-destructive/30 bg-destructive/10 text-destructive`;
