@@ -25,15 +25,17 @@ info:
     * Different facets **AND** together: `?work_mode=remote&seniority=senior` is
       remote *and* senior.
 
-    ## Geography is one OR-group — this surprises people
+    ## Geography is one OR-group
 
-    `regions`, `countries` and `cities` describe a single concept ("where"), so
+    `regions`, `countries` and `cities` name a single concept — *where* — so
     their values join into **one OR-group** instead of intersecting.
     `?countries=gb&cities=London` therefore returns *United Kingdom **or**
-    London*, which is **wider** than `?countries=gb` alone — not narrower. Pick
-    the one level you actually mean. `<facet>_mode=and` is rejected for these
-    three because a geographic intersection ("in Europe and in LATAM") is always
-    empty.
+    London*, which is **wider** than `?countries=gb` alone — not narrower. To
+    search one place, name only that place.
+
+    Picking two places reading as "either" is what makes
+    `?regions=eu&countries=br` ("Europe or Brazil") useful. There is no AND to
+    switch on: `<facet>_mode=and` does not apply to these three.
 
     `?regions=none` is a reserved value that selects postings with **no resolved
     geography**, rather than a real region code.
@@ -64,9 +66,9 @@ paths:
       summary: Search open jobs
       description: |
         Full-text and faceted search over open postings. Descriptions are the
-        search index's truncated preview (~1 KB). Use `agentSearchJobs` when you
-        need the full verbatim body of every hit, or `getJob` for the one posting
-        the user picked.
+        search index's truncated preview. Use `agentSearchJobs` when you need the
+        full verbatim body of every hit, or `getJob` for the one posting the user
+        picked.
 
         Closed postings are never in the index, so they never appear here.
       x-openai-isConsequential: false
@@ -133,8 +135,8 @@ paths:
         the search index's preview, in the format selected by
         `description_format`.
 
-        Responses are correspondingly large (roughly 5x `searchJobs` per hit);
-        prefer a small `limit`.
+        Responses are several times larger per hit than `searchJobs`, so prefer a
+        small `limit`.
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
@@ -199,10 +201,10 @@ paths:
         for the postings matching the same filter grammar the search endpoints
         take. Call this before applying any uncertain filter.
 
-        `facets=` narrows the response to the named facets, which is much
-        cheaper: the full set costs roughly 280 ms on a warm index against one
-        selected facet, a single attribute about 10 ms. `company_slug` has no
-        distribution — use `searchCompanies` for the company typeahead.
+        A distribution is counted per facet and the wide-valued ones (`cities`,
+        `skills`) dominate, so narrow with `facets=` whenever you read only a few.
+        `company_slug` has no distribution — use `searchCompanies` for the company
+        typeahead.
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
@@ -269,8 +271,8 @@ paths:
         - Jobs
       summary: Get a job by slug
       description: |
-        Full detail for one posting, including its verbatim stored description
-        (HTML) and the `ghost` signal, which the list endpoints omit. This is the
+        Full detail for one posting: the verbatim stored description (HTML) and
+        the `ghost` signal, which `agentSearchJobs` does not carry. This is the
         only endpoint that serves a **closed** posting; `closed_at` is non-null
         when the role is no longer open.
       x-openai-isConsequential: false
@@ -349,8 +351,8 @@ paths:
         and compose with `q`.
 
         `meta.total` is exact whenever any filter is present. On a completely
-        unfiltered request it is a planner **estimate** — counting the whole
-        catalogue exactly is a multi-second heap scan.
+        unfiltered request it is a planner **estimate**, because counting the
+        whole catalogue exactly is too expensive to do per request.
       x-openai-isConsequential: false
       parameters:
         - name: q
@@ -863,8 +865,9 @@ components:
       description: |
         Posting-reality class. `fresh` is recently posted and not obviously
         recycled; `stale` is old; `likely-evergreen` reads as an always-open
-        pipeline ad. Roughly half the catalogue is `stale`, so
-        `?reality=fresh` is the cheapest quality filter available.
+        pipeline ad. A large share of the catalogue is `stale`, so `?reality=fresh`
+        is the cheapest quality filter available. Read the live split from
+        `getJobFacets`.
     Source:
       name: source
       in: query
