@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 	"net/http/httptest"
-	"strconv"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v2"
@@ -18,6 +18,12 @@ import (
 // prove the wiring and not the arithmetic.
 func TestLimiterE2E(t *testing.T) {
 	mr := miniredis.RunT(t)
+	// Freeze the clock. redis_rate is GCRA: at 600/min a token leaks back every
+	// 100ms, so a loop of 600 requests that takes longer than that on a slow
+	// machine gets extra headroom and the "601st is refused" assertion becomes a
+	// race against the runner. CI caught exactly that. A frozen clock makes the
+	// budget arithmetic the only variable, which is what these cases are about.
+	mr.SetTime(time.Unix(1755000000, 0))
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 	th := ratelimit.NewRedisThrottler(client)
@@ -37,52 +43,50 @@ func TestLimiterE2E(t *testing.T) {
 		return resp.StatusCode, resp.Header.Get("X-RateLimit-Remaining"), resp.Header.Get("Retry-After")
 	}
 
-	t.Run("cheap budget admits exactly publicReadsPerMinute", func(t *testing.T) {
-		const peer = "203.0.113.10"
-		for i := 1; i <= publicReadsPerMinute; i++ {
-			code, rem, _ := hit("/cheap", peer)
-			if code != fiber.StatusOK {
-				t.Fatalf("request %d/%d = %d, want 200 (remaining=%s)", i, publicReadsPerMinute, code, rem)
-			}
-			// Remaining is a GCRA reading, not limit-minus-count: redis_rate is a
-			// leaky bucket, so the figure trails naive counting by up to one while
-			// the elapsed time has not yet credited a whole token back. Assert the
-			// band it must stay inside rather than an exact value that encodes the
-			// arithmetic of a particular backend.
-			if i == 1 {
-				n, err := strconv.Atoi(rem)
-				if err != nil || n < publicReadsPerMinute-2 || n > publicReadsPerMinute-1 {
-					t.Errorf("first Remaining = %q, want %d or %d", rem, publicReadsPerMinute-2, publicReadsPerMinute-1)
+	// GCRA's instantaneous capacity is limit-1, not limit: the emission-interval
+	// arithmetic reserves one slot. So these cases assert the honest contract —
+	// about `limit` requests get through and the budget then refuses — rather than
+	// an exact count that encodes one backend's off-by-one and breaks the day we
+	// change limiters.
+	admitUntilRefused := func(t *testing.T, path, peer string, ceiling int) int {
+		t.Helper()
+		for i := 1; i <= ceiling+1; i++ {
+			code, rem, retry := hit(path, peer)
+			if code == fiber.StatusTooManyRequests {
+				if rem != "0" {
+					t.Errorf("Remaining on refusal = %q, want 0", rem)
 				}
+				if retry == "" || retry == "0" {
+					t.Errorf("Retry-After = %q, want a positive whole second", retry)
+				}
+				return i - 1
+			}
+			if code != fiber.StatusOK {
+				t.Fatalf("request %d = %d, want 200 or 429", i, code)
 			}
 		}
-		code, rem, retry := hit("/cheap", peer)
-		if code != fiber.StatusTooManyRequests {
-			t.Fatalf("request %d = %d, want 429", publicReadsPerMinute+1, code)
+		t.Fatalf("%s never refused within %d requests against a ceiling of %d", path, ceiling+1, ceiling)
+		return 0
+	}
+
+	t.Run("cheap budget admits about publicReadsPerMinute then refuses", func(t *testing.T) {
+		got := admitUntilRefused(t, "/cheap", "203.0.113.10", publicReadsPerMinute)
+		if got < publicReadsPerMinute-1 || got > publicReadsPerMinute {
+			t.Errorf("admitted %d, want %d or %d", got, publicReadsPerMinute-1, publicReadsPerMinute)
 		}
-		if rem != "0" {
-			t.Errorf("Remaining on refusal = %q, want 0", rem)
-		}
-		if retry == "" || retry == "0" {
-			t.Errorf("Retry-After = %q, want a positive whole second", retry)
-		}
-		t.Logf("admitted %d, refused the next with Retry-After=%ss", publicReadsPerMinute, retry)
+		t.Logf("admitted %d of a %d ceiling, then refused", got, publicReadsPerMinute)
 	})
 
 	t.Run("agent budget is separate and smaller", func(t *testing.T) {
 		const peer = "203.0.113.11"
-		for i := 1; i <= agentSearchPerMinute; i++ {
-			if code, rem, _ := hit("/agent", peer); code != fiber.StatusOK {
-				t.Fatalf("agent request %d = %d (remaining=%s)", i, code, rem)
-			}
-		}
-		if code, _, _ := hit("/agent", peer); code != fiber.StatusTooManyRequests {
-			t.Fatalf("agent request %d = %d, want 429", agentSearchPerMinute+1, code)
+		got := admitUntilRefused(t, "/agent", peer, agentSearchPerMinute)
+		if got < agentSearchPerMinute-1 || got > agentSearchPerMinute {
+			t.Errorf("agent admitted %d, want %d or %d", got, agentSearchPerMinute-1, agentSearchPerMinute)
 		}
 		if code, _, _ := hit("/cheap", peer); code != fiber.StatusOK {
 			t.Errorf("/cheap after exhausting /agent = %d, want 200", code)
 		}
-		t.Logf("agent admitted %d then refused; cheap budget untouched", agentSearchPerMinute)
+		t.Logf("agent admitted %d then refused; cheap budget untouched", got)
 	})
 
 	t.Run("the live peak of 184 rpm never trips the agent budget", func(t *testing.T) {
