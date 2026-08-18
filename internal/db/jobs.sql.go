@@ -141,14 +141,28 @@ func (q *Queries) CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRo
 	return i, err
 }
 
-const closeJobByID = `-- name: CloseJobByID :execrows
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'moderated',
-    updated_at    = now()
-WHERE id = $1 AND closed_at IS NULL
+const closeJobByID = `-- name: CloseJobByID :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'moderated',
+        updated_at    = now()
+    WHERE jobs.id = $1 AND jobs.closed_at IS NULL
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
 `
 
+// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+// count(*) over the closed rows is the same int64 the caller already had.
 // Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 // close_job=true. The third writer of closed_at, alongside the ingest sweep and the
 // liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
@@ -156,21 +170,28 @@ WHERE id = $1 AND closed_at IS NULL
 // status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
 // reappear); that is the lifecycle's existing behavior, not a conflict.
 func (q *Queries) CloseJobByID(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, closeJobByID, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, closeJobByID, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
-const closeJobBySourceExternalID = `-- name: CloseJobBySourceExternalID :execrows
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'feed_removed',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = $1
-  AND external_id = $2
+const closeJobBySourceExternalID = `-- name: CloseJobBySourceExternalID :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'feed_removed',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND external_id = $2
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
 `
 
 type CloseJobBySourceExternalIDParams struct {
@@ -178,6 +199,12 @@ type CloseJobBySourceExternalIDParams struct {
 	ExternalID string `json:"external_id"`
 }
 
+// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+// count(*) over the closed rows is the same int64 the caller already had.
 // Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)
 // learns of a removed posting from its incremental stream and closes it by identity,
 // rather than relying on the post-run unseen sweep (which it opts out of, since an
@@ -185,11 +212,10 @@ type CloseJobBySourceExternalIDParams struct {
 // for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 // upsert of the same (source, external_id) reopens it if the posting reappears.
 func (q *Queries) CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error) {
-	result, err := q.db.Exec(ctx, closeJobBySourceExternalID, arg.Source, arg.ExternalID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, closeJobBySourceExternalID, arg.Source, arg.ExternalID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const closeStaleUnsignalledJobs = `-- name: CloseStaleUnsignalledJobs :execrows
@@ -234,34 +260,55 @@ func (q *Queries) CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleU
 	return result.RowsAffected(), nil
 }
 
-const closeUnseenJobByID = `-- name: CloseUnseenJobByID :execrows
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'unseen',
-    updated_at    = now()
-WHERE id = $1 AND closed_at IS NULL
+const closeUnseenJobByID = `-- name: CloseUnseenJobByID :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE jobs.id = $1 AND jobs.closed_at IS NULL
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
 `
 
+// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+// count(*) over the closed rows is the same int64 the caller already had.
 // Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
 // as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
 // entry) can be caught and skipped by the caller without losing the rest of the batch.
 func (q *Queries) CloseUnseenJobByID(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, closeUnseenJobByID, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, closeUnseenJobByID, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
-const closeUnseenJobs = `-- name: CloseUnseenJobs :execrows
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'unseen',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = $1
-  AND last_seen_at < $2
-  AND company_slug = ANY($3::text[])
+const closeUnseenJobs = `-- name: CloseUnseenJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND last_seen_at < $2
+      AND company_slug = ANY($3::text[])
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
 `
 
 type CloseUnseenJobsParams struct {
@@ -278,22 +325,39 @@ type CloseUnseenJobsParams struct {
 // that times out and only completes some boards) must not close the companies it never
 // touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 // now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
+//
+// The removal enqueue rides this statement rather than being a call per closed row.
+// A sweep closes a whole provider's stale postings in one round trip, so anything
+// per-row would undo that; feeding search_delete_outbox from the UPDATE's own RETURNING
+// keeps the enqueue atomic with the close (a rolled-back sweep queues nothing) and
+// exact (only rows that actually closed are queued).
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+// count(*) over the closed rows is the same int64 the caller already had, so no call site
+// changes.
 func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, closeUnseenJobs, arg.Source, arg.Cutoff, arg.CompanySlugs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, closeUnseenJobs, arg.Source, arg.Cutoff, arg.CompanySlugs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
-const closeUnseenJobsBySource = `-- name: CloseUnseenJobsBySource :execrows
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'unseen',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = $1
-  AND last_seen_at < $2
+const closeUnseenJobsBySource = `-- name: CloseUnseenJobsBySource :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND last_seen_at < $2
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
 `
 
 type CloseUnseenJobsBySourceParams struct {
@@ -301,6 +365,12 @@ type CloseUnseenJobsBySourceParams struct {
 	Cutoff pgtype.Timestamptz `json:"cutoff"`
 }
 
+// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+// count(*) over the closed rows is the same int64 the caller already had.
 // Post-ingest sweep for a fullCatalog source (see job-lifecycle spec): close every open job of
 // ONE source not seen since the cutoff, WITHOUT the crawled-company scope. A fullCatalog adapter
 // (e.g. habr_career) lists its whole catalogue each run, so an unseen job is genuinely gone —
@@ -309,11 +379,10 @@ type CloseUnseenJobsBySourceParams struct {
 // of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
 // otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
 func (q *Queries) CloseUnseenJobsBySource(ctx context.Context, arg CloseUnseenJobsBySourceParams) (int64, error) {
-	result, err := q.db.Exec(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const companiesWithAggregatorPostings = `-- name: CompaniesWithAggregatorPostings :many

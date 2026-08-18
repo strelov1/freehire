@@ -13,7 +13,9 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -59,6 +61,143 @@ func TestSearchDeleteOutboxSurvivesItsJobBeingDeleted(t *testing.T) {
 	if got := countDeletionQueue(t, pool); got != 1 {
 		t.Fatalf("deletion queue holds %d rows after the job was deleted, want 1 — "+
 			"a foreign key with ON DELETE CASCADE would strand this document in the index", got)
+	}
+}
+
+// The sweep closes every posting a crawl no longer saw in ONE statement, so the enqueue has
+// to ride that statement rather than being a call per row.
+func TestCloseUnseenJobsQueuesEveryJobItClosed(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	const want = 3
+	for i := 0; i < want; i++ {
+		job, err := ingestUpsert(ctx, q, ingestParams(fmt.Sprintf("acme:sweep-%d", i), "Engineer"))
+		if err != nil {
+			t.Fatalf("upsert %d: %v", i, err)
+		}
+		ageJob(t, pool, job.ID, 72*time.Hour)
+	}
+
+	closed, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		CompanySlugs: []string{"acme"},
+	})
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if closed != want {
+		t.Fatalf("sweep closed %d jobs, want %d", closed, want)
+	}
+	if got := countDeletionQueue(t, pool); got != want {
+		t.Errorf("sweep queued %d removals for %d closed jobs — every closed job must be queued", got, want)
+	}
+}
+
+// A job the sweep did not close must not be queued: the enqueue rides the UPDATE's RETURNING,
+// so it can only ever see rows that actually closed.
+func TestCloseUnseenJobsQueuesNothingForJobsItLeftOpen(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	if _, err := ingestUpsert(ctx, q, ingestParams("acme:fresh", "Engineer")); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	closed, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		CompanySlugs: []string{"acme"},
+	})
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if closed != 0 {
+		t.Fatalf("sweep closed %d jobs, want 0", closed)
+	}
+	if got := countDeletionQueue(t, pool); got != 0 {
+		t.Errorf("sweep queued %d removals having closed nothing, want 0", got)
+	}
+}
+
+// Every way a job can be closed must queue its removal. This enumerates the family rather
+// than testing each member in its own function on purpose: a sixth closing query added later
+// is a one-line addition here, and leaving it out is the exact mistake that would put jobs in
+// the index forever with nothing to notice it. Keep this list in step with the queries that
+// set closed_at in internal/db/queries/jobs.sql.
+func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
+	closers := []struct {
+		name  string
+		close func(ctx context.Context, q *Queries, jobID int64) error
+	}{
+		{"CloseUnseenJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
+				Source:       "greenhouse",
+				Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+				CompanySlugs: []string{"acme"},
+			})
+			return err
+		}},
+		{"CloseUnseenJobsBySource", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseUnseenJobsBySource(ctx, CloseUnseenJobsBySourceParams{
+				Source: "greenhouse",
+				Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+			})
+			return err
+		}},
+		{"CloseUnseenJobByID", func(ctx context.Context, q *Queries, jobID int64) error {
+			_, err := q.CloseUnseenJobByID(ctx, jobID)
+			return err
+		}},
+		{"CloseJobByID", func(ctx context.Context, q *Queries, jobID int64) error {
+			_, err := q.CloseJobByID(ctx, jobID)
+			return err
+		}},
+		{"CloseJobBySourceExternalID", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseJobBySourceExternalID(ctx, CloseJobBySourceExternalIDParams{
+				Source:     "greenhouse",
+				ExternalID: "acme:closer",
+			})
+			return err
+		}},
+	}
+
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	for _, c := range closers {
+		t.Run(c.name, func(t *testing.T) {
+			truncate(t, pool)
+
+			job, err := ingestUpsert(ctx, q, ingestParams("acme:closer", "Engineer"))
+			if err != nil {
+				t.Fatalf("upsert: %v", err)
+			}
+			ageJob(t, pool, job.ID, 72*time.Hour)
+
+			if err := c.close(ctx, q, job.ID); err != nil {
+				t.Fatalf("close: %v", err)
+			}
+
+			var closed bool
+			if err := pool.QueryRow(ctx,
+				`SELECT closed_at IS NOT NULL FROM jobs WHERE id = $1`, job.ID).Scan(&closed); err != nil {
+				t.Fatalf("read closed_at: %v", err)
+			}
+			if !closed {
+				t.Fatalf("%s did not close the job, so this case proves nothing", c.name)
+			}
+			if got := countDeletionQueue(t, pool); got != 1 {
+				t.Errorf("%s closed a job and queued %d removals, want 1 — "+
+					"a closing path that skips the queue leaves that document in the index forever", c.name, got)
+			}
+		})
 	}
 }
 

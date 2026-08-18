@@ -10,11 +10,11 @@
 
 ## 2. Enqueue at the close
 
-- [ ] 2.1 Rewrite `CloseUnseenJobs` as a CTE that closes and enqueues in one statement, and
+- [x] 2.1 Rewrite `CloseUnseenJobs` as a CTE that closes and enqueues in one statement, and
       cover it with an integration test asserting a bulk close of N jobs leaves N queue rows.
-- [ ] 2.2 Do the same for the remaining four: `CloseUnseenJobByID`,
+- [x] 2.2 Do the same for the remaining four: `CloseUnseenJobByID`,
       `CloseUnseenJobsBySource`, `CloseJobBySourceExternalID`, `CloseJobByID`.
-- [ ] 2.3 Add a test that enumerates the closing family and fails if any member closes a job
+- [x] 2.3 Add a test that enumerates the closing family and fails if any member closes a job
       without enqueuing it — so a sixth closing query added later cannot silently skip the
       queue. This is the task that keeps the change honest; do not fold it into 2.2.
 - [ ] 2.4 Assert a rolled-back close leaves no queue row.

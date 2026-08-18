@@ -41,8 +41,12 @@ func insertJob(t *testing.T, pool *pgxpool.Pool, externalID string) int64 {
 
 func truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	// search_delete_outbox must be named explicitly: CASCADE only reaches tables that
+	// reference jobs, and that queue deliberately carries no foreign key so a removal can
+	// outlive the row it names. Leave it out and rows leak between tests, which reads as a
+	// passing assertion about code that was never changed.
 	if _, err := pool.Exec(context.Background(),
-		"TRUNCATE enrichment_outbox, jobs, companies RESTART IDENTITY CASCADE"); err != nil {
+		"TRUNCATE enrichment_outbox, search_delete_outbox, jobs, companies RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

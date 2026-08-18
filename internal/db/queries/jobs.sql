@@ -1029,7 +1029,7 @@ SET title        = sqlc.arg(title),
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL
 RETURNING *;
 
--- name: CloseUnseenJobs :execrows
+-- name: CloseUnseenJobs :one
 -- Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 -- seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
 -- by source because ingest runs per provider (a greenhouse run must not close jobs
@@ -1038,14 +1038,32 @@ RETURNING *;
 -- that times out and only completes some boards) must not close the companies it never
 -- touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 -- now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'unseen',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff)
-  AND company_slug = ANY(sqlc.arg(company_slugs)::text[]);
+--
+-- The removal enqueue rides this statement rather than being a call per closed row.
+-- A sweep closes a whole provider's stale postings in one round trip, so anything
+-- per-row would undo that; feeding search_delete_outbox from the UPDATE's own RETURNING
+-- keeps the enqueue atomic with the close (a rolled-back sweep queues nothing) and
+-- exact (only rows that actually closed are queued).
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had, so no call site
+-- changes.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND last_seen_at < sqlc.arg(cutoff)
+      AND company_slug = ANY(sqlc.arg(company_slugs)::text[])
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
 
 -- name: UnseenJobIDs :many
 -- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
@@ -1067,17 +1085,39 @@ WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND last_seen_at < sqlc.arg(cutoff);
 
--- name: CloseUnseenJobByID :execrows
+-- name: CloseUnseenJobByID :one
+--
+-- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+-- search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+-- exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had.
 -- Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
 -- as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
 -- entry) can be caught and skipped by the caller without losing the rest of the batch.
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'unseen',
-    updated_at    = now()
-WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE jobs.id = sqlc.arg(id) AND jobs.closed_at IS NULL
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
 
--- name: CloseUnseenJobsBySource :execrows
+-- name: CloseUnseenJobsBySource :one
+--
+-- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+-- search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+-- exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had.
 -- Post-ingest sweep for a fullCatalog source (see job-lifecycle spec): close every open job of
 -- ONE source not seen since the cutoff, WITHOUT the crawled-company scope. A fullCatalog adapter
 -- (e.g. habr_career) lists its whole catalogue each run, so an unseen job is genuinely gone —
@@ -1085,28 +1125,51 @@ WHERE id = sqlc.arg(id) AND closed_at IS NULL;
 -- company-scoped CloseUnseenJobs cannot reach. cmd/ingest calls this ONLY after a zero-Failed run
 -- of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
 -- otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'unseen',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff);
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND last_seen_at < sqlc.arg(cutoff)
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
 
--- name: CloseJobBySourceExternalID :execrows
+-- name: CloseJobBySourceExternalID :one
+--
+-- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+-- search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+-- exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had.
 -- Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)
 -- learns of a removed posting from its incremental stream and closes it by identity,
 -- rather than relying on the post-run unseen sweep (which it opts out of, since an
 -- incremental stream re-reports only changed ads and so never refreshes last_seen_at
 -- for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 -- upsert of the same (source, external_id) reopens it if the posting reappears.
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'feed_removed',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = sqlc.arg(source)
-  AND external_id = sqlc.arg(external_id);
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'feed_removed',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND external_id = sqlc.arg(external_id)
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
 
 -- name: ExistingExternalIDs :many
 -- Seen-set for a hydrating source (see source-ingest): all external_ids stored for one
@@ -1175,18 +1238,33 @@ SET last_seen_at = now(),
 WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id)
 RETURNING company_slug;
 
--- name: CloseJobByID :execrows
+-- name: CloseJobByID :one
+--
+-- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+-- search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+-- exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had.
 -- Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 -- close_job=true. The third writer of closed_at, alongside the ingest sweep and the
 -- liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
 -- already-closed job is a no-op, never an error, so it never fights the report's own
 -- status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
 -- reappear); that is the lifecycle's existing behavior, not a conflict.
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'moderated',
-    updated_at    = now()
-WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'moderated',
+        updated_at    = now()
+    WHERE jobs.id = sqlc.arg(id) AND jobs.closed_at IS NULL
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
 
 -- name: CloseStaleUnsignalledJobs :execrows
 -- Age rule (see job-lifecycle): close open jobs from the sources that carry NO close

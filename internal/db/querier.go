@@ -364,6 +364,13 @@ type Querier interface {
 	ClearUserResume(ctx context.Context, id int64) error
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
+	//
+	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+	// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+	// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	// count(*) over the closed rows is the same int64 the caller already had.
 	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
 	// liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
@@ -371,6 +378,13 @@ type Querier interface {
 	// status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
 	// reappear); that is the lifecycle's existing behavior, not a conflict.
 	CloseJobByID(ctx context.Context, id int64) (int64, error)
+	//
+	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+	// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+	// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	// count(*) over the closed rows is the same int64 the caller already had.
 	// Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)
 	// learns of a removed posting from its incremental stream and closes it by identity,
 	// rather than relying on the post-run unseen sweep (which it opts out of, since an
@@ -398,6 +412,13 @@ type Querier interface {
 	// under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
 	// WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
 	CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleUnsignalledJobsParams) (int64, error)
+	//
+	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+	// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+	// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	// count(*) over the closed rows is the same int64 the caller already had.
 	// Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
 	// as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
 	// entry) can be caught and skipped by the caller without losing the rest of the batch.
@@ -410,7 +431,24 @@ type Querier interface {
 	// that times out and only completes some boards) must not close the companies it never
 	// touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 	// now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
+	//
+	// The removal enqueue rides this statement rather than being a call per closed row.
+	// A sweep closes a whole provider's stale postings in one round trip, so anything
+	// per-row would undo that; feeding search_delete_outbox from the UPDATE's own RETURNING
+	// keeps the enqueue atomic with the close (a rolled-back sweep queues nothing) and
+	// exact (only rows that actually closed are queued).
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	// count(*) over the closed rows is the same int64 the caller already had, so no call site
+	// changes.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	//
+	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
+	// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
+	// exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	// count(*) over the closed rows is the same int64 the caller already had.
 	// Post-ingest sweep for a fullCatalog source (see job-lifecycle spec): close every open job of
 	// ONE source not seen since the cutoff, WITHOUT the crawled-company scope. A fullCatalog adapter
 	// (e.g. habr_career) lists its whole catalogue each run, so an unseen job is genuinely gone —
