@@ -35,18 +35,18 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Document the second queue in `internal/searchdrain/AGENTS.md`: what it holds, why the
+- [x] 4.1 Document the second queue in `internal/searchdrain/AGENTS.md`: what it holds, why the
       enqueue lives in the closing statement, and why the index/delete race is already closed
       by the indexing claim's `closed_at IS NULL` filter.
-- [ ] 4.2 Record the measured index-operation cost (mean 7.69s over 449 batches of 200 on
+- [x] 4.2 Record the measured index-operation cost (mean 7.69s over 449 batches of 200 on
       2026-08-18) beside the existing 90-180s claim, dated — without retuning
       `SEARCH_DRAIN_CALL_TIMEOUT_SECONDS`, which is a separate decision with its own incident
       history.
-- [ ] 4.3 Note in `internal/searchdrain/AGENTS.md` that duplicates are still rebuild-only, so
+- [x] 4.3 Note in `internal/searchdrain/AGENTS.md` that duplicates are still rebuild-only, so
       whoever lengthens the reindex cadence sees what that still costs.
 
 ## 5. Verification
 
-- [ ] 5.1 Run `gofmt -l .` (must print nothing), `go vet ./...`, `go test ./...`,
+- [x] 5.1 Run `gofmt -l .` (must print nothing), `go vet ./...`, `go test ./...`,
       `go vet -tags=integration ./...`, and the tagged DB suite
       `go test -tags=integration ./internal/db/`.
