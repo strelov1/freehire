@@ -1783,10 +1783,20 @@ type Querier interface {
 	// internal/handler/companies.go) — rating is not (yet) a Meili-sortable
 	// attribute, so routing there would silently drop the requested order.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
-	// The merge worker's input: every company that has an open job, with the count that elects
-	// the winner of its folded group. Grouping happens in Go because the fold is
-	// normalize.CompanyKey — a repeating legal-form strip no SQL expression should try to
-	// reproduce, since a second implementation of that rule is the bug this change removes.
+	// The merge worker's input: every company slug the JOBS table actually holds, with the display
+	// name and the open-job count that elects the winner of its folded group.
+	//
+	// READ FROM jobs, NOT FROM companies.job_count. That column counts the postings the SEARCH
+	// INDEX holds, not the rows this worker rewrites, and the two diverge exactly where it hurts:
+	// a slug a merge has already retired drops to 0 in the index while its unmoved rows stay in
+	// the table. Planning from the counter made those rows INVISIBLE to the planner — 8,375 of
+	// them on `jpmorganchase` alone, stranded permanently, because the better the merge worked the
+	// more reliably the remainder hid.
+	//
+	// The name is the most recent one seen for the slug, matching how SyncCompaniesFromJobs
+	// collapses a slug's name variants. Grouping into folded groups happens in Go because the fold
+	// is normalize.CompanyKey — a repeating legal-form strip no SQL expression should reproduce,
+	// since a second implementation of that rule is the bug this whole change removes.
 	ListCompaniesForMerge(ctx context.Context) ([]ListCompaniesForMergeRow, error)
 	// Keyset page of hiring companies (job_count > 0) for the companies search reindex,
 	// cursored by the slug primary key (first chunk keyed by the empty string, which

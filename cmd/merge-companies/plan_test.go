@@ -300,3 +300,29 @@ func TestPlanMerges_MultiWordNameWinsEvenWhenOnlyAFormedRowHasIt(t *testing.T) {
 		t.Errorf("got %d aliases, want 2 — no existing row holds the canon", len(got[0].Aliases))
 	}
 }
+
+// TestPlanMerges_SeesASlugWhoseIndexCounterIsZero is the bug that stranded 8,375 rows on
+// `jpmorganchase` after wave 1 had merged it.
+//
+// The planner read companies.job_count, which counts the postings the SEARCH INDEX holds — not
+// the rows this worker rewrites. A retired slug drops to 0 in the index while its unmoved rows
+// stay in the table, so filtering on that counter made exactly the leftovers of a merge
+// invisible: the better the merge worked, the more reliably its remainder hid.
+//
+// The query now reads jobs, so a slug with rows and a zero counter is planned like any other.
+// This test pins the planning side of it: a group whose members report 0 open jobs must still
+// merge.
+func TestPlanMerges_SeesASlugWhoseIndexCounterIsZero(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "jp-morgan-chase", Name: "JP Morgan Chase", JobCount: 0},
+		{Slug: "jpmorganchase", Name: "JPMorganChase", JobCount: 0},
+	}, nil, 0)
+
+	if len(got) != 1 {
+		t.Fatalf("planned %d merges, want 1 — a slug the search index has forgotten still has "+
+			"rows in the table, and those rows are what this worker exists to move", len(got))
+	}
+	if got[0].Canonical != "jp-morgan-chase" {
+		t.Errorf("Canonical = %q, want jp-morgan-chase", got[0].Canonical)
+	}
+}

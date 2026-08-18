@@ -101,6 +101,13 @@ computes `role_fingerprint` (itself derived from the company slug); without that
 way out. A worker that cannot READ the registry must fail rather than proceed: an empty
 registry is indistinguishable from a catalogue with no merges.
 
+**The merge worker plans from `jobs`, never from `companies.job_count`.** That column counts the
+postings the SEARCH INDEX holds, not the rows the worker rewrites, and the two diverge exactly
+where it hurts: a slug a merge has already retired drops to 0 in the index while its unmoved
+rows stay in the table. Filtering on it made the leftovers of a merge invisible — 8,375 rows
+stranded on `jpmorganchase` after the first wave, permanently, because the better the merge
+worked the more reliably the remainder hid.
+
 ## Gotchas
 
 - **The canonical slug must be a fixed point of the rule, and job count alone does not give
