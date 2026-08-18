@@ -174,13 +174,16 @@ func TestPlan_CredentialDropsAnAmbiguousName(t *testing.T) {
 	}
 }
 
-func TestPlan_EditorialMatchingIsUnchangedByTheSuffixStrip(t *testing.T) {
-	// Editorial collections keep matching on normalize.Slug. A dataset name carrying
-	// a legal form must NOT be stripped into a different company's slug.
-	rows := []db.ListCompanyCollectionsRow{{Slug: "acme-robotics-limited"}}
+func TestPlan_EditorialMatchingUsesTheCatalogueSlugRule(t *testing.T) {
+	// This once asserted that editorial collections keep matching on normalize.Slug, so a
+	// dataset name carrying a legal form would not be "stripped into a different company's
+	// slug". There is no different company: the catalogue keys by normalize.CompanySlug, so
+	// acme-robotics-limited is a slug ingest cannot produce. Matching on it finds nothing and
+	// says nothing — the collection simply holds fewer companies than it names.
+	rows := []db.ListCompanyCollectionsRow{{Slug: "acme-robotics"}}
 	got := plan(rows, map[string][]collections.Record{"yc": slugRecords([]string{"Acme Robotics Limited"})})
-	if c := tagsFor(got, "acme-robotics-limited"); !slices.Contains(c, "yc") {
-		t.Errorf("editorial match changed shape: %v", c)
+	if c := tagsFor(got, "acme-robotics"); !slices.Contains(c, "yc") {
+		t.Errorf("editorial match = %v, want it to include yc", c)
 	}
 }
 

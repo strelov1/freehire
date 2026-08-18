@@ -456,18 +456,22 @@ type MatchStat struct {
 // temporary-route row for the same body is listed first.
 func (c Collection) Members(records []Record, companies map[string]Company) ([]string, MatchStat) {
 	var stat MatchStat
-	slugOf := normalize.Slug
+	// Both kinds slug the same way, because both look the result up in a map keyed by the
+	// CATALOGUE's company slug — and that is normalize.CompanySlug. Editorial matching used
+	// normalize.Slug until the catalogue started stripping corporate forms; a dataset naming
+	// "Acme Robotics Limited" then asked for a slug ingest can no longer produce, matched
+	// nothing, and reported no error. What still separates a credential is the ambiguity drop
+	// and the gates, not the spelling.
 	if c.Kind == KindCredential {
 		before := len(records)
 		records = DropAmbiguous(records, c.identityKey())
 		stat.Ambiguous = before - len(records)
-		slugOf = RegisterSlug
 	}
 
 	admitted := make(map[string]struct{}, len(records))
 	gatedOut := make(map[string]struct{}, len(records))
 	for _, r := range records {
-		slug := slugOf(r.Name)
+		slug := normalize.CompanySlug(r.Name)
 		company, known := companies[slug]
 		if slug == "" || !known {
 			stat.Unmatched++
@@ -648,4 +652,15 @@ func csvColumns(data []byte, delim rune, colNames ...string) ([][]string, error)
 		out = append(out, vals)
 	}
 	return out, nil
+}
+
+// easternRootsSlugs is the eastern-roots membership file parsed to its slugs, for the test
+// that guards every hand list against the catalogue's slug rule. Exported to the package's
+// tests only, because the file is embedded and there is no other way to read it back.
+func easternRootsSlugs() []string {
+	names, err := ParseSlugList(easternRootsData)
+	if err != nil {
+		return nil
+	}
+	return names
 }

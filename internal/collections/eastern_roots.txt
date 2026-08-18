@@ -93,10 +93,10 @@ endgame
 ennabl
 entrust
 epam-systems
-epam-systems-pte-ltd
+epam-systems
 eqvilent
 everstake
-ex-corp
+ex
 exadel
 exante
 exinity
@@ -134,7 +134,7 @@ grid-dynamics
 group-ib
 gsc-game-world
 haut-ai
-headway-inc
+headway
 helio-games
 hexens
 higgsfield-ai

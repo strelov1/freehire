@@ -58,7 +58,7 @@ func TestHandListSlugs_AreCanonical(t *testing.T) {
 			continue
 		}
 		for _, s := range c.Slugs {
-			if got := normalize.Slug(s); got != s {
+			if got := normalize.CompanySlug(s); got != s {
 				t.Errorf("collection %q slug %q is not canonical (normalizes to %q)", c.Slug, s, got)
 			}
 		}
@@ -83,15 +83,20 @@ func TestMembers_SplitsPresentAndAbsentDedupedSorted(t *testing.T) {
 	}
 }
 
-func TestMembers_EditorialMatchingDoesNotStripLegalForms(t *testing.T) {
-	// The suffix strip belongs to credentials only. An editorial dataset naming
-	// "Acme Robotics Limited" must still land on acme-robotics-limited, not on a
-	// different company called acme-robotics.
-	companies := map[string]Company{"acme-robotics-limited": {Slug: "acme-robotics-limited"}}
+func TestMembers_EditorialMatchingUsesTheCatalogueSlugRule(t *testing.T) {
+	// This once asserted the opposite: the suffix strip belonged to credentials only, and an
+	// editorial dataset naming "Acme Robotics Limited" had to land on acme-robotics-limited
+	// rather than on "a different company called acme-robotics".
+	//
+	// Those are no longer two companies. The catalogue keys by normalize.CompanySlug, so
+	// acme-robotics-limited is a slug ingest cannot produce — matching on it finds nothing,
+	// and an editorial collection that finds nothing reports no error, it just holds fewer
+	// companies than it names.
+	companies := map[string]Company{"acme-robotics": {Slug: "acme-robotics"}}
 	c := Collection{Slug: "x", Kind: KindEditorial}
 	matched, _ := c.Members([]Record{{Name: "Acme Robotics Limited"}}, companies)
-	if !reflect.DeepEqual(matched, []string{"acme-robotics-limited"}) {
-		t.Errorf("editorial match = %#v, want [acme-robotics-limited]", matched)
+	if !reflect.DeepEqual(matched, []string{"acme-robotics"}) {
+		t.Errorf("editorial match = %#v, want [acme-robotics]", matched)
 	}
 }
 
@@ -515,3 +520,40 @@ func TestEasternRoots_EmbeddedDatasetResolves(t *testing.T) {
 
 // errBoom is a sentinel for the adapter's error-propagation test.
 var errBoom = errors.New("boom")
+
+// TestHandListSlugsAreCompanySlugStable guards the curated lists against the slug rule they
+// silently depend on.
+//
+// Editorial collections match by exact slug against the catalogue, and the catalogue now keys
+// companies by normalize.CompanySlug. An entry written in a spelling that rule would never
+// produce — one still carrying a corporate form — matches nothing, and nothing says so: the
+// collection just quietly holds fewer companies than it names.
+//
+// The test is that each entry is a fixed point of the rule. eastern_roots.txt is included
+// because it is the same kind of list, only larger and easier to add to carelessly.
+func TestHandListSlugsAreCompanySlugStable(t *testing.T) {
+	lists := map[string][]string{
+		"AICompanySlugs": AICompanySlugs,
+		"Mag7Slugs":      Mag7Slugs,
+		"BigTechSlugs":   BigTechSlugs,
+		"AINativeSlugs":  AINativeSlugs,
+		"eastern_roots":  easternRootsSlugs(),
+	}
+	var checked int
+	for name, slugs := range lists {
+		for _, slug := range slugs {
+			checked++
+			if got := normalize.CompanySlug(slug); got != slug {
+				t.Errorf("%s: %q is not what the slug rule produces (%q) — the catalogue keys "+
+					"companies by normalize.CompanySlug, so this entry matches nothing",
+					name, slug, got)
+			}
+		}
+	}
+	// A detector that has stopped seeing the lists passes for the same reason a clean list
+	// does; count the population so the two are told apart.
+	if checked < 100 {
+		t.Errorf("checked only %d hand-list slugs, expected the curated lists to be far larger "+
+			"— has a list been renamed out from under this test?", checked)
+	}
+}

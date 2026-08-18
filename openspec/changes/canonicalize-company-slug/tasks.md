@@ -141,11 +141,21 @@ module's single legal-form rule and closes the hole each existing implementation
 
 ## 6. Collections
 
-- [ ] 6.1 Re-key the hand lists (`AICompanySlugs`, `Mag7Slugs`, `BigTechSlugs`, `AINativeSlugs`)
+- [x] 6.1 Re-key the hand lists (`AICompanySlugs`, `Mag7Slugs`, `BigTechSlugs`, `AINativeSlugs`)
       and `eastern_roots.txt` through `CompanySlug`.
-- [ ] 6.2 Add a guard test that every hand-list entry is already `CompanySlug`-stable, so a
+- [x] 6.2 Add a guard test that every hand-list entry is already `CompanySlug`-stable, so a
       future entry written in the old spelling fails the build rather than silently matching
       nothing.
+      The guard paid immediately. All three offending `eastern_roots.txt` entries were pointing
+      at the WRONG company already: `epam-systems-pte-ltd` (19 jobs) instead of `epam-systems`
+      (1,172), `headway-inc` (14) instead of `headway` (69), and `ex-corp` at a slug ingest will
+      stop producing. It also exposed that `pte` was in NO list — without it EPAM's Singapore
+      entity keys apart from EPAM itself.
+      Scope grew by one thing the task did not name: `Collection.Members` slugged EDITORIAL
+      records with `normalize.Slug` while the catalogue keys by `CompanySlug`, so an editorial
+      dataset naming a company with a corporate form matched nothing. Both kinds now slug the
+      same way; what still separates a credential is the ambiguity drop and the gates. Two tests
+      encoding the old assumption were inverted rather than deleted.
 
 ## 7. Documentation
 
