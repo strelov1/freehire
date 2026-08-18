@@ -95,6 +95,14 @@ const ALLOWED = [
       '0.2em tracking for one mono heading style; Tailwind\'s own scale tops out at ' +
       'tracking-widest (0.1em) and no other primitive needs this value',
   },
+  {
+    file: 'dialog.svelte',
+    kind: 'Tailwind arbitrary value',
+    reason:
+      "sm:max-h-[calc(100vh-3rem)] mirrors FilterModalShell's own mobile-takeover cap " +
+      '(web/src, not subject to this radius) exactly; no token expresses a dvh-safe ' +
+      'viewport-minus-margin reserve, and the two are meant to move together',
+  },
 ];
 
 const baselinePath = join(fileURLToPath(new URL('.', import.meta.url)), 'web-token-baseline.json');
