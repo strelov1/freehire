@@ -129,9 +129,10 @@ worked the more reliably the remainder hid.
   and `CompanySlug` DROPS apostrophes before slugging, so "Kohl's" keys at `kohls` rather than
   the `kohl-s` plain `Slug` would give. That artefact stopped being survivable once the canon
   became derived rather than chosen among stored slugs: it elected `kohl-s` over `kohls` across
-  2,939 postings. Beyond that,
-  and that is precisely the distinction a slug destroys, since it renders both as a hyphen — and that preference only speaks when it discriminates. Where no name is multi-word, or
-  every name is, the job count decides as before.
+  2,939 postings.
+
+  The preference only speaks when it discriminates. Where no name is multi-word, or every name
+  is, the job count decides as before.
 - **The word break is not whitespace.** It is every rune `Slug` drops EXCEPT `.` and `/`, which
   live inside the forms themselves (`B.V.`, `A/S`). Whitespace alone loses
   `Sun Technologies,Inc.`, and 13,730 catalogue companies are written that way.
