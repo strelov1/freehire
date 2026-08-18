@@ -48,6 +48,33 @@ info:
     live counts before filtering on them — an unknown value is not an error, it
     simply matches nothing.
 
+    ## Rate limits
+
+    These endpoints need no key, which is not the same as being free. Two
+    per-caller budgets apply, split by what a request costs to serve:
+
+    * **600 requests per minute** across the ordinary reads — `searchJobs`,
+      `getJobFacets`, `getJob`, `getSimilarJobs`, `searchCompanies`,
+      `getCompany` and `searchCities`, sharing one budget between them.
+    * **300 requests per minute** for `agentSearchJobs` alone, on its own
+      budget, because it rehydrates every result's full description. Exhausting
+      it does not touch the budget above.
+
+    Every response carries where you stand, so you never have to discover the
+    ceiling by hitting it:
+
+    * `X-RateLimit-Limit` — the ceiling in force.
+    * `X-RateLimit-Remaining` — requests left in the current window.
+    * `X-RateLimit-Reset` — whole seconds until your budget is full again.
+
+    Over the limit is `429` with `Retry-After` in whole seconds, alongside the
+    same three headers. **Read `X-RateLimit-Remaining` and slow down before you
+    are refused** — that is the whole reason it is sent on success too.
+
+    Rarely, a response carries no `X-RateLimit-*` at all. That means the limiter
+    could not run and let the request through rather than failing it; treat it as
+    "unknown", not as "unlimited".
+
     ## An unknown PARAMETER is dropped, and says so
 
     A parameter no filter reads is ignored rather than refused, so old saved

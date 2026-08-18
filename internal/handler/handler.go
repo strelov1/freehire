@@ -634,7 +634,7 @@ func Register(app *fiber.App, cfg Config) {
 	sitemapH.register(api)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
-	geoH.register(api)
+	geoH.register(api, mw)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
 	savedSearchH.register(api, mw)

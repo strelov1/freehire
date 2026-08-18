@@ -35,12 +35,13 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 	// Literal routes are registered before the /jobs/:slug param route (see
 	// Register) so they are not read as slugs.
-	api.Get("/jobs/search", h.SearchJobs)
+	readLimit := publicReadLimiter(mw.throttler)
+	api.Get("/jobs/search", readLimit, h.SearchJobs)
 	// Agent search: same query as /jobs/search, but always full descriptions in a
 	// selectable format for programmatic consumers. Public, like the other reads.
-	api.Get("/agent/jobs/search", h.AgentSearchJobs)
-	api.Get("/jobs/facets", h.JobFacets)
-	api.Get("/jobs/:slug/similar", h.SimilarJobs)
+	api.Get("/agent/jobs/search", agentSearchLimiter(mw.throttler), h.AgentSearchJobs)
+	api.Get("/jobs/facets", readLimit, h.JobFacets)
+	api.Get("/jobs/:slug/similar", readLimit, h.SimilarJobs)
 }
 
 // searcher is the search backend the handler depends on. *search.Client
