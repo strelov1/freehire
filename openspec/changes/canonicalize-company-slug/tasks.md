@@ -61,10 +61,12 @@ module's single legal-form rule and closes the hole each existing implementation
       `0109` is already taken twice, so confirm against `migrations/` and the prod ledger before
       naming the file. Carry the design's rationale in the file comment, following 0109's
       precedent: why the table is not derived from `jobs`/`companies`, and why `reason` exists.
-      It is **0111**, not 0110: `origin/main` and prod both already carry
-      `0110_job_semantic_chunks_hnsw_idx.sql`. Checked `git ls-tree origin/main`, every remote
-      branch, and prod's `schema_migrations` — exactly the check whose absence produced the two
-      existing 0109s. Also carries CHECKs against a self-alias and an unknown `reason`, and
+      It is **0112**. First numbered 0110 (taken), then 0111 — and by the time the branch was
+      ready `origin/main` had landed `0111_onboarding_advanced_search_step.sql` too. The number
+      has to be re-checked against a FRESHLY fetched `origin/main` immediately before the PR,
+      not only when the file is created; checking once is exactly how the two existing 0109s
+      happened. Verified against `git ls-tree origin/main`, every remote branch, and prod's
+      `schema_migrations`. Also carries CHECKs against a self-alias and an unknown `reason`, and
       deliberately NO foreign key to `companies(slug)`, which would delete the rows the table
       exists to keep.
 - [x] 2.2 Add the sqlc queries: batch lookup by `folded_key = ANY($1)`, single lookup by
