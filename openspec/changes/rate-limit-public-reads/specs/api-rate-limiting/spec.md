@@ -52,8 +52,13 @@ report, and reporting a fabricated one would be worse than silence.
 The public, unauthenticated read endpoints SHALL enforce a request budget, split
 into two classes by the cost of serving them.
 
-The ordinary reads — job search, job facets, a single job, similar jobs, company
-search, a single company, and city lookup — SHALL share one budget. The
+**Every** public job and company read SHALL share one budget — the job list, job
+search, job facets, a single job and its copies and apply form, similar jobs,
+company search and its vocabulary, a single company, and city lookup. The set is
+exhaustive by intent rather than by enumeration: leaving one read out would void
+the limit rather than narrow it, since the job list returns the same catalogue as
+job search, so an unbounded sibling is simply the door a throttled caller walks
+through instead. The
 agent-oriented job search SHALL have its own, smaller budget, because it
 rehydrates every result's full description from the database and so costs
 several times more per request in both bytes and latency than any other read. A

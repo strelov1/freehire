@@ -26,9 +26,13 @@
 - [x] 3.1 Add the budget constants and their two key prefixes in one place, sized
       from the measured peaks recorded in design.md (cheap 600/min, agent 300/min),
       each carrying a comment naming the peak it was derived from
-- [x] 3.2 Attach the cheap limiter to `/jobs/search`, `/jobs/facets`,
-      `/jobs/{slug}`, `/jobs/{slug}/similar`, `/companies`, `/companies/{slug}`
-      and `/geo/cities`, keyed by `KeyByUserOrIP`
+- [x] 3.2 Attach the cheap limiter to EVERY public job and company read —
+      `/jobs`, `/jobs/find`, `/jobs/search`, `/jobs/facets`, `/jobs/{slug}` and
+      its `/copies` and `/apply-form`, `/jobs/{slug}/similar`, `/companies`,
+      `/companies/subindustries`, `/companies/{slug}` and `/geo/cities` — keyed
+      by `KeyByUserOrIP`. The sitemaps stay unlimited on purpose: they are the
+      polite bulk path, nginx-cached, and throttling them pushes crawlers back
+      onto the endpoints this change is protecting
 - [x] 3.3 Attach the expensive limiter to `/agent/jobs/search` alone, with its own
       prefix; test that exhausting it leaves the ordinary search endpoint serving
 - [x] 3.4 Log every refusal with the request path and user agent, so "who did this

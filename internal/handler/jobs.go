@@ -44,12 +44,17 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
 	// attaches the caller when signed in but never rejects, so the detail read can
 	// overlay the caller's own vote (my_vote) while staying open to anonymous
 	// visitors.
-	api.Get("/jobs", h.ListJobs)
+	// Every job read shares the public-read budget. Leaving any one of them out
+	// would void the limit rather than narrow it: /jobs returns the same
+	// catalogue as /jobs/search, so an unbounded one is simply the door a
+	// throttled caller walks through instead.
+	readLimit := publicReadLimiter(mw.throttler)
+	api.Get("/jobs", readLimit, h.ListJobs)
 	// Static route registered before /jobs/:slug so it isn't captured as a slug.
-	api.Get("/jobs/find", h.FindJob)
-	api.Get("/jobs/:slug", publicReadLimiter(mw.throttler), mw.optional, h.GetJob)
-	api.Get("/jobs/:slug/copies", h.JobCopies)
-	api.Get("/jobs/:slug/apply-form", h.JobApplyForm)
+	api.Get("/jobs/find", readLimit, h.FindJob)
+	api.Get("/jobs/:slug", readLimit, mw.optional, h.GetJob)
+	api.Get("/jobs/:slug/copies", readLimit, h.JobCopies)
+	api.Get("/jobs/:slug/apply-form", readLimit, h.JobApplyForm)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
