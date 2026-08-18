@@ -109,18 +109,20 @@ module's single legal-form rule and closes the hole each existing implementation
 
 ## 4. The merge worker
 
-- [ ] 4.1 Add `cmd/merge-companies` grouping by `normalize.CompanyKey(name)` over companies with at
+- [x] 4.1 Add `cmd/merge-companies` grouping by `normalize.CompanyKey(name)` over companies with at
       least one open job, electing the highest `job_count` variant. Unit-test the election
       against the real counterexamples: `dominos`(14396) beats `domino-s`(1);
       `alfa-bank`(1617) beats `al-fa-bank`(20).
-- [ ] 4.2 Make dry-run the default and `--apply` explicit, following `cmd/prune`'s shape. Test
+- [x] 4.2 Make dry-run the default and `--apply` explicit, following `cmd/prune`'s shape. Test
       that a default run writes nothing to `jobs`, `companies` or `company_slug_aliases`.
-- [ ] 4.3 Add `--min-jobs N` wave bounding, and skip re-electing against a slug already present
+- [x] 4.3 Add `--min-jobs N` wave bounding, and skip re-electing against a slug already present
       as a `canonical_slug` — the canon freezes at first merge.
-- [ ] 4.4 Wire the chunked re-key plus the alias insert, and test idempotence: a second run with
+- [x] 4.4 Wire the chunked re-key plus the alias insert, and test idempotence: a second run with
       the same bounds updates zero rows.
-- [ ] 4.5 Wire the worker through `internal/worker`'s `Main`/`Bootstrap` convention and its exit
+- [x] 4.5 Wire the worker through `internal/worker`'s `Main`/`Bootstrap` convention and its exit
       codes, like every other cron worker.
+      `--limit` was dropped before it shipped: `--min-jobs` already bounds a wave, and a second
+      overlapping cap would have taken an alphabetical prefix rather than the biggest groups.
 
 ## 5. Read path
 
@@ -153,7 +155,8 @@ module's single legal-form rule and closes the hole each existing implementation
 - [ ] 8.1 Confirm `reindex-companies` is actually rebuilding and not silently skipping — it has
       previously reported success while skipping for 14 days. If it is skipping, fix that first;
       otherwise `/companies` and the sitemap will not reflect any merge.
-- [ ] 8.2 Deploy the migration alone, ahead of the code.
+- [ ] 8.2 Deploy the migration alone, ahead of the code. `release.sh` carries a FIXED worker
+      list — add `merge-companies` to it, or the binary never reaches the host.
 - [ ] 8.3 Deploy the code. Verify behaviour is unchanged against the empty table, and that a
       freshly ingested `X, Inc.` posting now lands on `x`.
 - [ ] 8.4 Wave 1: dry-run `--min-jobs 1000`, review the plan, then `--apply`.
