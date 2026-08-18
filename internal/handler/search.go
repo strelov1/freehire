@@ -64,7 +64,8 @@ const maxSearchWindow = 10000
 // searchParams are the query params the search endpoints read themselves rather
 // than hand to the filter: the query text, the sort directive and the pagination
 // window. search.UnknownParams owns the filter vocabulary and nothing else, so
-// each endpoint declares its own transport params here instead.
+// each endpoint declares its own transport params beside itself (see
+// facetsParams in facets.go, companiesParams in companies.go).
 var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 
 // agentSearchParams is searchParams plus the agent endpoint's response-format
