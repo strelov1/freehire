@@ -275,3 +275,28 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		}
 	})
 }
+
+// TestPlanMerges_MultiWordNameWinsEvenWhenOnlyAFormedRowHasIt closes the last gap the prod dry
+// runs found, and it is a big one: 2,811 of 7,375 retiring slugs across the full catalogue.
+//
+// "Public Storage" only exists in the catalogue as `public-storage-inc`, a row carrying a form.
+// Preferring a member that is ALREADY a fixed point dropped that row from consideration before
+// its word shape could be read, leaving the squashed `publicstorage` to win by default.
+//
+// Deriving the canon from the elected member's NAME fixes it and needs no extra rule: the
+// derived slug is a fixed point by construction, so the fixed-point preference disappears.
+func TestPlanMerges_MultiWordNameWinsEvenWhenOnlyAFormedRowHasIt(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "publicstorage", Name: "PublicStorage", JobCount: 300},
+		{Slug: "public-storage-inc", Name: "Public Storage Inc", JobCount: 40},
+	}, nil, 0)
+
+	if got[0].Canonical != "public-storage" {
+		t.Errorf("Canonical = %q, want public-storage — the employer writes two words, and a "+
+			"corporate form on the row that says so is not a reason to ignore it",
+			got[0].Canonical)
+	}
+	if len(got[0].Aliases) != 2 {
+		t.Errorf("got %d aliases, want 2 — no existing row holds the canon", len(got[0].Aliases))
+	}
+}

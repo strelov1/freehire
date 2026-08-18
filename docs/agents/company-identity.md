@@ -108,11 +108,11 @@ registry is indistinguishable from a catalogue with no merges.
   jobs) purely because it was larger — making the canonical url the one carrying a corporate
   form, and 301ing the better-known slug into it. It is unstable too: every new posting derives
   the stripped slug, so the canon would depend forever on an alias row to reach itself. The
-  election prefers the biggest slug `CompanySlug` can reproduce; where NO member qualifies —
-  `carnival-corporation` beside `carnival-corporation-plc`, four such groups in the >=100-job
-  wave — it takes the slug the rule yields even though no row holds it yet, and the reconcile
-  creates that row. Returning a slug no member holds is safe: a company already using it would
-  fold to the same key, so it would be a member and would have won outright.
+  canon is therefore always `CompanySlug` of the elected member's NAME, never a stored slug
+  reused — which makes it a fixed point by construction and needs no separate rule. Returning a
+  slug no row holds yet is safe and often right (`carnival`, `public-storage`): a company
+  already using it would fold to the same key, so it would be a member, and the reconcile that
+  follows the re-key creates the row.
 - **Read the NAME, not the slug, when choosing between spellings.** "Prefer the more
   hyphenated slug" is the tempting rule and it elects `domino-s` (1 job) over `dominos`
   (14,396) and `al-fa-bank` (20) over `alfa-bank` (1,617): in a slug an apostrophe is

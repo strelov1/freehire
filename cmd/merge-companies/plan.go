@@ -117,56 +117,31 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 // electCanonical picks the group's surviving slug. Members arrive sorted by open jobs
 // descending, so "the first that qualifies" is "the biggest that qualifies".
 //
-// Three rules, in order:
+//  1. An already-frozen canon wins outright, exactly as stored — even carrying a form. It has
+//     been redirecting and indexing, and moving it costs more than a tidier slug is worth.
+//  2. Otherwise the canon is the slug the RULE yields for the elected member's name, and the
+//     election prefers a member whose name is written in several words.
 //
-//  1. An already-frozen canon wins outright, even one carrying a corporate form. It has been
-//     redirecting and indexing; moving it costs more than a tidier slug is worth.
-//  2. Otherwise the biggest slug the rule can REPRODUCE — a fixed point of CompanySlug. Pure
-//     job count is not enough: the first prod dry run elected `danaher-corporation` over
-//     `danaher` (714 open jobs) because it happened to be larger, which would have made the
-//     catalogue's canonical url the one carrying the form and 301'd the better-known slug into
-//     it. It is also unstable, since every new posting derives the stripped slug and would need
-//     an alias row for the canon to reach itself.
-//  3. Failing that, the slug the rule YIELDS for the biggest member, even though no row holds
-//     it yet. A group where every member carries a form is real — carnival-corporation and
-//     carnival-corporation-plc were two of four in the >=100-job wave — and picking the least
-//     bad existing row would leave the form on the canonical url, which is the outcome rule 2
-//     exists to prevent. The derived slug is what every future posting keys to, and the
-//     reconcile that follows the re-key creates its row.
+// Deriving rather than reusing a stored slug is what makes the canon a fixed point by
+// construction: CompanySlug of a derived slug is itself, so there is no separate rule keeping
+// forms off the canonical url. It also stops a row that carries a form from being ignored for
+// carrying one — "Public Storage" exists in the catalogue only as `public-storage-inc`, and
+// skipping it left the squashed `publicstorage` to win by default, 2,811 times across the
+// catalogue.
 //
-// Returning a slug no member holds is safe: if a company already used it, its name would fold
-// to the same key and it would BE a member — and would have won rule 2.
+// The word-shape preference only speaks when it discriminates. Where no name is multi-word
+// (Dominos beside Domino's) or every name is (Alfa Bank beside Al Fa Bank), it says nothing and
+// the job count decides.
 func electCanonical(members []company, frozen map[string]bool) string {
 	for _, c := range members {
 		if frozen[c.Slug] {
 			return c.Slug
 		}
 	}
-	var fixed []company
 	for _, c := range members {
-		if normalize.CompanySlug(c.Slug) == c.Slug {
-			fixed = append(fixed, c)
+		if nameWords(c.Name) > 1 {
+			return normalize.CompanySlug(c.Name)
 		}
-	}
-	if len(fixed) > 0 {
-		// Among spellings the rule can reproduce, prefer one the employer WRITES in several
-		// words. Job count alone cannot see this: it elects `westerndigital` over
-		// `western-digital` and `acehardware` over `ace-hardware` purely on volume, 73 times
-		// in the >=100-job wave.
-		//
-		// The signal is the NAME, never the slug. "Domino's" slugs to `domino-s`, where an
-		// apostrophe is indistinguishable from a word break — which is exactly why "prefer
-		// the more hyphenated slug" elected `domino-s` over `dominos` and had to be dropped.
-		//
-		// It only speaks when it discriminates. Where no name is multi-word (Domino's) or
-		// every name is (Alfa Bank beside Al Fa Bank), it says nothing and the count decides,
-		// as it did before.
-		for _, c := range fixed {
-			if nameWords(c.Name) > 1 {
-				return c.Slug
-			}
-		}
-		return fixed[0].Slug
 	}
 	return normalize.CompanySlug(members[0].Name)
 }
