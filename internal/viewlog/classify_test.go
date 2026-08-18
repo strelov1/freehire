@@ -101,3 +101,54 @@ func TestClassify(t *testing.T) {
 		})
 	}
 }
+
+// The app sets data-sveltekit-preload-data="hover", so merely moving the pointer
+// over a job card fetches /jobs/<slug>/__data.json — which counted as a view.
+// Someone scrolling a listing on a desktop therefore "viewed" every job they
+// passed the cursor over. The browser marks those fetches with Sec-Purpose, which
+// is now the whole basis for telling them apart from an opened page.
+func TestClassifyIgnoresSpeculativeFetches(t *testing.T) {
+	base := Record{Method: "GET", Status: 200, Path: "/jobs/acme-engineer-123"}
+
+	t.Run("a hover preload is not a view", func(t *testing.T) {
+		rec := base
+		rec.Path = "/jobs/acme-engineer-123/__data.json"
+		rec.Purpose = "prefetch"
+		if _, ok := Classify(rec); ok {
+			t.Errorf("Classify ok = true for a prefetch, want false")
+		}
+	})
+
+	t.Run("a prerender is not a view", func(t *testing.T) {
+		rec := base
+		rec.Purpose = "prefetch;prerender"
+		if _, ok := Classify(rec); ok {
+			t.Errorf("Classify ok = true for a prerender, want false")
+		}
+	})
+
+	// The same shape without the header is a real navigation and must still count,
+	// including the SPA data request that a genuine in-app click produces.
+	t.Run("a real SPA navigation still counts", func(t *testing.T) {
+		rec := base
+		rec.Path = "/jobs/acme-engineer-123/__data.json"
+		sig, ok := Classify(rec)
+		if !ok {
+			t.Fatalf("Classify ok = false for a real navigation, want true")
+		}
+		if sig.Slug != "acme-engineer-123" || sig.Kind != KindPage {
+			t.Errorf("got %+v, want acme-engineer-123/KindPage", sig)
+		}
+	})
+
+	// The API is read by scripts that may send anything; the header is a browser
+	// signal, and honouring it uniformly keeps one rule rather than two.
+	t.Run("a speculative API read is not a view either", func(t *testing.T) {
+		rec := base
+		rec.Path = "/api/v1/jobs/acme-engineer-123"
+		rec.Purpose = "prefetch"
+		if _, ok := Classify(rec); ok {
+			t.Errorf("Classify ok = true for a speculative API read, want false")
+		}
+	})
+}

@@ -10,11 +10,26 @@ SSR→backend boundary) — lets us filter bots and cover anonymous + API unifor
 ## Shape
 
 - `ParseLine(line) (Record, ok)` — one nginx `combined`-format line → `Record`
-  (IP, timestamp, method, path, status, UA). Unparseable/bad-request lines → `ok=false`.
+  (IP, timestamp, method, path, status, UA, purpose). Unparseable/bad-request lines
+  → `ok=false`. The trailing `"$http_sec_purpose"` field is **optional** in the
+  pattern, so lines from before the nginx change parse unchanged; nginx's `-`
+  placeholder normalizes to empty.
 - `Classify(Record) (Signal, ok)` — a 2xx GET of `/jobs/<slug>` or its SvelteKit SPA
   data request `/jobs/<slug>/__data.json` (`KindPage`), or `/api/v1/jobs/<slug>`
   (`KindAPI`) → the slug; everything else ignored (a slug is one path segment, so
   lists and sub-resources like `/similar`, `/fit` don't count).
+- **A non-empty `Sec-Purpose` is never a view.** The app sets
+  `data-sveltekit-preload-data="hover"`, so moving the pointer across a listing
+  fetches `/jobs/<slug>/__data.json` for every card it passes — each of which
+  counted, inflating `view_count` for jobs nobody opened. Any non-empty value is
+  rejected rather than matching known ones: the header exists to say "not a real
+  navigation", and an unrecognized value still says it. This is also what makes
+  Speculation Rules safe to add later — a prerender carries the same header.
+
+**Deploy order matters:** the parser must ship BEFORE the nginx `log_format`
+change. It tolerates both formats, so parser-first is a no-op until nginx catches
+up; nginx-first would feed lines the old pattern cannot match, and a day that
+parses as nothing silently counts nothing.
 - `Aggregate(reader) map[day]map[slug]int` — dedups by the raw `(IP, UA, slug, day)`
   tuple (NUL-joined, no hashing), the day taken from each line's timestamp (UTC);
   page opens from known bots are dropped, API reads are not bot-filtered.

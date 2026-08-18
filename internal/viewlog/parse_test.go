@@ -58,4 +58,46 @@ func TestParseLine(t *testing.T) {
 			t.Errorf("ParseLine ok = true for dash request, want false")
 		}
 	})
+
+	// The log format gained a trailing "$http_sec_purpose" so a speculative fetch
+	// can be told apart from a real visit. Both formats have to parse: rotated
+	// files written before the nginx change are still fed to the aggregator, and a
+	// deploy where the parser lands first must not drop the day's counts.
+	t.Run("reads sec-purpose from the extended format", func(t *testing.T) {
+		line := `203.0.113.5 - - [21/Jul/2026:12:00:00 +0000] "GET /jobs/acme-engineer-123/__data.json HTTP/2.0" 200 1234 "-" "Mozilla/5.0" "prefetch"`
+		rec, ok := ParseLine(line)
+		if !ok {
+			t.Fatalf("ParseLine ok = false, want true")
+		}
+		if rec.Purpose != "prefetch" {
+			t.Errorf("Purpose = %q, want prefetch", rec.Purpose)
+		}
+		if rec.UserAgent != "Mozilla/5.0" {
+			t.Errorf("UserAgent = %q, want Mozilla/5.0", rec.UserAgent)
+		}
+	})
+
+	t.Run("a line in the old format still parses, with no purpose", func(t *testing.T) {
+		line := `203.0.113.5 - - [21/Jul/2026:12:00:00 +0000] "GET /jobs/acme-engineer-123 HTTP/2.0" 200 1234 "-" "Mozilla/5.0"`
+		rec, ok := ParseLine(line)
+		if !ok {
+			t.Fatalf("ParseLine ok = false, want true")
+		}
+		if rec.Purpose != "" {
+			t.Errorf("Purpose = %q, want empty", rec.Purpose)
+		}
+	})
+
+	// nginx writes "-" for a header the request did not carry, which means the
+	// same thing as absent and must not read as a purpose.
+	t.Run("treats nginx's dash placeholder as no purpose", func(t *testing.T) {
+		line := `203.0.113.5 - - [21/Jul/2026:12:00:00 +0000] "GET /jobs/acme-engineer-123 HTTP/2.0" 200 1234 "-" "Mozilla/5.0" "-"`
+		rec, ok := ParseLine(line)
+		if !ok {
+			t.Fatalf("ParseLine ok = false, want true")
+		}
+		if rec.Purpose != "" {
+			t.Errorf("Purpose = %q, want empty", rec.Purpose)
+		}
+	})
 }

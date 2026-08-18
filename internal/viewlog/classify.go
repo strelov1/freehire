@@ -26,6 +26,15 @@ func Classify(rec Record) (Signal, bool) {
 	if rec.Method != "GET" || rec.Status < 200 || rec.Status >= 300 {
 		return Signal{}, false
 	}
+	// A speculative fetch is not a view: nobody has seen the page, and may never.
+	// This is not a corner case — the app sets data-sveltekit-preload-data="hover",
+	// so moving the pointer across a listing fetched __data.json for every card it
+	// passed, and each one counted. Any non-empty Sec-Purpose is rejected rather
+	// than matching known values, because the header exists to say "not a real
+	// navigation" and a value we don't recognize still says it.
+	if rec.Purpose != "" {
+		return Signal{}, false
+	}
 	path := rec.Path
 	if i := strings.IndexByte(path, '?'); i >= 0 {
 		path = path[:i]

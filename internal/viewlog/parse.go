@@ -4,7 +4,8 @@
 // tuple (NUL-joined, no hashing) so a visitor counts at most once per job per
 // day. Two request shapes are counted — the SSR detail page GET /jobs/<slug>
 // (bot-filtered) and the API read GET /api/v1/jobs/<slug> (not bot-filtered) —
-// every other line is ignored.
+// every other line is ignored, including any request the browser marked
+// speculative with Sec-Purpose (see Classify).
 package viewlog
 
 import (
@@ -20,16 +21,28 @@ type Record struct {
 	UserAgent string
 	Method    string
 	Path      string
-	Status    int
+	// Purpose is the request's Sec-Purpose header: non-empty when the browser
+	// fetched this speculatively (`prefetch`, or `prefetch;prerender`) rather than
+	// because someone opened the page. Empty for a real navigation, for a client
+	// that does not send the header, and for every line written before the log
+	// format carried it.
+	Purpose string
+	Status  int
 }
 
 // combinedLine matches the nginx `combined` log format:
 //
 //	$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$referer" "$user_agent"
 //
+// plus one OPTIONAL trailing quoted field, "$http_sec_purpose", which the freehire
+// site config appends (see freehire-ops, provision/host2/nginx). The group is
+// optional on purpose: rotated files written before that change are still fed to
+// the aggregator, and the parser has to ship before the nginx change rather than
+// with it — a day whose lines it could not read would silently count nothing.
+//
 // The request group requires METHOD PATH PROTO, so bad requests logged as "-"
 // (or otherwise malformed) fail to match and are skipped by the caller.
-var combinedLine = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]*)\] "([A-Z]+) (\S+) [^"]*" (\d{3}) \S+ "[^"]*" "([^"]*)"`)
+var combinedLine = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]*)\] "([A-Z]+) (\S+) [^"]*" (\d{3}) \S+ "[^"]*" "([^"]*)"(?: "([^"]*)")?`)
 
 // timeLocalLayout is nginx's $time_local, e.g. 21/Jul/2026:12:00:00 +0000.
 const timeLocalLayout = "02/Jan/2006:15:04:05 -0700"
@@ -50,11 +63,19 @@ func ParseLine(line string) (Record, bool) {
 	if err != nil {
 		return Record{}, false
 	}
+	// nginx writes "-" for a header the request did not carry, which means the same
+	// thing as the field being absent — normalize both to empty so Classify has one
+	// case to test rather than two.
+	purpose := m[7]
+	if purpose == "-" {
+		purpose = ""
+	}
 	return Record{
 		IP:        m[1],
 		Time:      ts,
 		Method:    m[3],
 		Path:      m[4],
+		Purpose:   purpose,
 		Status:    status,
 		UserAgent: m[6],
 	}, true
