@@ -115,6 +115,45 @@ func (q *Queries) ListCompaniesForMerge(ctx context.Context) ([]ListCompaniesFor
 	return items, nil
 }
 
+const listCompanySlugAliases = `-- name: ListCompanySlugAliases :many
+SELECT DISTINCT folded_key, canonical_slug
+FROM company_slug_aliases
+ORDER BY folded_key, canonical_slug
+`
+
+type ListCompanySlugAliasesRow struct {
+	FoldedKey     string `json:"folded_key"`
+	CanonicalSlug string `json:"canonical_slug"`
+}
+
+// The whole registry, folded key to canonical slug. cmd/backfill-derive loads it once per run
+// and resolves in memory: it re-derives every job in the table, and jobderive is pure, so
+// without this a backfill would silently move every merged posting back to the spelling its
+// source happened to use — undoing the merges and taking role_fingerprint, which is computed
+// from the company slug, with it.
+//
+// Ordered for the same reason ResolveCompanySlugAliases is: one canonical slug per folded key
+// is the writer's invariant, and a violation should resolve identically every run.
+func (q *Queries) ListCompanySlugAliases(ctx context.Context) ([]ListCompanySlugAliasesRow, error) {
+	rows, err := q.db.Query(ctx, listCompanySlugAliases)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanySlugAliasesRow{}
+	for rows.Next() {
+		var i ListCompanySlugAliasesRow
+		if err := rows.Scan(&i.FoldedKey, &i.CanonicalSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const rekeyCompanySlugChunk = `-- name: RekeyCompanySlugChunk :execrows
 UPDATE jobs
 SET company_slug = $1,

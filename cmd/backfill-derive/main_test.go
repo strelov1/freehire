@@ -80,6 +80,12 @@ func (f *fakeStore) GetJob(_ context.Context, id int64) (db.Job, error) {
 	return db.Job{}, pgx.ErrNoRows
 }
 
+// ListCompanySlugAliases: this fake catalogue holds no merges, so the registry is empty and
+// the derivation is unchanged by it. A test that wants a merged row hands deriveRow its own.
+func (f *fakeStore) ListCompanySlugAliases(context.Context) ([]db.ListCompanySlugAliasesRow, error) {
+	return nil, nil
+}
+
 func (f *fakeStore) UpdateJobDerived(_ context.Context, arg db.UpdateJobDerivedParams) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

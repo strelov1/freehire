@@ -63,6 +63,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"slices"
@@ -76,6 +77,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
+	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -103,6 +105,7 @@ type deriveStore interface {
 	// from its readable neighbours.
 	worker.FullScanQueries
 	UpdateJobDerived(ctx context.Context, arg db.UpdateJobDerivedParams) error
+	ListCompanySlugAliases(ctx context.Context) ([]db.ListCompanySlugAliasesRow, error)
 }
 
 func main() {
@@ -162,7 +165,7 @@ func backfillConcurrency() int {
 // re-keying). The fingerprint is computed from the freshly derived company_slug, so
 // the result matches what cmd/ingest/store.go writes for the same raw fields. Pure —
 // safe to call concurrently.
-func deriveRow(j db.Job) (params db.UpdateJobDerivedParams, changed, slugMoved bool) {
+func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, changed, slugMoved bool) {
 	d := jobderive.Derive(jobderive.Input{
 		Title:       j.Title,
 		Company:     j.Company,
@@ -172,6 +175,12 @@ func deriveRow(j db.Job) (params db.UpdateJobDerivedParams, changed, slugMoved b
 		Description: j.Description,
 		WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
 	})
+	// jobderive is pure, so it re-derives the spelling the SOURCE used. Resolving through the
+	// alias registry here is what stops a backfill silently undoing every merge — and it must
+	// happen before the fingerprint, which is computed from the company slug.
+	if canonical, ok := canon[normalize.FoldSlug(d.CompanySlug)]; ok {
+		d.CompanySlug = canonical
+	}
 	fingerprint := jobhash.RoleFingerprint(db.UpsertJobParams{
 		CompanySlug: d.CompanySlug,
 		Title:       j.Title,
@@ -235,10 +244,39 @@ func backfillAll(ctx context.Context, store deriveStore, concurrency int) (scann
 // report fires ON each multiple of every, from whichever worker happens to cross it —
 // the counter is atomic, so exactly one goroutine observes each multiple whatever the
 // concurrency. It runs on the worker's goroutine, so it must stay cheap.
+// loadAliasRegistry reads company_slug_aliases into a folded-key lookup.
+//
+// A backfill that could not read it must FAIL rather than proceed: an empty registry looks
+// exactly like a catalogue with no merges, and proceeding would rewrite every merged posting
+// back to its source spelling — the one failure mode this guard exists for.
+func loadAliasRegistry(ctx context.Context, store deriveStore) (map[string]string, error) {
+	rows, err := store.ListCompanySlugAliases(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load company slug aliases: %w", err)
+	}
+	canon := make(map[string]string, len(rows))
+	for _, r := range rows {
+		if _, seen := canon[r.FoldedKey]; !seen {
+			canon[r.FoldedKey] = r.CanonicalSlug
+		}
+	}
+	log.Printf("backfill-derive: company alias registry loaded (%d folded keys)", len(canon))
+	return canon, nil
+}
+
 func backfillProgress(ctx context.Context, store deriveStore, concurrency int, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
+
+	// Loaded ONCE for the whole run rather than per row: the registry is small (one entry per
+	// retired slug) and the pool re-derives millions of rows. Read before any worker starts,
+	// so every row in a run resolves against the same registry.
+	canon, err := loadAliasRegistry(ctx, store)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -309,7 +347,7 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency int, e
 				if every > 0 && n%every == 0 && report != nil {
 					report(n, atomic.LoadInt64(&updatedN), atomic.LoadInt64(&slugsN))
 				}
-				params, changed, slugMoved := deriveRow(j)
+				params, changed, slugMoved := deriveRow(j, canon)
 				if !changed {
 					continue
 				}

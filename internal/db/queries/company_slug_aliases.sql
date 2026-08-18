@@ -67,3 +67,16 @@ WHERE jobs.id IN (
     ORDER BY j.id
     LIMIT @chunk_size
 );
+
+-- name: ListCompanySlugAliases :many
+-- The whole registry, folded key to canonical slug. cmd/backfill-derive loads it once per run
+-- and resolves in memory: it re-derives every job in the table, and jobderive is pure, so
+-- without this a backfill would silently move every merged posting back to the spelling its
+-- source happened to use — undoing the merges and taking role_fingerprint, which is computed
+-- from the company slug, with it.
+--
+-- Ordered for the same reason ResolveCompanySlugAliases is: one canonical slug per folded key
+-- is the writer's invariant, and a violation should resolve identically every run.
+SELECT DISTINCT folded_key, canonical_slug
+FROM company_slug_aliases
+ORDER BY folded_key, canonical_slug;

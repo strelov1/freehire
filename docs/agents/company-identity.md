@@ -93,6 +93,14 @@ nothing 404s. Do not run a manual reindex, and do not set `REINDEX_DEDUP`.
 `jobs.company` is left alone by a merge. The source keeps sending "DollarTree", so the next
 crawl would put it back, and the display name comes from `companies.name` regardless.
 
+**Any worker that re-derives `company_slug` must resolve through the registry.** `jobderive` is
+pure, so a re-derive yields the spelling the SOURCE used — which for a merged posting is the
+retired one. `cmd/backfill-derive` loads the registry once per run and resolves before it
+computes `role_fingerprint` (itself derived from the company slug); without that, a routine
+~15h backfill would silently undo every spelling merge and churn the repost identities on the
+way out. A worker that cannot READ the registry must fail rather than proceed: an empty
+registry is indistinguishable from a catalogue with no merges.
+
 ## Gotchas
 
 - **The canonical slug must be a fixed point of the rule, and job count alone does not give

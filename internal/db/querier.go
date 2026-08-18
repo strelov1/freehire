@@ -1817,6 +1817,15 @@ type Querier interface {
 	// rows that already hold industries, but the merge pass must also reach companies
 	// with none, and one query serving both keeps the two walks identical.
 	ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error)
+	// The whole registry, folded key to canonical slug. cmd/backfill-derive loads it once per run
+	// and resolves in memory: it re-derives every job in the table, and jobderive is pure, so
+	// without this a backfill would silently move every merged posting back to the spelling its
+	// source happened to use — undoing the merges and taking role_fingerprint, which is computed
+	// from the company slug, with it.
+	//
+	// Ordered for the same reason ResolveCompanySlugAliases is: one canonical slug per folded key
+	// is the writer's invariant, and a violation should resolve identically every run.
+	ListCompanySlugAliases(ctx context.Context) ([]ListCompanySlugAliasesRow, error)
 	// Every company slug, unfiltered. cmd/import-yc loads this once into an
 	// in-memory set to resolve each yc-oss directory entry's current-name and
 	// former-name slug candidates, instead of one CompanyExists round trip per
