@@ -105,10 +105,13 @@ crawl would put it back, and the display name comes from `companies.name` regard
   wave — it takes the slug the rule yields even though no row holds it yet, and the reconcile
   creates that row. Returning a slug no member holds is safe: a company already using it would
   fold to the same key, so it would be a member and would have won outright.
-- **Electing by anything but job count elects backwards.** "Prefer the more readable slug" is
-  the tempting rule and it picks `domino-s` (1 job) over `dominos` (14,396) and `al-fa-bank`
-  (20) over `alfa-bank` (1,617). Hyphens mark the corrupted spelling about as often as the
-  correct one.
+- **Read the NAME, not the slug, when choosing between spellings.** "Prefer the more
+  hyphenated slug" is the tempting rule and it elects `domino-s` (1 job) over `dominos`
+  (14,396) and `al-fa-bank` (20) over `alfa-bank` (1,617): in a slug an apostrophe is
+  indistinguishable from a word break. What actually decides is whether the employer WRITES
+  its name in several words — `Western Digital` and `Ace Hardware` do, `AT&T` and `Dominos` do
+  not — and that preference only speaks when it discriminates. Where no name is multi-word, or
+  every name is, the job count decides as before.
 - **The word break is not whitespace.** It is every rune `Slug` drops EXCEPT `.` and `/`, which
   live inside the forms themselves (`B.V.`, `A/S`). Whitespace alone loses
   `Sun Technologies,Inc.`, and 13,730 catalogue companies are written that way.

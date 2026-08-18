@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"slices"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/normalize"
 )
@@ -140,12 +141,43 @@ func electCanonical(members []company, frozen map[string]bool) string {
 			return c.Slug
 		}
 	}
+	var fixed []company
 	for _, c := range members {
 		if normalize.CompanySlug(c.Slug) == c.Slug {
-			return c.Slug
+			fixed = append(fixed, c)
 		}
 	}
+	if len(fixed) > 0 {
+		// Among spellings the rule can reproduce, prefer one the employer WRITES in several
+		// words. Job count alone cannot see this: it elects `westerndigital` over
+		// `western-digital` and `acehardware` over `ace-hardware` purely on volume, 73 times
+		// in the >=100-job wave.
+		//
+		// The signal is the NAME, never the slug. "Domino's" slugs to `domino-s`, where an
+		// apostrophe is indistinguishable from a word break — which is exactly why "prefer
+		// the more hyphenated slug" elected `domino-s` over `dominos` and had to be dropped.
+		//
+		// It only speaks when it discriminates. Where no name is multi-word (Domino's) or
+		// every name is (Alfa Bank beside Al Fa Bank), it says nothing and the count decides,
+		// as it did before.
+		for _, c := range fixed {
+			if nameWords(c.Name) > 1 {
+				return c.Slug
+			}
+		}
+		return fixed[0].Slug
+	}
 	return normalize.CompanySlug(members[0].Name)
+}
+
+// nameWords counts the whitespace words of a name that are the name proper, trailing legal
+// forms dropped: "Ace Hardware Corporation" is a two-word employer, not a three-word one.
+func nameWords(name string) int {
+	fields := strings.Fields(name)
+	for len(fields) > 1 && normalize.IsLegalForm(fields[len(fields)-1]) {
+		fields = fields[:len(fields)-1]
+	}
+	return len(fields)
 }
 
 // reasonFor classifies why a slug is retiring. The test is whether the current pure rule,

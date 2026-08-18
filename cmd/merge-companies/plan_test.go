@@ -126,9 +126,12 @@ func TestPlanMerges_CanonicalIsAFixedPointOfTheSlugRule(t *testing.T) {
 	}
 }
 
-// TestPlanMerges_JobCountStillDecidesBetweenFixedPoints: the fixed-point preference is a
-// tie-break BEFORE job count, not a replacement for it. Both spellings here are ones the rule
-// produces, so the bigger one still wins — including when it is the uglier of the two.
+// TestPlanMerges_JobCountStillDecidesBetweenFixedPoints: the preferences are tie-breaks BEFORE
+// job count, not replacements for it. Where neither the fixed-point rule nor the word shape of
+// the name discriminates, the bigger spelling still wins.
+//
+// This once asserted that turnertownsend beats turner-townsend on volume. The employer writes
+// two words, so the word-shape rule now takes it the other way — and that is the better url.
 func TestPlanMerges_JobCountStillDecidesBetweenFixedPoints(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "dollartree", Name: "DollarTree", JobCount: 283},
@@ -138,13 +141,13 @@ func TestPlanMerges_JobCountStillDecidesBetweenFixedPoints(t *testing.T) {
 		t.Errorf("Canonical = %q, want dollar-tree", got[0].Canonical)
 	}
 
+	// Both spellings of one WORD: the count decides and nothing else has an opinion.
 	got = planMerges([]company{
-		{Slug: "turner-townsend", Name: "Turner Townsend", JobCount: 16},
-		{Slug: "turnertownsend", Name: "TurnerTownsend", JobCount: 400},
+		{Slug: "dominos", Name: "Dominos", JobCount: 14396},
+		{Slug: "domino-s", Name: "Domino's", JobCount: 1},
 	}, nil, 0)
-	if got[0].Canonical != "turnertownsend" {
-		t.Errorf("Canonical = %q, want turnertownsend — both are fixed points, so the count "+
-			"decides even though the hyphenated one reads better", got[0].Canonical)
+	if got[0].Canonical != "dominos" {
+		t.Errorf("Canonical = %q, want dominos", got[0].Canonical)
 	}
 }
 
@@ -188,4 +191,63 @@ func TestPlanMerges_FallsBackToTheDerivedSlug(t *testing.T) {
 		t.Errorf("got %d aliases, want 2 — every existing slug retires when none of them is "+
 			"the canon", len(got[0].Aliases))
 	}
+}
+
+// TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn decides the spelling class by the shape
+// of the NAME, which is the signal job count alone cannot see.
+//
+// The >=100-job wave elects a squashed canonical over a hyphenated one 73 times out of 162
+// spelling merges. Some are right — AT&T really is one word, so `att` beats `at-t` — and some
+// are plainly wrong: `accenturefederalservices`, `acehardware`, `westerndigital`. What tells
+// them apart is not the slug but whether the employer writes its name with spaces.
+//
+// This is also why "prefer the more hyphenated slug" failed and this does not: that rule read
+// the slug, where a stray apostrophe looks exactly like a word break.
+func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
+	t.Run("a multi-word name keeps its word breaks", func(t *testing.T) {
+		got := planMerges([]company{
+			{Slug: "westerndigital", Name: "WesternDigital", JobCount: 400},
+			{Slug: "western-digital", Name: "Western Digital", JobCount: 126},
+		}, nil, 0)
+		if got[0].Canonical != "western-digital" {
+			t.Errorf("Canonical = %q, want western-digital — the employer writes two words",
+				got[0].Canonical)
+		}
+	})
+
+	t.Run("no member is multi-word, so the count decides", func(t *testing.T) {
+		// The counterexample that killed "prefer hyphens": the break in `domino-s` comes from
+		// an apostrophe, not a space, and neither name has a space at all.
+		got := planMerges([]company{
+			{Slug: "dominos", Name: "Dominos", JobCount: 14396},
+			{Slug: "domino-s", Name: "Domino's", JobCount: 1},
+		}, nil, 0)
+		if got[0].Canonical != "dominos" {
+			t.Errorf("Canonical = %q, want dominos", got[0].Canonical)
+		}
+	})
+
+	t.Run("every member is multi-word, so the count decides", func(t *testing.T) {
+		// The other counterexample: both names carry spaces, so the shape says nothing and
+		// the count correctly picks the un-corrupted spelling.
+		got := planMerges([]company{
+			{Slug: "alfa-bank", Name: "Alfa Bank", JobCount: 1617},
+			{Slug: "al-fa-bank", Name: "Al Fa Bank", JobCount: 20},
+		}, nil, 0)
+		if got[0].Canonical != "alfa-bank" {
+			t.Errorf("Canonical = %q, want alfa-bank", got[0].Canonical)
+		}
+	})
+
+	t.Run("a legal form is not a word that makes a name multi-word", func(t *testing.T) {
+		// "Ace Hardware Corporation" is two words plus a form; it must not outrank a plain
+		// "Ace Hardware", and both must beat the squashed spelling.
+		got := planMerges([]company{
+			{Slug: "acehardware", Name: "AceHardware", JobCount: 500},
+			{Slug: "ace-hardware", Name: "Ace Hardware", JobCount: 90},
+		}, nil, 0)
+		if got[0].Canonical != "ace-hardware" {
+			t.Errorf("Canonical = %q, want ace-hardware", got[0].Canonical)
+		}
+	})
 }
