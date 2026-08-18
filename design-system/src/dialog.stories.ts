@@ -32,3 +32,9 @@ export const NotDismissible: Story = {
     dismissible: false,
   },
 };
+
+// Resize the canvas below the sm breakpoint (640px) to see the mobile takeover:
+// edge-to-edge, scrolling body, close button pinned to the viewport corner.
+export const LongContent: Story = {
+  args: { title: 'Update your profile', body: 'long' },
+};
