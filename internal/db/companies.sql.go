@@ -98,7 +98,16 @@ WHERE job_count > 0
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality($6::text[]), 0) = 0
        OR industries && $6::text[]
-       OR domains && $7::text[])
+       -- The derived arm answers only where the curated one is SILENT. The two are
+       -- not equal evidence: ` + "`" + `domains` + "`" + ` is a union over every open job the company
+       -- holds, so for a company with hundreds of postings it drifts from what the
+       -- company is toward the range of work it advertises — Uber accumulates
+       -- gamedev, edtech and govtech that way, and briefly answered
+       -- ?industries=gaming in production because of it. Consulting that union for a
+       -- company an importer has already classified adds no reach (its own values
+       -- already match it) and asserts industries it is not in.
+       OR (cardinality(industries) = 0
+           AND domains && $7::text[]))
   AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_types && $8::text[])
   AND (coalesce(cardinality($9::text[]), 0) = 0 OR company_sizes && $9::text[])
   AND (coalesce(cardinality($10::text[]), 0) = 0 OR remote_regions && $10::text[])
@@ -261,7 +270,16 @@ WHERE job_count > 0
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality($6::text[]), 0) = 0
        OR industries && $6::text[]
-       OR domains && $7::text[])
+       -- The derived arm answers only where the curated one is SILENT. The two are
+       -- not equal evidence: ` + "`" + `domains` + "`" + ` is a union over every open job the company
+       -- holds, so for a company with hundreds of postings it drifts from what the
+       -- company is toward the range of work it advertises — Uber accumulates
+       -- gamedev, edtech and govtech that way, and briefly answered
+       -- ?industries=gaming in production because of it. Consulting that union for a
+       -- company an importer has already classified adds no reach (its own values
+       -- already match it) and asserts industries it is not in.
+       OR (cardinality(industries) = 0
+           AND domains && $7::text[]))
   AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_types && $8::text[])
   AND (coalesce(cardinality($9::text[]), 0) = 0 OR company_sizes && $9::text[])
   AND (coalesce(cardinality($10::text[]), 0) = 0 OR remote_regions && $10::text[])

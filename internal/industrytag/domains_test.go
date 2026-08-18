@@ -25,19 +25,25 @@ func TestDomainsForIndustries(t *testing.T) {
 			want:       []string{"crypto", "fintech"},
 		},
 		{
-			// entertainment is the nearest curated value to the "media" domain, and
-			// nearest is not the same as right: that domain also covers publishing,
-			// social networks and dating. Mapping it would file those companies under
-			// an industry that misdescribes them.
-			name:       "an industry whose nearest domain is broader than it",
+			// The alias table already routes digital-media and media-and-entertainment
+			// to entertainment, so holding the domain itself to a stricter standard was
+			// the inconsistency, not the mapping.
+			name:       "media resolves to the industry its own synonyms already use",
 			industries: []string{"entertainment"},
-			want:       []string{},
+			want:       []string{"media"},
 		},
 		{
-			// Same reason: "mobility" is automotive AND ride-hailing AND transport of
-			// people, which neither automotive nor transportation alone names.
-			name:       "the other deliberately unmapped domain",
-			industries: []string{"automotive", "transportation"},
+			// Settled against NAICS: ride-hailing is 485310 under Transit and Ground
+			// Passenger Transportation, distinct from 3361 Motor Vehicle Manufacturing.
+			// So the mobility domain answers transportation and NOT automotive — the
+			// latter would file taxi platforms under vehicle manufacturing.
+			name:       "mobility answers transportation, not automotive",
+			industries: []string{"transportation"},
+			want:       []string{"mobility"},
+		},
+		{
+			name:       "automotive is not reachable through the mobility domain",
+			industries: []string{"automotive"},
 			want:       []string{},
 		},
 		{
@@ -82,7 +88,7 @@ func TestDomainIndustryTableSpeaksBothVocabularies(t *testing.T) {
 // The domains left out are left out on purpose, so the omission is asserted rather
 // than left to be "fixed" by someone reading the table as incomplete.
 func TestDeliberatelyUnmappedDomains(t *testing.T) {
-	excluded := []string{"other", "media", "mobility"}
+	excluded := []string{"other"}
 
 	for _, domain := range excluded {
 		if industry, ok := domainIndustry[domain]; ok {

@@ -41,7 +41,16 @@ WHERE job_count > 0
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0
        OR industries && sqlc.arg('industries')::text[]
-       OR domains && sqlc.arg('industry_domains')::text[])
+       -- The derived arm answers only where the curated one is SILENT. The two are
+       -- not equal evidence: `domains` is a union over every open job the company
+       -- holds, so for a company with hundreds of postings it drifts from what the
+       -- company is toward the range of work it advertises — Uber accumulates
+       -- gamedev, edtech and govtech that way, and briefly answered
+       -- ?industries=gaming in production because of it. Consulting that union for a
+       -- company an importer has already classified adds no reach (its own values
+       -- already match it) and asserts industries it is not in.
+       OR (cardinality(industries) = 0
+           AND domains && sqlc.arg('industry_domains')::text[]))
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
@@ -92,7 +101,16 @@ WHERE job_count > 0
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0
        OR industries && sqlc.arg('industries')::text[]
-       OR domains && sqlc.arg('industry_domains')::text[])
+       -- The derived arm answers only where the curated one is SILENT. The two are
+       -- not equal evidence: `domains` is a union over every open job the company
+       -- holds, so for a company with hundreds of postings it drifts from what the
+       -- company is toward the range of work it advertises — Uber accumulates
+       -- gamedev, edtech and govtech that way, and briefly answered
+       -- ?industries=gaming in production because of it. Consulting that union for a
+       -- company an importer has already classified adds no reach (its own values
+       -- already match it) and asserts industries it is not in.
+       OR (cardinality(industries) = 0
+           AND domains && sqlc.arg('industry_domains')::text[]))
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])

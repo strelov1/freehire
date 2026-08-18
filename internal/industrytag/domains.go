@@ -13,19 +13,23 @@ import "slices"
 // names at most one industry, while an industry may be reachable through several
 // domains (none are today, but the inversion below does not assume otherwise).
 //
-// Three of the twenty domains map to nothing, and the omissions are the point:
+// One of the twenty domains maps to nothing: "other" is the classifier declining to
+// answer, not a vertical. A domain absent from vocab.DomainValues entirely — "saas",
+// retired for naming a business model rather than a vertical, but still present on
+// rows enriched before it went — falls out by the same lookup, with no special case.
 //
-//   - "other" is the classifier declining to answer, not a vertical.
-//   - "media" covers content, publishing, streaming, social networks and dating. The
-//     nearest curated value, "entertainment", names a fraction of that.
-//   - "mobility" covers automotive, autonomous vehicles, ride-hailing and transport
-//     of people — neither "automotive" nor "transportation" alone.
+// Where a placement is contested, it is settled against NAICS and Crunchbase rather
+// than by argument. Two were:
 //
-// Stretching either would file companies under an industry that misdescribes them,
-// which is the guess this package exists to refuse. A domain absent from
-// vocab.DomainValues entirely — "saas", retired for naming a business model rather
-// than a vertical, but still present on rows enriched before it went — falls out by
-// the same lookup, with no special case.
+//   - "mobility" → transportation. Ride-hailing is NAICS 485310, under 485 Transit
+//     and Ground Passenger Transportation, explicitly distinct from 3361 Motor
+//     Vehicle Manufacturing; Crunchbase has no "mobility" category at all, making
+//     Transportation the umbrella with Ride Sharing and Automotive beneath it. So
+//     "automotive" would have filed taxi platforms under vehicle manufacturing.
+//   - "media" → entertainment. The alias table beside this one already routes
+//     digital-media, media-and-entertainment, media-and-communications and
+//     content-creation there, and Crunchbase groups the two as one. The domain was
+//     being held to a stricter standard than its own synonyms.
 var domainIndustry = map[string]string{
 	"adtech":        "adtech",
 	"ai":            "ai",
@@ -42,6 +46,8 @@ var domainIndustry = map[string]string{
 	"healthcare":    "healthcare",
 	"hrtech":        "hr-tech",
 	"logistics":     "logistics",
+	"media":         "entertainment",
+	"mobility":      "transportation",
 	"proptech":      "proptech",
 	"travel":        "travel",
 }

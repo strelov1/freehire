@@ -182,15 +182,25 @@ func CompanyFilterFromValues(v url.Values) any {
 		for _, val := range included {
 			group = append(group, Eq(f.attr, val))
 		}
-		// An industry names a company whoever said so: the curated column an importer
-		// wrote, or the coarse domain the company's own postings imply. Both arms join
-		// the SAME group, so they OR — a company needs to satisfy only one. Curated
-		// only reaches 27% of the catalogue, so without the second arm the filter
-		// misses most of what it is asked for. Requested industries the mapping does
-		// not cover add nothing here, leaving the curated arm to answer alone.
+		// An industry reaches a company from two ORDERED sources: the curated column an
+		// importer wrote, and — only where that is empty — the coarse domain the
+		// company's own postings imply. Both arms join the SAME group, so they OR; the
+		// second carries `industries IS EMPTY` as a conjunct, which is what makes them
+		// ordered rather than equal.
+		//
+		// They are not equal evidence. `domains` is a union over every open job, so a
+		// company with hundreds of postings accumulates domains that describe its
+		// hiring range rather than its business — Uber collects gamedev, edtech and
+		// govtech that way, and briefly answered ?industries=gaming in production.
+		// Reading it for a company someone has already classified adds no reach and
+		// asserts industries it is not in.
+		//
+		// The curated column alone covers about a quarter of the catalogue, so the
+		// second arm is still most of the facet's reach. Requested industries the
+		// mapping does not cover add nothing, leaving the curated arm to answer alone.
 		if f.param == "industries" {
 			for _, domain := range industrytag.DomainsForIndustries(included) {
-				group = append(group, Eq("domains", domain))
+				group = append(group, And(IsUnset("industries"), Eq("domains", domain)))
 			}
 		}
 		g = append(g, group)

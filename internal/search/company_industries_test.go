@@ -22,7 +22,7 @@ func TestCompanyFilterFromValuesAcceptsIndustries(t *testing.T) {
 	f := CompanyFilterFromValues(url.Values{"industries": {"fintech"}})
 
 	gs := groups(t, f)
-	if !hasGroup(gs, `industries = "fintech"`, `domains = "fintech"`) {
+	if !hasGroup(gs, `industries = "fintech"`, `((industries IS EMPTY OR industries IS NULL) AND domains = "fintech")`) {
 		t.Errorf("industries filter missing its domain arm, got %v", gs)
 	}
 }
@@ -33,7 +33,7 @@ func TestCompanyFilterFromValuesTranslatesIndustryToItsDomain(t *testing.T) {
 	f := CompanyFilterFromValues(url.Values{"industries": {"developer-tools"}})
 
 	gs := groups(t, f)
-	if !hasGroup(gs, `industries = "developer-tools"`, `domains = "devtools"`) {
+	if !hasGroup(gs, `industries = "developer-tools"`, `((industries IS EMPTY OR industries IS NULL) AND domains = "devtools")`) {
 		t.Errorf("developer-tools should also match the devtools domain, got %v", gs)
 	}
 }
@@ -48,7 +48,7 @@ func TestCompanyFilterFromValuesOrsSeveralIndustries(t *testing.T) {
 	gs := groups(t, f)
 	if !hasGroup(gs,
 		`industries = "healthcare"`, `industries = "fintech"`,
-		`domains = "fintech"`, `domains = "healthcare"`,
+		`((industries IS EMPTY OR industries IS NULL) AND domains = "fintech")`, `((industries IS EMPTY OR industries IS NULL) AND domains = "healthcare")`,
 	) {
 		t.Errorf("industries values should OR within one group, got %v", gs)
 	}
@@ -58,10 +58,12 @@ func TestCompanyFilterFromValuesOrsSeveralIndustries(t *testing.T) {
 // Emitting a fragment for it would either match nothing (harmless but noisy) or,
 // worse, match a domain that misdescribes the company.
 func TestCompanyFilterFromValuesLeavesUnmappedIndustryAlone(t *testing.T) {
-	f := CompanyFilterFromValues(url.Values{"industries": {"entertainment"}})
+	// accounting is a curated industry the coarse domain vocabulary simply has no
+	// value for — unlike entertainment or transportation, which do map.
+	f := CompanyFilterFromValues(url.Values{"industries": {"accounting"}})
 
 	gs := groups(t, f)
-	if !hasGroup(gs, `industries = "entertainment"`) {
+	if !hasGroup(gs, `industries = "accounting"`) {
 		t.Errorf("an unmapped industry should filter on the curated column alone, got %v", gs)
 	}
 }

@@ -113,3 +113,46 @@ func containsSlug(hits []CompanyDocument, slug string) bool {
 	}
 	return false
 }
+
+// The industry facet's derived arm is a parenthesised conjunction inside an OR group
+// — a filter shape nothing else in this codebase builds. A unit test can only assert
+// the string; whether Meilisearch PARSES it is a property of the engine, and getting
+// it wrong is a 500 on every industry-filtered request rather than a wrong result.
+func TestIntegration_CompanySearch_IndustryPrecedence(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	buildCompanyIndex(t, c, []CompanyDocument{
+		// Curated: matches through its own column.
+		{Slug: "curated-fin", Name: "Curated Fin", JobCount: 5, Industries: []string{"fintech"}},
+		// Uncurated: matches through the domain that means the same thing.
+		// Two shapes of "no curated industry": a nil slice serializes to null, an
+		// empty one to []. Meilisearch does not treat them as the same thing, so both
+		// are here — testing only one would let a filter that handles only that one pass.
+		{Slug: "derived-nil", Name: "Derived Nil", JobCount: 5, Domains: []string{"fintech"}},
+		{Slug: "derived-empty", Name: "Derived Empty", JobCount: 5, Industries: []string{}, Domains: []string{"fintech"}},
+		// Curated as something else, with a domains union that drifted — the
+		// production shape that made ?industries=gaming return Uber. Its curated
+		// column answers for it; the drift must not.
+		{Slug: "big-classified", Name: "Big Classified", JobCount: 5,
+			Industries: []string{"logistics"}, Domains: []string{"fintech", "gamedev"}},
+	})
+
+	filter := CompanyFilterFromValues(url.Values{"industries": {"fintech"}})
+	res, err := c.SearchCompanies(ctx, CompanySearchParams{Filter: filter, Limit: 10})
+	if err != nil {
+		t.Fatalf("SearchCompanies: %v (does Meilisearch accept the conjunction?)", err)
+	}
+
+	got := slugs(res.Hits)
+	for _, want := range []string{"curated-fin", "derived-nil", "derived-empty"} {
+		if !contains(got, want) {
+			t.Errorf("industries=fintech → %v, missing %s", got, want)
+		}
+	}
+	if len(got) != 3 {
+		t.Errorf("industries=fintech → %v, want exactly the three above", got)
+	}
+	if contains(got, "big-classified") {
+		t.Error("a company curated as logistics was matched through its domains")
+	}
+}

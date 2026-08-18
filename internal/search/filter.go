@@ -16,6 +16,22 @@ func Eq(attr, value string) string {
 	return attr + " = " + quote(value)
 }
 
+// And joins fragments into one parenthesised conjunction, so a conjunction can sit
+// inside an OR group — Filter's groups OR their members, and a member that must
+// itself hold two conditions needs the parentheses to survive that. Backs the
+// company industry facet's derived arm, which matches a domain only on a company
+// with no curated industry. One fragment is returned unwrapped; none yields "".
+func And(fragments ...string) string {
+	switch len(fragments) {
+	case 0:
+		return ""
+	case 1:
+		return fragments[0]
+	default:
+		return "(" + strings.Join(fragments, " AND ") + ")"
+	}
+}
+
 // Neq builds an inequality fragment `attr != "value"` (escaped), used by the
 // exclude facets to filter a value out.
 func Neq(attr, value string) string {
@@ -33,6 +49,18 @@ func EqBool(attr string, v bool) string {
 // selecting jobs whose geography did not resolve — without a materialized column.
 func IsEmpty(attr string) string {
 	return attr + " IS EMPTY"
+}
+
+// IsUnset builds `(attr IS EMPTY OR attr IS NULL)` — the two ways Meilisearch can
+// represent "this document says nothing here", which it does NOT treat as one. An
+// empty Go slice serializes to `[]` and answers IS EMPTY; a nil slice serializes to
+// `null` and answers only IS NULL. Which of the two a document carries depends on
+// how its source produced the field, so a filter that tests only one silently
+// matches nothing for the other half — an over-narrow filter is indistinguishable
+// from a genuinely empty result. Verified against a real engine in
+// company_integration_test.go.
+func IsUnset(attr string) string {
+	return "(" + IsEmpty(attr) + " OR " + attr + " IS NULL)"
 }
 
 // IsNotEmpty builds `attr IS NOT EMPTY`, the exclude form of IsEmpty (jobs that DO
