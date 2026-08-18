@@ -117,8 +117,9 @@ registry is indistinguishable from a catalogue with no merges.
   hyphenated slug" is the tempting rule and it elects `domino-s` (1 job) over `dominos`
   (14,396) and `al-fa-bank` (20) over `alfa-bank` (1,617): in a slug an apostrophe is
   indistinguishable from a word break. What actually decides is whether the employer WRITES
-  its name in several words — `Western Digital` and `Ace Hardware` do, `AT&T` and `Dominos` do
-  not — and that preference only speaks when it discriminates. Where no name is multi-word, or
+  its name in several words — `Western Digital`, `Ace Hardware` and `Kimberly-Clark` do, `AT&T`,
+  `Brink's` and `Dominos` do not. A hyphen in the NAME separates words; an apostrophe does not,
+  and that is precisely the distinction a slug destroys, since it renders both as a hyphen — and that preference only speaks when it discriminates. Where no name is multi-word, or
   every name is, the job count decides as before.
 - **The word break is not whitespace.** It is every rune `Slug` drops EXCEPT `.` and `/`, which
   live inside the forms themselves (`B.V.`, `A/S`). Whitespace alone loses

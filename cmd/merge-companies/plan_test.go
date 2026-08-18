@@ -239,6 +239,30 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		}
 	})
 
+	t.Run("a hyphen in the name is a word break too", func(t *testing.T) {
+		// Kimberly-Clark writes itself with a hyphen, which is as much a word break as a
+		// space. Counting only spaces made it a one-word name and elected `kimberlyclark`.
+		got := planMerges([]company{
+			{Slug: "kimberlyclark", Name: "KimberlyClark", JobCount: 300},
+			{Slug: "kimberly-clark", Name: "Kimberly-Clark", JobCount: 40},
+		}, nil, 0)
+		if got[0].Canonical != "kimberly-clark" {
+			t.Errorf("Canonical = %q, want kimberly-clark", got[0].Canonical)
+		}
+	})
+
+	t.Run("an apostrophe is NOT a word break", func(t *testing.T) {
+		// The distinction the slug cannot make: Brink's is one word, and `brinks` beats
+		// `brink-s` exactly as `dominos` beats `domino-s`.
+		got := planMerges([]company{
+			{Slug: "brinks", Name: "Brinks", JobCount: 200},
+			{Slug: "brink-s", Name: "Brink's", JobCount: 10},
+		}, nil, 0)
+		if got[0].Canonical != "brinks" {
+			t.Errorf("Canonical = %q, want brinks", got[0].Canonical)
+		}
+	})
+
 	t.Run("a legal form is not a word that makes a name multi-word", func(t *testing.T) {
 		// "Ace Hardware Corporation" is two words plus a form; it must not outrank a plain
 		// "Ace Hardware", and both must beat the squashed spelling.

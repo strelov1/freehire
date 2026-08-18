@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/strelov1/freehire/internal/normalize"
 )
@@ -170,10 +171,17 @@ func electCanonical(members []company, frozen map[string]bool) string {
 	return normalize.CompanySlug(members[0].Name)
 }
 
-// nameWords counts the whitespace words of a name that are the name proper, trailing legal
-// forms dropped: "Ace Hardware Corporation" is a two-word employer, not a three-word one.
+// nameWords counts the words of a name that are the name proper, trailing legal forms
+// dropped: "Ace Hardware Corporation" is a two-word employer, not a three-word one.
+//
+// A HYPHEN separates words as surely as a space — Kimberly-Clark and T-Mobile write themselves
+// that way — but an apostrophe does not: Brink's and Domino's are one word each. That is the
+// distinction a slug cannot preserve, since Slug renders every one of them as a hyphen, and it
+// is the whole reason this reads the name.
 func nameWords(name string) int {
-	fields := strings.Fields(name)
+	fields := strings.FieldsFunc(name, func(r rune) bool {
+		return unicode.IsSpace(r) || r == '-'
+	})
 	for len(fields) > 1 && normalize.IsLegalForm(fields[len(fields)-1]) {
 		fields = fields[:len(fields)-1]
 	}
