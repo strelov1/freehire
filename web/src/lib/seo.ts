@@ -223,12 +223,47 @@ function baseSalary(e: Enrichment): Record<string, unknown> {
   };
 }
 
+// Location strings that restate the work mode instead of naming a place. Sources
+// put these in the location field constantly, and passing one through made the
+// posting claim a city that does not exist: 8 of the 10 postings sampled from the
+// Remote Worldwide collection told Google `addressLocality: "Remote"`, with no
+// addressCountry to place it. Google geocodes jobLocation against real places, so
+// that is not a harmless label — it is a location it cannot resolve.
+//
+// Matched on the whole (trimmed, lowercased) string, never as a substring:
+// "Remote within the Continental United States" does name a real area, and
+// dropping it would discard a genuine restriction.
+const PLACEHOLDER_LOCATIONS = new Set([
+  'remote',
+  'fully remote',
+  '100% remote',
+  'remote worldwide',
+  'remote - worldwide',
+  'remote (worldwide)',
+  'worldwide',
+  'anywhere',
+  'global',
+  'work from home',
+  'wfh',
+]);
+
+function isPlaceholderLocation(location: string): boolean {
+  return PLACEHOLDER_LOCATIONS.has(location.trim().toLowerCase());
+}
+
 // schema.org jobLocation from the raw location string: Google accepts a
 // PostalAddress with just locality; add the ISO country code when the geo
 // dictionary pinned one (job.countries is alpha-2), never a made-up street/postal
 // code — mismatched structured data is a ranking liability. Shared by a non-remote
 // posting and a remote one whose region never resolved (see jobPostingJsonLd).
-function jobLocationFromText(location: string, countries?: string[]): Record<string, unknown> {
+//
+// Returns undefined for a string that names no place, so the caller omits
+// jobLocation rather than emitting an unresolvable one.
+function jobLocationFromText(
+  location: string,
+  countries?: string[]
+): Record<string, unknown> | undefined {
+  if (isPlaceholderLocation(location)) return undefined;
   const address: Record<string, unknown> = {
     '@type': 'PostalAddress',
     addressLocality: location,
@@ -335,12 +370,18 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
       // location string still reached the posting). Asserting TELECOMMUTE without
       // its required companion would be worse than not asserting it: fall back to
       // the same plain jobLocation a non-remote posting gets.
-      ld.jobLocation = jobLocationFromText(job.location, job.countries);
+      //
+      // Unless that string is a placeholder like "Remote", which is the work mode
+      // written into the location field. Then there is still nothing to state and
+      // this joins the omit-entirely case below.
+      const place = jobLocationFromText(job.location, job.countries);
+      if (place) ld.jobLocation = place;
     }
     // Neither a resolved region nor any location text at all: nothing honest to
     // state, so location is omitted rather than guessed.
   } else if (job.location) {
-    ld.jobLocation = jobLocationFromText(job.location, job.countries);
+    const place = jobLocationFromText(job.location, job.countries);
+    if (place) ld.jobLocation = place;
   }
 
   if (e.salary_min != null || e.salary_max != null) {

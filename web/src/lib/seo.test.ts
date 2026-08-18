@@ -377,6 +377,45 @@ describe('jobPostingJsonLd', () => {
     );
     expect(ld).not.toHaveProperty('jobLocationType');
     expect(ld).not.toHaveProperty('applicantLocationRequirements');
+    // And it does not answer "where is this job" with the word that means "nowhere
+    // in particular": Google geocodes jobLocation against real places.
+    expect(ld).not.toHaveProperty('jobLocation');
+  });
+
+  // A worldwide posting's location text is a restatement of its work mode, not a
+  // place. Emitting it made 8 of the 10 postings sampled from the Remote Worldwide
+  // collection claim a city called "Remote", with no addressCountry to place it.
+  it.each([
+    'Remote',
+    'remote',
+    ' Worldwide ',
+    'Anywhere',
+    'Fully Remote',
+    'Remote - Worldwide',
+    'Work from home',
+  ])('never emits %j as a place', (location) => {
+    const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: [], location }), ORIGIN);
+    expect(ld).not.toHaveProperty('jobLocation');
+  });
+
+  // The same text is just as meaningless on a posting whose work mode was never
+  // classified, and that is where most of them arrive.
+  it('never emits a placeholder location on a posting with no work mode', () => {
+    const ld = jobPostingJsonLd(postingJob({ location: 'Remote' }), ORIGIN);
+    expect(ld).not.toHaveProperty('jobLocation');
+  });
+
+  // The guard keys on the whole string, never a substring: a qualified phrase
+  // still names a real area, and dropping it would lose a genuine restriction.
+  it('keeps a location that only begins with a placeholder word', () => {
+    const ld = jobPostingJsonLd(
+      postingJob({ work_mode: 'remote', regions: [], location: 'Remote within the US' }),
+      ORIGIN
+    );
+    expect(ld.jobLocation).toEqual({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: 'Remote within the US' },
+    });
   });
 
   it('falls back to a plain jobLocation when a remote posting has no resolved region but does have a location string', () => {
