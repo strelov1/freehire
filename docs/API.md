@@ -16,23 +16,33 @@ Base URL: `https://freehire.me/api/v1`
 - [Jobs](#jobs)
 - [AI analysis](#ai-analysis)
 - [Companies](#companies)
+- [Geography](#geography)
+- [Company feedback](#company-feedback)
 - [Authentication](#authentication)
 - [API keys](#api-keys)
 - [Job interactions](#job-interactions)
+- [In-app assistant](#in-app-assistant)
 - [Job submissions](#job-submissions)
 - [Job reports](#job-reports)
+- [Ghost job reports](#ghost-job-reports)
 - [Moderator jobs](#moderator-jobs)
 - [Profile & résumé](#profile-r-sum)
+- [Screening answers](#screening-answers)
 - [Activity & shared boards](#activity-shared-boards)
 - [Saved searches & subscriptions](#saved-searches-subscriptions)
+- [Push notifications & alerts](#push-notifications-alerts)
 - [Account, credits & extension](#account-credits-extension)
 - [Link intake & discovery](#link-intake-discovery)
 - [Votes, notifications & discussions](#votes-notifications-discussions)
 - [Market insights & stats](#market-insights-stats)
+- [Market pulse](#market-pulse)
 - [Employee referrals](#employee-referrals)
+- [Talent Network](#talent-network)
 - [CV builder & tailoring](#cv-builder-tailoring)
+- [Photo](#photo)
 - [Experience bank](#experience-bank)
 - [Application mail](#application-mail)
+- [Speech](#speech)
 
 ## Base URL
 
@@ -70,7 +80,7 @@ Endpoints marked “Session or API key” accept either; endpoints marked “Ses
 
 ## What is not here
 
-This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail consent redirect (`/me/gmail/connect` and its callback), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; and the sitemap-cursor helpers behind `/sitemap.xml`.
+This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook and the Discord interaction webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
 
 The `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.
 
@@ -83,8 +93,10 @@ These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any
 - Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.
 - Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.
 - Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.
-- Different facets are ANDed together; numeric and boolean filters are ANDed too.
+- Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.
+- Geography is a single OR group: `regions`, `countries` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means "in Europe **or** in Italy", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The three name a single concept — *where* — so picking two places reads as "either", which is what makes `regions=eu&countries=BR` ("Europe or Brazil") useful. There is no AND to switch on: `_mode=and` does not apply to geography.
 - Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.
+- A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result. At most 10 are listed per response. The same report rides on `/jobs/facets`, `/market/coverage` and `/companies`, which answer `{"data": ...}` and grow a `meta` block only when there is something to warn about. `/companies` filters on its own vocabulary, so a jobs facet sent there is reported as ignored.
 
 ### Facets
 
@@ -130,6 +142,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 - **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`
 - **Backend roles, freshest first, in Germany** — `category=backend&countries=DE&sort=posted_at&order=desc`
+- **One country only — no region param, or it widens back out** — `countries=IT&employment_type=contract`
 - **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`
 - **Exclude outstaff companies** — `company_type_exclude=outstaff`
 - **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`
@@ -222,7 +235,7 @@ curl "https://freehire.me/api/v1/jobs?limit=20&offset=0"
 
 Full-text + faceted search over open jobs.
 
-Combine free-text `q` with any of the filter params below. Repeated facet params are ORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude. Without `q`, results default to newest first; with `q`, to relevance.
+Combine free-text `q` with any of the filter params below. Repeated facet params are ORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude. Without `q`, results default to newest first; with `q`, to relevance. A param no filter reads is ignored rather than refused, and listed in `meta.ignored_params` — check it, since a dropped filter otherwise looks like a broad result.
 
 **Query parameters**
 
@@ -397,6 +410,34 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/copies"
     }
   ],
   "meta": { "total": 4 }
+}
+```
+
+### `GET /jobs/{slug}/apply-form`
+
+**Auth:** Public
+
+The captured ATS application form for the posting.
+
+The questions a candidate will have to answer, shaped for reading. Only captured for a minority of postings (roughly a sixth of technical ATS platforms are readable at all) — no captured form is a `404`, distinguishable from an unknown slug (also `404`, but at the job lookup rather than the form lookup).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/apply-form"
+```
+
+```json
+{
+  "data": {
+    "provider": "greenhouse",
+    "basics": ["resume", "phone", "linkedin"],
+    "questions": [ { "text": "Why do you want to work here?", "required": true } ]
+  }
 }
 ```
 
@@ -711,6 +752,249 @@ curl "https://freehire.me/api/v1/companies/subindustries"
 { "data": [ { "value": "payments", "count": 42 }, { "value": "developer-tools", "count": 31 } ] }
 ```
 
+## Geography
+
+Public reference data backing search and profile city autocompletes.
+
+### `GET /geo/cities`
+
+**Auth:** Public
+
+Prefix-search city names for autocomplete.
+
+Population-ranked prefix search over the embedded city dictionary, optionally narrowed to one country. A blank `q` returns an empty list.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `q` | string | no | Prefix to match. (e.g. `berl`) |
+| `country` | string | no | ISO 3166-1 alpha-2 code to narrow to. (e.g. `DE`) |
+
+```bash
+curl "https://freehire.me/api/v1/geo/cities?q=berl&country=DE"
+```
+
+```json
+{ "data": [ { "value": "Berlin", "country": "DE" } ] }
+```
+
+## Company feedback
+
+Signed-in users leave a 1–5 star rating plus category and text about a company, shown under their site-wide pseudonymous persona (never a user id). Reads are public; writes are cookie-only. A reader can report a specific review, and a moderator can hide it.
+
+### `GET /companies/{slug}/feedback`
+
+**Auth:** Public
+
+List a company's feedback, newest first.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The company slug. (e.g. `acme`) |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
+| `offset` | integer | no | Rows to skip. (e.g. `0`) |
+
+```bash
+curl "https://freehire.me/api/v1/companies/acme/feedback"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 5,
+      "author": "quiet-falcon-42",
+      "rating": 4,
+      "feedback_type": "interview",
+      "body": "Fast process, clear communication.",
+      "created_at": "2026-06-18T09:12:00Z",
+      "updated_at": "2026-06-18T09:12:00Z"
+    }
+  ],
+  "meta": { "total": 12, "limit": 20, "offset": 0 }
+}
+```
+
+### `GET /companies/{slug}/feedback/mine`
+
+**Auth:** Session only
+
+Your own feedback on this company, across every category (empty if none).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The company slug. (e.g. `acme`) |
+
+```bash
+curl "https://freehire.me/api/v1/companies/acme/feedback/mine" -b cookies.txt
+```
+
+```json
+{ "data": [ { "id": 5, "author": "quiet-falcon-42", "rating": 4, "feedback_type": "interview", "body": "...", "created_at": "...", "updated_at": "..." } ] }
+```
+
+### `POST /companies/{slug}/feedback`
+
+**Auth:** Session only
+
+Create or overwrite your feedback in one category on a company.
+
+One entry per (user, category): posting again in the same `feedback_type` overwrites your existing review rather than adding a second one. The response's nested `company` field is the freshly recomputed rating count/average, so you can update your own view of the company without a second fetch. `422` on an empty body, `429` past the daily review cap.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The company slug. (e.g. `acme`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rating` | integer | yes | 1–5 stars. (e.g. `4`) |
+| `feedback_type` | string | yes | Review category, e.g. `interview`, `culture`, `compensation`. (e.g. `interview`) |
+| `body` | string | yes | Free-text review. (e.g. `Fast process, clear communication.`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/companies/acme/feedback" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"rating":4,"feedback_type":"interview","body":"Fast process, clear communication."}'
+```
+
+```json
+{
+  "data": {
+    "id": 5,
+    "author": "quiet-falcon-42",
+    "rating": 4,
+    "feedback_type": "interview",
+    "body": "Fast process, clear communication.",
+    "created_at": "2026-06-18T09:12:00Z",
+    "updated_at": "2026-06-18T09:12:00Z",
+    "company": { "feedback_count": 12, "feedback_rating_avg": 4.1 }
+  }
+}
+```
+
+### `DELETE /companies/{slug}/feedback`
+
+**Auth:** Session only
+
+Delete your feedback in one category (no-op if absent).
+
+Returns the company's freshly recomputed counters, the same cast/clear shape as the vote endpoints.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The company slug. (e.g. `acme`) |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `feedback_type` | string | yes | Which category to delete. (e.g. `interview`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/companies/acme/feedback?feedback_type=interview" -b cookies.txt
+```
+
+```json
+{ "data": { "feedback_count": 11, "feedback_rating_avg": 4.0 } }
+```
+
+### `POST /company-feedback/{id}/report`
+
+**Auth:** Session only
+
+Report a specific review.
+
+A second report of the same review by you is a silent no-op.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The feedback entry id. (e.g. `5`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `reason` | string | yes | Report reason code. (e.g. `spam`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/company-feedback/5/report" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"reason":"spam"}'
+```
+
+```json
+(204 No Content)
+```
+
+### `GET /company-feedback/reported`
+
+**Auth:** Moderator
+
+Every review with at least one report, most-reported first.
+
+```bash
+curl "https://freehire.me/api/v1/company-feedback/reported" -H "Authorization: Bearer $MODERATOR_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 5,
+      "author": "quiet-falcon-42",
+      "rating": 1,
+      "feedback_type": "culture",
+      "body": "...",
+      "created_at": "...",
+      "updated_at": "...",
+      "company_slug": "acme",
+      "report_count": 3,
+      "report_reasons": ["spam", "off-topic"]
+    }
+  ]
+}
+```
+
+### `POST /company-feedback/{id}/hide`
+
+**Auth:** Moderator
+
+Hide a review, dropping it from the company's public list and average.
+
+Idempotent. 404 for an unknown id.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The feedback entry id. (e.g. `5`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/company-feedback/5/hide" -H "Authorization: Bearer $MODERATOR_API_KEY"
+```
+
+```json
+(204 No Content)
+```
+
 ## Authentication
 
 Register/login set the session cookie and return the user. Logout clears it. `me` resolves the caller (cookie or API key). OAuth sign-in is a redirect flow. Credential endpoints are rate-limited.
@@ -822,6 +1106,162 @@ Browser-only: redirects to the provider, then back to `/auth/oauth/{provider}/ca
 ```bash
 # open in a browser:
 https://freehire.me/api/v1/auth/oauth/google/start
+```
+
+### `POST /auth/verify/request`
+
+**Auth:** Session only
+
+Send (or resend) a six-digit email verification code.
+
+Mails a fresh code to the caller’s own address, never a body field. Returns `202 Accepted`. `409` if the address is already confirmed.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/auth/verify/request" -b cookies.txt
+```
+
+### `POST /auth/verify/confirm`
+
+**Auth:** Session only
+
+Confirm the address with the mailed code.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code` | string | yes | The six-digit code mailed to your address. (e.g. `123456`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/auth/verify/confirm" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"code":"123456"}'
+```
+
+```json
+{ "data": { "id": 1, "email": "me@example.com", "role": "user", "...": "..." } }
+```
+
+### `POST /auth/password/forgot`
+
+**Auth:** Public
+
+Request a password-reset code by email.
+
+Always answers `202`, whether or not the address has an account — this is deliberately not an email-enumeration oracle.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `email` | string | yes | Account email. (e.g. `me@example.com`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/auth/password/forgot" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com"}'
+```
+
+### `POST /auth/password/reset`
+
+**Auth:** Public
+
+Set a new password against a mailed code.
+
+Public — the code is the credential. Success revokes every existing session, so sign in fresh with the new password afterward.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `email` | string | yes | Account email. (e.g. `me@example.com`) |
+| `code` | string | yes | The mailed reset code. (e.g. `123456`) |
+| `password` | string | yes | New password. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/auth/password/reset" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com","code":"123456","password":"hunter2hunter2"}'
+```
+
+```json
+{ "data": { "reset": true } }
+```
+
+### `POST /auth/logout-all`
+
+**Auth:** Session only
+
+Sign out every session on the account, including this one.
+
+Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/auth/logout-all" -b cookies.txt
+```
+
+### `POST /auth/oauth/exchange`
+
+**Auth:** Public
+
+Redeem a mobile OAuth callback code for a session.
+
+Mobile-only: the app’s custom-scheme OAuth callback carries a single-use code (not the session directly); this exchanges it for the session cookie, landing in the app’s own cookie jar. Public — the code is the credential, and a missing/expired/reused one is a `401`.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code` | string | yes | The one-time code from the mobile callback redirect. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/auth/oauth/exchange" \
+  -H 'Content-Type: application/json' -c cookies.txt \
+  -d '{"code":"..."}'
+```
+
+```json
+{ "data": { "id": 1, "email": "me@example.com", "role": "user" } }
+```
+
+### `GET /auth/extension/connect`
+
+**Auth:** Browser extension only
+
+Consent screen for "Sign in with freehire" from the browser extension.
+
+Opened by the extension via `chrome.identity.launchWebAuthFlow`, not called directly — renders an HTML consent page, not JSON. `redirect_uri` must be an allowlisted `https://<extension-id>.chromiumapp.org` origin, or this is a `400`. A signed-out visitor is bounced through sign-in first, then back to this same consent step.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `redirect_uri` | string | yes | The allowlisted chromiumapp.org redirect the extension is listening on. |
+| `state` | string | no | Opaque value echoed back on completion. |
+
+```bash
+# opened by the extension, not called directly:
+https://freehire.me/api/v1/auth/extension/connect?redirect_uri=https://<extension-id>.chromiumapp.org/&state=...
+```
+
+### `POST /auth/extension/connect`
+
+**Auth:** Browser extension only
+
+Submit the consent decision and mint the extension’s session token.
+
+Submitted by the consent screen’s own form, not called directly. On `decision=allow`, 302-redirects to `redirect_uri` with a session token in the URL fragment (never the query, so it is never logged or sent to a server); on anything else, redirects with `error=access_denied`. Not a JSON endpoint.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `redirect_uri` | string | yes | Must match the allowlisted redirect validated on the GET step. |
+| `state` | string | no | Opaque value echoed back. |
+| `decision` | string | yes | `allow` or `cancel`. (e.g. `allow`) |
+
+```bash
+# submitted by the consent page's own form, not called directly
 ```
 
 ## API keys
@@ -1050,6 +1490,78 @@ curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/track" -H "Authorization:
 
 ```json
 { "data": { "ok": true } }
+```
+
+### `PATCH /me/applications/{id}`
+
+**Auth:** Session or API key
+
+Set the application stage and/or notes, addressed by row id.
+
+Same as `PATCH /jobs/{slug}/track`, but addressed by the tracking-board row id instead of the job slug — needed when a tracked application’s posting was later pruned and has no slug left to address it by. Same `stage` vocabulary and body shape.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The tracking row id (from `/me/tracking`). (e.g. `42`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stage` | string | no | Application stage. (e.g. `interview`) |
+| `notes` | string | no | Free-text notes. |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/me/applications/42" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"stage":"interview"}'
+```
+
+```json
+{ "data": { "job_id": 42, "stage": "interview", "notes": null } }
+```
+
+### `DELETE /me/applications/{id}`
+
+**Auth:** Session or API key
+
+Remove the interaction record entirely, addressed by row id.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The tracking row id. (e.g. `42`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/applications/42" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "ok": true } }
+```
+
+### `DELETE /me/applications/{id}/stage`
+
+**Auth:** Session or API key
+
+Clear the application stage, addressed by row id.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The tracking row id. (e.g. `42`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/applications/42/stage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "job_id": 42, "stage": null } }
 ```
 
 ### `POST /jobs/{slug}/dismiss`
@@ -1321,6 +1833,297 @@ curl "https://freehire.me/api/v1/me/timeline?from=2026-08-01T00:00:00Z&to=2026-0
 }
 ```
 
+### `GET /me/interviews`
+
+**Auth:** Session or API key
+
+Arranged meetings whose start falls in the date range.
+
+The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move or be cancelled, unlike a ledger event which happened and cannot change. `status` is `suggested`, `confirmed`, or `cancelled` — a cancelled meeting is still served, not withheld. Both bounds are required, RFC3339.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `from` | string (RFC3339) | yes | Lower bound, inclusive. (e.g. `2026-08-01T00:00:00Z`) |
+| `to` | string (RFC3339) | yes | Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`) |
+
+```bash
+curl "https://freehire.me/api/v1/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 3,
+      "application_id": 31,
+      "starts_at": "2026-08-20T13:00:00Z",
+      "ends_at": "2026-08-20T13:30:00Z",
+      "title": "Interview with Acme",
+      "join_url": "https://meet.example.com/abc",
+      "status": "confirmed",
+      "company_slug": "acme",
+      "role_title": "Senior Go Engineer",
+      "job_slug": "senior-go-engineer-acme-1a2b"
+    }
+  ],
+  "meta": { "from": "2026-08-01T00:00:00Z", "to": "2026-08-31T23:59:59Z", "count": 1 }
+}
+```
+
+## In-app assistant
+
+The same agent the web app and browser extension chat with, over HTTP: create a conversation, then post messages to it. All routes accept the session cookie or an API key (`autopilot` is cookie-only — see below) and act on a session you own; someone else’s session id answers `404`, same as one that never existed. Turns run one at a time per session — a message sent while one is already running queues rather than running alongside it. `preset` selects which conversation this is: `chat` (default), `profile` (the experience interviewer), `browse` (a browsing session held from the extension’s side panel), `interview` (a mock-interview rehearsal) or `debrief` (after a real one) — the last two must name the vacancy via `?job=<slug>`, an application you already hold. A `tailor` session cannot be created here; it is minted by the CV tailoring bootstrap, which knows the CV and vacancy to bind it to.
+
+### `POST /assistant/sessions`
+
+**Auth:** Session or API key
+
+Start a new conversation.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `preset` | string | no | One of `chat` (default), `profile`, `browse`, `interview`, `debrief`. (e.g. `chat`) |
+| `job` | string | no | Public slug of an application you hold. Required for `interview`/`debrief`, ignored otherwise. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions?preset=chat" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f", "preset": "chat", "label": "" } }
+```
+
+### `GET /assistant/sessions`
+
+**Auth:** Session or API key
+
+List your chat conversations, newest activity first.
+
+Tailoring conversations are not chats — each belongs to a CV — so they never appear here.
+
+```bash
+curl "https://freehire.me/api/v1/assistant/sessions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    { "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f", "preset": "chat", "label": "Relocating to Berlin?" }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+### `GET /assistant/sessions/{id}`
+
+**Auth:** Session or API key
+
+One owned conversation with its full transcript.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. (e.g. `b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f`) |
+
+```bash
+curl "https://freehire.me/api/v1/assistant/sessions/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "session": { "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f", "preset": "chat", "label": "Relocating to Berlin?" },
+    "messages": [
+      { "seq": 1, "role": "user", "content": { "text": "Should I relocate for this role?" } },
+      { "seq": 2, "role": "assistant", "content": { "text": "...", "...": "..." } }
+    ]
+  }
+}
+```
+
+### `DELETE /assistant/sessions/{id}`
+
+**Auth:** Session or API key
+
+Delete an owned conversation and its transcript.
+
+Returns `204 No Content`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/assistant/sessions/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /assistant/sessions/{id}/messages`
+
+**Auth:** Session or API key
+
+Send a message and stream the turn as Server-Sent Events.
+
+Body is `{"text": "..."}` (max ~8000 characters, deployment-configured). The response is `text/event-stream`, not JSON: each frame is `event: <kind>` plus a `data:` line carrying the JSON event (whose own `type` field repeats the kind). Kinds: `queued` (this turn waited for one already running), `user_prompt`, `assistant_text` / `assistant_thought` (streamed deltas), `tool_use` / `tool_result`, `usage`, and exactly one terminal `result` carrying `stop_reason` (`completed`, `cancelled`, or `error`). The turn keeps running even if you stop reading — stopping it is a separate call to `.../cancel`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `text` | string | yes | Your message. (e.g. `Should I relocate for this role?`) |
+
+```bash
+curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/messages" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"text":"Should I relocate for this role?"}'
+```
+
+```json
+event: user_prompt
+data: {"type":"user_prompt","text":"Should I relocate for this role?"}
+
+event: assistant_text
+data: {"type":"assistant_text","text":"Based on the salary range..."}
+
+event: result
+data: {"type":"result","stop_reason":"completed"}
+
+
+```
+
+### `POST /assistant/sessions/{id}/cancel`
+
+**Auth:** Session or API key
+
+Stop the session’s running turn.
+
+A no-op (still `204`) when nothing is running — you cannot see whether a turn is live before asking.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/cancel" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /assistant/sessions/{id}/opening`
+
+**Auth:** Session or API key
+
+Have the assistant speak first, on an `interview`/`debrief` session.
+
+Streams one turn under a server-side brief (no body), the same SSE shape as `.../messages`. `409` if the session’s preset does not open by itself, or if it already has an assistant message (an opening cannot be re-run).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/opening" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /assistant/sessions/{id}/retry`
+
+**Auth:** Session or API key
+
+Resume after a failed turn, without adding another user message.
+
+Re-runs the loop over the existing history (no body) — the same SSE shape as `.../messages`. `409 "nothing to retry"` when the session has no prior user message.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/retry" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /assistant/sessions/{id}/voice-token`
+
+**Auth:** Session or API key
+
+Mint a short-lived credential for a hands-free voice call.
+
+Only on an `interview` session; `409` otherwise. Rate-limited to 20 calls started per hour per caller. The audio itself never reaches this server: take the returned `value` to `calls_url` (this deployment’s own realtime gateway, not api.openai.com directly) to negotiate the WebRTC call. `501` when voice mode is not configured.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/voice-token" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "value": "ek_...", "model": "gpt-realtime", "calls_url": "https://freehire.me/api/v1/realtime/calls" } }
+```
+
+### `POST /assistant/sessions/{id}/voice-turns`
+
+**Auth:** Session or API key
+
+Append one completed spoken exchange to the transcript.
+
+Only on an `interview` session. Lets a call continued by typing carry the spoken turns forward in context. Returns `204 No Content`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `role` | string | yes | `user` or `assistant`. (e.g. `user`) |
+| `content` | string | yes | The transcribed/spoken text. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/voice-turns" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"role":"user","content":"I led the migration to Kubernetes."}'
+```
+
+### `POST /assistant/sessions/{id}/autopilot`
+
+**Auth:** Session only
+
+Run an unattended CV-tailoring pass as one long streamed turn.
+
+Session-only, not API-key — an unattended run edits a CV, and the browser is the only place you can watch it happen and undo it. Requires a `tailor` session bound to both a CV and a vacancy (`409` otherwise). Same SSE shape as `.../messages`, no body; every edit lands in one revision batch, so undoing the run is reverting that batch.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/autopilot" -b cookies.txt
+```
+
 ## Job submissions
 
 Any signed-in user can submit a vacancy for moderation and read their own queue. The review actions are moderator-only; approval mints a live job.
@@ -1353,6 +2156,30 @@ curl -X POST "https://freehire.me/api/v1/submissions" \
 
 ```json
 { "data": { "id": 9, "status": "pending", "title": "Senior Go Engineer", "company": "Acme", "url": "https://acme.com/careers/123" } }
+```
+
+### `POST /submissions/prefill`
+
+**Auth:** Session or API key
+
+Parse a job URL into a draft submission for review before posting.
+
+Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no credit. An unrecognized URL returns an empty object rather than an error. Rate-limited (shares the outbound-fetch budget).
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | yes | The job posting URL to parse. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/submissions/prefill" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"url":"https://boards.greenhouse.io/acme/jobs/123"}'
+```
+
+```json
+{ "data": { "title": "Senior Go Engineer", "company": "Acme", "location": "Remote — EU", "description": "...", "work_mode": "remote", "employment_type": "full_time", "seniority": "senior", "skills": ["go"], "source": "greenhouse" } }
 ```
 
 ### `GET /me/submissions`
@@ -1540,6 +2367,62 @@ curl -X POST "https://freehire.me/api/v1/reports/3/dismiss" \
 
 ```json
 { "data": { "id": 3, "status": "dismissed", "review_reason": "not an issue" } }
+```
+
+## Ghost job reports
+
+One person states they applied to a posting and were never answered, feeding the ghost-signal evidence used elsewhere in the API (see the `reality` field on a job). Distinct from Job reports above: nothing here reaches a moderator and nothing here closes the job directly.
+
+### `POST /jobs/{slug}/ghost-report`
+
+**Auth:** Session or API key
+
+File a claim that you applied and got no response.
+
+An unproven (unverified) address is a `403`; a closed job or a claim you already have on this job is a `409`; past the daily cap is a `429`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `applied_on` | string | yes | The day you applied (`YYYY-MM-DD`). (e.g. `2026-07-29`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/ghost-report" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"applied_on":"2026-07-29"}'
+```
+
+```json
+{ "data": { "job_id": 42, "applied_on": "2026-07-29", "created_at": "2026-07-29T10:00:00Z" } }
+```
+
+### `DELETE /jobs/{slug}/ghost-report`
+
+**Auth:** Session or API key
+
+Withdraw your claim about this job.
+
+A claim that is absent or already withdrawn is a `404`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/ghost-report" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+(204 No Content)
 ```
 
 ## Moderator jobs
@@ -1819,6 +2702,125 @@ Returns `204 No Content`. `501` when object storage is unconfigured.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/resume" -b cookies.txt
+```
+
+### `PUT /me/resume/contacts`
+
+**Auth:** Session only
+
+Override one or more contact-block fields on your profile.
+
+Each body field is owned per field: a value you set here takes over that field from whatever the structured résumé extract would otherwise contribute. Omit a field to leave it as-is; to clear rather than override, use `POST /me/resume/contacts/replace-from-cv`.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `full_name` | string | no | Overrides the extracted name. |
+| `email` | string | no | Overrides the extracted email. |
+| `phone` | string | no | Overrides the extracted phone. |
+| `location` | string | no | Overrides the extracted location. |
+| `links` | string[] | no | Overrides the extracted links. |
+| `headline` | string | no | A one-line positioning statement. |
+| `summary` | string | no | A short profile summary. |
+| `languages` | string[] | no | Spoken/written languages. |
+| `certifications` | string[] | no | Certifications to show. |
+| `education` | object[] | no | Education entries to show. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/resume/contacts" -b cookies.txt \
+  -H 'Content-Type: application/json' -d '{"email":"me@work.com","phone":"+1 555 0100"}'
+```
+
+```json
+{ "data": { "full_name": "Jane Doe", "email": "me@work.com", "phone": "+1 555 0100", "location": "Berlin, Germany" } }
+```
+
+### `POST /me/resume/contacts/replace-from-cv`
+
+**Auth:** Session only
+
+Reset every contact override from your current structured résumé.
+
+A full reset, not just identity fields — every owned field is replaced from the current structured extract. `409` when you have no structured résumé to copy from.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/resume/contacts/replace-from-cv" -b cookies.txt
+```
+
+```json
+{ "data": { "full_name": "Jane Doe", "email": "jane@example.com", "location": "Berlin, Germany" } }
+```
+
+## Screening answers
+
+The six candidate-stated facts that repeat across ATS application forms and no CV can supply. A singleton per user — no id in the path. `PUT` is a partial update: a field the body omits keeps its stored value.
+
+### `GET /me/screening-answers`
+
+**Auth:** Session or API key
+
+Your stored screening answers, or `null` if you have stated none.
+
+```bash
+curl "https://freehire.me/api/v1/me/screening-answers" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "authorized_countries": ["DE", "NL"],
+    "visa_sponsorship_needed": false,
+    "desired_salary_amount": 90000,
+    "desired_salary_currency": "EUR",
+    "desired_salary_period": "year",
+    "notice_period_days": 30,
+    "willing_to_relocate": true,
+    "age_18_or_older": true
+  }
+}
+```
+
+### `PUT /me/screening-answers`
+
+**Auth:** Session only
+
+Update one or more screening answers.
+
+A field the body omits is left unchanged. An unrecognized country code, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, a non-positive salary, or a negative notice period is a `400` naming the invalid value.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `authorized_countries` | string[] | no | ISO alpha-2 country codes you are authorized to work in. (e.g. `["DE","NL"]`) |
+| `visa_sponsorship_needed` | boolean | no | Whether you need visa sponsorship. |
+| `desired_salary_amount` | integer | no | Desired salary figure. (e.g. `90000`) |
+| `desired_salary_currency` | string | no | Three-letter ISO 4217 currency code. (e.g. `EUR`) |
+| `desired_salary_period` | string | no | Salary period, e.g. `year`, `month`. (e.g. `year`) |
+| `notice_period_days` | integer | no | Notice period in days. (e.g. `30`) |
+| `willing_to_relocate` | boolean | no | Whether you are willing to relocate. |
+| `age_18_or_older` | boolean | no | Whether you are 18 or older. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"willing_to_relocate":true,"notice_period_days":30}'
+```
+
+```json
+{
+  "data": {
+    "authorized_countries": ["DE", "NL"],
+    "visa_sponsorship_needed": false,
+    "desired_salary_amount": 90000,
+    "desired_salary_currency": "EUR",
+    "desired_salary_period": "year",
+    "notice_period_days": 30,
+    "willing_to_relocate": true,
+    "age_18_or_older": true
+  }
+}
 ```
 
 ## Activity & shared boards
@@ -2139,7 +3141,205 @@ curl -X DELETE "https://freehire.me/api/v1/me/telegram" -b cookies.txt
 ```
 
 ```json
-{ "data": { "ok": true } }
+(204 No Content)
+```
+
+### `GET /me/discord`
+
+**Auth:** Session only
+
+Your Discord link status (for the `/contribute` bot command).
+
+```bash
+curl "https://freehire.me/api/v1/me/discord" -b cookies.txt
+```
+
+```json
+{ "data": { "enabled": true, "linked": true, "discord_id": 123456789 } }
+```
+
+### `POST /me/discord/link`
+
+**Auth:** Session only
+
+Mint a one-time token to link your Discord account.
+
+Discord has no deep-link URL equivalent to Telegram’s — paste the returned token into the bot’s `/link` slash command.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/discord/link" -b cookies.txt
+```
+
+```json
+{ "data": { "token": "abc123...", "instructions": "In the freehire Discord server, run /link token:abc123..." } }
+```
+
+### `DELETE /me/discord`
+
+**Auth:** Session only
+
+Unlink your Discord account. Idempotent.
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/discord" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+## Push notifications & alerts
+
+The mobile app’s device push tokens, and the in-app notification center — a durable, channel-independent record of every delivered digest, reminder and nudge. All cookie-only.
+
+### `POST /me/push-tokens`
+
+**Auth:** Session only
+
+Register (or reassign) a mobile device’s Expo push token.
+
+Upserted by token value, not by user: if a different account signs in on the same device, this reassigns the token to the new caller. Returns `204 No Content`.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | yes | The Expo push token minted by the device. (e.g. `ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]`) |
+| `platform` | string | yes | `ios` or `android`. (e.g. `ios`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/push-tokens" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"token":"ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]","platform":"ios"}'
+```
+
+### `GET /me/push-tokens`
+
+**Auth:** Session only
+
+List your own registered devices.
+
+```bash
+curl "https://freehire.me/api/v1/me/push-tokens" -b cookies.txt
+```
+
+```json
+{
+  "data": [ { "token": "ExponentPushToken[...]", "platform": "ios", "created_at": "2026-06-19T10:00:00Z", "last_seen_at": "2026-06-19T10:00:00Z" } ],
+  "meta": { "total": 1 }
+}
+```
+
+### `DELETE /me/push-tokens`
+
+**Auth:** Session only
+
+Unregister one of your own device tokens.
+
+Returns `204 No Content`. `404` if the token is not yours (or unknown).
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | yes | The token to remove. |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/push-tokens" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"token":"ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"}'
+```
+
+### `POST /me/push-tokens/test`
+
+**Auth:** Session only
+
+Send a test push to all of your own registered devices.
+
+Never targets another user or a caller-supplied destination — only your own registered tokens. Rate-limited to 20/hour, since each call fans out one outbound send per device.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/push-tokens/test" -b cookies.txt
+```
+
+```json
+{ "data": { "devices": 2, "sent": 1, "pruned": 1, "failed": 0 } }
+```
+
+### `GET /me/notifications`
+
+**Auth:** Session only
+
+List your notification-center entries, newest first.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
+| `offset` | integer | no | Rows to skip. (e.g. `0`) |
+
+```bash
+curl "https://freehire.me/api/v1/me/notifications?limit=20" -b cookies.txt
+```
+
+```json
+{
+  "data": [ { "id": 5, "kind": "subscription_digest", "title": "3 new jobs match Senior Go remote", "body": "...", "public_slug": null, "jobs": [ "...": "..." ], "created_at": "2026-06-19T10:00:00Z", "read_at": null } ],
+  "meta": { "total": 12, "unread_count": 3, "limit": 20, "offset": 0 }
+}
+```
+
+### `GET /me/notifications/{id}`
+
+**Auth:** Session only
+
+One of your notifications, including its jobs snapshot.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The notification id. (e.g. `5`) |
+
+```bash
+curl "https://freehire.me/api/v1/me/notifications/5" -b cookies.txt
+```
+
+```json
+{ "data": { "id": 5, "kind": "reminder", "title": "...", "body": "...", "public_slug": "senior-go-engineer-acme-1a2b", "created_at": "2026-06-19T10:00:00Z", "read_at": null } }
+```
+
+### `POST /me/notifications/{id}/read`
+
+**Auth:** Session only
+
+Mark one notification read (idempotent).
+
+Returns `204 No Content`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The notification id. (e.g. `5`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/notifications/5/read" -b cookies.txt
+```
+
+### `POST /me/notifications/read-all`
+
+**Auth:** Session only
+
+Mark every unread notification read.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/notifications/read-all" -b cookies.txt
+```
+
+```json
+{ "data": { "marked": 3 } }
 ```
 
 ## Account, credits & extension
@@ -2201,6 +3401,22 @@ curl "https://freehire.me/api/v1/me/credits/history" -H "Authorization: Bearer f
 
 ```json
 { "data": [ { "delta": -1, "reason": "match_analysis", "label": "Senior Backend Engineer at Acme", "created_at": "2026-07-28T09:00:00Z" } ] }
+```
+
+### `GET /me/usage`
+
+**Auth:** Session or API key
+
+Your AI request activity this billing period.
+
+Counts and token usage, not cost — the gateway’s dollar figure is a list price against a mixed upstream pool, not what you pay; your price is credits, reported by `/me/credits`. Never fails for a reason you could act on: no usage yet, or an unreachable gateway, both answer 200 with zeroes.
+
+```bash
+curl "https://freehire.me/api/v1/me/usage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "requests": 42, "failed": 1, "tokens": 118000, "period": "2026-08", "resets_at": "2026-09-01T00:00:00Z" } }
 ```
 
 ### `GET /me/tracking/{slug}`
@@ -2307,6 +3523,50 @@ curl -X POST "https://freehire.me/api/v1/me/autofill/run" -H "Authorization: Bea
 { "data": { "filled": 11, "skipped": 2 } }
 ```
 
+### `PATCH /me/timezone`
+
+**Auth:** Session only
+
+Set your account’s IANA timezone.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `timezone` | string | yes | IANA timezone name. (e.g. `Europe/Berlin`) |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/me/timezone" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"timezone":"Europe/Berlin"}'
+```
+
+```json
+{ "data": { "id": 1, "email": "me@example.com", "role": "user", "timezone": "Europe/Berlin", "...": "..." } }
+```
+
+### `PATCH /me/language`
+
+**Auth:** Session only
+
+Set your preferred interface language.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `language` | string | yes | Supported language code. (e.g. `en`) |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/me/language" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"language":"en"}'
+```
+
+```json
+{ "data": { "id": 1, "email": "me@example.com", "role": "user", "language": "en", "...": "..." } }
+```
+
 ## Link intake & discovery
 
 Turning a URL in the wild into something freehire knows about. One intake sequence serves every surface — the website, the bot, the extension and the CLI — deliberately, so a pasted link gets the same answer everywhere.
@@ -2372,26 +3632,32 @@ curl "https://freehire.me/api/v1/me/contributions" -H "Authorization: Bearer fhk
 { "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "onboarded", "created_at": "2026-07-20T12:00:00Z" } ] }
 ```
 
-### `POST /me/contributions`
+### `POST /me/jd/resolve`
 
-**Auth:** Session or API key
+**Auth:** Session only
 
-Contribute a board by link.
+Turn a URL, pasted text, or an existing job into one usable by CV tailoring.
+
+Exactly one of `job_slug`, `url`, or `text` is required. A recognized URL resolves through the same ATS-aware registry `/jobs/resolve` uses (a network fetch — only the `url` form is rate-limited); an unrecognized URL falls back to a generic scrape; pasted text is stored as a private, unlisted job. Returns the slug the tailor workspace should open — an existing job, or a freshly created private one. `404` for an unknown `job_slug`, `422` for a URL nothing could read.
 
 **Body**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `url` | string | yes | A vacancy or a company's careers page. |
+| `job_slug` | string | no | An existing job’s slug. |
+| `url` | string | no | A job posting URL. |
+| `text` | string | no | Pasted job description text. |
+| `title` | string | no | Optional hint, used only alongside `text`. |
+| `company` | string | no | Optional hint, used only alongside `text`. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/contributions" \
-  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \
-  -d '{"url":"https://boards.greenhouse.io/acme"}'
+curl -X POST "https://freehire.me/api/v1/me/jd/resolve" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"url":"https://boards.greenhouse.io/acme/jobs/123"}'
 ```
 
 ```json
-{ "data": { "source": "greenhouse", "board": "acme", "state": "pending" } }
+{ "data": { "job_slug": "senior-go-engineer-acme-1a2b" } }
 ```
 
 ## Votes, notifications & discussions
@@ -2656,6 +3922,32 @@ curl -X POST "https://freehire.me/api/v1/threads/31/close" -b cookies.txt
 
 Aggregate market intelligence, all public and all unauthenticated. Every figure is served from a precomputed rollup rather than counted live, and nothing here exposes a record-level field or a user identifier — these are counts over the catalogue, not a way to read it.
 
+### `GET /stats/catalog`
+
+**Auth:** Public
+
+The headline catalogue-scale figures (open jobs, companies, sources, …).
+
+The canonical numbers behind every "how big is this" figure on the site (the jobs list total, the /about and /open pages). Backed by one snapshot `cmd/rollup-stats` republishes periodically, not a live count. `exact: false` means the cache was cold and the figures fell back to a planner estimate — treat them as approximate when it is false.
+
+```bash
+curl "https://freehire.me/api/v1/stats/catalog"
+```
+
+```json
+{
+  "data": {
+    "open_jobs": 42130,
+    "companies": 6210,
+    "sources": 48,
+    "ats_platforms": 22,
+    "telegram_channels": 340,
+    "computed_at": "2026-06-18T06:00:00Z",
+    "exact": true
+  }
+}
+```
+
 ### `GET /insights/roles`
 
 **Auth:** Public
@@ -2833,6 +4125,39 @@ curl "https://freehire.me/api/v1/status"
 
 ```json
 { "data": { "providers": [ { "source": "greenhouse", "boards": 812, "failing": 14, "last_run_at": "2026-07-28T18:00:00Z" } ] } }
+```
+
+## Market pulse
+
+Your own profile skills’ demand trend, joined against the weekly market snapshot. Cookie-only, unlike the aggregate insights above — this reads your saved profile.
+
+### `GET /me/market-pulse`
+
+**Auth:** Session only
+
+Weekly demand trend for your profile skills.
+
+One entry per profile skill seen in at least one open job; a skill never seen is omitted rather than reported with a zero. `change_pct` is `null` with fewer than two snapshots, or when the earliest snapshot’s count was zero. A profile with no skills yet answers an empty `data` array, not an error.
+
+```bash
+curl "https://freehire.me/api/v1/me/market-pulse" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "skill": "go",
+      "open_count": 640,
+      "change_pct": 12.5,
+      "series": [
+        { "week_start": "2026-07-06", "open_count": 570 },
+        { "week_start": "2026-08-10", "open_count": 640 }
+      ]
+    }
+  ],
+  "meta": { "week_start": "2026-08-10" }
+}
 ```
 
 ## Employee referrals
@@ -3052,6 +4377,77 @@ curl -X POST "https://freehire.me/api/v1/referrals/offers/b71e…/decide" \
 
 ```json
 { "data": { "id": "b71e…", "status": "approved", "decided_at": "2026-07-28T21:00:00Z" } }
+```
+
+## Talent Network
+
+A candidate-controlled public profile page, shareable by URL. The visibility setting lives on `users`, distinct from `user_profiles`.
+
+### `GET /me/talent-network`
+
+**Auth:** Session or API key
+
+Your current Talent Network visibility and shareable id.
+
+A caller who has never touched the setting reads `"off"` — the column default, not a sentinel. `talent_network_public_id` rides along even when visibility is off, so the client can render the shareable URL a candidate would get before they turn it on.
+
+```bash
+curl "https://freehire.me/api/v1/me/talent-network" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "talent_network_visibility": "public", "talent_network_public_id": "5b1e2b7a-9c3d-4e21-8f0a-1234567890ab" } }
+```
+
+### `PUT /me/talent-network`
+
+**Auth:** Session only
+
+Set your Talent Network visibility.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `visibility` | string | yes | One of `off`, `public`, `anonymous`. (e.g. `public`) |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/talent-network" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"visibility":"public"}'
+```
+
+```json
+{ "data": { "talent_network_visibility": "public", "talent_network_public_id": "5b1e2b7a-9c3d-4e21-8f0a-1234567890ab" } }
+```
+
+### `GET /talent-network/{publicID}`
+
+**Auth:** Public
+
+The public, shareable Talent Network profile page.
+
+A hidden (`off`) profile and a nonexistent id answer an identical 404 — the route never lets a caller distinguish the two. `full_name` is present only in `public` mode; `anonymous` omits it entirely.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `publicID` | string (uuid) | yes | The candidate’s `talent_network_public_id`. (e.g. `5b1e2b7a-9c3d-4e21-8f0a-1234567890ab`) |
+
+```bash
+curl "https://freehire.me/api/v1/talent-network/5b1e2b7a-9c3d-4e21-8f0a-1234567890ab"
+```
+
+```json
+{
+  "data": {
+    "full_name": "Jane Doe",
+    "specializations": ["backend"],
+    "skills": ["go", "postgresql"],
+    "cv": { "...": "..." }
+  }
+}
 ```
 
 ## CV builder & tailoring
@@ -3415,6 +4811,285 @@ curl -X PUT "https://freehire.me/api/v1/me/cvs/7d1a…/session" -H "Authorizatio
 { "data": { "id": "7d1a…", "agent_session_id": "s_9f…" } }
 ```
 
+### `PUT /me/cvs/{id}/tracer-links`
+
+**Auth:** Session only
+
+Turn link tracing on or off for this CV's PDF.
+
+Off is the default for every CV. Turning it on is refused with a `409` on a deployment with no visitor salt configured — there would be no honest way to count distinct visitors. Turning it off is never refused.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The CV id. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | yes | Turn tracing on or off. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/cvs/0f2c…/tracer-links" -b cookies.txt \
+  -H 'Content-Type: application/json' -d '{"enabled":true}'
+```
+
+```json
+{ "data": { "tracer_links_enabled": true } }
+```
+
+### `GET /me/cvs/{id}/tracer-links`
+
+**Auth:** Session only
+
+What is known about this CV's traced links.
+
+One entry per link the PDF carries (header links, project links). Clicks you made on your own CV are excluded from the counts; `bot_clicks` is tallied separately rather than folded in. `distinct_visitors` is omitted — not zero — on a deployment with no visitor salt, since there is no honest count to report.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The CV id. |
+
+```bash
+curl "https://freehire.me/api/v1/me/cvs/0f2c…/tracer-links" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "source_path": "header.links[0]",
+      "destination_url": "https://github.com/you",
+      "traced_url": "https://freehire.me/cv/acme-x7abc",
+      "clicks": 12,
+      "bot_clicks": 3,
+      "distinct_visitors": 9,
+      "last_click_at": "2026-07-20T10:00:00Z"
+    }
+  ]
+}
+```
+
+### `GET /me/cvs/{id}/revisions`
+
+**Auth:** Session only
+
+The edit history of this CV, newest first.
+
+Each entry names what changed and where (`paths`), not the edit itself — the operations carry your own prior text and stay server-side. `undoable` is false for an entry with nothing to reverse (e.g. the CV’s own creation); `reverted` marks an entry already undone rather than removing it from the feed.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The CV id. |
+
+```bash
+curl "https://freehire.me/api/v1/me/cvs/0f2c…/revisions" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "b1a2…",
+      "actor": "agent",
+      "origin": "tailoring",
+      "batch_id": "f3c1…",
+      "title": "Reframed 2 bullets toward Kafka",
+      "note": "Emphasized event-bus scale to match the requirement",
+      "paths": ["experience[0].bullets[1]"],
+      "reverted": false,
+      "undoable": true,
+      "created_at": "2026-07-28T20:10:00Z"
+    }
+  ]
+}
+```
+
+### `POST /me/cvs/{id}/revisions/{rid}/undo`
+
+**Auth:** Session only
+
+Reverse one revision, leaving later edits in place.
+
+The undo is itself recorded as a new revision. A `409` when the entry has nothing to reverse or the part of the document it changed is already gone.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The CV id. |
+| `rid` | string (uuid) | yes | The revision id, from the history feed. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/cvs/0f2c…/revisions/b1a2…/undo" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "cv": { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-28T20:15:00Z" },
+    "revision": { "id": "c4d5…", "actor": "user", "origin": "editor", "title": "Undid \"Reframed 2 bullets toward Kafka\"", "reverts_id": "b1a2…", "reverted": false, "undoable": false, "paths": ["experience[0].bullets[1]"], "created_at": "2026-07-28T20:15:00Z" }
+  }
+}
+```
+
+### `POST /me/cvs/{id}/revisions/batch/{bid}/undo`
+
+**Auth:** Session only
+
+Reverse every standing edit of one agent turn, newest first.
+
+`bid` is a revision’s `batch_id` from the history feed, not a separate id — undoing one entry of a batch and then the batch itself is well-defined, since an already-reverted entry is simply skipped.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The CV id. |
+| `bid` | string (uuid) | yes | The batch id shared by the revisions to undo. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/cvs/0f2c…/revisions/batch/f3c1…/undo" -b cookies.txt
+```
+
+```json
+{ "data": { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-28T20:16:00Z" } }
+```
+
+### `GET /me/cvs/{id}/ats-delta`
+
+**Auth:** Session only
+
+How tailoring changed this CV's ATS-readiness score.
+
+The tailored copy scored against the base CV it came from, with template, page margins and typography held identical so the difference reflects content alone — the base is a copy rendered with the tailored copy’s formatting, never the stored base itself. Recomputed per request, never stored. `available: false` (with `reason`, no `delta`) when rendering is unavailable rather than an error. `409` when the CV is not a tailored copy, has no base CV to compare against, or its vacancy no longer exists.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The tailored CV id. |
+
+```bash
+curl "https://freehire.me/api/v1/me/cvs/7d1a…/ats-delta" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "available": true,
+    "base_cv_id": "0f2c…",
+    "delta": {
+      "base": 62,
+      "tailored": 78,
+      "change": 16,
+      "categories": [ { "id": "keyword_coverage", "label": "Keyword coverage", "...": "..." } ],
+      "regressed": false
+    }
+  }
+}
+```
+
+### `GET /me/cvs/{id}/job-match`
+
+**Auth:** Session only
+
+How well a tailored CV matches the vacancy it was written for.
+
+Deterministic and free — no model call, unlike the AI match analysis. Scored off the CV’s rendered PDF text layer against the vacancy alone (no base-CV comparison, unlike the ATS delta), so it is cheap enough to refresh after every saved edit. `available: false` when nothing about the vacancy could be matched automatically, or rendering failed. `409` when the CV is not a tailored copy or its vacancy no longer exists.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The tailored CV id. |
+
+```bash
+curl "https://freehire.me/api/v1/me/cvs/7d1a…/job-match" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "available": true,
+    "score": {
+      "overall": 74,
+      "categories": [ { "...": "..." } ],
+      "contributing": ["skills", "requirements"],
+      "matched_skills": ["go", "postgresql"],
+      "missing_skills": ["kubernetes"],
+      "requirements": [ { "text": "5+ years Go", "priority": "required", "cached_status": "covered" } ]
+    }
+  }
+}
+```
+
+## Photo
+
+The one image the CV templates that print a portrait compose in. Cookie-only throughout — the image is PII, so there is no key-authenticated or public path.
+
+### `PUT /me/photo`
+
+**Auth:** Session only
+
+Upload (or replace) your headshot.
+
+Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and rate-limited to 12 uploads/hour. Replaces any existing headshot. `501` when object storage is not configured, `400` for an undecodable, unsupported, or oversized image.
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt -F "file=@headshot.jpg"
+```
+
+```json
+{ "data": { "enabled": true, "present": true, "uploaded_at": "2026-08-18T10:00:00Z" } }
+```
+
+### `GET /me/photo`
+
+**Auth:** Session only
+
+Whether you have a stored headshot, and when it was uploaded.
+
+`enabled` is false when object storage is not configured — the client should then offer no upload control at all rather than one that answers `501`. `uploaded_at` doubles as a cache-busting value for the image URL.
+
+```bash
+curl "https://freehire.me/api/v1/me/photo" -b cookies.txt
+```
+
+```json
+{ "data": { "enabled": true, "present": false, "uploaded_at": null } }
+```
+
+### `GET /me/photo/image`
+
+**Auth:** Session only
+
+The stored headshot itself, as image bytes.
+
+Not a JSON endpoint — the response is `image/jpeg` with a short private cache lifetime (60s), meant to be busted with `?v=<uploaded_at>`. `404` when no headshot is stored.
+
+```bash
+curl "https://freehire.me/api/v1/me/photo/image" -b cookies.txt -o headshot.jpg
+```
+
+### `DELETE /me/photo`
+
+**Auth:** Session only
+
+Remove your stored headshot.
+
+Returns `204 No Content`.
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/photo" -b cookies.txt
+```
+
 ## Experience bank
 
 The durable record a CV is built from: employments, and the evidence atoms under them. Every atom carries who asserted it — you, or a model that inferred it — and only your own assertions may be written into a CV. Reading accepts an API key; editing is session-only.
@@ -3443,15 +5118,15 @@ Edit one employment.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | integer | yes | The employment id. |
+| `id` | string (uuid) | yes | The employment id. |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/experience/employments/12" -b cookies.txt \
-  -H 'Content-Type: application/json' -d '{"company":"Acme","title":"Staff Engineer"}'
+curl -X PUT "https://freehire.me/api/v1/me/experience/employments/3fa8…" -b cookies.txt \
+  -H 'Content-Type: application/json' -d '{"company":"Acme","role":"Staff Engineer"}'
 ```
 
 ```json
-{ "data": { "id": 12, "company": "Acme", "title": "Staff Engineer" } }
+{ "data": { "id": "3fa8…", "kind": "job", "company": "Acme", "role": "Staff Engineer" } }
 ```
 
 ### `DELETE /me/experience/employments/{id}`
@@ -3464,10 +5139,10 @@ Remove an employment and its atoms.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | integer | yes | The employment id. |
+| `id` | string (uuid) | yes | The employment id. |
 
 ```bash
-curl -X DELETE "https://freehire.me/api/v1/me/experience/employments/12" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/experience/employments/3fa8…" -b cookies.txt
 ```
 
 ### `PUT /me/experience/atoms/{id}`
@@ -3480,15 +5155,15 @@ Edit one evidence atom.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | integer | yes | The atom id. |
+| `id` | string (uuid) | yes | The atom id. |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/experience/atoms/88" -b cookies.txt \
-  -H 'Content-Type: application/json' -d '{"text":"Cut p99 checkout latency 40% (12k rps)"}'
+curl -X PUT "https://freehire.me/api/v1/me/experience/atoms/88b1…" -b cookies.txt \
+  -H 'Content-Type: application/json' -d '{"claim":"Cut p99 checkout latency 40% (12k rps)"}'
 ```
 
 ```json
-{ "data": { "id": 88, "text": "Cut p99 checkout latency 40% (12k rps)", "source": "manual" } }
+{ "data": { "id": "88b1…", "claim": "Cut p99 checkout latency 40% (12k rps)", "provenance": "manual" } }
 ```
 
 ### `DELETE /me/experience/atoms/{id}`
@@ -3501,15 +5176,200 @@ Remove an evidence atom.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | integer | yes | The atom id. |
+| `id` | string (uuid) | yes | The atom id. |
 
 ```bash
-curl -X DELETE "https://freehire.me/api/v1/me/experience/atoms/88" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/experience/atoms/88b1…" -b cookies.txt
+```
+
+### `POST /me/experience/employments`
+
+**Auth:** Session or API key
+
+Record a new place — a job or a project.
+
+An employment carries no claim of its own (only the atoms attached to it do), so nothing about provenance applies here. `kind` is `job` or `project`; a project’s name arrives as `name` on the wire (legacy `company` accepted as a fallback), a job’s as `company`.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `kind` | string | yes | `job` or `project`. (e.g. `job`) |
+| `company` | string | no | The employer (jobs) — or the project name via `name` (see description). (e.g. `Acme`) |
+| `role` | string | no | Your title. (e.g. `Senior Backend Engineer`) |
+| `location` | string | no | Where you worked. |
+| `start` | string | no | Start date. (e.g. `2023-02`) |
+| `end` | string | no | End date; omit with `current`. |
+| `current` | boolean | no | Still ongoing. |
+| `summary` | string | no | A short description of the role. |
+| `link` | string | no | Outbound URL, for a project. |
+| `stack` | string[] | no | Technologies used, printed on the CV’s per-role stack line. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/experience/employments" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"kind":"job","company":"Acme","role":"Senior Backend Engineer","start":"2023-02","current":true}'
+```
+
+```json
+{ "data": { "id": "3fa8…", "kind": "job", "company": "Acme", "role": "Senior Backend Engineer", "start": "2023-02", "current": true } }
+```
+
+### `POST /me/experience/atoms`
+
+**Auth:** Session or API key
+
+Record a new achievement.
+
+The only route besides the assistant’s own tool that can add evidence outside a chat session, which is why `provenance` is forced to `manual` regardless of what the body sends — an authenticated POST with no chat transcript behind it can only honestly be the owner’s own words. When the account has opted into requiring it, an empty `context` is a 400.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `claim` | string | yes | The sentence a CV bullet would carry. (e.g. `Cut p99 checkout latency 40%`) |
+| `employment_id` | string (uuid) | no | The place this achievement belongs under; omit to leave it unplaced. |
+| `context` | string | no | How it was done — raw material for reframing toward a vacancy. |
+| `metrics` | string[] | no | Numbers backing the claim. (e.g. `["12k rps", "40%"]`) |
+| `skills` | string[] | no | Skills this achievement demonstrates. |
+| `source_ref` | string | no | Where this came from, for your own reference. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/experience/atoms" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"claim":"Cut p99 checkout latency 40%","employment_id":"3fa8…","metrics":["40%","12k rps"]}'
+```
+
+```json
+{ "data": { "id": "88b1…", "employment_id": "3fa8…", "claim": "Cut p99 checkout latency 40%", "metrics": ["40%", "12k rps"], "provenance": "manual" } }
+```
+
+### `POST /me/experience/atoms/merge`
+
+**Auth:** Session only
+
+Fold two of your atoms into one richer keep.
+
+Session-only, unlike its sibling create/edit/delete routes — the merge folds the discarded atom’s metrics and skills into the kept one while the kept one’s own provenance stands, letting a `manual` atom absorb numbers a model had inferred, so it cannot be widened to a key the way the others were.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `ids` | string[] (2 uuids) | yes | Exactly two atom ids; the first is kept. (e.g. `["88b1…","91c2…"]`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/experience/atoms/merge" -b cookies.txt \
+  -H 'Content-Type: application/json' -d '{"ids":["88b1…","91c2…"]}'
+```
+
+```json
+{ "data": { "id": "88b1…", "claim": "Cut p99 checkout latency 40% (12k rps)", "metrics": ["40%", "12k rps"], "provenance": "manual" } }
 ```
 
 ## Application mail
 
 Your job mail, and the link between a message and the application it belongs to. Mail arrives three ways: a connected Gmail account, the hosted freehire address, or a batch your own client pushed. Only the first two are classified by freehire — pushed mail is yours to triage, which is what makes that tier free. Everything here takes a full-scope API key, so a harness can drive the whole surface; the Gmail consent redirect is the one exception and stays browser-only.
+
+### `GET /me/tracking/{slug}/followup`
+
+**Auth:** Session or API key
+
+Draft a chase for a silent application.
+
+Offered only when the application is in the silent state the tracking board’s own badge uses — a `409` otherwise. `recipient`/`recipient_name` are omitted when nobody at the company ever replied, which is the common case: the draft is handed to you, nothing is sent.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl "https://freehire.me/api/v1/me/tracking/<slug>/followup" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "subject": "Following up: Senior Go Engineer application", "body": "Hi …", "recipient": "recruiting@acme.com", "recipient_name": "Acme Recruiting", "days_silent": 12 } }
+```
+
+### `POST /me/tracking/{slug}/followup`
+
+**Auth:** Session or API key
+
+Record that you sent a chase.
+
+Does not itself affect the silence calculation — that reads when the other side last moved, and a chase is not a reply. Idempotent within the hour: a double click overwrites the timestamp rather than logging a second event. Returns `204 No Content`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/tracking/<slug>/followup" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /me/tracking/{slug}/mail-recall`
+
+**Auth:** Session or API key
+
+Sweep your connected mailbox for mail belonging to this application.
+
+For an application whose mail arrived before you connected an inbox, or that a sync missed. Runs an LLM pass over your mailbox and returns matches as suggestions — it never links or writes the ledger itself; confirm a pick with `POST /me/tracking/{slug}/mail-recall/link`. Rate-limited. A `503` when no mail gateway is configured, a `502` when the model call fails.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/tracking/<slug>/mail-recall" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "scanned": 340,
+    "suggested": [
+      { "id": 0, "provider_id": "18f2a…", "from_addr": "recruiting@acme.com", "from_name": "Acme Recruiting", "subject": "Interview invitation", "received_at": "2026-07-15T09:00:00Z", "invitation": true }
+    ],
+    "invitations": 1
+  }
+}
+```
+
+### `POST /me/tracking/{slug}/mail-recall/link`
+
+**Auth:** Session or API key
+
+Import and link one message a mail-recall sweep proposed.
+
+Imports the message from your mailbox by `provider_id` (from a mail-recall response) and links it to the application in one step — the same import-then-link path a Gmail sync uses, so the response is the full message body, the same shape `POST /me/emails/{id}/link` returns.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `provider_id` | string | yes | The message’s `provider_id`, from a mail-recall response. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/tracking/<slug>/mail-recall/link" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"provider_id":"18f2a…"}'
+```
+
+```json
+{ "data": { "id": 4822, "subject": "Interview invitation", "linked_slug": "senior-go-engineer-acme-1a2b", "link_source": "manual", "...": "..." } }
+```
 
 ### `GET /me/inbox`
 
@@ -3915,4 +5775,26 @@ curl -X DELETE "https://freehire.me/api/v1/me/gmail" -H "Authorization: Bearer f
 
 ```json
 { "data": { "connected": false } }
+```
+
+## Speech
+
+Turns one recording into text for the assistant composer’s dictation control. Nothing is stored — the audio is read, forwarded to the transcription gateway, and dropped.
+
+### `POST /speech/transcriptions`
+
+**Auth:** Session or API key
+
+Transcribe one short audio recording to text.
+
+Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB) and rate-limited to 60 recordings/hour per caller. `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/speech/transcriptions" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" \
+  -F "file=@dictation.webm"
+```
+
+```json
+{ "data": { "text": "remote go engineer roles in Berlin" } }
 ```
