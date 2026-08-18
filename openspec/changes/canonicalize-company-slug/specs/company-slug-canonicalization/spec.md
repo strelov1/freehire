@@ -1,16 +1,21 @@
 ## ADDED Requirements
 
-### Requirement: A company slug SHALL be derived with one trailing legal form stripped
+### Requirement: A company slug SHALL be derived with its trailing legal forms stripped
 
-The system SHALL derive a company slug via `normalize.CompanySlug(name)`, which applies
-`normalize.Slug` after dropping exactly one trailing legal-form token from the name's
-whitespace-separated fields. Only the LAST field is considered, so a form word inside a name is
-kept. A name consisting only of a legal form SHALL be slugged unstripped rather than reduced to
-the empty slug. The legal-form token set SHALL live in `internal/normalize` as the single
-definition, and `collections.RegisterSlug` SHALL delegate to it rather than keeping its own.
+The system SHALL derive a company slug via `normalize.CompanySlug(name)`, which slugs the name
+after repeatedly dropping trailing legal-form tokens from its whitespace-separated fields. A
+token is matched on its ASCII letters only, so the punctuated and bare spellings of one form
+(`B.V.`, `BV`, `Ltd.`) are one token. Tokens whose letters are empty (a bare `&`) SHALL be
+skipped when looking for the trailing form, which is lossless because `normalize.Slug` collapses
+them anyway. Only a TRAILING field is ever a candidate, and a name of a single field SHALL be
+slugged unstripped rather than reduced to the empty slug.
 
-Comparison is on the token's ASCII letters only, so the punctuated and bare spellings of one
-form (`B.V.`, `BV`, `Ltd.`) are the same token.
+There SHALL be exactly one legal-form token set in the module, in `internal/normalize`.
+`collections.RegisterSlug` and `cmd/harvest-ats`'s `trimLegalForm` SHALL delegate to it.
+
+Unification is required, not cosmetic: `Collection.Members` looks a register record's
+`RegisterSlug` up in a map keyed by the catalogue's own company slug, so the two rules must be
+one rule or a credential is silently lost whenever they disagree.
 
 #### Scenario: A trailing legal form is stripped
 
@@ -21,7 +26,18 @@ form (`B.V.`, `BV`, `Ltd.`) are the same token.
 
 - **WHEN** a job is ingested for the company `Booking B.V.`
 - **THEN** its `company_slug` is `booking` — the strip compares the token's letters, so `B.V.`
-  matches the `bv` form even though `normalize.Slug` would render it `b-v`
+  matches the `bv` form even though `normalize.Slug` alone would render it `booking-b-v`
+
+#### Scenario: A compound legal form is stripped whole
+
+- **WHEN** a job is ingested for the company `Acme GmbH & Co. KG`
+- **THEN** its `company_slug` is `acme` — the strip repeats (`kg`, then `co`, then `gmbh`) and
+  steps over the punctuation-only `&`, because a single pass would leave half a form behind
+
+#### Scenario: An ampersand company form is stripped
+
+- **WHEN** a job is ingested for the company `Tiffany & Co.`
+- **THEN** its `company_slug` is `tiffany`
 
 #### Scenario: A form word inside a name is kept
 
@@ -34,12 +50,11 @@ form (`B.V.`, `BV`, `Ltd.`) are the same token.
 - **THEN** its `company_slug` is `limited`, because an empty slug silently matches nothing
   while a visibly odd company row can be found and fixed
 
-#### Scenario: Only one form is stripped
+#### Scenario: Stripping stops at a word that is not a form
 
 - **WHEN** a job is ingested for the company `Acme Holdings Ltd`, where `holdings` is not in
   the token set
-- **THEN** its `company_slug` is `acme-holdings` — `ltd` is stripped, and the strip does not
-  recurse
+- **THEN** its `company_slug` is `acme-holdings` — `ltd` is stripped and the repeat then stops
 
 #### Scenario: The register matcher and the catalogue agree by construction
 
@@ -78,7 +93,7 @@ touching the other.
 ### Requirement: A new posting's slug SHALL resolve through the alias registry before it is written
 
 The system SHALL resolve each ingested posting's company slug through the alias registry by
-folding `normalize.CompanySlug(name)` and looking the folded value up against `folded_key`,
+taking `normalize.CompanyKey(name)` and looking that folded value up against `folded_key`,
 writing the registry's `canonical_slug` when one is found and the derived slug otherwise. The
 lookup SHALL be performed ONCE per board run as a single batched query over the run's distinct
 slugs, and the resulting map SHALL be the sole source of company slugs for both the
@@ -115,7 +130,7 @@ supplies the derived slug, and the pipeline applies the registry.
 ### Requirement: The merge worker SHALL default to a dry run and roll in waves
 
 The system SHALL provide `cmd/merge-companies`, which groups companies that have at least one
-open job by `Fold(CompanySlug(name))`, elects the variant with the highest `job_count` as the
+open job by `normalize.CompanyKey(name)`, elects the variant with the highest `job_count` as the
 canonical slug, and reports the plan. Writing SHALL require an explicit `--apply` flag; without
 it the worker only reports. A `--min-jobs N` bound SHALL restrict a run to groups whose total
 open jobs reach N, so the catalogue can be collapsed in reviewed waves.

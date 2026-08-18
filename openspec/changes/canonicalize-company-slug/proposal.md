@@ -10,10 +10,10 @@ Measured on prod 2026-08-17 across the 152,916 companies that have an open job
 
 | Class | Example | Groups | Companies | Open jobs |
 |---|---|---|---|---|
-| **1a** trailing legal form | `ringcentral` / `ringcentral-inc` | 3,013 | 6,118 | 196,721 |
+| **1a** trailing legal form | `ringcentral` / `ringcentral-inc`; `accenture` / `accenture-gmbh` | 4,149 | 8,462 | 229,004 |
 | **1b** squashed spelling | `dollar-tree` / `dollartree`; `jp-morgan-chase` / `jpmorganchase` | 1,368 | 2,744 | 121,836 |
 
-Combined: 5,787 groups, 11,933 companies, **362,850 open jobs — 26% of the catalogue**. The
+Combined: 5,451 groups, 11,211 companies, **333,497 open jobs — 24% of the catalogue**. The
 worst fragments are the most visible ones: `dollar-tree`(22,683)+`dollartree`(283),
 `jp-morgan-chase`(3,591)+`jpmorganchase`(3,193), JPMorgan Chase in five spellings,
 `bosch-group`(2,231)+`boschgroup`(1,086).
@@ -25,14 +25,23 @@ competes with the first in search.
 
 ## What Changes
 
-- **`normalize.CompanySlug`** — a new pure function: `normalize.Slug` plus the strip of ONE
-  trailing legal-form token. `internal/jobderive` switches to it, which is the whole of
-  class 1a and stops new 1a duplicates from being created at all.
-- **The legal-form list is unified.** `internal/collections/register.go` already owns exactly
-  this rule (`RegisterSlug`, `legalSuffixes`) because register matching needed it. The list
-  and the strip move into `internal/normalize`; `RegisterSlug` becomes a caller. Two lists
-  that were obliged to agree become one. The list is NOT widened — the measured 196,721 jobs
-  come from those 15 tokens, and `register.go:14` documents why a speculative list is worse.
+- **`normalize.CompanySlug` becomes the catalogue's slug rule.** It already exists, alongside
+  `normalize.CompanyKey` (its folded comparison form), and today only
+  `cmd/harvest-orphans` calls either. `internal/jobderive` switches to it, which is the whole
+  of class 1a and stops new 1a duplicates from being created at all.
+- **Three legal-form lists collapse into one.** `internal/normalize` (22 tokens, repeating),
+  `internal/collections/register.go` (15, single-pass, refuses `co`) and
+  `cmd/harvest-ats` (21, single-pass) each define the same rule differently. Unifying is
+  forced, not cosmetic: `Collection.Members` looks a register record's `RegisterSlug` up in a
+  map keyed by the catalogue's own slug, so a disagreement silently costs a company its
+  credential.
+- **The wide, repeating list wins, on measured evidence.** Each existing implementation has a
+  hole the other covers — the slug-level one cannot strip `Booking B.V.`, the single-pass one
+  cannot strip `Acme GmbH & Co. KG`. The unified rule matches trailing fields by their ASCII
+  letters and repeats. `register.go`'s refusal of `co` does not survive the catalogue: all 297
+  companies ending in `-co` are `& Co.` forms, and of the 25 largest merges the wide tokens
+  create, 25 land on the correct employer and none on an unrelated one. `-gmbh` alone is 2,925
+  companies the narrow list never reaches.
 - **A `company_slug_aliases` table** records the frozen canonical spelling for class 1b and
   doubles as the redirect map. Class 1b cannot be a pure function: both `jpmorganchase` and
   `jp-morgan-chase` are honest `normalize.Slug` output of what the source actually wrote, so
@@ -70,8 +79,12 @@ gains a 301 outcome where it previously only had 200/404.
 ## Impact
 
 **Go**
-- `internal/normalize` — new `CompanySlug`, `Fold`; the legal-form token set moves here.
-- `internal/collections/register.go` — `RegisterSlug` delegates; `legalSuffixes` removed.
+- `internal/normalize` — `CompanySlug` regains field-level tokenization; the module's single
+  legal-form token set lives here.
+- `internal/collections/register.go` — `RegisterSlug` delegates; `legalSuffixes`,
+  `significantFields` and `letters` removed.
+- `cmd/harvest-ats/candidates.go` — `trimLegalForm` delegates; `legalFormSuffixes` removed.
+- `cmd/harvest-orphans/candidates.go` — today's only caller; behaviour widens with the rule.
 - `internal/jobderive/jobderive.go:183` — one call site changes; the package stays pure (no
   `ctx`, no database), which is why 1b is resolved in the pipeline and not here.
 - `internal/pipeline` — one batched alias lookup per board run, shared by `distinctCompanySlugs`
@@ -85,7 +98,7 @@ gains a 301 outcome where it previously only had 200/404.
 - New migration: `company_slug_aliases (alias_slug PK, canonical_slug, folded_key, reason,
   created_at)` plus an index on `folded_key`. New empty table, so a plain `CREATE INDEX` —
   no `CONCURRENTLY`, no lock worth naming.
-- `jobs.company_slug` and `jobs.company_slug_folded` rewritten for ~362,850 rows, in chunks.
+- `jobs.company_slug` and `jobs.company_slug_folded` rewritten for ~333,497 rows, in chunks.
   The existing guard (`internal/db/folded_slug_rule_test.go`) applies to the new write path.
 
 **Web**
@@ -101,8 +114,8 @@ gains a 301 outcome where it previously only had 200/404.
   a merged company under-counts its jobs for a few hours — counts read wrong, pages do not
   break, and it self-heals.
 - `search_outbox` is deliberately NOT used to deliver this. A push to the facet index costs
-  90-180s regardless of batch size (`internal/searchdrain/AGENTS.md`), so ~363k rows at the
-  500-row default is ~30 hours of pushes — the exact shape that caused the 2026-08-05 outage.
+  90-180s regardless of batch size (`internal/searchdrain/AGENTS.md`), so ~333k rows at the
+  500-row default is ~28 hours of pushes — the exact shape that caused the 2026-08-05 outage.
 - Verify before the first wave: `reindex-companies` has previously skipped silently for 14
   days while reporting success. If the companies index is in that state, `/companies` and the
   sitemap will not reflect the merges at all.

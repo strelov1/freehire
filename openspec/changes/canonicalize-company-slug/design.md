@@ -7,12 +7,12 @@ Inc.", "Cobblestone Energy, Dubai - UAE."), ATS adapters carry the board's clean
 each spelling becomes its own company.
 
 `normalize.Slug`'s own doc comment has carried the seam since it was written: *"It deliberately
-does not strip legal suffixes (LLC, Inc, ООО); that is a noted future refinement."*
-`internal/collections/register.go` then implemented exactly that refinement for a narrower
-purpose — register matching found almost nothing without it — and its `legalSuffixes` list plus
-`significantFields`/`letters` helpers are already the validated rule. This change promotes them.
+does not strip legal suffixes (LLC, Inc, ООО); that is a noted future refinement."* That
+refinement was then implemented three separate times, for three callers, with three different
+token sets — see "There are already three legal-form lists" below. This change does not add a
+fourth; it makes one of them the module's rule and deletes the others.
 
-Two constraints shape everything below.
+Three constraints shape everything below.
 
 **`companies` is derived.** `SyncCompaniesFromJobs` builds it and `DeleteOrphanCompanies`
 removes any row no job references. Merging companies therefore means rewriting
@@ -26,9 +26,9 @@ maintained by the write paths, not the engine, and `internal/db/folded_slug_rule
 enforces that. The fold this change needs for spelling variants is that same fold, against that
 same indexed column.
 
-Measured on prod 2026-08-17: 5,787 duplicate groups, 11,933 companies, 362,850 open jobs — 26%
-of the 1,380,940 open catalogue. Split 3,013 groups / 196,721 jobs for legal forms (class 1a)
-and 1,368 groups / 121,836 jobs for spelling (class 1b).
+Measured on prod 2026-08-17 under the rule this design settles on: 5,451 duplicate groups,
+11,211 companies, 333,497 open jobs — 24% of the 1,380,940 open catalogue. Split 4,149 groups /
+229,004 jobs for legal forms (class 1a) and 1,368 groups / 121,836 jobs for spelling (class 1b).
 
 ## Goals / Non-Goals
 
@@ -46,9 +46,9 @@ and 1,368 groups / 121,836 jobs for spelling (class 1b).
   `cobblestone-energy-dubai-uae`; `hitachi-energy` and its six country clones). A further 6,721
   companies / 69,280 jobs, but "Northrop Grumman UK" is a distinct legal entity, so this needs a
   confidence threshold and human review rather than a rule. Deliberately deferred.
-- **Widening the legal-form list.** The measured 196,721 jobs come from the existing 15 tokens.
-  `register.go:14` documents why a speculative list (GmbH, S.A., Pty) is worse, and the data
-  does not ask for one.
+- **Widening the token set beyond what the catalogue shows.** The set is the union already
+  present in the module, kept because collision measurement supports each token — not extended
+  speculatively. A token earns its place by landing on the right employer in the data.
 - **A general company-identity resolver** (domain matching, fuzzy names, rebrands). Out of
   scope; `internal/companyname`'s conservative stance still governs that problem.
 - **Changing any response body.** Only a new 301 outcome on one endpoint.
@@ -135,7 +135,7 @@ is why this is a spec requirement and not a code comment.
 The obvious delivery path — enqueue every re-keyed job so `cmd/search-drain` pushes it — does
 not survive arithmetic. A push to the facet index costs 90-180s **regardless of batch size**,
 because Meilisearch re-merges the whole inverted index per push
-(`internal/searchdrain/AGENTS.md`). At the 500-row default, 362,850 rows is ~726 pushes ≈ 30
+(`internal/searchdrain/AGENTS.md`). At the 500-row default, 333,497 rows is ~667 pushes ≈ 28
 hours of continuous pushing, competing for the disk IO that starves `freehire-web`'s `accept()`
 queue. That precise shape produced an ~8-minute outage and an unattended multi-hour recurrence
 on 2026-08-05.
@@ -147,16 +147,72 @@ up. No manual reindex, and `REINDEX_DEDUP` stays unset — the dedup pass measur
 `public_slug` is unaffected: `normalize.JobSlug(in.Title, in.Company, …)` takes the company
 NAME, not its slug, so no job URL moves and the stale-Meili-slug 404 spiral is not in play.
 
-### The legal-form list is unified rather than duplicated
+### There are already three legal-form lists, and they disagree
 
-`collections.RegisterSlug` and `normalize.CompanySlug` implement the same strip for different
-callers. Two lists obliged to agree are a silent-drift generator, and the failure is invisible: a
-company simply never earns a credential it qualifies for. `RegisterSlug` becomes a thin caller.
+This was found while implementing, and it displaced the original plan of "add
+`normalize.CompanySlug`". The function exists, and so does `normalize.CompanyKey` — precisely
+the folded comparison key this design needed, documented as *"two sources that separate the
+words differently still agree."* Both are called from one place,
+`cmd/harvest-orphans/candidates.go:47`.
 
-The one thing to preserve: the strip operates on the name's whitespace fields, not on the slug.
-`normalize.Slug("Booking B.V.")` is `booking-b-v`, where no trailing token matches `bv`; the
-field-level strip catches it. Field-level is strictly stronger, and the prod measurement that
-produced 196,721 was slug-level — a lower bound.
+| Definition | Tokens | Repeats | Operates on | Has `co` |
+|---|---|---|---|---|
+| `normalize.legalSuffixes` | 22 | yes | `Slug` output | yes |
+| `collections.legalSuffixes` | 15 | no | name fields, via `letters()` | no, refused explicitly |
+| `cmd/harvest-ats.legalFormSuffixes` | 21 | no | slug | yes |
+
+They disagree on substance, not spelling, and each catches what another misses:
+
+| Input | `normalize.CompanySlug` | `collections.RegisterSlug` |
+|---|---|---|
+| `Booking B.V.` | `booking-b-v` — slug-level, `b v` never matches `bv` | `booking` |
+| `Acme GmbH & Co. KG` | `acme` | `acme-gmbh-co-kg` — one pass, no `gmbh`/`kg` |
+
+**Unifying is mandatory, not tidying.** `Collection.Members` looks `RegisterSlug(record.Name)`
+up in a map keyed by the catalogue's own company slug. Once the catalogue key strips `gmbh`, a
+register row "ACME ROBOTICS GMBH" resolves to `acme-robotics-gmbh` and finds nothing. The
+credential is lost silently — the exact failure `internal/collections/AGENTS.md` warns about.
+
+### The wide list wins, on evidence rather than on the comment that forbade it
+
+`register.go:16` refuses `co` because it *"collides with ordinary short words and abbreviations
+inside genuine company names."* That reasoning was written for matching register records and
+does not survive contact with the catalogue: all 297 companies whose slug ends in `-co` are
+`& Co.` forms (Tiffany & Co., Levi Strauss & Co., JPMorgan Chase & Co.), and the strip is
+trailing-only, so an interior collision cannot arise.
+
+The decisive test is not whether a token looks dangerous but whether stripping it lands on a
+DIFFERENT existing company. Measured on prod 2026-08-17 over the tokens the wide list adds
+(`gmbh ab ag kg co oy sa pty srl as`): of the 25 largest collisions, 25 are correct merges —
+Accenture GmbH → Accenture, Oracle SA → Oracle, Goldman Sachs & Co. → Goldman Sachs, Ericsson AB
+→ Ericsson, JP Morgan Chase & Co. → JP Morgan Chase. Not one lands on an unrelated employer.
+(One is right for the wrong reason: `thehivecareers.co` is a domain, not a form, and still
+resolves to TheHiveCareers.)
+
+Yield, same measurement:
+
+| Rule | Groups | Companies | Open jobs |
+|---|---|---|---|
+| Narrow list, single pass | 4,321 | 8,859 | 308,693 |
+| Wide list, repeating | **5,451** | **11,211** | **333,497** |
+
+`-gmbh` alone is 2,925 companies the narrow list never touches.
+
+### The unified rule is field-level tokens plus the repeating wide list
+
+Neither existing implementation is adopted whole. Match the trailing form on the name's
+whitespace fields reduced to ASCII letters — `register.go`'s `letters()`, which is what makes
+`B.V.` a `bv` — and repeat the strip, which is what makes `Acme GmbH & Co. KG` an `acme`.
+
+Two details make that combination work. Fields whose letters are empty (a bare `&`) are stepped
+over when looking for the trailing form; that is lossless, because `normalize.Slug` collapses
+runs of non-alphanumerics anyway, so `Johnson & Johnson` slugs identically either way. And a
+single-field name is never stripped, so `Limited` survives as `limited` — the current
+implementation gets this free from its suffixes carrying a leading space, and the field-level
+version must keep it deliberately.
+
+Field-level also makes the `" a s"` / `" s a"` entries redundant: `Trafalgar A/S` is one field
+whose letters are `as`. They come out, with a test proving the removal inert.
 
 ## Risks / Trade-offs
 
@@ -173,8 +229,9 @@ of merges can be reversed by replaying the rows. The dry run prints the plan for
 the largest wave.
 
 **[Legal-form strip over-strips a genuine name]** → Only the last field is a candidate, the list
-is 15 tokens and not widened, and a name that is only a legal form is left intact. The behaviour
-is pinned by unit tests including "Limited Brands" and the punctuated `B.V.` case.
+is not extended beyond what collision measurement supports, and a single-field name is left
+intact. The behaviour is pinned by unit tests including "Limited Brands", "Limited" and the
+punctuated `B.V.` case.
 
 **[Stale facet index between the re-key and the scheduled reindex]** → For up to one reindex
 interval, a merged company under-counts its jobs and a retired slug's page 301s to a company

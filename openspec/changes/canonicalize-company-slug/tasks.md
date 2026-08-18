@@ -1,16 +1,35 @@
 ## 1. The slug rule (pure, no schema)
 
-- [ ] 1.1 Add `normalize.CompanySlug(name)` and `normalize.Fold(slug)` with the legal-form token
-      set, moving `legalSuffixes`, `significantFields` and `letters` out of
-      `internal/collections/register.go`. Tests first, covering: `RingCentral, Inc.` →
-      `ringcentral`; `Booking B.V.` → `booking` (the strip is field-level, so it beats
-      `normalize.Slug`'s `booking-b-v`); `Limited Brands` → `limited-brands`; `Limited` →
-      `limited`; `Acme Holdings Ltd` → `acme-holdings` (one strip, no recursion).
-- [ ] 1.2 Make `collections.RegisterSlug` delegate to `normalize.CompanySlug`, and add a test
-      that the two agree on the same input. The existing `register_test.go` corpus must stay
-      green — it is the validation this rule already earned.
-- [ ] 1.3 Update `normalize.Slug`'s doc comment: the "noted future refinement" about legal
-      suffixes now points at `CompanySlug` instead of describing an absence.
+`normalize.CompanySlug` and `normalize.CompanyKey` ALREADY EXIST
+(`internal/normalize/company.go`) and are called from exactly one place,
+`cmd/harvest-orphans/candidates.go:47`. This group does not add them — it makes them the
+module's single legal-form rule and closes the hole each existing implementation has.
+
+- [ ] 1.1 Fix `normalize.CompanySlug`'s tokenization: match the trailing form on the name's
+      whitespace fields reduced to ASCII letters (`register.go`'s `letters` helper), skipping
+      punctuation-only fields, instead of on `Slug`'s hyphenated output. Tests first, covering
+      what each current implementation gets wrong: `Booking B.V.` → `booking` (today
+      `booking-b-v`); `Acme GmbH & Co. KG` → `acme` (the repeat must step over `&`);
+      `Tiffany & Co.` → `tiffany`; and the cases that must NOT change — `Limited Brands` →
+      `limited-brands`, `Limited` → `limited`, `Acme Holdings Ltd` → `acme-holdings`.
+- [ ] 1.2 Retire the `" a s"` / `" s a"` entries from the token set: field-level `letters()`
+      makes them redundant (`Trafalgar A/S` → `as`). Test `Trafalgar A/S` → `trafalgar` before
+      removing them, so the removal is proven inert rather than assumed.
+- [ ] 1.3 Make `collections.RegisterSlug` delegate to `normalize.CompanySlug`, deleting
+      `collections.legalSuffixes`, `significantFields` and `letters`. `RequireCountry`'s
+      token-counting must keep agreeing with the strip — it currently shares
+      `significantFields`, so give it the shared helper rather than re-deriving. The existing
+      `register_test.go` and `nlsponsor`/`uksponsor`/`ush1bsponsor` corpora must stay green.
+- [ ] 1.4 Make `cmd/harvest-ats`'s `trimLegalForm` delegate too, deleting
+      `legalFormSuffixes`. Note `-se` and `-group` are in that list and in no other; decide
+      each on evidence and record the decision in the token set's comment.
+- [ ] 1.5 Add a guard test that the module defines exactly one legal-form token set — a grep-
+      style test over the package sources, in the shape of
+      `internal/db/folded_slug_rule_test.go`, because three lists is how this started.
+- [ ] 1.6 Update the doc comments that are now wrong: `normalize.Slug`'s "deliberately does not
+      strip legal suffixes … a noted future refinement" should point at `CompanySlug`, and
+      `register.go`'s "Co is a deliberate omission" is contradicted by the catalogue evidence
+      (297 companies on `-co`, all `& Co.`, zero bad collisions) and must not be carried over.
 
 ## 2. Schema and queries
 
@@ -43,7 +62,7 @@
 
 ## 4. The merge worker
 
-- [ ] 4.1 Add `cmd/merge-companies` grouping by `Fold(CompanySlug(name))` over companies with at
+- [ ] 4.1 Add `cmd/merge-companies` grouping by `normalize.CompanyKey(name)` over companies with at
       least one open job, electing the highest `job_count` variant. Unit-test the election
       against the real counterexamples: `dominos`(14396) beats `domino-s`(1);
       `alfa-bank`(1617) beats `al-fa-bank`(20).
