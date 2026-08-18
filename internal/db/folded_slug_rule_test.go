@@ -43,11 +43,16 @@ func TestEveryCompanySlugWriteAlsoWritesTheFoldedColumn(t *testing.T) {
 		}
 
 		for _, stmt := range splitNamedQueries(string(src)) {
-			if !writesJobsCompanySlug(stmt.body) {
+			// Judge the SQL, not the prose around it. A statement whose comment merely
+			// MENTIONS the folded column ("company_slug_folded is written below", or a
+			// TODO to write it) satisfied this check while leaving the column unwritten —
+			// which is precisely the silent failure the rule exists to prevent.
+			body := stripSQLComments(stmt.body)
+			if !writesJobsCompanySlug(body) {
 				continue
 			}
 			checked++
-			if !strings.Contains(stmt.body, "company_slug_folded") {
+			if !strings.Contains(body, "company_slug_folded") {
 				t.Errorf("%s: %s writes jobs.company_slug but not company_slug_folded — "+
 					"the folded column is maintained by the write paths, not by the engine "+
 					"(see migrations/0109). Add `company_slug_folded = replace(<the slug>, '-', '')`.",
@@ -58,10 +63,11 @@ func TestEveryCompanySlugWriteAlsoWritesTheFoldedColumn(t *testing.T) {
 
 	// Counting the population, not just the violations: a rule that silently stops
 	// matching anything looks identical to a rule that passes.
-	if checked < 4 {
-		t.Errorf("only %d statements matched as jobs.company_slug writers, expected at least 4 "+
-			"(UpsertJob, UpsertManualJob, InsertPrivateJob, RenameSlugCompany) — the detection "+
-			"below has probably drifted from how the queries are written", checked)
+	if checked < 5 {
+		t.Errorf("only %d statements matched as jobs.company_slug writers, expected at least 5 "+
+			"(UpsertJob, UpsertManualJob, InsertPrivateJob, RenameSlugCompany, "+
+			"RekeyCompanySlugChunk) — the detection below has probably drifted from how the "+
+			"queries are written", checked)
 	}
 }
 
@@ -108,4 +114,20 @@ func writesJobsCompanySlug(body string) bool {
 		strings.Contains(lower, "set company_slug =") ||
 		strings.Contains(lower, "company_slug = @new_slug") ||
 		strings.Contains(lower, "company_slug = excluded.company_slug")
+}
+
+// stripSQLComments drops `-- …` line comments from a statement so the rule reads the SQL and
+// not the commentary. A `--` inside a string literal would be cut too; no query here holds
+// one, and the failure direction is safe — a statement would look like it writes LESS than it
+// does, which errs toward reporting a violation rather than hiding one.
+func stripSQLComments(body string) string {
+	lines := strings.Split(body, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if i := strings.Index(line, "--"); i >= 0 {
+			line = line[:i]
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }

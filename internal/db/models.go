@@ -252,6 +252,17 @@ type CompanyFeedbackReport struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+// Retired company slug -> the canonical slug it merged into. The one company-adjacent table that is NOT derived from jobs: DeleteOrphanCompanies would drop a canon stored in companies as soon as the employer went quiet. Read by folded_key on ingest and by alias_slug to serve a 301.
+type CompanySlugAlias struct {
+	AliasSlug     string `json:"alias_slug"`
+	CanonicalSlug string `json:"canonical_slug"`
+	// alias_slug with hyphens removed (normalize.CompanyKey), so a spelling never merged before still resolves to the canon its folded form already owns.
+	FoldedKey string `json:"folded_key"`
+	// legal_form (a pure normalize.CompanySlug strip) or spelling (a job-count election at merge time). Recorded so one class of merge can be reversed without the other.
+	Reason    string             `json:"reason"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type CompanyVote struct {
 	UserID      int64              `json:"user_id"`
 	CompanySlug string             `json:"company_slug"`

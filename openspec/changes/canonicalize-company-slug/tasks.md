@@ -56,17 +56,30 @@ module's single legal-form rule and closes the hole each existing implementation
 
 ## 2. Schema and queries
 
-- [ ] 2.1 Add the `company_slug_aliases` migration (`alias_slug` PK, `canonical_slug`,
+- [x] 2.1 Add the `company_slug_aliases` migration (`alias_slug` PK, `canonical_slug`,
       `folded_key`, `reason`, `created_at`) with an index on `folded_key`. Number it **0110** —
       `0109` is already taken twice, so confirm against `migrations/` and the prod ledger before
       naming the file. Carry the design's rationale in the file comment, following 0109's
       precedent: why the table is not derived from `jobs`/`companies`, and why `reason` exists.
-- [ ] 2.2 Add the sqlc queries: batch lookup by `folded_key = ANY($1)`, single lookup by
+      It is **0111**, not 0110: `origin/main` and prod both already carry
+      `0110_job_semantic_chunks_hnsw_idx.sql`. Checked `git ls-tree origin/main`, every remote
+      branch, and prod's `schema_migrations` — exactly the check whose absence produced the two
+      existing 0109s. Also carries CHECKs against a self-alias and an unknown `reason`, and
+      deliberately NO foreign key to `companies(slug)`, which would delete the rows the table
+      exists to keep.
+- [x] 2.2 Add the sqlc queries: batch lookup by `folded_key = ANY($1)`, single lookup by
       `alias_slug`, and the upsert the merge worker writes with. Run `make sqlc`.
-- [ ] 2.3 Add the chunked, `IS DISTINCT FROM`-guarded `jobs` re-key query, writing
+- [x] 2.3 Add the chunked, `IS DISTINCT FROM`-guarded `jobs` re-key query, writing
       `company_slug` and `company_slug_folded` in one statement. Confirm
       `internal/db/folded_slug_rule_test.go` still passes — it counts the write paths, so the
       new one must raise the count, not slip past the detector.
+      It DID slip past, and not for the expected reason: the guard tested the raw statement
+      text, so the doc comment's own mention of `company_slug_folded` satisfied it while the
+      column went unwritten. Fixed by stripping `--` comments before the check, proven by
+      removing the column and watching it fail. Population minimum raised 4 -> 5.
+      `jobs.company` is deliberately NOT rewritten: the source keeps sending "DollarTree", so
+      the next crawl would put it straight back, and the display name comes from
+      `companies.name` anyway.
 
 ## 3. Write path
 

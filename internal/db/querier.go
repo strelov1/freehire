@@ -1152,6 +1152,9 @@ type Querier interface {
 	// observable applications at all, which the caller must treat as "not enough data"
 	// rather than as a zero response rate.
 	GetCompanyResponse(ctx context.Context, companySlug string) (GetCompanyResponseRow, error)
+	// Where a retired slug should 301 to. GET /companies/:slug consults this only AFTER missing
+	// in `companies`, so a re-created company always wins over a stale alias.
+	GetCompanySlugAlias(ctx context.Context, aliasSlug string) (string, error)
 	// The caller's current vote for a company (0 when none). Always returns one row.
 	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
 	// The caller's linked Discord account (link-status endpoint + delivery resolution).
@@ -1487,6 +1490,10 @@ type Querier interface {
 	// moderator to act on, not a per-report ticket with its own state machine (see
 	// internal/report for that fuller shape, built for job postings).
 	InsertCompanyFeedbackReport(ctx context.Context, arg InsertCompanyFeedbackReportParams) error
+	// Record a merge. DO NOTHING on conflict because the canon is frozen at first merge: a later
+	// run that re-elects a different winner for the same folded group must not silently move a
+	// URL that has already been 301-ing and indexed.
+	InsertCompanySlugAlias(ctx context.Context, arg InsertCompanySlugAliasParams) (int64, error)
 	// Append the debit for a metered action. delta is negative (the action cost). The partial
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
@@ -1736,6 +1743,9 @@ type Querier interface {
 	// un-schedule the meeting it announced, the same position the ledger takes on a deleted
 	// reply.
 	ListCalendarMatchCandidates(ctx context.Context, userID int64) ([]ListCalendarMatchCandidatesRow, error)
+	// Every slug already elected canonical. The merge worker holds these out of a new election,
+	// which is what "frozen" means in practice.
+	ListCanonicalCompanySlugs(ctx context.Context) ([]string, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
@@ -1765,6 +1775,11 @@ type Querier interface {
 	// internal/handler/companies.go) — rating is not (yet) a Meili-sortable
 	// attribute, so routing there would silently drop the requested order.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
+	// The merge worker's input: every company that has an open job, with the count that elects
+	// the winner of its folded group. Grouping happens in Go because the fold is
+	// normalize.CompanyKey — a repeating legal-form strip no SQL expression should try to
+	// reproduce, since a second implementation of that rule is the bug this change removes.
+	ListCompaniesForMerge(ctx context.Context) ([]ListCompaniesForMergeRow, error)
 	// Keyset page of hiring companies (job_count > 0) for the companies search reindex,
 	// cursored by the slug primary key (first chunk keyed by the empty string, which
 	// sorts before every slug). SELECT * so the row stays db.Company as columns grow and
@@ -2962,6 +2977,15 @@ type Querier interface {
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
 	// Dismiss a suggestion without linking.
 	RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams) (int64, error)
+	// Move one chunk of a retired slug's jobs onto the canonical slug.
+	//
+	// company_slug_folded is written in the same statement, as every write path that sets
+	// company_slug must (migration 0109; internal/db/folded_slug_rule_test.go enforces it).
+	//
+	// Idempotent by construction rather than by a guard: the subquery selects rows still
+	// carrying the OLD slug, so an updated row leaves the set. A re-run updates zero, and
+	// stopping mid-way costs nothing — the next run resumes with what is left.
+	RekeyCompanySlugChunk(ctx context.Context, arg RekeyCompanySlugChunkParams) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.
@@ -3033,6 +3057,14 @@ type Querier interface {
 	// what stops a group repeated inside one verbose title from outranking a real
 	// cluster. A second count(DISTINCT id) would only add a per-group sort.
 	ResidualTitleGroups(ctx context.Context, arg ResidualTitleGroupsParams) ([]ResidualTitleGroupsRow, error)
+	// The canonical slug for each folded key in the batch — one round trip per board run, not
+	// one per posting. pipeline.Runner folds the run's distinct company slugs, asks this once,
+	// and hands the ONE resulting map to both the aggregator-coverage gate and the upsert, so
+	// neither can compare a slug the other would not have written.
+	//
+	// Keyed on folded_key rather than on alias_slug so a spelling that was never itself merged
+	// still lands: "DollarTree" has no row, but it folds onto "dollartree", which does.
+	ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error)
 	// Mark a sent request contacted or declined, recording the acting referrer and time. The
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
 	// attempt matches no row (mapped to "already resolved").
