@@ -1089,9 +1089,7 @@ components:
       schema:
         type: integer
         minimum: 1
-      description: |
-        Restrict to postings published within the last N days. A non-positive or
-        non-numeric value imposes no restriction rather than erroring.
+      description: Restrict to postings published within the last N days. Omit for no freshness restriction.
     RegionsExclude:
       name: regions_exclude
       in: query
