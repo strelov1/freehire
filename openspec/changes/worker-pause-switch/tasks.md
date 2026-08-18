@@ -1,14 +1,14 @@
 ## 1. The pause decision
 
-- [ ] 1.1 Add `internal/worker/pause.go` with a decision function that reports whether this
+- [x] 1.1 Add `internal/worker/pause.go` with a decision function that reports whether this
       process may run, given a binary name and a Redis URL. Cover the no-key case (runs) and
       the `freehire:pause:all` case (refused) against `miniredis`.
-- [ ] 1.2 Honour the per-binary key `freehire:pause:<binary>`: `ingest` is refused while
+- [x] 1.2 Honour the per-binary key `freehire:pause:<binary>`: `ingest` is refused while
       `search-drain` runs, and every `ingest` invocation is refused regardless of the board
       file argument (the key matches the binary name only).
-- [ ] 1.3 Honour `FREEHIRE_IGNORE_PAUSE=1`: with the fleet-wide key present and the variable
+- [x] 1.3 Honour `FREEHIRE_IGNORE_PAUSE=1`: with the fleet-wide key present and the variable
       set, the decision is "run".
-- [ ] 1.4 Fail open on an unreachable Redis, on a malformed URL, and on a response slower than
+- [x] 1.4 Fail open on an unreachable Redis, on a malformed URL, and on a response slower than
       the 250ms timeout — each logs and returns "run". Assert the slow case completes within a
       bound so a regression to the dial default is caught.
 
