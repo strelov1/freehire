@@ -49,8 +49,28 @@ type UnknownParam struct {
 // query. Reporting the difference is the whole point — a caller that asked for
 // `country=it` and got the entire catalogue back needs to know why.
 func UnknownParams(v url.Values, alsoKnown []string) []UnknownParam {
-	known := knownParams(alsoKnown)
+	return unknownAgainst(v, knownParams(alsoKnown))
+}
 
+// UnknownCompanyParams is UnknownParams for the company search, whose filter
+// (CompanyFilterFromValues) reads a different vocabulary: its own facet list,
+// and none of the `_exclude` / `_mode` conventions the jobs filter honours. A
+// jobs facet sent here — `seniority=senior` on a company search — is therefore
+// ignored, and reported.
+func UnknownCompanyParams(v url.Values, alsoKnown []string) []UnknownParam {
+	known := make(map[string]bool, len(companyFacets)+len(alsoKnown))
+	for _, f := range companyFacets {
+		known[f.param] = true
+	}
+	for _, param := range alsoKnown {
+		known[param] = true
+	}
+	return unknownAgainst(v, known)
+}
+
+// unknownAgainst is the shared body of both reports: everything in v that the
+// given vocabulary does not contain, named, suggested and bounded.
+func unknownAgainst(v url.Values, known map[string]bool) []UnknownParam {
 	var out []UnknownParam
 	for param := range v {
 		// "?=value" parses to an empty name. There is nothing to report about it

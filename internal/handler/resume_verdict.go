@@ -119,13 +119,18 @@ func roleValues(c *fiber.Ctx, profile userprofile.Profile) url.Values {
 	return vals
 }
 
-// stripSkillParams removes the skills facet params (bare + _exclude/_mode) from a
-// query set. In the coverage endpoints the caller's skills are the measured set,
-// never a market filter that would narrow the market to jobs already listing them.
+// skillParams are the skills facet's query params (bare + _exclude/_mode). Named
+// once because two places need the same list: the strip below, and the coverage
+// endpoint's report of what it discarded.
+var skillParams = []string{"skills", "skills_exclude", "skills_mode"}
+
+// stripSkillParams removes the skills facet params from a query set. In the
+// coverage endpoints the caller's skills are the measured set, never a market
+// filter that would narrow the market to jobs already listing them.
 func stripSkillParams(vals url.Values) {
-	delete(vals, "skills")
-	delete(vals, "skills_exclude")
-	delete(vals, "skills_mode")
+	for _, param := range skillParams {
+		delete(vals, param)
+	}
 }
 
 // hasNonEmpty reports whether a query-param slice carries at least one non-empty

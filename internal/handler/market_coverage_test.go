@@ -164,3 +164,51 @@ func TestMarketCoverage_FilterFromQueryAndSkillsFromBody(t *testing.T) {
 		t.Errorf("uncovered filter should exclude body skills: %#v", uncovered)
 	}
 }
+
+func TestMarketCoverage_ReportsIgnoredParams(t *testing.T) {
+	// Coverage turns a filter into "how much of this market do my skills reach".
+	// A dropped filter therefore scores the caller against a market they did not
+	// ask about, and the percentage looks just as confident either way.
+	app := coverageApp(&recordingFacetCounter{})
+
+	_, body := doPostJSON(t, app, "/market/coverage?country=it", `{"skills":["go"]}`)
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "country" || first["did_you_mean"] != "countries" {
+		t.Errorf("ignored_params[0] = %v, want country -> countries", first)
+	}
+}
+
+func TestMarketCoverage_ReportsTheSkillsParamItDiscards(t *testing.T) {
+	// The measured skills come from the body; the skills facet is stripped from
+	// the query on purpose (stripSkillParams). That is still a filter the caller
+	// wrote and the endpoint dropped, so it has to be reported rather than
+	// silently obeyed-looking.
+	app := coverageApp(&recordingFacetCounter{})
+
+	_, body := doPostJSON(t, app, "/market/coverage?skills=rust", `{"skills":["go"]}`)
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want the discarded skills param", meta["ignored_params"])
+	}
+	if first, _ := ignored[0].(map[string]any); first["param"] != "skills" {
+		t.Errorf("ignored_params[0] = %v, want skills", first)
+	}
+}
+
+func TestMarketCoverage_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
+	app := coverageApp(&recordingFacetCounter{})
+
+	_, body := doPostJSON(t, app, "/market/coverage?countries=it", `{"skills":["go"]}`)
+
+	if _, present := body["meta"]; present {
+		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
+	}
+}

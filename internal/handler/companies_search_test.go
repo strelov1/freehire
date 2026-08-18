@@ -104,3 +104,24 @@ func TestListCompanies_FacetsBuildMeiliFilterAndRoute(t *testing.T) {
 		t.Errorf("filter %v missing expected facet groups", gs)
 	}
 }
+
+func TestListCompanies_ReportsIgnoredParams(t *testing.T) {
+	// The company filter has its own vocabulary: `seniority` is a jobs facet and
+	// does nothing here. Without a warning the company list that comes back
+	// reads as an answer to the narrower question that was asked.
+	fake := &fakeCompanySearcher{}
+	app := companyApp(fake)
+
+	// `collections` is a real company facet, so the request routes to Meili
+	// rather than falling through to the Postgres path this harness lacks.
+	_, body := doGet(t, app, "/companies?collections=yc&seniority=senior")
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	if first, _ := ignored[0].(map[string]any); first["param"] != "seniority" {
+		t.Errorf("ignored_params[0] = %v, want seniority", first)
+	}
+}

@@ -189,7 +189,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 		domains, industries, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
 		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
 		if err == nil {
-			return listResponse(c, items, total, limit, offset)
+			return listResponseWithIgnored(c, items, total, limit, offset, ignoredCompanyParams(c))
 		}
 		log.Printf("companies: meili search fell back to postgres (q=%q): %v", search, err)
 	}
@@ -253,7 +253,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	for i, row := range companies {
 		items[i] = companyListItemFromRow(row)
 	}
-	return listResponse(c, items, total, limit, offset)
+	return listResponseWithIgnored(c, items, total, limit, offset, ignoredCompanyParams(c))
 }
 
 // isCompanyFilter reports whether a /companies request carries any name search or facet
@@ -460,3 +460,17 @@ func orEmpty(v []string) []string {
 	}
 	return v
 }
+
+// ignoredCompanyParams reports the query params this listing did not filter on.
+//
+// Separate from the jobs endpoints' ignoredParams because the vocabularies are
+// separate: a company search reads its own facet list and none of the
+// `_exclude` / `_mode` conventions, so a jobs facet sent here is ignored and has
+// to be named as such.
+func ignoredCompanyParams(c *fiber.Ctx) []search.UnknownParam {
+	return search.UnknownCompanyParams(queryValues(c), companiesParams)
+}
+
+// companiesParams are the listing's own params: the name query, the sort
+// selector and the pagination window.
+var companiesParams = []string{"q", "sort", "limit", "offset"}

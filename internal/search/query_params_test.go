@@ -3,6 +3,7 @@ package search
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"testing"
 )
 
@@ -153,6 +154,45 @@ func TestUnknownParams_SuggestsThroughFacetModifiers(t *testing.T) {
 		}
 		if got[0].DidYouMean != want {
 			t.Errorf("DidYouMean for %s = %q, want %q", param, got[0].DidYouMean, want)
+		}
+	}
+}
+
+func TestUnknownCompanyParams(t *testing.T) {
+	// Companies filter on their own vocabulary, so the jobs facets are NOT
+	// known here — `seniority=senior` does nothing on a company search and has
+	// to say so. Nor does this filter support the `_exclude` / `_mode`
+	// conventions, which the jobs filter does.
+	v := url.Values{
+		"collections":     {"yc"},
+		"regions_exclude": {"eu"},
+		"seniority":       {"senior"},
+		"country":         {"it"},
+		"q":               {"acme"},
+	}
+
+	got := UnknownCompanyParams(v, []string{"q"})
+
+	var names []string
+	for _, p := range got {
+		names = append(names, p.Param)
+	}
+	want := []string{"country", "regions_exclude", "seniority"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("ignored = %v, want %v", names, want)
+	}
+	if got[0].DidYouMean != "countries" {
+		t.Errorf("DidYouMean for country = %q, want countries", got[0].DidYouMean)
+	}
+}
+
+func TestCompanyFacetParams_MatchesTheFilterVocabulary(t *testing.T) {
+	// UnknownCompanyParams trusts companyFacets to be the whole vocabulary. If a
+	// facet were added to the filter and not here, it would be reported as
+	// ignored while quietly working.
+	for _, f := range companyFacets {
+		if got := UnknownCompanyParams(url.Values{f.param: {"x"}}, nil); len(got) != 0 {
+			t.Errorf("facet %q reported as ignored: %#v", f.param, got)
 		}
 	}
 }

@@ -73,6 +73,10 @@ var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 // selector.
 var agentSearchParams = slices.Concat(searchParams, []string{"description_format"})
 
+// facetsParams are the facet-count endpoint's own params: the query text, the
+// facet-subset selector and the disjunctive toggle.
+var facetsParams = []string{"q", "facets", "disjunctive"}
+
 // ignoredParams reports the query params of this request that neither the filter
 // nor the endpoint itself reads. They are echoed in the response meta instead of
 // being refused: rejecting them would break saved searches and shared links that

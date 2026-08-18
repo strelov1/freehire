@@ -314,3 +314,34 @@ func TestJobFacets_FacetsParamRejectedWithDisjunctive(t *testing.T) {
 		t.Errorf("reached the counter with %d reqs, want no call", len(fake.gotReqs))
 	}
 }
+
+func TestJobFacets_ReportsIgnoredParams(t *testing.T) {
+	// The counts endpoint is where a filter becomes a number someone quotes as
+	// the size of a market, so a silently dropped filter is worse here than on
+	// the listing: it does not look like a long list, it looks like a fact.
+	app := facetsApp(&fakeFacetCounter{})
+
+	_, body := doGet(t, app, "/jobs/facets?country=it")
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "country" || first["did_you_mean"] != "countries" {
+		t.Errorf("ignored_params[0] = %v, want country -> countries", first)
+	}
+}
+
+func TestJobFacets_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
+	// This endpoint answers {"data": ...} with no meta. A clean request must
+	// keep that shape rather than grow an empty meta block.
+	app := facetsApp(&fakeFacetCounter{})
+
+	_, body := doGet(t, app, "/jobs/facets?q=go&facets=skills&countries=it")
+
+	if _, present := body["meta"]; present {
+		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
+	}
+}

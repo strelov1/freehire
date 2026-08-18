@@ -54,7 +54,29 @@ func (h *resumeHandlers) MarketCoverage(c *fiber.Ctx) error {
 	// coherence is a CV-section metric (declared ∩ body); a flat skill list has no
 	// sections, so it is meaningless here — zero it rather than advertise a score.
 	v.CoherencePercent = 0
-	return c.JSON(fiber.Map{"data": v})
+	return dataResponseWithIgnored(c, v, coverageIgnoredParams(c))
+}
+
+// coverageIgnoredParams reports the query params this endpoint did not filter on.
+//
+// The skills facet is included in that report rather than excused: the measured
+// skills arrive in the body, so marketFilter strips `skills` from the query
+// (stripSkillParams) — but a caller who wrote `?skills=rust` still wrote a filter
+// that was thrown away, and the score comes back looking equally confident.
+// They cannot come back from search.UnknownParams — the skills facet is real
+// vocabulary, just not vocabulary this endpoint reads — so they are named here
+// and removed before the rest of the query is checked.
+func coverageIgnoredParams(c *fiber.Ctx) []search.UnknownParam {
+	vals := queryValues(c)
+
+	var out []search.UnknownParam
+	for _, param := range skillParams {
+		if vals.Has(param) {
+			out = append(out, search.UnknownParam{Param: param})
+			delete(vals, param)
+		}
+	}
+	return append(out, search.UnknownParams(vals, nil)...)
 }
 
 // marketFilter builds the market filter from the request's facet query params

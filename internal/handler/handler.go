@@ -201,6 +201,21 @@ func listResponseWithIgnored(c *fiber.Ctx, data any, total int64, limit, offset 
 	return c.JSON(fiber.Map{"data": data, "meta": meta})
 }
 
+// dataResponseWithIgnored writes the single-item envelope, adding a meta block
+// only when the filter ignored something.
+//
+// The list endpoints already send meta, so they carry the warning there
+// (listResponseWithIgnored). These endpoints answer a bare {"data": ...}, and a
+// clean request keeps exactly that shape — the block appears only when there is
+// a warning to read, so nothing about the documented response changes for
+// callers who spelled their filters right.
+func dataResponseWithIgnored(c *fiber.Ctx, data any, ignored []search.UnknownParam) error {
+	if len(ignored) == 0 {
+		return c.JSON(fiber.Map{"data": data})
+	}
+	return c.JSON(fiber.Map{"data": data, "meta": fiber.Map{"ignored_params": ignored}})
+}
+
 // Config is the dependency bundle Register wires onto the app: the DB pool, the
 // required rate-limit Throttler, the single browser origin allowed cross-origin
 // (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only
