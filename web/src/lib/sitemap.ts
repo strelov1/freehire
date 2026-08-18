@@ -32,6 +32,8 @@ export const STATIC_PATHS = [
   '/features/inbox',
   '/features/referrals',
   '/features/tailor',
+  '/features/tracking',
+  '/features/notifications',
   '/features/ghost-jobs',
   '/features/advanced-search',
   // The data and API surfaces. Indexable pages that carry the site's most citable

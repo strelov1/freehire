@@ -77,16 +77,6 @@
   // shows a gap; the -50% loop stays seamless because the copies are identical.
   const sourcesMarquee = [...sources, ...sources, ...sources, ...sources];
 
-  // Illustrative "My jobs" board — decorative, not live data. Mirrors the real
-  // kanban (board.ts BOARD_COLUMNS) so the preview never promises a flow the
-  // product doesn't have: drag a saved job along its stages to the offer.
-  const board = [
-    { label: 'Saved', cards: [{ title: 'Data Engineer', company: 'Datadog' }] },
-    { label: 'Applied', cards: [{ title: 'Staff Frontend Engineer', company: 'Stripe' }] },
-    { label: 'Interview', cards: [{ title: 'Senior Backend Engineer', company: 'Linear' }] },
-    { label: 'Offer', cards: [{ title: 'Platform Engineer', company: 'Grafana' }] },
-  ];
-
   // Illustrative application-pipeline snapshot for the funnel below — decorative,
   // not live data. Counts sum to `applications`, and the keys are the product's own
   // pipeline groups, so the preview never promises a flow the product doesn't have.
@@ -126,6 +116,18 @@
       title: 'CV tailoring',
       body: 'Reframe your CV toward one vacancy — pulling forward the experience you already have but buried, and asking about anything your history does not support.',
       cta: 'How tailoring works',
+    },
+    {
+      href: resolve('/features/tracking'),
+      title: 'Application tracking',
+      body: 'One board for every application — Preparing, Applied, Interview, Offer — with a day-counter when an employer goes quiet and every reply attached automatically.',
+      cta: 'How tracking works',
+    },
+    {
+      href: resolve('/features/notifications'),
+      title: 'Notifications',
+      body: 'Save a search and get told about a new match instantly or as a daily digest, over email, Telegram or push — the same channels that carry your tracking nudges.',
+      cta: 'How notifications work',
     },
     {
       href: resolve('/features/referrals'),
@@ -270,8 +272,8 @@
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-3" />
   </section>
 
-  <!-- Track your search — the per-user My jobs board. A polished, hero-style
-       preview of the real kanban; the board data is illustrative, not live. -->
+  <!-- Track your search — trimmed to a pointer at the dedicated feature page,
+       which carries the full board preview and explains how tracking works. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="track your search" />
     <div class="mt-6 max-w-2xl">
@@ -279,66 +281,17 @@
         Track every application on your board.
       </h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        Save the openings worth a second look, mark the ones you applied to, and drag each card through
-        its stages — Saved → Applied → Interview → Offer. Your
-        <code class="font-mono text-foreground">My jobs</code> board keeps the whole search in one place.
-        Prefer the terminal? The <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>
-        does the same — <code class="font-mono text-foreground">apply</code>,
-        <code class="font-mono text-foreground">save</code>,
-        <code class="font-mono text-foreground">stage</code> and
-        <code class="font-mono text-foreground">note</code> any job from a script or an agent.
-      </p>
-      <p class="mt-4 leading-relaxed text-muted-foreground">
-        You don't have to move the cards by hand either: connect your mail and the
-        <a href={resolve('/features/inbox')} class="font-medium text-foreground underline-offset-4 hover:underline">freehire inbox</a>
-        tags each recruiter reply, attaches it to the application it belongs to, and walks the card
-        forward for you.
+        Save the openings worth a second look, mark the ones you applied to, and drag each card
+        through its stages — Preparing → Applied → Interview → Offer — on your
+        <code class="font-mono text-foreground">My jobs</code> board. See the board and how it works on the
+        <a href={resolve('/features/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline">Tracking</a>
+        page.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <Button href={resolve('/my/tracking')} variant="primary" size="lg">Open Tracking</Button>
-        <Button href={resolve('/cli')} variant="ghost" size="lg">Track from the CLI</Button>
+        <Button href={resolve('/features/tracking')} variant="primary" size="lg">See how tracking works</Button>
+        <Button href={resolve('/my/tracking')} variant="ghost" size="lg">Open Tracking</Button>
       </div>
     </div>
-
-    <!-- Board preview: the real kanban columns, hairline-separated (gap-px on a
-         bg-border grid) like the "how it works" tiles. Stacks on mobile. -->
-    <figure
-      class="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-    >
-      <figcaption
-        class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
-      >
-        <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
-        My jobs · Board
-      </figcaption>
-      <div class="grid gap-px bg-border sm:grid-cols-4">
-        {#each board as col (col.label)}
-          <div class="bg-background p-4">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {col.label}
-              </span>
-              <span class="font-mono text-[11px] text-muted-foreground">{col.cards.length}</span>
-            </div>
-            <div class="mt-3 flex flex-col gap-2">
-              {#each col.cards as card (card.title)}
-                <article class="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
-                  <div
-                    class="grid size-8 shrink-0 place-items-center rounded-lg border border-border font-mono text-xs font-medium"
-                  >
-                    {card.company.charAt(0)}
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium">{card.title}</p>
-                    <p class="truncate text-xs text-muted-foreground">{card.company}</p>
-                  </div>
-                </article>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-    </figure>
   </section>
 
   <!-- Your pipeline — the analytical view of the same My jobs board: a static
@@ -404,7 +357,9 @@
         added, freehire sends it to you on Telegram as a tidy digest. No inbox clutter, no checking back:
         connect once from
         <a href={resolve('/my/notifications/searches')} class="font-medium text-foreground underline-offset-4 hover:underline">Saved searches &amp; alerts</a>
-        and the openings come to you.
+        and the openings come to you. Email and push work the same way — see how on the
+        <a href={resolve('/features/notifications')} class="font-medium text-foreground underline-offset-4 hover:underline">Notifications</a>
+        page.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <Button href={resolve('/')} variant="primary" size="lg">Find &amp; save a filter</Button>
