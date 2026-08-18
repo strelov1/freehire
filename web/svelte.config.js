@@ -15,6 +15,25 @@ export default {
     // and API same-origin for the SameSite=Lax auth cookie.
     adapter: adapter(),
 
+    // Absolute asset paths. Kit defaults `relative` to true, which sets Vite's
+    // `base` to './' — and @vite-pwa/sveltekit reads that base directly
+    // (`base = viteOptions.base ?? "/"`) to build the service-worker registration.
+    // The result shipped as `new Workbox('./sw.js', { scope: './' })`, which the
+    // browser resolves against the CURRENT url: /sw.js from the home page, but
+    // /jobs/<slug>/sw.js or /collections/<slug>/sw.js from anywhere else — 404,
+    // ~5.7k a day in the SSR log. So the worker only ever registered for someone
+    // who arrived at '/', and an already-installed one (scope '/', so it controls
+    // the whole site) never re-registered for anyone landing deeper from search.
+    // It kept serving a precached app shell naming _app/immutable chunks that the
+    // next deploy had deleted, and the failed dynamic import surfaces to the user
+    // as the 500 error page. Mostly seen on phones, where a session outlives a
+    // deploy. nginx never logged any of it: /_app/immutable/ has access_log off,
+    // and the 500 is drawn client-side over an HTTP 200.
+    //
+    // Relative paths only buy anything when the app can be served from an unknown
+    // prefix; this one is adapter-node on its own domain.
+    paths: { relative: false },
+
     // Content-Security-Policy: defence-in-depth against stored/reflected XSS. Only
     // same-origin scripts run; SvelteKit auto-adds a per-response nonce (mode 'auto')
     // to the inline scripts IT injects (the hydration bootstrap). Inline JSON-LD
