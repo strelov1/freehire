@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="flow-assistant-title flow-assistant-desc">
+      <title id="flow-assistant-title">A bounded tool-calling loop that always ends in exactly one terminal event</title>
+      <desc id="flow-assistant-desc">The Runner calls the LLM gateway on the caller's own credential each round, then either calls a tool and streams the result back or streams a final answer; every path ends in exactly one terminal SSE event.</desc>
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#505050"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6f00"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#505050" stroke-width="1.2"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#fdfefc"/>
+
+      <!-- ===== Lifelines ===== -->
+      <line x1="140" y1="100" x2="140" y2="620" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="380" y1="100" x2="380" y2="620" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="620" y1="100" x2="620" y2="620" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="860" y1="100" x2="860" y2="620" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="1100" y1="100" x2="1100" y2="620" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- ===== Activation bar (Runner — active for the whole turn) ===== -->
+      <rect x="616" y="180" width="8" height="384" fill="rgba(91,111,0,0.10)" stroke="#5b6f00" stroke-width="0.8"/>
+
+      <!-- ===== ALT fragment: tool calls | answer text ===== -->
+      <rect x="90" y="324" width="1050" height="240" rx="4" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.22)" stroke-width="1"/>
+      <rect x="90" y="324" width="34" height="16" rx="2" fill="#fdfefc" stroke="rgba(20,20,20,0.22)" stroke-width="1"/>
+      <text x="107" y="336" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">ALT</text>
+      <text x="132" y="336" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.02em">[tool calls]</text>
+      <line x1="98" y1="484" x2="1132" y2="484" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="98" y="500" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.02em">[else — answer text]</text>
+
+      <!-- ===== Messages ===== -->
+
+      <!-- M1 User -> H -->
+      <path d="M140,136 H384" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="182" y="118" width="96" height="12" rx="2" fill="#fdfefc"/>
+      <text x="230" y="127" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">POST MESSAGE</text>
+
+      <!-- M2 H -> R -->
+      <path d="M380,180 H624" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="452" y="162" width="96" height="12" rx="2" fill="#fdfefc"/>
+      <text x="500" y="171" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RUN TURN (SSE)</text>
+
+      <!-- R self-message: PERSIST PROMPT -->
+      <path d="M624,208 H672 Q680,208 680,216 Q680,224 672,224 H624" fill="none" stroke="#5b6f00" stroke-width="1" marker-end="url(#arrow-accent)"/>
+      <text x="688" y="220" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.04em">PERSIST PROMPT</text>
+
+      <!-- M3 R -> L -->
+      <path d="M624,256 H860" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="686" y="238" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="730" y="247" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CHAT + TOOLS</text>
+
+      <!-- Note: iteration bound -->
+      <rect x="900" y="240" width="180" height="30" rx="3" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.18)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      <text x="990" y="253" fill="#505050" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.02em">repeats ≤ MaxSteps rounds</text>
+      <text x="990" y="264" fill="#7a7a7a" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.02em">(8 default · tailor 16 · autopilot 30)</text>
+
+      <!-- M4 L --> R (return) -->
+      <path d="M860,300 H624" fill="none" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="686" y="282" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="730" y="291" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">MODEL REPLY</text>
+
+      <!-- M5 R -> T (region 1) -->
+      <path d="M624,368 H1096" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="816" y="350" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="860" y="359" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CALL TOOLS</text>
+
+      <!-- M6 T --> R (return, region 1) -->
+      <path d="M1096,412 H624" fill="none" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="816" y="394" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="860" y="403" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOOL RESULT</text>
+
+      <!-- M7 R -->> User (async SSE notify, region 1, open arrowhead) -->
+      <path d="M624,456 H144" fill="none" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/>
+      <rect x="316" y="438" width="96" height="12" rx="2" fill="#fdfefc"/>
+      <text x="364" y="447" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SSE TOOL EVENT</text>
+
+      <!-- M8 R -->> User (headline success, region 2, solid accent) -->
+      <path d="M624,528 H144" fill="none" stroke="#5b6f00" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <rect x="316" y="510" width="96" height="12" rx="2" fill="#fdfefc"/>
+      <text x="364" y="519" fill="#5b6f00" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SSE END_TURN</text>
+
+      <!-- Note: step-cap fallback -->
+      <rect x="400" y="576" width="320" height="30" rx="3" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.18)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      <text x="560" y="589" fill="#505050" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.02em">cap reached → one final call, no tools</text>
+      <text x="560" y="600" fill="#7a7a7a" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.02em">still exactly one terminal event</text>
+
+      <!-- ===== Actor headers ===== -->
+      <rect x="70" y="60" width="140" height="40" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <text x="140" y="84" fill="#141414" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">User</text>
+
+      <rect x="310" y="60" width="140" height="40" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <text x="380" y="79" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">assistant</text>
+      <text x="380" y="91" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">handler</text>
+
+      <rect x="550" y="60" width="140" height="40" rx="6" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <text x="620" y="84" fill="#141414" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Runner</text>
+
+      <rect x="790" y="60" width="140" height="40" rx="6" fill="rgba(20,20,20,0.03)" stroke="rgba(20,20,20,0.30)" stroke-width="1"/>
+      <text x="860" y="79" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">LLM</text>
+      <text x="860" y="91" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">gateway</text>
+
+      <rect x="1030" y="60" width="140" height="40" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <text x="1100" y="79" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Tool</text>
+      <text x="1100" y="91" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">registry</text>
+
+      <!-- ===== Legend ===== -->
+      <line x1="40" y1="648" x2="1240" y2="648" stroke="rgba(20,20,20,0.12)" stroke-width="0.8"/>
+      <text x="40" y="664" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <line x1="140" y1="663" x2="166" y2="663" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="174" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">call / return</text>
+
+      <line x1="320" y1="663" x2="346" y2="663" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/>
+      <text x="354" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">async SSE push</text>
+
+      <line x1="520" y1="663" x2="546" y2="663" stroke="#5b6f00" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <text x="554" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">terminal event</text>
+
+      <rect x="740" y="656" width="14" height="14" rx="3" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.18)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      <text x="762" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">annotation</text>
+    </svg>

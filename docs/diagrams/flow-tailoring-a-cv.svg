@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="flow-cv-title flow-cv-desc">
+      <title id="flow-cv-title">A tailoring turn cites the experience bank for every edit it writes</title>
+      <desc id="flow-cv-desc">The candidate's CV is imported additively into the experience bank; a tailoring turn loops per vacancy requirement, searching the bank for scored evidence and writing each CV edit through the evidence-gated editor, then renders the result with Typst.</desc>
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#505050"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6f00"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#fdfefc"/>
+
+      <!-- ===== Lifelines ===== -->
+      <line x1="140" y1="100" x2="140" y2="612" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="380" y1="100" x2="380" y2="612" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="620" y1="100" x2="620" y2="612" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="860" y1="100" x2="860" y2="612" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="1100" y1="100" x2="1100" y2="612" stroke="rgba(20,20,20,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- ===== Activation bar (API — active for the whole turn) ===== -->
+      <rect x="376" y="136" width="8" height="452" fill="rgba(20,20,20,0.06)" stroke="#505050" stroke-width="0.8"/>
+
+      <!-- ===== LOOP fragment: per vacancy requirement ===== -->
+      <rect x="340" y="276" width="580" height="192" rx="4" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.22)" stroke-width="1"/>
+      <rect x="340" y="276" width="44" height="16" rx="2" fill="#fdfefc" stroke="rgba(20,20,20,0.22)" stroke-width="1"/>
+      <text x="362" y="288" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">LOOP</text>
+      <text x="396" y="288" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.02em">[per vacancy requirement]</text>
+
+      <!-- ===== Messages ===== -->
+
+      <!-- M1 Candidate -> API -->
+      <path d="M140,136 H384" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="196" y="118" width="72" height="12" rx="2" fill="#fdfefc"/>
+      <text x="232" y="127" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">UPLOAD CV</text>
+
+      <!-- API self-message: EXTRACT (LLM) -->
+      <path d="M384,172 H432 Q440,172 440,180 Q440,188 432,188 H384" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="448" y="184" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.04em">EXTRACT (LLM)</text>
+
+      <!-- M2 API -> BANK -->
+      <path d="M384,216 H620" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="458" y="198" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="502" y="207" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">IMPORT (ADD)</text>
+
+      <!-- M3 Candidate -> API -->
+      <path d="M140,260 H384" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="188" y="242" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="232" y="251" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TAILOR REQUEST</text>
+
+      <!-- M4 API -> BANK (in loop) -->
+      <path d="M384,316 H620" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="450" y="298" width="104" height="12" rx="2" fill="#fdfefc"/>
+      <text x="502" y="307" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FIND EVIDENCE</text>
+
+      <!-- M5 BANK --> API (return, in loop) -->
+      <path d="M620,360 H384" fill="none" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="450" y="342" width="104" height="12" rx="2" fill="#fdfefc"/>
+      <text x="502" y="351" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RANKED ATOMS</text>
+
+      <!-- M6 API -> ED (in loop) -->
+      <path d="M384,404 H860" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="578" y="386" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="622" y="395" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CV_EDIT + EVID</text>
+
+      <!-- M7 ED self-message: APPLY + COMMIT (in loop) -->
+      <path d="M860,432 H900 Q908,432 908,440 Q908,448 900,448 H860" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="668" y="444" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.04em">APPLY + COMMIT</text>
+
+      <!-- M8 Candidate -> API -->
+      <path d="M140,496 H384" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="196" y="478" width="68" height="12" rx="2" fill="#fdfefc"/>
+      <text x="230" y="487" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PREVIEW/DL</text>
+
+      <!-- M9 API -> TY -->
+      <path d="M384,540 H1100" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="678" y="522" width="112" height="12" rx="2" fill="#fdfefc"/>
+      <text x="734" y="531" fill="#141414" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RENDER (SANDBOX)</text>
+
+      <!-- M10 TY --> Candidate (headline success, direct return, solid accent) -->
+      <path d="M1100,584 H144" fill="none" stroke="#5b6f00" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <rect x="600" y="566" width="40" height="12" rx="2" fill="#fdfefc"/>
+      <text x="620" y="575" fill="#5b6f00" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PDF</text>
+
+      <!-- ===== Actor headers ===== -->
+      <rect x="70" y="60" width="140" height="40" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <text x="140" y="84" fill="#141414" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Candidate</text>
+
+      <rect x="310" y="60" width="140" height="40" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <text x="380" y="84" fill="#141414" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">API</text>
+
+      <rect x="550" y="60" width="140" height="40" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <text x="620" y="79" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">experience</text>
+      <text x="620" y="91" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">bank</text>
+
+      <rect x="790" y="60" width="140" height="40" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <text x="860" y="79" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">cvedit.</text>
+      <text x="860" y="91" fill="#141414" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Editor</text>
+
+      <rect x="1030" y="60" width="140" height="40" rx="6" fill="rgba(20,20,20,0.03)" stroke="rgba(20,20,20,0.30)" stroke-width="1"/>
+      <text x="1100" y="84" fill="#141414" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Typst</text>
+
+      <!-- ===== Legend ===== -->
+      <line x1="40" y1="648" x2="1240" y2="648" stroke="rgba(20,20,20,0.12)" stroke-width="0.8"/>
+      <text x="40" y="664" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <line x1="140" y1="663" x2="166" y2="663" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="174" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">call</text>
+
+      <line x1="300" y1="663" x2="326" y2="663" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <text x="334" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">return</text>
+
+      <line x1="460" y1="663" x2="486" y2="663" stroke="#5b6f00" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <text x="494" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">happy-path response</text>
+
+      <rect x="740" y="656" width="14" height="14" rx="3" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.22)" stroke-width="1"/>
+      <text x="762" y="667" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">iterates per requirement</text>
+    </svg>

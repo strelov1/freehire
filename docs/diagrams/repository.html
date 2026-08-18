@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The repository</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #fdfefc;
+      --color-ink:     #141414;
+      --color-muted:   #505050;
+      --color-accent:  #5b6f00;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 1.75rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture &middot; freehire</p>
+    <h1>The repository</h1>
+
+    <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="repository-title repository-desc">
+      <title id="repository-title">The freehire repository, module by module</title>
+      <desc id="repository-desc">Go backend packages (migrations, cmd, internal) generate types and read board data, feeding a frontend workspace (web, design-system, extension) that calls back over HTTP.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#505050"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6f00"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#fdfefc"/>
+
+      <!-- ===== Zones (painted first, behind arrows/nodes) ===== -->
+      <rect x="240" y="120" width="384" height="232" rx="8" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.10)" stroke-width="0.8"/>
+      <rect x="252" y="124" width="112" height="12" rx="2" fill="#fdfefc"/>
+      <text x="308" y="133" fill="rgba(20,20,20,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">GO BACKEND</text>
+
+      <rect x="712" y="120" width="384" height="232" rx="8" fill="rgba(20,20,20,0.02)" stroke="rgba(20,20,20,0.10)" stroke-width="0.8"/>
+      <rect x="724" y="124" width="168" height="12" rx="2" fill="#fdfefc"/>
+      <text x="808" y="133" fill="rgba(20,20,20,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">FRONTEND WORKSPACES</text>
+
+      <!-- ===== Arrows (before boxes) ===== -->
+
+      <!-- E1 MIG -> INT : SQLC GENERATES -->
+      <path d="M336,224 V240 Q336,248 344,248 H384 Q392,248 392,256 V272" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="322" y="234" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="366" y="243" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SQLC GENERATES</text>
+
+      <!-- E2 CMD -> INT -->
+      <path d="M528,224 V240 Q528,248 520,248 H480 Q472,248 472,256 V272" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E3 SRC -> CMD : AT CRAWL TIME -->
+      <path d="M200,236 H316 Q324,236 324,228 V200 Q324,192 332,192 H448" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="222" y="216" width="84" height="12" rx="2" fill="#fdfefc"/>
+      <text x="264" y="225" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AT CRAWL TIME</text>
+
+      <!-- E4 INT -> WEB : EMITS TS TYPES -->
+      <path d="M512,304 H728" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="576" y="286" width="88" height="12" rx="2" fill="#fdfefc"/>
+      <text x="620" y="295" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">EMITS TS TYPES</text>
+
+      <!-- E5 WEB -> CMD : HTTP (return path, over the top) -->
+      <path d="M808,272 V96 Q808,88 800,88 H568 Q560,88 560,96 V160" fill="none" stroke="#2e5aa8" stroke-width="1" marker-end="url(#arrow-link)"/>
+      <rect x="514" y="124" width="40" height="12" rx="2" fill="#fdfefc"/>
+      <text x="534" y="133" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HTTP</text>
+
+      <!-- E6 EXTD -> CMD : HTTP (return path, over the top, outer lane) -->
+      <path d="M1000,272 V72 Q1000,64 992,64 H488 Q480,64 480,72 V160" fill="none" stroke="#2e5aa8" stroke-width="1" marker-end="url(#arrow-link)"/>
+      <rect x="434" y="98" width="40" height="12" rx="2" fill="#fdfefc"/>
+      <text x="454" y="107" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HTTP</text>
+
+      <!-- E7 DS -> WEB : linked dependency -->
+      <path d="M864,224 V240 Q864,248 856,248 H816 Q808,248 808,256 V272" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E8 DS -> EXTD : linked dependency -->
+      <path d="M944,224 V240 Q944,248 952,248 H992 Q1000,248 1000,256 V272" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="908" y="234" width="112" height="12" rx="2" fill="#fdfefc"/>
+      <text x="964" y="243" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LINKED DEP</text>
+
+      <!-- ===== Nodes ===== -->
+
+      <!-- SRC: sources/ (store — data, not code) -->
+      <rect x="40" y="204" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="40" y="204" width="160" height="64" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <rect x="48" y="210" width="36" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="66" y="219" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DATA</text>
+      <text x="120" y="240" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">sources/</text>
+      <text x="120" y="256" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">yaml board files</text>
+
+      <!-- MIG: migrations/ -->
+      <rect x="256" y="160" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="256" y="160" width="160" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="264" y="166" width="34" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="281" y="175" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SQL</text>
+      <text x="336" y="196" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">migrations/</text>
+      <text x="336" y="212" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sqlc + initdb source</text>
+
+      <!-- CMD: cmd/ -->
+      <rect x="448" y="160" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="448" y="160" width="160" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="456" y="166" width="34" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="473" y="175" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GO</text>
+      <text x="528" y="196" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">cmd/</text>
+      <text x="528" y="212" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">~60 entry points</text>
+
+      <!-- INT: internal/ (focal — the domain layer) -->
+      <rect x="352" y="272" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="352" y="272" width="160" height="64" rx="6" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <rect x="360" y="278" width="34" height="12" rx="2" fill="transparent" stroke="rgba(91,111,0,0.5)" stroke-width="0.8"/>
+      <text x="377" y="287" fill="#5b6f00" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GO</text>
+      <text x="432" y="308" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">internal/</text>
+      <text x="432" y="324" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">domain packages</text>
+
+      <!-- DS: design-system/ -->
+      <rect x="824" y="160" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="824" y="160" width="160" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="832" y="166" width="42" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="853" y="175" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PNPM</text>
+      <text x="904" y="196" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">design-system/</text>
+      <text x="904" y="212" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">linked, not copied</text>
+
+      <!-- WEB: web/ -->
+      <rect x="728" y="272" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="728" y="272" width="160" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="736" y="278" width="42" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="757" y="287" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PNPM</text>
+      <text x="808" y="308" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">web/</text>
+      <text x="808" y="324" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sveltekit spa</text>
+
+      <!-- EXTD: extension/ -->
+      <rect x="920" y="272" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="920" y="272" width="160" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="928" y="278" width="38" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="947" y="287" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NPM</text>
+      <text x="1000" y="308" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">extension/</text>
+      <text x="1000" y="324" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">wxt + svelte</text>
+
+      <!-- ===== Legend ===== -->
+      <line x1="40" y1="640" x2="1240" y2="640" stroke="rgba(20,20,20,0.12)" stroke-width="0.8"/>
+      <text x="40" y="656" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <rect x="140" y="648" width="14" height="14" rx="3" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <text x="162" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">package</text>
+
+      <rect x="320" y="648" width="14" height="14" rx="3" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <text x="342" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">domain layer</text>
+
+      <rect x="500" y="648" width="14" height="14" rx="3" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <text x="522" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">data, not code</text>
+
+      <line x1="700" y1="655" x2="726" y2="655" stroke="#2e5aa8" stroke-width="1" marker-end="url(#arrow-link)"/>
+      <text x="734" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">http call</text>
+
+      <line x1="880" y1="655" x2="906" y2="655" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="914" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">build-time link</text>
+    </svg>
+  </div>
+</body>
+</html>

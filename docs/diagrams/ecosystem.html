@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The ecosystem</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #fdfefc;
+      --color-ink:     #141414;
+      --color-muted:   #505050;
+      --color-accent:  #5b6f00;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 1.75rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture &middot; freehire</p>
+    <h1>The ecosystem</h1>
+
+    <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ecosystem-title ecosystem-desc">
+      <title id="ecosystem-title">Three contribution channels feeding freehire's catalogue and its derived signals</title>
+      <desc id="ecosystem-desc">Contributors, source platforms, and signed-in users all feed the catalogue; the catalogue's derived signals fan out into the ghost-job signal, the silence ladder, facets and analytics, and CV-tailoring evidence.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#505050"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6f00"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#fdfefc"/>
+
+      <!-- ===== Arrows (before boxes) ===== -->
+
+      <!-- Contributors -> CORE -->
+      <path d="M220,152 H302 Q310,152 310,160 V308 Q310,316 318,316 H400" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- Platforms -> CORE -->
+      <path d="M220,336 H400" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- Users -> CORE -->
+      <path d="M220,520 H302 Q310,520 310,512 V364 Q310,356 318,356 H400" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- CORE -> SIGNALS -->
+      <path d="M560,336 H680" fill="none" stroke="#5b6f00" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+
+      <!-- SIGNALS -> GHOST -->
+      <path d="M840,310 H876 Q884,310 884,302 V160 Q884,152 892,152 H960" fill="none" stroke="#5b6f00" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <!-- SIGNALS -> SILENCE -->
+      <path d="M840,326 H892 Q900,326 900,318 V290 Q900,282 908,282 H960" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- SIGNALS -> FACETS -->
+      <path d="M840,342 H908 Q916,342 916,350 V404 Q916,412 924,412 H960" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- SIGNALS -> TAILOR -->
+      <path d="M840,358 H924 Q932,358 932,366 V534 Q932,542 940,542 H960" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- ===== Nodes ===== -->
+
+      <!-- Contributors -->
+      <rect x="40" y="120" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="40" y="120" width="180" height="64" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <rect x="48" y="126" width="32" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="64" y="135" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PPL</text>
+      <text x="130" y="156" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Contributors</text>
+      <text x="130" y="172" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">company · platform · dict</text>
+
+      <!-- Source platforms -->
+      <rect x="40" y="304" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="40" y="304" width="180" height="64" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <rect x="48" y="310" width="32" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="64" y="319" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+      <text x="130" y="340" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Source platforms</text>
+      <text x="130" y="356" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">ATS APIs · aggregators</text>
+
+      <!-- Signed-in users -->
+      <rect x="40" y="488" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="40" y="488" width="180" height="64" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <rect x="48" y="494" width="32" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="64" y="503" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">USR</text>
+      <text x="130" y="524" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Signed-in users</text>
+      <text x="130" y="540" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">apps · mailbox · reports</text>
+
+      <!-- CORE: freehire (focal) -->
+      <rect x="400" y="304" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="400" y="304" width="160" height="64" rx="6" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <rect x="408" y="310" width="28" height="12" rx="2" fill="transparent" stroke="rgba(91,111,0,0.5)" stroke-width="0.8"/>
+      <text x="422" y="319" fill="#5b6f00" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+      <text x="480" y="340" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">freehire</text>
+      <text x="480" y="356" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">catalogue + signals</text>
+
+      <!-- SIGNALS: Derived signals -->
+      <rect x="680" y="304" width="160" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="680" y="304" width="160" height="64" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <rect x="688" y="310" width="30" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="703" y="319" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SIG</text>
+      <text x="760" y="340" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Derived signals</text>
+      <text x="760" y="356" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">computed, not crawled</text>
+
+      <!-- GHOST: Ghost-job signal (focal) -->
+      <rect x="960" y="120" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="960" y="120" width="180" height="64" rx="6" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <rect x="968" y="126" width="30" height="12" rx="2" fill="transparent" stroke="rgba(91,111,0,0.5)" stroke-width="0.8"/>
+      <text x="983" y="135" fill="#5b6f00" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SIG</text>
+      <text x="1050" y="156" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ghost-job signal</text>
+      <text x="1050" y="172" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">structural + outcome</text>
+
+      <!-- SILENCE: Silence ladder -->
+      <rect x="960" y="250" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="960" y="250" width="180" height="64" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <rect x="968" y="256" width="30" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="983" y="265" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SIG</text>
+      <text x="1050" y="286" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Silence ladder</text>
+      <text x="1050" y="302" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">application follow-up</text>
+
+      <!-- FACETS: Facets & analytics -->
+      <rect x="960" y="380" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="960" y="380" width="180" height="64" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <rect x="968" y="386" width="30" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="983" y="395" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SIG</text>
+      <text x="1050" y="416" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Facets &amp; analytics</text>
+      <text x="1050" y="432" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">market signals</text>
+
+      <!-- TAILOR: CV tailoring -->
+      <rect x="960" y="510" width="180" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="960" y="510" width="180" height="64" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <rect x="968" y="516" width="30" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="983" y="525" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SIG</text>
+      <text x="1050" y="546" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CV tailoring</text>
+      <text x="1050" y="562" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">evidence for edits</text>
+
+      <!-- ===== Legend ===== -->
+      <line x1="40" y1="640" x2="1240" y2="640" stroke="rgba(20,20,20,0.12)" stroke-width="0.8"/>
+      <text x="40" y="656" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <rect x="140" y="648" width="14" height="14" rx="3" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <text x="162" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">contribution source</text>
+
+      <rect x="360" y="648" width="14" height="14" rx="3" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <text x="382" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">catalogue / focal signal</text>
+
+      <rect x="600" y="648" width="14" height="14" rx="3" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <text x="622" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">derived signal</text>
+    </svg>
+  </div>
+</body>
+</html>

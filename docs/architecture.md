@@ -25,77 +25,9 @@ freehire is a Go monolith with a satellite constellation of single-purpose worke
 
 That choice shapes everything downstream. Because workers do not share memory with the server or with each other, all coordination happens in Postgres — which is why the write paths are full of **transactional outboxes**: a table row queued in the same transaction as the write that caused it, drained later by whichever worker owns that queue.
 
-```mermaid
-flowchart LR
-    subgraph SOURCES["Sources · ~167 feeds"]
-        direction TB
-        ATS["ATS platforms<br/>Workday · Greenhouse<br/>Lever · Ashby · iCIMS"]
-        AGG["Aggregators<br/>himalayas · jobtech<br/>Adzuna · echojobs"]
-        CAREER["Company career sites"]
-        TGCH["Telegram channels"]
-    end
+<img src="diagrams/system-shape.svg" alt="How a job posting moves through freehire, from crawl to client: sources feed run-once ingest workers that write Postgres and, in the same transaction, an outbox; queue drains and a full reindex worker push into Meilisearch; the API server reads Postgres and Meilisearch to serve clients.">
 
-    subgraph INGEST["Ingest workers · cron, run-once"]
-        direction TB
-        ING["cmd/ingest<br/>one board file per run"]
-        TGI["cmd/tg-ingest → cmd/tg-extract"]
-        RUNNER["pipeline.Runner<br/>fetch → normalize → dedup → upsert"]
-    end
-
-    subgraph STORE["Storage"]
-        direction TB
-        PG[("PostgreSQL<br/>system of record")]
-        OUTBOX["Outbox tables<br/>enrichment · search<br/>semantic · apply_form"]
-    end
-
-    subgraph DRAIN["Queue drains · cron, run-once"]
-        direction TB
-        ENR["cmd/enrich<br/>LLM enrichment"]
-        SD["cmd/search-drain"]
-        EMB["cmd/embed"]
-        CAP["cmd/capture-apply-form"]
-    end
-
-    subgraph SEARCH["Meilisearch"]
-        direction TB
-        FACET["jobs<br/>keyword + facets"]
-    end
-
-    API["cmd/server · Fiber<br/>/api/v1/*"]
-
-    subgraph CLIENTS["Clients"]
-        direction TB
-        SPA["SvelteKit SPA · web/"]
-        EXT["Browser extension"]
-        BOTS["Telegram · Discord<br/>mobile push"]
-        THIRD["Public API · CLI<br/>ChatGPT Actions"]
-    end
-
-    ATS --> ING
-    AGG --> ING
-    CAREER --> ING
-    TGCH --> TGI
-    ING --> RUNNER
-    TGI --> RUNNER
-    RUNNER --> PG
-    RUNNER -.->|same transaction| OUTBOX
-    OUTBOX --> ENR
-    OUTBOX --> SD
-    OUTBOX --> EMB
-    OUTBOX --> CAP
-    ENR --> PG
-    CAP --> PG
-    SD --> FACET
-    EMB --> PG
-    RI["cmd/reindex<br/>full rebuild + atomic swap"] --> FACET
-    PG --> RI
-    PG --> API
-    FACET --> API
-    API --> SPA
-    API --> EXT
-    API --> BOTS
-    API --> THIRD
-```
+*Collapsed for readability: `Sources` folds the four crawl channels, `Queue drains` folds `cmd/enrich` · `cmd/search-drain` · `cmd/embed` · `cmd/capture-apply-form`, and `Clients` folds the SPA, extension, bots, and third-party API consumers. See each package's own `AGENTS.md` (linked below) for the full fan-out.*
 
 **Ingest.** `cmd/ingest` takes one board file per run — `sources/greenhouse.yml`, `sources/lever.yml`, and so on — so each provider crawls on its own schedule and a slow platform never blocks a fast one. It validates every entry against the adapter registry and fails before any request goes out, then hands off to `pipeline.Runner`, which fetches each board once, normalizes postings into a single schema, deduplicates, and upserts. The dedup key is `jobs.UNIQUE (source, external_id)`, so re-running a crawl is free. A board that keeps failing backs off on a recorded cooldown rather than being hammered every run. The large majority of postings are crawled straight from an employer's own ATS or career page; aggregators and Telegram are a smaller supplementary slice of the same pipeline — see [README's Sources breakdown](../README.md#sources) for the exact split.
 
@@ -113,42 +45,9 @@ Deeper: [`internal/pipeline`](../internal/pipeline/AGENTS.md) · [`internal/sour
 
 ## The repository
 
-```mermaid
-flowchart TB
-    subgraph GO["Go backend"]
-        direction LR
-        CMD["<b>cmd/</b><br/>~60 entry points<br/>server + mail-ingest are daemons<br/>everything else is cron, run-once"]
-        INT["<b>internal/</b><br/>domain packages — the substantial<br/>ones carry their own AGENTS.md"]
-        MIG["<b>migrations/</b><br/>SQL schema · source for BOTH<br/>sqlc codegen and Postgres initdb"]
-    end
+<img src="diagrams/repository.svg" alt="The freehire repository, module by module: Go backend packages (migrations, cmd, internal) generate types and read board data, feeding a frontend workspace (web, design-system, extension) that calls back over HTTP.">
 
-    subgraph DATA["Data, not code"]
-        direction LR
-        SRC["<b>sources/</b><br/>YAML board files, one per ATS provider<br/>+ custom.yml and telegram.yml<br/>retired/ holds withdrawn boards"]
-    end
-
-    subgraph JS["Frontend workspaces"]
-        direction LR
-        WEB["<b>web/</b><br/>SvelteKit SPA (pnpm)<br/>consumes /api/v1/*"]
-        DS["<b>design-system/</b><br/>separate pnpm package<br/>linked, not copied"]
-        EXTD["<b>extension/</b><br/>browser extension (WXT + Svelte)<br/>npm-managed, unlike the rest"]
-    end
-
-    subgraph DOCS["Docs and specs"]
-        direction LR
-        DOCD["<b>docs/</b><br/>this file · features.md<br/>agents/*.md cross-cutting notes"]
-        OS["<b>openspec/</b><br/>capability specs and change proposals"]
-    end
-
-    MIG -->|sqlc generates| INT
-    SRC -->|read at crawl time| CMD
-    CMD --> INT
-    INT -->|cmd/gen-contracts<br/>emits TS types| WEB
-    DS -->|linked dependency| WEB
-    DS -->|linked dependency| EXTD
-    WEB -->|HTTP| CMD
-    EXTD -->|HTTP| CMD
-```
+*`docs/` and `openspec/` are omitted from the diagram — they carry no code-level edges of their own.*
 
 **`cmd/`** holds roughly sixty entry points. Two are long-lived: `cmd/server` and `cmd/mail-ingest`. Everything else — crawlers, queue drains, backfills, rollups, notification passes — takes `DATABASE_URL`, does one pass, and exits non-zero on failure. What keeps a cron worker from stacking on itself is systemd's `Type=oneshot`, not a file lock.
 
@@ -166,44 +65,9 @@ Deeper: [`AGENTS.md`](../AGENTS.md) for the full module index · [`web/AGENTS.md
 
 freehire is fed by three quite different kinds of contribution, and the system's shape reflects which of them is cheap and which is expensive.
 
-```mermaid
-flowchart LR
-    subgraph PEOPLE["External contributors"]
-        ONELINE["Add a company<br/>one line in that provider's board file"]
-        ADAPTER["Add a platform<br/>new adapter in internal/sources<br/>+ one line in sources.All"]
-        DICT["Extend a dictionary<br/>skills · roles · locations · non-tech terms"]
-    end
+<img src="diagrams/ecosystem.svg" alt="Three contribution channels feeding freehire's catalogue and its derived signals: contributors, source platforms, and signed-in users all feed the catalogue; the catalogue's derived signals fan out into the ghost-job signal, the silence ladder, facets and analytics, and CV-tailoring evidence.">
 
-    subgraph PLATFORMS["Source platforms"]
-        PUBAPI["Public ATS JSON APIs<br/>read-only · keyless by default"]
-        FEEDS["Aggregator feeds<br/>some streaming, some paged"]
-    end
-
-    subgraph USERS["Signed-in users"]
-        APPS["Applications and stages"]
-        MAILBOX["Connected mailbox<br/>recruiter replies"]
-        REPORTS["Reports on a posting"]
-        BANK["Experience bank<br/>what they have actually done"]
-    end
-
-    CORE[("freehire<br/>catalogue + derived signals")]
-
-    ONELINE --> CORE
-    ADAPTER --> CORE
-    DICT --> CORE
-    PUBAPI --> CORE
-    FEEDS --> CORE
-    APPS --> CORE
-    MAILBOX --> CORE
-    REPORTS --> CORE
-    BANK --> CORE
-
-    CORE --> SIGNALS["Derived signals"]
-    SIGNALS --> GHOST["Ghost-job signal<br/>structural + outcome evidence"]
-    SIGNALS --> SILENCE["Application silence ladder"]
-    SIGNALS --> FACETS["Facets and market analytics"]
-    SIGNALS --> TAILOR["CV tailoring evidence"]
-```
+*Each contributor category, and `Signed-in users`, folds several distinct sources — see the prose above for the full breakdown.*
 
 **Contributors** mostly add coverage, and coverage is deliberately a one-line change. For a company on a platform freehire already crawls, adding it is one entry in that provider's board file — the single most useful contribution anyone can send. Only a company on an unsupported ATS needs a new adapter, and even then every adapter speaks the same `Source` interface, so the work is bounded. Dictionaries are the third path: skills, roles, locations and the non-technical-title terms are curated word lists, and they are **dict-only in production** — the system never guesses a facet, it emits nothing for an unknown.
 
@@ -217,27 +81,7 @@ Deeper: [`internal/sources`](../internal/sources/AGENTS.md) · [`internal/ghost`
 
 The search path is the most-travelled code in the system, and its defining property is that a result page is served **without touching Postgres for the payload**. The Meilisearch document *is* the public wire shape of a job, so the index answers the whole query.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as Reader (SPA)
-    participant H as searchHandlers
-    participant F as search.FilterFromValues
-    participant M as Meilisearch
-    participant PG as PostgreSQL
-
-    U->>H: GET /api/v1/jobs/search?q=&facets…
-    Note over H: 503 if search unconfigured<br/>400 if offset+limit over 10000
-    H->>F: facet params → index filter
-    Note over F: the same pure translation the<br/>notification matcher applies to a<br/>saved search, so they cannot drift
-    F-->>H: filter expression
-    H->>M: Search(query, filter, sort, limit, offset)
-    M-->>H: hits — each already a full jobview.Job
-    H->>PG: ghost evidence + absence stamps for this page
-    Note over PG: best-effort — a failed lookup drops<br/>the signal, never the search
-    PG-->>H: per-job signal
-    H-->>U: data — job views · meta — total, limit, offset
-```
+<img src="diagrams/flow-finding-a-job.svg" alt="A search request served without touching Postgres for the payload: the reader's search request is translated to a Meilisearch filter and answered from the index; Postgres is queried only afterward, best-effort, for the ghost-job signal on that page.">
 
 A few things are load-bearing here.
 
@@ -257,35 +101,9 @@ Deeper: [`internal/search`](../internal/search/AGENTS.md) · [`internal/jobview`
 
 The CV workspace is built on a rule that shapes every part of it: **the agent may not write a claim the candidate has not made.** Enforcement is not a prompt instruction — it is an evidence gate in the write path, and the evidence comes from a durable store called the experience bank.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as Candidate
-    participant API as API
-    participant RX as resumeextract
-    participant BANK as experience bank
-    participant ED as cvedit.Editor
-    participant TY as Typst
+<img src="diagrams/flow-tailoring-a-cv.svg" alt="A tailoring turn cites the experience bank for every edit it writes: the candidate's CV is imported additively into the experience bank; a tailoring turn loops per vacancy requirement, searching the bank for scored evidence and writing each CV edit through the evidence-gated editor, then renders the result with Typst.">
 
-    U->>API: upload CV file
-    API->>RX: extract structure (LLM)
-    RX-->>API: resume_structured, stamped to this upload
-    API->>BANK: Import — additive
-    Note over BANK: employments match on company plus role and only<br/>BLANK fields are filled. Atoms dedup on a<br/>normalized claim key. Import never deletes.
-    U->>API: POST /me/cvs/tailor (vacancy)
-    Note over API: refreshes a stale base CV, mints a tailored<br/>copy bound to the vacancy, opens an agent session
-    loop per vacancy requirement
-        API->>BANK: experience_search — scored, ranked, top-N
-        BANK-->>API: atoms with ids (no model call — a linear pass)
-        API->>ED: cv_edit with an evidence_id
-        Note over ED: policy + evidence gate run BEFORE the row lock<br/>one uncited operation refuses the whole batch
-        ED->>ED: apply ops, compute inverses, write<br/>document + revision in ONE transaction
-    end
-    U->>API: preview / download
-    API->>TY: render in a sandboxed temp root
-    Note over TY: system fonts disabled · bundled fonts staged in<br/>user data goes through data.json, never argv
-    TY-->>U: PDF (or SVG for previews)
-```
+*The upload-time `resumeextract` call is drawn as a self-message on `API` rather than its own lifeline.*
 
 **The bank is a store, not a cache.** Everything else about a candidate's experience is derived and replaced — the structured extract is regenerated on every upload, a tailored CV is discarded with its vacancy — but the bank accumulates, and only its owner removes anything. That is why import is additive: someone who uploads a trimmed one-page CV must not lose the history they built.
 
@@ -301,34 +119,9 @@ Deeper: [`internal/experience`](../internal/experience/AGENTS.md) · [`internal/
 
 The assistant runs **in this process**. There is no external agent runtime, no shell, and no credential minted for it: a tool receives the session owner's user id and calls the same Go service the HTTP handler calls. Anything the agent must not reach is simply a tool that does not exist.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant H as assistant handler
-    participant R as Runner
-    participant L as LLM gateway
-    participant T as Tool registry
+<img src="diagrams/flow-asking-the-assistant.svg" alt="A bounded tool-calling loop that always ends in exactly one terminal event: the Runner calls the LLM gateway on the caller's own credential each round, then either calls a tool and streams the result back or streams a final answer; every path ends in exactly one terminal SSE event.">
 
-    U->>H: POST /assistant/sessions/:id/messages
-    Note over H: owner check — a foreign session is 404, never 403<br/>one turn per session — a second waits, a third is 409
-    H->>R: run one turn, SSE stream open
-    R->>R: persist prompt · history = system prompt<br/>+ last N transcript messages
-    loop ≤ MaxSteps (8 default · tailor 16 · autopilot 30)
-        R->>L: Chat(history, tools) on the CALLER's own credential
-        L-->>R: text deltas / reasoning deltas / tool calls
-        alt tool calls
-            R->>T: Call each, sequentially
-            Note over T: a failing tool returns an error object for the<br/>model to correct — it is not a turn failure
-            T-->>R: structured result
-            R-->>U: SSE tool_use, tool_result
-        else answer text
-            R-->>U: SSE result(end_turn)
-        end
-    end
-    Note over R: cap reached → one final Chat with NO tools → result(max_steps)
-    R-->>U: exactly one terminal result event, always
-```
+*The `≤ MaxSteps` iteration is drawn as an annotation rather than a wrapping `loop` frame, to keep the diagram to one combined fragment (the `alt` on tool-calls vs. answer text).*
 
 **A turn is bounded twice** — by tool-calling rounds and by the model client's per-call timeout — and both bounds are chosen server-side, because a ceiling a client can raise is not a ceiling. Zero or negative values fall back to defaults rather than meaning "unbounded"; an unbounded loop on a metered gateway is a runaway bill.
 

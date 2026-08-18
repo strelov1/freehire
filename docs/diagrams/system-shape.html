@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The shape of the system</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #fdfefc;
+      --color-ink:     #141414;
+      --color-muted:   #505050;
+      --color-accent:  #5b6f00;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 1.75rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture &middot; freehire</p>
+    <h1>The shape of the system</h1>
+
+    <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="system-shape-title system-shape-desc">
+      <title id="system-shape-title">How a job posting moves through freehire, from crawl to client</title>
+      <desc id="system-shape-desc">Sources feed run-once ingest workers that write Postgres and, in the same transaction, an outbox; queue drains and a full reindex worker push into Meilisearch; the API server reads Postgres and Meilisearch to serve clients.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#505050"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6f00"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#fdfefc"/>
+
+      <!-- ===== Arrows (before boxes) ===== -->
+
+      <!-- E1 Sources -> Ingest -->
+      <path d="M160,320 H220" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E2 Ingest -> PostgreSQL (bottom entry) -->
+      <path d="M340,312 H452 Q460,312 460,304 V244" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E3 Ingest -.-> Outbox (dashed, same transaction) -->
+      <path d="M340,336 H452 Q460,336 460,344 V372" fill="none" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="424" y="346" width="64" height="12" rx="2" fill="#fdfefc"/>
+      <text x="456" y="355" fill="#7a7a7a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SAME TXN</text>
+
+      <!-- E4 Outbox -> Queue drains (bottom entry, below-to-above) -->
+      <path d="M520,404 H632 Q640,404 640,396 V244" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E5 Queue drains -> PostgreSQL (same row) -->
+      <path d="M580,212 H520" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E6 Queue drains -> Meilisearch (top entry) -->
+      <path d="M700,212 H812 Q820,212 820,220 V288" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E7 cmd/reindex -> Meilisearch (bottom entry) -->
+      <path d="M700,404 H812 Q820,404 820,396 V352" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E8 PostgreSQL -> cmd/reindex -->
+      <path d="M420,244 V300 Q420,308 428,308 H592 Q600,308 600,316 V372" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E9 PostgreSQL -> API (over the top) -->
+      <path d="M460,180 V148 Q460,140 468,140 H992 Q1000,140 1000,148 V288" fill="none" stroke="#5b6f00" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+
+      <!-- E10 Meilisearch -> API (same row) -->
+      <path d="M880,320 H940" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- E11 API -> Clients (same row) -->
+      <path d="M1060,320 H1120" fill="none" stroke="#505050" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- ===== Nodes ===== -->
+
+      <!-- Sources (input/external) -->
+      <rect x="40" y="288" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="40" y="288" width="120" height="64" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <rect x="48" y="294" width="30" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="63" y="303" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+      <text x="100" y="324" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Sources</text>
+      <text x="100" y="340" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">~167 feeds</text>
+
+      <!-- Ingest -> Runner (backend) -->
+      <rect x="220" y="288" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="220" y="288" width="120" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="228" y="294" width="36" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="246" y="303" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CRON</text>
+      <text x="280" y="322" fill="#141414" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ingest → Runner</text>
+      <text x="280" y="338" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">fetch · dedup · upsert</text>
+
+      <!-- PostgreSQL (focal) -->
+      <rect x="400" y="180" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="400" y="180" width="120" height="64" rx="6" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <rect x="408" y="186" width="26" height="12" rx="2" fill="transparent" stroke="rgba(91,111,0,0.5)" stroke-width="0.8"/>
+      <text x="421" y="195" fill="#5b6f00" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+      <text x="460" y="216" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PostgreSQL</text>
+      <text x="460" y="232" fill="#505050" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">system of record</text>
+
+      <!-- Outbox tables (store) -->
+      <rect x="400" y="372" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="400" y="372" width="120" height="64" rx="6" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <rect x="408" y="378" width="32" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="424" y="387" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TBL</text>
+      <text x="460" y="408" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Outbox tables</text>
+      <text x="460" y="424" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">4 outbox queues</text>
+
+      <!-- Queue drains (backend) -->
+      <rect x="580" y="180" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="580" y="180" width="120" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="588" y="186" width="36" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="606" y="195" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CRON</text>
+      <text x="640" y="216" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Queue drains</text>
+      <text x="640" y="232" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">4 cron workers</text>
+
+      <!-- cmd/reindex (backend) -->
+      <rect x="580" y="372" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="580" y="372" width="120" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="588" y="378" width="36" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="606" y="387" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CRON</text>
+      <text x="640" y="408" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">cmd/reindex</text>
+      <text x="640" y="424" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">rebuild + swap</text>
+
+      <!-- Meilisearch (external service) -->
+      <rect x="760" y="288" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="760" y="288" width="120" height="64" rx="6" fill="rgba(20,20,20,0.03)" stroke="rgba(20,20,20,0.30)" stroke-width="1"/>
+      <rect x="768" y="294" width="30" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="783" y="303" fill="rgba(20,20,20,0.7)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SVC</text>
+      <text x="820" y="324" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Meilisearch</text>
+      <text x="820" y="340" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">keyword + facets</text>
+
+      <!-- cmd/server API (backend) -->
+      <rect x="940" y="288" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="940" y="288" width="120" height="64" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <rect x="948" y="294" width="32" height="12" rx="2" fill="transparent" stroke="rgba(20,20,20,0.4)" stroke-width="0.8"/>
+      <text x="964" y="303" fill="rgba(20,20,20,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+      <text x="1000" y="324" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">cmd/server</text>
+      <text x="1000" y="340" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">Fiber · /api/v1/*</text>
+
+      <!-- Clients (input/external) -->
+      <rect x="1120" y="288" width="120" height="64" rx="6" fill="#fdfefc"/>
+      <rect x="1120" y="288" width="120" height="64" rx="6" fill="rgba(80,80,80,0.10)" stroke="#7a7a7a" stroke-width="1"/>
+      <rect x="1128" y="294" width="30" height="12" rx="2" fill="transparent" stroke="rgba(80,80,80,0.5)" stroke-width="0.8"/>
+      <text x="1143" y="303" fill="rgba(80,80,80,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+      <text x="1180" y="324" fill="#141414" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Clients</text>
+      <text x="1180" y="340" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">SPA · ext · bots</text>
+
+      <!-- ===== Legend ===== -->
+      <line x1="40" y1="640" x2="1240" y2="640" stroke="rgba(20,20,20,0.12)" stroke-width="0.8"/>
+      <text x="40" y="656" fill="#505050" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <rect x="140" y="648" width="14" height="14" rx="3" fill="rgba(91,111,0,0.08)" stroke="#5b6f00" stroke-width="1.2"/>
+      <text x="162" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">system of record</text>
+
+      <rect x="340" y="648" width="14" height="14" rx="3" fill="#ffffff" stroke="#141414" stroke-width="1"/>
+      <text x="362" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">run-once worker</text>
+
+      <rect x="540" y="648" width="14" height="14" rx="3" fill="rgba(20,20,20,0.05)" stroke="#505050" stroke-width="1"/>
+      <text x="562" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">outbox table</text>
+
+      <rect x="720" y="648" width="14" height="14" rx="3" fill="rgba(20,20,20,0.03)" stroke="rgba(20,20,20,0.30)" stroke-width="1"/>
+      <text x="742" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">external service</text>
+
+      <line x1="920" y1="655" x2="946" y2="655" stroke="#505050" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <text x="954" y="659" fill="#505050" font-size="9" font-family="'Geist Mono', monospace">same transaction</text>
+    </svg>
+  </div>
+</body>
+</html>
