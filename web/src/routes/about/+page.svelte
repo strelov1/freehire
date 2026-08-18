@@ -24,6 +24,7 @@
   title="About freehire — the open-source search engine for tech jobs"
   description="An open-source search engine for tech jobs: millions of openings indexed straight from company career boards, deduplicated and tagged by stack and location."
   {canonical}
+  image={`${origin}/api/v1/og/about.png`}
 />
 
 <svelte:head>

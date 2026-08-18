@@ -364,6 +364,7 @@ func Register(app *fiber.App, cfg Config) {
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
 	statsH := newStatsHandlers(queries, cfg.Cache)
+	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
 	// Feedback reuses communityH's persona minting (via the communityPersonas
@@ -642,6 +643,9 @@ func Register(app *fiber.App, cfg Config) {
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
 	statsH.register(api)
+	// The /open and /about pages' OG preview cards (see ogHandlers) — reads the
+	// same snapshot statsH.CatalogScale serves.
+	ogH.register(api)
 
 	// Per-user job interactions, tracking reads, and reminder controls
 	// (see trackingHandlers). The interaction writes precede the vote routes,

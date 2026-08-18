@@ -162,7 +162,12 @@
   </a>
 {/snippet}
 
-<Seo title="Open — freehire's numbers, live" {description} {canonical} />
+<Seo
+  title="Open — freehire's numbers, live"
+  {description}
+  {canonical}
+  image={`${origin}/api/v1/og/open.png`}
+/>
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
