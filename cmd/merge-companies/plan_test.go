@@ -100,3 +100,62 @@ func TestPlanMerges_IsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// TestPlanMerges_CanonicalIsAFixedPointOfTheSlugRule guards against electing a canonical slug
+// the rule itself would never produce.
+//
+// Found in the first prod dry run: `danaher-corporation` outweighed `danaher` (714 open jobs),
+// so pure job count elected it — and the catalogue's canonical url for the employer became the
+// one carrying a corporate form, with the better-known slug 301ing INTO it. That inverts the
+// change: the whole point is that the key does not carry the form.
+//
+// A slug still keying an employer under a form is also unstable. Every new posting derives the
+// stripped slug, so the canon would depend forever on an alias row to reach itself.
+func TestPlanMerges_CanonicalIsAFixedPointOfTheSlugRule(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "danaher-corporation", Name: "Danaher Corporation", JobCount: 900},
+		{Slug: "danaher", Name: "Danaher", JobCount: 714},
+	}, nil, 0)
+
+	if len(got) != 1 {
+		t.Fatalf("planned %d merges, want 1", len(got))
+	}
+	if got[0].Canonical != "danaher" {
+		t.Errorf("Canonical = %q, want danaher — a slug carrying a corporate form is not a "+
+			"canonical the rule can reproduce, whatever its job count", got[0].Canonical)
+	}
+}
+
+// TestPlanMerges_JobCountStillDecidesBetweenFixedPoints: the fixed-point preference is a
+// tie-break BEFORE job count, not a replacement for it. Both spellings here are ones the rule
+// produces, so the bigger one still wins — including when it is the uglier of the two.
+func TestPlanMerges_JobCountStillDecidesBetweenFixedPoints(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "dollartree", Name: "DollarTree", JobCount: 283},
+		{Slug: "dollar-tree", Name: "Dollar Tree", JobCount: 22683},
+	}, nil, 0)
+	if got[0].Canonical != "dollar-tree" {
+		t.Errorf("Canonical = %q, want dollar-tree", got[0].Canonical)
+	}
+
+	got = planMerges([]company{
+		{Slug: "turner-townsend", Name: "Turner Townsend", JobCount: 16},
+		{Slug: "turnertownsend", Name: "TurnerTownsend", JobCount: 400},
+	}, nil, 0)
+	if got[0].Canonical != "turnertownsend" {
+		t.Errorf("Canonical = %q, want turnertownsend — both are fixed points, so the count "+
+			"decides even though the hyphenated one reads better", got[0].Canonical)
+	}
+}
+
+// TestPlanMerges_FrozenCanonWinsEvenIfItCarriesAForm: a canon already elected has been
+// redirecting and indexing. Moving it would cost more than the tidier slug is worth.
+func TestPlanMerges_FrozenCanonWinsEvenIfItCarriesAForm(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "acme-inc", Name: "Acme Inc", JobCount: 5},
+		{Slug: "acme", Name: "Acme", JobCount: 900},
+	}, map[string]bool{"acme-inc": true}, 0)
+	if got[0].Canonical != "acme-inc" {
+		t.Errorf("Canonical = %q, want acme-inc (frozen)", got[0].Canonical)
+	}
+}

@@ -112,11 +112,29 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 	return out
 }
 
-// electCanonical picks the group's surviving slug: an already-frozen canon if the group holds
-// one, otherwise the member with the most open jobs (members arrive pre-sorted).
+// electCanonical picks the group's surviving slug. Members arrive sorted by open jobs
+// descending, so "the first that qualifies" is "the biggest that qualifies".
+//
+// Three rules, in order:
+//
+//  1. An already-frozen canon wins outright, even one carrying a corporate form. It has been
+//     redirecting and indexing; moving it costs more than a tidier slug is worth.
+//  2. Otherwise the biggest slug the rule can REPRODUCE — a fixed point of CompanySlug. Pure
+//     job count is not enough: the first prod dry run elected `danaher-corporation` over
+//     `danaher` (714 open jobs) because it happened to be larger, which would have made the
+//     catalogue's canonical url the one carrying the form and 301'd the better-known slug into
+//     it. It is also unstable, since every new posting derives the stripped slug and would need
+//     an alias row for the canon to reach itself.
+//  3. Failing that, the biggest. A group where nothing is a fixed point is odd but real, and
+//     merging it under an imperfect canon still beats leaving the employer split.
 func electCanonical(members []company, frozen map[string]bool) company {
 	for _, c := range members {
 		if frozen[c.Slug] {
+			return c
+		}
+	}
+	for _, c := range members {
+		if normalize.CompanySlug(c.Slug) == c.Slug {
 			return c
 		}
 	}

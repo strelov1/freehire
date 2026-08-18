@@ -85,6 +85,12 @@ crawl would put it back, and the display name comes from `companies.name` regard
 
 ## Gotchas
 
+- **The canonical slug must be a fixed point of the rule, and job count alone does not give
+  you one.** The first prod dry run elected `danaher-corporation` over `danaher` (714 open
+  jobs) purely because it was larger — making the canonical url the one carrying a corporate
+  form, and 301ing the better-known slug into it. It is unstable too: every new posting derives
+  the stripped slug, so the canon would depend forever on an alias row to reach itself. The
+  election prefers the biggest slug `CompanySlug` can reproduce, and only then the biggest.
 - **Electing by anything but job count elects backwards.** "Prefer the more readable slug" is
   the tempting rule and it picks `domino-s` (1 job) over `dominos` (14,396) and `al-fa-bank`
   (20) over `alfa-bank` (1,617). Hyphens mark the corrupted spelling about as often as the
