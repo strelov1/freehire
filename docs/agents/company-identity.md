@@ -74,6 +74,16 @@ nothing, and an interrupted wave resumes. The alias row is written BEFORE its jo
 killed between the two then leaves a slug that redirects to a company whose count is short,
 where the other order leaves a slug with no jobs and no record of where they went.
 
+A wave ends by reconciling the derived catalogue — `SyncCompaniesFromJobs` then
+`DeleteOrphanCompanies`, the same pair `cmd/backfill-company-names` runs after its own re-key.
+Skipping it looks harmless and is not: until the orphan row is gone, `GET /companies/<retired>`
+still FINDS a company, one with no jobs left, so it answers 200 and never falls through to the
+alias lookup. The merge reads as done while the redirect it exists to serve is not running.
+
+The re-key moves CLOSED postings too, so the row count it writes is larger than the open-job
+figure the plan reports — about 3x on prod. That is deliberate: a closed posting left on the
+retired slug would resurrect the duplicate the day it reopens.
+
 **The worker does not touch the search index, deliberately.** A push to the facet index costs
 90-180s regardless of batch size, so feeding a wave through `search_outbox` would be tens of
 hours of pushes — the shape behind the 2026-08-05 outage. The scheduled `freehire-reindexw`

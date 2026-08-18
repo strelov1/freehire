@@ -61,8 +61,27 @@ func run() int {
 		log.Printf("merge-companies: %v", err)
 		return 1
 	}
-	log.Printf("merge-companies: done. The scheduled reindex will refresh the search facet; " +
-		"do NOT run one by hand.")
+
+	// The jobs now carry the canonical slug; re-key the derived catalogue and sweep the rows
+	// the re-key orphaned, exactly as cmd/backfill-company-names does after ITS re-key.
+	//
+	// This is not optional bookkeeping. Until the orphan row is gone, GET /companies/<retired>
+	// still FINDS a company — one with no jobs left — so it answers 200 instead of falling
+	// through to the alias lookup and the 301. The merge would look done and the redirect,
+	// which is the whole reason the alias row exists, would not be running.
+	if err := q.SyncCompaniesFromJobs(ctx); err != nil {
+		log.Printf("merge-companies: sync companies: %v", err)
+		return 1
+	}
+	orphans, err := q.DeleteOrphanCompanies(ctx)
+	if err != nil {
+		log.Printf("merge-companies: delete orphan companies: %v", err)
+		return 1
+	}
+	log.Printf("merge-companies: reconciled the catalogue, %d company rows retired", orphans)
+
+	log.Printf("merge-companies: done. Job counts stay stale until cmd/recount-companies runs, " +
+		"and the search facet until the scheduled reindex — do NOT run a reindex by hand.")
 	return 0
 }
 
@@ -103,7 +122,11 @@ func report(plan []merge) {
 			log.Printf("  %s <- %s (%s, %d jobs)", m.Canonical, a.Slug, a.Reason, a.JobCount)
 		}
 	}
-	log.Printf("merge-companies: %d groups, %d slugs retiring, %d job rows to move",
+	// OPEN jobs, because that is what companies.job_count holds and what elects a winner.
+	// The re-key moves closed rows too — it has to, or a closed posting would keep the
+	// retired slug and resurrect the duplicate the day it reopens — so the number of rows
+	// actually written is larger, on prod about 3x.
+	log.Printf("merge-companies: %d groups, %d slugs retiring, %d open jobs (closed rows move too)",
 		len(plan), aliases, jobs)
 }
 
