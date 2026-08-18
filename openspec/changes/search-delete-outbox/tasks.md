@@ -1,10 +1,12 @@
 ## 1. The queue
 
 - [ ] 1.1 Add a migration creating `search_delete_outbox` (`job_id` unique, `created_at`,
-      `claimed_at`, `attempts`, `failed_at`) with the index the claim order needs, mirroring
-      `search_outbox`.
+      `claimed_at`, `attempts`, `failed_at`) with the index the claim order needs. Deliberately
+      NO foreign key to `jobs`: a queued removal must outlive the row it refers to, or
+      `cmd/prune` silently strands that document in the index. Say so in the migration comment.
 - [ ] 1.2 Add `internal/db/queries/search_delete_outbox.sql` — claim a lease-expired batch,
-      complete by id, and reap entries whose job is gone. Run `make sqlc`.
+      complete by id, and reap COMPLETED/dead-lettered entries. The reap must not key on the
+      job being gone; for this queue that is valid work. Run `make sqlc`.
 
 ## 2. Enqueue at the close
 
@@ -16,6 +18,10 @@
       without enqueuing it — so a sixth closing query added later cannot silently skip the
       queue. This is the task that keeps the change honest; do not fold it into 2.2.
 - [ ] 2.4 Assert a rolled-back close leaves no queue row.
+- [ ] 2.5 Make `PruneJobs` enqueue the ids it hard-deletes, in its existing `DELETE ...
+      RETURNING` CTE. Test that pruning an OPEN indexed job queues its removal, and that the
+      queue row survives the job row being gone — the case a mirrored `ON DELETE CASCADE`
+      would have silently eaten.
 
 ## 3. Draining
 

@@ -11,6 +11,11 @@ job, so that a close and its pending removal cannot diverge. Because jobs are cl
 — one statement closing every posting a crawl no longer saw — the enqueue SHALL be part of
 the closing statement itself rather than a separate call per row.
 
+A job removed from the catalogue outright SHALL also leave the index, on the same path. The
+queue therefore SHALL NOT depend on the job's row still existing: a queued removal identifies
+the document by key alone, and MUST survive the deletion of the job it refers to. A queue that
+cascaded with the job would lose exactly the removals it exists to guarantee.
+
 Removal SHALL be idempotent: removing a document that is not in the index is a no-op, so a
 retried, overlapping, or duplicated removal is harmless and needs no coordination with the
 indexing path.
@@ -37,6 +42,18 @@ for a later attempt rather than dropping it.
 
 - **WHEN** the transaction that closes a job does not commit
 - **THEN** no removal is queued for that job
+
+#### Scenario: A hard-deleted job leaves the index
+
+- **WHEN** a job is removed from the catalogue outright rather than closed
+- **THEN** its removal is queued by the same statement that deleted it, and the document
+  leaves the index
+
+#### Scenario: A queued removal survives its job being deleted
+
+- **WHEN** a job is queued for removal and its row is then hard-deleted before the queue is
+  drained
+- **THEN** the queued removal still exists and is still processed
 
 #### Scenario: Removing an unindexed job is harmless
 

@@ -74,6 +74,29 @@ become conditional too.
 `search_delete_outbox` mirrors it: `job_id` (unique), `created_at`, `claimed_at`, `attempts`,
 `failed_at`. Same lease/retry shape, so `internal/outbox`'s `RunBatch` drives it unchanged.
 
+### No foreign key to `jobs`
+
+`search_outbox` carries `FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE`. Mirroring
+that here would be a silent data-loss bug.
+
+`cmd/prune` is the only hard-delete path, and `PruneJobs` deletes by an explicit id list with
+NO `closed_at` condition — it can remove an open, indexed job outright. So the sequence
+"job closes → removal queued → prune deletes the job before the drain runs → cascade deletes
+the queued removal" leaves that document in the index permanently, with nothing left in the
+database that knows it should not be there.
+
+The two queues differ in a way that made the mirror instinct wrong. `search_outbox` NEEDS the
+job row: the drain reads it to build a document. This queue needs only the primary key, and the
+row being gone is the ordinary case rather than a corruption to reap. So it holds bare ids and
+takes no referential dependency on the table it is helping to garbage-collect.
+
+That also means `cmd/prune` becomes a sixth enqueue site: a hard-deleted job must leave the
+index just as a closed one does. `PruneJobs` already deletes inside a CTE with `RETURNING`, so
+the enqueue lands the same way it does on the closing statements.
+
+*Consequence for reaping:* the reap must NOT drop entries whose job no longer exists — for this
+queue that is valid work, not garbage. It drops completed and dead-lettered entries instead.
+
 ### Enqueue inside the closing statement, via CTE
 
 The five closing queries are bulk `:execrows` statements — `CloseUnseenJobs` closes every

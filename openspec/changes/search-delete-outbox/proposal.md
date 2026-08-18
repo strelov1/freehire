@@ -20,6 +20,13 @@ roughly 83% of the time — the reconciler is crowding out the thing it was mean
 - A new `search_delete_outbox` queue records jobs that need their document removed from the
   facet index. Rows are written in the SAME statement that closes the job, via a CTE over the
   closing `UPDATE`, so the enqueue is atomic with the close and survives bulk closes.
+- `cmd/prune` — the only hard-delete path — enqueues the same way. It deletes by id list with
+  no `closed_at` condition, so it can remove an open, indexed job outright.
+- The queue holds bare job ids with NO foreign key to `jobs`, unlike `search_outbox`. That
+  queue needs the row to build a document; this one needs only the primary key, and the row
+  being gone is the normal case rather than an error. A mirrored
+  `ON DELETE CASCADE` would delete a pending removal the moment `cmd/prune` removed its job,
+  stranding that document in the index permanently.
 - `cmd/search-drain` drains that queue alongside the existing index queue, calling
   `search.Client.DeleteJobs` — putting an existing, tested, idempotent method into production
   use for the first time.
@@ -45,6 +52,7 @@ None. This adds to and corrects an existing capability.
 
 - `migrations/` — one new migration creating `search_delete_outbox`.
 - `internal/db/queries/jobs.sql` — the five closing queries gain a CTE that enqueues.
+- `internal/db/queries/pruning.sql` — `PruneJobs` enqueues the ids it hard-deletes.
 - `internal/db/queries/search_delete_outbox.sql` — new: claim, complete, reap.
 - `internal/searchdrain/` — the runner gains a deletion wave.
 - `cmd/search-drain/` — wires the new store and the existing `DeleteJobs` adapter.
