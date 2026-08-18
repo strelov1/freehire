@@ -43,10 +43,32 @@ var trustedNets = func() []*net.IPNet {
 }()
 
 // trustedPeer reports whether the request comes from a peer we do not rate-limit.
-// An address that does not parse is treated as untrusted: an unrecognizable
-// caller is exactly the one to keep counting.
 func trustedPeer(c *fiber.Ctx) bool {
-	ip := net.ParseIP(c.IP())
+	return trusted(c.IP(), c.Context().RemoteIP())
+}
+
+// trusted decides on the address the request CLAIMS to come from, falling back to the socket
+// it actually came from when it claims nothing.
+//
+// The fallback is the whole point. Fiber resolves c.IP() to what a trusted proxy asserted, so
+// for nginx it is the visitor — correctly counted — but our own SSR asserts nothing at all,
+// and the empty string parsed to nil and read as untrusted. Every server-rendered page then
+// shared one key, `publicread:ip:`, and one budget; the busiest pages spent it and answered
+// 429 to the front end this exemption exists to protect.
+//
+// Reading the socket only when nothing was claimed keeps the fallback honest. The API listens
+// on 0.0.0.0, so a stranger can reach it directly and assert nothing — and a socket address
+// cannot be forged, which is why it, and not a header, decides that case.
+func trusted(claimed string, peer net.IP) bool {
+	if claimed != "" {
+		return isTrusted(net.ParseIP(claimed))
+	}
+	return isTrusted(peer)
+}
+
+// isTrusted reports whether an address is one of ours. An address that does not parse is
+// treated as untrusted: an unrecognizable caller is exactly the one to keep counting.
+func isTrusted(ip net.IP) bool {
 	if ip == nil {
 		return false
 	}
