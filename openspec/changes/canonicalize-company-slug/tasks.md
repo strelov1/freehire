@@ -5,16 +5,21 @@
 `cmd/harvest-orphans/candidates.go:47`. This group does not add them — it makes them the
 module's single legal-form rule and closes the hole each existing implementation has.
 
-- [ ] 1.1 Fix `normalize.CompanySlug`'s tokenization: match the trailing form on the name's
-      whitespace fields reduced to ASCII letters (`register.go`'s `letters` helper), skipping
-      punctuation-only fields, instead of on `Slug`'s hyphenated output. Tests first, covering
-      what each current implementation gets wrong: `Booking B.V.` → `booking` (today
-      `booking-b-v`); `Acme GmbH & Co. KG` → `acme` (the repeat must step over `&`);
+- [x] 1.1 Fix `normalize.CompanySlug`'s tokenization: match the trailing form on the name's own
+      words reduced to ASCII letters (`register.go`'s `letters` helper) instead of on `Slug`'s
+      hyphenated output. Tests first, covering what each current implementation gets wrong:
+      `Booking B.V.` → `booking` (today `booking-b-v`); `Acme GmbH & Co. KG` → `acme`;
       `Tiffany & Co.` → `tiffany`; and the cases that must NOT change — `Limited Brands` →
       `limited-brands`, `Limited` → `limited`, `Acme Holdings Ltd` → `acme-holdings`.
-- [ ] 1.2 Retire the `" a s"` / `" s a"` entries from the token set: field-level `letters()`
+      Review caught a regression the first attempt introduced: splitting on WHITESPACE loses
+      `Sun Technologies,Inc.`, which the old slug-level strip handled and which 13,730
+      companies / 55,962 open jobs are written as. The word break is therefore every rune
+      `Slug` drops EXCEPT `.` and `/`, which live inside the forms themselves (`B.V.`, `A/S`).
+- [x] 1.2 Retire the `" a s"` / `" s a"` entries from the token set: field-level `letters()`
       makes them redundant (`Trafalgar A/S` → `as`). Test `Trafalgar A/S` → `trafalgar` before
       removing them, so the removal is proven inert rather than assumed.
+      (Subsumed by 1.1: a token map of whole words cannot express a two-word entry, and
+      `TestSameCompany`'s existing "Trafalgar A/S" case plus a new `CompanySlug` row prove it.)
 - [ ] 1.3 Make `collections.RegisterSlug` delegate to `normalize.CompanySlug`, deleting
       `collections.legalSuffixes`, `significantFields` and `letters`. `RequireCountry`'s
       token-counting must keep agreeing with the strip — it currently shares
