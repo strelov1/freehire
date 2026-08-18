@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { UserRound } from '@lucide/svelte';
   import { Button, Chip, NumberedGrid, SectionLabel } from '$lib/ui';
   import { pillClass, pillTitle } from './facets/pill';
   import { ADVANCED_SEARCH_FAQ } from '$lib/advancedSearchFaq';
@@ -118,7 +119,7 @@
     {
       n: '01',
       title: 'Save this search',
-      body: 'One click turns your current filters — role, region, salary, all of it — into a saved search on your profile. No separate setup screen.',
+      body: 'One click turns your current filters into a saved search, listed under My filters right in the panel. Save more than one and switch between them — no separate setup screen.',
     },
     {
       n: '02',
@@ -263,6 +264,50 @@
           <span class="text-muted-foreground">Off</span>
         </div>
         <p class="text-center text-xs text-muted-foreground">Click the pill — same three states as the panel above.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Apply my profile: the reverse direction — profile feeds filters, not the
+       other way around — and a real, concrete exclude example (avoided skills). -->
+  <section class="border-t border-border py-14 sm:py-16">
+    <SectionLabel text="start from your profile" />
+    <div class="mt-6 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+      <div>
+        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+          Or skip the setup — apply my profile.
+        </h2>
+        <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          Everything you filled in becomes a starting set of filters, one click, right in the
+          panel: your specialization and skills go in as includes, the skills you're avoiding go
+          in as excludes, and your work-location preferences — remote regions, on-site countries
+          and cities, whether you'd relocate — come along too. Nothing to re-type.
+        </p>
+      </div>
+      <div class="rounded-xl border border-border bg-card p-6 sm:p-8">
+        <div class="flex items-center gap-2 text-sm font-medium">
+          <span class="flex size-8 items-center justify-center rounded-full bg-secondary">
+            <UserRound class="size-4" aria-hidden="true" />
+          </span>
+          Apply my profile
+        </div>
+        <dl class="mt-5 space-y-3 text-sm">
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="text-muted-foreground">Specialization &amp; skills</dt>
+            <dd class="font-mono text-xs text-muted-foreground">→ include</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="text-muted-foreground">Skills you're avoiding</dt>
+            <dd class="font-mono text-xs text-muted-foreground">→ exclude</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="text-muted-foreground">Where you'll work</dt>
+            <dd class="font-mono text-xs text-muted-foreground">→ region, country, city</dd>
+          </div>
+        </dl>
+        <Button href={resolve('/my/profile')} variant="outline" size="sm" class="mt-6">
+          Fill in your profile
+        </Button>
       </div>
     </div>
   </section>
