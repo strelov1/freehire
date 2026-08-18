@@ -580,7 +580,10 @@ func TestDerive_IsPure(t *testing.T) {
 		t.Errorf("Derive's argument is %v, want jobderive.Input", got)
 	}
 	if got := fn.NumOut(); got != 1 {
-		t.Errorf("Derive returns %d values, want exactly 1 (Derived) — it cannot fail, "+
+		t.Fatalf("Derive returns %d values, want exactly 1 (Derived) — it cannot fail, "+
 			"because it does nothing that can", got)
+	}
+	if got := fn.Out(0); got != reflect.TypeOf(Derived{}) {
+		t.Errorf("Derive returns %v, want jobderive.Derived", got)
 	}
 }

@@ -61,7 +61,10 @@ func TestGetCompanyRedirectsARetiredSlug(t *testing.T) {
 	t.Run("the redirect keeps the query string", func(t *testing.T) {
 		// Paging is in the query, so dropping it would land a crawler following page 4 of a
 		// retired slug on page 1 of the canonical one.
-		_, loc := do(t, "/api/v1/companies/dollartree?limit=20&offset=40")
+		status, loc := do(t, "/api/v1/companies/dollartree?limit=20&offset=40")
+		if status != fiber.StatusMovedPermanently {
+			t.Fatalf("status = %d, want 301", status)
+		}
 		if loc != "/api/v1/companies/dollar-tree?limit=20&offset=40" {
 			t.Errorf("Location = %q, want the query string preserved", loc)
 		}

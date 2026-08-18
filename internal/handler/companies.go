@@ -336,8 +336,14 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 		// drops whatever the page had earned in search. The lookup runs only AFTER the miss,
 		// so a live company always wins over a stale alias — a company that came back is
 		// never shadowed by the row that once retired it.
-		if canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug); aliasErr == nil {
+		canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug)
+		switch {
+		case aliasErr == nil:
 			return c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
+		case !errors.Is(aliasErr, pgx.ErrNoRows):
+			// A database failure is not "no such company". Reporting it as 404 would tell a
+			// crawler to drop a page that exists, and hide the outage from the error rate.
+			return aliasErr
 		}
 		return err // RenderError maps pgx.ErrNoRows to 404.
 	}

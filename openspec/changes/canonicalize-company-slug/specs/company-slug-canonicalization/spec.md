@@ -94,10 +94,18 @@ touching the other.
 
 The system SHALL resolve each ingested posting's company slug through the alias registry by
 taking `normalize.CompanyKey(name)` and looking that folded value up against `folded_key`,
-writing the registry's `canonical_slug` when one is found and the derived slug otherwise. The
-lookup SHALL be performed ONCE per board run as a single batched query over the run's distinct
-slugs, and the resulting map SHALL be the sole source of company slugs for both the
-aggregator-coverage gate and the upsert.
+writing the registry's `canonical_slug` when one is found and the derived slug otherwise.
+
+For a BUFFERED board the lookup SHALL be performed ONCE per run, as a single batched query
+over the run's distinct slugs. A STREAMING board has no such batch, so it SHALL resolve one
+company as it is first seen and memoize the answer for the rest of the run. Either way the
+resolved value SHALL be the sole source of company slugs for both the aggregator-coverage gate
+and the upsert.
+
+At most ONE canonical slug SHALL exist per `folded_key`. The writer holds this — one election
+per folded group, and no re-election against a frozen canon — because the schema cannot
+express it without a second table. The read SHALL be ordered so a violation resolves the same
+way every run rather than varying, and SHALL be reported rather than silently resolved.
 
 `internal/jobderive` SHALL remain a pure function with no context and no database access; it
 supplies the derived slug, and the pipeline applies the registry.
@@ -118,8 +126,14 @@ supplies the derived slug, and the pipeline applies the registry.
 
 #### Scenario: One lookup per run, not one per posting
 
-- **WHEN** a board run yields N postings across M distinct companies
+- **WHEN** a buffered board run yields N postings across M distinct companies
 - **THEN** the registry is queried once for the M distinct folded keys, not N times
+
+#### Scenario: A streaming board resolves per company and memoizes
+
+- **WHEN** a streaming board emits several postings for the same company
+- **THEN** the registry is consulted once for that company and the answer reused, because no
+  complete batch exists before the postings arrive
 
 #### Scenario: jobderive stays pure
 

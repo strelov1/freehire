@@ -405,6 +405,17 @@ func (s *dbStore) CanonicalCompanySlugs(ctx context.Context, foldedKeys []string
 	}
 	out := make(map[string]string, len(rows))
 	for _, r := range rows {
+		// One canonical slug per folded key is the writer's invariant, not the schema's (see
+		// the query). Rows arrive ordered, so the first wins deterministically; a second,
+		// different one means two waves elected different winners for one employer, which
+		// would otherwise show up only as a company that keeps changing url.
+		if prev, ok := out[r.FoldedKey]; ok {
+			if prev != r.CanonicalSlug {
+				log.Printf("ingest: company alias conflict: folded key %q maps to both %q and %q; using %q",
+					r.FoldedKey, prev, r.CanonicalSlug, prev)
+			}
+			continue
+		}
 		out[r.FoldedKey] = r.CanonicalSlug
 	}
 	return out, nil

@@ -58,12 +58,22 @@ var nameSuffixes = []string{
 // the catalogue holds, and the catalogue keys companies by normalize.CompanySlug — so a form
 // this stripped and that did not (or the reverse) produced a name matching nothing, and a mail
 // that matches no company links to no application without saying so.
+// It repeats, and it splits on punctuation as well as space, for the two shapes senders
+// actually use: "Acme GmbH & Co. KG" needs three passes over an ampersand, and
+// "Sun Technologies,Inc." attaches the form with no space at all — 13,730 catalogue
+// companies are written that way. A name of one word is never stripped, so a sender called
+// "Limited" survives.
 func stripLegalForm(s string) string {
-	i := strings.LastIndexByte(s, ' ')
-	if i <= 0 || !normalize.IsLegalForm(s[i+1:]) {
-		return s
+	for {
+		trimmed := trimTrailingPunct(s)
+		i := strings.LastIndexFunc(trimmed, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '/'
+		})
+		if i <= 0 || !normalize.IsLegalForm(trimmed[i+1:]) {
+			return trimmed
+		}
+		s = trimmed[:i]
 	}
-	return s[:i]
 }
 
 // subjectPrefixes are the templated subject openers that name the company next.

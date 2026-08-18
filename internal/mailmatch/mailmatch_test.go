@@ -51,6 +51,10 @@ func TestExtractCompany_UsesTheSharedFormList(t *testing.T) {
 		"Acme Robotics PLC":  "acme robotics",
 		"Adyen N.V.":         "adyen",
 		"Acme Recruiting AS": "acme recruiting",
+		// A compound form has to come off whole, stepping over the punctuation between its
+		// parts, or the sender never matches the plain company name it is written under.
+		"Acme GmbH & Co. KG":    "acme",
+		"Sun Technologies,Inc.": "sun technologies",
 	} {
 		if got := ExtractCompany(from, ""); got != want {
 			t.Errorf("ExtractCompany(%q) = %q, want %q", from, got, want)

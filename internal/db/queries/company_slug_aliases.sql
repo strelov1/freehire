@@ -6,9 +6,17 @@
 --
 -- Keyed on folded_key rather than on alias_slug so a spelling that was never itself merged
 -- still lands: "DollarTree" has no row, but it folds onto "dollartree", which does.
+--
+-- Ordered so the answer is deterministic. One canonical slug per folded key is an invariant
+-- the WRITER holds — planMerges elects exactly one winner per folded group and never
+-- re-elects against a frozen canon — but the schema cannot express "at most one DISTINCT
+-- canonical_slug per folded_key" without a second table, and this design deliberately keeps
+-- one. Without the ORDER BY a violation would resolve differently run to run; with it, the
+-- adapter can also see the conflict and say so.
 SELECT folded_key, canonical_slug
 FROM company_slug_aliases
-WHERE folded_key = ANY(@folded_keys::text[]);
+WHERE folded_key = ANY(@folded_keys::text[])
+ORDER BY folded_key, canonical_slug;
 
 -- name: GetCompanySlugAlias :one
 -- Where a retired slug should 301 to. GET /companies/:slug consults this only AFTER missing

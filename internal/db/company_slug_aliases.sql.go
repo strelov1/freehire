@@ -155,6 +155,7 @@ const resolveCompanySlugAliases = `-- name: ResolveCompanySlugAliases :many
 SELECT folded_key, canonical_slug
 FROM company_slug_aliases
 WHERE folded_key = ANY($1::text[])
+ORDER BY folded_key, canonical_slug
 `
 
 type ResolveCompanySlugAliasesRow struct {
@@ -169,6 +170,13 @@ type ResolveCompanySlugAliasesRow struct {
 //
 // Keyed on folded_key rather than on alias_slug so a spelling that was never itself merged
 // still lands: "DollarTree" has no row, but it folds onto "dollartree", which does.
+//
+// Ordered so the answer is deterministic. One canonical slug per folded key is an invariant
+// the WRITER holds — planMerges elects exactly one winner per folded group and never
+// re-elects against a frozen canon — but the schema cannot express "at most one DISTINCT
+// canonical_slug per folded_key" without a second table, and this design deliberately keeps
+// one. Without the ORDER BY a violation would resolve differently run to run; with it, the
+// adapter can also see the conflict and say so.
 func (q *Queries) ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error) {
 	rows, err := q.db.Query(ctx, resolveCompanySlugAliases, foldedKeys)
 	if err != nil {

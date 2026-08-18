@@ -3064,6 +3064,13 @@ type Querier interface {
 	//
 	// Keyed on folded_key rather than on alias_slug so a spelling that was never itself merged
 	// still lands: "DollarTree" has no row, but it folds onto "dollartree", which does.
+	//
+	// Ordered so the answer is deterministic. One canonical slug per folded key is an invariant
+	// the WRITER holds — planMerges elects exactly one winner per folded group and never
+	// re-elects against a frozen canon — but the schema cannot express "at most one DISTINCT
+	// canonical_slug per folded_key" without a second table, and this design deliberately keeps
+	// one. Without the ORDER BY a violation would resolve differently run to run; with it, the
+	// adapter can also see the conflict and say so.
 	ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error)
 	// Mark a sent request contacted or declined, recording the acting referrer and time. The
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
