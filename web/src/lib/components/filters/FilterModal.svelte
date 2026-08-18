@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { Bell, UserRound } from '@lucide/svelte';
+  import { Bell, Info, UserRound } from '@lucide/svelte';
+  import { Tooltip } from '$lib/ui';
   import { FACETS } from '$lib/facets';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -199,9 +200,28 @@
   countsFetch={stagedCounts}
   {pane}
   headerAction={showProfileAction ? profileAction : undefined}
+  {titleHint}
   extra={extra ? extraStaged : undefined}
   {footerNote}
 />
+
+<!-- Most facets are three-state (off / include / exclude); one quiet hint in the
+     header covers all of them rather than repeating the explanation on every
+     excludable section. -->
+{#snippet titleHint()}
+  <Tooltip side="bottom">
+    <button
+      type="button"
+      aria-label="How filters work"
+      class="flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <Info class="size-3.5" aria-hidden="true" />
+    </button>
+    {#snippet content()}
+      Click a filter once to include it, again to exclude it, again to clear it.
+    {/snippet}
+  </Tooltip>
+{/snippet}
 
 {#snippet profileAction()}
   {#if !isAuthenticated() || profile}

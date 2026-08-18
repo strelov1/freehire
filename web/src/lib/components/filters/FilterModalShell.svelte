@@ -41,6 +41,7 @@
     initialKey,
     pane,
     headerAction,
+    titleHint,
     extra,
     footerNote,
   }: {
@@ -73,6 +74,10 @@
     /** Optional control rendered in the header row, between the title and Close (e.g. the
      *  job modal's "Apply my profile"). Absent for callers that don't need one. */
     headerAction?: Snippet;
+    /** Optional small hint rendered right after the title (e.g. the job modal's
+     *  include/exclude tooltip). Absent for callers with nothing to explain there —
+     *  the companies modal has no excludable facets, so it passes none. */
+    titleHint?: Snippet;
     /** Optional content above the pane (e.g. the profile editor's "import from CV"). */
     extra?: Snippet;
     /** Optional footer nudge above the action row, handed a `jumpTo` to switch panes and
@@ -183,7 +188,10 @@
     >
       <!-- header -->
       <div class="flex items-center gap-3 border-b border-border px-4 py-3">
-        <h2 class="flex-1 text-base font-semibold tracking-tight">{title}</h2>
+        <h2 class="flex flex-1 items-center gap-1.5 text-base font-semibold tracking-tight">
+          {title}
+          {#if titleHint}{@render titleHint()}{/if}
+        </h2>
         {#if headerAction}{@render headerAction()}{/if}
         <button
           type="button"
