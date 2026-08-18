@@ -128,6 +128,7 @@ extension/*.zip
 /ingest
 /liveness
 /mail-ingest
+/merge-companies
 /notify
 /recount-companies
 /reindex
