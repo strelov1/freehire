@@ -95,7 +95,10 @@ describe('cachePolicy holds an entity page longer than a listing', () => {
   });
 
   it('differs from the listing policy only in the shared-cache lifetime', () => {
-    expect(PUBLIC_DETAIL_CACHE).toContain('s-maxage=3600');
+    // A day, bounded by the 48h ingest sweep — the fastest thing that closes a
+    // posting (docs/agents/job-lifecycle.md). Raising this past that floor would
+    // let the edge outlive the data.
+    expect(PUBLIC_DETAIL_CACHE).toContain('s-maxage=86400');
     // Same two guarantees as PUBLIC_CACHE: the browser keeps revalidating, and the
     // edge may keep serving while it refreshes.
     expect(PUBLIC_DETAIL_CACHE).toContain('max-age=0');

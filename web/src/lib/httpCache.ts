@@ -18,23 +18,27 @@
  *  `stale-while-revalidate` lets it keep serving during the refresh. */
 export const PUBLIC_CACHE = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
 
-/** A page about ONE entity, held twelve times longer. Same two guarantees as
- *  `PUBLIC_CACHE` — the browser still revalidates, the edge may still serve while
- *  it refreshes — and only the shared-cache lifetime differs.
+/** A page about ONE entity, held a day. Same two guarantees as `PUBLIC_CACHE` —
+ *  the browser still revalidates, the edge may still serve while it refreshes —
+ *  and only the shared-cache lifetime differs.
  *
- *  The hour is not a guess about how fresh a job page can be; it is bounded by how
+ *  The day is not a guess about how fresh a job page can be; it is bounded by how
  *  fresh the catalogue itself is. The fastest thing that takes a posting down is the
  *  ingest sweep, which closes a job unseen for **48 hours**; the liveness probe runs
  *  twice a day and needs two consecutive `expired` reads; the age rule waits 45 days
- *  (docs/agents/job-lifecycle.md). Against a floor measured in days, an hour is
- *  noise — and `stale-while-revalidate=86400` already accepted up to a day of it.
+ *  (docs/agents/job-lifecycle.md). Staying at half that floor keeps the page no
+ *  staler than the data behind it, and `stale-while-revalidate=86400` had already
+ *  accepted a day of staleness anyway.
  *
- *  What the hour actually buys is the revalidation count. `stale-while-revalidate`
- *  means the edge already answers instantly past expiry, so `s-maxage` was never
- *  controlling latency — it controls how often a background refresh lands on the
- *  origin. Entity pages are the overwhelming majority of URLs, so this is where
- *  twelve-fold matters. */
-export const PUBLIC_DETAIL_CACHE = 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400';
+ *  What this buys is the revalidation count, not latency. `stale-while-revalidate`
+ *  means the edge already answers instantly past expiry, so `s-maxage` only controls
+ *  how often a background refresh lands on the origin. That is the whole point here:
+ *  the catalogue is long-tail — hundreds of thousands of job and company pages, most
+ *  seen a handful of times a day — so entity pages are the overwhelming majority of
+ *  URLs and the ones whose misses reach the origin from Helsinki. It was an hour;
+ *  measured field TTFB is 1733ms at p75 on phones against a 65ms render, which is
+ *  network and origin round trips, not work. */
+export const PUBLIC_DETAIL_CACHE = 'public, max-age=0, s-maxage=86400, stale-while-revalidate=86400';
 
 /** Anything tied to a person. `no-store` is deliberate over `no-cache`: nothing
  *  should be written down at all, not even revalidated. */
