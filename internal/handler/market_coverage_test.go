@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -210,5 +212,33 @@ func TestMarketCoverage_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
 
 	if _, present := body["meta"]; present {
 		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
+	}
+}
+
+func TestMarketCoverage_IgnoredReportStaysSortedAndCapped(t *testing.T) {
+	// The skill params are prepended to the shared report, which caps and sorts
+	// only what it produced itself — so this endpoint could exceed the cap it
+	// exists to enforce, and break the alphabetical order the rest relies on.
+	app := coverageApp(&recordingFacetCounter{})
+
+	q := "/market/coverage?skills=a&skills_exclude=b&skills_mode=and"
+	for i := range 12 {
+		q += fmt.Sprintf("&junk%02d=x", i)
+	}
+	_, body := doPostJSON(t, app, q, `{"skills":["go"]}`)
+
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 10 {
+		t.Fatalf("len(ignored_params) = %d, want the shared cap of 10", len(ignored))
+	}
+
+	var names []string
+	for _, entry := range ignored {
+		m, _ := entry.(map[string]any)
+		names = append(names, m["param"].(string))
+	}
+	if !sort.StringsAreSorted(names) {
+		t.Errorf("ignored_params = %v, want one alphabetically sorted report", names)
 	}
 }

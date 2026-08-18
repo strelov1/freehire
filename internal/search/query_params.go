@@ -80,13 +80,27 @@ func unknownAgainst(v url.Values, known map[string]bool) []UnknownParam {
 		}
 		out = append(out, UnknownParam{Param: param, DidYouMean: suggestParam(param, known)})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Param < out[j].Param })
-	// Cap after sorting, so the report is the same prefix every time rather than
-	// whichever entries map iteration happened to reach first.
-	if len(out) > maxUnknownParamsReported {
-		out = out[:maxUnknownParamsReported]
+	return SortAndCap(out)
+}
+
+// SortAndCap orders an ignored-param report by name and bounds it to
+// maxUnknownParamsReported.
+//
+// Exported because a caller can have entries of its own to add: a param this
+// package calls legitimate vocabulary but that endpoint discards anyway (the
+// coverage endpoint's `skills`, which belong in the body). Those have to be
+// folded into the same report before it is ordered and bounded — appended
+// afterwards they would sit outside the sort and push the total past the cap
+// the bound exists to enforce.
+//
+// Capping after sorting matters: it makes the report the same prefix every
+// time, rather than whichever entries map iteration happened to reach first.
+func SortAndCap(params []UnknownParam) []UnknownParam {
+	sort.Slice(params, func(i, j int) bool { return params[i].Param < params[j].Param })
+	if len(params) > maxUnknownParamsReported {
+		params = params[:maxUnknownParamsReported]
 	}
-	return out
+	return params
 }
 
 // knownParams builds the set of every param the filter reads: each facet plus

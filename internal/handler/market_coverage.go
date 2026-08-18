@@ -76,7 +76,7 @@ func coverageIgnoredParams(c *fiber.Ctx) []search.UnknownParam {
 			delete(vals, param)
 		}
 	}
-	return append(out, search.UnknownParams(vals, nil)...)
+	return search.SortAndCap(append(out, search.UnknownParams(vals, nil)...))
 }
 
 // marketFilter builds the market filter from the request's facet query params
