@@ -50,6 +50,16 @@ type Draft struct {
 	PostedAt *time.Time
 
 	ManualSalary *Salary
+
+	// CanonicalCompanySlug overrides the derived company slug with the one a merge elected
+	// for this employer (company_slug_aliases). Empty for almost every posting, and empty
+	// is the honest default: only the ingest pipeline can fill it, because only it has the
+	// registry, and jobderive must stay a pure function of its input.
+	//
+	// It rides on the Draft rather than being applied to a built Job so the aggregate is
+	// still constructed once and never mutated — a setter would let any caller re-key a
+	// company, which is a decision the merge worker owns.
+	CanonicalCompanySlug string
 }
 
 // Fields is the readable projection of a Job: a plain DTO exposing every field for
@@ -136,6 +146,9 @@ func New(d Draft) (Job, error) {
 	in := d.Input
 	in.Location = normalize.CleanLocation(in.Location)
 	der := jobderive.Derive(in)
+	if d.CanonicalCompanySlug != "" {
+		der.CompanySlug = d.CanonicalCompanySlug
+	}
 	return Job{f: Fields{
 		Source:      d.Source,
 		ExternalID:  d.ExternalID,

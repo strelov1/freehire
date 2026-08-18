@@ -152,11 +152,15 @@ func run() int {
 	// tally records which of the two writes each persisted posting took, so the run says how far
 	// the cheap path actually reached rather than leaving it to be assumed (see writeTally).
 	tally := newWriteTally()
+	store := newDBStore(pool, enrich.Version, crawled, tally, hydrationWindow)
 	runner := pipeline.Runner{
 		Registry:    registry,
-		Store:       newDBStore(pool, enrich.Version, crawled, tally, hydrationWindow),
+		Store:       store,
 		BoardHealth: newBoardHealth(pool),
 		Coverage:    coverageLookup(cfg),
+		// Same object as Store: the alias registry is a read the store's pool already
+		// serves, and the pipeline asks for it once per board run.
+		Aliases: store,
 	}
 
 	runStats, err := runner.Run(ctx, sourceCfg.Sources)

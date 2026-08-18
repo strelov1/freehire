@@ -183,7 +183,7 @@ func Derive(in Input) Derived {
 		experience = jobfacts.ExperienceYearsMin(in.Description)
 	}
 	return Derived{
-		CompanySlug: normalize.Slug(in.Company),
+		CompanySlug: normalize.CompanySlug(in.Company),
 		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
 		Countries:   countries,
 		Regions:     regions,

@@ -6,6 +6,7 @@ package pipeline
 import (
 	"context"
 	"log"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -128,8 +129,9 @@ type BoardHealth interface {
 // without a per-run table scan. Optional: nil disables the gate entirely (ATS board files,
 // test fakes) — the same shape as BoardHealth.
 //
-// companySlugs are company_slug values as normalize.Slug produced them, and the returned
-// map's keys are expected back in exactly that form — a lookup may consult other SPELLINGS of
+// companySlugs are company_slug values as normalize.CompanySlug produced them AND the alias
+// registry resolved them — the same value the upsert will store. The returned map's keys are
+// expected back in exactly that form — a lookup may consult other SPELLINGS of
 // a slug internally, but that is its own business and never leaks into the answer.
 //
 // A live Meili filter matches a stored field's literal value and has no equivalent of a SQL
@@ -217,6 +219,43 @@ type Runner struct {
 	BoardHealth BoardHealth
 	// Coverage is optional (nil disables the aggregator ingest-time coverage gate).
 	Coverage CoverageLookup
+	// Aliases is optional (nil keeps every posting on its derived company slug).
+	Aliases AliasLookup
+}
+
+// AliasLookup resolves folded company slugs to the canonical slug a merge elected for that
+// employer (company_slug_aliases). Keyed on the FOLD rather than on the slug so a spelling
+// that was never itself merged still lands: "DollarTree" has no alias row, but it folds onto
+// "dollartree", which does.
+//
+// Keys absent from the returned map have no canon and keep their derived slug. A lookup
+// failure is not fatal — see companyCanonical.
+type AliasLookup interface {
+	CanonicalCompanySlugs(ctx context.Context, foldedKeys []string) (map[string]string, error)
+}
+
+// companyCanonical maps a derived company slug to the canonical one a merge elected for that
+// employer. nil means no registry is wired, and is read as the identity — mirroring how a nil
+// aggregatorCoverage reads as "never covered".
+//
+// Two callers build one, for the same reason the coverage gate has two: the buffered path
+// resolves the whole board in one batched call up front, and the streaming path has no such
+// batch, so it resolves one company at a time and memoizes.
+type companyCanonical func(derivedSlug string) string
+
+// canonicalOf is the ONE place a company slug becomes final. Both consumers read through it:
+// the aggregator-coverage gate, so it asks about the slug the catalogue actually holds, and
+// the upsert, so it stores that same value.
+//
+// Their agreement has to be structural rather than remembered. It used to rest on both sides
+// calling the same pure function on the same input; once the slug depends on registry state,
+// an independently derived value can disagree — and a coverage gate that has silently stopped
+// matching is indistinguishable from one with nothing to skip.
+func canonicalOf(c companyCanonical, derived string) string {
+	if c == nil {
+		return derived
+	}
+	return c(derived)
 }
 
 // Run ingests every configured board and returns the stats per provider. It returns an
@@ -473,7 +512,8 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 		rej      rejections
 		firstErr error
 	)
-	covered := r.aggregatorCoverageForBatch(ctx, e, raw)
+	canon := r.resolveCompanyAliases(ctx, e, raw)
+	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	for _, j := range raw {
 		// A HydratingSource marks an already-ingested posting it re-listed but did not
 		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
@@ -501,7 +541,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 			st.Ingested++
 			continue
 		}
-		r.saveOne(ctx, e, j, covered, &st, &rej, &firstErr)
+		r.saveOne(ctx, e, j, covered, canon, &st, &rej, &firstErr)
 	}
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
@@ -528,8 +568,8 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 // save loops share it so the normalize→filter→save→count step behaves identically; the
 // SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
 // filter's candidate denominator.
-func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, st *Stats, rej *rejections, firstErr *error) {
-	dj, err := normalizeJob(e, j)
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, canon companyCanonical, st *Stats, rej *rejections, firstErr *error) {
+	dj, err := normalizeJob(e, j, canon)
 	if err != nil {
 		st.Skipped++
 		if *firstErr == nil {
@@ -575,14 +615,101 @@ func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators []string, ap
 	return sources.AggregatorProviders(taxonomy), true
 }
 
+// canonicalCompanySlug is the canonical slug for a posting's company, or "" when the registry
+// has nothing to say about it — which job.Draft reads as "keep the derived slug".
+func canonicalCompanySlug(canon companyCanonical, company string) string {
+	if canon == nil {
+		return ""
+	}
+	derived := normalize.CompanySlug(company)
+	if canonical := canon(derived); canonical != derived {
+		return canonical
+	}
+	return ""
+}
+
+// resolveCompanyAliases resolves a buffered board's distinct company slugs against the alias
+// registry in ONE call, whatever the posting count.
+//
+// A failed lookup keeps every posting on its derived slug rather than failing the board. That
+// is the recoverable direction: the worst case is a duplicate company the next merge wave
+// collapses, where refusing the board loses the postings outright.
+func (r Runner) resolveCompanyAliases(ctx context.Context, e sources.CompanyEntry, raw []sources.Job) companyCanonical {
+	if r.Aliases == nil {
+		return nil
+	}
+	slugs := distinctCompanySlugs(raw)
+	if len(slugs) == 0 {
+		return nil
+	}
+	keys := make([]string, len(slugs))
+	for i, s := range slugs {
+		keys[i] = normalize.FoldSlug(s)
+	}
+	canonByKey, err := r.Aliases.CanonicalCompanySlugs(ctx, keys)
+	if err != nil {
+		log.Printf("ingest: %s board %q (%s): company-alias lookup failed, postings keep their derived slugs: %v",
+			e.Provider, e.Board, e.Company, err)
+		return nil
+	}
+	if len(canonByKey) == 0 {
+		return nil
+	}
+	return func(derived string) string {
+		if canonical, ok := canonByKey[normalize.FoldSlug(derived)]; ok {
+			return canonical
+		}
+		return derived
+	}
+}
+
+// streamCompanyCanonical is resolveCompanyAliases for a streaming board, which has no upfront
+// batch: it resolves one company as it is first seen and memoizes the answer. Like
+// streamAggregatorCoverage it is only ever called from ingestStream's emit callback, already
+// serialized under that path's own mutex, so the cache needs no lock.
+func (r Runner) streamCompanyCanonical(ctx context.Context, e sources.CompanyEntry) companyCanonical {
+	if r.Aliases == nil {
+		return nil
+	}
+	cache := make(map[string]string)
+	return func(derived string) string {
+		if derived == "" {
+			return derived
+		}
+		if v, ok := cache[derived]; ok {
+			return v
+		}
+		key := normalize.FoldSlug(derived)
+		result, err := r.Aliases.CanonicalCompanySlugs(ctx, []string{key})
+		if err != nil {
+			log.Printf("ingest: %s board %q (%s): company-alias lookup failed for %q, keeping the derived slug: %v",
+				e.Provider, e.Board, e.Company, derived, err)
+			return derived // not cached: a transient failure must not pin the wrong slug for the run
+		}
+		canonical := derived
+		if c, ok := result[key]; ok {
+			canonical = c
+		}
+		cache[derived] = canonical
+		return canonical
+	}
+}
+
 // aggregatorCoverageForBatch resolves the ingest-time coverage gate for a buffered board's
 // whole raw fetch in one batched call, up front.
-func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.CompanyEntry, raw []sources.Job) aggregatorCoverage {
+func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, canon companyCanonical) aggregatorCoverage {
 	aggregators, applies := r.aggregatorGate(e)
 	if !applies {
 		return nil
 	}
+	// The gate is asked about the CANONICAL slugs, because saveOne will ask it with the
+	// canonical slug it is about to store. Resolving here rather than re-deriving there is
+	// what makes the two sides one value instead of two that have to be kept equal.
 	slugs := distinctCompanySlugs(raw)
+	for i, s := range slugs {
+		slugs[i] = canonicalOf(canon, s)
+	}
+	slugs = slices.Compact(slices.Sorted(slices.Values(slugs)))
 	if len(slugs) == 0 {
 		return nil
 	}
@@ -595,13 +722,19 @@ func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.Compan
 	return func(companySlug string) bool { return covered[companySlug] }
 }
 
-// distinctCompanySlugs returns the distinct company slugs raw's postings will normalize to, so
-// the coverage lookup can be asked about exactly the companies this board might skip. They go
-// out as normalize.Slug produced them; widening a slug to its other spellings is the lookup's
-// own business (see CoverageLookup). normalizeJob itself is not called here
-// (it can fail, and its result would be discarded) -- just normalize.Slug(j.Company), the same
-// derivation jobderive uses for job.Fields().CompanySlug, on the same input (j.Company, with no
-// fallback to the entry's company -- normalizeJob has none either), so the two agree.
+// distinctCompanySlugs returns the distinct company slugs raw's postings will DERIVE to —
+// before the alias registry has its say. Its two callers both resolve the result through
+// canonicalOf before using it, and that is the invariant to preserve: what reaches the
+// coverage lookup must be what the upsert will store.
+//
+// This used to be guaranteed by both sides independently calling the same pure function on the
+// same input, and that is no longer enough. A company slug now depends on registry state, so
+// "both derive it the same way" can hold while the two values differ. One resolved map is
+// handed to both consumers instead; see canonicalOf.
+//
+// normalizeJob is not called here (it can fail, and its result would be discarded) — just
+// normalize.CompanySlug(j.Company), the same derivation jobderive performs, on the same input
+// (j.Company, with no fallback to the entry's company — normalizeJob has none either).
 func distinctCompanySlugs(raw []sources.Job) []string {
 	names := make([]string, len(raw))
 	for i, j := range raw {
@@ -612,12 +745,14 @@ func distinctCompanySlugs(raw []sources.Job) []string {
 
 // distinctSlugs is distinctCompanySlugs over bare company names, for the coverage probe a
 // CoverageGated adapter consults before it has any Jobs to speak of. Both callers must slug
-// the same way, so neither does it itself.
+// the same way, so neither does it itself — and it must be normalize.CompanySlug, the
+// derivation jobderive performs, not normalize.Slug. Asking about "acme-inc" and then deciding
+// about "acme" is a gate that answers a question nobody consults.
 func distinctSlugs(companies []string) []string {
 	seen := make(map[string]bool)
 	var slugs []string
 	for _, c := range companies {
-		slug := normalize.Slug(c)
+		slug := normalize.CompanySlug(c)
 		if slug == "" || seen[slug] {
 			continue
 		}
@@ -728,8 +863,16 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 	if !applies {
 		return nil
 	}
+	canon := r.streamCompanyCanonical(ctx, e)
 	return func(companies []string) map[string]bool {
+		// Resolve before asking, for the same reason the buffered path does: the probe is
+		// deciding whether a posting is worth a detail request, and the answer has to be
+		// about the employer the catalogue actually holds.
 		slugs := distinctSlugs(companies)
+		for i, s := range slugs {
+			slugs[i] = canonicalOf(canon, s)
+		}
+		slugs = slices.Compact(slices.Sorted(slices.Values(slugs)))
 		if len(slugs) == 0 {
 			return nil
 		}
@@ -741,7 +884,7 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 		}
 		out := make(map[string]bool, len(covered))
 		for _, c := range companies {
-			if covered[normalize.Slug(c)] {
+			if covered[canonicalOf(canon, normalize.CompanySlug(c))] {
 				out[c] = true
 			}
 		}
@@ -815,6 +958,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	// this path today) never does, so this resolves — and memoizes — one company at a time as
 	// postings arrive. cache is read/written only from within emit, which already serializes
 	// access via mu, so it needs no locking of its own.
+	canon := r.streamCompanyCanonical(ctx, e)
 	covered := r.streamAggregatorCoverage(ctx, e)
 	emit := func(j sources.Job) {
 		mu.Lock()
@@ -839,7 +983,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
-		r.saveOne(ctx, e, j, covered, &st, &rej, &firstErr)
+		r.saveOne(ctx, e, j, covered, canon, &st, &rej, &firstErr)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
@@ -877,9 +1021,13 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 // dictionary facets internally — so ingest, the moderator write path, and Telegram
 // extraction all produce identical facets from the one door. It returns
 // job.ErrInvalidDraft for a posting with no title/identity, which the caller skips.
-func normalizeJob(e sources.CompanyEntry, j sources.Job) (job.Job, error) {
+func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical) (job.Job, error) {
 	source, externalID := jobIdentity(e, j)
 	return job.New(job.Draft{
+		// Empty unless the registry re-keys this employer, and empty is what Draft reads as
+		// "keep what jobderive derived". Resolving here, at construction, is what makes the
+		// slug saveOne gates on the same value it stores.
+		CanonicalCompanySlug: canonicalCompanySlug(canon, j.Company),
 		Input: jobderive.Input{
 			Source:             source,
 			ExternalID:         externalID,

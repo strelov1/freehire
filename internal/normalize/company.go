@@ -103,7 +103,18 @@ func letters(word string) string {
 // This is a comparison key, not a display or URL key — unlike [Slug] it joins the words with
 // nothing and strips legal forms, both of which would be wrong in a path segment.
 func CompanyKey(name string) string {
-	return strings.ReplaceAll(CompanySlug(name), "-", "")
+	return FoldSlug(CompanySlug(name))
+}
+
+// FoldSlug removes a slug's word breaks, turning it into the comparison key two sources that
+// separated the words differently both land on: "dollar-tree" and "dollartree" fold alike.
+//
+// It is the same fold jobs.company_slug_folded stores (migration 0109) and the same one
+// company_slug_aliases.folded_key is keyed by, which is what lets a spelling nobody ever
+// merged reach a canon its folded form already owns. Take [CompanyKey] when you hold a NAME;
+// this is for when the slug is already in hand.
+func FoldSlug(slug string) string {
+	return strings.ReplaceAll(slug, "-", "")
 }
 
 // SameCompany reports whether two company names denote the same employer.

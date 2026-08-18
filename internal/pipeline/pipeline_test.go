@@ -378,8 +378,11 @@ func TestRunNormalizesAndNamespaces(t *testing.T) {
 	if j.ExternalID != "acme:42" {
 		t.Errorf("ExternalID = %q, want %q (board-namespaced)", j.ExternalID, "acme:42")
 	}
-	if j.CompanySlug != "acme-inc" {
-		t.Errorf("CompanySlug = %q, want %q", j.CompanySlug, "acme-inc")
+	// "Acme Inc" keys as `acme`: the company slug is normalize.CompanySlug, which drops the
+	// corporate form, so the same employer cannot arrive as two companies depending on
+	// whether its source spelled the form out.
+	if j.CompanySlug != "acme" {
+		t.Errorf("CompanySlug = %q, want %q", j.CompanySlug, "acme")
 	}
 	if j.Title != "Senior Go Developer" || j.URL != "u" || !j.Remote {
 		t.Errorf("passthrough fields wrong: %+v", j)
@@ -395,7 +398,7 @@ func TestRunNormalizesAndNamespaces(t *testing.T) {
 func TestNormalizeJobParsesGeographyFromLocation(t *testing.T) {
 	e := sources.CompanyEntry{Company: "Acme", Provider: "greenhouse", Board: "acme"}
 
-	geoJob, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote - Germany"})
+	geoJob, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote - Germany"}, nil)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -406,7 +409,7 @@ func TestNormalizeJobParsesGeographyFromLocation(t *testing.T) {
 
 	// A bare "Remote" resolves no country, so it falls into the open-anywhere global
 	// region (its remoteness stays on WorkMode; see location.Parse).
-	bareJob, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
+	bareJob, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"}, nil)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -421,7 +424,7 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 
 	// The adapter states hybrid structurally; the location text would parse as
 	// remote. The structured signal wins.
-	structured, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote", WorkMode: "hybrid"})
+	structured, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote", WorkMode: "hybrid"}, nil)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -430,7 +433,7 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 	}
 
 	// No structured signal: the parser fills from the location text.
-	parsed, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
+	parsed, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"}, nil)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -558,6 +561,7 @@ func TestNormalizeJobDerivesSkills(t *testing.T) {
 			Title: "Backend Engineer", Company: "Acme", ExternalID: "1",
 			Description: "<p>Build services in Golang with PostgreSQL and Kubernetes.</p>",
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
@@ -572,6 +576,7 @@ func TestNormalizeJobDerivesClassification(t *testing.T) {
 	dj, err := normalizeJob(
 		sources.CompanyEntry{Provider: "greenhouse", Board: "acme", Company: "Acme"},
 		sources.Job{ExternalID: "1", Title: "Senior Backend Engineer", Description: "x"},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
@@ -952,5 +957,165 @@ func TestRunReturnsPerProviderStats(t *testing.T) {
 	}
 	if stats["lever"].Ingested != 2 {
 		t.Errorf("lever Ingested = %d, want 2", stats["lever"].Ingested)
+	}
+}
+
+// fakeAliases answers CanonicalCompanySlugs from a canned folded_key -> canonical_slug map and
+// records every batch it was asked about, so a test can prove the lookup happens once per board
+// rather than once per posting.
+type fakeAliases struct {
+	mu    sync.Mutex
+	canon map[string]string
+	calls [][]string
+	err   error
+}
+
+func (f *fakeAliases) CanonicalCompanySlugs(_ context.Context, foldedKeys []string) (map[string]string, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, append([]string(nil), foldedKeys...))
+	f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := make(map[string]string)
+	for _, k := range foldedKeys {
+		if c, ok := f.canon[k]; ok {
+			out[k] = c
+		}
+	}
+	return out, nil
+}
+
+// TestRunStoresTheCanonicalCompanySlugAndGatesOnIt is the structural guarantee behind duplicate
+// class 1b, and behind the coverage gate not leaking a second time.
+//
+// "DollarTree" derives to `dollartree`, which a merge registered as an alias of `dollar-tree`.
+// The posting must be STORED under the canonical slug, and the coverage lookup must be asked
+// about that same canonical slug — because what it is really being asked is "does this employer
+// already have ATS coverage", and `dollartree` is not the key the catalogue holds that under.
+//
+// The two agreeing is not a coincidence to be maintained by hand: both read one resolved map.
+func TestRunStoresTheCanonicalCompanySlugAndGatesOnIt(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "DollarTree", URL: "u"},
+		{ExternalID: "2", Title: "Data Engineer", Company: "DollarTree", URL: "u"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{}}
+	aliases := &fakeAliases{canon: map[string]string{"dollartree": "dollar-tree"}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage, Aliases: aliases}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(store.saved) != 2 {
+		t.Fatalf("len(saved) = %d, want 2", len(store.saved))
+	}
+	for _, j := range store.saved {
+		if got := j.Fields().CompanySlug; got != "dollar-tree" {
+			t.Errorf("stored CompanySlug = %q, want %q (the canonical slug, not the derived one)",
+				got, "dollar-tree")
+		}
+	}
+	if len(coverage.calls) != 1 {
+		t.Fatalf("coverage was called %d times, want 1 (one batch per board)", len(coverage.calls))
+	}
+	if got := coverage.calls[0]; len(got) != 1 || got[0] != "dollar-tree" {
+		t.Errorf("coverage asked about %v, want [dollar-tree] — the gate must ask about the "+
+			"slug the upsert will write, or it silently stops matching", got)
+	}
+	if len(aliases.calls) != 1 {
+		t.Errorf("alias lookup ran %d times, want 1 per board run", len(aliases.calls))
+	}
+	if got := aliases.calls[0]; len(got) != 1 || got[0] != "dollartree" {
+		t.Errorf("alias lookup asked for %v, want [dollartree] (the folded key)", got)
+	}
+}
+
+// TestRunWithoutAliasesKeepsTheDerivedSlug pins the day-one behaviour: the registry is empty
+// until the merge worker writes to it, and an unwired lookup must change nothing.
+func TestRunWithoutAliasesKeepsTheDerivedSlug(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "DollarTree", URL: "u"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := store.saved[0].Fields().CompanySlug; got != "dollartree" {
+		t.Errorf("CompanySlug = %q, want %q", got, "dollartree")
+	}
+}
+
+// TestRunGatesOnTheCanonicalSlugAtDecisionTime is the other half of the invariant. The batch
+// asks the lookup about the canonical slug; this proves the SKIP decision reads it too.
+//
+// `dollar-tree` has ATS coverage; the aggregator posting arrives spelled `DollarTree`. Before
+// the registry resolved it, the gate compared `dollartree` against a catalogue holding
+// `dollar-tree`, found nothing, and saved the duplicate it exists to suppress — the leak in
+// its most literal form.
+func TestRunGatesOnTheCanonicalSlugAtDecisionTime(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "DollarTree", URL: "u"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"dollar-tree": true}}
+	aliases := &fakeAliases{canon: map[string]string{"dollartree": "dollar-tree"}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage, Aliases: aliases}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 0 {
+		t.Errorf("saved %d postings, want 0 — the employer already has ATS coverage under its "+
+			"canonical slug, and the gate must recognise that through the spelling",
+			len(store.saved))
+	}
+	if got := stats.Total().ATSCovered; got != 1 {
+		t.Errorf("ATSCovered = %d, want 1", got)
+	}
+}
+
+// TestRunGatesOnTheStrippedSlugWithNoRegistry catches the leak in its plainest form, with no
+// alias registry involved at all.
+//
+// The gate's question set and its decision must be the same derivation. When the batch was
+// built with normalize.Slug while the posting keyed on normalize.CompanySlug, every company
+// carrying a corporate form asked about "acme-inc" and then decided on "acme" — so the lookup
+// answered about a company nobody would consult, and the gate skipped nothing. Silently:
+// a gate that matches nothing looks exactly like a board with nothing to suppress.
+func TestRunGatesOnTheStrippedSlugWithNoRegistry(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme Inc", URL: "u"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := coverage.calls[0]; len(got) != 1 || got[0] != "acme" {
+		t.Errorf("coverage asked about %v, want [acme] — the corporate form is not part of the "+
+			"company key, so it must not be part of the question", got)
+	}
+	if len(store.saved) != 0 {
+		t.Errorf("saved %d postings, want 0 (the employer has ATS coverage)", len(store.saved))
+	}
+	if got := stats.Total().ATSCovered; got != 1 {
+		t.Errorf("ATSCovered = %d, want 1", got)
 	}
 }

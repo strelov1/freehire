@@ -83,17 +83,28 @@ module's single legal-form rule and closes the hole each existing implementation
 
 ## 3. Write path
 
-- [ ] 3.1 Switch `internal/jobderive/jobderive.go:183` to `normalize.CompanySlug`. Assert in a
+- [x] 3.1 Switch `internal/jobderive/jobderive.go:183` to `normalize.CompanySlug`. Assert in a
       test that `jobderive.Derive` still takes no context and touches no database — purity is a
-      requirement, not an accident.
-- [ ] 3.2 Resolve the alias registry once per board run in `pipeline.Runner`, over the distinct
+      requirement, not an accident. Purity is asserted on the SIGNATURE via reflection, so
+      adding a ctx parameter fails the build's tests rather than a reviewer's attention.
+- [x] 3.2 Resolve the alias registry once per board run in `pipeline.Runner`, over the distinct
       slugs `distinctCompanySlugs` already computes, and feed the resulting map to BOTH the
       coverage lookup and the upsert. Test that a posting whose folded slug matches a registered
-      `folded_key` is stored under the `canonical_slug`.
-- [ ] 3.3 Add the structural guard: the coverage gate and the upsert must read the slug from the
+      `folded_key` is stored under the `canonical_slug`. The canon rides on `job.Draft` rather
+      than being set on a built Job: the aggregate stays constructed-once-never-mutated, and a
+      setter would let any caller re-key a company. Wired in `cmd/ingest` on the existing
+      `dbStore`, which already serves the read-side `SeenLookup`.
+- [x] 3.3 Add the structural guard: the coverage gate and the upsert must read the slug from the
       same resolved map. A test that fails if either re-derives it independently — this is the
       failure mode the coverage-gate leak spike found, and a comment will not hold it.
-- [ ] 3.4 Update `distinctCompanySlugs`'s doc comment: the invariant is now "one map, two
+      The guard earned itself immediately: 3.1 had ALREADY reopened the leak, and the first
+      two tests missed it because their fixture company ("DollarTree") carries no corporate
+      form, so Slug and CompanySlug agreed. `distinctSlugs` still derived with
+      `normalize.Slug` while the posting keyed on `CompanySlug`, so every company with a
+      form asked the lookup about "acme-inc" and then decided about "acme" — the gate
+      suppressed nothing, silently. Fixed in both the buffered path and the CoverageGated
+      probe, pinned by a test whose fixture DOES carry a form.
+- [x] 3.4 Update `distinctCompanySlugs`'s doc comment: the invariant is now "one map, two
       consumers", not "both call the same pure function".
 
 ## 4. The merge worker

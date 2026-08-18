@@ -22,7 +22,7 @@ func TestDerive_SlugsAndFacets(t *testing.T) {
 	if got.PublicSlug != wantSlug {
 		t.Errorf("PublicSlug = %q, want %q", got.PublicSlug, wantSlug)
 	}
-	if got.CompanySlug != normalize.Slug("Acme") {
+	if got.CompanySlug != normalize.CompanySlug("Acme") {
 		t.Errorf("CompanySlug = %q", got.CompanySlug)
 	}
 	if len(got.Countries) == 0 || got.Countries[0] != "de" {
@@ -543,5 +543,44 @@ func TestDerive_ExplicitRegionOverridesCountryPairedRegion(t *testing.T) {
 	})
 	if !reflect.DeepEqual(got.Regions, []string{"apac"}) {
 		t.Errorf("Regions = %v, want [apac] (explicit Regions beats the country-paired one)", got.Regions)
+	}
+}
+
+// TestDerive_CompanySlugStripsLegalForms pins that the catalogue's company key is
+// normalize.CompanySlug, not normalize.Slug. This one line is the whole of duplicate class
+// 1a: 4,149 folded groups covering 229,004 open jobs on prod are one employer written with
+// and without its corporate form.
+func TestDerive_CompanySlugStripsLegalForms(t *testing.T) {
+	for company, want := range map[string]string{
+		"RingCentral, Inc.":     "ringcentral",
+		"Accenture GmbH":        "accenture",
+		"Sun Technologies,Inc.": "sun-technologies",
+		"Acme":                  "acme",
+	} {
+		got := Derive(Input{Title: "Engineer", Company: company, Source: "manual", ExternalID: "1"})
+		if got.CompanySlug != want {
+			t.Errorf("Derive(company=%q).CompanySlug = %q, want %q", company, got.CompanySlug, want)
+		}
+	}
+}
+
+// TestDerive_IsPure guards the reason class 1b resolves in pipeline.Runner and not here.
+//
+// Derive is the one derivation every write path shares — ingest, moderator authoring and
+// Telegram all call it, which is what stops the deterministic facets diverging between them.
+// It can only hold that position while it is a function of its input alone. Handing it a
+// context would mean handing it a database, and the next caller would have to be able to fail.
+func TestDerive_IsPure(t *testing.T) {
+	fn := reflect.TypeOf(Derive)
+	if got := fn.NumIn(); got != 1 {
+		t.Fatalf("Derive takes %d arguments, want exactly 1 (Input) — a second argument is "+
+			"almost certainly a context, and Derive must not be able to do I/O", got)
+	}
+	if got := fn.In(0); got != reflect.TypeOf(Input{}) {
+		t.Errorf("Derive's argument is %v, want jobderive.Input", got)
+	}
+	if got := fn.NumOut(); got != 1 {
+		t.Errorf("Derive returns %d values, want exactly 1 (Derived) — it cannot fail, "+
+			"because it does nothing that can", got)
 	}
 }

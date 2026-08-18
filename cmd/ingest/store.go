@@ -392,3 +392,20 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 	s.tally.record(source, true)
 	return nil
 }
+
+// CanonicalCompanySlugs implements pipeline.AliasLookup: for a batch of folded company slugs,
+// the canonical slug a merge elected for each employer that has one.
+//
+// Read rather than written here, like ExistingExternalIDs — the store already owns the pool,
+// and the pipeline asks for this once per board run, not once per posting.
+func (s *dbStore) CanonicalCompanySlugs(ctx context.Context, foldedKeys []string) (map[string]string, error) {
+	rows, err := s.q.ResolveCompanySlugAliases(ctx, foldedKeys)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		out[r.FoldedKey] = r.CanonicalSlug
+	}
+	return out, nil
+}
