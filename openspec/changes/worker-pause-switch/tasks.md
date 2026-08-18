@@ -31,14 +31,14 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Document the switch in `internal/worker/AGENTS.md`: both key shapes, the
+- [x] 4.1 Document the switch in `internal/worker/AGENTS.md`: both key shapes, the
       presence-as-signal rule, the `EX` convention, the override variable, the fail-open rule,
       and the paused-gauge/stale-timestamp pairing.
-- [ ] 4.2 Record the out-of-repo contract: `freehire_worker_paused` must be surfaced on the
+- [x] 4.2 Record the out-of-repo contract: `freehire_worker_paused` must be surfaced on the
       worker panel and in the staleness alert's annotation in `freehire-ops`, which cannot be
       compiled against this repo.
 
 ## 5. Verification
 
-- [ ] 5.1 Run `gofmt -l .` (must print nothing), `go vet ./...`, `go test ./...`, and
+- [x] 5.1 Run `gofmt -l .` (must print nothing), `go vet ./...`, `go test ./...`, and
       `go vet -tags=integration ./...` before pushing.
