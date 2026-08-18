@@ -25,7 +25,7 @@
 
 ## 3. Wiring
 
-- [ ] 3.1 Gate `worker.Main` on the decision before `run()` is called: a refused run publishes
+- [x] 3.1 Gate `worker.Main` on the decision before `run()` is called: a refused run publishes
       the paused metrics and exits zero, without initializing Sentry or opening the pgx pool.
       Assert `run` is never invoked when refused.
 
