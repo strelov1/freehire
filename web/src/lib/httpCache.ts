@@ -40,6 +40,18 @@ export const PUBLIC_DETAIL_CACHE = 'public, max-age=0, s-maxage=3600, stale-whil
  *  should be written down at all, not even revalidated. */
 export const PRIVATE_CACHE = 'private, no-store';
 
+/** A response that failed. Not `private` — there is nothing personal about a 500,
+ *  and saying so would be misleading; it simply must not be written down, because
+ *  what it describes is a moment rather than a page.
+ *
+ *  This exists because the opposite was tried by omission. An error page is HTML,
+ *  so it collected the same policy as the page it replaced, and Cloudflare stored a
+ *  500 under the URL and served it as a HIT for the next hour — `s-maxage=3600` on
+ *  an entity page, with `stale-while-revalidate=86400` extending it up to a day.
+ *  A blue/green flip that 500s for a few seconds therefore outlives itself by
+ *  hours, on pages the origin is already serving correctly again. */
+export const NO_CACHE = 'no-store';
+
 /** Route trees that are never shared, whoever asks. An anonymous hit here is a
  *  sign-in screen or a redirect, which is not worth handing to the next visitor. */
 const PRIVATE_ROOTS = new Set(['my', 'auth', 'moderation', 'delete-account']);
@@ -55,11 +67,23 @@ const DETAIL_ROOTS = new Set(['jobs', 'companies', 'blog']);
 export function cachePolicy({
   pathname,
   authenticated,
+  status = 200,
 }: {
   pathname: string;
   authenticated: boolean;
+  /** The response's status. Absent means "nothing went wrong" — the parameter was
+   *  added after the fact, and a caller that doesn't pass one is describing a page,
+   *  not a failure. */
+  status?: number;
 }): string {
+  // The signed-in guard outranks everything, including the error rule: a 500
+  // rendered for a signed-in visitor still carries their header state, so it is
+  // private first and uncacheable second. NO_CACHE would be the weaker claim.
   if (authenticated) return PRIVATE_CACHE;
+  // Only 5xx. A 404 is a stable fact about the URL — closed postings are a routine
+  // and permanent outcome here, in large numbers, and letting the edge absorb those
+  // repeats is exactly what this cache is for. A 5xx describes a moment.
+  if (status >= 500) return NO_CACHE;
   // Compare whole segments: /myths is not under /my.
   const segments = pathname.split('/').filter(Boolean);
   const [root] = segments;

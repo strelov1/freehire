@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRIVATE_CACHE, PUBLIC_CACHE, PUBLIC_DETAIL_CACHE, cachePolicy } from './httpCache';
+import { NO_CACHE, PRIVATE_CACHE, PUBLIC_CACHE, PUBLIC_DETAIL_CACHE, cachePolicy } from './httpCache';
 
 describe('cachePolicy', () => {
   it('lets a shared cache hold an anonymous public page', () => {
@@ -110,5 +110,43 @@ describe('cachePolicy holds an entity page longer than a listing', () => {
 describe('cachePolicy is method-agnostic', () => {
   it('gives a HEAD probe the same answer as a GET', () => {
     expect(cachePolicy({ pathname: '/collections/python', authenticated: false })).toBe(PUBLIC_CACHE);
+  });
+});
+
+// Regression, observed in production: an error page is HTML like any other, so it
+// was handed the same `s-maxage=3600, stale-while-revalidate=86400` as the page it
+// replaced. Cloudflare stored a 500 and served it as a HIT for the next hour — a
+// transient failure during a blue/green flip turned into a page that stayed broken
+// long after the origin had recovered.
+describe('cachePolicy never lets a server error be stored', () => {
+  it('refuses to cache a 5xx, whatever the route would otherwise get', () => {
+    expect(cachePolicy({ pathname: '/', authenticated: false, status: 500 })).toBe(NO_CACHE);
+    expect(cachePolicy({ pathname: '/companies/acme', authenticated: false, status: 502 })).toBe(
+      NO_CACHE,
+    );
+    expect(cachePolicy({ pathname: '/collections/python', authenticated: false, status: 503 })).toBe(
+      NO_CACHE,
+    );
+  });
+
+  // A 404 is a fact about the URL, not a symptom: closed postings are a routine,
+  // permanent outcome here and there are a great many of them, so letting the edge
+  // absorb those repeats is the point. Only 5xx is withheld.
+  it('still caches a 404, which is a stable answer rather than a failure', () => {
+    expect(cachePolicy({ pathname: '/jobs/gone', authenticated: false, status: 404 })).toBe(
+      PUBLIC_DETAIL_CACHE,
+    );
+    expect(cachePolicy({ pathname: '/nope', authenticated: false, status: 404 })).toBe(PUBLIC_CACHE);
+  });
+
+  // The signed-in guard is the one rule that must not be weakened by any of this.
+  it('keeps a signed-in error response private, not merely uncached', () => {
+    expect(cachePolicy({ pathname: '/', authenticated: true, status: 500 })).toBe(PRIVATE_CACHE);
+  });
+
+  // Omitting the status keeps the old signature working and means "nothing wrong".
+  it('treats an absent status as a success', () => {
+    expect(cachePolicy({ pathname: '/', authenticated: false })).toBe(PUBLIC_CACHE);
+    expect(cachePolicy({ pathname: '/', authenticated: false, status: 200 })).toBe(PUBLIC_CACHE);
   });
 });

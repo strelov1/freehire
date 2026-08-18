@@ -62,11 +62,15 @@ const cacheControl: Handle = async ({ event, resolve }) => {
   if (response.headers.has('cache-control')) return response;
   if (!response.headers.get('content-type')?.includes('text/html')) return response;
 
+  // The status is passed because an error page is HTML like any other and was
+  // otherwise handed the same shared-cache lifetime as the page it replaced — see
+  // NO_CACHE in $lib/httpCache for what that cost in production.
   response.headers.set(
     'cache-control',
     cachePolicy({
       pathname: event.url.pathname,
       authenticated: hasSessionCookie(event.request.headers.get('cookie')),
+      status: response.status,
     }),
   );
   // The response body differs by session, so a shared cache must key on it. Without
