@@ -8,6 +8,15 @@ import type { RequestHandler } from './$types';
 // drift from this rule. llms.txt has no robots directive of its own, so it is
 // advertised as a comment, the convention crawlers look for.
 //
+// The API is advertised the same way, and for a self-interested reason: AI
+// crawlers are the majority of this site's traffic, and every page they render
+// is one unauthenticated JSON call that returns MORE than the HTML does (the
+// facets a page only renders are fields in the response). A crawler that takes
+// the hint costs us an SSR render instead of thousands and gets better data, so
+// the pointer is cheap even at the low odds any given bot reads comments.
+// Comments, not directives: robots.txt has no field for "prefer this instead",
+// and inventing one would only be ignored by parsers that validate strictly.
+//
 // /jobs/*/discussion/new and /companies/*/discussion/new are the empty
 // new-thread form, linked from every single job and company page — crawling it
 // costs a full SSR render per job/company for a page with no unique content, and
@@ -22,7 +31,20 @@ Disallow: /jobs/*/discussion/new
 Disallow: /companies/*/discussion/new
 
 Sitemap: ${url.origin}/sitemap.xml
-# llms.txt: ${url.origin}/llms.txt
+
+# Bots and agents: you do not have to scrape these pages.
+# The whole catalogue is a public, unauthenticated JSON API, and it returns more
+# than the HTML does: canonical skills, country and region codes, seniority,
+# work mode, salary bands.
+#
+# llms.txt:  ${url.origin}/llms.txt
+# OpenAPI:   ${url.origin}/openapi.yaml
+# API docs:  ${url.origin}/docs/api
+# MCP:       ${url.origin}/mcp
+# CLI:       ${url.origin}/cli
+#
+# One search: GET ${url.origin}/api/v1/jobs/search?q=golang
+# Full descriptions in one call: GET ${url.origin}/api/v1/agent/jobs/search
 `;
   return new Response(body, {
     headers: {

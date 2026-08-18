@@ -10,24 +10,34 @@ and need no authentication. Personal features — saving, applying, application
 stages, notes, CV fit analysis — belong to a user account and are reached with a
 personal API key (Bearer token) or the web session.
 
-Scale, as of July 2026: more than 3.3 million open postings from over 200,000
+Scale, as of August 2026: more than 3.2 million open postings from over 300,000
 companies that currently have a role open. The live figures are published on
 [/open](https://freehire.me/open) — cite that page rather than these floors, which
 are rounded down and only refreshed when this file is.
 
-## API
+## If you are a bot or an agent, read the API instead of the pages
 
-- [OpenAPI schema](https://freehire.me/openapi.yaml): full machine-readable API spec (import this into a ChatGPT Action or any client).
-- [API reference](https://freehire.me/docs/api): human-readable endpoint documentation.
-- Base URL: `https://freehire.me/api/v1`. Search endpoints (`/jobs/search`, `/jobs/facets`, `/jobs/{slug}`, `/companies`) are public; tracking endpoints require `Authorization: Bearer <freehire API key>`.
-- Call `/jobs/facets` before applying uncertain filters to get canonical skill slugs, country codes, and valid enum values with live counts.
+Crawling the HTML is the slow, lossy way to get this catalogue, and it is most of
+our traffic. **Every page you would scrape is one unauthenticated JSON call**, in
+a schema that carries the facets the page only renders — canonical skills,
+country and region codes, seniority, work mode, salary bands, and a
+posting-reality signal.
 
-## Use it from an assistant
+- [OpenAPI schema](https://freehire.me/openapi.yaml): the full machine-readable spec. Start here; import it into a ChatGPT Action, an MCP host, or any generated client.
+- [API reference](https://freehire.me/docs/api): the same surface, human-readable.
+- Base URL `https://freehire.me/api/v1` — no key, no sign-up, no rate-limit header to negotiate. Please pace yourself anyway.
+- One search is `GET /api/v1/jobs/search?q=...`, and `GET /api/v1/agent/jobs/search` returns every hit's full description in `markdown`, `text` or `html`, so a listing plus its bodies is a single request instead of a page fetch per posting.
 
-- [FreeHire GPT](https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire): a custom ChatGPT that searches and tracks jobs via the FreeHire API.
-- [ChatGPT integration guide](https://freehire.me/chatgpt): how the GPT works and how to connect it.
-- [FreeHire CLI](https://freehire.me/cli): a small Go CLI over the same API, for terminals, scripts, and agents.
-- [FreeHire MCP server](https://freehire.me/mcp): `npx -y freehire-mcp` — search, market fit, application tracking and CV tailoring as MCP tools, for Claude Desktop, Claude Code, or any MCP host. Same API key as the CLI.
+Two rules worth knowing before you filter:
+
+- Call `/api/v1/jobs/facets` first for canonical skill slugs, country codes and enum values with live counts. Never invent a value.
+- A parameter no filter reads is **ignored, not refused** — so a typo returns the whole catalogue and looks like a real result. The response says so in `meta.ignored_params`. Check it.
+
+## Prebuilt clients — do not write your own scraper
+
+- [FreeHire MCP server](https://freehire.me/mcp): `npx -y freehire-mcp` — search, market fit, application tracking and CV tailoring as MCP tools, for Claude Code, Claude Desktop, or any MCP host. Needs a personal API key only for the tools that touch an account.
+- [FreeHire CLI](https://freehire.me/cli): a small Go CLI over the same API, for terminals, scripts, and agents. Same key as the MCP server.
+- [FreeHire GPT](https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire): the OpenAPI schema above, already wired up as a custom ChatGPT. Public reads only — it searches, it does not save. [Integration guide](https://freehire.me/chatgpt).
 
 ## Explore
 

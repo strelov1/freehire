@@ -47,6 +47,36 @@ info:
     `getJobFacets` (or `searchCities` for a city) to get canonical values with
     live counts before filtering on them — an unknown value is not an error, it
     simply matches nothing.
+
+    ## An unknown PARAMETER is dropped, and says so
+
+    A parameter no filter reads is ignored rather than refused, so old saved
+    searches and shared links keep working. The cost is that `?country=it` —
+    singular, and not the facet's name — returns the entire catalogue, which
+    looks exactly like a search that legitimately matched everything.
+
+    So the response tells you. `meta.ignored_params` lists what was thrown away,
+    with `did_you_mean` when the miss was only grammatical number:
+
+    ```json
+    "meta": {
+      "total": 1475149, "limit": 10, "offset": 0,
+      "ignored_params": [
+        { "param": "country", "did_you_mean": "countries" },
+        { "param": "skil" }
+      ]
+    }
+    ```
+
+    **Check it before trusting a filtered result.** The key is absent on a clean
+    request, never `[]`, so its presence alone is the signal. `searchJobs`,
+    `agentSearchJobs`, `searchCompanies` and `getJobFacets` all report — and
+    `getJobFacets` grows a `meta` block it otherwise does not have. The report is
+    capped at ten entries.
+
+    `searchCompanies` checks against its OWN vocabulary: a jobs facet sent there
+    (`?seniority=senior`) is a real facet name, but not one company search reads,
+    so it is ignored and reported.
 servers:
   - url: https://freehire.me/api/v1
 security: []
@@ -1416,6 +1446,17 @@ components:
                 type: object
                 additionalProperties:
                   type: number
+        meta:
+          type: object
+          additionalProperties: true
+          description: |
+            Present ONLY when the request carried a parameter no filter read.
+            A clean request answers `{"data": ...}` with no meta block at all.
+          properties:
+            ignored_params:
+              type: array
+              items:
+                $ref: "#/components/schemas/IgnoredParam"
     CompanySummary:
       type: object
       additionalProperties: true
@@ -1575,6 +1616,31 @@ components:
           description: The page size actually applied, after clamping.
         offset:
           type: integer
+        ignored_params:
+          type: array
+          description: |
+            Present ONLY when the request carried a parameter no filter read —
+            a clean request omits the key entirely rather than sending `[]`.
+            **Check it.** A misspelled filter does not fail; it is dropped, and
+            the unfiltered result that comes back is indistinguishable from a
+            genuine one.
+          items:
+            $ref: "#/components/schemas/IgnoredParam"
+    IgnoredParam:
+      type: object
+      required:
+        - param
+      properties:
+        param:
+          type: string
+          description: The query parameter that was received and not used.
+        did_you_mean:
+          type: string
+          description: |
+            The vocabulary's name for it, when the only mistake was grammatical
+            number — most facets are plural, so `country` resolves to
+            `countries`. Absent when nothing is close enough; a guess would
+            mislead more than silence.
     ErrorEnvelope:
       type: object
       required:
