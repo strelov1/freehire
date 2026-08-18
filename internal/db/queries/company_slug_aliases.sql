@@ -54,7 +54,10 @@ SELECT DISTINCT canonical_slug FROM company_slug_aliases;
 -- is normalize.CompanyKey — a repeating legal-form strip no SQL expression should reproduce,
 -- since a second implementation of that rule is the bug this whole change removes.
 SELECT company_slug AS slug,
-       ((array_agg(company ORDER BY created_at DESC))[1])::text AS name,
+       -- id breaks the tie: two rows sharing a created_at would otherwise pick a name
+       -- arbitrarily, and the name decides the CANONICAL SLUG — so a dry run a human read
+       -- could differ from what --apply then does.
+       ((array_agg(company ORDER BY created_at DESC, id DESC))[1])::text AS name,
        count(*) FILTER (WHERE closed_at IS NULL)::int AS job_count
 FROM jobs
 WHERE company_slug <> ''
