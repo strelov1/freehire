@@ -217,6 +217,24 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
+	// Claim a batch of live, unleased removals by stamping claimed_at.
+	//
+	// Deliberately has NO `EXISTS (SELECT 1 FROM jobs ...)` guard, unlike
+	// ClaimSearchOutboxBatch. That query skips entries whose job closed or became a duplicate,
+	// because there is nothing left to index. Here the opposite holds: a job that is closed,
+	// demoted, or hard-deleted is exactly what this queue exists to act on, and a removal needs
+	// only the primary key. Adding the guard would make the queue skip every entry it was
+	// created for.
+	//
+	// Claim order is insertion order (the id index), not freshest-first. Indexing sorts by
+	// job_posted_at because a searcher notices a missing new posting sooner than a missing old
+	// one; for removal one stale document is as wrong as another, so the simpler order wins and
+	// the partial index serves it directly.
+	//
+	// FOR UPDATE OF o locks only queue rows; SKIP LOCKED lets concurrent workers take disjoint
+	// rows; the lease predicate reclaims entries whose worker died (stale claimed_at), so no
+	// separate reaper process is needed.
+	ClaimSearchDeleteOutboxBatch(ctx context.Context, arg ClaimSearchDeleteOutboxBatchParams) ([]ClaimSearchDeleteOutboxBatchRow, error)
 	// Claim a batch of live, unleased entries for OPEN canonical jobs, freshest job
 	// first, by stamping claimed_at.
 	//
@@ -478,6 +496,10 @@ type Querier interface {
 	// This is an uncapped full-table GROUP BY over the whole jobs table, returning a row
 	// per company. It is computed once per prune run, not per batch.
 	CompanyTechEvidence(ctx context.Context) ([]CompanyTechEvidenceRow, error)
+	// Drop the entries for removals that landed. Deleting a document that was never indexed is
+	// a no-op in Meilisearch, so "landed" includes the common case where the job had no document
+	// to begin with — there is nothing to distinguish and nothing to retry.
+	CompleteSearchDeleteOutbox(ctx context.Context, ids []int64) error
 	// Promote a suggested link to a confirmed one: the suggestion becomes job_id with
 	// link_source 'manual'. No-op (0 rows) when there is no pending suggestion.
 	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
@@ -742,6 +764,12 @@ type Querier interface {
 	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
 	// absent.
 	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
+	// Housekeeping: drop dead-lettered entries older than the cutoff.
+	//
+	// Note what this does NOT reap: entries whose job row is gone. For search_outbox that is
+	// garbage, since a vanished job cannot be indexed. Here it is the whole point — cmd/prune
+	// hard-deletes jobs, and their documents still have to leave the index.
+	DeleteDeadSearchDeleteOutbox(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	// Unlink Discord. Returns the affected row count: 0 means there was no link.
 	DeleteDiscordLink(ctx context.Context, userID int64) (int64, error)
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
@@ -1043,6 +1071,9 @@ type Querier interface {
 	// failed_at is how the caller learns an entry dead-lettered, which is what decides the
 	// worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Record an attempt against entries whose removal failed, dead-lettering them once they pass
+	// max_attempts so a permanently poisonous entry stops being reclaimed by the lease forever.
+	FailSearchDeleteOutbox(ctx context.Context, arg FailSearchDeleteOutboxParams) error
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
