@@ -77,6 +77,26 @@ info:
     could not run and let the request through rather than failing it; treat it as
     "unknown", not as "unlimited".
 
+    ## Please say who you are
+
+    Not required, not validated, and nothing behaves differently without it —
+    every caller gets the same budget and the same answers. It is a request.
+
+    Send a `User-Agent` naming your project:
+
+    ```
+    acme/job-sync/1.4 (+https://github.com/acme/job-sync)
+    ```
+
+    `owner/project` is the part that matters; the version and contact URL are
+    useful if you have them. What it buys you is a message before a limit or a
+    field changes, instead of a `429` as first notice — a default library
+    user-agent is indistinguishable from a thousand others, so there is nobody
+    to warn.
+
+    If identification ever gates anything, it will be through a key we issue,
+    not a string you set yourself.
+
     ## An unknown PARAMETER is dropped, and says so
 
     A parameter no filter reads is ignored rather than refused, so old saved

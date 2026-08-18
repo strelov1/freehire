@@ -43,6 +43,11 @@ Sitemap: ${url.origin}/sitemap.xml
 # MCP:       ${url.origin}/mcp
 # CLI:       ${url.origin}/cli
 #
+# Please send a User-Agent naming your project, like
+#   acme/job-sync/1.4 (+https://github.com/acme/job-sync)
+# Not required, nothing checks it. It just lets us warn you before a limit
+# changes instead of you meeting a 429 cold.
+#
 # One search: GET ${url.origin}/api/v1/jobs/search?q=golang
 # Full descriptions in one call: GET ${url.origin}/api/v1/agent/jobs/search
 `;
