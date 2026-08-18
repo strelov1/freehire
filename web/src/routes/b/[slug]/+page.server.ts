@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { ApiError } from '$lib/api';
 import { serverApi } from '$lib/server/api';
+import { rethrowUpstream } from '$lib/server/upstream';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -17,7 +18,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
     board = await client.getBoard(params.slug);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) throw error(404, 'Board not found');
-    throw e;
+    rethrowUpstream(e);
   }
 
   const initial = await client.searchJobs(new URLSearchParams(board.query), LIMIT, 0);

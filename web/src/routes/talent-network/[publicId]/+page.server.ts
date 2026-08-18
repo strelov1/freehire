@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { ApiError } from '$lib/api';
 import { serverApi } from '$lib/server/api';
+import { rethrowUpstream } from '$lib/server/upstream';
 import type { PageServerLoad } from './$types';
 
 // The public, unauthenticated Talent Network profile page: load one candidate's profile
@@ -16,6 +17,6 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
     return { profile };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) error(404, 'Profile not found');
-    throw e;
+    rethrowUpstream(e);
   }
 };

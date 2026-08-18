@@ -2,6 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { ApiError, MovedError } from '$lib/api';
 import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import { serverApi } from '$lib/server/api';
+import { rethrowUpstream } from '$lib/server/upstream';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -55,7 +56,7 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
     if (e instanceof ApiError && e.status === 404) {
       error(404, 'Company not found');
     }
-    throw e;
+    rethrowUpstream(e);
   }
 
   const initial = await search;

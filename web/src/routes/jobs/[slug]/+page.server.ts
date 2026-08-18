@@ -9,6 +9,7 @@ import {
 } from '$lib/collections';
 import { resolveSeeAlsoMark } from '$lib/seeAlsoMark';
 import { serverApi } from '$lib/server/api';
+import { rethrowUpstream } from '$lib/server/upstream';
 import type { FacetCounts, Job } from '$lib/types';
 import type { PageServerLoad } from './$types';
 import { must } from '$lib/utils';
@@ -106,7 +107,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
   const jobPromise = api.getJob(params.slug).catch((e) => {
     if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
-    throw e;
+    rethrowUpstream(e);
   });
   const seeAlsoPromise = jobPromise.then((job) => buildSeeAlso(job, api));
 

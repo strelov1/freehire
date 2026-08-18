@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { ApiError } from '$lib/api';
 import { serverApi } from '$lib/server/api';
+import { rethrowUpstream } from '$lib/server/upstream';
 import type { PageServerLoad } from './$types';
 
 // Rows per page of the full openings-by-location list. Kept within the endpoint's cap so
@@ -13,7 +14,7 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   const [job, result] = await Promise.all([
     api.getJob(params.slug).catch((e) => {
       if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
-      throw e;
+      rethrowUpstream(e);
     }),
     api.getJobCopies(params.slug, PAGE_SIZE, offset).catch(() => ({ copies: [], total: 0 })),
   ]);
