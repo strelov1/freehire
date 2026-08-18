@@ -7,6 +7,7 @@ const meta = {
   tags: ['autodocs'],
   argTypes: {
     side: { control: 'select', options: ['top', 'right', 'bottom', 'left'] },
+    narrowTrigger: { control: 'boolean' },
   },
 } satisfies Meta<typeof TooltipDemo>;
 
@@ -23,5 +24,16 @@ export const LongContent: Story = {
     side: 'top',
     label:
       'Reposted three times in six months with no change to the description — the pattern the ghost-job signal looks for.',
+  },
+};
+// Regression guard for the `w-max` fix: a tiny icon-only trigger is a tiny
+// containing block, which used to collapse long content to one word per line
+// regardless of max-w-xs — see tooltip.svelte's positioning comment.
+export const NarrowTriggerLongContent: Story = {
+  args: {
+    side: 'bottom',
+    narrowTrigger: true,
+    label:
+      'Click a filter once to include it, again to exclude it, again to clear it. See how filters work.',
   },
 };

@@ -218,11 +218,7 @@
       <Info class="size-3.5" aria-hidden="true" />
     </button>
     {#snippet content()}
-      <span class="block">
-        Most filters are three-state: click once to require a value, again to rule it out — a
-        company you already applied to, a source you don't trust, a skill you're done with — and a
-        third time to clear it.
-      </span>
+      <span class="block">Click a filter once to include it, again to exclude it, again to clear it.</span>
       <a
         href={resolve('/features/advanced-search')}
         class="mt-1.5 block font-medium text-foreground underline-offset-2 hover:underline"

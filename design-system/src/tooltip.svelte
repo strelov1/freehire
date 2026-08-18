@@ -97,12 +97,20 @@
   {@render children()}
   {#if visible}
     <!-- A <span>, not a <div>: the wrapper is a <span>, which only accepts
-         phrasing content. Absolute positioning blockifies it either way. -->
+         phrasing content. Absolute positioning blockifies it either way.
+
+         `w-max` (not just `max-w-xs`) is load-bearing on a small trigger. Left
+         at `width: auto`, a `left-1/2 -translate-x-1/2`-positioned box is sized
+         by CSS shrink-to-fit against the *containing block's* available width —
+         here, the trigger span itself. A tiny icon-button trigger makes that
+         available width tiny too, so long content collapsed to one word per
+         line no matter how generous max-w-xs was. `w-max` sizes to the
+         content's own max-content width instead, still capped by max-w-xs. -->
     <span
       id={tooltipId}
       role="tooltip"
       class={cn(
-        'absolute z-popover max-w-xs rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md',
+        'absolute z-popover w-max max-w-xs rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md',
         positions[side],
         className,
       )}
