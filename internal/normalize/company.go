@@ -20,9 +20,22 @@ import (
 var legalSuffixes = map[string]struct{}{
 	"corporation": {}, "limited": {}, "gmbh": {}, "corp": {}, "llc": {}, "ltd": {},
 	"inc": {}, "incorporated": {}, "plc": {}, "llp": {}, "lp": {}, "cic": {}, "cio": {},
-	"srl": {}, "pty": {}, "bv": {}, "nv": {},
-	"ab": {}, "ag": {}, "kg": {}, "oy": {}, "sa": {}, "as": {}, "co": {},
+	"srl": {}, "pty": {}, "bv": {}, "nv": {}, "aps": {},
+	"ab": {}, "ag": {}, "kg": {}, "oy": {}, "sa": {}, "as": {}, "se": {}, "co": {},
 }
+
+// Two tails that look like they belong here and deliberately do not.
+//
+// "spa" is the Italian S.p.A. AND the literal word: "Hilton Luxor Resort & Spa" carries more
+// open jobs than any genuine S.p.A. in the catalogue, so stripping it would merge a hotel into
+// a resort chain. This is the collision the excluded-"co" comment feared, in the one place it
+// is real.
+//
+// "group" is not a corporate form at all, it is part of a brand. Every "X Group" / "X" pair in
+// the catalogue does look like one employer (Thales, Securitas, Bosch), but "group" is an
+// ordinary word by which two businesses legitimately differ, and merging on it is a judgement.
+// Judgements belong to cmd/merge-companies, which shows a dry run, elects by job count and
+// records a reversible alias — not to a pure function applied silently to every new posting.
 
 // CompanySlug is [Slug] with any trailing corporate forms removed: "Arch Capital Group Ltd."
 // becomes "arch-capital-group". An empty or untransliterable name yields "".

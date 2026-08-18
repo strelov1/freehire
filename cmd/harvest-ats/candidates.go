@@ -3,6 +3,7 @@ package main
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/normalize"
@@ -42,12 +43,13 @@ func guessedCandidates(site companySite) []hit {
 // already tried three ways is not new evidence).
 const maxCandidateSlugs = 3
 
-// legalFormSuffixes are the company-form tails a platform profile slug commonly carries while
-// the board itself does not (linkedin.com/company/doodle-ag → the teamtailor board `doodle`).
-var legalFormSuffixes = []string{
-	"-ag", "-gmbh", "-inc", "-llc", "-ltd", "-limited", "-bv", "-nv", "-sa", "-se",
-	"-srl", "-spa", "-oy", "-ab", "-as", "-aps", "-plc", "-pty", "-co", "-corp", "-group",
-}
+// boardNameTails are the tails a platform profile slug carries while the board does not, BEYOND
+// the corporate forms normalize.IsLegalForm knows. They are here rather than in the shared list
+// because they are not legal forms and must not re-key the catalogue: "group" is part of a brand
+// name, and "spa" collides with the literal word. Over-trimming is safe here and only here —
+// this produces board-id GUESSES, where an extra candidate costs one lookup and a missing one
+// loses the board.
+var boardNameTails = []string{"group", "spa"}
 
 // careersHostPrefixes are the sub-domains a company puts its careers site on. Their labels
 // are not the company, so `jobs.picnic.app` must contribute `picnic`, not `jobs`.
@@ -92,12 +94,25 @@ func candidateSlugs(site companySite) []string {
 // trimLegalForm drops a trailing company-form label from a slug (`delivery-hero-se` →
 // `delivery-hero`), which boards routinely omit.
 func trimLegalForm(slug string) string {
-	for _, suffix := range legalFormSuffixes {
-		if bare := strings.TrimSuffix(slug, suffix); bare != slug && bare != "" {
-			return bare
-		}
+	head, tail, ok := lastSegment(slug)
+	if !ok {
+		return slug
+	}
+	if normalize.IsLegalForm(tail) || slices.Contains(boardNameTails, tail) {
+		return head
 	}
 	return slug
+}
+
+// lastSegment splits a slug before its final hyphen, so trimLegalForm can judge that segment
+// on its own. Returns ok=false for a slug with no hyphen — there is no tail to consider, and
+// trimming the whole thing would leave nothing to guess a board from.
+func lastSegment(slug string) (head, tail string, ok bool) {
+	i := strings.LastIndexByte(slug, '-')
+	if i <= 0 {
+		return "", "", false
+	}
+	return slug[:i], slug[i+1:], true
 }
 
 // domainLabel returns the company-bearing label of a website's host: the registrable name with
@@ -137,11 +152,11 @@ func profileSlugs(profileURL string) []string {
 	}
 	slug := m[1]
 	out := []string{slug}
-	for _, suffix := range legalFormSuffixes {
-		if bare := strings.TrimSuffix(slug, suffix); bare != slug && bare != "" {
-			out = append(out, bare)
-			break
-		}
+	// Both spellings are worth trying: the profile keeps the form the board drops, but a
+	// board is occasionally registered WITH it, so the trimmed slug is an extra candidate
+	// rather than a replacement.
+	if bare := trimLegalForm(slug); bare != slug {
+		out = append(out, bare)
 	}
 	return out
 }

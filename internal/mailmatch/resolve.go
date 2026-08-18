@@ -89,5 +89,5 @@ func Resolve(email Email, candidates []Candidate) Match {
 // ExtractCompany produces (lowercased, legal-suffix stripped) so the two compare.
 func normalizeForMatch(company string) string {
 	s := strings.ToLower(strings.TrimSpace(company))
-	return strings.TrimSpace(stripFirstSuffix(s, legalSuffixes))
+	return strings.TrimSpace(stripLegalForm(s))
 }

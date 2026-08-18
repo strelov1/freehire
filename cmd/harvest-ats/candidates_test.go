@@ -127,3 +127,33 @@ func TestProvidersForID(t *testing.T) {
 		})
 	}
 }
+
+// TestTrimLegalForm_UsesTheSharedFormList proves harvest no longer carries its own copy of the
+// legal-form vocabulary. The tokens below are ones the shared list has and harvest's private
+// list did not, so before the two were joined a board registered under the bare name was simply
+// never guessed.
+func TestTrimLegalForm_UsesTheSharedFormList(t *testing.T) {
+	cases := map[string]string{
+		"doodle-kg":     "doodle",        // German GmbH & Co. KG
+		"doodle-cic":    "doodle",        // UK community interest company
+		"doodle-lp":     "doodle",        // limited partnership
+		"acme-robotics": "acme-robotics", // nothing to trim
+	}
+	for in, want := range cases {
+		if got := trimLegalForm(in); got != want {
+			t.Errorf("trimLegalForm(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestTrimLegalForm_KeepsItsOwnBoardTails guards the tails harvest needs that are NOT legal
+// forms, and must therefore stay out of the catalogue's slug rule: "group" is part of a brand
+// name, and "spa" collides with the literal word (a resort's "& Spa"). Guessing an extra board
+// candidate is free; merging two employers is not.
+func TestTrimLegalForm_KeepsItsOwnBoardTails(t *testing.T) {
+	for in, want := range map[string]string{"bosch-group": "bosch", "oggi-lavoro-spa": "oggi-lavoro"} {
+		if got := trimLegalForm(in); got != want {
+			t.Errorf("trimLegalForm(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

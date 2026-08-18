@@ -18,8 +18,11 @@ import (
 // An empty or untransliterable name yields an empty slug, which the write path
 // treats as "no company".
 //
-// It deliberately does not strip legal suffixes (LLC, Inc, ООО); that is a noted
-// future refinement.
+// It deliberately does not strip legal suffixes (LLC, Inc, ООО) — that is
+// [CompanySlug]'s job, and the two are different keys. Slug is faithful to the name it
+// was given, which is what a URL path segment and a job's public slug need; CompanySlug
+// answers "which employer is this", where "RingCentral" and "RingCentral, Inc." must not
+// be two answers. Reach for CompanySlug whenever the value keys a COMPANY.
 func Slug(name string) string {
 	name = unidecode.Unidecode(name)
 	var b strings.Builder

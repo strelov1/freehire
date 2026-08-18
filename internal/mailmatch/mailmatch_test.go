@@ -40,3 +40,20 @@ func TestExtractCompany(t *testing.T) {
 		})
 	}
 }
+
+// TestExtractCompany_UsesTheSharedFormList proves mail matching strips the same corporate
+// forms the catalogue keys companies by. It carried its own six-token list, so a sender
+// writing "Acme Limited" or "Acme GmbH & Co. KG" yielded a name that matched no company —
+// and a mail that matches no company links to no application, silently.
+func TestExtractCompany_UsesTheSharedFormList(t *testing.T) {
+	for from, want := range map[string]string{
+		"Acme Limited":       "acme",
+		"Acme Robotics PLC":  "acme robotics",
+		"Adyen N.V.":         "adyen",
+		"Acme Recruiting AS": "acme recruiting",
+	} {
+		if got := ExtractCompany(from, ""); got != want {
+			t.Errorf("ExtractCompany(%q) = %q, want %q", from, got, want)
+		}
+	}
+}

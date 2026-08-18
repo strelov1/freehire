@@ -34,13 +34,22 @@ module's single legal-form rule and closes the hole each existing implementation
       Two tests changed rather than deleted: `DoesNotStripCo` inverts to `StripsCo` on the
       catalogue evidence, and `Community Co CIC` now yields `community` because the strip
       repeats.
-- [ ] 1.4 Make `cmd/harvest-ats`'s `trimLegalForm` delegate too, deleting
+- [x] 1.4 Make `cmd/harvest-ats`'s `trimLegalForm` delegate too, deleting
       `legalFormSuffixes`. Note `-se` and `-group` are in that list and in no other; decide
       each on evidence and record the decision in the token set's comment.
-- [ ] 1.5 Add a guard test that the module defines exactly one legal-form token set — a grep-
+      Decided on prod data: `se` and `aps` JOIN the shared list (Capgemini SE, SAP SE, Allianz
+      SE are plain Societas Europaea). `spa` and `group` do NOT — "Hilton Luxor Resort & Spa"
+      outweighs every real S.p.A. in the catalogue, and `group` is a brand component, not a
+      form. Harvest keeps those two as `boardNameTails`, which is sound because it emits board
+      GUESSES: an extra candidate costs a lookup, a merged employer costs a company.
+- [x] 1.5 Add a guard test that the module defines exactly one legal-form token set — a grep-
       style test over the package sources, in the shape of
       `internal/db/folded_slug_rule_test.go`, because three lists is how this started.
-- [ ] 1.6 Update the doc comments that are now wrong: `normalize.Slug`'s "deliberately does not
+      It was FOUR: the guard immediately found `internal/mailmatch`, whose six-token list meant
+      mail from "Acme Limited" resolved to a name no company matched — and an unmatched mail
+      links to no application silently. Unified too. Guard proven by planting a decoy list and
+      watching it fail before removing it.
+- [x] 1.6 Update the doc comments that are now wrong: `normalize.Slug`'s "deliberately does not
       strip legal suffixes … a noted future refinement" should point at `CompanySlug`, and
       `register.go`'s "Co is a deliberate omission" is contradicted by the catalogue evidence
       (297 companies on `-co`, all `& Co.`, zero bad collisions) and must not be carried over.
