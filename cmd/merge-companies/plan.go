@@ -101,7 +101,9 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 				JobCount: c.JobCount,
 			})
 		}
-		if len(m.Aliases) == 0 || m.Jobs < minJobs {
+		// len(m.Aliases) is always >= 1 here: the group holds at least two companies and
+		// exactly one of them wins.
+		if m.Jobs < minJobs {
 			continue
 		}
 		out = append(out, m)

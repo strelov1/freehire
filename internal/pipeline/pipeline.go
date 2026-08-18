@@ -243,6 +243,18 @@ type AliasLookup interface {
 // batch, so it resolves one company at a time and memoizes.
 type companyCanonical func(derivedSlug string) string
 
+// resolveAll maps a batch of derived slugs through the registry and re-dedupes, since two
+// spellings can resolve onto one canon. Both coverage paths ask through it, so neither can
+// hand the lookup a slug the upsert would not write.
+//
+// It rewrites derived in place; both callers hand it a slice distinctSlugs just built.
+func resolveAll(c companyCanonical, derived []string) []string {
+	for i, s := range derived {
+		derived[i] = canonicalOf(c, s)
+	}
+	return slices.Compact(slices.Sorted(slices.Values(derived)))
+}
+
 // canonicalOf is the ONE place a company slug becomes final. Both consumers read through it:
 // the aggregator-coverage gate, so it asks about the slug the catalogue actually holds, and
 // the upsert, so it stores that same value.
@@ -705,11 +717,7 @@ func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.Compan
 	// The gate is asked about the CANONICAL slugs, because saveOne will ask it with the
 	// canonical slug it is about to store. Resolving here rather than re-deriving there is
 	// what makes the two sides one value instead of two that have to be kept equal.
-	slugs := distinctCompanySlugs(raw)
-	for i, s := range slugs {
-		slugs[i] = canonicalOf(canon, s)
-	}
-	slugs = slices.Compact(slices.Sorted(slices.Values(slugs)))
+	slugs := resolveAll(canon, distinctCompanySlugs(raw))
 	if len(slugs) == 0 {
 		return nil
 	}
@@ -868,11 +876,7 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 		// Resolve before asking, for the same reason the buffered path does: the probe is
 		// deciding whether a posting is worth a detail request, and the answer has to be
 		// about the employer the catalogue actually holds.
-		slugs := distinctSlugs(companies)
-		for i, s := range slugs {
-			slugs[i] = canonicalOf(canon, s)
-		}
-		slugs = slices.Compact(slices.Sorted(slices.Values(slugs)))
+		slugs := resolveAll(canon, distinctSlugs(companies))
 		if len(slugs) == 0 {
 			return nil
 		}
