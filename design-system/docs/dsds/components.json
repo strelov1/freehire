@@ -937,6 +937,45 @@
           "file": "../../src/country-flag.stories.ts"
         }
       ]
+    },
+    {
+      "id": "component.brand-mark",
+      "type": "component",
+      "name": "BrandMark",
+      "description": "A brand's logo glyph, drawn from its own SVG path + hex color — always renders in that brand color, flat on the page (not on a colored badge, unlike ProviderIcon's fixed OAuth switch). The caller supplies the path/hex/title (e.g. the app's own techmarks.ts, sourced from simple-icons); this primitive takes no icon-set dependency itself.",
+      "source": {
+        "file": "../../src/brand-mark.svelte"
+      },
+      "props": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "SVG path data, drawn in a 0 0 24 24 viewBox."
+        },
+        {
+          "name": "hex",
+          "type": "string",
+          "required": true,
+          "description": "Brand color, without the leading #."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Accessible name, set as the svg's aria-label."
+        },
+        {
+          "name": "class",
+          "type": "string",
+          "default": "size-4"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/brand-mark.stories.ts"
+        }
+      ]
     }
   ]
 }
