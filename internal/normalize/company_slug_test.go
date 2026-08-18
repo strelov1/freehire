@@ -28,6 +28,14 @@ func TestCompanySlug(t *testing.T) {
 		{"form word inside a name is kept", "Limited Brands", "limited-brands"},
 		{"a name that is only a form is not erased", "Limited", "limited"},
 		{"no form to strip", "Yandex", "yandex"},
+		// An apostrophe is not a word break, so it must not become one in the key. Slug turns
+		// "Kohl's" into kohl-s, and once the canon is DERIVED from the name that artefact
+		// could no longer lose to the clean sibling spelling — it elected kohl-s over kohls
+		// across 2,939 postings.
+		{"possessive apostrophe", "Kohl's", "kohls"},
+		{"possessive apostrophe, US style", "Domino's", "dominos"},
+		{"apostrophe inside a name", "Brink's Incorporated", "brinks"},
+		{"typographic apostrophe", "Macy\u2019s", "macys"},
 		{"a symbol word is not part of the key", "Acme ™", "acme"},
 		{"a non-latin word is kept and transliterated", "Яндекс ООО", "iandeks-ooo"},
 		{"empty stays empty", "", ""},

@@ -57,7 +57,7 @@ var legalSuffixes = map[string]struct{}{
 // A single-word name is never stripped: "Limited" stays "limited", because an empty slug
 // silently matches nothing while a visibly odd company row can be found and fixed.
 func CompanySlug(name string) string {
-	words := strings.FieldsFunc(name, isWordBreak)
+	words := strings.FieldsFunc(dropApostrophes(name), isWordBreak)
 	for len(words) > 1 {
 		if _, isForm := legalSuffixes[letters(words[len(words)-1])]; !isForm {
 			break
@@ -65,6 +65,18 @@ func CompanySlug(name string) string {
 		words = words[:len(words)-1]
 	}
 	return Slug(strings.Join(words, " "))
+}
+
+// dropApostrophes removes the possessive/elision marks a name carries so they cannot become
+// word breaks in the key. "Kohl's" is one word and belongs at `kohls`, which is also what a
+// person types; [Slug] alone renders it `kohl-s`.
+//
+// It matters more than it looks. Once the canonical slug is DERIVED from a name rather than
+// chosen among stored slugs, that artefact can no longer lose to the clean sibling spelling —
+// it elected `kohl-s` over `kohls` across 2,939 postings. Both the ASCII and the typographic
+// mark are covered, since sources use either.
+func dropApostrophes(name string) string {
+	return strings.NewReplacer("'", "", "\u2019", "", "\u02bc", "").Replace(name)
 }
 
 // isWordBreak reports whether a rune separates two words of a company name. Everything [Slug]
