@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -43,9 +44,10 @@ func TestIngestStatusEndpoint(t *testing.T) {
 		IngestedTotal int     `json:"ingested_total"`
 	}
 	type statusData struct {
-		Overall     string          `json:"overall"`
-		GeneratedAt string          `json:"generated_at"`
-		Providers   []providerEntry `json:"providers"`
+		Overall        string          `json:"overall"`
+		GeneratedAt    string          `json:"generated_at"`
+		LastJobAddedAt *string         `json:"last_job_added_at"`
+		Providers      []providerEntry `json:"providers"`
 	}
 	type envelope struct {
 		Data statusData `json:"data"`
@@ -72,9 +74,9 @@ func TestIngestStatusEndpoint(t *testing.T) {
 		return env, string(raw)
 	}
 
-	// --- Empty fleet: 200, operational, no providers ---------------------------
-	if env, _ := get(t); env.Data.Overall != "operational" || len(env.Data.Providers) != 0 {
-		t.Fatalf("empty fleet: overall=%q providers=%d, want operational/0", env.Data.Overall, len(env.Data.Providers))
+	// --- Empty fleet: 200, operational, no providers, no jobs yet --------------
+	if env, _ := get(t); env.Data.Overall != "operational" || len(env.Data.Providers) != 0 || env.Data.LastJobAddedAt != nil {
+		t.Fatalf("empty fleet: overall=%q providers=%d last_job_added_at=%v, want operational/0/nil", env.Data.Overall, len(env.Data.Providers), env.Data.LastJobAddedAt)
 	}
 
 	// --- Seed boards in controlled states --------------------------------------
@@ -134,7 +136,20 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	// through from the sources registry into the DTO.
 	healthy("jobstash", "", 500)
 
+	// One open, public job with a known created_at, so last_job_added_at has
+	// something to report.
+	latestJobAddedAt := statusNow.Add(-5 * time.Minute)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, public_slug, created_at)
+		VALUES ('test', 'status-latest', 'http://example.test', 'Job', 'status-latest-job', $1)`, latestJobAddedAt); err != nil {
+		t.Fatalf("seed latest job: %v", err)
+	}
+
 	env, raw := get(t)
+
+	if env.Data.LastJobAddedAt == nil || *env.Data.LastJobAddedAt != latestJobAddedAt.Format(time.RFC3339) {
+		t.Errorf("last_job_added_at = %v, want %s", env.Data.LastJobAddedAt, latestJobAddedAt.Format(time.RFC3339))
+	}
 
 	// Overall folds every provider into one fleet rollup: 21 boards, 11 cooled → 10/21
 	// served (~0.48) with a fresh success present → degraded. Note it is NOT down even

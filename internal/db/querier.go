@@ -1601,6 +1601,14 @@ type Querier interface {
 	// Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
 	// predicate.
 	LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error)
+	// created_at of the most recently added open, public job — the "is the pipeline
+	// still writing rows" signal for the public /status endpoint. Same predicate and
+	// ordering as ListJobs above, so it is served by the same jobs_open_created_idx
+	// (an index scan for one row, not the full scan CountCatalogueScale needs) and
+	// safe on a live request path. Wrapped in a scalar subquery so this always
+	// returns exactly one row — NULL for an empty catalogue — rather than the
+	// no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
+	LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz, error)
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)

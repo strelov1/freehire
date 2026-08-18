@@ -162,6 +162,22 @@ SELECT similar_job_ids
 FROM jobs
 WHERE id = sqlc.arg(id)::bigint;
 
+-- name: LatestOpenJobAddedAt :one
+-- created_at of the most recently added open, public job — the "is the pipeline
+-- still writing rows" signal for the public /status endpoint. Same predicate and
+-- ordering as ListJobs above, so it is served by the same jobs_open_created_idx
+-- (an index scan for one row, not the full scan CountCatalogueScale needs) and
+-- safe on a live request path. Wrapped in a scalar subquery so this always
+-- returns exactly one row — NULL for an empty catalogue — rather than the
+-- no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
+SELECT (
+    SELECT created_at
+    FROM jobs
+    WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+) AS last_job_added_at;
+
 -- name: CountCatalogueScale :one
 -- Exact open-job and company totals for the published catalogue-scale snapshot
 -- (internal/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:

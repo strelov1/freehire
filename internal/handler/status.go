@@ -107,12 +107,19 @@ type statusProvider struct {
 
 // IngestStatus serves the public, unauthenticated ingest-fleet status: a
 // per-provider health rollup over board_health with a derived operational/
-// degraded/down status per provider and an overall fleet status. Sanitized by
-// construction — the DTO carries no error text or board identifier — so no
-// internal detail can leak. An empty fleet yields overall "operational" with no
-// providers.
+// degraded/down status per provider and an overall fleet status, plus
+// last_job_added_at — the created_at of the most recently added open, public
+// job, a live signal that the pipeline is actually writing rows (independent
+// of per-provider crawl health). Sanitized by construction — the DTO carries
+// no error text or board identifier — so no internal detail can leak. An
+// empty fleet yields overall "operational" with no providers and a null
+// last_job_added_at.
 func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 	rows, err := h.queries.ProviderHealthRollup(c.Context())
+	if err != nil {
+		return err
+	}
+	lastJobAddedAt, err := h.queries.LatestOpenJobAddedAt(c.Context())
 	if err != nil {
 		return err
 	}
@@ -145,9 +152,10 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"data": fiber.Map{
-			"overall":      fleetStatus(rolls, now),
-			"generated_at": now.Format(time.RFC3339),
-			"providers":    providers,
+			"overall":           fleetStatus(rolls, now),
+			"generated_at":      now.Format(time.RFC3339),
+			"last_job_added_at": isoOrNil(lastJobAddedAt),
+			"providers":         providers,
 		},
 	})
 }
