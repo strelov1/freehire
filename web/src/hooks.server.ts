@@ -76,8 +76,34 @@ const cacheControl: Handle = async ({ event, resolve }) => {
   return response;
 };
 
+// Narrow what SvelteKit advertises in the response's `Link` header. The default
+// policy (`type === 'js' || type === 'css'`) walks the whole module graph of the
+// matched route, and this app's graph is wide: a route resolves to ~85 chunks,
+// most of them under 1.5KB. Every one of them became a `rel=modulepreload` the
+// browser started fetching before it had parsed a byte of HTML.
+//
+// On a fast connection that is free. On a throttled one it is the dominant cost:
+// ~85 highest-priority streams share the link with the single render-blocking
+// stylesheet, and Lighthouse (mobile, Slow 4G) measured LCP 6.2s on `/` and 7.0s
+// on a job page with 89-93% of it spent in render delay — not in TTFB (~0.5-0.7s),
+// and with no image or web font involved anywhere in the LCP.
+//
+// So: keep the stylesheet, keep the two entry modules (they are on the critical
+// path either way and are what the inline bootstrap immediately imports), and let
+// the rest be discovered through their own import statements. That trades a wide
+// burst for a slightly deeper waterfall, which is the right way round when the
+// burst is what delays first paint.
+//
+// Position in `sequence()` is not arbitrary: unlike `transformPageChunk`, whose
+// hooks are merged, the FIRST `preload` wins and later ones are ignored. Nothing
+// else sets one today — a second one added below this line would be dead code.
+const preloadPolicy: Handle = async ({ event, resolve }) =>
+  resolve(event, {
+    preload: ({ type, path }) => type === 'css' || path.includes('immutable/entry/'),
+  });
+
 // sentryHandle scopes each SSR request; it is a passthrough when init was skipped.
-export const handle = sequence(Sentry.sentryHandle(), locale, cacheControl);
+export const handle = sequence(Sentry.sentryHandle(), preloadPolicy, locale, cacheControl);
 
 // Reports uncaught SSR errors to Sentry; inert when init was skipped above.
 export const handleError = Sentry.handleErrorWithSentry();

@@ -3,6 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Warm the company-logo origin: every job row and company header renders an
+    <img> from it (CompanyLogo → $lib/logo), so a listing opens a connection to it
+    within the first paint, on every page that matters. Its handshake is otherwise
+    paid at the moment the first logo is needed.
+
+    Only this one origin gets a preconnect. googletagmanager.com is the other
+    candidate Lighthouse names, but it is loaded from $lib/analytics behind cookie
+    consent: outside a consent-required region it starts unprompted, inside one it
+    may never start at all, and a preconnect the visitor then never uses spends a
+    connection slot against the resources that do. dns-prefetch is the honest
+    weight for it — name resolution only, discarded cheaply if consent says no. -->
+    <link rel="preconnect" href="https://logo.freehire.me" crossorigin />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />

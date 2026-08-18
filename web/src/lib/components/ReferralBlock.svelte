@@ -3,7 +3,6 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { Button } from '$lib/ui';
-  import RequestReferralModal from './RequestReferralModal.svelte';
 
   // Shown on a vacancy and on the company page when the company has an approved referrer.
   // jobId is the optional source-vacancy context passed through to the request.
@@ -17,12 +16,37 @@
     jobId?: number;
   } = $props();
 
+  // The request form is imported on the click that opens it, not with the page.
+  // This block itself is small, but the modal behind it pulls in Dialog, FormField
+  // and the whole request flow — and it was landing in the route's module graph for
+  // every job and company page, which is every visitor paying for a form that only
+  // the few who actually ask for a referral ever open. Same lazy posture as shiki
+  // and easymde elsewhere.
+  //
+  // `$state.raw`: this holds a component constructor, which must be stored as-is —
+  // a deep proxy around it is both pointless and a hazard.
+  type RequestReferralModal = typeof import('./RequestReferralModal.svelte').default;
+  let Modal = $state.raw<RequestReferralModal | null>(null);
+  let loading = $state(false);
   let open = $state(false);
 
-  function ask() {
+  async function ask() {
     if (!isAuthenticated()) {
       openAuthDialog();
       return;
+    }
+    if (!Modal) {
+      // The button is disabled for the duration: on a slow connection the chunk is
+      // a visible wait, and a click that looks ignored invites a second one.
+      loading = true;
+      try {
+        Modal = (await import('./RequestReferralModal.svelte')).default;
+      } catch {
+        // Offline or a failed deploy swap — leave the button live so a retry works.
+        return;
+      } finally {
+        loading = false;
+      }
     }
     open = true;
   }
@@ -39,14 +63,9 @@
       directly if interested.
     </p>
   </div>
-  <Button variant="primary" size="sm" onclick={ask}>Ask for a referral</Button>
+  <Button variant="primary" size="sm" onclick={ask} disabled={loading}>Ask for a referral</Button>
 </section>
 
-{#if open}
-  <RequestReferralModal
-    {companySlug}
-    {companyName}
-    {jobId}
-    onClose={() => (open = false)}
-  />
+{#if open && Modal}
+  <Modal {companySlug} {companyName} {jobId} onClose={() => (open = false)} />
 {/if}
