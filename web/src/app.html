@@ -50,6 +50,18 @@
             document.documentElement.classList.add('ph-dismissed');
         } catch (e) {}
       })();
+      // And once more for the onboarding nudge above the job feed, which is the
+      // costliest of the three: it sits in the flow directly above the rows, so
+      // appearing after hydration moved the whole feed down. Mirrors the lifecycle
+      // in $lib/onboarding.ts — 'seen' and 'done' both retire the banner, anything
+      // else (including no entry at all) leaves it visible for a first-time visitor.
+      (function () {
+        try {
+          var o = localStorage.getItem('hire.onboarding');
+          if (o === 'seen' || o === 'done')
+            document.documentElement.classList.add('onboarding-seen');
+        } catch (e) {}
+      })();
     </script>
     <!-- Google Analytics is no longer bootstrapped inline here: it now loads via
     $lib/analytics (initTrackers), gated on cookie consent alongside PostHog. -->

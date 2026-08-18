@@ -57,8 +57,9 @@ export default {
       directives: {
         'script-src': [
           'self',
-          // Anti-FOUC script in app.html — theme + Product Hunt strip (see WARNING above).
-          'sha256-MW6zpEdH1zWlGWKLAC6RP63TxcORvBoLwbJTeRL+HD0=',
+          // Anti-FOUC script in app.html — theme + Product Hunt strip + onboarding
+          // nudge (see WARNING above).
+          'sha256-u3FGDCCLNrppO+D5gI/BmV8qq0wTVlA/OoPesWqF1Ts=',
           // Google Analytics: the gtag.js host. GA now loads from the same-origin
           // bundle ($lib/analytics, consent-gated), so no inline-script hash is
           // needed — only the external host it injects.

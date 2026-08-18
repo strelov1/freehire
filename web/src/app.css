@@ -76,3 +76,14 @@
 .ph-dismissed [data-ph-banner] {
   display: none;
 }
+
+/* Onboarding nudge: same arrangement as the strip above, for the same reason. It
+   sits directly above the job feed, so rendering it only after hydration pushed
+   every row down by 74px on a first visit — CrUX measured CLS 0.28 on the mobile
+   home page, with 31% of visits in "poor", while lab Lighthouse saw only 0.066
+   because it never replays a returning visitor's localStorage. Server-rendered
+   now; this class hides it before first paint for anyone who already dismissed or
+   completed it, and JobsView drops the node on mount. See $lib/onboarding.ts. */
+.onboarding-seen [data-onboarding-banner] {
+  display: none;
+}

@@ -175,16 +175,27 @@
   // the sole entry — once dismissed or completed it retires; there is no persistent
   // re-open control.
   let wizardOpen = $state(false);
-  let onboardingState = $state<OnboardingLifecycle>(browser ? loadOnboardingState() : 'unseen');
+  // Starts 'unseen' on both sides so the hydrated markup matches the server's; the
+  // stored value arrives on mount, by which point app.css has already hidden the
+  // banner for anyone who dismissed or completed it. Reading localStorage here
+  // instead would make the client disagree with the SSR output on the very first
+  // frame. Same shape as ProductHuntBanner's `dismissed`.
+  let onboardingState = $state<OnboardingLifecycle>('unseen');
   // The ephemeral post-onboarding Telegram-alert offer (set after the wizard, or on
   // mount to resume a pending alert after sign-in). Dismissible; not persisted.
   let alertBanner = $state<{ query: string; autostart: boolean } | null>(null);
   // Show only to an un-nudged visitor with no active facet filters AND no text query,
   // so a shared search/filter link is never interrupted (activeFilterCount ignores the
-  // query, so check it explicitly). Gated on `browser`: never SSR the banner.
+  // query, so check it explicitly).
+  //
+  // Deliberately NOT gated on `browser`. It was, and that is what made this banner
+  // the site's largest source of layout shift: the feed rendered without it, then
+  // hydration inserted 74px directly above the rows. Lab Lighthouse missed it
+  // (0.066) because it never carries a returning visitor's localStorage; CrUX put
+  // the mobile home page at CLS 0.28. It is server-rendered now, and hidden before
+  // first paint by app.css for a visitor who has already seen it.
   const showBanner = $derived(
-    browser &&
-      standalone &&
+    standalone &&
       bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
   );
 
@@ -249,6 +260,10 @@
   // sets stay empty). Cleanup: cancel any pending debounced reload so it can't fire
   // after this view is gone.
   onMount(() => {
+    // Catch up with the stored lifecycle now that localStorage is readable. For a
+    // returning visitor this drops the server-rendered banner — with no shift,
+    // because app.css already took it out of the flow before first paint.
+    onboardingState = loadOnboardingState();
     if (isAuthenticated()) {
       ensureViewedLoaded();
       ensureSavedLoaded();
