@@ -1,13 +1,21 @@
 import { browser } from '$app/environment';
 
 // Live GitHub star count for the repo, rendered as a header badge. Fetched once
-// per session on first mount and cached in localStorage for a few hours, so we
-// never hammer the unauthenticated API (60 req/h per IP) — a stale-but-instant
-// number beats a spinner, and on any failure the badge just drops the number
-// (the icon link still works). SSR-safe: every browser API is `browser`-guarded.
+// per session on first mount and cached in localStorage for a few hours — a
+// stale-but-instant number beats a spinner, and on any failure the badge just
+// drops the number (the icon link still works). SSR-safe: every browser API is
+// `browser`-guarded.
+//
+// The count comes from our own origin, not api.github.com. Called from the browser
+// it spent the visitor's share of GitHub's unauthenticated cap (60 requests/hour
+// per IP), which holds up from a home connection and fails from anything with a
+// shared address — a datacentre, a corporate proxy, carrier NAT — where the reply
+// is a 403: a console error, and a badge with no number. The server route answers
+// from one process-wide hourly cache (see $lib/server/github).
 
 const REPO = 'strelov1/freehire';
 export const GITHUB_URL = `https://github.com/${REPO}`;
+const STARS_ENDPOINT = '/github-stars';
 
 const CACHE_KEY = 'hire.gh_stars';
 const TTL_MS = 6 * 60 * 60 * 1000; // 6h
@@ -53,17 +61,17 @@ class GithubStarsStore {
     }
 
     try {
-      const res = await fetch(`https://api.github.com/repos/${REPO}`, {
-        headers: { Accept: 'application/vnd.github+json' },
-      });
+      const res = await fetch(STARS_ENDPOINT);
       if (!res.ok) return;
-      const data = (await res.json()) as { stargazers_count?: number };
-      if (typeof data.stargazers_count === 'number') {
-        this.count = data.stargazers_count;
-        writeCache({ count: data.stargazers_count, at: Date.now() });
+      // `stars: null` means the server could not reach GitHub. Keep whatever the
+      // cache held rather than overwriting a real number with an absence.
+      const data = (await res.json()) as { stars?: number | null };
+      if (typeof data.stars === 'number') {
+        this.count = data.stars;
+        writeCache({ count: data.stars, at: Date.now() });
       }
     } catch {
-      // offline / rate-limited — keep the cached value (or none)
+      // offline — keep the cached value (or none)
     }
   }
 }
