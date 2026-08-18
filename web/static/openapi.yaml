@@ -64,7 +64,9 @@ info:
     ceiling by hitting it:
 
     * `X-RateLimit-Limit` — the ceiling in force.
-    * `X-RateLimit-Remaining` — requests left in the current window.
+    * `X-RateLimit-Remaining` — requests left in the current window. The limiter
+      is a leaky bucket, not a counter, so this can trail your own request count
+      by one; treat it as a reading to pace against, not an exact ledger.
     * `X-RateLimit-Reset` — whole seconds until your budget is full again.
 
     Over the limit is `429` with `Retry-After` in whole seconds, alongside the
