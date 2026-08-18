@@ -33,11 +33,49 @@ declare global {
   }
 }
 
-// Null until the dynamic import resolves and init runs; every entry point below
-// guards on it, so calls before/without load are safe no-ops. `loading` coalesces
+// Null until the dynamic import resolves and init runs. `loading` coalesces
 // concurrent init calls.
 let ph: PostHog | null = null;
 let loading = false;
+
+// Calls made before the SDK resolves are held here and replayed, in order, once it
+// does. Without this they were silently dropped, and the very first pageview of
+// every visit is exactly such a call: `afterNavigate` fires on the initial load too
+// (see +layout.svelte), which is well before a dynamically imported ~40KB SDK can
+// have finished loading. That race was always lost more often than won; deferring
+// init to idle would have made losing it the rule.
+//
+// Replay makes the ordering load-bearing rather than merely nice: `syncReplayForRoute`
+// carries privacy state, not an event. Dropping its `stopSessionRecording()` for
+// /my/** and then starting the SDK would begin recording a CV page — the one thing
+// that call exists to prevent. Queued in order, the stop still lands first.
+//
+// Null once the queue has been handed over (or abandoned), which also makes
+// "already settled" and "still waiting" distinguishable at the push site.
+let pending: Array<(sdk: PostHog) => void> | null = [];
+
+// A visitor who never grants consent, or a deployment with no key, never drains the
+// queue — so it is bounded. Deep enough for a browsing session's worth of pageviews,
+// shallow enough that abandoning it costs nothing. Oldest entries are kept: the first
+// pageview and the initial replay decision are the ones worth having.
+const PENDING_LIMIT = 50;
+
+/** Run `fn` against the SDK now, or as soon as it has loaded. A no-op forever once
+ *  the queue has been abandoned (no key configured). */
+function withPostHog(fn: (sdk: PostHog) => void): void {
+  if (ph) {
+    fn(ph);
+    return;
+  }
+  if (pending && pending.length < PENDING_LIMIT) pending.push(fn);
+}
+
+/** Hand the queued calls to the freshly initialized SDK, in the order they were made. */
+function drainPending(sdk: PostHog): void {
+  const queued = pending;
+  pending = null;
+  queued?.forEach((fn) => fn(sdk));
+}
 
 // The runtime env read and browser guard live in the caller (hooks.client.ts,
 // which is client-only) so this module stays free of SvelteKit runtime imports
@@ -55,7 +93,13 @@ export function initTrackers(config: AnalyticsConfig): void {
  *  a failed dynamic import must never break the app, so the SDK download is fired
  *  and forgotten with errors swallowed. */
 function initPostHog(config: AnalyticsConfig): void {
-  if (ph || loading || !config.key) return;
+  if (ph || loading) return;
+  if (!config.key) {
+    // Inert deployment (no key): nothing will ever drain the queue, so stop
+    // holding closures for an SDK that is not coming.
+    pending = null;
+    return;
+  }
   loading = true;
   void import('posthog-js')
     .then(({ default: posthog }) => {
@@ -67,6 +111,7 @@ function initPostHog(config: AnalyticsConfig): void {
         session_recording: { maskAllInputs: true },
       });
       ph = posthog;
+      drainPending(posthog);
     })
     .catch(() => {
       loading = false; // let a later call retry the load
@@ -191,31 +236,35 @@ export function trackSignupIfNew(user: {
   track('signup', { method: user.has_password ? 'password' : 'oauth' });
 }
 
-/** Capture an explicit funnel event. No-op until the SDK has loaded. */
+/** Capture an explicit funnel event. Queued until the SDK has loaded. */
 export function track(event: string, props?: Record<string, unknown>): void {
-  ph?.capture(event, props);
+  withPostHog((sdk) => sdk.capture(event, props));
 }
 
 /** Bind analytics identity to a signed-in user by id only — never PII. */
 export function identifyUser(user: { id: number }): void {
-  ph?.identify(String(user.id));
+  withPostHog((sdk) => sdk.identify(String(user.id)));
 }
 
 /** Drop identity so subsequent events are anonymous (on sign-out). */
 export function resetIdentity(): void {
-  ph?.reset();
+  withPostHog((sdk) => sdk.reset());
 }
 
-/** Start or stop session recording based on route privacy. */
+/** Start or stop session recording based on route privacy. Queued like the rest,
+ *  so a /my/** stop decided before the SDK loaded is still applied — and applied
+ *  before anything queued after it. */
 export function syncReplayForRoute(path: string): void {
-  if (!ph) return;
-  if (isPrivateRoute(path)) ph.stopSessionRecording();
-  else ph.startSessionRecording();
+  const isPrivate = isPrivateRoute(path);
+  withPostHog((sdk) => {
+    if (isPrivate) sdk.stopSessionRecording();
+    else sdk.startSessionRecording();
+  });
 }
 
 /** Capture a pageview for the current SPA route. */
 export function capturePageview(): void {
-  ph?.capture('$pageview');
+  withPostHog((sdk) => sdk.capture('$pageview'));
 }
 
 /** Generic feature-flag reader: the flag's value when loaded, else the fallback.

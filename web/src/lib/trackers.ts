@@ -20,8 +20,30 @@ export function startTrackers(): void {
   initTrackers(config());
 }
 
+// How long the boot start may wait for an idle moment before going anyway. The
+// trackers weigh roughly 300KB between them (gtag.js ~168KB, the PostHog SDK plus
+// its recorder and surveys chunks the rest), and at boot they competed for
+// bandwidth with the render-blocking stylesheet and the route's own modules —
+// measurable in LCP, which is 6-7s on mobile. Yielding until the browser is idle
+// takes them out of that contention.
+//
+// The timeout is what keeps this a deferral rather than a gamble: a page that
+// never goes idle still starts them, just late. Consent has already been checked
+// by the time we get here, so waiting cannot turn into consent-less tracking.
+const BOOT_IDLE_TIMEOUT_MS = 3000;
+
 /** Start trackers only when consent currently allows it: the visitor is not
- *  consent-required, or has already granted consent. */
+ *  consent-required, or has already granted consent.
+ *
+ *  Deferred to the first idle moment. Calls made in the meantime are not lost —
+ *  $lib/analytics queues them and replays them in order once the SDK is up. */
 export function startTrackersIfAllowed(): void {
-  if (trackersAllowed()) startTrackers();
+  if (!trackersAllowed()) return;
+  // requestIdleCallback is unsupported on older Safari; a plain timer is the
+  // same deferral without the idle heuristic.
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(startTrackers, { timeout: BOOT_IDLE_TIMEOUT_MS });
+  } else {
+    setTimeout(startTrackers, BOOT_IDLE_TIMEOUT_MS);
+  }
 }

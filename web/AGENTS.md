@@ -28,7 +28,21 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - PostHog is gated on `PUBLIC_POSTHOG_KEY` (inert without it — no init, no events);
   ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`),
   overridable via `PUBLIC_POSTHOG_HOST`. Injected by `freehire-ops`, never committed, unset
-  in dev.
+  in dev. At boot the start is deferred to `requestIdleCallback` (3s timeout) so gtag.js and
+  the PostHog SDK stop competing with first paint; **calls made before the SDK resolves are
+  queued in `$lib/analytics` and replayed in order**, which is what keeps the initial
+  `afterNavigate` pageview and — load-bearing — the `/my/**` `stopSessionRecording()` from
+  being dropped. Accept-in-the-banner still starts them immediately.
+- **`hooks.server.ts` narrows the `Link` header** to the stylesheet and the two entry modules.
+  SvelteKit's default preloads a route's whole module graph, which here is ~85 sub-1.5KB
+  chunks — ~90 `modulepreload` fetches racing the render-blocking CSS. Removing them cut
+  mobile LCP from 8.5s to 4.4s on `/` and 7.8s to 4.7s on a job page (Lighthouse, Slow 4G,
+  same rig). Note `sequence()` semantics: the FIRST `preload` wins, later ones are ignored.
+- The header's GitHub star count comes from **our own `/github-stars`**, not `api.github.com`.
+  Called from the browser it spent the visitor's share of GitHub's 60/hour-per-IP cap and
+  returned 403 from any shared address; `$lib/server/github` holds one process-wide hourly
+  cache, shared with `/open`. `stars: null` is a valid answer — the badge drops the number,
+  never errors. Unauthenticated even server-side, so a busy IP still degrades to null.
 - The PWA service worker (`web/vite.config.ts`, `SvelteKitPWA`) precaches only the built app
   shell — no runtime-caching entry for `/api/*` or navigations, since every job listing,
   filter result and `/me/*` response is personalized or live. `workbox.navigateFallback` is
@@ -48,6 +62,11 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   `EventSource`), embedded in the workspace's `ArtifactPanel` and in `JobDrawer.svelte`.
   The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts`
   (unit-tested).
+- **`ReferralBlock` imports its modal on the click that opens it.** The block is small; the
+  `RequestReferralModal` behind it pulls in Dialog, FormField and the request flow, and it sat
+  in the module graph of every job and company page while only the few visitors who actually
+  ask for a referral open it. The block itself stays server-rendered — deferring it too would
+  push the description down after hydration and trade the CLS the page currently has at zero.
 - **Filters**: the companies FilterModal uses `COMPANY_FACETS` from `web/src/lib/facets.ts`,
   including a "Remote hiring" pill that reuses the shared `REGION` vocabulary for the
   `remote_regions` overlap facet.
