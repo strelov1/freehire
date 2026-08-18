@@ -104,6 +104,12 @@
   // rather than only in the footer so the story on / and /about has a doorway.
   const features = [
     {
+      href: resolve('/features/advanced-search'),
+      title: 'Advanced search',
+      body: 'Twenty filters — role, stack, region, company, terms and posting trust — and almost every one can also mean "not this." Save the search and freehire keeps running it for you.',
+      cta: 'How the filters work',
+    },
+    {
       href: resolve('/features/extension'),
       title: 'Browser extension',
       body: "A job-application agent in Chrome's side panel: it reads the posting you are on, scores it against your CV, and fills the form from your profile — on any site, not just the ones we track.",

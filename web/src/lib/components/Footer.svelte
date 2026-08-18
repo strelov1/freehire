@@ -20,6 +20,7 @@
     {
       title: 'Features',
       links: [
+        { label: 'Advanced search', href: resolve('/features/advanced-search') },
         { label: 'Browser extension', href: resolve('/features/extension') },
         { label: 'Inbox', href: resolve('/features/inbox') },
         { label: 'CV tailoring', href: resolve('/features/tailor') },

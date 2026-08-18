@@ -33,6 +33,7 @@ export const STATIC_PATHS = [
   '/features/referrals',
   '/features/tailor',
   '/features/ghost-jobs',
+  '/features/advanced-search',
   // The data and API surfaces. Indexable pages that carry the site's most citable
   // material — live catalogue figures (/open), market rollups (/trends), the API
   // reference — so they belong in the sitemap even though nothing links to some of
