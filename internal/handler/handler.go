@@ -201,14 +201,10 @@ func listResponseWithIgnored(c *fiber.Ctx, data any, total int64, limit, offset 
 	return c.JSON(fiber.Map{"data": data, "meta": meta})
 }
 
-// dataResponseWithIgnored writes the single-item envelope, adding a meta block
-// only when the filter ignored something.
-//
-// The list endpoints already send meta, so they carry the warning there
-// (listResponseWithIgnored). These endpoints answer a bare {"data": ...}, and a
-// clean request keeps exactly that shape — the block appears only when there is
-// a warning to read, so nothing about the documented response changes for
-// callers who spelled their filters right.
+// dataResponseWithIgnored is listResponseWithIgnored for the single-item
+// endpoints: they answer a bare {"data": ...} with no meta at all, so a clean
+// request keeps exactly that shape and the block appears only to carry a
+// warning.
 func dataResponseWithIgnored(c *fiber.Ctx, data any, ignored []search.UnknownParam) error {
 	if len(ignored) == 0 {
 		return c.JSON(fiber.Map{"data": data})

@@ -476,6 +476,10 @@ func orEmpty(v []string) []string {
 	return v
 }
 
+// companiesParams are the listing's own params: the name query, the sort
+// selector and the pagination window.
+var companiesParams = []string{"q", "sort", "limit", "offset"}
+
 // ignoredCompanyParams reports the query params this listing did not filter on.
 //
 // Separate from the jobs endpoints' ignoredParams because the vocabularies are
@@ -485,7 +489,3 @@ func orEmpty(v []string) []string {
 func ignoredCompanyParams(c *fiber.Ctx) []search.UnknownParam {
 	return search.UnknownCompanyParams(queryValues(c), companiesParams)
 }
-
-// companiesParams are the listing's own params: the name query, the sort
-// selector and the pagination window.
-var companiesParams = []string{"q", "sort", "limit", "offset"}

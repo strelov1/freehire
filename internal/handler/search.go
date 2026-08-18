@@ -63,19 +63,13 @@ const maxSearchWindow = 10000
 
 // searchParams are the query params the search endpoints read themselves rather
 // than hand to the filter: the query text, the sort directive and the pagination
-// window. search.UnknownParams owns the filter vocabulary and knows nothing of
-// these, so they are declared here — the endpoint that adds a param of its own
-// (see agentSearchParams) extends this list rather than teaching the search
-// package about transport.
+// window. search.UnknownParams owns the filter vocabulary and nothing else, so
+// each endpoint declares its own transport params here instead.
 var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 
 // agentSearchParams is searchParams plus the agent endpoint's response-format
 // selector.
 var agentSearchParams = slices.Concat(searchParams, []string{"description_format"})
-
-// facetsParams are the facet-count endpoint's own params: the query text, the
-// facet-subset selector and the disjunctive toggle.
-var facetsParams = []string{"q", "facets", "disjunctive"}
 
 // ignoredParams reports the query params of this request that neither the filter
 // nor the endpoint itself reads. They are echoed in the response meta instead of

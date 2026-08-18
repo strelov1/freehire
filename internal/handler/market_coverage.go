@@ -59,13 +59,12 @@ func (h *resumeHandlers) MarketCoverage(c *fiber.Ctx) error {
 
 // coverageIgnoredParams reports the query params this endpoint did not filter on.
 //
-// The skills facet is included in that report rather than excused: the measured
-// skills arrive in the body, so marketFilter strips `skills` from the query
-// (stripSkillParams) — but a caller who wrote `?skills=rust` still wrote a filter
-// that was thrown away, and the score comes back looking equally confident.
-// They cannot come back from search.UnknownParams — the skills facet is real
-// vocabulary, just not vocabulary this endpoint reads — so they are named here
-// and removed before the rest of the query is checked.
+// The skills facet is reported rather than excused: the measured skills arrive
+// in the body, so marketFilter strips `skills` from the query — but a caller who
+// wrote `?skills=rust` still wrote a filter that was thrown away, and the score
+// comes back looking equally confident. search.UnknownParams cannot name them
+// (the facet is real vocabulary, just not vocabulary this endpoint reads), so
+// they are collected here and folded into the one sorted, bounded report.
 func coverageIgnoredParams(c *fiber.Ctx) []search.UnknownParam {
 	vals := queryValues(c)
 

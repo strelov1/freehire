@@ -175,6 +175,10 @@ func facetParamByAttr() map[string]string {
 	return m
 }
 
+// facetsParams are this endpoint's own params: the query text, the facet-subset
+// selector and the disjunctive toggle.
+var facetsParams = []string{"q", "facets", "disjunctive"}
+
 // JobFacets reports the count of vacancies per facet value under the given
 // filters (the same query params as SearchJobs), instead of a page of jobs. It
 // is public like the other job reads. The response is keyed by the public facet
