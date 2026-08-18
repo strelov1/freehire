@@ -67,7 +67,24 @@
     $lib/analytics (initTrackers), gated on cookie consent alongside PostHog. -->
     %sveltekit.head%
   </head>
-  <body data-sveltekit-preload-data="hover">
+  <!-- `tap`, not `hover`: preloading on hover made the pointer inflate job view
+  counts. internal/viewlog reads nginx's access log and counts GET
+  /jobs/<slug>/__data.json as a page open — which is right, because a real in-app
+  click produces that request and no other. But `hover` issues the same request
+  for every card the cursor passes, so scrolling a listing on a desktop "viewed"
+  every job scrolled past, and jobs.view_count is shown to visitors.
+
+  Sec-Purpose does not help here: SvelteKit preloads with a plain fetch() and the
+  browser only sets that header for its own prefetch/prerender, so these arrive
+  indistinguishable from a navigation (verified in production — the log line ends
+  in "-").
+
+  `tap` starts the same preload on pointerdown instead, which is a real intent to
+  open: the request now means what viewlog reads it as. The head start shrinks
+  from a hover's few hundred milliseconds to the ~100ms between pressing and
+  releasing, which is most of the perceived benefit — the load overlaps the click
+  either way. -->
+  <body data-sveltekit-preload-data="tap">
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>
