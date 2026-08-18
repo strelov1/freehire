@@ -3,6 +3,7 @@ package worker
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +138,126 @@ func TestWriteRunMetricsWritesExpectedSeries(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "ingest_eightfold.prom.tmp")); !os.IsNotExist(err) {
 		t.Errorf("expected the .tmp file to be gone after rename, stat err: %v", err)
 	}
+}
+
+// A completed run clears the paused gauge rather than omitting it, so the series
+// is a live signal an alert can read as "not held" instead of one that merely
+// stops being written.
+func TestWriteRunMetricsClearsThePausedGauge(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(PromTextfileDirEnv, dir)
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"/opt/freehire/src/hire-current/ingest", "sources/eightfold.yml"}
+
+	writeRunMetrics(time.Second, 0)
+
+	data, err := os.ReadFile(filepath.Join(dir, "ingest_eightfold.prom"))
+	if err != nil {
+		t.Fatalf("read metrics file: %v", err)
+	}
+	if want := `freehire_worker_paused{job="ingest",instance="eightfold"} 0`; !strings.Contains(string(data), want) {
+		t.Errorf("metrics file missing %q; got:\n%s", want, string(data))
+	}
+}
+
+// A refused run must not refresh the last-run series. Leaving them to age is what
+// keeps an existing staleness alert firing for a switch nobody lifted; stamping a
+// refused run as a success is the failure mode that kept reindexw's skipped cycles
+// invisible for days.
+func TestWritePausedMetricsPublishesOnlyThePausedGauge(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(PromTextfileDirEnv, dir)
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"/opt/freehire/src/hire-current/ingest", "sources/eightfold.yml"}
+
+	writePausedMetrics()
+
+	data, err := os.ReadFile(filepath.Join(dir, "ingest_eightfold.prom"))
+	if err != nil {
+		t.Fatalf("read metrics file: %v", err)
+	}
+	got := string(data)
+
+	if want := `freehire_worker_paused{job="ingest",instance="eightfold"} 1`; !strings.Contains(got, want) {
+		t.Errorf("metrics file missing %q; got:\n%s", want, got)
+	}
+	if strings.Contains(got, "freehire_worker_last_run") {
+		t.Errorf("a refused run refreshed the last-run series; got:\n%s", got)
+	}
+}
+
+func TestWritePausedMetricsDisabledWithoutEnv(t *testing.T) {
+	t.Setenv(PromTextfileDirEnv, "")
+	writePausedMetrics()
+}
+
+// The exact text below is the contract the freehire-ops dashboard and alert rules
+// bind to. Renaming a metric or a label here silently breaks queries in another
+// repository that cannot be compiled against this one, so both outputs are pinned
+// in full rather than spot-checked. The run timestamp is the one value that cannot
+// be pinned, so it is normalised before comparison.
+const (
+	wantCompletedRunRender = `# HELP freehire_worker_last_run_timestamp_seconds Unix time the worker last finished a run.
+# TYPE freehire_worker_last_run_timestamp_seconds gauge
+freehire_worker_last_run_timestamp_seconds{job="ingest",instance="eightfold"} STAMP
+# HELP freehire_worker_last_run_duration_seconds How long the worker's last run took, in seconds.
+# TYPE freehire_worker_last_run_duration_seconds gauge
+freehire_worker_last_run_duration_seconds{job="ingest",instance="eightfold"} 2.500000
+# HELP freehire_worker_last_run_success Whether the worker's last run exited zero (1) or not (0).
+# TYPE freehire_worker_last_run_success gauge
+freehire_worker_last_run_success{job="ingest",instance="eightfold"} 1
+# HELP freehire_worker_paused Whether the pause switch held this worker's run back (1) or not (0).
+# TYPE freehire_worker_paused gauge
+freehire_worker_paused{job="ingest",instance="eightfold"} 0
+`
+
+	wantPausedRunRender = `# HELP freehire_worker_paused Whether the pause switch held this worker's run back (1) or not (0).
+# TYPE freehire_worker_paused gauge
+freehire_worker_paused{job="ingest",instance="eightfold"} 1
+`
+)
+
+var runStamp = regexp.MustCompile(`(freehire_worker_last_run_timestamp_seconds\{[^}]*\} )\d+`)
+
+func readRunFile(t *testing.T, dir string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "ingest_eightfold.prom"))
+	if err != nil {
+		t.Fatalf("read metrics file: %v", err)
+	}
+	return runStamp.ReplaceAllString(string(data), "${1}STAMP")
+}
+
+func TestMetricsRenderMatchesThePublishedContract(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"/opt/freehire/src/hire-current/ingest", "sources/eightfold.yml"}
+
+	t.Run("completed run", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv(PromTextfileDirEnv, dir)
+
+		writeRunMetrics(2500*time.Millisecond, 0)
+
+		if got := readRunFile(t, dir); got != wantCompletedRunRender {
+			t.Errorf("completed-run render mismatch:\ngot:\n%s\nwant:\n%s", got, wantCompletedRunRender)
+		}
+	})
+
+	t.Run("refused run", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv(PromTextfileDirEnv, dir)
+
+		writePausedMetrics()
+
+		if got := readRunFile(t, dir); got != wantPausedRunRender {
+			t.Errorf("refused-run render mismatch:\ngot:\n%s\nwant:\n%s", got, wantPausedRunRender)
+		}
+	})
 }
 
 func TestWriteRunMetricsWithoutInstance(t *testing.T) {

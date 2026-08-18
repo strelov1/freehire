@@ -14,12 +14,12 @@
 
 ## 2. Metrics
 
-- [ ] 2.1 Extend `internal/worker/metrics.go` so a completed run publishes
+- [x] 2.1 Extend `internal/worker/metrics.go` so a completed run publishes
       `freehire_worker_paused 0` alongside the existing `freehire_worker_last_run_*` triple,
       carrying the same `job`/`instance` labels.
-- [ ] 2.2 Add a refused-run publisher that writes `freehire_worker_paused 1` and no last-run
+- [x] 2.2 Add a refused-run publisher that writes `freehire_worker_paused 1` and no last-run
       series, to the same `RunMetricsFilename()` the worker already owns.
-- [ ] 2.3 Pin the exact exposition text of both outputs by test, the way
+- [x] 2.3 Pin the exact exposition text of both outputs by test, the way
       `cmd/queue-metrics/render_test.go` pins its own, so a metric rename is a visible edit
       rather than a silent break of the `freehire-ops` contract.
 

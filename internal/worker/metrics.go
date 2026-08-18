@@ -32,13 +32,7 @@ func writeRunMetrics(runDuration time.Duration, exitCode int) {
 	if dir == "" {
 		return
 	}
-	job := filepath.Base(os.Args[0])
-	instance := runInstance(os.Args[1:])
-
-	labels := fmt.Sprintf(`job=%q`, job)
-	if instance != "" {
-		labels = fmt.Sprintf(`job=%q,instance=%q`, job, instance)
-	}
+	labels := metricLabels()
 
 	success := 0
 	if exitCode == 0 {
@@ -54,11 +48,50 @@ freehire_worker_last_run_duration_seconds{%[1]s} %[3]f
 # HELP freehire_worker_last_run_success Whether the worker's last run exited zero (1) or not (0).
 # TYPE freehire_worker_last_run_success gauge
 freehire_worker_last_run_success{%[1]s} %[4]d
-`, labels, time.Now().Unix(), runDuration.Seconds(), success)
+`, labels, time.Now().Unix(), runDuration.Seconds(), success) + pausedGauge(labels, 0)
 
+	publishRunFile(dir, content)
+}
+
+// writePausedMetrics records that the pause switch refused this run, if
+// PROM_TEXTFILE_DIR is set. It publishes the paused gauge ALONE: the last-run
+// series are deliberately left to age, so an existing staleness rule still fires
+// for a switch nobody lifted, while this gauge beside it identifies the silence
+// as deliberate rather than broken.
+func writePausedMetrics() {
+	dir := os.Getenv(PromTextfileDirEnv)
+	if dir == "" {
+		return
+	}
+	publishRunFile(dir, pausedGauge(metricLabels(), 1))
+}
+
+// metricLabels renders the label set both writers share: the running binary's
+// name, plus the board instance when the invocation carries one.
+func metricLabels() string {
+	job := filepath.Base(os.Args[0])
+	if instance := runInstance(os.Args[1:]); instance != "" {
+		return fmt.Sprintf(`job=%q,instance=%q`, job, instance)
+	}
+	return fmt.Sprintf(`job=%q`, job)
+}
+
+// publishRunFile writes this process's metrics file. Errors are logged, not
+// fatal — a metrics file failing to write must not fail the worker's actual job.
+func publishRunFile(dir, content string) {
 	if err := WriteTextfile(dir, RunMetricsFilename(), content); err != nil {
 		log.Printf("worker: %v", err)
 	}
+}
+
+// pausedGauge renders the freehire_worker_paused series, which reports whether
+// the pause switch held this run back. It is published by both writers so the
+// gauge is a live 0/1 signal rather than one that merely stops being written.
+func pausedGauge(labels string, held int) string {
+	return fmt.Sprintf(`# HELP freehire_worker_paused Whether the pause switch held this worker's run back (1) or not (0).
+# TYPE freehire_worker_paused gauge
+freehire_worker_paused{%s} %d
+`, labels, held)
 }
 
 // RunMetricsFilename reports the textfile-collector file this process's run
