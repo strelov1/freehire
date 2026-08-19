@@ -30,23 +30,33 @@ removals for duplicates. Producing them is the whole change.
 
 ## Decisions
 
-### Decision 1: Read the transition with Postgres 18's `RETURNING old./new.`
+### Decision 1: Read the transition from one statement's own snapshot
 
-Each pass's UPDATE returns `old.duplicate_of` and `new.duplicate_of`, and two CTEs over that
-result insert into the two queues.
+Every CTE of a single statement reads the same snapshot, so a CTE that selects `duplicate_of`
+alongside the pass's own work holds the value as it stood BEFORE the update, while the
+UPDATE's `RETURNING` holds it after. Both in one statement, no window between them.
 
-*Alternative — read the current markers, then write:* two statements with a window between
-them in which another pass can change the same row, so the recorded "before" may not be the
-value the write actually replaced. The failure is silent and directional: a missed removal
-leaves a duplicate in search.
+The role and aggregator passes already read `jobs` in their `target` CTE to compute the new
+marker, so the old value comes free — one more column. The fuzzy pass and
+`MarkJobDuplicateOfRole` drive off an argument rather than a scan, so they gain a small
+`before` CTE that reads only the rows they are about to touch.
+
+*This started as `RETURNING old.duplicate_of, new.duplicate_of`* — Postgres 18 syntax, and
+prod is 18.4. It was verified working against `pgvector/pgvector:pg18`, including the part
+that mattered: `new.` reflects the BEFORE trigger's `COALESCE` rather than the value assigned
+to an owned column. Then sqlc 1.31.1 rejected it — its analyzer predates PG18 — and the
+snapshot form turned out to be both portable and no more code. The verification was not
+wasted: it established that the transition is readable atomically at all, which is the
+property the design needs; the syntax was only the first way found to get it.
+
+*Alternative — read the current markers in one statement, then write in another:* a window in
+which another pass can change the same row, so the recorded "before" may not be the value the
+write replaced. The failure is silent and directional: a missed removal leaves a duplicate in
+search.
 
 *Alternative — a trigger that enqueues:* moves the logic away from the statement that owns it
 and fires on every marker write including the backfill's, which would have queued two million
 rows. Rejected.
-
-Postgres 18 makes the first option available at all; prod is 18.4. Verified on
-`pgvector/pgvector:pg18`, including the part that matters most — `new.duplicate_of` reflects
-the BEFORE trigger's `COALESCE`, not the value the statement assigned to an owned column.
 
 ### Decision 2: Branch on the DERIVED marker, never on the owning column
 

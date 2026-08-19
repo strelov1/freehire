@@ -512,7 +512,7 @@ WHERE company_slug = sqlc.arg(company_slug)
 ORDER BY id
 LIMIT 1;
 
--- name: MarkJobDuplicateOfRole :execrows
+-- name: MarkJobDuplicateOfRole :one
 -- Point one row at its ROLE canon. The import path only: the batch passes recompute whole
 -- companies (RecomputeRoleDuplicatesForCompanies, SuppressAggregatorDuplicatesForCompanies) and
 -- must keep doing so — this marks the single row an import just wrote.
@@ -522,10 +522,23 @@ LIMIT 1;
 -- jobdedup.CanonicalForRole, so this is the role verdict arriving early — the same clustering
 -- the batch pass would reach hours later. A write to duplicate_of itself would not survive:
 -- the derivation in migration 0115 recomputes it from the owned columns.
-UPDATE jobs
-SET duplicate_of_role = sqlc.arg(duplicate_of_role),
-    updated_at        = now()
-WHERE id = sqlc.arg(id);
+WITH before AS (
+    SELECT b.id, b.duplicate_of AS was_duplicate_of FROM jobs b WHERE b.id = sqlc.arg(id)
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_role = sqlc.arg(duplicate_of_role),
+        updated_at        = now()
+    WHERE j.id = sqlc.arg(id)
+    RETURNING j.id, j.duplicate_of AS now_duplicate_of
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT u.id FROM updated u JOIN before b ON b.id = u.id
+    WHERE b.was_duplicate_of IS NULL AND u.now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*)::bigint FROM updated;
 
 -- name: ListRoleClusterCopies :many
 -- The open postings sharing a role cluster (company_slug + role_fingerprint) with the
@@ -609,7 +622,7 @@ UNION
 SELECT DISTINCT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of IS NOT NULL;
 
--- name: RecomputeRoleDuplicatesForCompanies :execrows
+-- name: RecomputeRoleDuplicatesForCompanies :one
 -- The batched slice of the role-duplicate recompute, driven over a CHUNK of companies
 -- (cmd/reindex's forCompanyBatches) rather than one call per company — see that
 -- function's doc comment for why: at catalogue scale (2026-08-06 prod measurement:
@@ -635,17 +648,35 @@ WITH canon AS (
 ),
 target AS (
     SELECT j.id,
-        CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup
+        CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup,
+        j.duplicate_of AS was_duplicate_of
     FROM jobs j
     JOIN canon c ON j.role_fingerprint = c.role_fingerprint
     WHERE j.company_slug = ANY(sqlc.arg(companies)::text[]) AND j.closed_at IS NULL
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_role = t.new_dup,
+        updated_at        = now()
+    FROM target t
+    WHERE j.id = t.id
+      AND j.duplicate_of_role IS DISTINCT FROM t.new_dup
+    RETURNING j.id,
+              t.was_duplicate_of,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM updated WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
+    ON CONFLICT (job_id) DO NOTHING
 )
-UPDATE jobs j
-SET duplicate_of_role = t.new_dup,
-    updated_at        = now()
-FROM target t
-WHERE j.id = t.id
-  AND j.duplicate_of_role IS DISTINCT FROM t.new_dup;
+SELECT count(*)::bigint FROM updated;
 
 -- name: CompaniesWithAggregatorPostings :many
 -- Company slugs with at least one OPEN aggregator posting — the drive list for the
@@ -657,7 +688,7 @@ SELECT DISTINCT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> ''
   AND source = ANY(sqlc.arg(aggregators)::text[]);
 
--- name: SuppressAggregatorDuplicatesForCompanies :execrows
+-- name: SuppressAggregatorDuplicatesForCompanies :one
 -- The batched slice of the cross-source aggregator suppression, driven over a CHUNK of
 -- companies (cmd/reindex's forCompanyBatches) rather than one call per company — see
 -- RecomputeRoleDuplicatesForCompanies' doc comment for the prod measurement that
@@ -799,17 +830,36 @@ target AS (
     -- Every candidate aggregator row, with its MIN matching ATS id or NULL. LEFT JOIN so an
     -- unmatched row (including one whose ATS twin just closed) resolves to NULL and is
     -- released back into search/embedding/enrichment. min(id) picks a stable target.
-    SELECT a.id, MIN(m.ats_id) AS new_dup
+    SELECT a.id, MIN(m.ats_id) AS new_dup,
+           MIN(j.duplicate_of) AS was_duplicate_of
     FROM agg a
     LEFT JOIN matches m ON m.agg_id = a.id
+    JOIN jobs j ON j.id = a.id
     GROUP BY a.id
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_aggregator = t.new_dup,
+        updated_at              = now()
+    FROM target t
+    WHERE j.id = t.id
+      AND j.duplicate_of_aggregator IS DISTINCT FROM t.new_dup
+    RETURNING j.id,
+              t.was_duplicate_of,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM updated WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
+    ON CONFLICT (job_id) DO NOTHING
 )
-UPDATE jobs j
-SET duplicate_of_aggregator = t.new_dup,
-    updated_at              = now()
-FROM target t
-WHERE j.id = t.id
-  AND j.duplicate_of_aggregator IS DISTINCT FROM t.new_dup;
+SELECT count(*)::bigint FROM updated;
 
 -- name: PropagateCollectionsToJobs :execrows
 -- Denormalize each company's curated-collection set onto its jobs, so the search
@@ -1554,23 +1604,51 @@ FROM jobs
 WHERE company_slug = sqlc.arg(company) AND closed_at IS NULL AND duplicate_of IS NULL
 ORDER BY id;
 
--- name: MarkFuzzyDuplicatesForCompany :execrows
+-- name: MarkFuzzyDuplicatesForCompany :one
 -- Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
 -- one company's whole assignment lands in a single statement rather than a round trip per row.
 -- Scoped to the company and to still-canonical open rows, so a row the exact pass claimed in the
 -- meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
 -- recompute reverses everything here by recomputing duplicate_of from scratch.
-UPDATE jobs j
-SET duplicate_of_fuzzy = m.canon_id,
-    updated_at         = now()
-FROM (
+WITH assign AS (
     SELECT unnest(sqlc.arg(ids)::bigint[]) AS id,
            unnest(sqlc.arg(canons)::bigint[]) AS canon_id
-) m
-WHERE j.id = m.id
-  AND j.company_slug = sqlc.arg(company)
-  AND j.closed_at IS NULL
-  AND j.duplicate_of_fuzzy IS DISTINCT FROM m.canon_id;
+),
+before AS (
+    -- Every CTE of one statement reads the same snapshot, so this is the derived marker as it
+    -- stood BEFORE the update below — which is what makes the status transition readable
+    -- without a second statement and the race between them.
+    SELECT j.id, j.duplicate_of AS was_duplicate_of
+    FROM jobs j JOIN assign a ON a.id = j.id
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_fuzzy = m.canon_id,
+        updated_at         = now()
+    FROM assign m
+    WHERE j.id = m.id
+      AND j.company_slug = sqlc.arg(company)
+      AND j.closed_at IS NULL
+      AND j.duplicate_of_fuzzy IS DISTINCT FROM m.canon_id
+    RETURNING j.id,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+flipped AS (
+    SELECT u.id, b.was_duplicate_of, u.now_duplicate_of, u.eff_posted_at
+    FROM updated u JOIN before b ON b.id = u.id
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM flipped WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM flipped WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*)::bigint FROM flipped;
 
 -- name: OrphanAggregatorCompanies :many
 -- Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans

@@ -2067,24 +2067,52 @@ func (q *Queries) ListRoleClusterCopies(ctx context.Context, arg ListRoleCluster
 	return items, nil
 }
 
-const markFuzzyDuplicatesForCompany = `-- name: MarkFuzzyDuplicatesForCompany :execrows
-UPDATE jobs j
-SET duplicate_of_fuzzy = m.canon_id,
-    updated_at         = now()
-FROM (
-    SELECT unnest($2::bigint[]) AS id,
-           unnest($3::bigint[]) AS canon_id
-) m
-WHERE j.id = m.id
-  AND j.company_slug = $1
-  AND j.closed_at IS NULL
-  AND j.duplicate_of_fuzzy IS DISTINCT FROM m.canon_id
+const markFuzzyDuplicatesForCompany = `-- name: MarkFuzzyDuplicatesForCompany :one
+WITH assign AS (
+    SELECT unnest($1::bigint[]) AS id,
+           unnest($2::bigint[]) AS canon_id
+),
+before AS (
+    -- Every CTE of one statement reads the same snapshot, so this is the derived marker as it
+    -- stood BEFORE the update below — which is what makes the status transition readable
+    -- without a second statement and the race between them.
+    SELECT j.id, j.duplicate_of AS was_duplicate_of
+    FROM jobs j JOIN assign a ON a.id = j.id
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_fuzzy = m.canon_id,
+        updated_at         = now()
+    FROM assign m
+    WHERE j.id = m.id
+      AND j.company_slug = $3
+      AND j.closed_at IS NULL
+      AND j.duplicate_of_fuzzy IS DISTINCT FROM m.canon_id
+    RETURNING j.id,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+flipped AS (
+    SELECT u.id, b.was_duplicate_of, u.now_duplicate_of, u.eff_posted_at
+    FROM updated u JOIN before b ON b.id = u.id
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM flipped WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM flipped WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*)::bigint FROM flipped
 `
 
 type MarkFuzzyDuplicatesForCompanyParams struct {
-	Company string  `json:"company"`
 	Ids     []int64 `json:"ids"`
 	Canons  []int64 `json:"canons"`
+	Company string  `json:"company"`
 }
 
 // Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
@@ -2093,23 +2121,35 @@ type MarkFuzzyDuplicatesForCompanyParams struct {
 // meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
 // recompute reverses everything here by recomputing duplicate_of from scratch.
 func (q *Queries) MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markFuzzyDuplicatesForCompany, arg.Company, arg.Ids, arg.Canons)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, markFuzzyDuplicatesForCompany, arg.Ids, arg.Canons, arg.Company)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
-const markJobDuplicateOfRole = `-- name: MarkJobDuplicateOfRole :execrows
-UPDATE jobs
-SET duplicate_of_role = $1,
-    updated_at        = now()
-WHERE id = $2
+const markJobDuplicateOfRole = `-- name: MarkJobDuplicateOfRole :one
+WITH before AS (
+    SELECT b.id, b.duplicate_of AS was_duplicate_of FROM jobs b WHERE b.id = $1
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_role = $2,
+        updated_at        = now()
+    WHERE j.id = $1
+    RETURNING j.id, j.duplicate_of AS now_duplicate_of
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT u.id FROM updated u JOIN before b ON b.id = u.id
+    WHERE b.was_duplicate_of IS NULL AND u.now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*)::bigint FROM updated
 `
 
 type MarkJobDuplicateOfRoleParams struct {
-	DuplicateOfRole pgtype.Int8 `json:"duplicate_of_role"`
 	ID              int64       `json:"id"`
+	DuplicateOfRole pgtype.Int8 `json:"duplicate_of_role"`
 }
 
 // Point one row at its ROLE canon. The import path only: the batch passes recompute whole
@@ -2122,11 +2162,10 @@ type MarkJobDuplicateOfRoleParams struct {
 // the batch pass would reach hours later. A write to duplicate_of itself would not survive:
 // the derivation in migration 0115 recomputes it from the owned columns.
 func (q *Queries) MarkJobDuplicateOfRole(ctx context.Context, arg MarkJobDuplicateOfRoleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markJobDuplicateOfRole, arg.DuplicateOfRole, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, markJobDuplicateOfRole, arg.ID, arg.DuplicateOfRole)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const markLivenessExpired = `-- name: MarkLivenessExpired :one
@@ -2252,7 +2291,7 @@ func (q *Queries) PropagateCollectionsToJobs(ctx context.Context) (int64, error)
 	return result.RowsAffected(), nil
 }
 
-const recomputeRoleDuplicatesForCompanies = `-- name: RecomputeRoleDuplicatesForCompanies :execrows
+const recomputeRoleDuplicatesForCompanies = `-- name: RecomputeRoleDuplicatesForCompanies :one
 WITH canon AS (
     SELECT jobs.role_fingerprint, MIN(jobs.id) AS canon_id, COUNT(*) AS n
     FROM jobs
@@ -2262,17 +2301,35 @@ WITH canon AS (
 ),
 target AS (
     SELECT j.id,
-        CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup
+        CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup,
+        j.duplicate_of AS was_duplicate_of
     FROM jobs j
     JOIN canon c ON j.role_fingerprint = c.role_fingerprint
     WHERE j.company_slug = ANY($1::text[]) AND j.closed_at IS NULL
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_role = t.new_dup,
+        updated_at        = now()
+    FROM target t
+    WHERE j.id = t.id
+      AND j.duplicate_of_role IS DISTINCT FROM t.new_dup
+    RETURNING j.id,
+              t.was_duplicate_of,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM updated WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
+    ON CONFLICT (job_id) DO NOTHING
 )
-UPDATE jobs j
-SET duplicate_of_role = t.new_dup,
-    updated_at        = now()
-FROM target t
-WHERE j.id = t.id
-  AND j.duplicate_of_role IS DISTINCT FROM t.new_dup
+SELECT count(*)::bigint FROM updated
 `
 
 // The batched slice of the role-duplicate recompute, driven over a CHUNK of companies
@@ -2292,11 +2349,10 @@ WHERE j.id = t.id
 // The IS DISTINCT FROM guard makes re-runs cheap and idempotent, and a closed canon
 // fails over to the next min(id) on the next run.
 func (q *Queries) RecomputeRoleDuplicatesForCompanies(ctx context.Context, companies []string) (int64, error) {
-	result, err := q.db.Exec(ctx, recomputeRoleDuplicatesForCompanies, companies)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, recomputeRoleDuplicatesForCompanies, companies)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const refreshUnchangedJob = `-- name: RefreshUnchangedJob :one
@@ -2913,7 +2969,7 @@ func (q *Queries) SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentPara
 	return err
 }
 
-const suppressAggregatorDuplicatesForCompanies = `-- name: SuppressAggregatorDuplicatesForCompanies :execrows
+const suppressAggregatorDuplicatesForCompanies = `-- name: SuppressAggregatorDuplicatesForCompanies :one
 WITH ats AS (
     SELECT jobs.id,
            jobs.company_slug_folded AS fcompany,
@@ -3010,17 +3066,36 @@ target AS (
     -- Every candidate aggregator row, with its MIN matching ATS id or NULL. LEFT JOIN so an
     -- unmatched row (including one whose ATS twin just closed) resolves to NULL and is
     -- released back into search/embedding/enrichment. min(id) picks a stable target.
-    SELECT a.id, MIN(m.ats_id) AS new_dup
+    SELECT a.id, MIN(m.ats_id) AS new_dup,
+           MIN(j.duplicate_of) AS was_duplicate_of
     FROM agg a
     LEFT JOIN matches m ON m.agg_id = a.id
+    JOIN jobs j ON j.id = a.id
     GROUP BY a.id
+),
+updated AS (
+    UPDATE jobs j
+    SET duplicate_of_aggregator = t.new_dup,
+        updated_at              = now()
+    FROM target t
+    WHERE j.id = t.id
+      AND j.duplicate_of_aggregator IS DISTINCT FROM t.new_dup
+    RETURNING j.id,
+              t.was_duplicate_of,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+dequeued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM updated WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
+    ON CONFLICT (job_id) DO NOTHING
 )
-UPDATE jobs j
-SET duplicate_of_aggregator = t.new_dup,
-    updated_at              = now()
-FROM target t
-WHERE j.id = t.id
-  AND j.duplicate_of_aggregator IS DISTINCT FROM t.new_dup
+SELECT count(*)::bigint FROM updated
 `
 
 type SuppressAggregatorDuplicatesForCompaniesParams struct {
@@ -3074,11 +3149,10 @@ type SuppressAggregatorDuplicatesForCompaniesParams struct {
 // DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
 // RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
 func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, arg SuppressAggregatorDuplicatesForCompaniesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, suppressAggregatorDuplicatesForCompanies, arg.FoldedCompanies, arg.Aggregators)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, suppressAggregatorDuplicatesForCompanies, arg.FoldedCompanies, arg.Aggregators)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const touchJob = `-- name: TouchJob :one

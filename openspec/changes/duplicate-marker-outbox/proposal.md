@@ -56,11 +56,11 @@ gives them a new producer.
   `SuppressAggregatorDuplicatesForCompanies`, `MarkFuzzyDuplicatesForCompany`,
   `MarkJobDuplicateOfRole`. Each gains a CTE over `RETURNING` in the shape the closing
   statements already use for `search_delete_outbox`.
-- **Postgres 18 is required** and prod is on 18.4. `RETURNING old.duplicate_of,
-  new.duplicate_of` is an 18 feature, and it is what makes the transition readable atomically
-  instead of through a read-then-write with a race in the middle. Verified against
-  `pgvector/pgvector:pg18`, including that `new` reflects the BEFORE trigger's derivation
-  rather than the value the statement assigned.
+- **No version floor and no new dependency.** The transition is read from the statement's own
+  snapshot: a CTE selecting `duplicate_of` holds the value before the update, `RETURNING`
+  holds it after, and every CTE of one statement sees the same snapshot. This began as
+  Postgres 18's `RETURNING old./new.` — verified working, prod is 18.4 — until sqlc 1.31.1
+  rejected the syntax; the snapshot form is portable and no larger.
 - **Return types:** the three batch passes are `:execrows`; a CTE moves the row count out of
   the command tag, so they become `:one` ending in `SELECT count(*)`, as PR #2133 did for the
   five closing statements. Callers keep taking `int64`.
