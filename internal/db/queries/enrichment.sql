@@ -49,6 +49,38 @@ FROM claimable c
 WHERE o.id = c.id
 RETURNING o.id, o.job_id, o.target_version;
 
+-- name: DeleteIneligibleEnrichmentOutbox :execrows
+-- Reap live entries ClaimEnrichmentBatch can never take: their job has closed, become a
+-- non-canonical repost, or gone. That query's inner join plus its closed/duplicate filter
+-- correctly skips them — a dead or hidden posting should not spend LLM budget — but until
+-- this existed nothing deleted them either, and they accumulated. The same gap
+-- DeleteIneligibleSearchOutbox closed for search_outbox, on the queue beside it.
+--
+-- Measured on prod 2026-08-19, before the first run: of 1,118,601 entries, 486,178 sat
+-- behind a closed job, 216,283 behind a duplicate, and 19 behind no job at all. Only
+-- 484,651 were claimable — 57% of the queue was unreachable, and the depth gauge read it
+-- as work.
+--
+-- Deleting is not lossy: EnqueuePendingJobs re-enqueues every open, non-duplicate,
+-- unenriched, tech job with a description, so an entry reaped here comes back on its own
+-- if the job becomes eligible again.
+--
+-- Dead-lettered rows (failed_at set) are deliberately left alone, exactly as in the search
+-- reaper: they are a record of repeated failure, surfaced as freehire_queue_dead_letters,
+-- so reaping them would erase the evidence rather than the garbage.
+--
+-- Bounded by max_rows so one enrich run cannot turn into an unbounded delete on the first
+-- pass over a long-accumulated backlog; the next run takes the next slice.
+DELETE FROM enrichment_outbox
+WHERE id IN (
+    SELECT o.id
+    FROM enrichment_outbox o
+    LEFT JOIN jobs j ON j.id = o.job_id
+    WHERE o.failed_at IS NULL
+      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
+    LIMIT sqlc.arg(max_rows)
+);
+
 -- name: DeleteEnrichmentEntry :exec
 DELETE FROM enrichment_outbox
 WHERE id = $1;

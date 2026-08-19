@@ -61,7 +61,7 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("enrichment done: enriched=%d failed=%d dead_lettered=%d",
-		stats.Enriched, stats.Failed, stats.DeadLettered)
+	log.Printf("enrichment done: enriched=%d failed=%d dead_lettered=%d reaped=%d",
+		stats.Enriched, stats.Failed, stats.DeadLettered, stats.Reaped)
 	return worker.ExitCode(stats.Failed, stats.DeadLettered)
 }

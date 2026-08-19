@@ -13,6 +13,9 @@ type recordingStore struct {
 	policies []FailurePolicy
 }
 
+// Reap is a no-op here: these tests are about failure bounding, not housekeeping.
+func (s *recordingStore) Reap(context.Context, int) (int64, error) { return 0, nil }
+
 func (s *recordingStore) Fail(ctx context.Context, outboxID int64, msg string, policy FailurePolicy) (bool, error) {
 	s.policies = append(s.policies, policy)
 	return s.fakeStore.Fail(ctx, outboxID, msg, policy)

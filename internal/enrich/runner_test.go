@@ -45,6 +45,7 @@ type fakeStore struct {
 	deadFor  map[int64]bool
 
 	mu        sync.Mutex
+	reapCalls int
 	enqueued  bool
 	completed []int64
 	failed    []int64
@@ -74,6 +75,13 @@ func (s *fakeStore) Complete(_ context.Context, entry Claimed, _ json.RawMessage
 	s.completed = append(s.completed, entry.OutboxID)
 	s.mu.Unlock()
 	return nil
+}
+
+// Reap records the call so a test can assert the runner reaps before it enqueues; the
+// fake has nothing ineligible to delete.
+func (s *fakeStore) Reap(context.Context, int) (int64, error) {
+	s.reapCalls++
+	return 0, nil
 }
 
 func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, policy FailurePolicy) (bool, error) {

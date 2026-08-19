@@ -20,6 +20,7 @@ The typed enrichment contract, the LLM provider abstraction, and the queue-drain
 - `SetJobEnrichment` is deliberately separate from `UpsertJob` so ingest and enrichment stay decoupled.
 - Never hard-code a vendor or model — the LLM is configured by `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` (any OpenAI-compatible endpoint).
 - The lease expiry is the built-in reaper — no separate process.
+- **Entries whose job stops being claimable are reaped at the START of each run** (`Store.Reap` → `DeleteIneligibleEnrichmentOutbox`, bounded by `reapLimit`). The claim's join plus its `closed_at IS NULL AND duplicate_of IS NULL` filter correctly skips a job that closed or became a repost — but nothing deleted those entries, so they accumulated. Measured on prod 2026-08-19: of **1,118,601** entries, 486,178 sat behind a closed job and 216,283 behind a duplicate; only **484,651 were claimable**, so 57% of the queue was unreachable and the depth gauge read it as work. Reaping is best-effort and never aborts the run, and it is not lossy — `EnqueuePendingJobs` re-adds anything that becomes eligible again. Dead-lettered entries (`failed_at`) are left alone: they are the evidence `freehire_queue_dead_letters` reports.
 - Overlapping cron runs can't double-enrich: the wave is sized to the concurrency so an entry's lease window stays ≈ one LLM call.
 
 ## How it works

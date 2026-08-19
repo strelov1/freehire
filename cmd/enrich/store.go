@@ -48,6 +48,10 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]enrich.
 	return out, nil
 }
 
+func (s *dbStore) Reap(ctx context.Context, maxRows int) (int64, error) {
+	return s.q.DeleteIneligibleEnrichmentOutbox(ctx, int32(maxRows))
+}
+
 func (s *dbStore) Job(ctx context.Context, id int64) (enrich.JobInput, error) {
 	j, err := s.q.GetJob(ctx, id)
 	if err != nil {

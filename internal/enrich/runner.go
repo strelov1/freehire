@@ -36,6 +36,9 @@ type Store interface {
 	// Fail records a failed attempt under the given policy; it returns whether the
 	// entry was dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, policy FailurePolicy) (deadLettered bool, err error)
+	// Reap deletes up to maxRows live entries Claim can never take (their job closed,
+	// became a non-canonical repost, or is gone), returning how many it removed.
+	Reap(ctx context.Context, maxRows int) (int64, error)
 }
 
 // FailurePolicy is how one failure should be bounded. Which of the two bounds applies
@@ -67,7 +70,18 @@ type Stats struct {
 	Enriched     int
 	Failed       int
 	DeadLettered int
+	// Reaped counts entries deleted because Claim could never take them — housekeeping,
+	// not enrichment work.
+	Reaped int
 }
+
+// reapLimit bounds how many ineligible entries one run deletes. Sized against the backlog
+// this accumulated into before anything reaped it: 633,532 of 1,118,601 entries on prod
+// 2026-08-19, 57% of the queue. An unbounded first pass over that is a long delete holding
+// row locks the claim then waits on, so the run takes a slice and the next one takes the
+// next. Larger than search-drain's 2,000 because enrich runs on a far slower cadence and
+// its backlog is two orders of magnitude bigger.
+const reapLimit = 20_000
 
 // Runner drives the enrichment process: enqueue pending jobs, then drain claimed
 // batches, enriching and writing back each entry.
@@ -79,9 +93,20 @@ type Runner struct {
 // Run enqueues pending jobs and drains the queue until no claimable entries remain.
 // A failure on a single entry is recorded and never aborts the run.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
+	// Reap before enqueueing, so the depth this run reports is work and not residue.
+	// Claim skips an entry whose job has closed or become a repost, but nothing deleted
+	// those entries, and they accumulated into most of the queue. Best-effort:
+	// housekeeping must never be the reason enrichment stops.
+	reaped, err := r.Store.Reap(ctx, reapLimit)
+	if err != nil {
+		log.Printf("enrich: reap ineligible entries (continuing): %v", err)
+	} else if reaped > 0 {
+		log.Printf("enrich: reaped %d entries whose job closed or became a repost", reaped)
+	}
+
 	enqueued, err := r.Store.Enqueue(ctx, opt.TargetVersion)
 	if err != nil {
-		return Stats{}, fmt.Errorf("enqueue: %w", err)
+		return Stats{Reaped: int(reaped)}, fmt.Errorf("enqueue: %w", err)
 	}
 	log.Printf("enrich: enqueued %d pending, draining (concurrency=%d)", enqueued, opt.Concurrency)
 
@@ -98,7 +123,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 			log.Printf("enrich: progress enriched=%d failed=%d dead=%d", cum.Succeeded, cum.Failed, cum.DeadLettered)
 		},
 	}, rn.process)
-	stats := Stats{Enriched: s.Succeeded, Failed: s.Failed, DeadLettered: s.DeadLettered}
+	stats := Stats{Enriched: s.Succeeded, Failed: s.Failed, DeadLettered: s.DeadLettered, Reaped: int(reaped)}
 	if err != nil {
 		return stats, fmt.Errorf("claim: %w", err)
 	}
