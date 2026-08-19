@@ -107,7 +107,7 @@
   }
 </script>
 
-<Dialog bind:open title="Report this job" class="max-w-md">
+<Dialog bind:open title="Report this job" class="sm:max-w-md">
 
     {#if step === 'reason'}
       <ul class="flex flex-col gap-2">

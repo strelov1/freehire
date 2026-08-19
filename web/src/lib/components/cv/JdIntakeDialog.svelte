@@ -105,7 +105,7 @@
     'rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 </script>
 
-<Dialog bind:open title="Tailor a CV for a job" class="max-w-lg">
+<Dialog bind:open title="Tailor a CV for a job" class="sm:max-w-lg">
   <div class="flex gap-4 border-b border-border text-sm">
     {#each [{ id: 'existing', label: 'Our vacancy' }, { id: 'url', label: 'Link' }, { id: 'text', label: 'Paste text' }] as t (t.id)}
       <button

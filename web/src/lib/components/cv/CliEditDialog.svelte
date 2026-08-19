@@ -31,7 +31,7 @@
   }
 </script>
 
-<Dialog bind:open title="Edit this CV from the CLI" class="max-w-lg">
+<Dialog bind:open title="Edit this CV from the CLI" class="sm:max-w-lg">
   <p class="text-sm leading-relaxed text-muted-foreground">
     Give this to your own coding agent — with the freehire CLI installed and signed in, it reads
     and writes this exact CV the same way the in-app assistant does.

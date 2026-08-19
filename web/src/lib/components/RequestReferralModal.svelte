@@ -106,7 +106,7 @@
   }
 </script>
 
-<Dialog bind:open title={`Ask for a referral · ${companyName}`} class="max-w-md">
+<Dialog bind:open title={`Ask for a referral · ${companyName}`} class="sm:max-w-md">
 
     {#if done}
       <div class="flex flex-col items-center gap-3 py-4 text-center">

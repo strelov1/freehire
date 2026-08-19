@@ -42,6 +42,13 @@
      * held and is not.
      */
     dismissible?: boolean;
+    /**
+     * Size the card at `sm` and up with an `sm:max-w-*` utility, never a bare
+     * `max-w-*` — the base classes carry an unprefixed `max-w-none` for the
+     * mobile takeover, and `cn()`'s twMerge keeps only the last unprefixed
+     * value in the group, so a bare override wins at every width and cancels
+     * the takeover below `sm` too.
+     */
     class?: string;
     children: Snippet;
   } = $props();

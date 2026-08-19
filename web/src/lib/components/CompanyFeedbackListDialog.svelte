@@ -69,7 +69,7 @@
   }
 </script>
 
-<Dialog bind:open title={companyName ? `Feedback on ${companyName}` : 'Feedback'} class="max-w-lg">
+<Dialog bind:open title={companyName ? `Feedback on ${companyName}` : 'Feedback'} class="sm:max-w-lg">
   {#if page.status !== 'loading'}
     <div class="mb-4 flex justify-end">
       <Button variant="outline" size="sm" onclick={onWriteFeedback}>Write feedback</Button>

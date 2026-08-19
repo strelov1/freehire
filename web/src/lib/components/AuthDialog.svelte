@@ -152,7 +152,7 @@
   }
 </script>
 
-<Dialog bind:open {title} class="max-w-sm">
+<Dialog bind:open {title} class="sm:max-w-sm">
 
     {#if providers.length > 0 && !isRecovery}
       <div class="mb-4 flex flex-col gap-2">

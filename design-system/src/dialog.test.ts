@@ -79,6 +79,18 @@ describe('Dialog', () => {
     expect(getByRole('dialog', { hidden: true }).getAttribute('aria-labelledby')).toBeNull();
   });
 
+  // A bare `max-w-*` override used to share twMerge's conflict group with the
+  // base's unprefixed `max-w-none`, so the caller's class won at every width
+  // and cancelled the mobile takeover below `sm`. An `sm:`-prefixed override
+  // lives in its own group and must leave `max-w-none` in place.
+  it('keeps the mobile takeover when the caller sizes the card at sm and up', () => {
+    const { getByRole } = render(Dialog, { ...open(true), class: 'sm:max-w-md' });
+    const el = getByRole('dialog', { hidden: true });
+
+    expect(el.className).toContain('max-w-none');
+    expect(el.className).toContain('sm:max-w-md');
+  });
+
   // A dialog holding the outcome of a request that cannot be repeated has to be
   // able to refuse to go away — otherwise Escape hides whether the irreversible
   // thing succeeded. The platform gives us the refusal for free through

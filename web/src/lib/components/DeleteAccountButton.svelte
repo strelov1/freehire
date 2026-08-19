@@ -65,7 +65,7 @@
   {s.trigger}
 </Button>
 
-<Dialog bind:open title={s.dialogTitle} dismissible={!busy} class="max-w-md border-destructive/30">
+<Dialog bind:open title={s.dialogTitle} dismissible={!busy} class="sm:max-w-md border-destructive/30">
   <p class="text-sm text-muted-foreground">{s.warning}</p>
 
   <ul class="mt-4 flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">

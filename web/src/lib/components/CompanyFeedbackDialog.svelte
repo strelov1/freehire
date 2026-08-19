@@ -93,7 +93,7 @@
   }
 </script>
 
-<Dialog bind:open title={isEdit ? 'Edit your feedback' : 'Leave feedback'} class="max-w-md">
+<Dialog bind:open title={isEdit ? 'Edit your feedback' : 'Leave feedback'} class="sm:max-w-md">
   {#if !loaded}
     <p class="text-sm text-muted-foreground">Loading…</p>
   {:else}
