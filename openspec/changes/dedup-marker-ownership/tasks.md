@@ -94,8 +94,10 @@
 
 ## 6. Ship
 
-- [ ] 6.1 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, then
-      the tagged suite for `internal/db` and `cmd/reindex`.
+- [x] 6.1 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, then
+      the tagged suite for `internal/db` and `cmd/reindex`. All clean, plus the tagged suites
+      for `internal/handler`, `cmd/ingest`, `internal/linkimport` and `internal/catalogstats` —
+      every package whose fixtures wrote `duplicate_of`.
 - [ ] 6.2 Apply 2.1 on prod, run the backfill under `systemd-run`, apply 2.2, run the
       reconcile sweep, then deploy the code — the order of Decision 5, with the marker-refresh
       timer stopped for the window between the backfill finishing and the deploy landing.
