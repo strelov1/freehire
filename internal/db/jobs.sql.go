@@ -2025,8 +2025,8 @@ WHERE id = $2
 `
 
 type MarkJobDuplicateOfRoleParams struct {
-	DuplicateOf pgtype.Int8 `json:"duplicate_of"`
-	ID          int64       `json:"id"`
+	DuplicateOfRole pgtype.Int8 `json:"duplicate_of_role"`
+	ID              int64       `json:"id"`
 }
 
 // Point one row at its ROLE canon. The import path only: the batch passes recompute whole
@@ -2039,7 +2039,7 @@ type MarkJobDuplicateOfRoleParams struct {
 // the batch pass would reach hours later. A write to duplicate_of itself would not survive:
 // the derivation in migration 0115 recomputes it from the owned columns.
 func (q *Queries) MarkJobDuplicateOfRole(ctx context.Context, arg MarkJobDuplicateOfRoleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markJobDuplicateOfRole, arg.DuplicateOf, arg.ID)
+	result, err := q.db.Exec(ctx, markJobDuplicateOfRole, arg.DuplicateOfRole, arg.ID)
 	if err != nil {
 		return 0, err
 	}

@@ -135,8 +135,8 @@ func TestMarkJobDuplicateOfRole(t *testing.T) {
 	}
 
 	n, err := q.MarkJobDuplicateOfRole(ctx, MarkJobDuplicateOfRoleParams{
-		ID:          dupID,
-		DuplicateOf: pgtype.Int8{Int64: canonID, Valid: true},
+		ID:              dupID,
+		DuplicateOfRole: pgtype.Int8{Int64: canonID, Valid: true},
 	})
 	if err != nil || n != 1 {
 		t.Fatalf("MarkJobDuplicateOf = (%d, %v), want (1, nil)", n, err)

@@ -179,8 +179,8 @@ func TestEnqueueJobEnrichmentGating(t *testing.T) {
 			t.Fatalf("upsert repost: %v", err)
 		}
 		if _, err := q.MarkJobDuplicateOfRole(ctx, MarkJobDuplicateOfRoleParams{
-			ID:          repost.ID,
-			DuplicateOf: pgtype.Int8{Int64: canon.ID, Valid: true},
+			ID:              repost.ID,
+			DuplicateOfRole: pgtype.Int8{Int64: canon.ID, Valid: true},
 		}); err != nil {
 			t.Fatalf("mark duplicate: %v", err)
 		}

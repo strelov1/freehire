@@ -523,7 +523,7 @@ LIMIT 1;
 -- the batch pass would reach hours later. A write to duplicate_of itself would not survive:
 -- the derivation in migration 0115 recomputes it from the owned columns.
 UPDATE jobs
-SET duplicate_of_role = sqlc.arg(duplicate_of),
+SET duplicate_of_role = sqlc.arg(duplicate_of_role),
     updated_at        = now()
 WHERE id = sqlc.arg(id);
 

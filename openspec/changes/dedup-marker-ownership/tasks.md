@@ -66,17 +66,25 @@
 
 ## 5. Prove the defect is gone
 
-- [ ] 5.1 Integration test reproducing the ping-pong on the old schema's terms: mark a row
+- [x] 5.1 Integration test reproducing the ping-pong on the old schema's terms: mark a row
       via the aggregator pass, run the role recompute over the same company with that row a
-      singleton in its role cluster, and assert the suppression survives. This is the test
-      that fails before the change.
-- [ ] 5.2 Integration test: a full `refreshDuplicateMarkers` cycle over an unchanged fixture
-      catalogue re-marks zero rows on the second run, across all three passes.
-- [ ] 5.3 Integration test: running the three passes in a different order produces the same
-      end state.
-- [ ] 5.4 A test walking `internal/db/queries/*.sql` that fails if any statement assigns
+      singleton in its role cluster, and assert the suppression survives. Same test for the
+      fuzzy pass. (`internal/db/duplicate_marker_no_clobber_integration_test.go`)
+- [x] 5.2 Integration test: a full refresh cycle over an unchanged fixture catalogue re-marks
+      zero rows on the second run, across all three passes. **This is the test that carries
+      the weight.** Verified by reverting the role pass to write `duplicate_of` and re-running:
+      it fails with "role recompute re-marked 3 rows, want 0". The 5.1 tests do NOT fail under
+      that revert — the trigger still shields the owned columns — so the cycle test is the one
+      that would catch a regression.
+- [x] 5.3 Integration test: running the three passes in a different order produces the same
+      end state. Compares the DERIVED canon: an owned column may legitimately differ between
+      orders (fuzzy-first leaves a redundant marker COALESCE never surfaces), which is what
+      precedence is for.
+- [x] 5.4 A test walking `internal/db/queries/*.sql` that fails if any statement assigns
       `duplicate_of` directly, in the shape of the existing walk that keeps the legal-form
-      vocabulary single-sourced.
+      vocabulary single-sourced. (`internal/db/duplicate_marker_owner_rule_test.go`; it caught
+      the `sqlc.arg(duplicate_of)` parameter name on its first run, which is now
+      `duplicate_of_role` to match its column.)
 
 ## 6. Ship
 

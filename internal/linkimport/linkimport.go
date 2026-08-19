@@ -237,8 +237,8 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 	}
 	if deduped {
 		if _, err := qtx.MarkJobDuplicateOfRole(ctx, db.MarkJobDuplicateOfRoleParams{
-			ID:          res.Job.ID,
-			DuplicateOf: pgtype.Int8{Int64: canon.ID, Valid: true},
+			ID:              res.Job.ID,
+			DuplicateOfRole: pgtype.Int8{Int64: canon.ID, Valid: true},
 		}); err != nil {
 			return Result{}, false, err
 		}
