@@ -20,14 +20,18 @@
 
 ## 2. Schema
 
-- [ ] 2.1 Migration: add `duplicate_of_role`, `duplicate_of_aggregator`, `duplicate_of_fuzzy`
-      as nullable `bigint` on `jobs`, with the same FK shape `duplicate_of` carries today.
-      Catalog-only, no rewrite.
-- [ ] 2.2 Migration: the `BEFORE INSERT OR UPDATE` trigger deriving `duplicate_of` from the
-      three, per Decision 1 — pure `NEW`-local PL/pgSQL, no query, early return when no owned
-      column changed. Ships in a separate file from 2.1 so the backfill can run between them.
-- [ ] 2.3 Integration test: the trigger derives the COALESCE in precedence order, ignores a
+- [x] 2.1 Migration: add `duplicate_of_role`, `duplicate_of_aggregator`, `duplicate_of_fuzzy`
+      as nullable `bigint` on `jobs`. Catalog-only, no rewrite. **No foreign key** — see
+      Decision 7, added while writing this.
+      (`migrations/0114_jobs_duplicate_marker_owner_columns.sql`)
+- [x] 2.2 Migration: the `BEFORE INSERT OR UPDATE` trigger deriving `duplicate_of` from the
+      three, per Decision 1 — pure `NEW`-local PL/pgSQL, no query. The early return is the
+      engine's: `UPDATE OF` lists the four marker columns, so a statement naming none of them
+      never enters the trigger. Separate file from 2.1 so the backfill runs between them.
+      (`migrations/0115_jobs_derive_duplicate_of.sql`)
+- [x] 2.3 Integration test: the trigger derives the COALESCE in precedence order, ignores a
       direct write to `duplicate_of`, and is a no-op when no owned column changed.
+      (`internal/db/duplicate_marker_ownership_integration_test.go`)
 
 ## 3. Backfill
 
@@ -42,16 +46,23 @@
 
 ## 4. Passes write their own column
 
-- [ ] 4.1 `RecomputeRoleDuplicatesForCompanies` writes `duplicate_of_role`; its `target` CTE
+- [x] 4.1 `RecomputeRoleDuplicatesForCompanies` writes `duplicate_of_role`; its `target` CTE
       and `IS DISTINCT FROM` guard move to that column.
-- [ ] 4.2 `SuppressAggregatorDuplicatesForCompanies` writes `duplicate_of_aggregator`.
-- [ ] 4.3 `MarkFuzzyDuplicatesForCompany` writes `duplicate_of_fuzzy`. Its scoping predicate
+- [x] 4.2 `SuppressAggregatorDuplicatesForCompanies` writes `duplicate_of_aggregator`. Its
+      candidate predicate deliberately keeps reading the derived `duplicate_of`: "canonical OR
+      already pointing at a non-aggregator row" is what admits the contested rows of Decision
+      2, and rewriting it as `duplicate_of_aggregator IS NOT NULL` would quietly shrink the
+      candidate set by those 8,279 rows.
+- [x] 4.3 `MarkFuzzyDuplicatesForCompany` writes `duplicate_of_fuzzy`. Its scoping predicate
       keeps reading the derived `duplicate_of` — it wants "still canonical", which is the
       derived question.
-- [ ] 4.4 Rename `MarkJobDuplicateOf` to `MarkJobDuplicateOfRole` and point it at the role
+- [x] 4.4 Rename `MarkJobDuplicateOf` to `MarkJobDuplicateOfRole` and point it at the role
       column; update `cmd/ingest/store.go` and `internal/linkimport/linkimport.go`.
-- [ ] 4.5 `make sqlc`, then fix the two call sites and anything the regenerated `querier.go`
-      breaks.
+- [x] 4.5 `make sqlc`, then fix the two call sites and anything the regenerated `querier.go`
+      breaks. Also every test fixture that wrote `duplicate_of` directly — eleven files across
+      `internal/db`, `internal/handler`, and `internal/catalogstats` — now writes
+      `duplicate_of_role`. That the trigger broke all of them at once is the guarantee
+      working: those writes no longer take.
 
 ## 5. Prove the defect is gone
 

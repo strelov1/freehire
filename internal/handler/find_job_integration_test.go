@@ -128,7 +128,7 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 			   VALUES ('ashby', 'truelogic:ef27e902', 'https://jobs.ashbyhq.com/truelogic/ef27e902', 'Senior Full Stack', 'senior-full-stack-canonical')
 			   RETURNING id
 			 )
-			 INSERT INTO jobs (source, external_id, url, title, public_slug, duplicate_of)
+			 INSERT INTO jobs (source, external_id, url, title, public_slug, duplicate_of_role)
 			 SELECT 'ashby', 'truelogic:c6d2719d', 'https://jobs.ashbyhq.com/truelogic/c6d2719d',
 			        'Senior Full Stack', 'senior-full-stack-duplicate', id
 			 FROM canonical`); err != nil {

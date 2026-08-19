@@ -34,7 +34,7 @@ func seedCompanyJob(t *testing.T, pool *pgxpool.Pool, ext, slug string, createdA
 	}
 	var id int64
 	err := pool.QueryRow(context.Background(), `
-		INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, duplicate_of,
+		INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, duplicate_of_role,
 			created_at, closed_at)
 		VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3,
 			now() - make_interval(days => $4::int),

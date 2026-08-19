@@ -2475,10 +2475,16 @@ type Querier interface {
 	// from the row's own applied_at, so a dated recording carries the mail's date
 	// into the ledger rather than now().
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
-	// Point one row at its canon. The import path only: the batch passes recompute whole companies
-	// (RecomputeRoleDuplicatesForCompany, SuppressAggregatorDuplicatesForCompany) and must keep
-	// doing so — this marks the single row an import just wrote.
-	MarkJobDuplicateOf(ctx context.Context, arg MarkJobDuplicateOfParams) (int64, error)
+	// Point one row at its ROLE canon. The import path only: the batch passes recompute whole
+	// companies (RecomputeRoleDuplicatesForCompanies, SuppressAggregatorDuplicatesForCompanies) and
+	// must keep doing so — this marks the single row an import just wrote.
+	//
+	// Writes duplicate_of_role, not duplicate_of, and the name says so. Both callers
+	// (cmd/ingest/store.go, internal/linkimport) resolve their canon through
+	// jobdedup.CanonicalForRole, so this is the role verdict arriving early — the same clustering
+	// the batch pass would reach hours later. A write to duplicate_of itself would not survive:
+	// the derivation in migration 0115 recomputes it from the owned columns.
+	MarkJobDuplicateOfRole(ctx context.Context, arg MarkJobDuplicateOfRoleParams) (int64, error)
 	// Record one expired probe: increment the strike counter and, in the same write,
 	// close the job (closed_at) once it reaches the threshold the caller owns — the
 	// two-strike grace that absorbs a transient death signal. Returns the new strike

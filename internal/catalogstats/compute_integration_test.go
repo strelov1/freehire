@@ -66,7 +66,7 @@ func TestComputeCountsOnlyThePaginatedSet(t *testing.T) {
 
 	seedJob(t, q, "greenhouse", "dupco:1", "dupco")
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET duplicate_of = $1 WHERE external_id = 'dupco:1'`, canonical.ID); err != nil {
+		`UPDATE jobs SET duplicate_of_role = $1 WHERE external_id = 'dupco:1'`, canonical.ID); err != nil {
 		t.Fatalf("suppress duplicate: %v", err)
 	}
 

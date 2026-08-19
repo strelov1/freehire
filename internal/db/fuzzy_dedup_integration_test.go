@@ -131,7 +131,7 @@ func jobWithCompany(externalID, title, companySlug string) UpsertJobParams {
 // pass works over leftovers only.
 func markDuplicate(t *testing.T, pool *pgxpool.Pool, id, canon int64) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), `UPDATE jobs SET duplicate_of = $2 WHERE id = $1`, id, canon); err != nil {
+	if _, err := pool.Exec(context.Background(), `UPDATE jobs SET duplicate_of_role = $2 WHERE id = $1`, id, canon); err != nil {
 		t.Fatalf("mark duplicate: %v", err)
 	}
 }

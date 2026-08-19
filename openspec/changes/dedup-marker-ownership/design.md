@@ -149,6 +149,20 @@ DISTINCT FROM` on rows it has already selected. Nothing scans by an owned column
 noted rather than built; if a future consumer wants "everything the aggregator pass
 suppressed", it gets an index then.
 
+### Decision 7: No foreign key on the owned columns
+
+`duplicate_of` references `jobs(id)`; the three owned columns do not.
+
+The asymmetry is deliberate and mirrors 0113's. A row can carry an owned marker the derivation
+does not surface — an aggregator verdict outranking a role one leaves `duplicate_of_role`
+pointing somewhere nothing reads. `cmd/prune` collects a duplicate cluster by walking
+`duplicate_of`, so it would not collect that row, and deleting the job it points at would then
+fail on a constraint protecting a value no reader consults. Without the key the same case
+degrades to a stale pointer in a pass-owned column, which that pass overwrites on its next run.
+
+The invariant that matters — a duplicate points at a real job — is enforced where it is read,
+on `duplicate_of`, which keeps its key.
+
 ## Risks / Trade-offs
 
 - **A trigger on the hottest table in the schema** → Pure `NEW`-local PL/pgSQL, no query, and

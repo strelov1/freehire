@@ -76,7 +76,7 @@ func TestEstimateOpenJobsExcludesSuppressedAndPrivate(t *testing.T) {
 		}
 	}
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET duplicate_of = $1 WHERE external_id LIKE 'dup:%'`, canonicalID); err != nil {
+		`UPDATE jobs SET duplicate_of_role = $1 WHERE external_id LIKE 'dup:%'`, canonicalID); err != nil {
 		t.Fatalf("suppress duplicates: %v", err)
 	}
 

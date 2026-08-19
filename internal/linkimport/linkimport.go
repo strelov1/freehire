@@ -236,7 +236,7 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 		canon, deduped = jobdedup.CanonicalForRole(ctx, qtx, params, res.Job.ID)
 	}
 	if deduped {
-		if _, err := qtx.MarkJobDuplicateOf(ctx, db.MarkJobDuplicateOfParams{
+		if _, err := qtx.MarkJobDuplicateOfRole(ctx, db.MarkJobDuplicateOfRoleParams{
 			ID:          res.Job.ID,
 			DuplicateOf: pgtype.Int8{Int64: canon.ID, Valid: true},
 		}); err != nil {

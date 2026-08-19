@@ -582,7 +582,10 @@ type Job struct {
 	SalaryCurrencySource  string             `json:"salary_currency_source"`
 	SalaryPeriodSource    string             `json:"salary_period_source"`
 	// company_slug with hyphens removed. Maintained by every write path that sets company_slug (enforced by a test); exists so the aggregator-suppression pass can filter on a column the planner can estimate instead of an expression it cannot.
-	CompanySlugFolded pgtype.Text `json:"company_slug_folded"`
+	CompanySlugFolded     pgtype.Text `json:"company_slug_folded"`
+	DuplicateOfAggregator pgtype.Int8 `json:"duplicate_of_aggregator"`
+	DuplicateOfRole       pgtype.Int8 `json:"duplicate_of_role"`
+	DuplicateOfFuzzy      pgtype.Int8 `json:"duplicate_of_fuzzy"`
 }
 
 type JobDailyStat struct {

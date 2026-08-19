@@ -261,7 +261,7 @@ func TestResidualTitleGroupsExcludesClassifiedClosedAndDuplicates(t *testing.T) 
 		t.Fatalf("close f:4: %v", err)
 	}
 	dup := residualJob(ctx, t, pool, "f:5", "Line Cook", "ukg", nil)
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of = $1 WHERE id = $2", live.ID, dup.ID); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", live.ID, dup.ID); err != nil {
 		t.Fatalf("mark f:5 duplicate: %v", err)
 	}
 
@@ -383,7 +383,7 @@ func TestPruneJobsTakesTheDuplicateCluster(t *testing.T) {
 
 	canon := residualJob(ctx, t, pool, "d:1", "Line Cook", "greenhouse", nil)
 	dup := residualJob(ctx, t, pool, "d:2", "Line Cook", "ukg", nil)
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of = $1 WHERE id = $2", canon.ID, dup.ID); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", canon.ID, dup.ID); err != nil {
 		t.Fatalf("mark duplicate: %v", err)
 	}
 
@@ -414,7 +414,7 @@ func TestPruneJobsArchivesAnOverlappingRowOnce(t *testing.T) {
 
 	canon := residualJob(ctx, t, pool, "o:1", "Line Cook", "greenhouse", nil)
 	dup := residualJob(ctx, t, pool, "o:2", "Line Cook", "ukg", nil)
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of = $1 WHERE id = $2", canon.ID, dup.ID); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", canon.ID, dup.ID); err != nil {
 		t.Fatalf("mark duplicate: %v", err)
 	}
 
@@ -477,10 +477,10 @@ func TestPruneJobsFollowsDuplicateChains(t *testing.T) {
 	a := residualJob(ctx, t, pool, "c:1", "Line Cook", "greenhouse", nil)
 	b := residualJob(ctx, t, pool, "c:2", "Line Cook", "ukg", nil)
 	c := residualJob(ctx, t, pool, "c:3", "Line Cook", "workday", nil)
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of = $1 WHERE id = $2", c.ID, b.ID); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", c.ID, b.ID); err != nil {
 		t.Fatalf("link b -> c: %v", err)
 	}
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of = $1 WHERE id = $2", b.ID, a.ID); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", b.ID, a.ID); err != nil {
 		t.Fatalf("link a -> b: %v", err)
 	}
 

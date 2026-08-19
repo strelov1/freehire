@@ -15,7 +15,7 @@ import (
 func setDuplicateOf(t *testing.T, pool *pgxpool.Pool, jobID, canonID int64) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		"UPDATE jobs SET duplicate_of = $1 WHERE id = $2", canonID, jobID); err != nil {
+		"UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", canonID, jobID); err != nil {
 		t.Fatalf("set duplicate_of: %v", err)
 	}
 }

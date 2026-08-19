@@ -130,7 +130,7 @@ func TestFindOpenJobByURL_SkipsClosedAndFollowsDuplicates(t *testing.T) {
 		canonicalID, _ := dupOf(t, pool, "himalayas:canonical")
 		const canonicalSlug = "pslug-himalayas:canonical"
 		if _, err := pool.Exec(ctx,
-			"UPDATE jobs SET duplicate_of = $1 WHERE external_id = $2", canonicalID, "himalayas:dup"); err != nil {
+			"UPDATE jobs SET duplicate_of_role = $1 WHERE external_id = $2", canonicalID, "himalayas:dup"); err != nil {
 			t.Fatalf("suppress himalayasPosting: %v", err)
 		}
 		slug, err := findByURL(t, q, himalayasPosting)
@@ -150,7 +150,7 @@ func TestFindOpenJobByURL_SkipsClosedAndFollowsDuplicates(t *testing.T) {
 		mustUpsert(t, q, urlJob("himalayas:dup", himalayasPosting))
 		canonicalID, _ := dupOf(t, pool, "himalayas:canonical")
 		if _, err := pool.Exec(ctx,
-			"UPDATE jobs SET duplicate_of = $1 WHERE external_id = $2", canonicalID, "himalayas:dup"); err != nil {
+			"UPDATE jobs SET duplicate_of_role = $1 WHERE external_id = $2", canonicalID, "himalayas:dup"); err != nil {
 			t.Fatalf("suppress himalayasPosting: %v", err)
 		}
 		if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", canonicalID); err != nil {

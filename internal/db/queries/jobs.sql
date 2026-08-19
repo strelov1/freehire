@@ -512,13 +512,19 @@ WHERE company_slug = sqlc.arg(company_slug)
 ORDER BY id
 LIMIT 1;
 
--- name: MarkJobDuplicateOf :execrows
--- Point one row at its canon. The import path only: the batch passes recompute whole companies
--- (RecomputeRoleDuplicatesForCompany, SuppressAggregatorDuplicatesForCompany) and must keep
--- doing so — this marks the single row an import just wrote.
+-- name: MarkJobDuplicateOfRole :execrows
+-- Point one row at its ROLE canon. The import path only: the batch passes recompute whole
+-- companies (RecomputeRoleDuplicatesForCompanies, SuppressAggregatorDuplicatesForCompanies) and
+-- must keep doing so — this marks the single row an import just wrote.
+--
+-- Writes duplicate_of_role, not duplicate_of, and the name says so. Both callers
+-- (cmd/ingest/store.go, internal/linkimport) resolve their canon through
+-- jobdedup.CanonicalForRole, so this is the role verdict arriving early — the same clustering
+-- the batch pass would reach hours later. A write to duplicate_of itself would not survive:
+-- the derivation in migration 0115 recomputes it from the owned columns.
 UPDATE jobs
-SET duplicate_of = sqlc.arg(duplicate_of),
-    updated_at   = now()
+SET duplicate_of_role = sqlc.arg(duplicate_of),
+    updated_at        = now()
 WHERE id = sqlc.arg(id);
 
 -- name: ListRoleClusterCopies :many
@@ -635,11 +641,11 @@ target AS (
     WHERE j.company_slug = ANY(sqlc.arg(companies)::text[]) AND j.closed_at IS NULL
 )
 UPDATE jobs j
-SET duplicate_of = t.new_dup,
-    updated_at   = now()
+SET duplicate_of_role = t.new_dup,
+    updated_at        = now()
 FROM target t
 WHERE j.id = t.id
-  AND j.duplicate_of IS DISTINCT FROM t.new_dup;
+  AND j.duplicate_of_role IS DISTINCT FROM t.new_dup;
 
 -- name: CompaniesWithAggregatorPostings :many
 -- Company slugs with at least one OPEN aggregator posting — the drive list for the
@@ -799,11 +805,11 @@ target AS (
     GROUP BY a.id
 )
 UPDATE jobs j
-SET duplicate_of = t.new_dup,
-    updated_at   = now()
+SET duplicate_of_aggregator = t.new_dup,
+    updated_at              = now()
 FROM target t
 WHERE j.id = t.id
-  AND j.duplicate_of IS DISTINCT FROM t.new_dup;
+  AND j.duplicate_of_aggregator IS DISTINCT FROM t.new_dup;
 
 -- name: PropagateCollectionsToJobs :execrows
 -- Denormalize each company's curated-collection set onto its jobs, so the search
@@ -1555,8 +1561,8 @@ ORDER BY id;
 -- meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
 -- recompute reverses everything here by recomputing duplicate_of from scratch.
 UPDATE jobs j
-SET duplicate_of = m.canon_id,
-    updated_at   = now()
+SET duplicate_of_fuzzy = m.canon_id,
+    updated_at         = now()
 FROM (
     SELECT unnest(sqlc.arg(ids)::bigint[]) AS id,
            unnest(sqlc.arg(canons)::bigint[]) AS canon_id
@@ -1564,7 +1570,7 @@ FROM (
 WHERE j.id = m.id
   AND j.company_slug = sqlc.arg(company)
   AND j.closed_at IS NULL
-  AND j.duplicate_of IS DISTINCT FROM m.canon_id;
+  AND j.duplicate_of_fuzzy IS DISTINCT FROM m.canon_id;
 
 -- name: OrphanAggregatorCompanies :many
 -- Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans

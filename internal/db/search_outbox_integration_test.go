@@ -218,7 +218,7 @@ func TestDeleteIneligibleSearchOutboxReapsWhatClaimCanNeverTake(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closedJob.ID); err != nil {
 		t.Fatalf("close job: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
 		t.Fatalf("mark repost as duplicate: %v", err)
 	}
 	// A dead-lettered entry whose job ALSO closed: it is ineligible on both counts, and
@@ -359,7 +359,7 @@ func TestClaimSearchOutboxBatchOrdersByJobPostedAtAndSkipsClosedOrDuplicate(t *t
 	}
 	// repost's outbox entry stays queued, but the job itself became a non-canonical
 	// repost of canon after being enqueued.
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
 		t.Fatalf("mark repost as duplicate: %v", err)
 	}
 
