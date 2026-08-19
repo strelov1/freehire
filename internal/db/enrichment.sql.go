@@ -116,6 +116,21 @@ WHERE id IN (
 //
 // Bounded by max_rows so one enrich run cannot turn into an unbounded delete on the first
 // pass over a long-accumulated backlog; the next run takes the next slice.
+//
+// There is a race here, and it is left unserialized deliberately. A job can become eligible
+// again (reopened, or released from duplicate_of) while this statement runs: the enqueue that
+// follows that lifecycle write hits ON CONFLICT DO NOTHING because this row still exists, and
+// then this deletes it, leaving an eligible job with no entry. Three things bound it. The
+// window is one statement, not a transaction — once the row is gone the next
+// EnqueueJobEnrichment inserts normally. Runner.Run reaps BEFORE it enqueues, so its own
+// EnqueuePendingJobs re-adds anything that became eligible up to that point. And
+// EnqueuePendingJobs re-evaluates the whole catalogue at the start of every run, so the worst
+// case is one cron period of delay for one job, not a lost posting.
+//
+// Serializing it would mean locking jobs rows from a housekeeping statement — contending with
+// ingest on the hottest table in the schema to prevent an hour's delay on a job that is not
+// yet enriched anyway. DeleteIneligibleSearchOutbox carries the identical race for the identical
+// reason.
 func (q *Queries) DeleteIneligibleEnrichmentOutbox(ctx context.Context, maxRows int32) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteIneligibleEnrichmentOutbox, maxRows)
 	if err != nil {
