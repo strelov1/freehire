@@ -26,8 +26,9 @@ another pass's column is a defect.
 ### Requirement: The effective duplicate marker is derived, not written
 
 The system SHALL derive `jobs.duplicate_of` from the three owned columns rather than accept
-direct writes to it, resolving them as `COALESCE(duplicate_of_role, duplicate_of_aggregator,
-duplicate_of_fuzzy)` — deterministic verdicts first, heuristic last. Every existing reader of
+direct writes to it, resolving them as `COALESCE(duplicate_of_aggregator, duplicate_of_role,
+duplicate_of_fuzzy)` — the order that reproduces which pass wins a contested row today, with
+the only heuristic pass last. Every existing reader of
 `duplicate_of` SHALL keep its current meaning: a non-NULL value names this posting's canon,
 and NULL means the posting is itself canonical.
 
@@ -38,11 +39,12 @@ and NULL means the posting is itself canonical.
 - **THEN** it reads `jobs.duplicate_of` exactly as before and observes the same value it
   would have observed under the single-column scheme
 
-#### Scenario: The most deterministic verdict wins a disagreement
+#### Scenario: A contested posting keeps the verdict it has today
 
-- **WHEN** a posting carries a marker in more than one owned column
-- **THEN** `duplicate_of` resolves to the role verdict over the aggregator verdict, and the
-  aggregator verdict over the fuzzy verdict
+- **WHEN** an aggregator posting is both suppressed against its ATS twin and a member of a
+  role cluster, so it carries a marker in two owned columns
+- **THEN** `duplicate_of` resolves to the aggregator verdict, pointing at the first-party ATS
+  posting rather than at the role canon
 
 #### Scenario: A direct write does not survive
 

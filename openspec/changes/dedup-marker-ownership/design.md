@@ -70,16 +70,35 @@ The trigger is pure PL/pgSQL over `NEW`, issues no query, and returns early when
 three owned columns changed, so the cost on the ingest path is a few microseconds per
 modified row. Against that, the change removes ~5.7M pointless row writes a day.
 
-### Decision 2: Precedence is role, then aggregator, then fuzzy
+### Decision 2: Precedence is aggregator, then role, then fuzzy
 
-`COALESCE(duplicate_of_role, duplicate_of_aggregator, duplicate_of_fuzzy)` — deterministic
-verdicts ahead of heuristic ones.
+`COALESCE(duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy)`.
 
-In practice the passes are disjoint: the aggregator and fuzzy passes are already scoped to
-rows the earlier passes left canonical, so at most one column should be non-NULL on any row.
-Precedence is a tie-break for a case that should not arise, which is why the cheapest
-defensible order wins. Task 1 verifies the assumption with a count before the ordering can
-matter.
+This decision originally read role-first, on the reasoning that the passes are disjoint and
+precedence is a formality. Task 1.1 measured prod and both halves of that reasoning were
+wrong.
+
+**The passes overlap.** Of 1,162,487 open marked rows, 8,279 are both aggregator-shaped and
+share a `role_fingerprint` with their canon — 0.7%, small but not zero. Precedence decides
+what those rows point at.
+
+**Today the aggregator pass wins that overlap**, and the ordering is not incidental. Its
+candidate set is documented as "canonical OR already pointing at a non-aggregator row", so a
+row the role pass pointed at a non-aggregator canon is deliberately re-decided by the
+aggregator pass, while a row the role pass pointed at another aggregator is deliberately left
+alone. Role-first `COALESCE` would have inverted the first case for up to 8,279 rows —
+a silent behavior change smuggled in under a refactor.
+
+Aggregator-first reproduces both cases exactly. The row the role pass pointed at another
+aggregator never enters the aggregator pass's candidate set, so its aggregator column stays
+NULL and `COALESCE` falls through to role — the same answer either order would give. The row
+pointed at a non-aggregator canon does enter it, and aggregator-first keeps the aggregator's
+verdict, which is what happens today.
+
+The "deterministic first" rationale survives the flip: aggregator suppression matches on
+exact normalized title plus compatible country, which is no less deterministic than role
+clustering. Fuzzy is the only heuristic pass, and it is last in either ordering — it is
+scoped to rows the other two left canonical, so it can never contend.
 
 ### Decision 3: Ingest-time writes belong to `duplicate_of_role`
 
@@ -177,9 +196,12 @@ for an unchanged catalogue. That number is the test, and it is already being log
 
 ## Open Questions
 
-- What is the current population of rows that would carry a marker in more than one owned
-  column? Expected zero (Decision 2). Task 1 answers it; the answer decides whether
-  precedence is a formality or a real rule.
+- ~~What is the current population of rows that would carry a marker in more than one owned
+  column?~~ **Answered 2026-08-19: 8,279 of 1,162,487 open marked rows (0.7%).** Precedence
+  is a real rule; Decision 2 was rewritten because of it. A further 28,201 marked rows are
+  neither aggregator-shaped nor sharing a fingerprint with their canon — the backfill seeds
+  those into the role column, and the first refresh re-decides them. What they are is worth
+  a look, but not a blocker: whatever pass owns them will claim them on its next run.
 - Does anything outside the three passes and the two ingest sites write `duplicate_of` today
   through a path the query grep would miss — a manual admin action, a moderation tool, a
   one-off script kept outside the repo?

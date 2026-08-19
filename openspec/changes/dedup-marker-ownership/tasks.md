@@ -1,15 +1,22 @@
 ## 1. Answer the open questions before writing schema
 
-- [ ] 1.1 Count on prod, off-peak and with a `statement_timeout`, how many open rows would
+- [x] 1.1 Count on prod, off-peak and with a `statement_timeout`, how many open rows would
       carry a marker in more than one owned column under the seeding rule of Decision 4.
-      Expected zero; record the actual number in `design.md` and revisit Decision 2 if it is
-      not.
-- [ ] 1.2 Grep the module for every write to `duplicate_of` — queries, Go call sites, and any
+      **8,279 of 1,162,487 open marked rows (0.7%), not zero.** Decision 2 rewritten: the
+      precedence order is aggregator, role, fuzzy, because that is which pass wins a
+      contested row today.
+- [x] 1.2 Grep the module for every write to `duplicate_of` — queries, Go call sites, and any
       `migrations/*.sql` that sets it — and confirm the writer list is exactly the three
       passes plus `cmd/ingest/store.go` and `internal/linkimport/linkimport.go`.
-- [ ] 1.3 Record the current prod baseline for re-marked rows per pass per run from the
+      **Confirmed:** four SQL statements assign it (`MarkJobDuplicateOf`,
+      `RecomputeRoleDuplicatesForCompanies`, `SuppressAggregatorDuplicatesForCompanies`,
+      `MarkFuzzyDuplicatesForCompany`); no `INSERT` sets it, no migration sets it, and the
+      only Go call sites are the two named above.
+- [x] 1.3 Record the current prod baseline for re-marked rows per pass per run from the
       `freehire-reindex-dedup-only` journal, so the post-deploy acceptance check has a
-      before-picture that outlives the journal's retention.
+      before-picture that outlives the journal's retention. **In `proposal.md`**; the
+      2026-08-19 01:30 cycle adds the decisive arithmetic — role re-marked 474,949 while
+      aggregator and fuzzy together hold 470,033, so ~5k of the ~950k is real work.
 
 ## 2. Schema
 
