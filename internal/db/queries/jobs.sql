@@ -530,12 +530,26 @@ updated AS (
     SET duplicate_of_role = sqlc.arg(duplicate_of_role),
         updated_at        = now()
     WHERE j.id = sqlc.arg(id)
-    RETURNING j.id, j.duplicate_of AS now_duplicate_of
+    RETURNING j.id,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+flipped AS (
+    SELECT u.id, b.was_duplicate_of, u.now_duplicate_of, u.eff_posted_at
+    FROM updated u JOIN before b ON b.id = u.id
 ),
 dequeued AS (
     INSERT INTO search_delete_outbox (job_id)
-    SELECT u.id FROM updated u JOIN before b ON b.id = u.id
-    WHERE b.was_duplicate_of IS NULL AND u.now_duplicate_of IS NOT NULL
+    SELECT id FROM flipped WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+-- Both callers pass a canon, so today this branch never fires: the import path only ever SETS
+-- the role marker. It is here because the argument is nullable and the other three writers are
+-- symmetric — a future caller clearing the marker through this query would otherwise leave a
+-- now-canonical posting out of search until the next rebuild, silently.
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM flipped WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT count(*)::bigint FROM updated;

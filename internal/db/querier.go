@@ -2545,6 +2545,10 @@ type Querier interface {
 	// jobdedup.CanonicalForRole, so this is the role verdict arriving early — the same clustering
 	// the batch pass would reach hours later. A write to duplicate_of itself would not survive:
 	// the derivation in migration 0115 recomputes it from the owned columns.
+	// Both callers pass a canon, so today this branch never fires: the import path only ever SETS
+	// the role marker. It is here because the argument is nullable and the other three writers are
+	// symmetric — a future caller clearing the marker through this query would otherwise leave a
+	// now-canonical posting out of search until the next rebuild, silently.
 	MarkJobDuplicateOfRole(ctx context.Context, arg MarkJobDuplicateOfRoleParams) (int64, error)
 	// Record one expired probe: increment the strike counter and, in the same write,
 	// close the job (closed_at) once it reaches the threshold the caller owns — the

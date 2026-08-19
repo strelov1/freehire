@@ -2136,12 +2136,22 @@ updated AS (
     SET duplicate_of_role = $2,
         updated_at        = now()
     WHERE j.id = $1
-    RETURNING j.id, j.duplicate_of AS now_duplicate_of
+    RETURNING j.id,
+              j.duplicate_of AS now_duplicate_of,
+              COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+flipped AS (
+    SELECT u.id, b.was_duplicate_of, u.now_duplicate_of, u.eff_posted_at
+    FROM updated u JOIN before b ON b.id = u.id
 ),
 dequeued AS (
     INSERT INTO search_delete_outbox (job_id)
-    SELECT u.id FROM updated u JOIN before b ON b.id = u.id
-    WHERE b.was_duplicate_of IS NULL AND u.now_duplicate_of IS NOT NULL
+    SELECT id FROM flipped WHERE was_duplicate_of IS NULL AND now_duplicate_of IS NOT NULL
+    ON CONFLICT (job_id) DO NOTHING
+),
+requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM flipped WHERE was_duplicate_of IS NOT NULL AND now_duplicate_of IS NULL
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT count(*)::bigint FROM updated
@@ -2161,6 +2171,10 @@ type MarkJobDuplicateOfRoleParams struct {
 // jobdedup.CanonicalForRole, so this is the role verdict arriving early — the same clustering
 // the batch pass would reach hours later. A write to duplicate_of itself would not survive:
 // the derivation in migration 0115 recomputes it from the owned columns.
+// Both callers pass a canon, so today this branch never fires: the import path only ever SETS
+// the role marker. It is here because the argument is nullable and the other three writers are
+// symmetric — a future caller clearing the marker through this query would otherwise leave a
+// now-canonical posting out of search until the next rebuild, silently.
 func (q *Queries) MarkJobDuplicateOfRole(ctx context.Context, arg MarkJobDuplicateOfRoleParams) (int64, error) {
 	row := q.db.QueryRow(ctx, markJobDuplicateOfRole, arg.ID, arg.DuplicateOfRole)
 	var column_1 int64

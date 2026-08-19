@@ -21,6 +21,10 @@
       gains a small `before` CTE reading only the rows it is about to touch.
 - [x] 2.4 `MarkJobDuplicateOfRole` (the ingest-time role verdict) — same treatment; it already
       runs inside the ingest transaction, so the queue write lands atomically with the marker.
+      Carries BOTH branches even though its two callers only ever set a canon and the clearing
+      branch is therefore unreachable today: the argument is nullable, the other three writers
+      are symmetric, and a future caller clearing the marker here would otherwise leave a
+      now-canonical posting out of search until the next rebuild, silently.
 - [x] 2.5 `make sqlc`, fix the call sites the `:one` change touches. None needed changing —
       the callers already took `int64`.
 
@@ -40,8 +44,9 @@
 
 ## 4. Ship
 
-- [x] 4.1 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, then
-      the tagged suites for `internal/db`, `cmd/reindex`, `cmd/ingest`, `internal/linkimport`.
+- [x] 4.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`,
+      then the tagged suites for `internal/db`, `cmd/reindex`, `cmd/ingest` and
+      `internal/linkimport` — all pass.
 - [ ] 4.2 Deploy. No migration, no backfill, no ordering constraint — the change is live for
       every status change after it lands.
 - [ ] 4.3 Confirm on prod that the drain reports removals after the next marker refresh, and
