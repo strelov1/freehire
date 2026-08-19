@@ -35,14 +35,20 @@
 
 ## 3. Backfill
 
-- [ ] 3.1 `cmd/backfill-duplicate-marker-owner`: chunked keyset pass over `id`, seeding by
-      shape per Decision 4, `IS DISTINCT FROM`-guarded, resumable, `DATABASE_URL` only —
-      modelled on `cmd/backfill-slug-folded`.
-- [ ] 3.2 Integration test: an aggregator row pointing at a non-aggregator canon seeds the
+- [x] 3.1 `cmd/backfill-duplicate-marker-owner`: chunked pass over an id RANGE, seeding by
+      shape per Decision 4, resumable, `DATABASE_URL` only — modelled on
+      `cmd/backfill-slug-folded`. Closed rows are seeded too: nothing else ever would, and the
+      first statement to touch a marker column on one would otherwise fire the derivation and
+      clear a `duplicate_of` that `cmd/prune` still walks.
+- [x] 3.2 Integration test: an aggregator row pointing at a non-aggregator canon seeds the
       aggregator column, every other marked row seeds the role column, an unmarked row seeds
-      nothing, and a second run writes zero rows.
-- [ ] 3.3 The reconcile sweep of Decision 5 step 4 — rows with `duplicate_of` set and all
-      three owned columns NULL — as a flag on the same worker.
+      nothing, and a second run writes zero rows. The fixture disables the trigger to produce a
+      genuinely pre-0114 row — the only honest way to make one in a database that already has
+      the derivation.
+- [x] 3.3 ~~The reconcile sweep as a flag on the same worker.~~ **Not needed.** The seeding
+      predicate is "marked, and no owned column set", which is exactly the reconcile predicate:
+      re-running the worker after 0115 lands picks up every row written while it was walking.
+      A separate mode would have been a second name for the same statement.
 
 ## 4. Passes write their own column
 

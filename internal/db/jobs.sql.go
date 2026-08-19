@@ -94,6 +94,61 @@ func (q *Queries) BackfillCompanySlugFoldedChunk(ctx context.Context, arg Backfi
 	return result.RowsAffected(), nil
 }
 
+const backfillDuplicateMarkerOwnerChunk = `-- name: BackfillDuplicateMarkerOwnerChunk :execrows
+UPDATE jobs j
+SET duplicate_of_aggregator = CASE
+        WHEN j.source = ANY($1::text[])
+         AND NOT (c.source = ANY($1::text[]))
+        THEN j.duplicate_of
+    END,
+    duplicate_of_role = CASE
+        WHEN j.source = ANY($1::text[])
+         AND NOT (c.source = ANY($1::text[]))
+        THEN NULL
+        ELSE j.duplicate_of
+    END
+FROM jobs c
+WHERE c.id = j.duplicate_of
+  AND j.id >= $2 AND j.id < $3
+  AND j.duplicate_of IS NOT NULL
+  AND j.duplicate_of_aggregator IS NULL
+  AND j.duplicate_of_role IS NULL
+  AND j.duplicate_of_fuzzy IS NULL
+`
+
+type BackfillDuplicateMarkerOwnerChunkParams struct {
+	Aggregators []string `json:"aggregators"`
+	FromID      int64    `json:"from_id"`
+	ToID        int64    `json:"to_id"`
+}
+
+// Seed the owned marker columns (0114) from the single duplicate_of that predates them, for one
+// id range.
+//
+// Provenance cannot be recovered: a marked row records WHERE it points, never which pass decided
+// it. So the seed goes by shape — a marked row whose own source is an aggregator and whose canon's
+// is not is the aggregator pass's; everything else is seeded as the role pass's.
+//
+// Fuzzy markers are indistinguishable from role markers that way and land in the role column. That
+// is self-correcting and cheap to reason about: the first role recompute clears the ones that are
+// not role clusters, and the fuzzy pass re-sets them in its own column during the same run. One
+// extra cycle of the churn this change removes, once.
+//
+// Closed rows are seeded too, deliberately. The passes only consider open rows, so nothing would
+// ever seed a closed row's columns — and then the first statement to touch any marker column on it
+// would fire the derivation and silently clear a duplicate_of that prune still walks.
+//
+// The "no owned column set yet" predicate is what makes re-runs free, and it is also the reconcile
+// sweep: a row written between this chunk passing its range and the trigger existing still matches,
+// so running the pass again after the trigger lands finishes the job. No separate mode needed.
+func (q *Queries) BackfillDuplicateMarkerOwnerChunk(ctx context.Context, arg BackfillDuplicateMarkerOwnerChunkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, backfillDuplicateMarkerOwnerChunk, arg.Aggregators, arg.FromID, arg.ToID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const canonicalJobForRole = `-- name: CanonicalJobForRole :one
 SELECT id, public_slug
 FROM jobs
@@ -586,6 +641,34 @@ func (q *Queries) CountCatalogueScale(ctx context.Context) (CountCatalogueScaleR
 	row := q.db.QueryRow(ctx, countCatalogueScale)
 	var i CountCatalogueScaleRow
 	err := row.Scan(&i.OpenJobs, &i.Companies)
+	return i, err
+}
+
+const duplicateMarkerOwnerBackfillBounds = `-- name: DuplicateMarkerOwnerBackfillBounds :one
+SELECT COALESCE(min(id), 0)::bigint AS min_id,
+       COALESCE(max(id), 0)::bigint AS max_id,
+       count(*) FILTER (
+           WHERE duplicate_of IS NOT NULL
+             AND duplicate_of_aggregator IS NULL
+             AND duplicate_of_role IS NULL
+             AND duplicate_of_fuzzy IS NULL
+       )::bigint AS remaining
+FROM jobs
+`
+
+type DuplicateMarkerOwnerBackfillBoundsRow struct {
+	MinID     int64 `json:"min_id"`
+	MaxID     int64 `json:"max_id"`
+	Remaining int64 `json:"remaining"`
+}
+
+// The id range the owned-marker backfill walks, plus how many rows still need it. Exact count on
+// purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong
+// "0 remaining" would end it early.
+func (q *Queries) DuplicateMarkerOwnerBackfillBounds(ctx context.Context) (DuplicateMarkerOwnerBackfillBoundsRow, error) {
+	row := q.db.QueryRow(ctx, duplicateMarkerOwnerBackfillBounds)
+	var i DuplicateMarkerOwnerBackfillBoundsRow
+	err := row.Scan(&i.MinID, &i.MaxID, &i.Remaining)
 	return i, err
 }
 

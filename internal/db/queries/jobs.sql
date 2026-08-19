@@ -1626,3 +1626,57 @@ SELECT COALESCE(min(id), 0)::bigint AS min_id,
        COALESCE(max(id), 0)::bigint AS max_id,
        count(*) FILTER (WHERE company_slug_folded IS DISTINCT FROM replace(company_slug, '-', ''))::bigint AS remaining
 FROM jobs;
+
+-- name: BackfillDuplicateMarkerOwnerChunk :execrows
+-- Seed the owned marker columns (0114) from the single duplicate_of that predates them, for one
+-- id range.
+--
+-- Provenance cannot be recovered: a marked row records WHERE it points, never which pass decided
+-- it. So the seed goes by shape — a marked row whose own source is an aggregator and whose canon's
+-- is not is the aggregator pass's; everything else is seeded as the role pass's.
+--
+-- Fuzzy markers are indistinguishable from role markers that way and land in the role column. That
+-- is self-correcting and cheap to reason about: the first role recompute clears the ones that are
+-- not role clusters, and the fuzzy pass re-sets them in its own column during the same run. One
+-- extra cycle of the churn this change removes, once.
+--
+-- Closed rows are seeded too, deliberately. The passes only consider open rows, so nothing would
+-- ever seed a closed row's columns — and then the first statement to touch any marker column on it
+-- would fire the derivation and silently clear a duplicate_of that prune still walks.
+--
+-- The "no owned column set yet" predicate is what makes re-runs free, and it is also the reconcile
+-- sweep: a row written between this chunk passing its range and the trigger existing still matches,
+-- so running the pass again after the trigger lands finishes the job. No separate mode needed.
+UPDATE jobs j
+SET duplicate_of_aggregator = CASE
+        WHEN j.source = ANY(sqlc.arg(aggregators)::text[])
+         AND NOT (c.source = ANY(sqlc.arg(aggregators)::text[]))
+        THEN j.duplicate_of
+    END,
+    duplicate_of_role = CASE
+        WHEN j.source = ANY(sqlc.arg(aggregators)::text[])
+         AND NOT (c.source = ANY(sqlc.arg(aggregators)::text[]))
+        THEN NULL
+        ELSE j.duplicate_of
+    END
+FROM jobs c
+WHERE c.id = j.duplicate_of
+  AND j.id >= sqlc.arg(from_id) AND j.id < sqlc.arg(to_id)
+  AND j.duplicate_of IS NOT NULL
+  AND j.duplicate_of_aggregator IS NULL
+  AND j.duplicate_of_role IS NULL
+  AND j.duplicate_of_fuzzy IS NULL;
+
+-- name: DuplicateMarkerOwnerBackfillBounds :one
+-- The id range the owned-marker backfill walks, plus how many rows still need it. Exact count on
+-- purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong
+-- "0 remaining" would end it early.
+SELECT COALESCE(min(id), 0)::bigint AS min_id,
+       COALESCE(max(id), 0)::bigint AS max_id,
+       count(*) FILTER (
+           WHERE duplicate_of IS NOT NULL
+             AND duplicate_of_aggregator IS NULL
+             AND duplicate_of_role IS NULL
+             AND duplicate_of_fuzzy IS NULL
+       )::bigint AS remaining
+FROM jobs;
