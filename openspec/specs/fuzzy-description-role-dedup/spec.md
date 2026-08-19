@@ -5,7 +5,6 @@ Collapse near-identical-description reposts that byte-exact matching misses — 
 reposted per city with a localized salary or legal block, where a hash sees two unrelated
 texts because it has no notion of "almost". Uses word overlap of the normalized description
 within a company+title bucket, running after and never overriding the exact passes.
-
 ## Requirements
 ### Requirement: Near-identical-description reposts collapse within a company+title bucket
 
@@ -40,8 +39,13 @@ bucket and never compares postings of different roles.
 
 The fuzzy-description pass SHALL run AFTER the exact role-cluster recompute and operate only
 over its remaining open canonical rows, so it merges what byte-exact matching left split and
-never re-splits or contradicts a deterministic collapse. It SHALL be idempotent and
-reversible by the standard recompute.
+never re-splits or contradicts a deterministic collapse. It SHALL write only its own marker
+column, `duplicate_of_fuzzy`, and SHALL be idempotent across a full refresh cycle — the
+recompute no longer reverses it, because the recompute no longer reaches it.
+
+Running after the exact pass remains a cost optimization and a merge-quality rule: it keeps
+the fuzzy pass off rows already claimed deterministically. It is no longer what makes the
+end state correct.
 
 #### Scenario: Exact-collapsed reposts are untouched
 
@@ -53,6 +57,13 @@ reversible by the standard recompute.
 - **WHEN** the fuzzy pass runs twice with no new postings
 - **THEN** the second run changes no `duplicate_of` markers
 
+#### Scenario: A full refresh cycle is stable
+
+- **WHEN** the whole marker refresh runs twice with no new postings, so the role recompute
+  runs between the two fuzzy passes
+- **THEN** the second fuzzy pass changes no markers, and the role recompute clears none of
+  the fuzzy markers the first pass set
+
 ### Requirement: Over-merge guards are enforced
 
 The fuzzy pass SHALL guard against merging distinct roles: a conservative word-similarity
@@ -63,3 +74,4 @@ differ only by grade are not merged.
 
 - **WHEN** two postings share a company and base title but carry different seniority grades
 - **THEN** they are not collapsed together, regardless of description similarity
+
