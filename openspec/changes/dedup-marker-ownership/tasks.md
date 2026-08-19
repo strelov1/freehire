@@ -98,11 +98,44 @@
       the tagged suite for `internal/db` and `cmd/reindex`. All clean, plus the tagged suites
       for `internal/handler`, `cmd/ingest`, `internal/linkimport` and `internal/catalogstats` —
       every package whose fixtures wrote `duplicate_of`.
-- [ ] 6.2 Apply 2.1 on prod, run the backfill under `systemd-run`, apply 2.2, run the
+- [x] 6.2 Apply 2.1 on prod, run the backfill under `systemd-run`, apply 2.2, run the
       reconcile sweep, then deploy the code — the order of Decision 5, with the marker-refresh
       timer stopped for the window between the backfill finishing and the deploy landing.
-- [ ] 6.3 After the first post-deploy refresh cycle absorbs the seeding correction, confirm
+      **Deployed 2026-08-19.** Three things went differently from the plan and are worth the
+      next person's attention:
+      - `release.sh` applies every pending migration in one step, so 0114 and 0115 landed
+        together. Harmless in the end — the derivation only fires on a write naming a marker
+        column, so it clears nothing retroactively — but the plan's "backfill between them"
+        was not achievable through the normal deploy path. What actually protects the
+        catalogue is the marker timers being stopped, not the migration order.
+      - **The deploy caused a 7-minute outage, and the cause was the worker pause switch.**
+        `freehire:pause:all` was set to reduce lock contention; `cmd/migrate` is a worker, so
+        it exited 0 with "paused, skipping this run", `release.sh` read that as success and
+        flipped the colour. New code, old schema, `SQLSTATE 42703` on every job read. The
+        migration block guards against "migration failed", not "migration politely declined".
+      - `ALTER TABLE` needed ten retries to win `ACCESS EXCLUSIVE` on `jobs` even off-peak;
+        the 5s `lock_timeout` is deliberate and the answer is repetition, not a longer wait.
+      Backfill: 2,032,470 rows, ~55 min at `BACKFILL_MARKER_CHUNK=1000000` (the 50k default
+      projected five hours — the chunk spans an id RANGE and the sequence runs far ahead of
+      the row count).
+- [x] 6.3 After the first post-deploy refresh cycle absorbs the seeding correction, confirm
       the next cycle reports near-zero re-marked rows for all three passes against the 1.3
-      baseline. This is the acceptance criterion.
+      baseline. This is the acceptance criterion. **PASSED.**
+
+      | Pass | Baseline | Cycle 1 (seeding correction) | Cycle 2 |
+      |---|---|---|---|
+      | role | 460k–495k | 365,015 | **4,035** |
+      | aggregator | 120k–128k | 5,007 | **4,928** |
+      | fuzzy | 305k–348k | 340,234 | **4,422** |
+      | total | ~950,000 | 710,256 | **13,385** |
+
+      A 98.6% reduction, and the cycle now takes 1h33m instead of over two hours. The
+      aggregator pass dropped in the FIRST cycle — it never needed the seeding correction,
+      since the backfill seeds its column by shape. Cycle 2 ran 17:07–18:40 UTC.
 - [ ] 6.4 Confirm `reindex --since` still behaves with a working set roughly a third smaller,
-      per the last risk in `design.md`.
+      per the last risk in `design.md`. **Deferred, deliberately.** `--since` is not on any
+      timer (the scheduled rebuilds are full-scope), so nothing exercises it until someone
+      runs it by hand. The risk it guards against — a smaller working set — is a correctness
+      improvement, and the acceptance numbers above already show `updated_at` has stopped
+      churning. Left unchecked rather than silently dropped: whoever next runs a `--since`
+      rebuild should confirm it, and this line is the reminder.
