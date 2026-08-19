@@ -31,9 +31,15 @@
   const jsonLd = $derived(
     jsonLdScript([
       jobPostingJsonLd(data.job, origin),
+      // Two levels, not three: the feed a job sits in IS the homepage, so the
+      // parent here is `/`. There was a `Jobs` level pointing at `/jobs`, but
+      // that route is a 301 to `/` (jobs/+page.server.ts — the feed moved), and
+      // a trail step naming a redirect is a step Google resolves away. Adding
+      // it back with `/` as its target would be worse still: two positions, one
+      // URL. If the feed ever gets its own page again, this is where the level
+      // returns.
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
-        { name: 'Jobs', url: `${origin}/jobs` },
         { name: data.job.title, url: canonical },
       ]),
     ])
