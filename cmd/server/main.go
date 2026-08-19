@@ -109,8 +109,11 @@ func main() {
 		// résumés up front so users get a clear message instead of a raw 413. Seam: if the
 		// broad ceiling ever matters, add a Content-Length guard middleware on the non-upload
 		// routes rather than lowering this.
-		BodyLimit:    8 * 1024 * 1024,
-		ErrorHandler: handler.RenderError,
+		BodyLimit: 8 * 1024 * 1024,
+		// Wrapped so an error-derived response is counted with the status actually sent:
+		// Fiber renders errors here, after the middleware chain has unwound, so the counter
+		// in observability.HTTPMetrics cannot see them.
+		ErrorHandler: observability.CountErrors(handler.RenderError),
 		// The app sits behind the in-network nginx proxy (web/nginx.conf). Key c.IP()
 		// (and thus the rate limiter) on X-Real-IP, which nginx OVERWRITES with the real
 		// peer — a single value the client cannot spoof. X-Forwarded-For is deliberately
@@ -125,6 +128,11 @@ func main() {
 		// API over loopback. One definition so the two cannot disagree.
 		TrustedProxies: ratelimit.TrustedCIDRs,
 	})
+
+	// Counting responses sits OUTSIDE recover.New on purpose: recover converts a panic into a
+	// 500 further in, so only a middleware the response passes through on its way back out
+	// records the status the client actually got.
+	app.Use(observability.HTTPMetrics())
 
 	// The recover middleware marks each unwound panic via c.Locals so RenderError
 	// won't double-report it: the sentryfiber middleware below already captures the
