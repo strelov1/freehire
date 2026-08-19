@@ -2,13 +2,17 @@
   // A job's server-sanitized description HTML with consistent typographic styles. Reused by the
   // job page (JobView), the tracker/drawer, and the tailor artifact panel — one home for the CSS
   // so the description reads the same everywhere.
-  let { html }: { html: string } = $props();
+  //
+  // `lang` marks the body as a foreign-language subtree of an English page (see
+  // foreignContentLang in $lib/seo). Optional: callers that don't know the posting's
+  // language omit it and the body simply inherits the document's.
+  let { html, lang }: { html: string; lang?: string } = $props();
 </script>
 
 {#if html}
   <!-- Description is server-sanitized HTML (see internal/sources), safe to render. -->
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
-  <div class="job-description text-sm leading-relaxed">{@html html}</div>
+  <div class="job-description text-sm leading-relaxed" {lang}>{@html html}</div>
 {/if}
 
 <style>

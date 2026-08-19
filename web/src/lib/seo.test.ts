@@ -8,6 +8,7 @@ import {
   companyPageTitle,
   companiesPageTitle,
   datasetJsonLd,
+  foreignContentLang,
   jobListItems,
   jobPostingJsonLd,
   listingRobots,
@@ -16,7 +17,7 @@ import {
 } from './seo';
 import { companyLogoUrl } from './logo';
 import type { PostMeta } from './blog';
-import type { Company, Job } from './types';
+import type { Company, Job, JobCard } from './types';
 
 // collectionPageJsonLd reads only title + public_slug off each job.
 function job(title: string, slug: string): Job {
@@ -236,7 +237,68 @@ describe('organizationJsonLd', () => {
   });
 });
 
+describe('foreignContentLang', () => {
+  it('names the posting language when it is not the page language', () => {
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'ru' } }))).toBe('ru');
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'DE' } }))).toBe('de');
+  });
+
+  it('stays silent for English, so the document language is never restated', () => {
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'en' } }))).toBeUndefined();
+  });
+
+  it('accepts any ISO 639-1 code, down to the catalogue rarities', () => {
+    // Guards the shape check against ever becoming a whitelist. All real
+    // production values — one Javanese posting, three Malagasy — and a language
+    // new to the catalogue must work without touching seo.ts.
+    for (const code of ['jv', 'ha', 'mg', 'eo', 'zu', 'zh']) {
+      expect(foreignContentLang(postingJob({ enrichment: { posting_language: code } }))).toBe(code);
+    }
+  });
+
+  it('stays silent when no language was resolved', () => {
+    expect(foreignContentLang(postingJob())).toBeUndefined();
+    expect(foreignContentLang(postingJob({ enrichment: {} }))).toBeUndefined();
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: '' } }))).toBeUndefined();
+  });
+
+  it('degrades rather than emitting a tag no consumer can resolve', () => {
+    // Prose where a code belongs — the failure mode of an unenforced LLM field.
+    expect(
+      foreignContentLang(postingJob({ enrichment: { posting_language: 'russian' } }))
+    ).toBeUndefined();
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'r u' } }))).toBeUndefined();
+    // Real languages, wrong standard: ISO 639-3 and a regional subtag are not in
+    // the contract today, so they degrade instead of corrupting. Widening the
+    // pattern is what should flip these, not an accident.
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'fil' } }))).toBeUndefined();
+    expect(
+      foreignContentLang(postingJob({ enrichment: { posting_language: 'pt-BR' } }))
+    ).toBeUndefined();
+  });
+
+  it('degrades to silence on a Card, the projection that carries no enrichment', () => {
+    const card: JobCard = { public_slug: 'engineer-abc', title: 'Engineer', company: 'Acme' };
+    expect(foreignContentLang(card)).toBeUndefined();
+  });
+});
+
 describe('jobPostingJsonLd', () => {
+  it('states inLanguage whenever the posting language is known, English included', () => {
+    const ru = jobPostingJsonLd(postingJob({ enrichment: { posting_language: 'ru' } }), ORIGIN);
+    expect(ru.inLanguage).toBe('ru');
+
+    // Unlike the lang attribute, the JSON-LD has no surrounding document to
+    // inherit from — 'en' is a fact worth stating, not a restatement.
+    const en = jobPostingJsonLd(postingJob({ enrichment: { posting_language: 'en' } }), ORIGIN);
+    expect(en.inLanguage).toBe('en');
+
+    expect(jobPostingJsonLd(postingJob(), ORIGIN)).not.toHaveProperty('inLanguage');
+    expect(
+      jobPostingJsonLd(postingJob({ enrichment: { posting_language: 'russian' } }), ORIGIN)
+    ).not.toHaveProperty('inLanguage');
+  });
+
   it('adds logo, skills, and experience/education requirements when present', () => {
     const ld = jobPostingJsonLd(
       postingJob({

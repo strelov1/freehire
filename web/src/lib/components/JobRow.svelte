@@ -11,7 +11,7 @@
   import { cardTags, cardTagsFromCard, formatSalary } from '$lib/enrichment';
   import { computeClientMatch, matchTeaser, resolveMatchState } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
-  import { metaDescription } from '$lib/seo';
+  import { foreignContentLang, metaDescription } from '$lib/seo';
   import type { Job, JobCard } from '$lib/types';
   import { Badge, EntityLogo } from '$lib/ui';
   import { supersedesReality } from '$lib/ghost';
@@ -255,8 +255,12 @@
   </div>
 
   <!-- The title is the card's hero — a size up from the body with tight leading, so
-       the eye lands on the role first. -->
+       the eye lands on the role first.
+
+       `lang` sits on the card rather than anywhere above it because one listing
+       can hold a Russian, a German and an English title in a row. -->
   <h3
+    lang={foreignContentLang(job)}
     class={[
       'font-semibold leading-snug tracking-tight',
       compact ? 'mt-2 line-clamp-1 text-base' : 'mt-2.5 line-clamp-2 text-lg sm:text-[1.35rem]',

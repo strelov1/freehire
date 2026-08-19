@@ -8,6 +8,7 @@
   import { markViewed } from '$lib/viewedJobs.svelte';
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
+  import { foreignContentLang } from '$lib/seo';
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
@@ -29,6 +30,11 @@
   // the article's content is in the initial HTML. Only the per-user interactions
   // below hydrate client-side.
   let { job }: { job: Job } = $props();
+
+  // Set on the two subtrees below that carry the posting's own words; undefined
+  // (so unset) when it is English. See foreignContentLang for why the document
+  // stays `en` regardless.
+  const contentLang = $derived(foreignContentLang(job));
 
   // The signed-in user's interaction with this job (null when signed out or not
   // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
@@ -244,7 +250,10 @@
     </section>
   {/if}
 
-  <JobDescription html={job.description} />
+  <!-- The Summary above is an LLM synopsis the enrichment prompt pins to English
+       (internal/enrich), so the body is the only part of this snippet that takes
+       the posting's language. -->
+  <JobDescription html={job.description} lang={contentLang} />
 {/snippet}
 
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
@@ -294,7 +303,7 @@
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div class="flex flex-wrap items-center gap-2.5">
-        <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
         {#if applied}
           <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
             <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
