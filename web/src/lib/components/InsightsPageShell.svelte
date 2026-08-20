@@ -17,11 +17,15 @@
     return resolve('/insights/roles/[category]', { category: cat });
   }
 
+  // `heading` is the page's <h1>, NOT its <title>. The distinction is the whole
+  // reason for the name: this prop was called `title`, every caller handed it the
+  // string it was already giving <Seo>, and the brand suffix that belongs in a tab
+  // label ("… · freehire") rendered inside the heading on every insights page.
   let {
     category,
     label,
     kind,
-    title,
+    heading,
     intro,
     updated,
     covered,
@@ -30,7 +34,7 @@
     category: string;
     label: string;
     kind: Kind;
-    title: string;
+    heading: string;
     intro: string;
     updated: string;
     covered: CoveredCategory[];
@@ -60,7 +64,7 @@
     <span class="text-foreground">{label} {KIND_LABEL[kind]}</span>
   </nav>
 
-  <h1 class="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
+  <h1 class="text-3xl font-bold tracking-tight text-foreground">{heading}</h1>
   <p class="mt-3 text-lg text-muted-foreground">{intro}</p>
   <p class="mt-1 text-xs text-muted-foreground">Updated {updated}</p>
 

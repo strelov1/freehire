@@ -11,7 +11,11 @@
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/insights/salary/${data.category}`);
-  const title = $derived(`${data.label} Salaries · freehire`);
+  // The heading is the page's own name; the title is that plus the brand suffix a
+  // browser tab and a SERP need. Kept apart deliberately — one variable serving both
+  // is how "· freehire" ended up inside the <h1>.
+  const heading = $derived(`${data.label} Salaries`);
+  const title = $derived(`${heading} · freehire`);
   const updated = $derived(
     new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
   );
@@ -37,7 +41,7 @@
   category={data.category}
   label={data.label}
   kind="salary"
-  {title}
+  {heading}
   intro={data.intro}
   {updated}
   covered={data.covered}
