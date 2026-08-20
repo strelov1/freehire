@@ -10,6 +10,9 @@
 - [x] 1.2 Rank matches by open-vacancy count from the passed `FacetCounts`, break ties
   by label, and cap at five. Tests: higher count ranks first, equal counts order by
   label and do not reshuffle across repeated calls, nine matches yield exactly five.
+  (Superseded by 1.5: count is the WITHIN-TIER key, not the primary one. Left as
+  written because it is what this step actually built, and 1.5 records why it was
+  wrong.)
 - [x] 1.3 Handle the three absence cases: a null/absent distribution offers the matches
   ordered by label with no count (never a zero); a role missing from a PRESENT
   distribution is dropped entirely (measured zero — a suggestion to an empty page); and

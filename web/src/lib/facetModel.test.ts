@@ -280,6 +280,17 @@ describe('filtersWithRole', () => {
     expect(must(after.facets.role).include).toEqual(['backend', 'frontend']);
   });
 
+  it('switches a role from excluded to included', () => {
+    // Suggestions are withheld for roles already INCLUDED, not for excluded ones, so
+    // an excluded role is still offered. Adding it must flip the sign: a no-op would
+    // clear the typed text and change nothing else, which reads as a broken click.
+    const before = emptyFilters();
+    before.facets.role = { include: [], exclude: ['data_analytics'], matchAll: false };
+    const after = filtersWithRole(before, 'data_analytics');
+    expect(must(after.facets.role).include).toEqual(['data_analytics']);
+    expect(must(after.facets.role).exclude).toEqual([]);
+  });
+
   it('leaves every other filter alone', () => {
     const before = withSkills({ include: ['go'] });
     before.postedWithinDays = 7;

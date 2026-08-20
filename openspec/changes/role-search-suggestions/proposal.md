@@ -20,7 +20,10 @@ precise.
 
 - The header list-search input gains a **role suggestion dropdown** on jobs-backed
   lists. Typing two or more characters offers up to five matching roles, each with
-  its open-vacancy count, ranked by that count.
+  its open-vacancy count, ranked by how well the query names the role and, within one
+  such tier, by that count. Count alone was measured wrong on the live catalogue — the
+  matcher is alias-aware and typo-tolerant, so it hands first place to whichever
+  unrelated role owns the largest bucket. See the spec for the tiers.
 - Choosing a suggestion **applies the `role` facet and clears the text query**, so
   the search becomes an exact tag filter that the user can then narrow further with
   seniority, geography, or work format.
