@@ -147,7 +147,10 @@ func filterFromValues(v url.Values, now time.Time) any {
 	if n, ok := atoiOK(v.Get("experience_years_min")); ok {
 		groups = append(groups, []string{Gte("enrichment.experience_years_min", n)})
 	}
-	if n, ok := atoiOK(v.Get("experience_years_max")); ok {
+	// n >= 0 because a negative ceiling can only match nothing — the attribute is
+	// never below zero — so it is a typo, and honouring it would render an empty
+	// page that looks like a legitimately narrow search rather than a bad param.
+	if n, ok := atoiOK(v.Get("experience_years_max")); ok && n >= 0 {
 		groups = append(groups, []string{Lte("enrichment.experience_years_min", n)})
 	}
 

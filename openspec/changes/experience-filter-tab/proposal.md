@@ -21,9 +21,10 @@ entry-level population rather than measuring it.
 
 ## What Changes
 
-- The filter modal's `ROLE` rail gains an **Experience** pane holding three
-  controls: the seniority pills, a "no prior experience required" toggle, and a
-  years-of-experience range.
+- The filter modal's `ROLE` rail gains an **Experience** pane holding two controls:
+  the seniority pills and a years-of-experience ceiling. The entry-level case is the
+  ceiling's leftmost stop rather than a toggle of its own — see `design.md` for why
+  one control beats two here.
 - The seniority pills **move** out of the `Role` pane into the new Experience
   pane. They remain the same `seniority` URL param with the same values and
   exclusion behaviour — only their home in the rail changes.

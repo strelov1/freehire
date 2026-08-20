@@ -197,6 +197,19 @@ func TestFilterFromValues_ExperienceYearsMaxZero(t *testing.T) {
 	}
 }
 
+// A negative ceiling can only match nothing — `enrichment.experience_years_min` is
+// never below zero — so it is a typo, not a query. The contract declares the param
+// non-negative; honouring the sign would turn that typo into an empty result page
+// that looks like a legitimately narrow search.
+func TestFilterFromValues_ExperienceYearsMaxNegative(t *testing.T) {
+	for _, raw := range []string{"-1", "-10"} {
+		got := normalizeGroups(t, FilterFromValues(vals("experience_years_max="+raw)))
+		if len(got) != 0 {
+			t.Errorf("experience_years_max=%q: got %v, want no filter group", raw, got)
+		}
+	}
+}
+
 func TestFilterFromValues_ExperienceYearsMaxUnparseable(t *testing.T) {
 	for _, raw := range []string{"", "abc", "3.5"} {
 		got := normalizeGroups(t, FilterFromValues(vals("experience_years_max="+raw)))

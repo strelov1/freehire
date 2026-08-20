@@ -384,11 +384,13 @@
         class="w-full accent-primary"
       />
       <!-- Roughly half the catalogue states no experience requirement at all, and a
-           bound excludes every one of those postings. Said permanently rather than
-           on a bounded value: a result count that collapses without explanation is
-           read as a broken filter, and by then the user has already been misled. -->
+           bound excludes every one of those postings. Shown permanently rather than
+           only once bounded: a result count that collapses without explanation is
+           read as a broken filter, and by then the user has already been misled. The
+           sentence is therefore about what SETTING a bound does, so it stays true at
+           the unbounded "Any" stop instead of describing a filter that is not on. -->
       <p class="mt-2 text-xs text-muted-foreground">
-        Matches only postings that state an experience requirement — about half of them.
+        Setting a limit matches only postings that state an experience requirement — about half of them.
       </p>
     </div>
   {:else if entry.kind === 'work'}

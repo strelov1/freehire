@@ -113,10 +113,12 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.postedWithinDays = Number.isInteger(days) && days > 0 ? days : null;
   // Zero IS a bound here — it selects the postings stating no prior experience is
   // required — so the guard admits it and rejects only what cannot be a year count.
-  // `Number('')` is 0, hence the explicit presence check ahead of the range test.
-  const years = Number(p.get('experience_years_max'));
-  f.experienceYearsMax =
-    p.get('experience_years_max') && Number.isInteger(years) && years >= 0 ? years : null;
+  // The presence test is on the TRIMMED string, not the raw one: `Number('')` and
+  // `Number(' ')` are both 0 while `' '` is truthy, so a naive check would turn
+  // `?experience_years_max=%20` in a shared link into the entry-level filter.
+  const rawYears = p.get('experience_years_max')?.trim() ?? '';
+  const years = Number(rawYears);
+  f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
   return f;
 }
 

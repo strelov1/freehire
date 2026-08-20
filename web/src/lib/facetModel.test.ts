@@ -142,8 +142,11 @@ describe('experienceYearsMax', () => {
     expect(filtersFromParams(p).experienceYearsMax).toBe(0);
   });
 
-  it('reads a junk or negative URL value back as no bound', () => {
-    for (const raw of ['', 'abc', '-1', '2.5']) {
+  // `Number(' ')` is 0 and `' '` is truthy, so a whitespace-only value slips past a
+  // naive presence check and lands on the entry-level filter — a shared or
+  // hand-edited link would narrow to almost nothing without saying why.
+  it('reads a junk, blank or negative URL value back as no bound', () => {
+    for (const raw of ['', ' ', '%20', 'abc', '-1', '2.5']) {
       const back = filtersFromParams(new URLSearchParams(`experience_years_max=${raw}`));
       expect(back.experienceYearsMax, `experience_years_max=${raw}`).toBeNull();
     }
