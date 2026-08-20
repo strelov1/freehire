@@ -66,6 +66,12 @@ export const FILTER_EXTRAS: FilterRow[] = [
     values: 'integer — jobs requiring at least this many years',
   },
   {
+    param: 'experience_years_max',
+    label: 'Maximum experience',
+    values:
+      'integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all',
+  },
+  {
     param: 'posted_within_days',
     label: 'Posted within',
     values: 'integer — jobs whose effective posting date falls in the last N days',

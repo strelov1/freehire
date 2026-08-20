@@ -113,6 +113,7 @@ export type RailKind =
   | 'language'
   | 'relocation'
   | 'posted'
+  | 'experience'
   // The job modal's "My filters" (saved searches) tab — renders SavedSearches, not a facet control.
   | 'saved';
 
@@ -150,12 +151,17 @@ export const COMPANY_RAIL_GROUPS: CompanyRailGroup[] = [
 
 export const RAIL: RailEntry[] = [
   // One "Role" pane holds the whole "what role" concept: the role picker
-  // (natural/named/composite roles), the seniority pills, the specialization
-  // chips, and the AI Specialization facet — four controls, one tab. They overlap
-  // by design (role=senior is also reachable via the seniority pill); the picker is
-  // the natural-language entry, the pills/chips/AI-specialization the browse-by-axis
-  // entry.
+  // (natural/named/composite roles), the specialization chips, and the AI
+  // Specialization facet. The picker is the natural-language entry, the chips and
+  // AI-specialization the browse-by-axis entry.
+  //
+  // Seniority used to sit here too, because a role slug can carry a grade prefix
+  // (`senior_backend`) and the two read as one thought. It moved to Experience: a
+  // grade states how much experience a posting wants, which is the question that
+  // pane answers, and it sits there next to the years ceiling that qualifies it.
+  // The two params stay independent, as they already were.
   { key: 'category', label: 'Role', section: 'ROLE', kind: 'category' },
+  { key: 'experience', label: 'Experience', section: 'ROLE', kind: 'experience' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },

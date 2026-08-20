@@ -136,6 +136,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |
+| `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all |
 | `posted_within_days` | Posted within | integer — jobs whose effective posting date falls in the last N days |
 
 ### Recipes

@@ -19,3 +19,34 @@ export const FRESHNESS_PRESETS: { days: number | null; label: string }[] = [
 export function freshnessLabel(days: number | null): string {
   return FRESHNESS_PRESETS.find((p) => p.days === days)?.label ?? 'Any';
 }
+
+/** Experience-ceiling presets, least→most with "Any" as the rightmost stop. Each
+ *  stop is an upper bound on the years a posting asks for, so the leftmost is a
+ *  real `0` — the postings stating no prior experience is required — and only the
+ *  rightmost is "no bound".
+ *
+ *  The spacing is deliberately non-linear because the catalogue is: measured on
+ *  production, postings asking 5–7 years outnumber those asking 8–9 by more than
+ *  five to one, so evenly spaced stops would spend most of the slider's travel on
+ *  a thin tail. */
+export const EXPERIENCE_PRESETS: { years: number | null; label: string }[] = [
+  { years: 0, label: 'No experience' },
+  { years: 1, label: 'Up to 1 year' },
+  { years: 2, label: 'Up to 2 years' },
+  { years: 3, label: 'Up to 3 years' },
+  { years: 5, label: 'Up to 5 years' },
+  { years: 8, label: 'Up to 8 years' },
+  { years: 10, label: 'Up to 10 years' },
+  { years: null, label: 'Any' },
+];
+
+/** Label for the current experience ceiling. Unlike freshnessLabel this does NOT
+ *  fall back to "Any" for an off-preset value: a hand-edited or shared URL can
+ *  carry any year count, and reporting a live bound as "Any" would tell the user
+ *  the filter is off while it is quietly narrowing their results. */
+export function experienceLabel(years: number | null): string {
+  const preset = EXPERIENCE_PRESETS.find((p) => p.years === years);
+  if (preset) return preset.label;
+  if (years == null) return 'Any';
+  return `Up to ${years} ${years === 1 ? 'year' : 'years'}`;
+}

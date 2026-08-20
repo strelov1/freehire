@@ -186,6 +186,7 @@ paths:
         - $ref: "#/components/parameters/SalaryMin"
         - $ref: "#/components/parameters/SalaryMax"
         - $ref: "#/components/parameters/ExperienceYearsMin"
+        - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
@@ -253,6 +254,7 @@ paths:
         - $ref: "#/components/parameters/SalaryMin"
         - $ref: "#/components/parameters/SalaryMax"
         - $ref: "#/components/parameters/ExperienceYearsMin"
+        - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
@@ -333,6 +335,7 @@ paths:
         - $ref: "#/components/parameters/SalaryMin"
         - $ref: "#/components/parameters/SalaryMax"
         - $ref: "#/components/parameters/ExperienceYearsMin"
+        - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/PostedWithinDays"
       responses:
         "200":
@@ -1161,7 +1164,23 @@ components:
       in: query
       schema:
         type: integer
-      description: Lower bound on the years of experience the posting asks for.
+      description: >-
+        Lower bound on the years of experience the posting asks for. Pairs with
+        `experience_years_max` as a closed range over that one figure. A posting
+        that states no experience requirement carries no figure and is therefore
+        excluded by either bound.
+    ExperienceYearsMax:
+      name: experience_years_max
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+      description: >-
+        Upper bound on the years of experience the posting asks for — the most you
+        are willing to be asked for. It bounds the same figure `experience_years_min`
+        bounds from below, not a second field. `experience_years_max=0` selects the
+        postings that state no prior experience is required. Like `experience_years_min`,
+        it excludes postings that state no requirement at all.
     PostedWithinDays:
       name: posted_within_days
       in: query

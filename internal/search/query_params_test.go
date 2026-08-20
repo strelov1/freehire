@@ -35,6 +35,7 @@ func TestUnknownParams_AcceptsTheFilterVocabulary(t *testing.T) {
 		"salary_min":           {"1000"},
 		"salary_max":           {"9000"},
 		"experience_years_min": {"3"},
+		"experience_years_max": {"8"},
 		"posted_within_days":   {"7"},
 	}
 
@@ -75,6 +76,7 @@ func TestScalarFilters_EachOneStillNarrowsAQuery(t *testing.T) {
 		"salary_min":           "1000",
 		"salary_max":           "9000",
 		"experience_years_min": "3",
+		"experience_years_max": "8",
 		"posted_within_days":   "7",
 	}
 

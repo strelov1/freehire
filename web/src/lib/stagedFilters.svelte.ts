@@ -88,6 +88,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, postedWithinDays: n };
   }
 
+  setExperienceYearsMax(n: number | null): void {
+    this.#f = { ...this.#f, experienceYearsMax: n };
+  }
+
   /** Reset every staged filter. */
   clear(): void {
     this.#f = emptyFilters();

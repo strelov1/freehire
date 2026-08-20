@@ -167,6 +167,45 @@ func TestFilterFromValues_VisaBoolAndNumeric(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_ExperienceYearsMax(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("experience_years_max=3")))
+	want := [][]string{{`enrichment.experience_years_min <= 3`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_ExperienceYearsClosedRange(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("experience_years_min=2&experience_years_max=5")))
+	want := [][]string{
+		{`enrichment.experience_years_min <= 5`},
+		{`enrichment.experience_years_min >= 2`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Zero is the entry-level selector, not an absent value: `experience_years_max=0`
+// asks for the postings that state no prior experience is required. A guard that
+// treats the bound as falsy would silently drop the one filter juniors need.
+func TestFilterFromValues_ExperienceYearsMaxZero(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("experience_years_max=0")))
+	want := [][]string{{`enrichment.experience_years_min <= 0`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_ExperienceYearsMaxUnparseable(t *testing.T) {
+	for _, raw := range []string{"", "abc", "3.5"} {
+		got := normalizeGroups(t, FilterFromValues(vals("experience_years_max="+raw)))
+		if len(got) != 0 {
+			t.Errorf("experience_years_max=%q: got %v, want no filter group", raw, got)
+		}
+	}
+}
+
 func TestFilterFromValues_RegionUnspecifiedSentinel(t *testing.T) {
 	// The reserved `regions=none` value selects jobs with no resolved geography
 	// via Meili's IS EMPTY, not an equality against a literal "none" region.

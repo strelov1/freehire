@@ -86,7 +86,33 @@ func TestExperienceYearsMin(t *testing.T) {
 		{"yrs abbrev", "10 yrs experience.", ptr(10)},
 		{"min across mentions", "5 years of Go and 2 years of Kubernetes.", ptr(2)},
 		{"age ignored", "Must be 18 years of age. 4+ years experience.", ptr(4)},
-		{"hyperbole capped out", "100 years of fun, no experience needed.", nil},
+		{"hyperbole capped out", "100 years of fun awaits you.", nil},
+
+		// An entry-level posting states the requirement in prose, not as a figure.
+		// Reading only digits left that population indistinguishable from a posting
+		// that says nothing at all, so the filter could not reach it.
+		{"no experience required", "No prior experience required — we will train you.", ptr(0)},
+		{"no experience necessary", "No experience necessary. Full training provided.", ptr(0)},
+		{"no previous experience needed", "No previous experience needed for this role.", ptr(0)},
+		{"copula between", "No prior experience is required for this position.", ptr(0)},
+		{"zero wins the floor", "No prior experience required. 3 years with Go is a plus.", ptr(0)},
+		{"hyperbole with explicit no-experience", "100 years of fun, no experience needed.", ptr(0)},
+
+		// The phrase is about a TOOL, not the job: "no prior experience with X is
+		// required" means X is optional. Requiring the statement to close without an
+		// object in between is what keeps this out.
+		{"tool-scoped is not entry level", "No prior experience with Kubernetes is required, but 5 years of backend is.", ptr(5)},
+		{"domain-scoped is not entry level", "No previous experience in fintech required; 4+ years engineering expected.", ptr(4)},
+
+		// The object can also TRAIL the requirement word, which reads the same way:
+		// the tool is optional, the role is not. Guarding only the leading order
+		// caught one word order and waved the other through.
+		{"trailing tool scope", "No prior experience is required with our proprietary CRM. The role needs 5+ years of enterprise sales.", ptr(5)},
+		{"trailing domain scope", "No experience required in Kubernetes, but 4 years of backend is expected.", ptr(4)},
+
+		// A trailing "for <the role>" is the ordinary entry-level phrasing, not a
+		// scoping object, so it must survive the guard above.
+		{"trailing role reference still entry level", "No experience necessary for this position.", ptr(0)},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

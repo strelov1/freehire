@@ -16,6 +16,7 @@ var scalarFilters = []string{
 	"salary_min",
 	"salary_max",
 	"experience_years_min",
+	"experience_years_max",
 	"posted_within_days",
 }
 

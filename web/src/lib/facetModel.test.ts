@@ -118,6 +118,44 @@ describe('filtersToParams / filtersFromParams round-trip', () => {
   });
 });
 
+describe('experienceYearsMax', () => {
+  it('is absent from the URL when unset', () => {
+    expect(filtersToParams(emptyFilters()).has('experience_years_max')).toBe(false);
+  });
+
+  it('serializes a bound and reads it back', () => {
+    const f = emptyFilters();
+    f.experienceYearsMax = 3;
+    const p = filtersToParams(f);
+    expect(p.get('experience_years_max')).toBe('3');
+    expect(filtersFromParams(p).experienceYearsMax).toBe(3);
+  });
+
+  // Zero is the entry-level selector, not "unset". A falsy guard here would drop the
+  // one bound juniors need, and the URL would silently widen back to the whole
+  // catalogue while the control still showed the leftmost stop.
+  it('serializes a zero bound rather than treating it as unset', () => {
+    const f = emptyFilters();
+    f.experienceYearsMax = 0;
+    const p = filtersToParams(f);
+    expect(p.get('experience_years_max')).toBe('0');
+    expect(filtersFromParams(p).experienceYearsMax).toBe(0);
+  });
+
+  it('reads a junk or negative URL value back as no bound', () => {
+    for (const raw of ['', 'abc', '-1', '2.5']) {
+      const back = filtersFromParams(new URLSearchParams(`experience_years_max=${raw}`));
+      expect(back.experienceYearsMax, `experience_years_max=${raw}`).toBeNull();
+    }
+  });
+
+  it('counts as one active filter, including at zero', () => {
+    const f = emptyFilters();
+    f.experienceYearsMax = 0;
+    expect(activeFilterCount(f)).toBe(1);
+  });
+});
+
 describe('role facet round-trips through the generic param path', () => {
   it('serializes include/exclude/mode and reads them back', () => {
     const f = emptyFilters();

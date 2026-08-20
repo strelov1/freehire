@@ -81,6 +81,10 @@ export class FilterStore {
     this.#url.setSoon({ ...this.#url.value, postedWithinDays: n });
   }
 
+  setExperienceYearsMax(n: number | null) {
+    this.#url.setSoon({ ...this.#url.value, experienceYearsMax: n });
+  }
+
   // Discrete inputs (clicked/toggled): apply immediately via setNow.
   setVisa(on: boolean) {
     this.#url.setNow({ ...this.#url.value, visa: on });

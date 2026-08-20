@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dynamicLabel, FACETS } from '$lib/facets';
   import { type FilterStore, savedSearchQuery } from '$lib/filters';
-  import { freshnessLabel } from '$lib/filterControls';
+  import { experienceLabel, freshnessLabel } from '$lib/filterControls';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
 
@@ -72,6 +72,9 @@
 
     if (f.visa) push('Visa', [{ text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
     if (f.postedWithinDays != null) push('Posted', [{ text: freshnessLabel(f.postedWithinDays), exclude: false, remove: () => store.setPostedWithinDays(null) }]);
+    // `!= null`, not truthiness: a zero bound is the entry-level filter, and hiding
+    // its chip would leave the narrowest experience filter with no way to remove it.
+    if (f.experienceYearsMax != null) push('Experience', [{ text: experienceLabel(f.experienceYearsMax), exclude: false, remove: () => store.setExperienceYearsMax(null) }]);
 
     return out;
   });

@@ -12,7 +12,14 @@
   import { StagedFilters } from '$lib/stagedFilters.svelte';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
-  import { FRESHNESS_PRESETS, SALARY_MAX, SALARY_STEP, freshnessLabel } from '$lib/filterControls';
+  import {
+    EXPERIENCE_PRESETS,
+    FRESHNESS_PRESETS,
+    SALARY_MAX,
+    SALARY_STEP,
+    experienceLabel,
+    freshnessLabel,
+  } from '$lib/filterControls';
   import FacetSection from '../facets/FacetSection.svelte';
   import ChipFacet from './ChipFacet.svelte';
   import CategoryPane from './CategoryPane.svelte';
@@ -146,8 +153,8 @@
 
   function entryCount(e: RailEntry): number {
     const f = staged.value;
-    if (e.kind === 'category')
-      return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'seniority') + selCount(f, 'ai_archetype');
+    if (e.kind === 'category') return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'ai_archetype');
+    if (e.kind === 'experience') return selCount(f, 'seniority') + (f.experienceYearsMax != null ? 1 : 0);
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
     if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
@@ -191,6 +198,16 @@
   const freshnessIndex = $derived.by(() => {
     const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.postedWithinDays);
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
+  });
+
+  // Same snap-to-Any rule as freshness above: an off-preset bound (hand-edited or
+  // shared URL) has no exact stop, so the handle rests on the rightmost one. The
+  // LABEL still reports the real bound — see experienceLabel — so the two do not
+  // agree here on purpose: the handle says "no stop matches", the text says what
+  // is actually filtering.
+  const experienceIndex = $derived.by(() => {
+    const i = EXPERIENCE_PRESETS.findIndex((p) => p.years === staged.value.experienceYearsMax);
+    return i < 0 ? EXPERIENCE_PRESETS.length - 1 : i;
   });
 </script>
 
@@ -296,12 +313,7 @@
     {#if roleDef && !exclude.includes('role')}
       <div class="mb-6"><FacetSection def={roleDef} store={staged} counts={c} expand /></div>
     {/if}
-    {#if !exclude.includes('seniority')}
-      <ChipFacet store={staged} param="seniority" label="Seniority" counts={c} />
-      <div class="mt-6"><CategoryPane store={staged} {plain} counts={c} /></div>
-    {:else}
-      <CategoryPane store={staged} {plain} counts={c} />
-    {/if}
+    <CategoryPane store={staged} {plain} counts={c} />
     {#if !exclude.includes('ai_archetype')}
       {@const aiArchetypeDef = facetDefFor('ai_archetype')}
       {#if aiArchetypeDef}
@@ -349,6 +361,36 @@
       aria-label="Minimum salary"
       class="w-full accent-primary"
     />
+  {:else if entry.kind === 'experience'}
+    {@const showSeniority = !exclude.includes('seniority')}
+    {#if showSeniority}
+      <ChipFacet store={staged} param="seniority" label="Seniority" counts={c} />
+    {/if}
+    <div class:mt-6={showSeniority}>
+      <div class="mb-2 flex items-center justify-between">
+        <h3 class="text-sm font-semibold tracking-tight">Years of experience</h3>
+        <span class="text-xs font-medium text-muted-foreground"
+          >{experienceLabel(staged.value.experienceYearsMax)}</span
+        >
+      </div>
+      <input
+        type="range"
+        min="0"
+        max={EXPERIENCE_PRESETS.length - 1}
+        step="1"
+        value={experienceIndex}
+        oninput={(e) => staged.setExperienceYearsMax(EXPERIENCE_PRESETS[Number(e.currentTarget.value)]?.years ?? null)}
+        aria-label="Maximum years of experience"
+        class="w-full accent-primary"
+      />
+      <!-- Roughly half the catalogue states no experience requirement at all, and a
+           bound excludes every one of those postings. Said permanently rather than
+           on a bounded value: a result count that collapses without explanation is
+           read as a broken filter, and by then the user has already been misled. -->
+      <p class="mt-2 text-xs text-muted-foreground">
+        Matches only postings that state an experience requirement — about half of them.
+      </p>
+    </div>
   {:else if entry.kind === 'work'}
     <ChipFacet store={staged} param="work_mode" label="Work format" counts={c} />
     <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>

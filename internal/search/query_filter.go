@@ -139,8 +139,16 @@ func filterFromValues(v url.Values, now time.Time) any {
 	if n, ok := atoiOK(v.Get("salary_max")); ok {
 		groups = append(groups, []string{Lte("enrichment.salary_max", n)})
 	}
+	// Both experience bounds read the SAME attribute: `enrichment.experience_years_min`
+	// is what the posting asks for, so these are a floor and a ceiling on that one ask,
+	// not a min/max pair over two fields. Meili compares only documents carrying the
+	// attribute, so either bound drops the postings that state no requirement — the
+	// honest reading of "asks for at most N years".
 	if n, ok := atoiOK(v.Get("experience_years_min")); ok {
 		groups = append(groups, []string{Gte("enrichment.experience_years_min", n)})
+	}
+	if n, ok := atoiOK(v.Get("experience_years_max")); ok {
+		groups = append(groups, []string{Lte("enrichment.experience_years_min", n)})
 	}
 
 	// Freshness: posted_within_days=N restricts to jobs posted in the last N days,
