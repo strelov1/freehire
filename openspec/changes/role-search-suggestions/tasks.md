@@ -1,0 +1,58 @@
+## 1. Matcher and ranker (pure module)
+
+- [ ] 1.1 Add `web/src/lib/roleSuggest.ts` exporting `RoleSuggestion` and
+  `suggestRoles(query, counts, active)`, matching a query against the role catalogue
+  by label and alias through `facets.ts`'s existing `optionMatches` (adapt the call
+  site if its signature needs it; do not fork the matching logic). Cover with
+  `roleSuggest.test.ts`: label match, alias match (`swe` → `software_engineer`),
+  prefix match (`data an` → `data_analytics`), and one role reached through two
+  aliases offered once.
+- [ ] 1.2 Rank matches by open-vacancy count from the passed `FacetCounts`, break ties
+  by label, and cap at five. Tests: higher count ranks first, equal counts order by
+  label and do not reshuffle across repeated calls, nine matches yield exactly five.
+- [ ] 1.3 Handle the three absence cases: a null/absent distribution offers the matches
+  ordered by label with no count (never a zero); a role missing from a PRESENT
+  distribution is dropped entirely (measured zero — a suggestion to an empty page); and
+  a role already present in `active` is not offered. Tests for all three.
+- [ ] 1.4 Reject queries shorter than two characters with no matches, so the component
+  has no threshold logic of its own. Test the one-character case.
+
+## 2. Bridge capability
+
+- [ ] 2.1 Add the optional `roleSuggest` member to `ListSearchTarget` in
+  `web/src/lib/listSearch.svelte.ts` — `counts(): FacetCounts | null` as a getter
+  (mirroring `filterScope.counts`) and `apply(slug: string): void` — documented in the
+  file's existing comment style as the jobs-only capability it is.
+- [ ] 2.2 Publish `roleSuggest` from the target `JobsView.svelte` already registers:
+  `counts` returns the live distribution, `apply(slug)` clears the text query and
+  turns the `role` facet on through the existing filter store in one interaction.
+  Confirm `CompaniesView.svelte` publishes nothing new.
+
+## 3. Header dropdown
+
+- [ ] 3.1 Render the dropdown in `HeaderListSearch.svelte` when `target.roleSuggest`
+  exists and `suggestRoles` returns matches: up to five role rows with label and
+  count, then a final "search «…» as text" row. Replace the file's now-false
+  "No dropdown — the page's own list is the live result" comment with one describing
+  the actual rule.
+- [ ] 3.2 Wire selection: activating a role row calls `roleSuggest.apply(slug)` and
+  closes the dropdown; activating the text row leaves today's free-text behaviour
+  exactly as it is.
+- [ ] 3.3 Add keyboard handling — Down/Up move the highlight, Enter activates the
+  highlighted row, Enter with nothing highlighted falls through to the existing
+  free-text search, Escape closes and keeps the typed text, outside click closes.
+  Start with nothing highlighted so Enter is never captured by default.
+- [ ] 3.4 Add the combobox/listbox roles and `aria-activedescendant`, and match the
+  layering and dismissal of the existing `HeaderLocationFilter` popover so the
+  dropdown cannot cover page content or trap focus.
+
+## 4. Verify
+
+- [ ] 4.1 Run the web checks — `pnpm test`, `pnpm lint`, `pnpm check` (or this repo's
+  equivalents) — and confirm they pass.
+- [ ] 4.2 Drive the real app: on the jobs feed type `data an`, pick `Data Analyst`,
+  and confirm the URL carries `role=data_analytics` with no `q`, the input is empty,
+  the chip is present and removable, and the counts reload. Then confirm `/companies`
+  shows no dropdown, and that typing `revolut` + Enter still runs a free-text search.
+- [ ] 4.3 Make a role selection distinguishable in the jobs view's existing `search`
+  analytics event, so the 1.1% role-facet usage figure can be re-measured after ship.
