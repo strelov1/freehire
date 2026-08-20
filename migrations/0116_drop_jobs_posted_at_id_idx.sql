@@ -1,0 +1,29 @@
+-- migrate: no-transaction
+--
+-- Drops jobs_posted_at_id_idx (posted_at DESC NULLS LAST, id DESC), 692 MB on prod
+-- with 2 scans and 0 heap fetches in the 20 days since the last postmaster start.
+--
+-- It came from 0001_init, when the jobs list was ordered and paged in Postgres. That
+-- ordering has since moved to Meilisearch, where `posted_at` is a sortable attribute,
+-- and nothing asks Postgres for it any more:
+--
+--   * no query in internal/db/queries orders jobs by posted_at — ListJobs sorts
+--     `created_at DESC, id DESC` (served by jobs_open_created_idx), and the two
+--     `job_posted_at DESC NULLS LAST` orderings are on the search/semantic OUTBOX
+--     tables, which have their own indexes;
+--   * ListJobs takes only limit/offset — the endpoint has no sort parameter to reach
+--     a posted_at ordering with;
+--   * the index backs no constraint and nothing in pg_depend references it beyond the
+--     automatic dependency on the table.
+--
+-- The index itself was never the problem: EXPLAIN on prod shows the planner picks it
+-- happily for `ORDER BY posted_at DESC NULLS LAST, id DESC LIMIT 20`. There is simply
+-- no caller. It is 692 MB of write amplification on the hottest table in the database.
+--
+-- CONCURRENTLY, so the drop takes no lasting lock on a 3M-row table under live ingest;
+-- IF EXISTS, so a re-run after an interrupted attempt is a no-op (the applied-record
+-- insert runs outside a transaction for no-transaction files, so a file can execute
+-- without being recorded). On an existing prod volume, run it detached from the SSH
+-- session — a CONCURRENTLY statement dies with its session, and for a drop that leaves
+-- the index present but marked invalid.
+DROP INDEX CONCURRENTLY IF EXISTS jobs_posted_at_id_idx;
