@@ -44,29 +44,34 @@
 
 ## 3. Header dropdown
 
-- [ ] 3.1 Render the dropdown in `HeaderListSearch.svelte` when `target.roleSuggest`
+- [x] 3.1 Render the dropdown in `HeaderListSearch.svelte` when `target.roleSuggest`
   exists and `suggestRoles` returns matches: up to five role rows with label and
   count, then a final "search «…» as text" row. Replace the file's now-false
   "No dropdown — the page's own list is the live result" comment with one describing
   the actual rule.
-- [ ] 3.2 Wire selection: activating a role row calls `roleSuggest.apply(slug)` and
+- [x] 3.2 Wire selection: activating a role row calls `roleSuggest.apply(slug)` and
   closes the dropdown; activating the text row leaves today's free-text behaviour
   exactly as it is.
-- [ ] 3.3 Add keyboard handling — Down/Up move the highlight, Enter activates the
+- [x] 3.3 Add keyboard handling — Down/Up move the highlight, Enter activates the
   highlighted row, Enter with nothing highlighted falls through to the existing
   free-text search, Escape closes and keeps the typed text, outside click closes.
   Start with nothing highlighted so Enter is never captured by default.
-- [ ] 3.4 Add the combobox/listbox roles and `aria-activedescendant`, and match the
+- [x] 3.4 Add the combobox/listbox roles and `aria-activedescendant`, and match the
   layering and dismissal of the existing `HeaderLocationFilter` popover so the
   dropdown cannot cover page content or trap focus.
 
 ## 4. Verify
 
-- [ ] 4.1 Run the web checks — `pnpm test`, `pnpm lint`, `pnpm check` (or this repo's
+- [x] 4.1 Run the web checks — `pnpm test`, `pnpm lint`, `pnpm check` (or this repo's
   equivalents) — and confirm they pass.
-- [ ] 4.2 Drive the real app: on the jobs feed type `data an`, pick `Data Analyst`,
+- [x] 4.2 Drive the real app: on the jobs feed type `data an`, pick `Data Analyst`,
   and confirm the URL carries `role=data_analytics` with no `q`, the input is empty,
   the chip is present and removable, and the counts reload. Then confirm `/companies`
   shows no dropdown, and that typing `revolut` + Enter still runs a free-text search.
-- [ ] 4.3 Make a role selection distinguishable in the jobs view's existing `search`
-  analytics event, so the 1.1% role-facet usage figure can be re-measured after ship.
+- [x] 4.3 Emit a `role_suggestion` analytics event on selection — its own event rather
+  than a flag on `search`, since the question is how often the dropdown is what puts
+  the role facet on. The role facet measured 1.1% of searches before it existed.
+- [x] 4.4 Give the `role` facet a chip group in `FilterSummary.svelte`. It had none: a
+  role counted towards the All-filters badge but drew no chip, so the only way to lift
+  it was Reset all. Latent while the facet lived in the modal; this change puts it one
+  click from the search box.

@@ -186,8 +186,11 @@
   let lastSearchKey = untrack(() => filtersToParams(filters.applied).toString());
 
   // The filter scope the role distribution was last measured under, minus the text
-  // query it deliberately ignores. Starts empty so the first run always measures.
-  let lastRoleScopeKey = '';
+  // query it deliberately ignores. `null` rather than '' because '' is a REAL key —
+  // it is what an unfiltered feed serializes to, which is the commonest first paint
+  // of all, and seeding with it made the first measurement look like a repeat and
+  // never fire.
+  let lastRoleScopeKey: string | null = null;
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -306,7 +309,13 @@
       roleSuggest: {
         counts: () => roleCounts,
         active: () => filters.facet('role').include,
-        apply: (slug) => filters.applyRole(slug),
+        apply: (slug) => {
+          // Its own event, not a flag on `search`: the question this answers is how
+          // often the dropdown is what puts the role facet on, and the role facet
+          // measured 1.1% of searches before it existed.
+          track('role_suggestion', { role: slug });
+          filters.applyRole(slug);
+        },
       },
       openFilters: () => (modalOpen = true),
       activeFilters: () => filters.active,
