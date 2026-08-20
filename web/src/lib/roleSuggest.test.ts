@@ -133,6 +133,22 @@ describe('suggestRoles against the real catalogue', () => {
     expect(top('data')).toBe('Data Analyst');
   });
 
+  it('offers a role whose every word the query names, however it is spelled', () => {
+    // "Fullstack Engineer" spells as one word what the query spells as two, so no
+    // contiguous run of the query appears in it — but every word of the query does.
+    // That is a spelling difference, not a typo, and 57,293 open postings carry it.
+    expect(top('full stack engineer')).toBe('Fullstack Engineer');
+    expect(top('ux/ui designer')).toBe('UX Designer');
+  });
+
+  it('closes the dictionary gaps the query log named', () => {
+    expect(top('machine learning engineer')).toBe('ML Engineer');
+    expect(top('backend developer')).toBe('Backend Engineer');
+    expect(top('frontend developer')).toBe('Frontend Engineer');
+    expect(top('user experience designer')).toBe('UX Designer');
+    expect(top('user interface designer')).toBe('UX Designer');
+  });
+
   it('never offers a role reached only by typo tolerance', () => {
     // Marketing Specialist is reachable from `backend` only by edit distance against
     // its `growth hacker` alias. Offering it beside Backend Engineer reads as noise —

@@ -739,3 +739,38 @@ func TestParse_MarketingDisciplinesRU(t *testing.T) {
 		}
 	}
 }
+
+// Full-phrase title aliases exist so the web role picker and the header's role
+// suggestions can match what people actually type ("backend developer", not just
+// "backend") — CategoryAliases feeds the generated web contracts. They must not move
+// any title to a different category: each is subsumed by a shorter alias that already
+// resolved it, so the classification these tests pin is the classification before them.
+func TestSearchPhraseAliasesDoNotChangeClassification(t *testing.T) {
+	for _, tc := range []struct{ title, want string }{
+		{"Backend Developer", "backend"},
+		{"Back-End Developer", "backend"},
+		{"Senior Backend Developer", "backend"},
+		{"Frontend Developer", "frontend"},
+		{"Front-End Developer", "frontend"},
+		{"Machine Learning Engineer", "ml_ai"},
+		{"Senior Machine Learning Engineer", "ml_ai"},
+	} {
+		if got := Parse(tc.title).Category; got != tc.want {
+			t.Errorf("Parse(%q).Category = %q, want %q", tc.title, got, tc.want)
+		}
+	}
+}
+
+// The same phrases must be REACHABLE as aliases, which is what the search side reads.
+func TestCategoryAliasesCarrySearchPhrases(t *testing.T) {
+	aliases := CategoryAliases()
+	for _, tc := range []struct{ canonical, alias string }{
+		{"backend", "backend developer"},
+		{"frontend", "frontend developer"},
+		{"ml_ai", "machine learning engineer"},
+	} {
+		if !slices.Contains(aliases[tc.canonical], tc.alias) {
+			t.Errorf("CategoryAliases()[%q] missing %q", tc.canonical, tc.alias)
+		}
+	}
+}

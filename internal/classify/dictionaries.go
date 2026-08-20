@@ -160,6 +160,11 @@ var categoryTable = []aliasEntry{
 	{"computer vision engineer", "ml_ai"},
 	{"nlp engineer", "ml_ai"},
 	{"ml engineer", "ml_ai"},
+	// Same reason as the "<discipline> developer" spellings below: redundant for
+	// tagging ("machine learning" already resolves it), needed by search, where the
+	// label reads "ML Engineer" and the query "machine learning engineer" reached
+	// nothing. 7,199 open postings carry the full phrase.
+	{"machine learning engineer", "ml_ai"},
 	{"ml/ai", "ml_ai"},
 	{"ai/ml", "ml_ai"},
 	// AI-application terms (RAG/agents/LLM/prompt/applied AI) → ai_engineering.
@@ -226,11 +231,21 @@ var categoryTable = []aliasEntry{
 	{"back end", "backend"},
 	{"бэкенд", "backend"},
 	{"бекенд", "backend"},
+	// The "<discipline> developer" spellings are redundant for tagging — the bare
+	// alias above already resolves them — and exist for the search side, which reads
+	// this table through CategoryAliases. Its matcher needs every word of the query to
+	// appear, so "backend developer" reaches nothing when the only alias is "backend"
+	// and the label says "Engineer". Measured: 8,870 open postings titled that way,
+	// and the query returned no suggestion at all.
+	{"backend developer", "backend"},
+	{"back-end developer", "backend"},
 	{"frontend", "frontend"},
 	{"front-end", "frontend"},
 	{"front end", "frontend"},
 	{"фронтенд", "frontend"},
 	{"фронт", "frontend"},
+	{"frontend developer", "frontend"},
+	{"front-end developer", "frontend"},
 	// Frontend-only frameworks named in a "<Framework> Developer" title — the
 	// framework itself states the discipline, so this is not a guess the way a
 	// bare language ("Java Developer") would be.

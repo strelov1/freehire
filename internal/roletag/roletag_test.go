@@ -419,3 +419,27 @@ func TestDerive_CommercialMarketingCluster(t *testing.T) {
 		})
 	}
 }
+
+// The spelled-out UX/UI titles. Unlike the "<discipline> developer" phrases added to
+// classify — which were redundant for tagging and needed only by search — these were a
+// real gap in the tagging itself: "User Experience Designer" derived the bare `design`
+// category and no ux_designer, so the role under-counted every posting titled that way.
+// Adding them therefore changes what is TAGGED, and existing rows only pick the role up
+// on the next backfill-derive.
+func TestUXDesignerSpelledOutAliases(t *testing.T) {
+	for _, title := range []string{
+		"User Experience Designer",
+		"User Interface Designer",
+		"Senior UX/UI Designer",
+	} {
+		if got := Derive("", "design", title); !slices.Contains(got, "ux_designer") {
+			t.Errorf("Derive(_, design, %q) = %v, want it to contain ux_designer", title, got)
+		}
+	}
+	aliases := NamedAliases()["ux_designer"]
+	for _, want := range []string{"user experience designer", "user interface designer", "ux/ui designer"} {
+		if !slices.Contains(aliases, want) {
+			t.Errorf("NamedAliases()[ux_designer] missing %q", want)
+		}
+	}
+}

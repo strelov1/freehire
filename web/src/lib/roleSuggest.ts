@@ -43,7 +43,20 @@ const aliasesBySlug: Record<string, readonly string[]> = ROLE_ALIASES;
 
 /** The tier a role lands in when only the matcher's typo tolerance reached it.
  *  Matches at or past this tier are dropped — see matchTier. */
-const fuzzyOnlyTier = 3;
+const fuzzyOnlyTier = 4;
+
+/** Does every word of the query appear inside some word of the text, with no edit
+ *  distance spent? This is what separates a SPELLING difference from a typo: the query
+ *  "full stack engineer" has no contiguous run inside "fullstack engineer", yet each of
+ *  its words is there.
+ *
+ *  Only meaningful for a multi-word query. One short word sitting inside a longer one
+ *  is a coincidence — `swe` inside "answer engine optimization" — while three words all
+ *  landing is not. */
+function everyWordPresent(text: string, q: string): boolean {
+  const words = text.split(/\s+/).filter(Boolean);
+  return q.split(/\s+/).every((token) => words.some((w) => w.includes(token)));
+}
 
 /** Does `q` occur in `text` at the start of a word? Distinguishes the `swe` that
  *  names Software Engineer from the one buried inside Marketing's "answer engine
@@ -62,9 +75,12 @@ function atWordStart(text: string, q: string): boolean {
  *  1 — the query prefixes one but stops mid-word (`data` → "database developer",
  *      and every half-typed query on its way to tier 0);
  *  2 — the query starts a word further in (`design` → "product design lead");
- *  3 — the matcher admitted it on typo tolerance alone, and it is NOT offered.
+ *  3 — a multi-word query whose every word is present, but not as one contiguous run
+ *      (`full stack engineer` → "Fullstack Engineer", which spells as one word what the
+ *      query spells as two);
+ *  4 — the matcher admitted it on typo tolerance alone, and it is NOT offered.
  *
- *  Tier 3 is dropped rather than ranked last. Nothing separates two typo-tolerant
+ *  Tier 4 is dropped rather than ranked last. Nothing separates two typo-tolerant
  *  hits, so within that tier the biggest bucket wins on count alone: searching
  *  `backedn` led with Marketing Specialist (55,768, via edit distance against its
  *  `growth hacker` alias) ahead of Backend Engineer. Offering nothing is honest — the
@@ -88,7 +104,8 @@ function matchTier(option: { value: string; label: string }, q: string): number 
   if (prefixes.some((t) => !/[a-z0-9]/.test(t[q.length] ?? ''))) return 0;
   if (prefixes.length > 0) return 1;
   if (texts.some((t) => atWordStart(t, q))) return 2;
-  return 3;
+  if (q.includes(' ') && texts.some((t) => everyWordPresent(t, q))) return 3;
+  return 4;
 }
 
 /** A graded slug (senior_backend) loses to its ungraded sibling (backend) when

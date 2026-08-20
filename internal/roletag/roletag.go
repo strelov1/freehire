@@ -185,7 +185,15 @@ var namedRoleTable = []struct {
 
 	// Design specializations.
 	{"product_designer", "Product Designer", []string{"product designer"}},
-	{"ux_designer", "UX Designer", []string{"ux designer", "ui designer", "ui/ux designer"}},
+	// The spelled-out forms are not just search synonyms: "User Experience Designer"
+	// derived the bare `design` category and no ux_designer at all, so the role
+	// under-counted every posting titled that way. 4,704 open postings carry one of
+	// these spellings. Existing rows pick the role up on the next backfill-derive; new
+	// ones get it at ingest.
+	{"ux_designer", "UX Designer", []string{
+		"ux designer", "ui designer", "ui/ux designer", "ux/ui designer",
+		"user experience designer", "user interface designer",
+	}},
 	{"graphic_designer", "Graphic Designer", []string{"graphic designer"}},
 	{"interior_designer", "Interior Designer", []string{"interior designer"}},
 	{"visual_designer", "Visual Designer", []string{"visual designer"}},
