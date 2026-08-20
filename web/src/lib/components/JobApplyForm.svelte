@@ -1,29 +1,39 @@
-<script lang="ts">
+<script module lang="ts">
   import type { Display } from '$lib/generated/contracts';
 
+  /** Whether a form has anything to show: questions, or a statement of what it wants
+   *  uploaded. Exported because the caller owning the tab has to ask the same question
+   *  this component answers — a tab offered over an empty panel is worse than no tab,
+   *  and two copies of the predicate would eventually disagree about which it is. */
+  export function applyFormWorthShowing(form: Display | null | undefined): boolean {
+    return !!form && ((form.questions?.length ?? 0) > 0 || (form.basics?.length ?? 0) > 0);
+  }
+</script>
+
+<script lang="ts">
   // What the application will ask, as the ATS published it. `form` is null for most
   // postings — only a few platforms publish a form we can read — and the block simply
   // does not render, which is the ordinary case rather than a degraded one.
+  //
+  // Renders bare, with no card or heading of its own: it sits inside the job page's
+  // tab panel, where the tab is the heading and a second one under it would say the
+  // same thing twice.
   let { form }: { form: Display | null } = $props();
-
-  // A form worth showing has either questions or a statement of what it wants uploaded.
-  // Neither is a reason to render a heading over nothing.
-  const worthShowing = $derived(
-    !!form && (form.questions?.length > 0 || form.basics?.length > 0)
-  );
 </script>
 
-{#if form && worthShowing}
-  <section class="mt-6 rounded-lg border border-border bg-card p-4">
-    <div class="mb-3 flex items-baseline justify-between gap-3">
-      <h2 class="text-sm font-semibold tracking-tight">What this application asks</h2>
-      <span class="text-xs text-muted-foreground capitalize">{form.provider}</span>
-    </div>
+{#if applyFormWorthShowing(form) && form}
+  <section class="flex flex-col gap-3">
+    <!-- The provider is the whole caption here. It was a chip beside a heading before
+         this block moved into a tab; the tab now says what it is, so what is left worth
+         saying is whose form it is, verbatim from the ATS. -->
+    <p class="text-xs text-muted-foreground">
+      As published by <span class="capitalize">{form.provider}</span>
+    </p>
 
     {#if form.basics?.length}
       <!-- The controls every application demands, said once. Listed rather than dropped:
            a form that does NOT want a CV is worth knowing too. -->
-      <p class="mb-2 max-w-3xl text-sm text-muted-foreground">
+      <p class="max-w-3xl text-sm text-muted-foreground">
         {form.basics.join(', ')}
       </p>
     {/if}

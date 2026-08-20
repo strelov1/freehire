@@ -9,12 +9,14 @@
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
   import { foreignContentLang } from '$lib/seo';
+  import type { Display } from '$lib/generated/contracts';
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
+  import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
   import JobCompanyPanel from './JobCompanyPanel.svelte';
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
@@ -29,7 +31,11 @@
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
   // the article's content is in the initial HTML. Only the per-user interactions
   // below hydrate client-side.
-  let { job }: { job: Job } = $props();
+  // `applyForm` is the employer's own screening form when its ATS publishes one —
+  // null for most postings, which is the ordinary case and simply means one fewer tab.
+  let { job, applyForm = null }: { job: Job; applyForm?: Display | null } = $props();
+
+  type ContentTab = 'description' | 'company' | 'application';
 
   // Set on the two subtrees below that carry the posting's own words; undefined
   // (so unset) when it is English. See foreignContentLang for why the document
@@ -73,17 +79,22 @@
   const views = $derived(job.view_count ?? 0);
   const applies = $derived(job.applied_count ?? 0);
 
-  // The content column is tabbed whenever we know the employer, so "who are these
-  // people?" is answerable without leaving the posting. Page state, not a route: the
+  // The content column is tabbed so "who are these people?" and "what will they ask
+  // me?" are answerable without leaving the posting. Page state, not a route: the
   // company copy already has a canonical home at /companies/<slug>, and a second URL
   // serving it would be a thin duplicate we'd then have to keep out of the index.
-  const CONTENT_TABS = [
-    { id: 'description', label: 'Description' },
-    { id: 'company', label: 'Company' },
-  ] as const;
-  type ContentTab = (typeof CONTENT_TABS)[number]['id'];
-
+  //
+  // Built per job rather than fixed, because neither of the two extra tabs is always
+  // there: a posting can arrive without a company slug, and only a few ATS platforms
+  // publish a form we can read. A tab is offered only when its panel has something in
+  // it — `applyFormWorthShowing` is the same predicate the panel itself renders on, so
+  // the two cannot disagree about whether there is anything to show.
   const companySlug = $derived(job.company_slug ?? '');
+  const contentTabs = $derived([
+    { id: 'description', label: 'Description' } as const,
+    ...(companySlug ? [{ id: 'company', label: 'Company' } as const] : []),
+    ...(applyFormWorthShowing(applyForm) ? [{ id: 'application', label: 'Application' } as const] : []),
+  ]);
   let contentTab = $state<ContentTab>('description');
   // Per-instance so a second JobView on one page can't claim the same panel, which
   // would leave both strips' aria-controls pointing at the first one's panel.
@@ -505,29 +516,36 @@
       </div>
     {/if}
 
-    {#if companySlug}
+    {#if contentTabs.length > 1}
       <TabStrip
-        tabs={CONTENT_TABS}
+        tabs={contentTabs}
         active={contentTab}
         onSelect={(id) => (contentTab = id)}
         label="Job details"
         {panelId}
       />
-      <!-- One panel for both tabs, its contents toggled by class rather than {#if}.
+      <!-- One panel for every tab, its contents toggled by class rather than {#if}.
            Unmounting the inactive one would throw away the company the visitor already
-           waited for, and re-render the description on every switch back. -->
+           waited for, and re-render the description on every switch back. It also keeps
+           all three in the server-rendered HTML, so a crawler reads what a visitor would
+           have to click for. -->
       <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
         <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
           {@render descriptionContent()}
         </div>
-        <div class={contentTab === 'company' ? 'block' : 'hidden'}>
-          {#key companySlug}
-            <JobCompanyPanel
-              slug={companySlug}
-              name={job.company || 'this company'}
-              active={contentTab === 'company'}
-            />
-          {/key}
+        {#if companySlug}
+          <div class={contentTab === 'company' ? 'block' : 'hidden'}>
+            {#key companySlug}
+              <JobCompanyPanel
+                slug={companySlug}
+                name={job.company || 'this company'}
+                active={contentTab === 'company'}
+              />
+            {/key}
+          </div>
+        {/if}
+        <div class={contentTab === 'application' ? 'block' : 'hidden'}>
+          <JobApplyForm form={applyForm} />
         </div>
       </div>
     {:else}
