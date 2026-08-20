@@ -72,12 +72,14 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && suggestOpen) {
+    // With the dropdown closed this handler owns no keys at all, which is what keeps
+    // the input behaving exactly as it did on every page that offers no suggestions.
+    if (!suggestOpen) return;
+    if (e.key === 'Escape') {
       e.preventDefault(); // keep the typed text; only the dropdown closes
       close();
       return;
     }
-    if (!suggestOpen) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       activeIndex = activeIndex < rowCount - 1 ? activeIndex + 1 : 0;

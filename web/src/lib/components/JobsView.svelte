@@ -140,13 +140,14 @@
   // it by one debounce, and drop roles in and out mid-word. One facet, no `q` — the
   // rest of the filter scope stays, so the figure still answers what a click would
   // give. Refreshed only when a non-text filter changes; typing does not touch it.
+  const roleScopeParams = () => {
+    const p = scopedParams();
+    p.delete('q');
+    return p;
+  };
   let roleCounts = $state.raw<FacetCounts | null>(null);
   const refreshRoleCounts = latestOnly(
-    () => {
-      const p = scopedParams();
-      p.delete('q');
-      return api.facetCounts(p, { facets: ['role'] });
-    },
+    () => api.facetCounts(roleScopeParams(), { facets: ['role'] }),
     (c) => (roleCounts = c),
   );
 
@@ -401,11 +402,7 @@
       // The role distribution ignores the text query, so refetch it only when the rest
       // of the scope moves — otherwise every settled keystroke would spend a request
       // re-measuring something that did not change.
-      const roleScopeKey = (() => {
-        const p = scopedParams();
-        p.delete('q');
-        return p.toString();
-      })();
+      const roleScopeKey = roleScopeParams().toString();
       if (roleScopeKey !== lastRoleScopeKey) {
         lastRoleScopeKey = roleScopeKey;
         refreshRoleCounts();
