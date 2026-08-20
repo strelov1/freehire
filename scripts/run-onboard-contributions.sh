@@ -1,6 +1,7 @@
 #!/bin/bash
 # Daily contribution onboarding: drain link_contributions into a pull request.
-# Runs at 05:17 UTC via cron, on the host that owns the database.
+# Runs as a systemd oneshot off freehire-onboard-contributions.timer, like every
+# other freehire worker.
 #
 # The "contribute a board" flow records a pending row per contributed board and
 # never crawls anything — migration 0025 calls the status "the seam for the
@@ -8,27 +9,34 @@
 # contributed board live, adds the ones that answer to sources/<source>.yml, and
 # opens a pull request. A human merges it.
 #
-# Configuration (usually /etc/hire/onboard-contributions.env):
-#   GH_TOKEN                  required, opens the pull request
-#   CLAUDE_CODE_OAUTH_TOKEN   required unless ANTHROPIC_API_KEY is set
-#   REPO                      default strelov1/freehire
-#   PGDB                      default hire
-#   WORK_DIR                  default /var/tmp/onboard-contributions
-#   TELEGRAM_BOT_TOKEN        optional, reports the run
-#   TELEGRAM_CHAT_ID          optional, required with the bot token
+# Environment (systemd supplies both files; a hand run reads them itself):
+#   /opt/freehire/.env                        DATABASE_URL, TELEGRAM_BOT_TOKEN
+#   /opt/freehire/env/onboard-contributions.env
+#       GH_TOKEN                  required, opens the pull request
+#       ANTHROPIC_API_KEY         required unless CLAUDE_CODE_OAUTH_TOKEN is set
+#       ANTHROPIC_BASE_URL        optional, when Claude Code runs through a proxy
+#       TELEGRAM_CHAT_ID          optional, reports the run
+#       REPO                      default strelov1/freehire
+#       WORK_DIR                  default /var/tmp/onboard-contributions
 set -uo pipefail
 
-ENV_FILE="${ENV_FILE:-/etc/hire/onboard-contributions.env}"
-if [ -f "$ENV_FILE" ]; then
-  # shellcheck disable=SC1090
-  set -a && . "$ENV_FILE" && set +a
-fi
+for env_file in "${FREEHIRE_ENV:-/opt/freehire/.env}" \
+                "${ENV_FILE:-/opt/freehire/env/onboard-contributions.env}"; do
+  if [ -f "$env_file" ]; then
+    # shellcheck disable=SC1090
+    set -a && . "$env_file" && set +a
+  fi
+done
 
 REPO="${REPO:-strelov1/freehire}"
-PGDB="${PGDB:-hire}"
 WORK_DIR="${WORK_DIR:-/var/tmp/onboard-contributions}"
+# Pinned on purpose: Claude Code's own default is not among the models the proxy
+# in ANTHROPIC_BASE_URL serves, and it fails the run at the first prompt.
+CLAUDE_MODEL="${CLAUDE_MODEL:-claude-sonnet-4-6}"
 REPO_DIR="$WORK_DIR/repo"
-STAMP="$(date -u +%Y%m%d)"
+# Minute-resolution: a failed run leaves its branch pushed, and the next run must
+# not collide with it. The open-PR guard, not the branch name, prevents pile-up.
+STAMP="$(date -u +%Y%m%d-%H%M)"
 LABEL="onboard-contributions"
 
 log() { echo "$(date -u '+%Y-%m-%d %H:%M:%S') $*"; }
@@ -48,14 +56,15 @@ die() {
   exit 1
 }
 
-# The table lives on this host; psql runs as the postgres system user.
-psql_hire() { sudo -u postgres psql -d "$PGDB" -tAF'|' -c "$1"; }
+# Same connection every other freehire worker uses.
+psql_hire() { psql "$DATABASE_URL" -tAF'|' -c "$1"; }
 
 # --- preflight ---------------------------------------------------------------
 
 for bin in claude git gh go curl psql; do
   command -v "$bin" >/dev/null 2>&1 || die "$bin not found on PATH"
 done
+[ -n "${DATABASE_URL:-}" ] || die "DATABASE_URL is not set"
 [ -n "${GH_TOKEN:-}" ] || die "GH_TOKEN is not set"
 [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}" ] || die "no Claude credential is set"
 export GH_TOKEN
@@ -67,6 +76,11 @@ cd "$WORK_DIR" || die "cannot enter $WORK_DIR"
 log "Cloning $REPO"
 git clone --depth 50 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" repo >/dev/null 2>&1 \
   || die "clone failed"
+
+# The service account has no git identity of its own, and commits are signed off,
+# so set one on the clone rather than globally on the host.
+git -C repo config user.name "${GIT_USER_NAME:-freehire-agent}"
+git -C repo config user.email "${GIT_USER_EMAIL:-strelov1@gmail.com}"
 
 # --- reconcile ---------------------------------------------------------------
 # A board counts as onboarded once it is in main, not when its PR opens. This is
@@ -138,7 +152,7 @@ git checkout -b "feat/onboard-contributed-boards-$STAMP" >/dev/null 2>&1 || die 
 
 # Claude has no web tools here, only Bash/Read/Edit/Write, so every board is
 # validated with curl.
-claude -p --permission-mode acceptEdits --allowedTools Bash,Read,Edit,Write -- "$(cat <<PROMPT
+claude -p --model "$CLAUDE_MODEL" --permission-mode acceptEdits --allowedTools Bash,Read,Edit,Write -- "$(cat <<PROMPT
 You are draining the crowdsourced board contribution queue. The repository is checked out in
 your current working directory, on a fresh branch off main.
 
@@ -203,9 +217,12 @@ fi
 go build ./... || die "go build failed after the board edits"
 git add sources
 git commit -s -m "feat(sources): onboard contributed boards" >/dev/null || die "commit failed"
-git push -u origin HEAD >/dev/null 2>&1 || die "push failed"
+branch=$(git rev-parse --abbrev-ref HEAD)
+git push origin HEAD >/dev/null 2>&1 || die "push failed"
 
-pr_url=$(gh pr create --repo "$REPO" \
+# --head is explicit because the shallow single-branch clone has no tracking ref
+# for a new branch, and gh refuses to guess one.
+pr_url=$(gh pr create --repo "$REPO" --head "$branch" \
   --title "feat(sources): onboard contributed boards" \
   --body-file "$WORK_DIR/pr_body.md" \
   --label "$LABEL")
@@ -225,14 +242,14 @@ if [ -s "$WORK_DIR/queue_review.tsv" ]; then
   git checkout main >/dev/null 2>&1 || die "cannot switch back to main"
   git checkout -b "feat/onboard-new-adapter-$STAMP" >/dev/null 2>&1 || die "cannot create the adapter branch"
 
-  claude -p --continue --permission-mode acceptEdits --allowedTools Bash,Read,Edit,Write -- "$(cat <<PROMPT
+  claude -p --continue --model "$CLAUDE_MODEL" --permission-mode acceptEdits --allowedTools Bash,Read,Edit,Write -- "$(cat <<PROMPT
 The review queue holds links the recognizer could not map to a supported ATS. Most of them are
 a company's own careers page fronting an ATS we already crawl.
 
 1. Before fetching anything, settle them with one catalogue query. Guess company slugs from the
    URLs in $WORK_DIR/queue_review.tsv and ask the database:
 
-       sudo -u postgres psql -d $PGDB -c "SELECT company_slug, source, count(*) FROM jobs WHERE company_slug IN ('acme','globex') GROUP BY 1,2 ORDER BY 1;"
+       psql "\$DATABASE_URL" -c "SELECT company_slug, source, count(*) FROM jobs WHERE company_slug IN ('acme','globex') GROUP BY 1,2 ORDER BY 1;"
 
    Anything already crawled needs no adapter. Note it in $WORK_DIR/adapter_notes.md.
 2. From what is left, pick at most ONE row that is a real, ingestable ATS with a public listing
@@ -256,8 +273,9 @@ PROMPT
     if go build ./... && go test ./internal/sources/...; then
       git add -A
       git commit -s -m "$title" >/dev/null
-      git push -u origin HEAD >/dev/null 2>&1
-      adapter_pr_url=$(gh pr create --repo "$REPO" --title "$title" \
+      adapter_branch=$(git rev-parse --abbrev-ref HEAD)
+      git push origin HEAD >/dev/null 2>&1
+      adapter_pr_url=$(gh pr create --repo "$REPO" --head "$adapter_branch" --title "$title" \
         --body-file "$WORK_DIR/adapter_pr_body.md")
       log "Opened $adapter_pr_url"
     else
