@@ -29,17 +29,86 @@ be offered once.
 - **WHEN** the query matches two aliases that both resolve to `ai_engineering`
 - **THEN** `ai_engineering` appears exactly once in the matches
 
-### Requirement: Suggestions are ranked by open vacancies and bounded
+### Requirement: Suggestions are ranked by match quality before open vacancies
 
-The system SHALL rank matched roles by their open-vacancy count from the jobs
-view's already-fetched role facet distribution, most vacancies first, and SHALL
-offer at most five. Ranking SHALL be deterministic: roles with equal counts SHALL
-be ordered by label so the list does not reshuffle between renders.
+The matcher is typo-tolerant and matches curated aliases, so a query can reach a
+role it plainly does not name: `devops` reaches Sales Specialist through the alias
+`revops`, and `backend` reaches Marketing Specialist through `growth hacker`.
+Ranking such a set by open-vacancy count alone promotes whichever unrelated role
+owns the largest bucket — measured against the live catalogue, it put Sales
+Specialist (147,223) above DevOps Engineer for `devops`, and Marketing Specialist
+(55,768) above Backend Engineer for `backend`.
+
+The system SHALL therefore rank by match quality FIRST, in these tiers:
+
+1. the query prefixes the role's label or one of its aliases AND finishes a word
+   there — `data` naming "Data Analyst";
+2. the query prefixes one but stops mid-word — `data` against the Software
+   Generalist alias "database developer", and every half-typed query on its way to
+   tier 1;
+3. the query starts a word further in — `design` inside "Product Design Lead".
+
+Tiers 1 and 2 are separate because a plain prefix rule is not enough: "database
+developer" carries 75,427 jobs behind it, so under one combined tier a search for
+`data` led with Software Generalist rather than Data Analyst.
+
+A role the matcher admitted ONLY through typo tolerance SHALL NOT be offered at
+all. Nothing distinguishes two such matches, so ordering them by count hands the
+lead to the biggest bucket: `backedn` led with Marketing Specialist (55,768,
+reached by edit distance against its `growth hacker` alias) ahead of Backend
+Engineer. Offering nothing is the honest answer — the dropdown always keeps its
+free-text row, and the search index tolerates typos itself.
+
+Within a tier the system SHALL order by open-vacancy count, most first, and SHALL
+break a remaining tie by label so the list does not reshuffle between renders.
+The system SHALL offer at most five roles.
+
+#### Scenario: A mid-word prefix loses to a role the query names outright
+- **WHEN** the query is `data` and the Software Generalist alias "database developer" has more open vacancies than Data Analyst
+- **THEN** Data Analyst is offered first
+
+#### Scenario: A typo-only match is not offered
+- **WHEN** the query is `backedn`, which reaches roles only through typo tolerance
+- **THEN** no role is offered
+
+### Requirement: One row per role, never one per grade
+
+The role catalogue carries every seniority grade as its own slug
+(`senior_data_analytics`, `intern_qa`), and graded slugs outnumber ungraded ones
+in the live distribution roughly six to one. Offering them individually spends the
+whole five-row budget on one role: `data analyst` measured as Data Analyst, Senior
+Data Analyst, Lead Data Analyst, Junior Data Analyst, Intern Data Analyst, with
+Data Engineer and Data Scientist pushed out entirely.
+
+The system SHALL offer at most one row per BASE role — the slug with any seniority
+grade stripped — keeping whichever graded or ungraded variant ranks highest under
+the rule above. Grade remains reachable through the seniority facet, and a query
+that names a grade still reaches it: naming it makes that variant the better match
+under tier 1, so it is the variant kept.
+
+#### Scenario: Grades of one role do not crowd out other roles
+- **WHEN** the query is `data analyst` and the distribution carries Data Analyst and its senior, lead, junior and intern grades alongside Data Engineer
+- **THEN** Data Analyst is offered once and Data Engineer is still offered
+
+#### Scenario: Naming a grade keeps that grade
+- **WHEN** the query is `senior data analyst`
+- **THEN** the row offered for that role is Senior Data Analyst, not Data Analyst
+
+#### Scenario: An unrelated role reached only by typo tolerance never leads
+- **WHEN** the query is `devops` and Sales Specialist (reached through its `revops` alias) has far more open vacancies than DevOps Engineer
+- **THEN** DevOps Engineer is offered first
+
+#### Scenario: A large fuzzy match does not outrank the named role
+- **WHEN** the query is `backend` and Marketing Specialist (reached through its `growth hacker` alias) has more open vacancies than Backend Engineer
+- **THEN** Backend Engineer is offered first
 
 When the facet distribution has not loaded yet, the system SHALL still offer the
-matched roles — ordered by label — and SHALL omit the count rather than render a
-zero or hide the suggestion, because an absent measurement must not read as
-"no vacancies".
+matched roles — ranked by match quality alone, since no count exists to order
+within a tier — and SHALL omit the count rather than render a zero or hide the
+suggestion, because an absent measurement must not read as "no vacancies". Match
+quality is what makes this state usable: ordering the unmeasured case by label
+alone fills every row with `C-Level …` and `Intern …` and can omit the named role
+entirely, which is what a jobs page shows on every cold load.
 
 When the distribution HAS loaded, a matched role absent from it SHALL NOT be
 offered: the catalogue carries more role slugs than the open catalogue currently
@@ -59,8 +128,8 @@ A role the user has already selected in the `role` facet SHALL NOT be offered.
 - **THEN** exactly five are offered
 
 #### Scenario: Counts have not loaded
-- **WHEN** the role facet distribution is unavailable and the query matches roles
-- **THEN** the roles are offered ordered by label, each without a count
+- **WHEN** the role facet distribution is unavailable and the query is `swe`
+- **THEN** Software Engineer is the first role offered, and no row carries a count
 
 #### Scenario: A role with no open vacancies is not offered
 - **WHEN** the distribution is loaded and a matched role has no entry in it

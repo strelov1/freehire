@@ -1,21 +1,31 @@
 ## 1. Matcher and ranker (pure module)
 
-- [ ] 1.1 Add `web/src/lib/roleSuggest.ts` exporting `RoleSuggestion` and
+- [x] 1.1 Add `web/src/lib/roleSuggest.ts` exporting `RoleSuggestion` and
   `suggestRoles(query, counts, active)`, matching a query against the role catalogue
   by label and alias through `facets.ts`'s existing `optionMatches` (adapt the call
   site if its signature needs it; do not fork the matching logic). Cover with
   `roleSuggest.test.ts`: label match, alias match (`swe` → `software_engineer`),
   prefix match (`data an` → `data_analytics`), and one role reached through two
   aliases offered once.
-- [ ] 1.2 Rank matches by open-vacancy count from the passed `FacetCounts`, break ties
+- [x] 1.2 Rank matches by open-vacancy count from the passed `FacetCounts`, break ties
   by label, and cap at five. Tests: higher count ranks first, equal counts order by
   label and do not reshuffle across repeated calls, nine matches yield exactly five.
-- [ ] 1.3 Handle the three absence cases: a null/absent distribution offers the matches
+- [x] 1.3 Handle the three absence cases: a null/absent distribution offers the matches
   ordered by label with no count (never a zero); a role missing from a PRESENT
   distribution is dropped entirely (measured zero — a suggestion to an empty page); and
   a role already present in `active` is not offered. Tests for all three.
-- [ ] 1.4 Reject queries shorter than two characters with no matches, so the component
+- [x] 1.4 Reject queries shorter than two characters with no matches, so the component
   has no threshold logic of its own. Test the one-character case.
+
+- [x] 1.5 Rank by match-quality tier before count (prefix → word-boundary → fuzzy),
+  and collapse graded variants to one row per `baseRole`, keeping the best-ranked
+  variant. Both rules exist because ranking by count alone was measured wrong on the
+  live catalogue: `devops` led with Sales Specialist, `backend` with Marketing
+  Specialist, and `data analyst` spent all five rows on grades of one role.
+- [x] 1.6 Re-test group 1 against the REAL catalogue and a REAL production
+  distribution, asserting RANK (`found[0]`), not mere presence — every existing
+  fixture reduces the 1,290-role catalogue to a handful, which is why the suite stayed
+  green through all of the above. Cover the `counts === null` path the same way.
 
 ## 2. Bridge capability
 

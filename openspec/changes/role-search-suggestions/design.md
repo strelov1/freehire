@@ -110,12 +110,32 @@ the trap the repo's single-legal-form-vocabulary rule exists to prevent. If its
 signature does not fit a bare slug/label pair, adapt the call site; do not fork the
 logic.
 
-### Ranking is by facet count, with a deterministic tiebreak
+### Ranking is by match quality first, count second
 
-Sorting by open vacancies puts the role the user most likely means first. Equal
-counts break by label so repeated renders do not reshuffle. With no distribution
-loaded, order by label and render no count at all — a missing measurement must not be
-drawn as a zero.
+An earlier draft ranked by open vacancies alone. Measured against the live
+distribution, that was wrong: `optionMatches` is typo-tolerant and alias-aware, so
+`devops` reaches Sales Specialist (147,223 jobs) through `revops` and `backend`
+reaches Marketing Specialist (55,768) through `growth hacker` — and sorting by
+absolute count then hands first place to the largest unrelated bucket. Match quality
+(prefix, then word-boundary, then fuzzy) is the primary key; count orders within a
+tier; label breaks the remaining tie.
+
+This also rescues the unmeasured state. With no distribution every count is absent,
+so a count-first rule degenerates to alphabetical over 1,290 roles — which returns
+five `C-Level …` rows and, for `swe`, omits Software Engineer entirely. Under
+quality-first the same call leads with the role the query names.
+
+### One row per base role
+
+Graded slugs outnumber ungraded ones about six to one in the live distribution, so
+without collapsing, `data analyst` spends all five rows on Data Analyst's grades and
+never reaches Data Engineer. `baseRole` already exists in `facets.ts` for exactly this
+key. Collapsing keeps the highest-ranked variant, so naming a grade still yields that
+grade — it wins tier 1 against its own ungraded sibling.
+
+Collapsing WITHOUT the quality tiering would make things worse, not better (`backend`
+would collapse to Backend Engineer plus Marketing Specialist), which is why the two
+ship together.
 
 ### Enter is not captured by default
 
@@ -134,9 +154,14 @@ row. This makes the feature purely additive for anyone who ignores it.
   Escape and outside-click both close, and the query survives Escape.
 - **Reversing the documented "no dropdown" decision** → Replace the comment together
   with the behaviour, so the file does not carry a rule its code no longer follows.
-- **Matching 1,750 strings per keystroke** → Pure string work over a static array,
-  already debounced upstream by the filter store; no measurement suggests this needs
-  an index. If it ever does, the pure module is the place to add one.
+- **Matching 1,750 strings per keystroke, undebounced** → `FilterStore.setQuery` uses
+  `setSoon`, which updates `value` IMMEDIATELY and debounces only `applied`
+  (`urlSynced.svelte.ts` — "`value` stays live so the input never lags"). The header
+  binds `target.value.q`, so there is no upstream debounce protecting this path. An
+  earlier draft of this document claimed there was; that was wrong. Measured at 8–11 ms
+  per call on a warm desktop JIT, ~20 ms for a long query — plausibly 30–60 ms of
+  synchronous main-thread work per keystroke on a mid-range phone. Task 3 must either
+  debounce the suggestion computation or memoize it on `(query, distribution)`.
 - **Suggestions could be measured as unused, like the facet they surface** → The jobs
   view already emits a `search` analytics event; a role selection should be
   distinguishable in it, so the 1.1% figure can be re-measured after ship.
