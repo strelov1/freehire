@@ -154,7 +154,8 @@
   function entryCount(e: RailEntry): number {
     const f = staged.value;
     if (e.kind === 'category') return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'ai_archetype');
-    if (e.kind === 'experience') return selCount(f, 'seniority') + (f.experienceYearsMax != null ? 1 : 0);
+    if (e.kind === 'experience')
+      return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
     if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
@@ -363,10 +364,20 @@
     />
   {:else if entry.kind === 'experience'}
     {@const showSeniority = !exclude.includes('seniority')}
+    {@const showRoleType = !exclude.includes('role_type')}
     {#if showSeniority}
       <ChipFacet store={staged} param="seniority" label="Seniority" counts={c} />
     {/if}
-    <div class:mt-6={showSeniority}>
+    <!-- Directly beneath seniority on purpose: the two are the axes users conflate.
+         "Lead" reads to many as a management grade, while in this catalogue it names
+         the IC ladder — of the 116,893 postings at seniority=lead, only 3,303 carry
+         any management marker. Adjacency is what makes them read as two questions. -->
+    {#if showRoleType}
+      <div class:mt-6={showSeniority}>
+        <ChipFacet store={staged} param="role_type" label="Role type" counts={c} />
+      </div>
+    {/if}
+    <div class:mt-6={showSeniority || showRoleType}>
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold tracking-tight">Years of experience</h3>
         <span class="text-xs font-medium text-muted-foreground"

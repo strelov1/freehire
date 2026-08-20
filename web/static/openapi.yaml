@@ -168,6 +168,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/AIArchetype"
+        - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
         - $ref: "#/components/parameters/Reality"
         - $ref: "#/components/parameters/Source"
@@ -236,6 +237,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/AIArchetype"
+        - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
         - $ref: "#/components/parameters/Reality"
         - $ref: "#/components/parameters/Source"
@@ -317,6 +319,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/AIArchetype"
+        - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
         - $ref: "#/components/parameters/Reality"
         - $ref: "#/components/parameters/Source"
@@ -918,6 +921,29 @@ components:
             - fullstack_ai_engineer
             - devops_infra_engineer
       description: AI skill-signature archetype, derived from the posting's skill set.
+    RoleType:
+      name: role_type
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - people_manager
+      description: |
+        Whether the posting names a people-management role, resolved from its title.
+
+        The vocabulary holds ONE value on purpose. A posting carrying
+        `people_manager` is a management role; a posting carrying **nothing** means
+        no management marker was found in the title — it does **not** mean the
+        posting is an individual-contributor role. That side is not detectable from
+        a title and this API does not claim it.
+
+        So `role_type_exclude=people_manager` returns "postings with no management
+        marker", which is a wider and weaker set than "individual-contributor
+        postings". Do not present it to users as the latter.
     Collections:
       name: collections
       in: query

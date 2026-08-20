@@ -54,6 +54,7 @@
     push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('cities')]);
 
     facetGroup('seniority', 'Seniority');
+    facetGroup('role_type', 'Role type');
     facetGroup('work_mode', 'Work format');
     facetGroup('skills', 'Skills', true);
     facetGroup('domains', 'Industry');

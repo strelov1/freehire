@@ -42,6 +42,12 @@ export const REGION_LABELS: Record<string, string> = Object.fromEntries(
 
 export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };
 
+// The one role-type value (vocab.RoleTypeValues). There is deliberately no second
+// entry: the catalogue can show that a posting IS a management role and cannot show
+// that it is not, so excluding this pill means "no management marker in the title",
+// which must never be labelled "Individual contributor" anywhere.
+export const ROLE_TYPE_LABELS: Record<string, string> = { people_manager: 'People manager' };
+
 // English proficiency levels (vocab.EnglishLevelValues); `none` is the
 // no-requirement sentinel — detail pages filter it out before rendering.
 export const ENGLISH_LEVEL_LABELS: Record<string, string> = {

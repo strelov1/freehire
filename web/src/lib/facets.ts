@@ -17,13 +17,13 @@ import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, ROLE_LABELS, ROLE_ALIASES,
-  AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS,
+  AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
-  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, titleCase,
+  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { ROLE_RELATED } from './roleRelated';
@@ -377,6 +377,7 @@ export const CATEGORY_OPTIONS: FacetOption[] = CATEGORY;
 // Six fixed values (internal/aiarchetype) — a static select like CATEGORY/DOMAINS,
 // not a dynamic (distribution-driven) control like role/skills.
 const AI_ARCHETYPE: FacetOption[] = options(AI_ARCHETYPE_VALUES, AI_ARCHETYPE_LABELS);
+const ROLE_TYPE: FacetOption[] = options(ROLE_TYPE_VALUES, ROLE_TYPE_LABELS);
 
 // Work-mode and region options, exported for the profile's location preferences editor so
 // it shares the filter panel's vocabulary/order instead of duplicating it.
@@ -558,6 +559,7 @@ export const FACETS: FacetDef[] = [
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'ai_archetype', label: 'AI Specialization', control: 'select', options: AI_ARCHETYPE, excludable: true, placeholder: 'Search AI specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
+  { param: 'role_type', label: 'Role type', control: 'pills', options: ROLE_TYPE, excludable: true },
   { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills', techIcons: true },
   { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: true, placeholder: 'Search industries' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: true },

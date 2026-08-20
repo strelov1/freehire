@@ -560,6 +560,13 @@ func facetSettings() *meilisearch.Settings {
 			// ai_archetype is derived at index time (aiarchetype) from skills+category,
 			// same pattern as roles.
 			"ai_archetype",
+			// role_type is derived at index time (roletype) from the title alone, same
+			// pattern again — no jobs column, so a reindex is what reaches existing
+			// postings. Adding a filterable attribute is the one hazardous part of
+			// shipping this: until the LIVE index declares it, a binary that requests
+			// the facet hard-500s /api/v1/jobs/facets for every caller, so the settings
+			// patch goes out BEFORE the binary flips.
+			"role_type",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLLECTIONS, AI_ARCHETYPE_VALUES } from './generated/contracts';
+import { COLLECTIONS, AI_ARCHETYPE_VALUES, ROLE_TYPE_VALUES } from './generated/contracts';
 import { cityOption, countryLabel, FACETS } from './facets';
 
 const collectionOptions = () => FACETS.find((f) => f.param === 'collections')?.options ?? [];
@@ -17,6 +17,29 @@ describe('the ai_archetype facet', () => {
     expect(facet?.dynamic).toBeFalsy();
     const offered = (facet?.options ?? []).map((o) => o.value).toSorted();
     expect(offered).toEqual(AI_ARCHETYPE_VALUES.toSorted());
+  });
+});
+
+describe('the role_type facet', () => {
+  it('offers every generated role-type value as an excludable pill', () => {
+    const facet = FACETS.find((f) => f.param === 'role_type');
+    expect(facet?.control).toBe('pills');
+    expect(facet?.excludable).toBe(true);
+    const offered = (facet?.options ?? []).map((o) => o.value).toSorted();
+    expect(offered).toEqual(ROLE_TYPE_VALUES.toSorted());
+  });
+
+  // The vocabulary is one-sided: we can show a posting IS a management role, never
+  // that it is not. Labelling the excluded state "individual contributor" would turn
+  // a known unknown into a false claim, so no label here may say it.
+  it('never labels any value as individual contributor', () => {
+    const labels = (FACETS.find((f) => f.param === 'role_type')?.options ?? []).map((o) =>
+      o.label.toLowerCase(),
+    );
+    for (const label of labels) {
+      expect(label).not.toContain('individual contributor');
+      expect(label).not.toMatch(/\bic\b/);
+    }
   });
 });
 

@@ -111,6 +111,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, engineering_design, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
 | `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
+| `role_type` | Role type | people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means "no marker", not "IC" |
 | `skills` | Skills | Open vocabulary — call /jobs/facets for live values |
 | `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |
 | `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |

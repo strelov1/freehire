@@ -40,9 +40,24 @@ const API_ONLY_FACETS: FilterRow[] = [
   { param: 'salary_period', label: 'Salary period', values: 'year, month, day, hour' },
 ];
 
+// A facet whose value list needs saying more than enumerating. Keyed by param, this
+// replaces the derived `values` text for that row only — the row itself still comes
+// from the FACETS registry, so the facet cannot be documented twice or go missing.
+const VALUES_OVERRIDE: Record<string, string> = {
+  // The one-sided vocabulary. An integrator who reads `role_type_exclude` as a
+  // positive individual-contributor filter is building on a claim the catalogue
+  // cannot support, so the caveat has to ride with the row rather than be inferred.
+  role_type:
+    'people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means "no marker", not "IC"',
+};
+
 /** Every string facet: the SPA-derived rows plus the API-only ones. */
 export const FILTER_FACETS: FilterRow[] = [
-  ...FACETS.map((f) => ({ param: f.param, label: f.label, values: valuesOf(f.options) })),
+  ...FACETS.map((f) => ({
+    param: f.param,
+    label: f.label,
+    values: VALUES_OVERRIDE[f.param] ?? valuesOf(f.options),
+  })),
   ...API_ONLY_FACETS,
 ];
 

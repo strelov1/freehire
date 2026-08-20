@@ -11,6 +11,7 @@ import (
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/roletag"
+	"github.com/strelov1/freehire/internal/roletype"
 )
 
 // maxIndexedDescriptionRunes caps the description text stored in the search
@@ -53,6 +54,14 @@ type JobDocument struct {
 	// it backs the `ai_archetype` facet but is never part of the served public
 	// wire shape.
 	AIArchetype string `json:"ai_archetype"`
+	// RoleType is "people_manager" when the title names a people-management role, and
+	// empty otherwise — empty meaning "no marker found", never "individual
+	// contributor" (see internal/roletype for why the other side is not detectable).
+	// Like Roles and AIArchetype it lives on the document rather than jobview.Job, so
+	// it backs the `role_type` facet without entering the public wire shape, and it
+	// needs no jobs column and no cmd/backfill-derive pass — a reindex is what
+	// reaches existing postings.
+	RoleType string `json:"role_type"`
 	// CompanySlugFolded is company_slug with its hyphens removed — the same fold
 	// jobs.company_slug_folded stores and the aggregator-suppression pass compares on
 	// (migration 0109). Like Roles, it is declared on the document, not jobview.Job, so
@@ -89,6 +98,7 @@ func FromJob(j db.Job) (JobDocument, error) {
 		Job:         view,
 		Roles:       roletag.Derive(j.Seniority, j.Category, j.Title),
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
+		RoleType:    roletype.Derive(j.Title),
 		// Read from the stored column rather than re-folded here, so the index can never
 		// disagree with the pass that compares on it. A row that predates the column (the
 		// backfill is chunked and paced) simply carries no folded value and is matched by

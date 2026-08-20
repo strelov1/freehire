@@ -32,6 +32,14 @@ var (
 	RelocationValues     = []string{"not_supported", "supported", "required"}
 	SalaryPeriodValues   = []string{"year", "month", "day", "hour"}
 	SeniorityValues      = []string{"intern", "junior", "middle", "senior", "lead", "staff", "principal", "c_level"}
+	// RoleTypeValues answers "does this role manage people?" — an axis none of the
+	// other vocabularies covers. It holds ONE value on purpose. The management side
+	// is legible from a title (`head of`, `director`, a craft-qualified manager);
+	// the individual-contributor side is not, and treating the absence of a marker
+	// as proof of the opposite is exactly the inference the dictionaries in this
+	// repo are forbidden to make. An unresolved posting means "no marker found",
+	// never "individual contributor" — see internal/roletype.
+	RoleTypeValues       = []string{"people_manager"}
 	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
 	CategoryValues       = []string{

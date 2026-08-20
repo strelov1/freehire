@@ -201,6 +201,26 @@ func TestFilterFromValues_ExperienceYearsMaxZero(t *testing.T) {
 // never below zero — so it is a typo, not a query. The contract declares the param
 // non-negative; honouring the sign would turn that typo into an empty result page
 // that looks like a legitimately narrow search.
+// role_type is derived at index time and carried top-level, like `roles` and
+// `ai_archetype`, so it filters on the bare attribute rather than an enrichment.*
+// dot path. Excluding it is how a caller asks for postings with no management
+// marker — which is not the same as asking for individual-contributor postings.
+func TestFilterFromValues_RoleType(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("role_type=people_manager")))
+	want := [][]string{{`role_type = "people_manager"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_RoleTypeExclude(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("role_type_exclude=people_manager")))
+	want := [][]string{{`role_type != "people_manager"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_ExperienceYearsMaxNegative(t *testing.T) {
 	for _, raw := range []string{"-1", "-10"} {
 		got := normalizeGroups(t, FilterFromValues(vals("experience_years_max="+raw)))

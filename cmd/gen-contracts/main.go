@@ -349,6 +349,11 @@ func genVocab() string {
 	// The six AI skill-signature archetype slugs (internal/aiarchetype), generated
 	// so the AI Specialization filter's valid values can't drift from the rule table.
 	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))
+	// The role-type vocabulary (internal/roletype), generated for the same reason:
+	// the filter's one pill must not drift from the dictionary. It holds a single
+	// value, and the absence of one means "no management marker", never
+	// "individual contributor" — nothing in the SPA may label it as the latter.
+	b.WriteString(emitVocab("RoleType", "ROLE_TYPE_VALUES", vocab.RoleTypeValues))
 	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
 	// with a sharper edge: the job page draws one gauge segment per criterion the payload
 	// says fired, and the rows accounting for them come from the SPA's own list. A

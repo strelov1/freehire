@@ -58,6 +58,51 @@ func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
 	}
 }
 
+func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
+	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if mgr.RoleType != "people_manager" {
+		t.Errorf("role_type = %q, want people_manager", mgr.RoleType)
+	}
+
+	// An unresolved title carries no value — and is still indexed. Empty means "no
+	// marker in the title", never "individual contributor".
+	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if ic.RoleType != "" {
+		t.Errorf("role_type = %q, want empty", ic.RoleType)
+	}
+
+	// Top level on the document so it is filterable...
+	raw, err := json.Marshal(mgr)
+	if err != nil {
+		t.Fatalf("marshal doc: %v", err)
+	}
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &full); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := full["role_type"]; !ok {
+		t.Errorf("document should carry a top-level role_type field: %s", raw)
+	}
+	// ...but never part of the public wire shape.
+	viewRaw, err := json.Marshal(mgr.Job)
+	if err != nil {
+		t.Fatalf("marshal view: %v", err)
+	}
+	var view map[string]json.RawMessage
+	if err := json.Unmarshal(viewRaw, &view); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	if _, ok := view["role_type"]; ok {
+		t.Errorf("role_type leaked into the public job wire shape: %s", viewRaw)
+	}
+}
+
 func TestCategoryUnresolved(t *testing.T) {
 	tests := []struct {
 		name string
