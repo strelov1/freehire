@@ -192,6 +192,7 @@ paths:
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
         - $ref: "#/components/parameters/WorkModeExclude"
+        - $ref: "#/components/parameters/RoleTypeExclude"
         - $ref: "#/components/parameters/SkillsExclude"
         - $ref: "#/components/parameters/SourceExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
@@ -261,6 +262,7 @@ paths:
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
         - $ref: "#/components/parameters/WorkModeExclude"
+        - $ref: "#/components/parameters/RoleTypeExclude"
         - $ref: "#/components/parameters/SkillsExclude"
         - $ref: "#/components/parameters/SourceExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
@@ -1244,6 +1246,24 @@ components:
         items:
           type: string
       description: Work formats to exclude, e.g. `onsite`.
+    RoleTypeExclude:
+      name: role_type_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - people_manager
+      description: >-
+        Role types to exclude. Declared explicitly, unlike most `_exclude` twins,
+        because with a one-value vocabulary the exclusion is the primary way to use
+        this facet: `role_type_exclude=people_manager` returns the postings whose
+        title carries no management marker. That is a wider and weaker set than
+        "individual-contributor postings" — it also holds every management role the
+        title dictionary missed — so do not present it to users as the latter.
     SkillsExclude:
       name: skills_exclude
       in: query

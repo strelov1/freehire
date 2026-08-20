@@ -81,7 +81,6 @@ var blindPhrases = []string{
 	"chief engineer",
 	"chief architect",
 	"chief scientist",
-	"chief of product",
 }
 
 // Derive resolves title to "people_manager" or to "". It lowercases, cuts the blind

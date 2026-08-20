@@ -57,6 +57,12 @@ func TestDerive(t *testing.T) {
 		{"chief scientist is IC", "Chief Scientist", ""},
 		{"chief of staff", "Chief of Staff", ""},
 
+		// …but a Chief of <function> runs that function. Masking it was a slip: the
+		// test one block down already reads "Head of Product" as a manager, and the
+		// same office spelled "Chief" cannot mean the opposite.
+		{"chief of product", "Chief of Product", "people_manager"},
+		{"chief of engineering", "Chief of Engineering", "people_manager"},
+
 		// The graded VP forms are the same office. "vp" is a whole word, so it does not
 		// fire inside "svp" — each spelling has to be its own entry.
 		{"svp", "SVP, Product Engineering", "people_manager"},

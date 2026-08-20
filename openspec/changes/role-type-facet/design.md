@@ -21,7 +21,7 @@ Production measurement, 3,148,859 live postings:
 | …reachable via neither | 111,786 |
 | titles containing "manager" | 378,410 |
 | …of which are IC roles (product/project/account/…) | 150,779 |
-| IC-ladder titles (`staff|principal|…engineer`) | 7,802 |
+| IC-ladder titles (`staff`, `principal`, … + engineer) | 7,802 |
 | titles saying `individual contributor` | 52 |
 | `seniority=lead` total / with a management marker | 116,893 / 3,303 |
 
