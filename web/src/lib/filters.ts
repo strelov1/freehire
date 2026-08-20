@@ -20,6 +20,7 @@ import {
   facetToggleSign,
   facetAdd,
   facetRemove,
+  filtersWithRole,
 } from './facetModel';
 
 export * from './facetModel';
@@ -118,6 +119,14 @@ export class FilterStore {
   /** Add a token to a facet's include set (token inputs); no-op on blank or duplicate. */
   add(param: string, raw: string) {
     this.#setFacet(param, facetAdd(this.facet(param), raw));
+  }
+
+  /** Header role suggestion picked: turn the role on and drop the typed text in one
+   *  discrete write. setNow (not setSoon) is the point — it clears the timer the last
+   *  keystroke's setQuery left pending, so the debounced text cannot land after the
+   *  role and re-narrow the search the suggestion just widened. */
+  applyRole(slug: string) {
+    this.#url.setNow(filtersWithRole(this.#url.value, slug));
   }
 
   /** Remove a value from a facet entirely (both sets). */

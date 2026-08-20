@@ -199,6 +199,23 @@ export function facetRemove(st: FacetState, v: string): FacetState {
   return facetSetSign(st, v, 'off');
 }
 
+/** Choosing a role suggestion under the header search box: turn that role on and drop
+ *  the typed text, as ONE new state.
+ *
+ *  The two belong together. The role tag is derived from the title by a deterministic
+ *  dictionary, so it is already the more precise of the two filters — keeping the text
+ *  as well would AND a half-typed query against it and return fewer jobs than either
+ *  filter alone, which reads as the suggestion breaking the page. Committing them as
+ *  one state also means the caller writes once (setNow), which cancels the debounce
+ *  the last keystroke left pending instead of racing it. */
+export function filtersWithRole(f: JobFilters, slug: string): JobFilters {
+  return {
+    ...f,
+    q: '',
+    facets: { ...f.facets, role: facetAdd(f.facets.role ?? emptyFacet(), slug) },
+  };
+}
+
 /** Build a fresh filter set seeded from a user profile — the reset-and-seed behind
  *  "Apply my profile". Specializations become `category` values, skills become included
  *  `skills` values, and excluded skills become EXCLUDED `skills` values (rendering

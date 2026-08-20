@@ -14,6 +14,7 @@ import {
   facetToggleSign,
   facetAdd,
   facetRemove,
+  filtersWithRole,
   type FacetState,
   type JobFilters,
 } from './facetModel';
@@ -260,5 +261,37 @@ describe('sort param removal', () => {
   it('never serializes a sort param', () => {
     expect(filtersToParams(emptyFilters()).get('sort')).toBeNull();
     expect(new URLSearchParams(savedSearchQuery(withSkills({ include: ['go'] }))).get('sort')).toBeNull();
+  });
+});
+
+// Choosing a role suggestion under the header search box replaces the typed text
+// with the role facet. Both happen in ONE state change: applied separately, the
+// search would briefly AND a half-typed query against the role and return fewer
+// jobs than either filter alone — a suggestion that empties the page.
+describe('filtersWithRole', () => {
+  it('turns the role on and empties the text query', () => {
+    const after = filtersWithRole({ ...emptyFilters(), q: 'data an' }, 'data_analytics');
+    expect(after.q).toBe('');
+    expect(must(after.facets.role).include).toEqual(['data_analytics']);
+  });
+
+  it('adds to the roles already chosen rather than replacing them', () => {
+    const after = filtersWithRole(filtersWithRole(emptyFilters(), 'backend'), 'frontend');
+    expect(must(after.facets.role).include).toEqual(['backend', 'frontend']);
+  });
+
+  it('leaves every other filter alone', () => {
+    const before = withSkills({ include: ['go'] });
+    before.postedWithinDays = 7;
+    const after = filtersWithRole(before, 'backend');
+    expect(must(after.facets.skills).include).toEqual(['go']);
+    expect(after.postedWithinDays).toBe(7);
+  });
+
+  it('does not mutate the filters it was given', () => {
+    const before = { ...emptyFilters(), q: 'data an' };
+    filtersWithRole(before, 'data_analytics');
+    expect(before.q).toBe('data an');
+    expect(must(before.facets.role).include).toEqual([]);
   });
 });

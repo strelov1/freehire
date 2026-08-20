@@ -29,14 +29,18 @@
 
 ## 2. Bridge capability
 
-- [ ] 2.1 Add the optional `roleSuggest` member to `ListSearchTarget` in
-  `web/src/lib/listSearch.svelte.ts` — `counts(): FacetCounts | null` as a getter
-  (mirroring `filterScope.counts`) and `apply(slug: string): void` — documented in the
-  file's existing comment style as the jobs-only capability it is.
-- [ ] 2.2 Publish `roleSuggest` from the target `JobsView.svelte` already registers:
-  `counts` returns the live distribution, `apply(slug)` clears the text query and
-  turns the `role` facet on through the existing filter store in one interaction.
-  Confirm `CompaniesView.svelte` publishes nothing new.
+- [x] 2.1 Add the optional `roleSuggest` member to `ListSearchTarget` in
+  `web/src/lib/listSearch.svelte.ts` — `counts()`, `active()` and `apply(slug)`,
+  documented in the file's existing comment style as the jobs-only capability it is.
+- [x] 2.2 Publish `roleSuggest` from the target `JobsView.svelte` already registers,
+  backed by `filtersWithRole` (pure, tested in facetModel) and `FilterStore.applyRole`,
+  which commits the cleared text and the role facet in ONE `setNow` so the pending
+  keystroke debounce cannot land afterwards. `CompaniesView.svelte` publishes nothing
+  new.
+- [x] 2.3 Measure the role distribution WITHOUT the text query, in its own single-facet
+  request refreshed only when a non-text filter moves. Scoped by `q` the numbers would
+  answer "jobs matching what you typed AND this role", lag a debounce behind the input,
+  and make roles appear and vanish mid-word through the measured-zero drop rule.
 
 ## 3. Header dropdown
 
