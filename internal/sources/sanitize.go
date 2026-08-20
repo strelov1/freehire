@@ -56,15 +56,61 @@ func newDescriptionPolicy() *bluemonday.Policy {
 //
 // Self-labelled anchors are dropped BEFORE the policy runs, because that is the only point
 // at which an anchor's text can still be compared against its own destination — the policy
-// unwraps the tag and the two become indistinguishable from prose.
+// unwraps the tag and the two become indistinguishable from prose. The literal-newline repair
+// runs first for the same reason: it reads the markup around each escape to decide what the
+// escape meant, and it may emit a <br> the policy must then vet like any other tag.
 func sanitizeHTML(s string) string {
-	stripped, dropped := dropSelfLabelledAnchors(s)
+	stripped, dropped := dropSelfLabelledAnchors(repairLiteralNewlines(s))
 	out := noBreakSpaces.Replace(descriptionPolicy.Sanitize(stripped))
 	if dropped {
 		// Only a drop can empty a block, so a body with nothing stripped is never rewritten.
 		out = dropEmptyBlocks(out)
 	}
 	return wrapOrphanListItems(out)
+}
+
+// literalNewlineMarker is the two-character sequence a double-escaping feed leaves behind:
+// its JSON holds "\\n", so the decoded value carries a backslash followed by an "n" instead
+// of the line break the source HTML had.
+const literalNewlineMarker = `\n`
+
+var (
+	// tagAdjacentLiteralNewline matches a literal newline escape that sits against a tag on
+	// either side, whitespace allowed in between. That is the source file's own indentation,
+	// which HTML collapses — so the escape stands in for whitespace and nothing more. The two
+	// sides are one alternation rather than two passes so that an escape between two tags
+	// ("</p>\n<p>") is rewritten once instead of matching twice.
+	tagAdjacentLiteralNewline = regexp.MustCompile(`(>\s*)\\n|\\n(\s*<)`)
+	// looseLiteralNewline matches whatever escapes the tag-adjacent pass left: an escape with
+	// prose on both sides, where it is the posting's ONLY line break.
+	looseLiteralNewline = regexp.MustCompile(`\\n`)
+)
+
+// repairLiteralNewlines restores the line breaks a double-escaping feed turned into visible
+// text. Some aggregators (seen live on whatjobs markets and adzuna, which resell through the
+// same upstream network) escape their JSON twice, so a description reaches the catalogue with
+// literal "\n" sequences the reader sees mid-sentence.
+//
+// What an escape MEANT depends on where it sits, so the repair is not one replacement:
+//
+//   - Against a tag it is indentation between blocks ("</p>\n<p>", "<ul>\n <li>"). It becomes a
+//     real newline, which HTML collapses exactly as the original did. Emitting a <br> here would
+//     add a blank line between every paragraph, and inside a list it would be markup a browser
+//     hoists out of the <ul> altogether.
+//   - Between two sentences it is the only break the posting has ("~ Kita-Zuschuss \n~ Weihnachtsgeld").
+//     A real newline would collapse and glue the lines together, so it becomes a <br>.
+//
+// Measured over a 20k-row sample of the live catalogue, 578 of 605 escapes were the first kind.
+//
+// A posting that deliberately shows "\n" as a code escape would be rewritten too. Nothing in the
+// sample did, and such a sample would live inside <code>/<pre> — the seam to exempt those is the
+// tree walk wrapOrphanListItems already does, if a real case ever turns up.
+func repairLiteralNewlines(s string) string {
+	if !strings.Contains(s, literalNewlineMarker) {
+		return s
+	}
+	s = tagAdjacentLiteralNewline.ReplaceAllString(s, "${1}\n${2}")
+	return looseLiteralNewline.ReplaceAllString(s, "<br>")
 }
 
 // wrapOrphanListItems wraps each maximal run of <li> siblings that lacks a <ul>/<ol>

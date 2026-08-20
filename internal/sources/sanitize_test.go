@@ -174,6 +174,54 @@ func TestSanitizeHTMLWrapsOrphanListItemsIsIdempotent(t *testing.T) {
 	}
 }
 
+// Some aggregator feeds double-escape the newlines in their JSON, so the decoded description
+// carries the two characters "\" and "n" where the source HTML had a line break — visible to
+// the reader as literal "\n" in the middle of the prose (seen live on whatjobs and adzuna
+// postings resold through the same upstream network). What the escape MEANT depends on where
+// it sits, which is why the repair is not a single replacement: next to a tag it is the source
+// file's indentation and collapses like any other whitespace, while between two sentences it
+// is the only line break the posting has and must survive as a <br>.
+func TestSanitizeHTMLRepairsLiteralNewlines(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"indentation between blocks collapses": {
+			`<p>Company Description</p>\n<p>We are hiring.</p>`,
+			"<p>Company Description</p>\n<p>We are hiring.</p>",
+		},
+		"indentation before a list item collapses": {
+			`<ul>\n <li>Go</li>\n <li>SQL</li>\n</ul>`,
+			"<ul>\n <li>Go</li>\n <li>SQL</li>\n</ul>",
+		},
+		"escape between bare text and a tag collapses": {
+			`<p>Was du bewegst\n<p>Deine Aufgaben</p>`,
+			"<p>Was du bewegst\n<p>Deine Aufgaben</p>",
+		},
+		"escape between two sentences becomes a break": {
+			`<p>~ Kita-Zuschuss \n~ Weihnachtsgeld</p>`,
+			`<p>~ Kita-Zuschuss <br>~ Weihnachtsgeld</p>`,
+		},
+		"body with no escape is untouched": {
+			`<p>Ship features</p>`,
+			`<p>Ship features</p>`,
+		},
+	}
+	for name, c := range cases {
+		if got := sanitizeHTML(c.in); got != c.want {
+			t.Errorf("%s: sanitizeHTML(%q) = %q, want %q", name, c.in, got, c.want)
+		}
+	}
+}
+
+// The backfill re-runs this pipeline over already-repaired rows, so a body that carries no
+// escape any more must come back byte-for-byte — otherwise every run would rewrite the same
+// rows and each rewrite is a TOAST write.
+func TestSanitizeHTMLRepairsLiteralNewlinesIsIdempotent(t *testing.T) {
+	in := `<p>~ Kita-Zuschuss \n~ Weihnachtsgeld</p>\n<p>Bewirb dich.</p>`
+	once := sanitizeHTML(in)
+	if twice := sanitizeHTML(once); twice != once {
+		t.Errorf("sanitizeHTML is not idempotent:\nonce:  %q\ntwice: %q", once, twice)
+	}
+}
+
 func TestLenientPercentUnescape(t *testing.T) {
 	cases := map[string]struct{ in, want string }{
 		"plain":              {"hello world", "hello world"},

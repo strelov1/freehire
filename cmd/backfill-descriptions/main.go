@@ -79,6 +79,11 @@ const (
 	percentEncodedMarker = "%3C"
 	entityEncodedMarker  = "&lt;"
 	anchorMarker         = "<a"
+	// literalNewlineMarker is the fourth signature: a backslash followed by an "n", left by an
+	// aggregator that escaped its JSON twice (whatjobs markets and adzuna, which resell through
+	// the same upstream network). Unlike the encodings this needs no decoder of its own — the
+	// sanitizer repairs it — so the marker only has to select the row.
+	literalNewlineMarker = `\n`
 )
 
 // himalayasSource is the one provider whose stored bodies carry the aggregator's own branding
@@ -198,6 +203,12 @@ func backfillPause() time.Duration {
 // outweighing live markup (see sources.UnescapeEncodedHTML), which is what leaves a posting that
 // merely writes "&lt;" as a less-than sign alone.
 //
+// A stored literal "\n" sends the body through the sanitizer for the same reason as an anchor:
+// the repair lives there (see internal/sources.repairLiteralNewlines), not in a decoder here,
+// because deciding what an escape meant needs the markup around it. The marker is narrow enough
+// to select almost nothing — 15 rows in a 20k-row sample of the live catalogue — so it does not
+// widen the universal sweep in any meaningful way.
+//
 // A stored anchor also sends the body through the sanitizer, whatever its source: descriptions
 // carry no links any more (see internal/sources.sanitizeHTML), and the rows stored before that
 // rule can only be brought in line by re-running it. Unlike the decodes this path does lean on
@@ -218,7 +229,7 @@ func repairDescription(source, stored string) string {
 		decoded = sources.UnescapeEncodedHTML(decoded)
 	}
 	repaired := stored
-	if decoded != stored || strings.Contains(decoded, anchorMarker) {
+	if decoded != stored || strings.Contains(decoded, anchorMarker) || strings.Contains(decoded, literalNewlineMarker) {
 		repaired = sources.SanitizeHTML(decoded)
 	}
 	if source == himalayasSource {
