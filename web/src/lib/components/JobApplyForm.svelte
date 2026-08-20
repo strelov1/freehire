@@ -4,8 +4,11 @@
   /** Whether a form has anything to show: questions, or a statement of what it wants
    *  uploaded. Exported because the caller owning the tab has to ask the same question
    *  this component answers — a tab offered over an empty panel is worse than no tab,
-   *  and two copies of the predicate would eventually disagree about which it is. */
-  export function applyFormWorthShowing(form: Display | null | undefined): boolean {
+   *  and two copies of the predicate would eventually disagree about which it is.
+   *
+   *  Narrows rather than returning a bare boolean, so a caller that passes the guard
+   *  does not then have to re-prove to the compiler that the form is there. */
+  export function applyFormWorthShowing(form: Display | null | undefined): form is Display {
     return !!form && ((form.questions?.length ?? 0) > 0 || (form.basics?.length ?? 0) > 0);
   }
 </script>
@@ -21,7 +24,7 @@
   let { form }: { form: Display | null } = $props();
 </script>
 
-{#if applyFormWorthShowing(form) && form}
+{#if applyFormWorthShowing(form)}
   <section class="flex flex-col gap-3">
     <!-- The provider is the whole caption here. It was a chip beside a heading before
          this block moved into a tab; the tab now says what it is, so what is left worth

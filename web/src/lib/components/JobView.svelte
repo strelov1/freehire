@@ -35,8 +35,6 @@
   // null for most postings, which is the ordinary case and simply means one fewer tab.
   let { job, applyForm = null }: { job: Job; applyForm?: Display | null } = $props();
 
-  type ContentTab = 'description' | 'company' | 'application';
-
   // Set on the two subtrees below that carry the posting's own words; undefined
   // (so unset) when it is English. See foreignContentLang for why the document
   // stays `en` regardless.
@@ -89,11 +87,15 @@
   // publish a form we can read. A tab is offered only when its panel has something in
   // it — `applyFormWorthShowing` is the same predicate the panel itself renders on, so
   // the two cannot disagree about whether there is anything to show.
+  type ContentTab = 'description' | 'company' | 'application';
+
   const companySlug = $derived(job.company_slug ?? '');
-  const contentTabs = $derived([
-    { id: 'description', label: 'Description' } as const,
-    ...(companySlug ? [{ id: 'company', label: 'Company' } as const] : []),
-    ...(applyFormWorthShowing(applyForm) ? [{ id: 'application', label: 'Application' } as const] : []),
+  const contentTabs: { id: ContentTab; label: string }[] = $derived([
+    { id: 'description', label: 'Description' },
+    ...(companySlug ? [{ id: 'company' as const, label: 'Company' }] : []),
+    ...(applyFormWorthShowing(applyForm)
+      ? [{ id: 'application' as const, label: 'Application' }]
+      : []),
   ]);
   let contentTab = $state<ContentTab>('description');
   // Per-instance so a second JobView on one page can't claim the same panel, which
@@ -527,8 +529,8 @@
       <!-- One panel for every tab, its contents toggled by class rather than {#if}.
            Unmounting the inactive one would throw away the company the visitor already
            waited for, and re-render the description on every switch back. It also keeps
-           all three in the server-rendered HTML, so a crawler reads what a visitor would
-           have to click for. -->
+           every panel in the server-rendered HTML, so a crawler reads what a visitor
+           would have to click for. -->
       <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
         <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
           {@render descriptionContent()}
