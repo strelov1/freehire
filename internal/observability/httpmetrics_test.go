@@ -144,3 +144,38 @@ func TestHTTPMetricsLabelsAreBounded(t *testing.T) {
 			"has crept in, and at ~700 routes that is tens of thousands of series", n)
 	}
 }
+
+// TestMethodLabelDoesNotAliasTheRequestBuffer is the regression test for a live prod failure.
+//
+// fasthttp backs c.Method() with the request buffer and recycles it, so a label value taken
+// straight from it mutates after the counter has stored it. On 2026-08-20 that produced a label
+// reading "GETT" and a /metrics endpoint answering 500, because the corrupted label sets
+// collided with the intact ones. The check is that the returned string shares no backing array
+// with the input: mutating the caller's bytes must not change the label.
+func TestMethodLabelDoesNotAliasTheRequestBuffer(t *testing.T) {
+	buf := []byte("GET")
+	label := methodLabel(string(buf))
+	buf[2] = 'X' // fasthttp reusing the buffer for the next request
+
+	if label != fiber.MethodGet {
+		t.Errorf("label became %q after the caller's buffer changed — it aliases the request "+
+			"buffer, which is what broke /metrics on prod", label)
+	}
+}
+
+// TestMethodLabelBoundsClientSuppliedValues closes the cardinality hole the method label opens:
+// the method comes from the client, so an unbounded passthrough lets any caller mint label
+// values — exactly what refusing a route label was meant to prevent.
+func TestMethodLabelBoundsClientSuppliedValues(t *testing.T) {
+	for _, m := range []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodDelete} {
+		if got := methodLabel(m); got != m {
+			t.Errorf("methodLabel(%q) = %q, want it preserved", m, got)
+		}
+	}
+	for _, m := range []string{"BREW", "", "get", "GETT", "PROPFIND"} {
+		if got := methodLabel(m); got != "other" {
+			t.Errorf("methodLabel(%q) = %q, want \"other\" — an unknown method must not become "+
+				"its own series", m, got)
+		}
+	}
+}

@@ -28,6 +28,40 @@ var httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help: "API responses by method and HTTP status code.",
 }, []string{"method", "status"})
 
+// methodLabel maps a request method onto one of a fixed set of package-level constants.
+//
+// It exists for two reasons, and the first one broke production. fasthttp backs c.Method() with
+// the request buffer and RECYCLES that buffer between requests, so the string a counter stores
+// as a label value mutates under it. On prod 2026-08-20 that surfaced as a label reading "GETT"
+// and a /metrics endpoint answering 500 — "collected metric ... was collected before with the
+// same name and label values" — because the corrupted label sets collided. Returning a constant
+// that shares nothing with the request is the fix; utils.CopyString would also work, but see the
+// second reason.
+//
+// The second: the method is CLIENT-SUPPLIED. Passing it through unbounded lets any caller mint
+// label values at will, which is the cardinality hole this metric refuses a route label to
+// avoid. Anything outside the set the API actually serves collapses to "other".
+func methodLabel(m string) string {
+	switch m {
+	case fiber.MethodGet:
+		return fiber.MethodGet
+	case fiber.MethodPost:
+		return fiber.MethodPost
+	case fiber.MethodPut:
+		return fiber.MethodPut
+	case fiber.MethodPatch:
+		return fiber.MethodPatch
+	case fiber.MethodDelete:
+		return fiber.MethodDelete
+	case fiber.MethodHead:
+		return fiber.MethodHead
+	case fiber.MethodOptions:
+		return fiber.MethodOptions
+	default:
+		return "other"
+	}
+}
+
 // HTTPMetrics counts responses that completed without an error. It is HALF the wiring: a
 // handler returning an error has no status yet when this unwinds, because Fiber renders it in
 // the ErrorHandler AFTER the middleware chain has fully unwound. Reading the status here would
@@ -47,7 +81,7 @@ func HTTPMetrics() fiber.Handler {
 			// CountErrors will record it once the ErrorHandler has chosen the status.
 			return err
 		}
-		httpRequests.WithLabelValues(c.Method(), strconv.Itoa(c.Response().StatusCode())).Inc()
+		httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(c.Response().StatusCode())).Inc()
 		return nil
 	}
 }
@@ -63,7 +97,7 @@ func HTTPMetrics() fiber.Handler {
 func CountErrors(next fiber.ErrorHandler) fiber.ErrorHandler {
 	return func(c *fiber.Ctx, err error) error {
 		rendered := next(c, err)
-		httpRequests.WithLabelValues(c.Method(), strconv.Itoa(c.Response().StatusCode())).Inc()
+		httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(c.Response().StatusCode())).Inc()
 		return rendered
 	}
 }

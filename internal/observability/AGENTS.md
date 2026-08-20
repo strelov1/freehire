@@ -45,6 +45,14 @@ what status it sent rather than re-deriving it, because `RenderError` resolves t
 through `codedError` and `classify`, and a second copy of that mapping is the failure this
 codebase has already paid for once.
 
+**The method label is mapped, never passed through.** `c.Method()` is backed by fasthttp's
+request buffer, which is RECYCLED between requests, so a label value taken straight from it
+mutates after the counter has stored it. On prod 2026-08-20 that produced a label reading `GETT`
+and a `/metrics` endpoint answering 500 — the corrupted label sets collided with the intact ones,
+so the whole endpoint failed rather than degrading. `methodLabel` returns package-level constants
+that share nothing with the request. It also bounds the label: the method is CLIENT-SUPPLIED, so
+an unbounded passthrough would let any caller mint series at will.
+
 **No route label, deliberately.** The app registers ~700 routes; route x status x method is tens
 of thousands of series on a single-target Prometheus. "Which endpoint" is already answered by the
 per-request log line. If a future need justifies the cardinality, add a SEPARATE metric scoped to
