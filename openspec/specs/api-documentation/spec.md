@@ -52,6 +52,12 @@ companies, authentication, API keys, per-user job interactions, submissions,
 reports, and saved searches/subscriptions. Each endpoint SHALL state its method,
 path, authentication requirement, parameters, and a copyable curl example.
 
+`web/static/openapi.yaml` is the integration contract, so every endpoint that
+declares `experience_years_min` SHALL also declare its companion
+`experience_years_max`. The two SHALL be documented as a pair whose meaning is a
+range over the posting's stated experience requirement, and the documentation SHALL
+state that either bound excludes postings that state no requirement.
+
 #### Scenario: Endpoint entry is complete
 
 - **WHEN** the documentation lists an endpoint
@@ -63,8 +69,16 @@ path, authentication requirement, parameters, and a copyable curl example.
 - **WHEN** a reader looks up how to query jobs by filters
 - **THEN** the docs list every search facet param, the `<param>_mode=and` and
   `<param>_exclude` modifiers, the numeric (`salary_min`/`salary_max`/
-  `experience_years_min`) and boolean (`visa_sponsorship`) filters, full-text
-  `q`, `sort`/`order`, and `semantic_ratio`, with at least one worked recipe
+  `experience_years_min`/`experience_years_max`) and boolean (`visa_sponsorship`)
+  filters, full-text `q`, `sort`/`order`, and `semantic_ratio`, with at least one
+  worked recipe
+
+#### Scenario: The OpenAPI contract declares both experience bounds
+
+- **WHEN** an endpoint in `web/static/openapi.yaml` declares the
+  `experience_years_min` parameter
+- **THEN** it also declares `experience_years_max`, described as the upper bound of
+  the same range
 
 ### Requirement: Generated Markdown reference
 
@@ -117,4 +131,3 @@ issues, not a self-declared string a caller can set to any value.
 - **WHEN** an integrator reads the published schema, the llms.txt summary, or
   robots.txt
 - **THEN** each states the requested format and that it is not enforced
-
