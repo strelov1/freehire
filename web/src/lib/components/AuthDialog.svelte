@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { login, register } from '$lib/auth.svelte';
@@ -67,12 +68,29 @@
   // modes only; the recovery steps are a linear flow.
   const isRecovery = $derived(mode === 'forgot' || mode === 'reset');
 
+  // The page the visitor is standing on, read from the ADDRESS BAR rather than
+  // `page.url`. The listings mirror their filters into the URL with a shallow
+  // `replaceState`, which SvelteKit does not write back into `page.url` (see
+  // UrlSyncedState.params) — so on a listing entered bare, `page.url` is a bare
+  // `/` while the visitor is looking at a filtered search.
+  //
+  // Read once per open, not reactively: the dialog is mounted fresh each time it
+  // opens (TopBar renders it under `{#if authDialog.open}`) and the filters can't
+  // change behind a modal, so there is nothing to track.
+  const currentAddress = () =>
+    browser ? location.pathname + location.search : page.url.pathname + page.url.search;
+
   // Where to go after sign-in. When a guarded page bounced the user here to sign
   // in (e.g. a shared /jobs/swipe?filter link), `redirectTo` is that deep link;
   // otherwise stay on the current page (in-place prompts like a job's Save
-  // button). OAuth passes this to the backend, which echoes it back sanitized;
-  // password login navigates to it here after success.
-  const returnTo = $derived(authDialog.redirectTo ?? page.url.pathname + page.url.search);
+  // button). OAuth passes this to the backend, which echoes it back sanitized
+  // (SafeReturnPath keeps the query string); password login navigates to it here
+  // after success.
+  //
+  // Getting this from `page.url` sent the OAuth round trip home with `returnTo=/`
+  // and landed a visitor who saved a job from a filtered search back on the
+  // unfiltered feed — the redirect is a full page load, so nothing restores it.
+  const returnTo = $derived(authDialog.redirectTo ?? currentAddress());
 
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
@@ -132,7 +150,11 @@
     try {
       await (mode === 'login' ? login : register)(email, password);
       onClose();
-      if (target !== page.url.pathname + page.url.search) {
+      // Same source as `returnTo` on purpose: an in-place prompt (Save, Follow)
+      // has nowhere to go, and comparing against a different reading of "where we
+      // are" would turn that no-op into a navigation that reloads the page the
+      // visitor is already on.
+      if (target !== currentAddress()) {
         // eslint-disable-next-line svelte/no-navigation-without-resolve -- a validated same-origin path from the guard, not a typed route
         await goto(target);
       }
