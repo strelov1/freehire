@@ -100,6 +100,48 @@ watch -n1 'ss -ltn "sport = :8083 or sport = :8084"'
 `dropped_iterations > 0` invalidates a step: k6 itself could not keep up, so that
 step describes the load generator, not the target. Raise the VU headroom and rerun.
 
+## Catalogue drain test (`scraper.js`)
+
+Answers a different question from `pages.js`: not "how many page renders per
+second", but **"how fast can this hardware be emptied of its catalogue"**. It
+replays the two-stage extraction pattern production measured on 2026-08-21 —
+a cheap `jobs/search?company_slug=…&limit=1` probe, then paged
+`agent/jobs/search?limit=100&description_format=text` over every employer that
+has postings.
+
+```bash
+# on host-2. Resolve the IDLE colour FIRST — the API ports are blue :8081 /
+# green :8082, and `hire-current` points at whichever is live.
+readlink /opt/freehire/src/hire-current   # → hire-green ⇒ idle API is :8081
+
+FORCE_SCRAPER=1 \
+  PERF_BASE_URL=http://127.0.0.1:8081 \
+  SCRAPER_STEPS=1,2,5,10,20 SCRAPER_STEP_SEC=30 \
+  k6 run perf/k6/scraper.js
+```
+
+One iteration walks one company end to end, so a step's `rate` is **companies per
+second**. The custom summary reports postings/s, MiB/s, and the projected hours
+for a full pass over the live company count.
+
+**The rate limiter is the trap here.** `agent/jobs/search` is capped at 300/min
+(5 r/s) per caller and the cheap reads at 600/min, keyed by user-or-IP
+(`internal/handler/public_read_limit.go`). A single-machine run therefore
+measures the limiter, not the host, unless you say otherwise. `cmd/server` trusts
+`X-Real-IP` from a peer inside `ratelimit.TrustedCIDRs`, and
+`internal/ratelimit.trusted` then counts the **claimed** address — so
+`SCRAPER_SPOOF_IP=1` (the default) gives each VU its own budget from
+documentation-only address space (RFC 5737) and the run reports what the box can
+serve. Set `SCRAPER_SPOOF_IP=0` to measure the throttled path instead — a real
+answer to the different question "how fast can one outside client drain us".
+A 429 during extraction fails the `not throttled` check rather than passing
+silently, so a misconfigured run is visible in the summary instead of reading as
+a low ceiling.
+
+Same siting rule as `PROFILE=saturation`: point it at the **idle** colour's API
+port on the prod host, never the live origin. It has its own `FORCE_SCRAPER`
+latch with no localhost exemption for exactly that reason.
+
 ## Key knobs
 
 | env                    | default                       | purpose                                        |
@@ -116,6 +158,13 @@ step describes the load generator, not the target. Raise the VU headroom and rer
 | `FILTER_QUERY`         | `q=engineer&work_mode=…`      | the heavy feed filter (tune to your data)      |
 | `COMPANY_FILTER_QUERY` | `regions=europe&company_type=startup` | companies-list facets                  |
 | `SLO_*`                | see `config.js`               | per-page p95 latency budgets (ms)              |
+| `FORCE_SCRAPER`        | —                             | must be `1` to run `scraper.js`                |
+| `SCRAPER_STEPS`        | `1,2,5,10,20`                 | companies/sec steps, run back to back          |
+| `SCRAPER_STEP_SEC`     | `30`                          | seconds held at each step                      |
+| `SCRAPER_SPOOF_IP`     | `1`                           | per-VU `X-Real-IP` so the limiter isn't what you measure |
+| `SCRAPER_SLUG_POOL`    | `300`                         | company slugs pulled in `setup()`              |
+| `SCRAPER_MAX_PAGES`    | `5`                           | extraction depth per employer (100/page)       |
+| `SCRAPER_PAGE_SIZE`    | `100`                         | postings per extraction request                |
 
 ## Reading results
 
