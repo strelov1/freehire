@@ -202,12 +202,16 @@ private mode is a smaller loss than a scope that cannot be dismissed.
 
 ## Risks / Trade-offs
 
-- **A visible content swap on first load** → **Measured, and the gate passed.** With
-  the outgoing rows held on screen, CLS is 0.026 against a 0.0014 baseline — inside
-  Google's "good" band (≤0.10) — and LCP shows no signal above measurement noise
-  (baseline 888-1228ms, scoped 984-1408ms, overlapping). Bounded to the first visit
-  per browser besides. The suggestion form stays the fallback if field data disagrees
-  with the lab.
+- **A visible content swap on first load** → **Measured, and the cost turned out to
+  be a range rather than a number.** With the outgoing rows held on screen the same
+  build read CLS 0.026 in one session and 0.246 an hour later, against a 0.0014
+  baseline both times; LCP was unmoved in both. Stashing the later edits and
+  re-measuring reproduced 0.246 exactly, which rules out the code and leaves the
+  data: the hold removes the collapse but not the height difference between the
+  outgoing twenty rows and the incoming twenty, and that difference is whatever the
+  catalogue is serving that hour. Shipped automatic anyway, deliberately and with
+  those figures in hand; the watchdog and CrUX are the checks that can still overturn
+  it, and the suggestion form is what it would be overturned in favour of.
 
   Two things about how that number was reached are worth keeping, because both
   produced a confident wrong answer first:

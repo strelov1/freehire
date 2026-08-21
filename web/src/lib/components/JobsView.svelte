@@ -531,24 +531,37 @@
   // nothing. It is also safe by now — `replaceState` is not available during the
   // initial `enter`, but a network round trip has passed since.
   async function offerGeoScope() {
-    const guards = { search: location.search, storedFilters: loadJobFilters(), offered: geoScopeOffered() };
-    if (!shouldOfferGeoScope(guards)) return;
+    // The page this offer is for. A request is in flight for a few hundred
+    // milliseconds and the visitor can leave in that time — onto a job page, onto
+    // /companies — and every one of those routes has an empty query string, so the
+    // guards below would pass and the scope would land on a page it was never meant
+    // for. The pathname captured here is the only thing that can tell those apart.
+    const pathname = location.pathname;
+    const guards = () => ({
+      search: location.search,
+      storedFilters: loadJobFilters(),
+      offered: geoScopeOffered(),
+    });
+    if (!shouldOfferGeoScope(guards())) return;
 
     const region = await fetchRegion();
     // Nothing was offered, so nothing is marked: a deployment whose edge sends no
     // country would otherwise spend its one chance per browser on a null answer.
     if (!region) return;
-    // They filtered while we were asking. Their scope wins; ours is dropped, not
-    // queued.
-    if (location.search !== '') return;
+    // Re-read the world, do not trust the snapshot: while we were asking they may
+    // have navigated away, filtered, or been offered the scope by another mount.
+    // Any of those outranks a guess; ours is dropped, not queued.
+    if (location.pathname !== pathname || !shouldOfferGeoScope(guards())) return;
 
-    markGeoScopeOffered();
+    // A guess that cannot be recorded is a guess that re-applies on every visit and
+    // cannot be dismissed, so a failed write means no scope at all.
+    if (!markGeoScopeOffered()) return;
     guessedRegion = region;
     // Keep what is on screen until the scoped page arrives, so the swap happens in
     // place instead of through a spinner the height of the whole list.
     holdover = jobs.items;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
-    replaceState(`${location.pathname}?${geoScopeQuery(region)}`, {});
+    replaceState(`${pathname}?${geoScopeQuery(region)}`, {});
     filters.syncFromUrl();
   }
 

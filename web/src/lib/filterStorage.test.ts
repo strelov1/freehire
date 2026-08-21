@@ -115,10 +115,35 @@ describe('geo-scope marker', () => {
     expect(geoScopeOffered()).toBe(true);
   });
 
+  it('reports a successful write', () => {
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = new MemoryStorage();
+
+    expect(markGeoScopeOffered()).toBe(true);
+  });
+
   it('reports "offered" when storage is unavailable (SSR)', () => {
     // No globalThis.localStorage installed.
     expect(geoScopeOffered()).toBe(true);
-    expect(() => markGeoScopeOffered()).not.toThrow();
+    expect(markGeoScopeOffered()).toBe(false);
+  });
+
+  // Reads and writes fail independently: a quota-exhausted store answers getItem
+  // and throws on setItem. Shrugging that off would offer the guess again on every
+  // visit — an offer nobody can dismiss — so the caller has to hear about it.
+  it('reports a failed write even when reads work', () => {
+    const store = new MemoryStorage();
+    // @ts-expect-error - install a stand-in that reads but cannot write
+    globalThis.localStorage = {
+      getItem: (k: string) => store.getItem(k),
+      setItem() {
+        throw new Error('quota');
+      },
+      removeItem: (k: string) => store.removeItem(k),
+    };
+
+    expect(markGeoScopeOffered()).toBe(false);
+    expect(geoScopeOffered()).toBe(false);
   });
 
   // An unrecordable guess is one that would re-apply on every single load and fight
@@ -138,6 +163,6 @@ describe('geo-scope marker', () => {
     };
 
     expect(geoScopeOffered()).toBe(true);
-    expect(() => markGeoScopeOffered()).not.toThrow();
+    expect(markGeoScopeOffered()).toBe(false);
   });
 });

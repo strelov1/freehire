@@ -30,7 +30,8 @@ page, and costs the visitor one click to undo.
 - Scope is the standalone jobs feed only. `/companies` keeps its current behaviour —
   its geography answers "where is this employer", not "where may I work from", and
   the two are not interchangeable.
-- No API change, no new endpoint, no schema change.
+- No change to the catalogue API and no schema change. The one new route is the
+  region endpoint above, which serves the browser and nothing else.
 
 ## Capabilities
 

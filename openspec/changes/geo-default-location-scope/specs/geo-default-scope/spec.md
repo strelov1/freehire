@@ -98,9 +98,20 @@ excluding crawlers from the scope does not exclude the cost. The swap happens be
 any user input, which is precisely the window where a late paint replaces the
 largest-paint candidate and where a shift is attributed in full.
 
-The gate is measurement, not argument: if the feed's measured performance or
-layout-shift figures regress, the derived scope SHALL be shipped in its suggestion
-form — offered and applied on a click — rather than applied automatically.
+The cost is **data-dependent and cannot be stated as a single number**. Holding the
+outgoing rows removes the collapse; it does not remove the difference in height
+between twenty unscoped rows and twenty scoped ones, and everything below each row
+moves by that difference. Measured against live prod results an hour apart, the same
+build read **0.026 and 0.246** — stable to four decimals within a session, an order
+of magnitude apart between them. Largest contentful paint showed no increase beyond
+noise in either.
+
+Shipping automatic application is therefore a deliberate acceptance of a layout
+shift that will sometimes leave the "good" band, taken with those figures in hand.
+The checks that follow are the field ones, not a lab threshold: the scheduled
+Lighthouse watchdog against the feed, and CrUX. The suggestion form — offered and
+applied on a click, no swap, no shift — remains the recorded fallback and SHALL be
+adopted if either says the cost is real.
 
 #### Scenario: The swap does not move the page
 
@@ -112,16 +123,20 @@ form — offered and applied on a click — rather than applied automatically.
 - **WHEN** the scheduled Lighthouse run loads the feed, which it does with empty browser storage and therefore always through the derived-scope branch
 - **THEN** its recorded scores stay above the floors configured for the feed
 
-#### Scenario: Measurement finds a regression
+#### Scenario: The field disagrees with the decision
 
-- **WHEN** before-and-after measurement of the feed shows the performance score or the layout-shift figure worse than the baseline
-- **THEN** the automatic application is abandoned in favour of the suggestion form, and the regression is not shipped
+- **WHEN** the Lighthouse watchdog drops below its floors, or CrUX shows the feed's layout shift outside the "good" band for real visitors
+- **THEN** the automatic application is abandoned in favour of the suggestion form
 
 ### Requirement: The derived scope is the lowest-priority source of filter state
 
 The system SHALL apply the derived scope to the standalone jobs feed only when no
-other source has supplied geography: no geography params in the URL, and no stored
-filter set being restored. When the derived scope applies, it SHALL set the
+other source has supplied filter state: **no params at all** in the URL, and no
+stored filter set being restored.
+
+Any param, not only a geographic one. A link built to mean "senior jobs" was built
+by somebody who saw a particular result; adding the recipient's geography to it
+would show them something the sender never saw. When the derived scope applies, it SHALL set the
 `regions` facet to the visitor's region **and** the worldwide region, so a remote
 role open to everyone is never hidden by a regional default.
 

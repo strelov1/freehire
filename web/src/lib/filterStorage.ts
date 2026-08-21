@@ -58,13 +58,19 @@ export function geoScopeOffered(): boolean {
   }
 }
 
-/** Record that the derived scope was offered. Best-effort like every access here;
- *  a failed write leaves `geoScopeOffered()` answering from the same failure. */
-export function markGeoScopeOffered(): void {
-  if (typeof localStorage === 'undefined') return;
+/** Record that the derived scope was offered, reporting whether the record stuck.
+ *
+ *  The return value is not decoration. Reads and writes fail independently — a
+ *  quota-exhausted store answers `getItem` and throws on `setItem` — and in that
+ *  state a caller that shrugged off the failure would offer the guess again on
+ *  every visit, including to someone who had just cleared it. An unrecorded offer
+ *  is one the visitor cannot dismiss, so it must not be made. */
+export function markGeoScopeOffered(): boolean {
+  if (typeof localStorage === 'undefined') return false;
   try {
     localStorage.setItem(GEO_SCOPE_KEY, '1');
+    return true;
   } catch {
-    // best-effort: private mode / quota / disabled storage
+    return false;
   }
 }
