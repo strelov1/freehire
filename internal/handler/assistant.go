@@ -633,6 +633,15 @@ func (h *assistantHandlers) streamSSE(
 
 		defer cancel()
 
+		// One byte immediately, before anything this turn might wait on. Until something is
+		// written, fasthttp is holding the response line and the headers in its buffer, so
+		// "the stream is open" is true here and not yet true on the wire — and a proxy times
+		// out a request whose upstream has sent nothing, however busy that upstream is. The
+		// heartbeat below cannot cover this: its first comment is a whole interval away.
+		// A comment rather than an event because EventSource ignores it: this says nothing to
+		// the client, it only makes the connection real.
+		stream.comment("open")
+
 		// The heartbeat starts BEFORE the queue wait, not after it: a queued message can wait
 		// up to a minute, and an idle connection is exactly what a proxy in front of us
 		// collects. Waiting in silence would lose the connection at roughly the same moment
@@ -834,34 +843,50 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	}
 	// One read of the vacancy for the whole pre-run: the fit analysis and the surface
 	// alignment both need it, and a run must not ask the database twice for the same row.
-	refreshAnalysis := func(context.Context) {}
+	// This read stays in the request — it is one row, and the pre-run has nothing to prepare
+	// without it.
+	var analysis *autopilotAnalysis
+	var jobDescription string
 	if job, err := h.queries.GetJob(c.Context(), *sess.JobID); err != nil {
 		log.Printf("assistant: loading job %d for the autopilot pre-run: %v", *sess.JobID, err)
 	} else {
-		refreshAnalysis = h.prepareAutopilotAnalysis(c, sess, job)
-		// Its own system revision — not the run's edit batch — so undoing the run leaves the
-		// vacancy's wording in place.
-		h.cv.logSurfaceAlign(c.Context(), sess.UserID, *sess.CVID, job.Description)
+		analysis, jobDescription = h.prepareAutopilotAnalysis(c, sess, job), job.Description
 	}
-	h.layDownRunPlan(c.Context(), sess)
 	return h.streamSSE(c, sess, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
+		// The pre-run happens HERE, inside the stream, and not in the handler above it. On a
+		// vacancy with no cached fit analysis it runs the three-stage chain — minutes, not
+		// seconds — and a handler that has not returned has written no byte, so a proxy in
+		// front of us times the request out and the candidate is told the run failed to
+		// start. From here the response is already open and its heartbeat already ticking,
+		// so the same wait costs nothing but the wait.
+		//
+		// Order is the order it had: the analysis first, because the run plan is written from
+		// it, and cv_context reads it on the run's first step.
+		analysis.ensure(ctx)
+		if jobDescription != "" {
+			// Its own system revision — not the run's edit batch — so undoing the run leaves
+			// the vacancy's wording in place.
+			h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, jobDescription)
+		}
+		h.layDownRunPlan(ctx, sess)
+
 		err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
 		// The refresh is unconditional — it must run even when the candidate cancelled the
 		// run partway through (CancelAssistantTurn cancels this very ctx) — so it runs on a
 		// detached copy, the same way boundRunner's credential-forget already does.
-		refreshAnalysis(context.WithoutCancel(ctx))
+		analysis.refresh(context.WithoutCancel(ctx))
 		return err
 	})
 }
 
-// prepareAutopilotAnalysis delegates to matchHandlers.prepareAutopilotRun, which both fills
-// the fit-analysis cache when empty (so cv_context — the run's first tool call — has
-// something to read instead of erroring) and returns the closure that unconditionally
-// refreshes that cache once the run ends. A missing match surface degrades to a no-op
-// refresh — the same best-effort posture the pre-run ensure step already had.
-func (h *assistantHandlers) prepareAutopilotAnalysis(c *fiber.Ctx, sess assistant.Session, job db.Job) func(context.Context) {
+// prepareAutopilotAnalysis delegates to matchHandlers.prepareAutopilotRun, which assembles
+// both halves of the run's fit analysis — the fill that gives cv_context something to read,
+// and the refresh that follows the run — out of reads taken while c is still valid. A
+// missing match surface degrades to a nil, whose ensure and refresh are no-ops: the same
+// best-effort posture this step always had.
+func (h *assistantHandlers) prepareAutopilotAnalysis(c *fiber.Ctx, sess assistant.Session, job db.Job) *autopilotAnalysis {
 	if h.cv == nil || h.cv.match == nil {
-		return func(context.Context) {}
+		return nil
 	}
 	return h.cv.match.prepareAutopilotRun(c, sess.UserID, job)
 }

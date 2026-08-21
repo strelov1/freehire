@@ -7,12 +7,14 @@
 package handler
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -199,6 +201,108 @@ func TestAutopilotComputesAnalysisWhenMissing(t *testing.T) {
 	if fitM.n != 6 {
 		t.Errorf("fit model called %d times, want 6 (one full chain run before the run, one after) — the post-run refresh must fire even when the pre-run step just computed one", fitM.n)
 	}
+}
+
+// gatedFitModel is a fitModel that holds its FIRST call until released, so a test can inspect
+// the world while the cold-start chain is provably mid-flight.
+type gatedFitModel struct {
+	fitModel
+	started     chan struct{}
+	release     chan struct{}
+	holdOnce    sync.Once
+	releaseOnce sync.Once
+}
+
+func newGatedFitModel(t *testing.T) *gatedFitModel {
+	m := &gatedFitModel{
+		fitModel: fitModel{resp: []string{fitStage1, fitStage2, fitStage3}},
+		started:  make(chan struct{}),
+		release:  make(chan struct{}),
+	}
+	t.Cleanup(m.letGo)
+	return m
+}
+
+// letGo releases the model however many times it is called, so a test may release it
+// explicitly and still be cleaned up after.
+func (m *gatedFitModel) letGo() { m.releaseOnce.Do(func() { close(m.release) }) }
+
+func (m *gatedFitModel) GenerateContent(ctx context.Context, msgs []llms.MessageContent, opts ...llms.CallOption) (*llms.ContentResponse, error) {
+	m.holdOnce.Do(func() {
+		close(m.started)
+		<-m.release
+	})
+	return m.fitModel.GenerateContent(ctx, msgs, opts...)
+}
+
+// TestAutopilotAnswersBeforeTheColdStartAnalysis: the response must open BEFORE the cold-start
+// fit analysis runs, not after it.
+//
+// The pre-run used to happen in the handler, ahead of streamSSE, so on a vacancy with nothing
+// cached the response stayed silent for as long as the three-stage chain took — measured at
+// 2m6s on prod, 2026-08-21, against nginx's 60s default. The proxy cut five runs that day and
+// the browser reported "could not start the run" for runs that were running fine and went on
+// to finish. Nothing downstream can tell those two apart, so the fix has to be here: open the
+// stream first, wait inside it, where the heartbeat is already ticking.
+func TestAutopilotAnswersBeforeTheColdStartAnalysis(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	turnM := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
+	fitM := newGatedFitModel(t)
+	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
+
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+	h := &assistantHandlers{
+		store: assistant.NewStore(queries), queries: queries,
+		maxPrompt:  defaultAssistantMaxPrompt,
+		stages:     queries,
+		experience: bank,
+		cv: &cvHandlers{
+			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
+			queries:            queries,
+			jobReader:          queries,
+			matchAnalysisCache: queries,
+			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
+		},
+	}
+	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	mw := middleware{
+		cookie: auth.RequireAuth(iss, testVersions),
+		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
+	}
+	h.register(api, mw)
+	h.cv.register(api, mw)
+
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-ttfb@example.test", true)
+	seedBankedCareer(t, queries, userID)
+	sessionID, _ := seedTailoringSession(t, pool, h, userID)
+
+	addr := serveOnSocket(t, app)
+	conn := dialAutopilotTurn(t, addr, sessionID, cookie)
+	defer func() { _ = conn.Close() }()
+
+	select {
+	case <-fitM.started:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the cold-start analysis never started")
+	}
+
+	// The chain is held mid-flight. The response line must already be on the wire: what a
+	// proxy counts is silence from the upstream, and this is the silence that cost the runs.
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	status, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		t.Fatalf("nothing answered while the cold-start analysis is still running (%v) — the "+
+			"stream opens only after the chain, which is exactly what a proxy times out", err)
+	}
+	if !strings.HasPrefix(status, "HTTP/1.1 200") {
+		t.Fatalf("response line %q, want HTTP/1.1 200", strings.TrimSpace(status))
+	}
+	fitM.letGo()
 }
 
 // TestAutopilotRefreshesAnalysisAfterEveryRun: the fit analysis is no longer a frozen

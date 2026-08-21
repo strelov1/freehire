@@ -275,21 +275,67 @@ func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, prof
 	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers, language))
 }
 
-// ensureCachedAnalysis computes and caches the fit analysis for (user, job) when none is cached
-// yet, reusing the exact compute path PostMatchAnalysis uses. It exists for the cold-start
-// autopilot run, whose first tool call (cv_context) reads the cache and errors without one — this
-// is what lets that run start without requiring the candidate to have produced an analysis first.
+// autopilotAnalysis is one autopilot run's fit analysis: the cold-start fill the run's first
+// tool call (cv_context) depends on, and the refresh that must follow the run. Both run the
+// same three-stage chain over the same Input, so both are assembled once, here, rather than
+// each reading the candidate's profile, blockers and bank for itself.
 //
-// Best-effort and silent: a lookup or compute failure (no LLM configured, an analyzer error) is
-// logged and left uncached, exactly as PostMatchAnalysis already degrades. No credits debit — this
-// path is unmetered, tracked only by the same LLM spend attribution every call already carries
-// (see the tailor-coldstart-autopilot design's "no new metering" decision).
+// Everything it holds is a plain value because NEITHER half runs in the request. The refresh
+// never could — it fires after the turn, from the SSE writer's detached goroutine. The fill
+// now joins it there: run in the handler ahead of the stream, it left the response silent for
+// the whole chain, which on 2026-08-21 was 2m6s against nginx's 60s default. The proxy cut
+// five runs that way, and each one told the candidate their run had failed to start while it
+// was in fact running.
 //
-// Coalesced through h.coalesce: the tailoring workspace's visible match-analysis stream now
+// A nil *autopilotAnalysis is a working no-op — the caller has no match surface wired — so
+// PostAssistantAutopilot needs no branch of its own.
+type autopilotAnalysis struct {
+	h            *matchHandlers
+	userID       int64
+	job          db.Job
+	analyzer     *matchanalysis.Analyzer
+	input        matchanalysis.Input
+	cvUploadedAt *time.Time
+	language     string
+}
+
+// prepareAutopilotRun assembles the run's analysis while the fiber ctx is still valid. It
+// reads — profile, blockers, language, the credential binding, the Input, the CV's upload
+// stamp — and computes nothing; both halves are the caller's to run from the stream.
+func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.Job) *autopilotAnalysis {
+	profile, _ := h.userProfile.Get(c.Context(), userID)
+	blockers := h.jobBlockers(c.Context(), userID, job, profile)
+	language := h.callerLanguage(c.Context(), userID)
+	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
+	return &autopilotAnalysis{
+		h:            h,
+		userID:       userID,
+		job:          job,
+		analyzer:     h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis)),
+		input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
+		cvUploadedAt: cvUploadedAt,
+		language:     language,
+	}
+}
+
+// ensure computes and caches the analysis when none is cached yet. It exists for the
+// cold-start autopilot run, whose first tool call reads the cache and errors without one —
+// this is what lets that run start without requiring the candidate to have produced an
+// analysis first.
+//
+// Best-effort and silent: a lookup or compute failure (no LLM configured, an analyzer error)
+// is logged and left uncached, exactly as PostMatchAnalysis already degrades. No credits
+// debit — this path is unmetered, tracked only by the same LLM spend attribution every call
+// already carries (see the tailor-coldstart-autopilot design's "no new metering" decision).
+//
+// Coalesced through h.coalesce: the tailoring workspace's visible match-analysis stream
 // starts at the same cold start this runs at, so both routinely race for the identical
 // (user, job) — see matchAnalysisCoordinator for why only one of them ever actually computes.
-func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.Job) {
-	done, run, isLeader := h.coalesce.lead(userID, job.ID)
+func (a *autopilotAnalysis) ensure(ctx context.Context) {
+	if a == nil {
+		return
+	}
+	done, run, isLeader := a.h.coalesce.lead(a.userID, a.job.ID)
 	if !isLeader {
 		// The visible stream (or another concurrent call for this pair) already claimed the
 		// compute — wait for it rather than spending a second three-stage chain on the same
@@ -301,66 +347,42 @@ func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.
 	succeeded := false
 	defer func() { done(succeeded) }()
 
-	if _, err := h.matchAnalysisCache.GetUserJobAnalysis(c.Context(),
-		db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID}); err == nil {
+	if _, err := a.h.matchAnalysisCache.GetUserJobAnalysis(ctx,
+		db.GetUserJobAnalysisParams{UserID: a.userID, JobID: a.job.ID}); err == nil {
 		succeeded = true // already cached — nothing to compute, and it's a good row for a follower to read
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v", userID, job.ID, err)
+		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v",
+			a.userID, a.job.ID, err)
 		return
 	}
-	profile, _ := h.userProfile.Get(c.Context(), userID)
-	blockers := h.jobBlockers(c.Context(), userID, job, profile)
-	language := h.callerLanguage(c.Context(), userID)
-	analysis, err := h.runAnalysis(c, userID, job, profile, blockers, language)
-	if err != nil {
-		log.Printf("matchanalysis: inline compute before an autopilot run, user %d job %d: %v", userID, job.ID, err)
-		return
-	}
-	if analysis == nil {
-		return // LLM unconfigured — nothing to cache
-	}
-	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
-	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, language, analysis)
-	succeeded = true
+	succeeded = a.compute(ctx, "inline compute before an autopilot run")
 }
 
-// prepareAutopilotRun ensures the fit analysis is cached before an autopilot run starts —
-// exactly ensureCachedAnalysis's fill-if-empty, so cv_context has something to read — and
-// returns the closure PostAssistantAutopilot calls once the run ends, which UNCONDITIONALLY
-// recomputes the chain and overwrites the (user, job) cache, even when nothing was cached
-// or an analysis was already there. This is what repeals the fit-analysis-post-autopilot-verify
-// design's predecessor rule that the fit analysis is a frozen snapshot of the base profile.
-//
-// The Input/Analyzer for the guaranteed refresh is assembled here, before returning, so it
-// closes over plain values rather than c — the closure runs later from the SSE writer's
-// detached goroutine, which only has a plain context.Context (see cacheAnalysis's own
-// comment on the same constraint). ensureCachedAnalysis assembles its own Input on a cache
-// miss; the two are not shared, so a cold cache costs the profile/blockers/bank reads
-// twice in one autopilot invocation — an accepted cost of keeping this function simple,
-// since a cache miss on the run's own vacancy is the rarer path. Never debits credits —
-// this path, like ensureCachedAnalysis, is unmetered.
-func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.Job) func(context.Context) {
-	h.ensureCachedAnalysis(c, userID, job)
-
-	profile, _ := h.userProfile.Get(c.Context(), userID)
-	blockers := h.jobBlockers(c.Context(), userID, job, profile)
-	language := h.callerLanguage(c.Context(), userID)
-	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
-	input := h.buildAnalysisInput(c, job, userID, profile, blockers, language)
-	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
-
-	return func(ctx context.Context) {
-		analysis, err := analyzer.Analyze(ctx, input)
-		if err != nil {
-			log.Printf("matchanalysis: post-autopilot refresh, user %d job %d: %v", userID, job.ID, err)
-			return
-		}
-		if analysis == nil {
-			return // LLM unconfigured — nothing to cache
-		}
-		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, language, analysis)
+// refresh UNCONDITIONALLY recomputes the chain and overwrites the (user, job) cache, even
+// when nothing was cached or an analysis was already there. This is what repeals the
+// fit-analysis-post-autopilot-verify design's predecessor rule that the fit analysis is a
+// frozen snapshot of the base profile.
+func (a *autopilotAnalysis) refresh(ctx context.Context) {
+	if a == nil {
+		return
 	}
+	a.compute(ctx, "post-autopilot refresh")
+}
+
+// compute runs the chain and caches what it produced, reporting whether the cache is left
+// holding this call's own result — which is what a coalescing follower waits to learn.
+func (a *autopilotAnalysis) compute(ctx context.Context, stage string) bool {
+	analysis, err := a.analyzer.Analyze(ctx, a.input)
+	if err != nil {
+		log.Printf("matchanalysis: %s, user %d job %d: %v", stage, a.userID, a.job.ID, err)
+		return false
+	}
+	if analysis == nil {
+		return false // LLM unconfigured — nothing to cache
+	}
+	a.h.cacheAnalysis(ctx, a.userID, a.job, a.cvUploadedAt, a.language, analysis)
+	return true
 }
 
 // creditsBalance reports the caller's current points, or nil on a DB error (logged).

@@ -127,11 +127,13 @@ func newCoordinatorHandlers(pool *pgxpool.Pool, queries *db.Queries, store *resu
 }
 
 // registerEnsureRoute mounts a test-only route standing in for the cold-start autopilot's
-// invisible pre-run: it calls the exact same unexported method PostAssistantAutopilot calls,
-// against the same matchHandlers and (user, job) a stream request in the same test races.
+// invisible pre-run: it prepares and fills exactly as PostAssistantAutopilot does, against the
+// same matchHandlers and (user, job) a stream request in the same test races. The real caller
+// runs the fill from its SSE writer on a plain context; a request context stands in for that
+// here, since what these tests exercise is the coalescing, not where the fill is called from.
 func registerEnsureRoute(app *fiber.App, h *matchHandlers, userID int64, job db.Job) {
 	app.Post("/test/ensure", func(c *fiber.Ctx) error {
-		h.ensureCachedAnalysis(c, userID, job)
+		h.prepareAutopilotRun(c, userID, job).ensure(c.Context())
 		return c.SendStatus(fiber.StatusOK)
 	})
 }
