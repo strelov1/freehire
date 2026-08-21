@@ -129,6 +129,33 @@
   untrack(() => seeded.seed(initial, pageOffset(currentPage)));
   let jobs = $state.raw(seeded);
 
+  // Whether an opening scope is still to be guessed from the visitor's IP country, and
+  // so whether the facet measurement below is worth making yet. Asked here, at setup,
+  // because the answer is knowable without the network: `offerGeoScope` runs these same
+  // three guards before it fetches anything, and only a first-time visitor landing on a
+  // bare URL gets past them. Everybody else — a repeat visitor, a link carrying filters,
+  // a restored set — is false here and waits for nothing.
+  //
+  // What the wait buys: measured from Brazil on 2026-08-21, a cold feed spent 778ms on
+  // a facet count of the unscoped catalogue that `/geo/region` (330ms) then replaced
+  // wholesale, and the two overlapped, so the discarded one was also competing for the
+  // connection the useful one needed. One scope, measured once.
+  //
+  // Never true on the server (no `location`, and `geoScopeOffered` reads an absent
+  // localStorage as "already offered"), so SSR is untouched.
+  let geoGuessPending = $state(
+    untrack(
+      () =>
+        browser &&
+        standalone &&
+        shouldOfferGeoScope({
+          search: location.search,
+          storedFilters: loadJobFilters(),
+          offered: geoScopeOffered(),
+        }),
+    ),
+  );
+
   // The live facet distribution (value → count per facet), feeding the dynamic
   // selects (skills, countries) so the user sees which values exist and how many
   // jobs each has under the current filters. A failed fetch leaves the prior
@@ -443,12 +470,19 @@
     goto(resolve('/jobs/swipe') + (qs ? `?${qs}` : ''));
   }
 
-  // Reload list + counts whenever the debounced filters change — a settled
-  // keystroke, an immediate facet toggle, or a back/forward re-seed. Skip the
-  // first run for the list (the SSR `initial` already seeded page one); still
-  // fetch counts on mount since they aren't server-rendered into this view.
+  // Measure the facets for the scope now in force — on mount too, since they are not
+  // server-rendered into this view.
+  //
+  // Its own effect, apart from the list reload below, because the two answer to
+  // different triggers: releasing the geography hold must re-measure the facets and must
+  // NOT reload the list. In one effect that did both, the visitor whose guess resolved
+  // to no region got a second, identical search — the release re-ran the whole body
+  // while the filters had not moved.
   $effect(() => {
     void filters.applied; // track the debounced snapshot
+    // Read outside untrack: clearing the hold is what re-runs this, and it is the only
+    // thing that ever will for a visitor whose guess came back empty.
+    if (geoGuessPending) return;
     untrack(() => {
       refreshCounts();
       // The role distribution ignores the text query, so refetch it only when the rest
@@ -462,6 +496,15 @@
         lastRoleScopeKey = roleScopeKey;
         if (!generalCountsCoverRole(scopedParams())) refreshRoleCounts();
       }
+    });
+  });
+
+  // Reload the list whenever the debounced filters change — a settled keystroke, an
+  // immediate facet toggle, or a back/forward re-seed. The first run is a no-op: the
+  // SSR `initial` already seeded page one.
+  $effect(() => {
+    void filters.applied; // track the debounced snapshot
+    untrack(() => {
       const firstRun = !started;
       if (firstRun) {
         started = true;
@@ -625,12 +668,21 @@
   if (untrack(() => standalone)) {
     afterNavigate((nav) => {
       const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
-      if (stored) filters.apply(stored);
-      else {
+      if (stored) {
+        filters.apply(stored);
+        // A restored set outranks the guess, so nothing is going to be asked for and
+        // the facet measurement must not keep waiting on an answer that is not coming.
+        geoGuessPending = false;
+      } else {
         filters.syncFromUrl();
         // Last in the precedence chain, and the only branch that runs on a cold
         // load: URL params were just applied, or there was nothing to restore.
-        void offerGeoScope();
+        //
+        // Released on EVERY outcome — scope applied, no region, guard failed on the
+        // re-read, storage refused the marker — because the facet measurement is held
+        // behind this and a path that forgot to release would leave the filter panel
+        // permanently countless.
+        void offerGeoScope().finally(() => (geoGuessPending = false));
       }
     });
   } else {
