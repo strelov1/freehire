@@ -1,18 +1,13 @@
 package handler
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ratelimit"
 	"github.com/strelov1/freehire/internal/searchintent"
-	"github.com/strelov1/freehire/internal/userprofile"
 )
 
 // searchIntentsPerHour bounds how many interpretations one caller may run per hour.
@@ -32,29 +27,28 @@ func searchIntentLimiter(throttler ratelimit.Throttler) fiber.Handler {
 	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("searchintent"), searchIntentsPerHour, time.Hour)
 }
 
-// profileReader is the saved profile this endpoint seeds from. *userprofile.Service
-// satisfies it; tests inject a stub. Narrow on purpose — the endpoint reads one
-// profile and writes nothing.
-type profileReader interface {
-	Get(ctx context.Context, userID int64) (userprofile.Profile, error)
-}
-
 // intentHandlers serves the search-interpretation endpoint. It is transport only: it
 // reads the caller, builds the request, binds the model client to that caller's own
 // gateway credential, and renders what internal/searchintent returns. Every decision
 // about what a description means lives there, where it is testable without a server.
+//
+// It reads NO profile, deliberately. Turning a saved profile into filters is already a
+// feature — "Apply my profile", filtersFromProfile in web/src/lib/facetModel.ts — and it
+// is a pure client-side mapping because a profile is already written in the filter's own
+// vocabulary. A second implementation here would be a diverging copy of rules that one
+// place already gets right (the base-location gate, the include-wins overlap rule), and
+// would spend a model call to do worse.
 //
 // The model client arrives ONLY through llm: the interpreter is built per request from
 // the caller's own bound client. Holding a second, service-credential interpreter
 // beside it would be two sources of one dependency, free to disagree about whether the
 // feature is configured at all.
 type intentHandlers struct {
-	profiles profileReader
-	llm      llmBinding
+	llm llmBinding
 }
 
-func newIntentHandlers(profiles profileReader, llm llmBinding) *intentHandlers {
-	return &intentHandlers{profiles: profiles, llm: llm}
+func newIntentHandlers(llm llmBinding) *intentHandlers {
+	return &intentHandlers{llm: llm}
 }
 
 func (h *intentHandlers) register(api fiber.Router, mw middleware) {
@@ -65,12 +59,10 @@ func (h *intentHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/search/interpret", mw.cookie, searchIntentLimiter(mw.throttler), h.InterpretSearch)
 }
 
-// interpretRequest is what the dialog posts: a description, or a request to seed from
-// the caller's saved profile, optionally refining a result they are already looking at.
+// interpretRequest is what the dialog posts: a description, optionally refining a
+// result the caller is already looking at.
 type interpretRequest struct {
 	Text string `json:"text"`
-	// Source is "profile" to seed from the saved profile; anything else reads Text.
-	Source string `json:"source"`
 	// Previous is the result being refined, echoed back from a prior response.
 	Previous *interpretResult `json:"previous"`
 }
@@ -146,18 +138,6 @@ func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "description is too long")
 	}
 
-	// The profile path calls no model. A saved profile is already written in the
-	// filter's vocabulary — specializations ARE category values, skills ARE canonical
-	// tags, the location block holds ISO codes — so the search is a mapping, not an
-	// interpretation. It costs nothing, answers instantly, and cannot hallucinate.
-	if in.Source == "profile" {
-		profile, err := h.callerProfile(c.Context(), userID)
-		if err != nil {
-			return err
-		}
-		return c.JSON(fiber.Map{"data": resultView(searchintent.FromProfile(*profile))})
-	}
-
 	req := searchintent.Request{Text: in.Text}
 	if in.Previous != nil {
 		previous := in.Previous.result()
@@ -175,53 +155,4 @@ func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": resultView(res)})
-}
-
-// callerProfile reads the saved profile the interpretation seeds from. No profile is a
-// fact about the caller rather than a failure, so it is answered with where to create
-// one — the same answer the assistant's profile tool gives, for the same reason:
-// collecting the preferences here would produce a better result this once and nothing
-// durable.
-func (h *intentHandlers) callerProfile(ctx context.Context, userID int64) (*searchintent.Profile, error) {
-	profile, err := h.profiles.Get(ctx, userID)
-	if errors.Is(err, userprofile.ErrNotFound) {
-		return nil, fiber.NewError(fiber.StatusNotFound,
-			"no saved profile yet — fill one in at /my/profile and it will drive this search")
-	}
-	if err != nil {
-		return nil, err
-	}
-	out := searchintent.Profile{
-		Specializations: profile.Specializations,
-		Skills:          profile.Skills,
-		ExcludedSkills:  profile.ExcludedSkills,
-	}
-
-	// The location block is stored whole as JSONB and echoed back verbatim, so it is
-	// decoded here rather than read field by field. A block we cannot parse is left
-	// out: the rest of the profile still describes a search, and refusing the whole
-	// interpretation over one stored field would be a worse answer than a narrower one.
-	var loc userprofile.LocationPreferences
-	if len(profile.LocationPreferences) > 0 &&
-		json.Unmarshal(profile.LocationPreferences, &loc) == nil {
-		out.WorkModes = loc.WorkModes
-		out.RemoteFrom = append(append([]string{}, loc.Remote.Regions...), loc.Remote.Countries...)
-		out.BasedIn = strings.TrimSpace(strings.Join(nonBlank(loc.Base.City, loc.Base.Country), ", "))
-		out.Relocating = loc.Relocation.Open
-		out.RelocateTo = slices.Concat(loc.Relocation.Cities, loc.Relocation.Countries, loc.Relocation.Regions)
-	}
-
-	return &out, nil
-}
-
-// nonBlank drops the empty parts of a location so "Lisbon, " and ", pt" never reach the
-// model as if the missing half were meaningful.
-func nonBlank(values ...string) []string {
-	out := make([]string, 0, len(values))
-	for _, v := range values {
-		if v = strings.TrimSpace(v); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
 }

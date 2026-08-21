@@ -30,6 +30,7 @@ import type {
   TrackedApplication,
   MailRecallResult,
   FollowUpDraft,
+  Interpretation,
   Company,
   CompanyListItem,
   FacetCounts,
@@ -469,6 +470,17 @@ export function createApi(
     params.set('limit', String(limit));
     params.set('offset', String(offset));
     return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`), offset);
+  }
+
+  /** Turn a written description of a job search into filter values (the AI filter).
+   *  Signed-in only. `previous` refines an interpretation already on screen: the
+   *  server returns a complete replacement search, not a diff, so the caller always
+   *  has one coherent result to show. Nothing is stored on either side. */
+  async function interpretSearch(text: string, previous?: Interpretation): Promise<Interpretation> {
+    return requestData<Interpretation>(
+      '/api/v1/search/interpret',
+      jsonBody('POST', { text, previous: previous ?? null }),
+    );
   }
 
   /** The swipe-deck batch: open jobs matching the same facets/query as
@@ -2045,6 +2057,7 @@ export function createApi(
     runMatchAnalysis,
     matchAnalysisStreamUrl,
     searchJobs,
+    interpretSearch,
     swipeDeck,
     facetCounts,
     jobsActivity,

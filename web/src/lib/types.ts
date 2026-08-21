@@ -680,6 +680,30 @@ export interface TrackedApplication {
  *  template-built server-side — no model, no credits. `recipient` is present only
  *  when linked mail supplied an address; an unanswered application (the commonest
  *  silent one) has nobody to address, and the draft is issued without one. */
+/** One interpreted search — a written description turned into filter values, as
+ *  POST /api/v1/search/interpret returns it. It round-trips: send it back as
+ *  `previous` to refine it. Every value is already canonicalised server-side against
+ *  the real dictionaries (see internal/searchintent), so the client only places them. */
+export interface Interpretation {
+  /** One sentence describing the search these values build. Shown instead of the raw
+   *  filters, and produced in the same model response as them, so the sentence can
+   *  never describe a different search than the one that was resolved. */
+  summary: string;
+  facets: Record<string, string[]>;
+  exclude: Record<string, string[]>;
+  query: string;
+  salary_min?: number | null;
+  posted_within_days?: number | null;
+  experience_years_max?: number | null;
+  visa_sponsorship?: boolean;
+  /** What the server could not place, verbatim as the model wrote it. It is rendered:
+   *  a drop the user is not told about is indistinguishable from a value applied. */
+  unresolved: string[];
+  /** Nothing resolved. Distinct from a successful interpretation, because applying an
+   *  empty filter shows the whole catalogue and reads as "everything matches you". */
+  empty: boolean;
+}
+
 export interface FollowUpDraft {
   subject: string;
   body: string;

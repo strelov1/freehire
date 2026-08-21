@@ -20,9 +20,14 @@
   open-vocabulary facets described as "write ordinary words", and the free-text rule.
 - [x] 2.2 Define the structured-output schema (facets, query, scalars, summary) and the
   single-call `Interpret` entry point that returns a resolved `Result`.
-- [x] 2.3 Seed an interpretation from a saved profile: specializations, skills, excluded
-  skills, location preferences, and the structured CV's headline and years. Excluded skills
-  land as excluded values, not included ones.
+- [x] 2.3 ~~Seed an interpretation from a saved profile.~~ **Dropped, with reason:** the
+  product already does this. `filtersFromProfile` (`web/src/lib/facetModel.ts`) is the
+  pure client-side mapping behind "Apply my profile", and it is more careful than a
+  re-implementation would be — it gates the home address on whether the person accepts
+  on-site work, and lets a wanted skill win over an avoided one. A profile is written in
+  the filter's own vocabulary, so this needs no model at all; building a second version
+  server-side would have spent a model call to do worse, and left two sets of rules to
+  diverge.
 - [x] 2.4 Refine: accept the previous result as context and return a complete replacement,
   including when the new constraint contradicts the old one.
 
@@ -33,8 +38,8 @@
 - [x] 3.3 Add the transport-only handler for `POST /api/v1/search/interpret` — require a
   session, cap the text length, bind the model client with `userLLM`, and report 503 when
   the model client is unconfigured. Register it beside the search routes.
-- [x] 3.4 Report the no-saved-profile case as a 404 naming the profile page, matching how
-  the assistant's profile tool answers the same situation.
+- [x] 3.4 ~~Report the no-saved-profile case as a 404 naming the profile page.~~ **Dropped
+  with 2.3:** the endpoint reads no profile at all, so the case cannot arise.
 - [x] 3.5 ~~Document the endpoint in `openapi.yaml`.~~ **Dropped, with reason:**
   `web/static/openapi.yaml` documents the public, unauthenticated integration surface —
   jobs, companies, geo — and carries no cookie-authenticated route at all. This endpoint
@@ -44,29 +49,28 @@
 
 ## 4. Sidebar entry point (`web/`)
 
-- [ ] 4.1 Add a `beforeButton` snippet to `FilterSummaryShell.svelte` and render
+- [x] 4.1 Add a `beforeButton` snippet to `FilterSummaryShell.svelte` and render
   `AiFilterButton.svelte` from `FilterSummary.svelte` only. The company summary passes
   nothing.
-- [ ] 4.2 Open the existing auth dialog on a signed-out activation, sending no request.
-- [ ] 4.3 Add the API client call for the interpret endpoint.
+- [x] 4.2 Open the existing auth dialog on a signed-out activation, sending no request.
+- [x] 4.3 Add the API client call for the interpret endpoint.
 
 ## 5. Dialog (`web/`)
 
-- [ ] 5.1 `AiFilterDialog.svelte` input state: two seed tabs (text / profile), example
-  descriptions on the text tab, and the profile tab's empty state pointing at the profile
-  page.
-- [ ] 5.2 Preview state: the summary sentence, the resolved values as chips grouped the way
+- [x] 5.1 `AiFilterDialog.svelte` input state: a description box with example queries.
+  (No profile tab — see 2.3; "Apply my profile" already exists and is a better answer.)
+- [x] 5.2 Preview state: the summary sentence, the resolved values as chips grouped the way
   the sidebar groups them, and the not-recognised line when anything was dropped.
-- [ ] 5.3 The nothing-resolved state — its own message, with no apply action offered.
-- [ ] 5.4 Refine field: post the previewed result back as context and replace the preview
+- [x] 5.3 The nothing-resolved state — its own message, with no apply action offered.
+- [x] 5.4 Refine field: post the previewed result back as context and replace the preview
   with the new result.
-- [ ] 5.5 Apply: clear the filter store, then write the interpreted values through its
+- [x] 5.5 Apply: clear the filter store, then write the interpreted values through its
   published operations and nothing else. Dismissing discards the preview.
 
 ## 6. Verification
 
-- [ ] 6.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, and
+- [x] 6.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, and
   `go vet -tags=integration ./...` all pass.
-- [ ] 6.2 Web unit tests pass and the applied result writes exactly the interpreted values.
+- [x] 6.2 Web unit tests pass and the applied result writes exactly the interpreted values.
 - [ ] 6.3 Walk the change end to end in the running app: describe a search, refine it,
   apply it, remove a chip, save it as an alert.

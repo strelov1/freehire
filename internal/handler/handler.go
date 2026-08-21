@@ -501,7 +501,7 @@ func Register(app *fiber.App, cfg Config) {
 	searchH := newSearchHandlers(jobSearch, facets, queries)
 	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
 	// search and a profile-aware conversation cannot disagree about what it says.
-	intentH := newIntentHandlers(profileSvc, llmBinding{client: cfg.LLM, keys: llmKeys})
+	intentH := newIntentHandlers(llmBinding{client: cfg.LLM, keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)

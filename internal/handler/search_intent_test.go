@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,18 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/searchintent"
-	"github.com/strelov1/freehire/internal/userprofile"
 )
-
-// stubProfiles answers the profile read the profile-seeded interpretation needs.
-type stubProfiles struct {
-	profile userprofile.Profile
-	err     error
-}
-
-func (s stubProfiles) Get(context.Context, int64) (userprofile.Profile, error) {
-	return s.profile, s.err
-}
 
 // intentApp mounts the endpoint behind a middleware that signs the caller in when
 // userID is non-zero, standing in for RequireAuth.
@@ -81,7 +69,7 @@ func postIntent(t *testing.T, app *fiber.App, body string) (int, string) {
 }
 
 func TestInterpretSearchRefusesAnUnauthenticatedCaller(t *testing.T) {
-	h := newIntentHandlers(stubProfiles{}, llmBinding{client: modelSayingJSON(t, `{}`)})
+	h := newIntentHandlers(llmBinding{client: modelSayingJSON(t, `{}`)})
 	status, _ := postIntent(t, intentApp(t, h, 0), `{"text":"senior go"}`)
 	if status != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", status)
@@ -104,7 +92,7 @@ func TestInterpretSearchRefusesOverlongTextWithoutCallingTheModel(t *testing.T) 
 		t.Fatalf("llm.New: %v", err)
 	}
 
-	h := newIntentHandlers(stubProfiles{}, llmBinding{client: client})
+	h := newIntentHandlers(llmBinding{client: client})
 	body, err := json.Marshal(map[string]string{"text": strings.Repeat("x", searchintent.MaxTextRunes+1)})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -119,29 +107,15 @@ func TestInterpretSearchRefusesOverlongTextWithoutCallingTheModel(t *testing.T) 
 }
 
 func TestInterpretSearchReportsAnUnconfiguredModel(t *testing.T) {
-	h := newIntentHandlers(stubProfiles{}, llmBinding{})
+	h := newIntentHandlers(llmBinding{})
 	status, _ := postIntent(t, intentApp(t, h, 7), `{"text":"senior go"}`)
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 — the feature is off, not the request wrong", status)
 	}
 }
 
-// No saved profile is a fact about the caller, not a failure. It must say where to fix
-// that, the same answer the assistant's profile tool gives.
-func TestInterpretSearchFromProfileWithoutOne(t *testing.T) {
-	h := newIntentHandlers(stubProfiles{err: userprofile.ErrNotFound},
-		llmBinding{client: modelSayingJSON(t, `{}`)})
-	status, body := postIntent(t, intentApp(t, h, 7), `{"source":"profile"}`)
-	if status != fiber.StatusNotFound {
-		t.Fatalf("status = %d, want 404", status)
-	}
-	if !strings.Contains(body, "/my/profile") {
-		t.Fatalf("body = %s, want it to name where a profile is created", body)
-	}
-}
-
 func TestInterpretSearchReturnsTheResolvedFilter(t *testing.T) {
-	h := newIntentHandlers(stubProfiles{}, llmBinding{client: modelSayingJSON(t,
+	h := newIntentHandlers(llmBinding{client: modelSayingJSON(t,
 		`{"summary":"Senior Go roles in Portugal.","seniority":["senior"],"skills":["Golang"],`+
 			`"countries":["Portugal"],"cities":["Atlantis City"]}`)})
 
@@ -178,7 +152,7 @@ func TestInterpretSearchReturnsTheResolvedFilter(t *testing.T) {
 // not turn that into filters" — never as an empty filter, which shows the whole
 // catalogue and reads as "everything matches you".
 func TestInterpretSearchFlagsAnEmptyResult(t *testing.T) {
-	h := newIntentHandlers(stubProfiles{}, llmBinding{client: modelSayingJSON(t,
+	h := newIntentHandlers(llmBinding{client: modelSayingJSON(t,
 		`{"summary":"anything","skills":["blockchain-adjacent"]}`)})
 
 	status, body := postIntent(t, intentApp(t, h, 7), `{"text":"something odd"}`)
@@ -199,7 +173,7 @@ func TestInterpretSearchFlagsAnEmptyResult(t *testing.T) {
 }
 
 func TestInterpretSearchRefusesARequestWithNothingInIt(t *testing.T) {
-	h := newIntentHandlers(stubProfiles{}, llmBinding{client: modelSayingJSON(t, `{}`)})
+	h := newIntentHandlers(llmBinding{client: modelSayingJSON(t, `{}`)})
 	status, _ := postIntent(t, intentApp(t, h, 7), `{}`)
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)

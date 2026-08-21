@@ -1,0 +1,36 @@
+<script lang="ts">
+  import { Sparkles } from '@lucide/svelte';
+  import { isAuthenticated } from '$lib/auth.svelte';
+  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import type { FilterStore } from '$lib/filters';
+  import AiFilterDialog from './AiFilterDialog.svelte';
+
+  // Rendered for everyone, signed in or not. Hiding it from signed-out visitors would
+  // hide the feature from exactly the people who have not yet been given a reason to
+  // sign in; the gate is on activation, through the app's existing auth dialog.
+  let { store }: { store: FilterStore } = $props();
+
+  let open = $state(false);
+
+  function activate() {
+    if (!isAuthenticated()) {
+      openAuthDialog();
+      return;
+    }
+    open = true;
+  }
+</script>
+
+<button
+  type="button"
+  class="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+  onclick={activate}
+>
+  <Sparkles class="size-4" />
+  Describe with AI
+  <span class="rounded bg-primary/15 px-1 text-[10px] font-semibold uppercase tracking-wide">beta</span>
+</button>
+
+{#if open}
+  <AiFilterDialog {store} onclose={() => (open = false)} />
+{/if}
