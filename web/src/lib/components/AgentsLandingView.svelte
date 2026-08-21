@@ -387,15 +387,15 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
            columns all fit at 390px rather than pushing the last one off the
            edge; below ~340px the wrapper still scrolls. -->
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[21rem] table-fixed border-collapse text-sm">
+        <table class="w-full min-w-80 table-fixed border-collapse text-sm">
           <thead>
             <tr class="border-b border-border">
-              <th class="w-[43%] py-3 pr-3 text-left text-xs font-medium text-muted-foreground sm:text-sm"
+              <th class="w-2/5 py-3 pr-3 text-left text-xs font-medium text-muted-foreground sm:text-sm"
                 >Capability</th
               >
               {#each matrix.columns as column, i (column)}
                 <th
-                  class="w-[19%] px-1 py-3 text-center text-xs font-medium sm:px-3 sm:text-sm {i === 0
+                  class="w-1/5 px-1 py-3 text-center text-xs font-medium sm:px-3 sm:text-sm {i === 0
                     ? 'text-foreground'
                     : 'text-muted-foreground'}"
                 >
