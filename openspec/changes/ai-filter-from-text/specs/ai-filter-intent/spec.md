@@ -112,28 +112,19 @@ any other unresolved value.
 - **THEN** the result carries no posted-within bound
 - **AND** the drop appears in the unresolved list
 
-### Requirement: Seeding an interpretation from the saved profile
+### Requirement: The interpretation reads no saved profile
 
-A caller MAY ask for an interpretation built from what they have already told us rather
-than from typed text. The system SHALL read the same profile material the assistant's
-profile tool reads — specializations, skills, excluded skills, location preferences, and
-the structured CV's headline and years — so the two surfaces cannot disagree about what a
-profile says.
+The system SHALL NOT build a search from the caller's saved profile. That capability
+already exists on the client ("Apply my profile"), where it is a pure mapping: a profile
+is validated into the filter's own vocabulary when it is saved, so turning one into a
+search needs no model at all. Interpreting it here would be a second set of rules free to
+diverge from the first, at the cost of a model call.
 
-A caller with no saved profile SHALL be told so, and pointed at the profile page, rather
-than receiving an empty interpretation.
+#### Scenario: The endpoint reads no profile
 
-#### Scenario: A profile becomes a search
-
-- **WHEN** a caller with a saved profile asks for a profile-seeded interpretation
-- **THEN** the result's facets reflect their specializations, skills and location
-  preferences
-- **AND** their excluded skills appear as excluded values, not included ones
-
-#### Scenario: No profile saved
-
-- **WHEN** a caller with no saved profile asks for a profile-seeded interpretation
-- **THEN** the system reports that no profile exists and where to create one
+- **WHEN** an interpretation is requested
+- **THEN** the caller's saved profile is not read, and the result depends only on the
+  description they wrote
 
 ### Requirement: Refining an interpretation
 

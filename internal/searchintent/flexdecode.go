@@ -32,11 +32,21 @@ func (f *flexStrings) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	if b[0] == '[' {
-		var list []string
-		if err := json.Unmarshal(b, &list); err != nil {
+		// Element by element, because one odd element must not cost the list. Decoded
+		// straight into []string, a single number in "skills":["go",5] made
+		// encoding/json abandon the whole field — the same over-reaction, one level
+		// down, that this type exists to stop.
+		var raw []json.RawMessage
+		if err := json.Unmarshal(b, &raw); err != nil {
 			return err
 		}
-		*f = list
+		for _, element := range raw {
+			var one flexStrings
+			if err := one.UnmarshalJSON(element); err != nil {
+				continue
+			}
+			*f = append(*f, one...)
+		}
 		return nil
 	}
 	if b[0] == '"' {

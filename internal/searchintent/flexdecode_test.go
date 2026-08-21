@@ -39,6 +39,19 @@ func TestProposalSurvivesAScalarInsideAnExclusion(t *testing.T) {
 	}
 }
 
+// A list with one number in it is the same miss as a bare scalar, one level down — and
+// it cost more, because encoding/json abandoned the whole field rather than the one
+// element. The point of this type is that a single odd value never costs the rest.
+func TestProposalReadsAMixedList(t *testing.T) {
+	var p proposal
+	if err := json.Unmarshal([]byte(`{"skills":["go",5,null,"react"]}`), &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !slices.Equal([]string(p.Skills), []string{"go", "5", "react"}) {
+		t.Fatalf("skills = %v, want [go 5 react] — one odd element must not cost the list", p.Skills)
+	}
+}
+
 func TestProposalReadsNullAndEmptyAsNoValues(t *testing.T) {
 	var p proposal
 	if err := json.Unmarshal([]byte(`{"seniority":null,"skills":"","cities":[]}`), &p); err != nil {

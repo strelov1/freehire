@@ -31,30 +31,26 @@ dialog. No separate sign-in surface SHALL be introduced for this feature.
 - **THEN** the existing auth dialog opens
 - **AND** no interpretation request is sent
 
-### Requirement: Two ways to seed a search
+### Requirement: The dialog takes a written description
 
-The dialog SHALL offer two seeds: free text, and the caller's saved profile.
+The dialog SHALL take one free-text description of the search, and SHALL show example
+descriptions beside it — a blank box does not tell someone what kind of sentence works.
 
-The text seed SHALL show example descriptions, because a blank box does not tell someone
-what kind of sentence works.
+It SHALL NOT offer to build a search from the caller's saved profile. That capability
+already exists as "Apply my profile", which maps a profile to filters on the client with
+no model call, because a saved profile is already written in the filter's own vocabulary.
+A second way to do it here would be a diverging copy of rules that one place already gets
+right, and would spend a model call to do it worse.
 
-The profile seed SHALL render an empty state pointing at the profile page when the caller
-has no saved profile, rather than an error.
-
-#### Scenario: Text seed
+#### Scenario: A description is interpreted
 
 - **WHEN** a signed-in caller types a description and submits it
 - **THEN** an interpretation is requested from that text
 
-#### Scenario: Profile seed
+#### Scenario: An empty description is not interpreted
 
-- **WHEN** a signed-in caller with a saved profile chooses the profile seed
-- **THEN** an interpretation is requested from their profile without them typing anything
-
-#### Scenario: Profile seed with no profile
-
-- **WHEN** a signed-in caller with no saved profile chooses the profile seed
-- **THEN** the dialog shows where to create a profile instead of an error
+- **WHEN** a signed-in caller submits nothing
+- **THEN** no interpretation is requested
 
 ### Requirement: The preview shows what was understood before anything is applied
 

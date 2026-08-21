@@ -17,9 +17,10 @@ Let them write the sentence and fill the filters for them.
   profile + structured CV**.
 - One model call turns that into **canonical facet values**, a summary sentence, and a
   list of what it could not resolve. Every open-vocabulary value (skills, countries,
-  cities, companies, domains) is canonicalised server-side through the dictionaries that
-  already own those vocabularies; anything a resolver refuses is dropped AND reported,
-  never guessed.
+  cities) is canonicalised server-side through the dictionaries that already own those
+  vocabularies; anything a resolver refuses is dropped AND reported, never guessed. A
+  company name is the one filter this surface cannot ground — no dictionary here tells
+  "Stripe" from "Stripee" — so it is always dropped and reported rather than resolved.
 - A **preview** step: the summary sentence, the resolved values as chips, the
   "didn't recognise" line, and one field to refine ("also remote only") which re-runs the
   interpretation with the previous result as context.

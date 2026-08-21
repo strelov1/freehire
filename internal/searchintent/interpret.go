@@ -106,7 +106,7 @@ func userPrompt(req Request) (string, error) {
 	var b strings.Builder
 	if req.Previous != nil {
 		b.WriteString("The search so far:\n")
-		b.WriteString(describe(*req.Previous))
+		b.WriteString(describe(req.Previous.reground()))
 		b.WriteString("\nChange it as follows, and return the WHOLE search, not just the change:\n")
 	} else {
 		b.WriteString("Build a search from this description:\n")
@@ -122,6 +122,13 @@ func describe(r Result) string {
 	var b strings.Builder
 	for _, name := range sortedFacetNames(r.Facets) {
 		fmt.Fprintf(&b, "- %s: %s\n", name, strings.Join(r.Facets[name], ", "))
+	}
+	// The exclusions belong here as much as the inclusions do. Left out, the model never
+	// learns about them and hands back a replacement that quietly drops them — so
+	// refining "remote, not in the USA" with "also senior" puts the USA back, and the
+	// person reads a summary saying so one screen after reading the opposite.
+	for _, name := range sortedFacetNames(r.Exclude) {
+		fmt.Fprintf(&b, "- NOT %s: %s\n", name, strings.Join(r.Exclude[name], ", "))
 	}
 	if r.Query != "" {
 		fmt.Fprintf(&b, "- free text: %s\n", r.Query)

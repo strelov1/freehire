@@ -84,6 +84,50 @@ func (r Result) Empty() bool {
 		!r.Scalars.VisaSponsorship
 }
 
+// reground puts a result the CALLER handed back through the same dictionaries a model's
+// proposal faces.
+//
+// A refinement echoes the previous result to us, and it reaches the prompt — facet names
+// and all. Nothing about a round-trip makes that payload trustworthy: an arbitrary key
+// carried arbitrary text straight into the model's instructions, and an arbitrary value
+// list carried as much of it as the sender cared to type. Everything this package
+// promises about a model's output has to hold for a caller's too.
+//
+// Names this surface does not offer are dropped rather than refused. resolve refuses one
+// outright because there it means the MODEL is confused about what the product can do,
+// and answering half its question would be worse than answering none. A caller's echoed
+// payload is the opposite case: a key we never wrote is noise to filter out, and letting
+// it discard the rest would lose a search the person can see on their screen.
+func (r Result) reground() Result {
+	out, err := intent{
+		Facets:             onlyOfferedFacets(r.Facets),
+		Exclude:            onlyOfferedFacets(r.Exclude),
+		Query:              r.Query,
+		SalaryMin:          r.Scalars.SalaryMin,
+		PostedWithinDays:   r.Scalars.PostedWithinDays,
+		ExperienceYearsMax: r.Scalars.ExperienceYearsMax,
+		VisaSponsorship:    r.Scalars.VisaSponsorship,
+	}.resolve()
+	if err != nil {
+		return Result{}
+	}
+	return out
+}
+
+// onlyOfferedFacets keeps the entries this surface actually serves. Nil in, nil out.
+func onlyOfferedFacets(in map[string][]string) map[string][]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(in))
+	for name, values := range in {
+		if _, offered := facetResolvers[name]; offered {
+			out[name] = values
+		}
+	}
+	return out
+}
+
 // intent is the model's raw proposal, before any dictionary has seen it. Its values
 // are ordinary words — "Golang", "Portugal", "senior" — because enumerating the open
 // vocabularies in the prompt would cost more than resolving them afterwards and would
@@ -180,20 +224,30 @@ func resolveCountry(raw string) (string, bool) {
 	return countries[0], true
 }
 
+// cityMatchWindow is how far down the dictionary's answers to look for the written name.
+//
+// One is not enough. SearchCities ranks by population, so an exact name can sit behind a
+// longer one that merely starts the same way: asked for "Bath" its first answer is
+// Bathinda, and reading only that threw away a city it knows perfectly well. A dozen is
+// past every collision worth having and still one lookup.
+const cityMatchWindow = 12
+
 // resolveCity requires the dictionary to return a city whose name IS what was written.
 //
 // location.Parse cannot be used here: it passes an unrecognised token through as a
 // city, which is exactly the unresolved-value-in-a-filter failure this package exists
 // to prevent. SearchCities is a real lookup, but it matches on prefix, so it answers
 // "Ber" with Berlin — a city nobody asked for. Demanding the whole name back is what
-// separates a lookup from a guess.
+// separates a lookup from a guess, and looking past the first answer does not soften
+// that: a fragment matches no name at any depth.
 func resolveCity(raw string) (string, bool) {
 	name := strings.TrimSpace(raw)
-	matches := location.SearchCities(name, "", 1)
-	if len(matches) == 0 || !strings.EqualFold(matches[0].Name, name) {
-		return "", false
+	for _, match := range location.SearchCities(name, "", cityMatchWindow) {
+		if strings.EqualFold(match.Name, name) {
+			return match.Name, true
+		}
 	}
-	return matches[0].Name, true
+	return "", false
 }
 
 // Ceilings on the scalar filters. They are absurdity guards, not policy: a salary floor
@@ -206,7 +260,21 @@ const (
 	maxSalaryFloor      = 10_000_000
 	maxExperienceYears  = 60
 	maxPostedWithinDays = 365
+	// The two free-text fields are a niche nobody has a word for, and one sentence
+	// describing the search. Both are shown to a person and one of them is echoed back
+	// into the next prompt, so both are bounded rather than trusted.
+	maxQueryRunes   = 200
+	maxSummaryRunes = 400
 )
+
+// clip truncates on a rune boundary, so a bound never cuts a character in half.
+func clip(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
+}
 
 // bound accepts a proposed scalar inside [low, high] and reports anything else as a
 // drop, appended to unresolved — a bound that vanished without a word is the same lie
@@ -238,8 +306,11 @@ func bound(name string, v *int, low, high int, unresolved []string) (*int, []str
 // identical requests reads as instability rather than as an answer.
 func (in intent) resolve() (Result, error) {
 	out := Result{
-		Query:   strings.TrimSpace(in.Query),
-		Summary: strings.TrimSpace(in.Summary),
+		// The free text is a few words for a niche no facet names. Bounding it here
+		// bounds it for BOTH producers: a model that ran away, and a caller echoing a
+		// result back into the next prompt.
+		Query:   clip(strings.TrimSpace(in.Query), maxQueryRunes),
+		Summary: clip(strings.TrimSpace(in.Summary), maxSummaryRunes),
 	}
 	// One place threads the drop report, so each bound reads as the range it accepts.
 	keep := func(name string, v *int, low, high int) *int {
@@ -331,7 +402,11 @@ func dropRedundantGeography(facets, exclude map[string][]string) {
 
 	countryRegion := location.CountryToRegion()
 	keepExclusions(exclude, "countries", func(code string) bool {
-		return slices.Contains(chosen, countryRegion[code])
+		region, known := countryRegion[code]
+		// A country the dictionary does not place proves nothing either way, and
+		// dropping an exclusion on that silence WIDENS the search — the same failure as
+		// the `global` case above, reached from the other side. Keep it.
+		return !known || slices.Contains(chosen, region)
 	})
 }
 

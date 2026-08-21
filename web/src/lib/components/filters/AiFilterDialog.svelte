@@ -47,9 +47,16 @@
     const one = (heading: string, text: string) => push(heading, [{ text, exclude: false }]);
 
     for (const def of FACETS) {
+      // Included wins over excluded, the rule filtersFromInterpretation applies when the
+      // same values become a filter. The server drops the overlap before it gets here,
+      // but the chips are keyed by text and a duplicate key does not merely look odd in
+      // Svelte — it breaks the whole each block. Cheap insurance on a rendered value.
+      const included = result.facets?.[def.param] ?? [];
       push(def.label, [
-        ...(result.facets?.[def.param] ?? []).map((v) => ({ text: label(def.param, v), exclude: false })),
-        ...(result.exclude?.[def.param] ?? []).map((v) => ({ text: label(def.param, v), exclude: true })),
+        ...included.map((v) => ({ text: label(def.param, v), exclude: false })),
+        ...(result.exclude?.[def.param] ?? [])
+          .filter((v) => !included.includes(v))
+          .map((v) => ({ text: label(def.param, v), exclude: true })),
       ]);
     }
     // The bounds use the SHARED labels, not wording of our own: the preview promises to

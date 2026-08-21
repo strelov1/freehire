@@ -18,7 +18,8 @@ In:
 
 - A "Describe with AI" entry point in the job filter sidebar, visible to
   everyone, usable only when signed in.
-- Two ways to seed it: free text, or the caller's saved profile + CV.
+- One way to seed it: free text. (The profile tab was designed here and dropped
+  during implementation — see the note below.)
 - A preview of what we understood, one text field to refine it, then apply.
 - Applying replaces the whole filter state.
 
@@ -85,8 +86,7 @@ does not import `handler`, so it is testable with a fake model and no HTTP.
 
 ```go
 type Request struct {
-    Text     string    // what the user typed; empty when seeding from profile
-    Profile  *Profile  // specializations, skills, excluded skills, location prefs, CV headline
+    Text     string    // what the user typed
     Previous *Result   // the refine round: what we last understood
 }
 
@@ -105,8 +105,8 @@ we resolved — a second call to summarise could drift.
 
 **Endpoint:** `POST /api/v1/search/interpret`, `RequireAuth` (cookie only —
 this is a browser surface, not an integration one), rate-limited per user
-in the shape of `matchAnalysisLimiter`. Body: `{"text": "...", "source":
-"text" | "profile", "previous": {...}}`. Text capped at 1000 characters.
+in the shape of `matchAnalysisLimiter`. Body: `{"text": "...",
+"previous": {...}}`. Text capped at 1000 characters.
 
 The handler is transport only: read the caller, build the `Request`, call the
 service on a client bound with `userLLM(ctx, keys, client, userID,
@@ -118,23 +118,23 @@ no exception.
 Search unconfigured or LLM unconfigured: 503, the same as the other
 search-dependent routes.
 
-## The profile tab
+## The profile tab — designed, then dropped
 
-"From Profile" builds the same `Result` from what the user has already told
-us — `userprofile.Get` (specializations, skills, excluded skills, location
-preferences) plus the structured CV headline and years, if present. This is
-the same material `get_profile` reads for the assistant, so the two surfaces
-cannot disagree about what a profile says.
+This design specified a "From Profile" tab that would interpret the caller's saved
+profile. It was not built, and the reason is worth keeping: the product already
+does it. `filtersFromProfile` in `web/src/lib/facetModel.ts` is the pure
+client-side mapping behind "Apply my profile", and it is more careful than a
+re-implementation would be — it gates the home address on whether the person
+accepts on-site work, and lets a wanted skill win over an avoided one.
 
-The profile's own fields are largely canonical already (specializations are
-category values, skills are canonical tags), so most of it maps without a
-model call. The model is still called: it turns "5 years, mostly Go and
-Kubernetes at fintechs" into a seniority, a category and a domain, and it
-writes the summary sentence.
+A profile is validated into the filter's own vocabulary when it is saved
+(specializations against `vocab.CategoryValues`, skills normalised), so turning
+one into a search needs no model at all. Building a second version server-side
+would have spent a model call to produce a worse answer, and left two sets of
+rules free to diverge.
 
-A caller with no saved profile gets a 404 with a message pointing at
-`/my/profile`, and the tab renders that as an empty state rather than an
-error — the same treatment `noProfileResult` gives the assistant.
+The endpoint therefore reads no profile: `interpretRequest` carries a description
+and an optional previous result, and nothing else.
 
 ## Frontend
 
@@ -180,7 +180,7 @@ no new code.
   dropped; `q` survives only when no facet covers it; scalars out of range
   are dropped.
 - Handler, integration-tagged: unauthenticated is 401; over the rate limit is
-  429; profile source with no profile is 404; LLM unconfigured is 503.
+  429; LLM unconfigured is 503.
 - Web, vitest: the preview → store application writes exactly the resolved
   values and nothing else; a preview with only unresolved values offers no
   Apply.
