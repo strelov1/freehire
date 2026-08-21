@@ -111,7 +111,8 @@ Applying SHALL write the interpreted values and nothing else.
 
 - **WHEN** an interpretation has been applied
 - **THEN** each value appears as a removable chip in the sidebar
-- **AND** removing one narrows the filter exactly as removing a hand-picked value does
+- **AND** removing an included one widens the search, and removing an excluded one stops
+  hiding what it hid — exactly as for a value picked by hand
 
 ### Requirement: Saving an applied search uses the existing control
 

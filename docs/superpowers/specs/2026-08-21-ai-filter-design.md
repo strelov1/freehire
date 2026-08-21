@@ -146,8 +146,8 @@ passes nothing, so it is unaffected.
 **Not signed in.** The click opens the existing `AuthDialog` via
 `auth-dialog.svelte.ts`. No bespoke gate, no second sign-in surface.
 
-**Signed in.** `AiFilterDialog.svelte`, two tabs (Text query / From profile),
-in three states:
+**Signed in.** `AiFilterDialog.svelte`, one description box (the profile tab was
+dropped — see above), in three states:
 
 1. *Input* — textarea, three example queries, "Build filter".
 2. *Preview* — the summary sentence, the resolved values as chips grouped
