@@ -136,7 +136,15 @@
     className,
   )}
 >
-  <div class="relative min-h-dvh p-6 sm:min-h-full">
+  <!--
+    Below sm the takeover is a full viewport, so flow layout leaves a short
+    dialog pinned to the top edge with the rest of the screen empty under it.
+    Centering is safe for tall content too: past min-h-dvh the box grows and
+    justify-center has nothing left to center, so it can never push content
+    above the scroll container's top. Back to flow at sm, where the card is
+    h-fit and there is no spare height to center against.
+  -->
+  <div class="relative flex min-h-dvh flex-col justify-center p-6 sm:block sm:min-h-full">
     {#if title}
       <h2 id={titleId} class="text-lg font-semibold">{title}</h2>
     {/if}
