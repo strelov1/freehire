@@ -129,31 +129,31 @@
   untrack(() => seeded.seed(initial, pageOffset(currentPage)));
   let jobs = $state.raw(seeded);
 
+  // What `shouldOfferGeoScope` decides on, read fresh each call — the address bar and
+  // storage both move under us. Client-only: `location` does not exist on the server.
+  // Shared with `offerGeoScope`, which asks the same question again after its round
+  // trip; two copies of these three keys would be two things to keep in step.
+  const geoScopeGuards = () => ({
+    search: location.search,
+    storedFilters: loadJobFilters(),
+    offered: geoScopeOffered(),
+  });
+
   // Whether an opening scope is still to be guessed from the visitor's IP country, and
   // so whether the facet measurement below is worth making yet. Asked here, at setup,
-  // because the answer is knowable without the network: `offerGeoScope` runs these same
-  // three guards before it fetches anything, and only a first-time visitor landing on a
-  // bare URL gets past them. Everybody else — a repeat visitor, a link carrying filters,
-  // a restored set — is false here and waits for nothing.
+  // because the answer is knowable without the network: `offerGeoScope` clears the same
+  // guards before it fetches anything, and only a first-time visitor landing on a bare
+  // URL gets past them. Everybody else — a repeat visitor, a link carrying filters, a
+  // restored set — is false here and waits for nothing.
   //
   // What the wait buys: measured from Brazil on 2026-08-21, a cold feed spent 778ms on
   // a facet count of the unscoped catalogue that `/geo/region` (330ms) then replaced
   // wholesale, and the two overlapped, so the discarded one was also competing for the
   // connection the useful one needed. One scope, measured once.
   //
-  // Never true on the server (no `location`, and `geoScopeOffered` reads an absent
-  // localStorage as "already offered"), so SSR is untouched.
+  // Never true on the server, where `browser` short-circuits before `location` is read.
   let geoGuessPending = $state(
-    untrack(
-      () =>
-        browser &&
-        standalone &&
-        shouldOfferGeoScope({
-          search: location.search,
-          storedFilters: loadJobFilters(),
-          offered: geoScopeOffered(),
-        }),
-    ),
+    untrack(() => browser && standalone && shouldOfferGeoScope(geoScopeGuards())),
   );
 
   // The live facet distribution (value → count per facet), feeding the dynamic
@@ -182,17 +182,17 @@
       // and the answer belongs to the scope that was actually asked for.
       const scope = scopedParams();
       const coversRole = generalCountsCoverRole(scope);
-      return api.facetCounts(scope).then((c) => ({ counts: c, coversRole }));
+      return api.facetCounts(scope).then((facets) => ({ facets, coversRole }));
     },
-    ({ counts: c, coversRole }) => {
-      counts = c;
+    ({ facets, coversRole }) => {
+      counts = facets;
       // One scope, one measurement: with no text query separating them, this response
       // already IS the role distribution, `role` included and identical (see
       // generalCountsCoverRole). Publishing it here is what lets the dedicated request
       // below be skipped on the load every visitor pays for — and it leaves the
       // suggestions populated, so the first keystroke has them in hand instead of
       // waiting on a fetch.
-      if (coversRole) roleCounts = c;
+      if (coversRole) roleCounts = facets;
     },
   );
 
@@ -617,12 +617,7 @@
     // guards below would pass and the scope would land on a page it was never meant
     // for. The pathname captured here is the only thing that can tell those apart.
     const pathname = location.pathname;
-    const guards = () => ({
-      search: location.search,
-      storedFilters: loadJobFilters(),
-      offered: geoScopeOffered(),
-    });
-    if (!shouldOfferGeoScope(guards())) return;
+    if (!shouldOfferGeoScope(geoScopeGuards())) return;
 
     const region = await fetchRegion();
     // Nothing was offered, so nothing is marked: a deployment whose edge sends no
@@ -631,7 +626,7 @@
     // Re-read the world, do not trust the snapshot: while we were asking they may
     // have navigated away, filtered, or been offered the scope by another mount.
     // Any of those outranks a guess; ours is dropped, not queued.
-    if (location.pathname !== pathname || !shouldOfferGeoScope(guards())) return;
+    if (location.pathname !== pathname || !shouldOfferGeoScope(geoScopeGuards())) return;
 
     // A guess that cannot be recorded is a guess that re-applies on every visit and
     // cannot be dismissed, so a failed write means no scope at all.
