@@ -68,18 +68,25 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   this — a reminder fires once from a pre-scheduled `fire_at`, a subscription match is a distinct
   `(subscription, job)` pair already.
 - **A digest is bounded twice, and the two bounds are not the same number.** `Digest.Jobs` is
-  the whole match set (ceiling: `Config.SnapshotCap`, 200) and is what the in-app notification
-  records — it is what `/my/notifications/:id/jobs` renders. `Digest.Listed()` is the first
-  `notify.ListLimit` (10) and is what a channel message itemizes. `Digest.Total` carries the
-  true count under either, so a renderer can show the "and N more" tail; don't derive the count
-  from `len(Jobs)`. They were one knob until 2026-08-21, which meant lowering the email's list
-  length silently truncated the on-site page the email's own "view all" pointed at.
+  everything the digest carries (ceiling: `Config.SnapshotCap`, 200) and is what the in-app
+  notification records — it is what `/my/notifications/:id/jobs` renders. `Digest.Listed()` is
+  the first `notify.ListLimit` (10) and is what a channel message itemizes; the "and N more"
+  tail is the difference. They were one knob until 2026-08-21, which meant lowering the email's
+  list length silently truncated the on-site page the email's own "view all" pointed at.
+- **`Digest.Total` is `len(Jobs)`, and that is load-bearing.** A pass can claim more matches for
+  one subscription than `SnapshotCap` allows; `deliverOne` calls `deferOverflow` to release the
+  excess back to the pending queue BEFORE building the digest, so a later pass delivers it. Do
+  not go back to truncating in `buildDigest` — that stamped the overflow notified while it
+  appeared in no message and in no snapshot, dropping those postings from the alert for good. A
+  claimed id whose job row was pruned is deliberately NOT deferred; it is stamped notified, or
+  it would be re-claimed every pass forever.
 - **A subscription digest is recorded BEFORE it is sent** (`RecordNotification` is `:one`), so
   the message can link to its own `/my/notifications/<id>/jobs`. A failed send withdraws the row
-  (`DeleteNotification`), so the history holds a digest if and only if it went out; a failed
-  *recording* is still non-fatal — the digest goes out with `NotificationID` zero and each
-  channel's tail falls back to `/my/notifications`. `internal/reminder` and `internal/nudge`
-  still record after delivery and discard the returned id.
+  (`DeleteNotification`) — best-effort: if that delete also fails it is logged, and one history
+  row describes a digest nobody received. A failed *recording* is non-fatal in the other
+  direction — the digest goes out with `NotificationID` zero and each channel's tail falls back
+  to `/my/notifications`. `internal/reminder` and `internal/nudge` still record after delivery
+  and discard the returned id.
 - `DigestJob` deliberately carries **no internal job id** — only the public slug and URL.
 - **The Telegram link token is deliberately NOT a JWT.** Telegram's deep-link `start`
   parameter allows only 1–64 chars of `[A-Za-z0-9_-]`, which a dotted ~200-char JWT

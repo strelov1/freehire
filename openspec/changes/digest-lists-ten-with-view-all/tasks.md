@@ -83,3 +83,14 @@
 - [x] 6.3 `go test -tags=integration ./internal/notify/` — the notification-center
   integration test touches the recording path this change reorders.
 - [x] 6.4 `openspec validate digest-lists-ten-with-view-all --strict`.
+
+## 7. Review follow-up
+
+- [x] 7.1 Add a `deliverOne` test asserting that a claimed set larger than
+  `SnapshotCap` marks only the delivered jobs notified and releases the rest, and
+  that a claimed id with no job row is still marked notified. Fails.
+- [x] 7.2 Add `deferOverflow` ahead of `buildDigest` and drop `buildDigest`'s
+  `limit` parameter, so `Total == len(Jobs)` by construction. Passes.
+- [x] 7.3 Restate the withdrawal as best-effort in the spec, the design, and
+  `docs/agents/notifications.md` — a failed `DeleteNotification` leaves a phantom
+  row, so "if and only if" was a promise the code does not keep.

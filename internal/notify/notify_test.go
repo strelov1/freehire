@@ -959,3 +959,60 @@ func TestDeliver_DigestRecordsEveryMatchedJob(t *testing.T) {
 		t.Errorf("recorded snapshot carries %d jobs, want 67", len(recorded))
 	}
 }
+
+// A pass can claim more matches for one subscription than a digest can carry.
+// The overflow must go back to pending — stamping it notified would drop those
+// postings from the alert forever, listed in no message and in no snapshot.
+func TestDeliver_OverflowBeyondSnapshotCapIsDeferredNotDropped(t *testing.T) {
+	claimed := make([]db.ClaimSubscriptionMatchesRow, 0, 5)
+	jobs := make(map[int64]db.GetJobsForDigestRow, 5)
+	for i := range int64(5) {
+		claimed = append(claimed, db.ClaimSubscriptionMatchesRow{SubscriptionID: 1, JobID: i})
+		jobs[i] = db.GetJobsForDigestRow{ID: i, Title: "Job", PublicSlug: "job"}
+	}
+	store := &fakeStore{claimed: claimed, delivery: deliverySubscription(), digestJobs: jobs}
+	notifier := &fakeNotifier{}
+	cfg := DefaultConfig()
+	cfg.SnapshotCap = 3
+	r := New(store, &fakeSearcher{}, notifier, cfg)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := notifier.sent[0].Total; got != 3 {
+		t.Errorf("digest Total = %d, want 3 — a digest announces only what it carries", got)
+	}
+	if len(store.notified) != 1 || len(store.notified[0].JobIds) != 3 {
+		t.Fatalf("notified = %+v, want exactly the 3 delivered jobs", store.notified)
+	}
+	if len(store.released) != 1 || len(store.released[0].JobIds) != 2 {
+		t.Fatalf("released = %+v, want the 2 undelivered jobs back in the pending queue", store.released)
+	}
+	for _, id := range store.notified[0].JobIds {
+		for _, rel := range store.released[0].JobIds {
+			if id == rel {
+				t.Errorf("job %d was both notified and released", id)
+			}
+		}
+	}
+}
+
+// A claimed id whose job row is gone (pruned) must still be stamped notified,
+// or it is re-claimed on every pass forever.
+func TestDeliver_ClaimedIDWithNoJobRowIsStillNotified(t *testing.T) {
+	store := &fakeStore{
+		claimed:    []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 1, JobID: 99}},
+		delivery:   deliverySubscription(),
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+	}
+	cfg := DefaultConfig()
+	cfg.SnapshotCap = 1
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, cfg)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.notified) != 1 || len(store.notified[0].JobIds) != 2 {
+		t.Errorf("notified = %+v, want both ids (the pruned one included)", store.notified)
+	}
+}

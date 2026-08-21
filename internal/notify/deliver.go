@@ -85,7 +85,8 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		return
 	}
 
-	digest := buildDigest(info.SavedSearchName, jobs, r.cfg.SnapshotCap)
+	jobs, jobIDs = r.deferOverflow(ctx, subID, jobs, jobIDs)
+	digest := buildDigest(info.SavedSearchName, jobs)
 
 	// Record the in-app notification BEFORE sending, so the digest can carry its
 	// own row's id and each channel's "and N more" tail can link to the page
@@ -189,15 +190,47 @@ func (r *Runner) release(ctx context.Context, subID int64, jobIDs []int64) {
 	}
 }
 
-// buildDigest assembles a digest carrying the first `limit` matched jobs — the
-// snapshot ceiling, not the message listing bound (see Digest.Listed) — while
-// Total reflects all matched jobs so the renderer can summarize the remainder.
-func buildDigest(name string, jobs []db.GetJobsForDigestRow, limit int) Digest {
-	d := Digest{SavedSearchName: name, Total: len(jobs)}
-	for i, j := range jobs {
-		if i >= limit {
-			break
+// deferOverflow trims a claimed set larger than one digest may carry, releasing
+// the excess back to the pending queue so a later pass delivers it.
+//
+// Truncating without releasing would stamp those matches notified while they
+// appeared in no message and in no recorded snapshot — the postings would leave
+// the alert having never been shown. Because GetJobsForDigest orders freshest
+// first, what is held back is the oldest of the claimed set.
+//
+// A claimed id with no job row (pruned between match and delivery) is NOT held
+// back: it stays in jobIDs and is stamped notified, or it would be re-claimed
+// every pass forever.
+func (r *Runner) deferOverflow(ctx context.Context, subID int64, jobs []db.GetJobsForDigestRow, jobIDs []int64) ([]db.GetJobsForDigestRow, []int64) {
+	if len(jobs) <= r.cfg.SnapshotCap {
+		return jobs, jobIDs
+	}
+
+	held := make(map[int64]bool, len(jobs)-r.cfg.SnapshotCap)
+	for _, j := range jobs[r.cfg.SnapshotCap:] {
+		held[j.ID] = true
+	}
+	deferred := make([]int64, 0, len(held))
+	kept := make([]int64, 0, len(jobIDs)-len(held))
+	for _, id := range jobIDs {
+		if held[id] {
+			deferred = append(deferred, id)
+			continue
 		}
+		kept = append(kept, id)
+	}
+	log.Printf("notify: subscription %d claimed %d matches, delivering %d and deferring %d", subID, len(jobIDs), len(kept), len(deferred))
+	r.release(ctx, subID, deferred)
+	return jobs[:r.cfg.SnapshotCap], kept
+}
+
+// buildDigest assembles a digest over the jobs this delivery carries. Total is
+// len(jobs) because deferOverflow has already held back anything that would not
+// fit, so a digest never announces a job it cannot show; the "and N more" tail a
+// renderer draws is the difference between Total and Digest.Listed.
+func buildDigest(name string, jobs []db.GetJobsForDigestRow) Digest {
+	d := Digest{SavedSearchName: name, Total: len(jobs)}
+	for _, j := range jobs {
 		d.Jobs = append(d.Jobs, DigestJob{
 			Title:          j.Title,
 			Company:        j.Company,

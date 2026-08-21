@@ -14,19 +14,28 @@ day; this timing gate does not affect the `instant` frequency (the default),
 which delivers as soon as matches are claimed as before.
 
 How many jobs a digest **records** SHALL be bounded separately from how many a
-channel message **lists**. The digest SHALL carry the whole match set, bounded only
+channel message **lists**. The digest SHALL carry every match it announces, bounded
 by a configured snapshot ceiling that exists to keep one notification's recorded
 document from growing without limit; the per-message listing bound belongs to the
-channel and SHALL NOT truncate what is recorded. The digest's match count SHALL
-remain the true count of matched jobs under either bound.
+channel and SHALL NOT truncate what is recorded.
+
+A pass that claims more matches for one subscription than that ceiling allows SHALL
+release the excess back to the pending queue before the digest is built, so a later
+pass delivers them, and SHALL NOT mark them notified — a match that appears in no
+message and in no recorded snapshot has not been delivered. A claimed match whose
+job no longer exists is exempt and SHALL still be marked notified, or it would be
+re-claimed on every pass indefinitely. A digest's announced count SHALL therefore
+equal what it carries, so the "and N more" tail never names a job the page it links
+to cannot show.
 
 The in-app notification SHALL be recorded before the digest is sent, so the digest
 can carry its own notification id and each channel can link to the page that renders
-the recorded match set. A delivery that then fails SHALL have that record removed, so
-the notification history holds a row for a digest if and only if the digest was
-delivered. A failed recording SHALL NOT block or fail the delivery: the digest is
-sent carrying no notification id, and the channel falls back to a generic
-destination.
+the recorded match set. A delivery that then fails SHALL remove that record on a
+best-effort basis, so an undelivered digest does not appear in the notification
+history; a removal that itself fails SHALL be logged rather than allowed to affect
+the delivery bookkeeping. A failed recording SHALL NOT block or fail the delivery:
+the digest is sent carrying no notification id, and the channel falls back to a
+generic destination.
 
 #### Scenario: One digest per subscription per pass
 
@@ -69,6 +78,16 @@ destination.
 
 - **WHEN** a pass matches 67 jobs for one subscription
 - **THEN** the recorded in-app notification carries all 67, while the channel message lists only the channel's bound
+
+#### Scenario: Claimed matches beyond the snapshot ceiling are deferred, not dropped
+
+- **WHEN** a pass claims more matches for one subscription than the snapshot ceiling allows
+- **THEN** the excess is released back to the pending queue for a later pass, is not marked notified, and the delivered digest's announced count equals the number of jobs it carries
+
+#### Scenario: A claimed match whose job is gone is still marked notified
+
+- **WHEN** a claimed match's job row no longer exists at delivery time
+- **THEN** it is marked notified along with the delivered digest rather than deferred, so it is not re-claimed on every later pass
 
 #### Scenario: The delivered digest carries its notification id
 

@@ -55,7 +55,7 @@ func TestBuildDigest_RecordsEveryMatchUnderTheSnapshotCap(t *testing.T) {
 		rows[i] = db.GetJobsForDigestRow{ID: int64(i), Title: "Job " + strconv.Itoa(i), PublicSlug: "job-" + strconv.Itoa(i)}
 	}
 
-	d := buildDigest("Go", rows, DefaultConfig().SnapshotCap)
+	d := buildDigest("Go", rows)
 
 	if d.Total != 67 {
 		t.Errorf("Total = %d, want 67", d.Total)
@@ -68,19 +68,18 @@ func TestBuildDigest_RecordsEveryMatchUnderTheSnapshotCap(t *testing.T) {
 	}
 }
 
-func TestBuildDigest_SnapshotCapTruncatesButTotalStaysTrue(t *testing.T) {
+// A digest never announces a job it cannot show: deferOverflow holds back
+// anything that would not fit before buildDigest sees it.
+func TestBuildDigest_TotalMatchesWhatItCarries(t *testing.T) {
 	rows := make([]db.GetJobsForDigestRow, 12)
 	for i := range rows {
 		rows[i] = db.GetJobsForDigestRow{ID: int64(i), Title: "Job " + strconv.Itoa(i)}
 	}
 
-	d := buildDigest("Go", rows, 5)
+	d := buildDigest("Go", rows)
 
-	if d.Total != 12 {
-		t.Errorf("Total = %d, want 12 — the cap bounds the snapshot, not the count", d.Total)
-	}
-	if len(d.Jobs) != 5 {
-		t.Errorf("len(Jobs) = %d, want 5", len(d.Jobs))
+	if d.Total != len(d.Jobs) {
+		t.Errorf("Total = %d but carries %d jobs — a digest must not count what it cannot show", d.Total, len(d.Jobs))
 	}
 }
 

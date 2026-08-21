@@ -51,6 +51,12 @@ realistic case by a wide margin (`Config.MatchLimit` is 200: one query cannot ma
 more than that in a pass) and keeps a pathological accumulation — a `daily` digest
 deferred across many passes — from writing an unbounded document.
 
+It also stops being a *truncation* and becomes a *deferral*: `deferOverflow` hands
+the excess back to the pending queue instead of letting `buildDigest` drop it, so
+the ceiling bounds one delivery rather than bounding what a subscriber ever sees.
+That is what lets `buildDigest` lose its `limit` parameter — with nothing left to
+cut, `Total` is simply `len(Jobs)`.
+
 The message-side limit is a package constant, not config:
 
 ```go
@@ -86,7 +92,7 @@ a degradation of the link, never of the mail.
 `deliverOne` currently sends, marks notified, then records. The id cannot be known
 before the send under that order, so the sequence becomes:
 
-1. build the digest
+1. `deferOverflow`, then build the digest
 2. `RecordNotification` (now `:one`) → id
 3. `digest.NotificationID = id`
 4. `Send`
@@ -94,20 +100,25 @@ before the send under that order, so the sequence becomes:
    `RecordMatchDeliveryFailure` path
 6. on success: `MarkMatchesNotified`, `MarkDigestSent` as before
 
-Step 5 is what preserves the guarantee the old ordering gave for free — a
-`user_notifications` row exists if and only if a digest went out. The
-`add-notification-center` requirement ("record one row for every successful
-delivery", "a recording failure SHALL NOT fail the delivery") stays literally true:
-step 2 failing is logged and delivery continues with `NotificationID` zero, and step
-5 keeps an undelivered digest out of the history.
+Step 5 keeps an undelivered digest out of the history, which is what the old
+ordering gave for free. The `add-notification-center` requirement ("record one row
+for every successful delivery", "a recording failure SHALL NOT fail the delivery")
+stays literally true: step 2 failing is logged and delivery continues with
+`NotificationID` zero.
 
-The residual window is a `Send` failure followed by a `Delete` failure, which leaves
-one phantom history row. It is logged, and it is strictly better than the
-alternative reading of the same window — dropping a delivery that already succeeded.
-Wrapping steps 2–5 in a transaction would close it exactly, at the cost of holding a
-Postgres transaction open across an SES/Telegram round-trip for every digest in the
-batch, and of plumbing transaction support into a `Store` interface that has never
-needed it. Not worth it for a window this narrow.
+**This is best-effort, not an invariant, and the spec says so.** A `Send` failure
+followed by a `Delete` failure leaves one history row describing a digest nobody
+received. It is logged. No reconciler is added for it: the sweep would have to
+distinguish a phantom row from a legitimately recorded digest, and the only
+distinguishing fact — that the send failed — is not written anywhere. Recording
+it to make a sweep possible costs a column and a pass to remove a row that is,
+at worst, one stale entry in a read-only list. Wrapping steps 2–5 in a transaction
+would close the window exactly, at the cost of holding a Postgres transaction open
+across an SES/Telegram round-trip for every digest in the batch, and of plumbing
+transaction support into a `Store` interface that has never needed it. Neither is
+worth it for a window this narrow with a consequence this small — but the guarantee
+is stated as best-effort rather than "if and only if", because a reader who takes
+the stronger reading will eventually be wrong.
 
 `RecordNotification` is shared with `internal/reminder` and `internal/nudge`; both
 become `_, err :=`. Adding a second, near-identical insert just to keep a `:exec`
@@ -122,11 +133,30 @@ new is needed on the web side.
 
 ## Risks / Trade-offs
 
-**A subscription that matches more than 200 jobs in one delivery.** The mail says
-"N more", the page shows 200. The count stays honest — `Total` is still the true
-figure — but the page under-delivers on "all". Accepted: `MatchLimit` makes this
-reachable only by a deferred `daily` digest accumulating across passes, and the
-alternative is an unbounded jsonb document per notification.
+**A subscription that claims more than 200 matches in one pass** — reachable by a
+`daily` digest accumulating across deferred passes, and by `ClaimBatch` (500)
+handing one subscription up to 500 ids. `deliverOne` calls `deferOverflow` first:
+the freshest 200 are delivered and the rest are released back to pending for a
+later pass, so `Total == len(Jobs)` always holds and the tail can never name a job
+the linked page cannot show.
+
+The trap this avoids is the pre-existing one. `buildDigest` used to truncate to
+the cap while `MarkMatchesNotified` stamped the *whole* claimed set, so the
+overflow left the alert having appeared in no message and no snapshot. At the old
+cap of 20 a 500-match claim silently dropped 480 postings. The overflow is now
+deferred rather than truncated, which is also why `buildDigest` no longer takes a
+limit at all — a digest that could carry less than it counted is exactly the shape
+that made the bug possible.
+
+One id is deliberately exempt: a claimed match whose job row was pruned between
+matching and delivery returns no row from `GetJobsForDigest`, so it cannot be
+deferred by job — it stays in the notified set. Deferring it would re-claim it
+every pass forever.
+
+**A `daily` digest spreads across days when it overflows.** 500 matches deliver
+200 today and the rest tomorrow, because `MarkDigestSent` stamps the day. Accepted:
+delayed beats dropped, and a saved search matching 500 jobs a day is one that wants
+narrowing more than it wants a bigger mail.
 
 **Ten may prove too few for a `daily` digest**, where a bigger list is more
 expected than in an instant alert. `ListLimit` is one constant and a
