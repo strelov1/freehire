@@ -42,6 +42,16 @@ type Record struct {
 //
 // The request group requires METHOD PATH PROTO, so bad requests logged as "-"
 // (or otherwise malformed) fail to match and are skipped by the caller.
+//
+// NOT anchored at the end, and that is load-bearing rather than an oversight. The
+// live format also carries $request_time and $upstream_response_time after the
+// fields above, added so web-metrics.sh can export latency; this parser neither
+// reads them nor needs to know they are there, and the same pattern keeps reading
+// rotated files written before they existed. Anything appended in future is
+// likewise ignored. Do not "tidy" this by adding a $ — the guard for that is
+// TestParseLine/"ignores the timing fields appended for the latency metrics",
+// which fails on a slug credited to the wrong job rather than merely on a
+// rejected line.
 var combinedLine = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]*)\] "([A-Z]+) (\S+) [^"]*" (\d{3}) \S+ "[^"]*" "([^"]*)"(?: "([^"]*)")?`)
 
 // timeLocalLayout is nginx's $time_local, e.g. 21/Jul/2026:12:00:00 +0000.
