@@ -19,6 +19,14 @@
   });
 
   const count = $derived(githubStars.count);
+
+  // Empty until the number lands, and rendered either way. The box has to be there
+  // from the first paint: the store reads its localStorage cache in `onMount`, so the
+  // count is always a frame late, and it cannot be earlier — rendering a cached number
+  // the server did not render is a hydration mismatch. Without a held box the badge
+  // widens on arrival, which pushes the header's right-hand group and drags the
+  // `flex-1` search box between them sideways, on every page load.
+  const label = $derived(count != null ? formatStars(count) : '');
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- external GitHub URL, not an internal route -->
@@ -38,18 +46,10 @@
   <ProviderIcon provider="github" />
   {#if variant === 'row'}
     <span>GitHub</span>
-    <span class="ml-auto tabular-nums text-xs">{count != null ? formatStars(count) : ''}</span>
+    <span class="ml-auto tabular-nums text-xs">{label}</span>
   {:else}
-    <!-- The count's box is held from the first paint, empty until the number lands.
-         It cannot be there earlier: the store reads its localStorage cache in
-         `onMount`, and rendering a cached number the server did not render would be a
-         hydration mismatch. So the number always arrives a frame late, and without a
-         reserved box it widens this badge, pushes the header's right-hand group, and
-         drags the `flex-1` search box between them along with it — on every page load,
-         signed in or out.
-
-         `min-w-8` holds four tabular digits, which the repo will not outgrow soon; the
+    <!-- `min-w-8` holds four tabular digits, which the repo will not outgrow soon; the
          next shape after that is "10.9k", one character wider. -->
-    <span class="min-w-8 text-right tabular-nums">{count != null ? formatStars(count) : ''}</span>
+    <span class="min-w-8 text-right tabular-nums">{label}</span>
   {/if}
 </a>

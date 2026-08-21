@@ -142,25 +142,20 @@
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
          scope-prefix, divided from the search icon. `variant` picks the popover body
          (jobs work-format+location vs the company region/remote-hiring pills). -->
-    {#if target?.filterScope}
-      <HeaderLocationFilter
-        variant={target.filterScope.variant}
-        store={target.filterScope.store}
-        counts={target.filterScope.counts()}
-        inferred={target.filterScope.inferred?.() ?? false}
-      />
-    {:else}
-      <!-- The same trigger in launcher mode, standing in until the list view registers
-           its filter scope. That registration happens in the view's `onMount`, ~300ms
-           after first paint, and rendering nothing until then made the trigger pop into
-           existence and shove this search box 114px to the right — on every load of
-           /jobs and /companies, which is most of the site's traffic.
-           Launcher is the honest stand-in rather than a dead placeholder box: it needs
-           no store, it renders the identical neutral label, and a pick during those few
-           hundred milliseconds navigates to the feed with that scope instead of doing
-           nothing. -->
-      <HeaderLocationFilter variant="launcher" />
-    {/if}
+    <!-- Always rendered, launcher-shaped until the list view registers its filter
+         scope. That registration happens in the view's `onMount`, ~300ms after first
+         paint, and rendering nothing until then made the trigger pop into existence and
+         shove this search box 114px to the right — on every load of /jobs and
+         /companies. Launcher is the honest stand-in rather than a dead placeholder box:
+         it needs no store, it renders the identical neutral label, and a pick during
+         those few hundred milliseconds navigates to the feed with that scope instead of
+         doing nothing. -->
+    <HeaderLocationFilter
+      variant={target?.filterScope?.variant ?? 'launcher'}
+      store={target?.filterScope?.store}
+      counts={target?.filterScope?.counts() ?? null}
+      inferred={target?.filterScope?.inferred?.() ?? false}
+    />
     <div class="h-5 w-px shrink-0 bg-border"></div>
     <Search class="size-4 shrink-0 text-muted-foreground" />
     <input
