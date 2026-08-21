@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Sparkles } from '@lucide/svelte';
+  import { MessageSquareText } from '@lucide/svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import type { FilterStore } from '$lib/filters';
@@ -26,7 +26,7 @@
   class="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
   onclick={activate}
 >
-  <Sparkles class="size-4" />
+  <MessageSquareText class="size-4" />
   Describe with AI
   <span class="rounded bg-primary/15 px-1 text-[10px] font-semibold uppercase tracking-wide">beta</span>
 </button>

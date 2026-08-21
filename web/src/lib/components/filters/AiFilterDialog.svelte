@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Sparkles, X } from '@lucide/svelte';
+  import { MessageSquareText, X } from '@lucide/svelte';
   import { Button } from '$lib/ui';
   import { errorMessage } from '$lib/utils';
   import { focusTrap } from '$lib/actions/focusTrap';
@@ -98,7 +98,7 @@
   >
     <div class="flex items-start gap-3 border-b border-border p-5">
       <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-        <Sparkles class="size-5 text-primary" />
+        <MessageSquareText class="size-5 text-primary" />
       </div>
       <div class="min-w-0 flex-1">
         <h2 class="text-lg font-semibold leading-tight">Describe your search</h2>
@@ -146,44 +146,65 @@
         </p>
         <Button class="mt-4" variant="outline" onclick={() => (result = null)}>Start over</Button>
       {:else}
-        <p class="text-sm font-medium">{result.summary}</p>
+        <!-- Dimmed while a refinement is in flight. The call takes tens of seconds and
+             replaces everything below, so leaving the old answer looking live reads as
+             "nothing happened" — which is exactly how the first version was reported. -->
+        <div class={busy ? 'pointer-events-none opacity-40 transition-opacity' : ''}>
+          <p class="text-sm font-medium">{result.summary}</p>
 
-        <div class="mt-4 flex flex-col gap-3">
-          {#each preview as group (group.label)}
-            <div>
-              <p class="text-xs font-medium text-muted-foreground">{group.label}</p>
-              <div class="mt-1 flex flex-wrap gap-1.5">
-                {#each group.chips as chip (chip.text)}
-                  <span
-                    class="rounded-lg px-2 py-1 text-xs {chip.exclude
-                      ? 'bg-destructive/10 text-destructive line-through'
-                      : 'bg-muted'}"
-                  >
-                    {chip.text}
-                  </span>
-                {/each}
+          <div class="mt-4 flex flex-col gap-3">
+            {#each preview as group (group.label)}
+              <div>
+                <p class="text-xs font-medium text-muted-foreground">{group.label}</p>
+                <div class="mt-1 flex flex-wrap gap-1.5">
+                  {#each group.chips as chip (chip.text)}
+                    <span
+                      class="rounded-lg px-2 py-1 text-xs {chip.exclude
+                        ? 'bg-destructive/10 text-destructive line-through'
+                        : 'bg-muted'}"
+                    >
+                      {chip.text}
+                    </span>
+                  {/each}
+                </div>
               </div>
-            </div>
-          {/each}
+            {/each}
+          </div>
+
+          {#if result.unresolved?.length}
+            <p class="mt-4 text-xs text-muted-foreground">
+              Didn't recognise: {result.unresolved.join(', ')}
+            </p>
+          {/if}
         </div>
 
-        {#if result.unresolved?.length}
-          <p class="mt-4 text-xs text-muted-foreground">
-            Didn't recognise: {result.unresolved.join(', ')}
-          </p>
-        {/if}
-
-        <input
-          bind:value={refinement}
-          placeholder="Add a constraint — e.g. remote only"
-          class="mt-4 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-          onkeydown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void build(refinement, result ?? undefined);
-            }
-          }}
-        />
+        <!-- The refine action sits ON the field, not only in the footer. Typing alone
+             does nothing, and a button at the far end of the dialog is not where anyone
+             looks for the effect of what they just typed. -->
+        <div class="mt-4 flex gap-2">
+          <input
+            bind:value={refinement}
+            disabled={busy}
+            placeholder="Add a constraint — e.g. remote only"
+            class="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
+            onkeydown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void build(refinement, result ?? undefined);
+              }
+            }}
+          />
+          <Button variant="outline" disabled={busy || !refinement.trim()} onclick={() => build(refinement, result ?? undefined)}>
+            {busy ? 'Rebuilding…' : 'Update'}
+          </Button>
+        </div>
+        <p class="mt-1.5 text-xs text-muted-foreground">
+          {#if busy}
+            Rebuilding the whole search with that added — this takes a moment.
+          {:else}
+            Press Enter or Update. The search is rebuilt from scratch with your addition.
+          {/if}
+        </p>
       {/if}
 
       {#if error}
@@ -197,10 +218,9 @@
           {busy ? 'Building…' : 'Build filter'}
         </Button>
       {:else if !result.empty}
-        <Button variant="outline" disabled={busy || !refinement.trim()} onclick={() => build(refinement, result ?? undefined)}>
-          {busy ? 'Refining…' : 'Refine'}
-        </Button>
-        <Button onclick={apply}>Apply</Button>
+        <!-- Refining lives beside its own input above; the footer is only for the one
+             action that ends the dialog. -->
+        <Button disabled={busy} onclick={apply}>Apply</Button>
       {/if}
     </div>
   </div>
