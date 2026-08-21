@@ -31,8 +31,7 @@
     <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&amp;theme=light" alt="freehire — every IT job, straight from the source | Product Hunt" width="250" height="54">
   </picture>
 </a>
-
-<a href="https://trendshift.io/repositories/55060?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/55060/daily?language=Go" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/55060?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/55060" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
 
 <br>
 
