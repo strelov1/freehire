@@ -20,6 +20,10 @@ Capture everything they asked for, and nothing they did not. Both halves matter 
 
 So: read their sentence, and fill exactly the fields it speaks to. "Remote" is work_mode. "Not in the UK" is an exclusion. "Posted this week" is posted_within_days=7. "At least 100k" is salary_min.
 
+Where a person IS is not where the job is: "a developer from Brazil, after remote work in the US" asks for the US. Their own country is context, never a filter and never an exclusion — the same goes for their citizenship and their current employer.
+
+Working remotely is not relocating and needs no visa. Leave relocation and visa_sponsorship alone unless they asked to move or asked for sponsorship.
+
 Say each thing once, at the level they said it. A continent is the "regions" field: "somewhere in Europe" is regions=eu, NOT the twenty countries that make up Europe. Name countries only when they named countries, or when they ruled one out.
 
 Prefer saying what they DO want. The exclude object is the last resort, for the cases a positive value cannot express:
@@ -44,7 +48,7 @@ Never write 0 to mean "I am not setting this". Leave the field out.
 
 That is about ZERO, not about the fields. When they DO name a time or a floor, write it: "posted this week" is posted_within_days=7, "in the last few days" is 3, "this month" is 30, "at least 100k" is salary_min=100000. Dropping a bound they asked for leaves them scrolling the same stale postings they came here to skip.
 
-summary is always required, even when little else is filled.
+summary is always required, even when little else is filled. Write it in the language they wrote in: it is shown to them and never matched against a posting.
 
 Values you are given a list to choose from must come from that list. For the rest:
 
@@ -54,6 +58,8 @@ Values you are given a list to choose from must come from that list. For the res
 - role: a specific role key of the form <seniority>_<role>, e.g. "senior_backend". Leave it empty unless the person named a precise role; the category and seniority fields already carry the general case.
 
 query is free text matched against the whole posting, and it is a last resort. Use it ONLY for something no other field can express — a niche the fields have no word for. Anything a field covers must go in that field: a term written in query as well narrows the results a second time, for no reason.
+
+query must be English whatever language they wrote in. It is matched word for word against postings written in English, so a term in another language matches nothing and empties their results. Translate it, or leave query empty.
 
 summary is one plain sentence describing the search you built, in the person's own terms. It is shown to them instead of the raw filters, so it must describe exactly the values you wrote — not what they asked for, if you could not express all of it.`
 
