@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cmp"
 	"context"
 	"log"
 	"math"
@@ -261,6 +262,9 @@ type Config struct {
 	// runs on its own model (ASSISTANT_MODEL) — chosen for tool calling and context
 	// size rather than for cheap JSON extraction. Nil disables new turns.
 	AssistantLLM *llm.Client
+	// SearchIntentLLM backs the AI filter. Separate for latency, not capability — see
+	// config.SearchIntentModel.
+	SearchIntentLLM *llm.Client
 	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
 	// assistant package's default.
 	AssistantMaxSteps int
@@ -501,7 +505,7 @@ func Register(app *fiber.App, cfg Config) {
 	searchH := newSearchHandlers(jobSearch, facets, queries)
 	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
 	// search and a profile-aware conversation cannot disagree about what it says.
-	intentH := newIntentHandlers(llmBinding{client: cfg.LLM, keys: llmKeys})
+	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)

@@ -45,6 +45,42 @@ func TestResolveKeepsAnExcludedRegionWhenNoRegionIsChosen(t *testing.T) {
 	}
 }
 
+// The UK is a REGION, and half the models exclude it as a country instead. Same
+// redundancy, same struck-through chip, so the rule has to follow it there — a country
+// whose whole area is already left out by the chosen regions is excluding nothing.
+func TestResolveDropsAnExcludedCountryWhoseRegionWasNotChosen(t *testing.T) {
+	got, err := intent{
+		Facets:  map[string][]string{"regions": {"eu"}},
+		Exclude: map[string][]string{"countries": {"United Kingdom"}},
+	}.resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if len(got.Exclude["countries"]) != 0 {
+		t.Fatalf("excluded countries = %v, want none — the UK is its own region and eu was chosen",
+			got.Exclude["countries"])
+	}
+}
+
+// "Anywhere remote, but not the USA" resolves to the `global` region plus that one
+// exclusion — and global means EVERY area is chosen, so the exclusion is the only thing
+// narrowing anything. An earlier version of the rule below dropped it, because
+// north_america was not literally in the chosen list, and turned the search into "any
+// remote job on earth".
+func TestResolveKeepsAnExcludedCountryUnderGlobal(t *testing.T) {
+	got, err := intent{
+		Facets:  map[string][]string{"regions": {"global"}, "work_mode": {"remote"}},
+		Exclude: map[string][]string{"countries": {"United States"}},
+	}.resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !slices.Equal(got.Exclude["countries"], []string{"us"}) {
+		t.Fatalf("excluded countries = %v, want [us] — global chooses every area, so this excludes something",
+			got.Exclude["countries"])
+	}
+}
+
 // A country is INSIDE a region, so choosing the region says nothing about the country:
 // "somewhere in Europe but not Germany" needs the exclusion, and the rule above must
 // not reach it.

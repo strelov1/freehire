@@ -156,10 +156,20 @@ func requestSchema() (llmschema.Schema, error) {
 			llmschema.Enum("english_level", vocab.EnglishLevelValues),
 			llmschema.Enum("education_level", vocab.EducationLevelValues),
 			llmschema.Enum("salary_period", vocab.SalaryPeriodValues),
-			// Asked for as TEXT, not as a number: zero is a real filter here (postings
-			// that require no prior experience) and the model writes zero for "unset".
-			// As text, "" and "0" are different answers. See flexInt.
-			llmschema.AsText("experience_years_max"),
+			// All three bounds are asked for as TEXT, for two reasons that happen to
+			// want the same thing.
+			//
+			// Meaning: zero is a real filter on the experience ceiling — postings that
+			// require no prior experience — and the model writes zero for "unset". As
+			// text, "" and "0" are different answers. See flexInt.
+			//
+			// Mechanism: flexInt is a struct (it carries the set/unset flag), and the
+			// schema is derived by REFLECTION. Left alone, a struct with no exported
+			// fields is declared to the model as an empty object, and a model honouring
+			// that dutifully answers "{}" — which is how every bound silently stopped
+			// arriving. AsText is what stops reflection describing the carrier instead
+			// of the value. schema_test.go pins it.
+			llmschema.AsText("salary_min", "posted_within_days", "experience_years_max"),
 		)
 		if schemaErr != nil {
 			schemaErr = fmt.Errorf("searchintent: build schema: %w", schemaErr)

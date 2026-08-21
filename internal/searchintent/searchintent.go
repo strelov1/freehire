@@ -277,10 +277,37 @@ func (in intent) resolve() (Result, error) {
 // nothing about Germany and "not Germany" still needs its exclusion. And a skill is a
 // requirement rather than a place: "Go but not PHP" excludes real postings by design.
 func dropRedundantRegionExclusions(facets, exclude map[string][]string) {
-	if len(facets["regions"]) == 0 || len(exclude["regions"]) == 0 {
+	chosen := facets["regions"]
+	if len(chosen) == 0 {
+		return
+	}
+	// `global` is "open anywhere", so it chooses every area rather than one of them.
+	// Under it an exclusion is the ONLY thing narrowing the search — "anywhere remote,
+	// but not the USA" — and dropping it would widen the result to the whole catalogue
+	// while the summary still promised otherwise.
+	if slices.Contains(chosen, "global") {
 		return
 	}
 	delete(exclude, "regions")
+
+	// Half the models say "not the UK" as a COUNTRY rather than as the region it is.
+	// Same redundancy and the same struck-through chip, so the rule has to follow it
+	// there — but only for a country whose whole area is already left out by the
+	// regions chosen. Germany under a chosen `eu` is the opposite case: its region WAS
+	// chosen, so "not Germany" is the only way to say it and must survive.
+	countryRegion := location.CountryToRegion()
+	kept := exclude["countries"][:0:0]
+	for _, code := range exclude["countries"] {
+		if !slices.Contains(chosen, countryRegion[code]) {
+			continue
+		}
+		kept = append(kept, code)
+	}
+	if len(kept) == 0 {
+		delete(exclude, "countries")
+		return
+	}
+	exclude["countries"] = kept
 }
 
 // dropContradictions removes an excluded value that is also included. The inclusion

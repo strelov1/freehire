@@ -204,6 +204,18 @@ func main() {
 	}
 	defer assistantFlush()
 
+	// The AI filter runs on its own model too, for the opposite reason to the
+	// assistant's: the task is trivial — sort one sentence into named fields — but a
+	// person is watching a spinner while it happens, so latency is the whole quality
+	// bar. Measured against this gateway on the real prompt and schema, a small fast
+	// model answers in ~2.3s where the shared one takes ~4s and spikes, at the same
+	// accuracy. Unset falls back to LLM_MODEL.
+	intentLLM, intentFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.SearchIntentModel, cfg.Model)), "search-intent")
+	if err != nil {
+		log.Fatalf("llm (search intent): %v", err)
+	}
+	defer intentFlush()
+
 	// Dictation runs on the same gateway and the same key as the two clients above —
 	// an OpenAI-compatible endpoint serves /chat/completions and /audio/transcriptions
 	// alike — so there is nothing extra to configure and nothing extra to fail. Nil
@@ -291,6 +303,7 @@ func main() {
 		TracerLinkSalt:              cfg.TracerLinkSalt,
 		LLM:                         llmClient,
 		AssistantLLM:                assistantLLM,
+		SearchIntentLLM:             intentLLM,
 		AssistantMaxSteps:           cfg.AssistantMaxSteps,
 		AssistantMaxPrompt:          cfg.AssistantMaxPrompt,
 		LLMKeys:                     llmKeys,

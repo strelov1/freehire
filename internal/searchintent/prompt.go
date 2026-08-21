@@ -42,6 +42,8 @@ Two fields are easy to read backwards, and getting either wrong inverts the sear
 
 Never write 0 to mean "I am not setting this". Leave the field out.
 
+That is about ZERO, not about the fields. When they DO name a time or a floor, write it: "posted this week" is posted_within_days=7, "in the last few days" is 3, "this month" is 30, "at least 100k" is salary_min=100000. Dropping a bound they asked for leaves them scrolling the same stale postings they came here to skip.
+
 summary is always required, even when little else is filled.
 
 Values you are given a list to choose from must come from that list. For the rest:
