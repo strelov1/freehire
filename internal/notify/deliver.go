@@ -96,8 +96,13 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 	digest.NotificationID = r.recordNotification(ctx, subID, info, digest)
 
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
-		// Nothing was delivered, so the row recorded above must not survive:
-		// the history holds a digest if and only if that digest went out.
+		// Withdraw on EVERY send error, including an ambiguous one (a timeout may
+		// mean the mail went out and only the acknowledgement was lost). Keeping
+		// the row on ambiguous errors would leave one behind per attempt, and the
+		// matches stay pending either way — so a channel outage would fill the
+		// history with up to MaxAttempts rows per digest nobody received, which is
+		// the failure this ordering exists to avoid. The cost of withdrawing is
+		// narrower: a mail that did slip out links to a page that 404s.
 		r.withdrawNotification(ctx, subID, digest.NotificationID)
 		// A channel with no registered notifier (e.g. email while SES is
 		// unconfigured) is not a delivery failure: soft-skip so the matches stay

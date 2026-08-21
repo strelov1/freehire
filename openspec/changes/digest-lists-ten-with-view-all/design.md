@@ -106,6 +106,16 @@ for every successful delivery", "a recording failure SHALL NOT fail the delivery
 stays literally true: step 2 failing is logged and delivery continues with
 `NotificationID` zero.
 
+**The withdrawal is unconditional, including on ambiguous errors.** A `Send` that
+times out may mean the mail went out and only the acknowledgement was lost, so
+withdrawing can delete the row for a digest that was in fact delivered — its "view
+all" link then 404s. Withdrawing only on errors that prove nothing was dispatched
+(`ErrChannelNotConfigured`) sounds safer and is worse: the matches stay pending
+under either reading, so every retry of a genuinely failed send would leave another
+row, and a channel outage would fill the history with up to `MaxAttempts` rows per
+digest nobody received — the exact failure this ordering exists to prevent. One
+dead link on a rare ambiguous send beats five phantom entries on every real one.
+
 **This is best-effort, not an invariant, and the spec says so.** A `Send` failure
 followed by a `Delete` failure leaves one history row describing a digest nobody
 received. It is logged. No reconciler is added for it: the sweep would have to
