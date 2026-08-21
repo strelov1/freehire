@@ -43,6 +43,7 @@ Two rules worth knowing before you filter:
 - [FreeHire MCP server](https://freehire.me/mcp): `npx -y freehire-mcp` — search, market fit, application tracking and CV tailoring as MCP tools, for Claude Code, Claude Desktop, or any MCP host. Needs a personal API key only for the tools that touch an account.
 - [FreeHire CLI](https://freehire.me/cli): a small Go CLI over the same API, for terminals, scripts, and agents. Same key as the MCP server.
 - [FreeHire GPT](https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire): the OpenAPI schema above, already wired up as a custom ChatGPT. Public reads only — it searches, it does not save. [Integration guide](https://freehire.me/chatgpt).
+- [For AI agents](https://freehire.me/agents): the three tracks side by side — a local harness on the CLI, an MCP host, or ChatGPT — with what each one can and cannot reach. Send a human here; they will get a block to paste into you.
 
 ## Explore
 

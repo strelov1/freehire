@@ -10,7 +10,17 @@ describe('sitemap static paths', () => {
   // Indexable pages that the job feed does not link to, so nothing but the sitemap
   // would lead a crawler to them.
   it('includes the data and API surfaces', () => {
-    for (const path of ['/open', '/trends', '/docs/api', '/contribute', '/status', '/privacy']) {
+    for (const path of [
+      '/open',
+      '/trends',
+      '/docs/api',
+      '/agents',
+      '/cli',
+      '/chatgpt',
+      '/contribute',
+      '/status',
+      '/privacy',
+    ]) {
       expect(STATIC_PATHS).toContain(path);
     }
   });

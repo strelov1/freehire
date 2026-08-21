@@ -128,6 +128,14 @@
             Source ↗
           </Button>
         </div>
+
+        <p class="reveal mt-5 text-sm leading-relaxed text-muted-foreground" style="--d:300ms">
+          Not on the terminal? <a
+            href={resolve('/agents')}
+            class="font-medium text-foreground underline-offset-4 hover:underline"
+            >Every way to connect an agent</a
+          > — MCP hosts, ChatGPT, and your own client.
+        </p>
       </div>
 
       <figure

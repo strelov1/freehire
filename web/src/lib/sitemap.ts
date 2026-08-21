@@ -44,6 +44,7 @@ export const STATIC_PATHS = [
   '/open',
   '/trends',
   '/docs/api',
+  '/agents',
   '/cli',
   '/chatgpt',
   '/contribute',

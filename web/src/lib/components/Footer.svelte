@@ -38,6 +38,7 @@
         { label: 'Insights', href: resolve('/insights') },
         { label: 'Hiring signal', href: resolve('/insights/companies') },
         { label: 'Trends', href: resolve('/trends') },
+        { label: 'For AI agents', href: resolve('/agents') },
         { label: 'CLI', href: resolve('/cli') },
         { label: 'ChatGPT', href: resolve('/chatgpt') },
         { label: 'API docs', href: resolve('/docs/api') },

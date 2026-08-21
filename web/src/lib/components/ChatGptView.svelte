@@ -51,6 +51,14 @@
           </Button>
           <Button href={resolve('/my/api-keys')} variant="outline" size="lg">Get an API key</Button>
         </div>
+
+        <p class="reveal mt-5 text-sm leading-relaxed text-muted-foreground" style="--d:300ms">
+          Using a different assistant? <a
+            href={resolve('/agents')}
+            class="font-medium text-foreground underline-offset-4 hover:underline"
+            >Every way to connect an agent</a
+          > — the CLI, MCP hosts, and your own client.
+        </p>
       </div>
 
       <figure
