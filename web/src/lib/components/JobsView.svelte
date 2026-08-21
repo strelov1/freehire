@@ -16,7 +16,12 @@
   import { Paginator } from '$lib/paginated.svelte';
   import { pageCount, pageOffset } from '$lib/pagination';
   import Pagination from './Pagination.svelte';
-  import { FilterStore, filtersToParams, activeFilterCount } from '$lib/filters';
+  import {
+    FilterStore,
+    filtersToParams,
+    activeFilterCount,
+    generalCountsCoverRole,
+  } from '$lib/filters';
   import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
   import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '$lib/geoScope';
   import {
@@ -130,23 +135,42 @@
   // counts — the selects degrade to plain (countless) options, never break.
   // latestOnly stops a slow earlier response overwriting a newer one.
   let counts = $state.raw<FacetCounts | null>(null);
-  const refreshCounts = latestOnly(
-    () => api.facetCounts(scopedParams()),
-    (c) => (counts = c),
-  );
 
-  // The role distribution the header's suggestions are ranked and filtered by. Its own
-  // fetch, deliberately: `counts` above is scoped by the text query, and a suggestion
-  // list keyed off that would rank by "jobs matching what you have typed so far", lag
-  // it by one debounce, and drop roles in and out mid-word. One facet, no `q` — the
-  // rest of the filter scope stays, so the figure still answers what a click would
-  // give. Refreshed only when a non-text filter changes; typing does not touch it.
+  // The role distribution the header's suggestions are ranked and filtered by. A scope
+  // of its own, deliberately: `counts` above is scoped by the text query, and a
+  // suggestion list keyed off that would rank by "jobs matching what you have typed so
+  // far", lag it by one debounce, and drop roles in and out mid-word. Same filters, no
+  // `q` — so the figure still answers what a click would give.
   const roleScopeParams = () => {
     const p = scopedParams();
     p.delete('q');
     return p;
   };
   let roleCounts = $state.raw<FacetCounts | null>(null);
+
+  const refreshCounts = latestOnly(
+    () => {
+      // Whether THIS request's scope covers the role distribution is captured with the
+      // request, not read when it lands: the filters can move while it is in flight,
+      // and the answer belongs to the scope that was actually asked for.
+      const scope = scopedParams();
+      const coversRole = generalCountsCoverRole(scope);
+      return api.facetCounts(scope).then((c) => ({ counts: c, coversRole }));
+    },
+    ({ counts: c, coversRole }) => {
+      counts = c;
+      // One scope, one measurement: with no text query separating them, this response
+      // already IS the role distribution, `role` included and identical (see
+      // generalCountsCoverRole). Publishing it here is what lets the dedicated request
+      // below be skipped on the load every visitor pays for — and it leaves the
+      // suggestions populated, so the first keystroke has them in hand instead of
+      // waiting on a fetch.
+      if (coversRole) roleCounts = c;
+    },
+  );
+
+  // The dedicated measurement, for the one case the general response cannot answer: a
+  // scope that moved while a query was narrowing `counts`. One facet, no `q`.
   const refreshRoleCounts = latestOnly(
     () => api.facetCounts(roleScopeParams(), { facets: ['role'] }),
     (c) => (roleCounts = c),
@@ -429,11 +453,14 @@
       refreshCounts();
       // The role distribution ignores the text query, so refetch it only when the rest
       // of the scope moves — otherwise every settled keystroke would spend a request
-      // re-measuring something that did not change.
+      // re-measuring something that did not change. And when the scope carries no
+      // query, `refreshCounts` above is already measuring exactly this, so the request
+      // is skipped outright: that is the whole cold-load case, where the two calls
+      // returned the same `role` map twice.
       const roleScopeKey = roleScopeParams().toString();
       if (roleScopeKey !== lastRoleScopeKey) {
         lastRoleScopeKey = roleScopeKey;
-        refreshRoleCounts();
+        if (!generalCountsCoverRole(scopedParams())) refreshRoleCounts();
       }
       const firstRun = !started;
       if (firstRun) {

@@ -87,6 +87,25 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   return p;
 }
 
+/** Whether a general facet response measured under `scope` also answers for the role
+ *  distribution, which is measured under the same scope minus the text query.
+ *
+ *  The two coincide exactly when there is no text query to separate them — and then
+ *  they are not merely equivalent but identical, because `/jobs/facets` with no
+ *  `facets=` counts every facet, `role` among them. Measured against prod on
+ *  2026-08-21: `?regions=latam,global` and `?regions=latam,global&facets=role`
+ *  returned byte-identical `role` maps (867 values), while adding `q=python` cut the
+ *  general response's `role` to 209 — which is exactly why the role distribution has
+ *  its own scope in the first place.
+ *
+ *  So this is the test for "the dedicated role request would be a second copy of a
+ *  response we already have". An empty `q` counts as no query: `filtersToParams` only
+ *  writes the param when the string is non-empty, and a hand-built `?q=` means the
+ *  same thing to the API. */
+export function generalCountsCoverRole(scope: URLSearchParams): boolean {
+  return !scope.get('q');
+}
+
 /** Parse filters back from URL query params. Include and exclude are independent
  *  sets; if a value appears in both (a malformed or legacy link), exclude wins and
  *  it is dropped from include so a value carries exactly one sign. */
