@@ -47,10 +47,12 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Dig
 // string, and the saved search name are HTML-escaped (they are user/source data);
 // the freehire URL is our own and safe.
 //
-// The body is capped to Telegram's telegramMaxLen: job lines are added until the
+// The listing is bounded twice. notify.ListLimit is the product bound, shared with
+// the email channel so the two never disagree about a digest's shape. On top of it
+// the body is capped to Telegram's telegramMaxLen: job lines are added until the
 // next one (plus the largest possible "+ N more" tail) would overflow, then the
-// tail absorbs the remainder. Without the cap a digest of many long-title jobs
-// exceeds the limit, Telegram rejects the send deterministically, every retry
+// tail absorbs the remainder. Without the length cap a digest of many long-title
+// jobs exceeds the limit, Telegram rejects the send deterministically, every retry
 // re-fails, and the whole batch is dead-lettered — silently dropping the user's
 // notifications.
 func (n *Notifier) render(d notify.Digest) string {
@@ -59,10 +61,11 @@ func (n *Notifier) render(d notify.Digest) string {
 
 	// Reserve room for the widest possible tail up front (d.Total is its worst-case
 	// count), so appending the actual tail after the loop can never push past the limit.
-	tailReserve := utf16Len(moreLine(d.Total))
+	viewAll := n.viewAllURL(d)
+	tailReserve := utf16Len(moreLine(d.Total, viewAll))
 	used := utf16Len(b.String())
 	shown := 0
-	for _, j := range d.Jobs {
+	for _, j := range d.Listed() {
 		line := n.jobLine(j)
 		lineLen := utf16Len(line)
 		if used+lineLen+tailReserve > telegramMaxLen {
@@ -73,7 +76,7 @@ func (n *Notifier) render(d notify.Digest) string {
 		shown++
 	}
 	if more := d.Total - shown; more > 0 {
-		b.WriteString(moreLine(more))
+		b.WriteString(moreLine(more, viewAll))
 	}
 	return b.String()
 }
@@ -101,12 +104,23 @@ func (n *Notifier) applyURL(j notify.DigestJob) string {
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=telegram-bot"
 }
 
-// moreLine is the "+ N more" overflow tail, or "" when nothing is omitted.
-func moreLine(more int) string {
+// viewAllURL is where the "+ N more" tail leads: the digest's own in-app
+// notification, whose page lists every job this digest matched. A digest whose
+// recording failed carries no id and falls back to the notification section.
+func (n *Notifier) viewAllURL(d notify.Digest) string {
+	if d.NotificationID == 0 {
+		return n.jobBaseURL + "/my/notifications"
+	}
+	return n.jobBaseURL + "/my/notifications/" + strconv.FormatInt(d.NotificationID, 10) + "/jobs?utm_source=telegram-bot"
+}
+
+// moreLine is the "+ N more" overflow tail linking to where the omitted jobs are,
+// or "" when nothing is omitted. The URL is our own, so it needs no escaping.
+func moreLine(more int, viewAllURL string) string {
 	if more <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\n+ %d more", more)
+	return fmt.Sprintf("\n<a href=%q>+ %d more</a>", viewAllURL, more)
 }
 
 // utf16Len counts s in UTF-16 code units — the unit Telegram measures a message

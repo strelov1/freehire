@@ -47,9 +47,9 @@ func (s *fakeStore) ReleaseReminderClaim(_ context.Context, id int64) error {
 	s.released = append(s.released, id)
 	return nil
 }
-func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) error {
+func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) (int64, error) {
 	s.recorded = append(s.recorded, arg)
-	return s.recordErr
+	return int64(len(s.recorded)), s.recordErr
 }
 
 // fakeNotifier records deliveries and can be told to fail.

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -65,8 +66,10 @@ func TestNotifier_RenderSingularNoOverflow(t *testing.T) {
 // jobs that don't fit fall into the "+ N more" tail, and none are lost.
 func TestNotifier_RenderCapsAtTelegramLimit(t *testing.T) {
 	n := NewNotifier(NewClient("t"), "https://freehire.me")
-	const total = 20                                                              // DigestCap
-	longTitle := strings.Repeat("Senior Staff Platform Reliability Engineer ", 6) // ~258 chars
+	const total = 20
+	// Long enough that fewer than notify.ListLimit lines fit, so the length guard
+	// — not the product bound — is what stops the loop.
+	longTitle := strings.Repeat("Senior Staff Platform Reliability Engineer ", 15)
 	jobs := make([]notify.DigestJob, total)
 	for i := range jobs {
 		jobs[i] = notify.DigestJob{
@@ -81,8 +84,8 @@ func TestNotifier_RenderCapsAtTelegramLimit(t *testing.T) {
 		t.Errorf("rendered %d UTF-16 units, want <= 4096 (Telegram sendMessage limit)", n16)
 	}
 	shown := strings.Count(got, "• ")
-	if shown == 0 || shown >= total {
-		t.Errorf("shown = %d, want some-but-not-all of %d jobs listed", shown, total)
+	if shown == 0 || shown >= notify.ListLimit {
+		t.Errorf("shown = %d, want fewer than the %d-job product bound — the length guard must bite first", shown, notify.ListLimit)
 	}
 	if !strings.Contains(got, "more") {
 		t.Errorf("dropped jobs must be summarized by a '+ N more' tail: %q", got)
@@ -175,5 +178,42 @@ func TestStartToken(t *testing.T) {
 func TestStartToken_NilMessage(t *testing.T) {
 	if _, _, ok := StartToken(Update{}); ok {
 		t.Error("StartToken(empty update) ok = true, want false")
+	}
+}
+
+// --- listing bound and the "view all" destination --------------------------
+
+func tgDigest(n int, notificationID int64) notify.Digest {
+	d := notify.Digest{SavedSearchName: "Go", Total: n, NotificationID: notificationID}
+	for i := range n {
+		d.Jobs = append(d.Jobs, notify.DigestJob{Title: "Job", Slug: "job-" + strconv.Itoa(i)})
+	}
+	return d
+}
+
+func TestNotifier_RenderListsAtMostTenJobs(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	got := n.render(tgDigest(67, 42))
+
+	if shown := strings.Count(got, "• "); shown != notify.ListLimit {
+		t.Errorf("listed %d jobs, want %d", shown, notify.ListLimit)
+	}
+	if !strings.Contains(got, "<b>67</b> new jobs for") {
+		t.Errorf("heading must still carry the true count: %q", got)
+	}
+	if want := `<a href="https://freehire.me/my/notifications/42/jobs?utm_source=telegram-bot">+ 57 more</a>`; !strings.Contains(got, want) {
+		t.Errorf("tail missing %q in: %q", want, got)
+	}
+}
+
+func TestNotifier_RenderTailFallsBackWithoutANotificationID(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	got := n.render(tgDigest(67, 0))
+
+	if strings.Contains(got, "/my/notifications/0/jobs") {
+		t.Errorf("a zero notification id must not be rendered as a URL: %q", got)
+	}
+	if want := `<a href="https://freehire.me/my/notifications">+ 57 more</a>`; !strings.Contains(got, want) {
+		t.Errorf("tail missing fallback %q in: %q", want, got)
 	}
 }

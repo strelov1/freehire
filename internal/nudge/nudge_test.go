@@ -78,12 +78,12 @@ func (s *fakeStore) ReleaseNudgeClaim(_ context.Context, id int64) error {
 	s.released = append(s.released, id)
 	return nil
 }
-func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) error {
+func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) (int64, error) {
 	if s.notifyErr != nil {
-		return s.notifyErr
+		return 0, s.notifyErr
 	}
 	s.recordedNotifications = append(s.recordedNotifications, arg)
-	return nil
+	return int64(len(s.recordedNotifications)), nil
 }
 
 type fakeNotifier struct {

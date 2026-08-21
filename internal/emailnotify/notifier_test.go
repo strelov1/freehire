@@ -3,6 +3,7 @@ package emailnotify
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -131,5 +132,63 @@ func TestNotifier_SendPropagatesError(t *testing.T) {
 
 	if err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest()); err == nil {
 		t.Error("Send should propagate the sender error so the delivery retries")
+	}
+}
+
+// --- listing bound and the "view all" destination --------------------------
+
+// bigDigest is a digest of n matched jobs, all recorded — the shape the engine
+// now hands over once the snapshot stopped being truncated by the mail's cap.
+func bigDigest(n int, notificationID int64) notify.Digest {
+	d := notify.Digest{SavedSearchName: "Go", Total: n, NotificationID: notificationID}
+	for i := range n {
+		d.Jobs = append(d.Jobs, notify.DigestJob{Title: "Job", Company: "Acme", Slug: "job-" + strconv.Itoa(i)})
+	}
+	return d
+}
+
+func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
+	got := n.render(bigDigest(67, 42))
+
+	if c := strings.Count(got.html, "/jobs/job-"); c != notify.ListLimit {
+		t.Errorf("HTML lists %d jobs, want %d", c, notify.ListLimit)
+	}
+	if c := strings.Count(got.text, "/jobs/job-"); c != notify.ListLimit {
+		t.Errorf("text lists %d jobs, want %d", c, notify.ListLimit)
+	}
+	if !strings.Contains(got.html, "57 more") || !strings.Contains(got.text, "57 more") {
+		t.Errorf("missing the 57-more tail:\nhtml=%s\ntext=%s", got.html, got.text)
+	}
+	if want := `67 new jobs for "Go"`; got.subject != want {
+		t.Errorf("subject = %q, want %q — the count is the news, only the body is bounded", got.subject, want)
+	}
+}
+
+func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
+	got := n.render(bigDigest(67, 42))
+
+	const want = "https://freehire.me/my/notifications/42/jobs?utm_source=email"
+	if !strings.Contains(got.html, want) {
+		t.Errorf("HTML tail does not link to %q: %s", want, got.html)
+	}
+	if !strings.Contains(got.text, want) {
+		t.Errorf("text tail does not link to %q: %s", want, got.text)
+	}
+}
+
+func TestNotifier_TailFallsBackWithoutANotificationID(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
+	got := n.render(bigDigest(67, 0))
+
+	if strings.Contains(got.html, "/my/notifications/0/jobs") {
+		t.Errorf("a zero notification id must not be rendered as a URL: %s", got.html)
+	}
+	if !strings.Contains(got.html, "https://freehire.me/my/notifications") {
+		t.Errorf("missing the fallback destination: %s", got.html)
+	}
+	if !strings.Contains(got.text, "57 more") {
+		t.Errorf("the tail must still render without an id: %s", got.text)
 	}
 }

@@ -85,8 +85,20 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		return
 	}
 
-	digest := buildDigest(info.SavedSearchName, jobs, r.cfg.DigestCap)
+	digest := buildDigest(info.SavedSearchName, jobs, r.cfg.SnapshotCap)
+
+	// Record the in-app notification BEFORE sending, so the digest can carry its
+	// own row's id and each channel's "and N more" tail can link to the page
+	// that lists the full match set. A recording failure is not a delivery
+	// failure — the digest goes out with a zero id and the tail falls back to a
+	// generic destination.
+	notificationID := r.recordNotification(ctx, subID, info, digest)
+	digest.NotificationID = notificationID
+
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
+		// Nothing was delivered, so the row recorded above must not survive:
+		// the history holds a digest if and only if that digest went out.
+		r.withdrawNotification(ctx, subID, notificationID)
 		// A channel with no registered notifier (e.g. email while SES is
 		// unconfigured) is not a delivery failure: soft-skip so the matches stay
 		// pending for a pass once the channel is provisioned, without burning an
@@ -126,26 +138,45 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		}
 	}
 
-	title, body, slug := renderDigest(digest)
+	stats.Delivered++
+}
+
+// recordNotification writes the digest's in-app notification-center row and
+// returns its id, or zero if the write failed. A failure is a degraded read-side
+// feature (and a tail that falls back to a generic destination), never a reason
+// to hold back a digest that is otherwise ready to send.
+func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.GetSubscriptionForDeliveryRow, d Digest) int64 {
+	title, body, slug := renderDigest(d)
 	var publicSlug pgtype.Text
 	if slug != "" {
 		publicSlug = pgtype.Text{String: slug, Valid: true}
 	}
-	if err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
+	id, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     info.UserID,
 		Kind:       "subscription_digest",
 		Title:      title,
 		Body:       body,
 		PublicSlug: publicSlug,
-		Jobs:       digestJobsSnapshot(digest),
-	}); err != nil {
-		// Delivered and stamped; only the in-app notification-center record
-		// failed. That's a degraded read-side feature, not a reason to fail a
-		// delivery that already succeeded.
+		Jobs:       digestJobsSnapshot(d),
+	})
+	if err != nil {
 		log.Printf("notify: record notification for subscription %d: %v", subID, err)
+		return 0
 	}
+	return id
+}
 
-	stats.Delivered++
+// withdrawNotification removes the row recordNotification wrote for a digest
+// that then failed to send. A failure here leaves one history row describing a
+// digest nobody received — logged, and strictly better than the alternative
+// reading of the same window, which would be to drop a delivery that succeeded.
+func (r *Runner) withdrawNotification(ctx context.Context, subID, id int64) {
+	if id == 0 {
+		return
+	}
+	if err := r.store.DeleteNotification(ctx, id); err != nil {
+		log.Printf("notify: withdraw notification %d for subscription %d: %v", id, subID, err)
+	}
 }
 
 // release drops the lease on a subscription's claimed matches so they are retried
@@ -159,7 +190,8 @@ func (r *Runner) release(ctx context.Context, subID int64, jobIDs []int64) {
 	}
 }
 
-// buildDigest assembles a capped digest: the first `limit` jobs are listed, but
+// buildDigest assembles a digest carrying the first `limit` matched jobs — the
+// snapshot ceiling, not the message listing bound (see Digest.Listed) — while
 // Total reflects all matched jobs so the renderer can summarize the remainder.
 func buildDigest(name string, jobs []db.GetJobsForDigestRow, limit int) Digest {
 	d := Digest{SavedSearchName: name, Total: len(jobs)}

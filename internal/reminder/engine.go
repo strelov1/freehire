@@ -63,7 +63,10 @@ type Store interface {
 	CancelReminderAtFire(ctx context.Context, id int64) (int64, error)
 	RecordReminderDeliveryFailure(ctx context.Context, arg db.RecordReminderDeliveryFailureParams) error
 	ReleaseReminderClaim(ctx context.Context, id int64) error
-	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
+	// RecordNotification's id is discarded here: a reminder records after it is
+	// delivered, so nothing needs to link to the row. Only the subscription
+	// digest, which records before sending, uses it.
+	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
 }
 
 // Config tunes one firing pass. Defaults come from DefaultConfig.
@@ -244,7 +247,7 @@ func recipient(channel string, info db.GetReminderForDeliveryRow) (string, bool)
 // already sent, so this is logged and dropped, not propagated.
 func (r *Runner) recordNotification(ctx context.Context, id int64, info db.GetReminderForDeliveryRow, msg ReminderMessage) {
 	title, body := renderReminder(msg)
-	err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
+	_, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     info.UserID,
 		Kind:       "reminder",
 		Title:      title,

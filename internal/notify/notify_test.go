@@ -54,6 +54,12 @@ type fakeStore struct {
 
 	recordedNotifications []db.RecordNotificationParams
 	recordNotificationErr error
+	// nextNotificationID is the id the next RecordNotification hands back, so a
+	// test can assert the digest carried it; deletedNotifications records the
+	// ids a failed send withdrew.
+	nextNotificationID    int64
+	deletedNotifications  []int64
+	deleteNotificationErr error
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
@@ -131,9 +137,22 @@ func (s *fakeStore) MarkDigestSent(_ context.Context, id int64) error {
 	return nil
 }
 
-func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificationParams) error {
+func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificationParams) (int64, error) {
 	s.recordedNotifications = append(s.recordedNotifications, a)
-	return s.recordNotificationErr
+	if s.recordNotificationErr != nil {
+		return 0, s.recordNotificationErr
+	}
+	if s.nextNotificationID == 0 {
+		s.nextNotificationID = 1
+	}
+	id := s.nextNotificationID
+	s.nextNotificationID++
+	return id, nil
+}
+
+func (s *fakeStore) DeleteNotification(_ context.Context, id int64) error {
+	s.deletedNotifications = append(s.deletedNotifications, id)
+	return s.deleteNotificationErr
 }
 
 type fakeNotifier struct {
@@ -141,12 +160,11 @@ type fakeNotifier struct {
 	sent []Digest
 }
 
+// Send records the digest even when it fails, so a test can assert what the
+// channel was handed on the failure path too.
 func (n *fakeNotifier) Send(_ context.Context, _, _ string, d Digest) error {
-	if n.err != nil {
-		return n.err
-	}
 	n.sent = append(n.sent, d)
-	return nil
+	return n.err
 }
 
 // --- helpers -------------------------------------------------------------
@@ -803,5 +821,142 @@ func TestDeliverOne_DailyIgnoresQuietHours(t *testing.T) {
 	}
 	if len(notifier.sent) != 1 {
 		t.Errorf("sent = %d, want 1 (daily digest is exempt from quiet hours)", len(notifier.sent))
+	}
+}
+
+// --- record-then-send ordering -------------------------------------------
+
+// deliverySubscription is the minimal Telegram-deliverable subscription the
+// ordering tests below all need.
+func deliverySubscription() map[int64]db.GetSubscriptionForDeliveryRow {
+	return map[int64]db.GetSubscriptionForDeliveryRow{
+		1: {ID: 1, UserID: 42, Channel: ChannelTelegram, SavedSearchName: "Go", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+	}
+}
+
+func TestDeliver_DigestCarriesItsNotificationID(t *testing.T) {
+	store := &fakeStore{
+		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 1, JobID: 11}},
+		delivery:           deliverySubscription(),
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}, 11: {ID: 11, Title: "B", PublicSlug: "b"}},
+		nextNotificationID: 42,
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("digests sent = %d, want 1", len(notifier.sent))
+	}
+	if notifier.sent[0].NotificationID != 42 {
+		t.Errorf("NotificationID = %d, want 42 — the digest must be recorded before it is sent", notifier.sent[0].NotificationID)
+	}
+	if len(store.deletedNotifications) != 0 {
+		t.Errorf("deleted = %v, want none on a successful delivery", store.deletedNotifications)
+	}
+}
+
+func TestDeliver_FailedSendWithdrawsItsNotification(t *testing.T) {
+	store := &fakeStore{
+		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:           deliverySubscription(),
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: errors.New("telegram down")}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Failed != 1 {
+		t.Errorf("Failed = %d, want 1", stats.Failed)
+	}
+	if len(store.deletedNotifications) != 1 || store.deletedNotifications[0] != 42 {
+		t.Errorf("deleted = %v, want [42] — an undelivered digest must not sit in the history", store.deletedNotifications)
+	}
+	if len(store.notified) != 0 {
+		t.Errorf("notified = %d, want 0 (a failed send leaves matches pending)", len(store.notified))
+	}
+	if len(store.failures) != 1 {
+		t.Errorf("failures = %d, want 1", len(store.failures))
+	}
+}
+
+func TestDeliver_SoftSkippedChannelWithdrawsItsNotification(t *testing.T) {
+	store := &fakeStore{
+		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:           deliverySubscription(),
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrChannelNotConfigured}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.SoftSkips != 1 {
+		t.Errorf("SoftSkips = %d, want 1", stats.SoftSkips)
+	}
+	if len(store.deletedNotifications) != 1 || store.deletedNotifications[0] != 42 {
+		t.Errorf("deleted = %v, want [42] — nothing was delivered, so nothing belongs in the history", store.deletedNotifications)
+	}
+}
+
+func TestDeliver_RecordFailureSendsWithoutANotificationID(t *testing.T) {
+	store := &fakeStore{
+		claimed:               []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:              deliverySubscription(),
+		digestJobs:            map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		recordNotificationErr: errors.New("insert failed"),
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("digests sent = %d, want 1 (a recording failure must not block the send)", len(notifier.sent))
+	}
+	if notifier.sent[0].NotificationID != 0 {
+		t.Errorf("NotificationID = %d, want 0", notifier.sent[0].NotificationID)
+	}
+	if len(store.deletedNotifications) != 0 {
+		t.Errorf("deleted = %v, want none — there is no row to withdraw", store.deletedNotifications)
+	}
+}
+
+func TestDeliver_DigestRecordsEveryMatchedJob(t *testing.T) {
+	claimed := make([]db.ClaimSubscriptionMatchesRow, 0, 67)
+	jobs := make(map[int64]db.GetJobsForDigestRow, 67)
+	for i := range int64(67) {
+		claimed = append(claimed, db.ClaimSubscriptionMatchesRow{SubscriptionID: 1, JobID: i})
+		jobs[i] = db.GetJobsForDigestRow{ID: i, Title: "Job", PublicSlug: "job"}
+	}
+	store := &fakeStore{claimed: claimed, delivery: deliverySubscription(), digestJobs: jobs}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	d := notifier.sent[0]
+	if d.Total != 67 || len(d.Jobs) != 67 {
+		t.Errorf("digest Total=%d Jobs=%d, want 67/67", d.Total, len(d.Jobs))
+	}
+	if len(d.Listed()) != ListLimit {
+		t.Errorf("Listed = %d, want %d", len(d.Listed()), ListLimit)
+	}
+
+	var recorded []digestJobSnapshot
+	if err := json.Unmarshal(store.recordedNotifications[0].Jobs, &recorded); err != nil {
+		t.Fatalf("snapshot did not unmarshal: %v", err)
+	}
+	if len(recorded) != 67 {
+		t.Errorf("recorded snapshot carries %d jobs, want 67", len(recorded))
 	}
 }

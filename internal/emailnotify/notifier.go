@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/mailtpl"
@@ -61,19 +62,21 @@ type renderedEmail struct {
 // escaping context by html/template, which is the injection guard for the
 // user/source-derived job titles and company names.
 type htmlData struct {
-	Jobs      []mailtpl.Job
-	More      int
-	ManageURL string
+	Jobs       []mailtpl.Job
+	More       int
+	ViewAllURL string
 }
 
 func (n *Notifier) render(d notify.Digest) renderedEmail {
-	rows := make([]mailtpl.Job, 0, len(d.Jobs))
-	for _, j := range d.Jobs {
+	listed := d.Listed()
+	rows := make([]mailtpl.Job, 0, len(listed))
+	for _, j := range listed {
 		rows = append(rows, mailtpl.NewJob(j.Title, j.Company, j.SalaryString(), n.jobURL(j)))
 	}
-	// Digest.Jobs is already capped by the engine (Config.DigestCap); Total is the
-	// true count, so the remainder becomes the "and N more" tail.
-	more := d.Total - len(d.Jobs)
+	// A message itemizes at most notify.ListLimit jobs while Total is the true
+	// count, so the remainder becomes the "and N more" tail — which links to the
+	// page carrying the whole match set, not to the alerts settings.
+	more := d.Total - len(listed)
 	if more < 0 {
 		more = 0
 	}
@@ -83,7 +86,7 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 	var b bytes.Buffer
 	// The template is a trusted constant and the data is escaped in context, so
 	// Execute can only fail on a template bug — surfaced by the render tests.
-	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ManageURL: n.manageURL()})
+	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ViewAllURL: n.viewAllURL(d)})
 
 	html := n.layout.Render(mailtpl.Body{
 		Preheader: fmt.Sprintf("%d new job%s matching your %q alert", d.Total, notify.Plural(d.Total), d.SavedSearchName),
@@ -95,12 +98,12 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 		Footer: "You’re getting this because you set up a job alert on freehire.",
 	})
 
-	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more)}
+	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more, n.viewAllURL(d))}
 }
 
 // renderText builds the plain-text alternative, mirroring the HTML body so
 // non-HTML clients (and spam scorers) see the same content.
-func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int) string {
+func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, viewAllURL string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d new job%s for %q\n\n", d.Total, notify.Plural(d.Total), d.SavedSearchName)
 	for _, l := range rows {
@@ -114,7 +117,7 @@ func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int) str
 		b.WriteString("\n  " + l.URL + "\n")
 	}
 	if more > 0 {
-		fmt.Fprintf(&b, "\n+ %d more at %s\n", more, n.manageURL())
+		fmt.Fprintf(&b, "\n+ %d more at %s\n", more, viewAllURL)
 	}
 	b.WriteString("\nManage your alerts: " + n.manageURL() + "\n")
 	return b.String()
@@ -123,6 +126,17 @@ func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int) str
 // manageURL is the saved-search settings page, where the digest sends anyone who
 // wants more results or fewer mails.
 func (n *Notifier) manageURL() string { return n.jobBaseURL + "/my/notifications" }
+
+// viewAllURL is where the "and N more" tail leads: the digest's own in-app
+// notification, whose page lists every job this digest matched. A digest whose
+// recording failed carries no id, and the tail falls back to the notification
+// section — a weaker destination, but never a broken one.
+func (n *Notifier) viewAllURL(d notify.Digest) string {
+	if d.NotificationID == 0 {
+		return n.manageURL()
+	}
+	return n.jobBaseURL + "/my/notifications/" + strconv.FormatInt(d.NotificationID, 10) + "/jobs?utm_source=email"
+}
 
 // jobURL is the on-platform freehire job page for a digest job, tagged with an
 // email UTM source so the channel's traffic is attributable. Slugs are our own
@@ -144,5 +158,5 @@ var htmlTemplate = template.Must(mailtpl.Partials().New("digest").Parse(`
   {{end}}
 </table>
 {{if gt .More 0}}
-<div style="padding-top:20px;">{{template "button-right" (mailLink .ManageURL (printf "View all — %d more" .More))}}</div>
+<div style="padding-top:20px;">{{template "button-right" (mailLink .ViewAllURL (printf "View all — %d more" .More))}}</div>
 {{end}}`))

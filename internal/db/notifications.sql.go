@@ -34,6 +34,18 @@ func (q *Queries) CountUserNotifications(ctx context.Context, userID int64) (Cou
 	return i, err
 }
 
+const deleteNotification = `-- name: DeleteNotification :exec
+DELETE FROM user_notifications WHERE id = $1
+`
+
+// Remove a notification recorded for a delivery that then failed, so the
+// history holds a row for a digest if and only if the digest went out. Only the
+// record-before-send path (subscription digests) can need this.
+func (q *Queries) DeleteNotification(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteNotification, id)
+	return err
+}
+
 const getNotification = `-- name: GetNotification :one
 SELECT id, kind, title, body, public_slug, jobs, created_at, read_at
 FROM user_notifications
@@ -172,9 +184,10 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 	return result.RowsAffected(), nil
 }
 
-const recordNotification = `-- name: RecordNotification :exec
+const recordNotification = `-- name: RecordNotification :one
 INSERT INTO user_notifications (user_id, kind, title, body, public_slug, jobs)
 VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id
 `
 
 type RecordNotificationParams struct {
@@ -192,8 +205,12 @@ type RecordNotificationParams struct {
 // the delivery it accompanies (see the add-notification-center design). jobs
 // is only ever set by a multi-job subscription digest (see 0091); every other
 // kind, and a single-job digest, passes NULL and relies on public_slug instead.
-func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotificationParams) error {
-	_, err := q.db.Exec(ctx, recordNotification,
+//
+// Returns the new row's id because a subscription digest is recorded BEFORE it
+// is sent, so the message can link to this row's matched-jobs page. Reminders
+// and nudges record after delivery as before and discard the id.
+func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotificationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, recordNotification,
 		arg.UserID,
 		arg.Kind,
 		arg.Title,
@@ -201,5 +218,7 @@ func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotification
 		arg.PublicSlug,
 		arg.Jobs,
 	)
-	return err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }

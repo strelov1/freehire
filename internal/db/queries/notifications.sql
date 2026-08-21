@@ -1,12 +1,23 @@
--- name: RecordNotification :exec
+-- name: RecordNotification :one
 -- Record one delivered notify/reminder/nudge event for the in-app notification
 -- center, independent of which channel(s) carried it. Called right alongside
 -- each engine's own "marked delivered" write; a failure here must never fail
 -- the delivery it accompanies (see the add-notification-center design). jobs
 -- is only ever set by a multi-job subscription digest (see 0091); every other
 -- kind, and a single-job digest, passes NULL and relies on public_slug instead.
+--
+-- Returns the new row's id because a subscription digest is recorded BEFORE it
+-- is sent, so the message can link to this row's matched-jobs page. Reminders
+-- and nudges record after delivery as before and discard the id.
 INSERT INTO user_notifications (user_id, kind, title, body, public_slug, jobs)
-VALUES ($1, $2, $3, $4, sqlc.narg(public_slug), sqlc.narg(jobs));
+VALUES ($1, $2, $3, $4, sqlc.narg(public_slug), sqlc.narg(jobs))
+RETURNING id;
+
+-- name: DeleteNotification :exec
+-- Remove a notification recorded for a delivery that then failed, so the
+-- history holds a row for a digest if and only if the digest went out. Only the
+-- record-before-send path (subscription digests) can need this.
+DELETE FROM user_notifications WHERE id = $1;
 
 -- name: ListUserNotifications :many
 -- The caller's own notifications, newest first, standard offset/limit paging

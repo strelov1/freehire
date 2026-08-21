@@ -107,8 +107,10 @@ type Store interface {
 	// RecordNotification writes the in-app notification-center row for a
 	// delivered nudge. Called from fire right after MarkNudgeDelivered; a
 	// failure must never fail the delivery it accompanies (see
-	// add-notification-center's design).
-	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
+	// add-notification-center's design). The returned id is only of use to
+	// the subscription digest, which records before it sends so its message can
+	// link to the row; a nudge records after and discards it.
+	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.
@@ -442,7 +444,7 @@ func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
 // takes toward MarkNudgeDelivered's own failure, just above.
 func (r *Runner) recordNotification(ctx context.Context, id int64, info db.GetNudgeForDeliveryRow, msg Message) {
 	title, body := renderNudge(msg)
-	if err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
+	if _, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     info.UserID,
 		Kind:       "nudge_" + msg.Kind,
 		Title:      title,

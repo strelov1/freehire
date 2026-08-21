@@ -934,6 +934,10 @@ type Querier interface {
 	// (cmd/prune) — this query is for the two soft paths cascade doesn't reach.
 	DeleteJobSemanticChunks(ctx context.Context, jobIds []int64) error
 	DeleteMailbox(ctx context.Context, userID int64) error
+	// Remove a notification recorded for a delivery that then failed, so the
+	// history holds a row for a digest if and only if the digest went out. Only the
+	// record-before-send path (subscription digests) can need this.
+	DeleteNotification(ctx context.Context, id int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
 	// by the company-info backfill are preserved: they intentionally have no job, so
@@ -2974,7 +2978,11 @@ type Querier interface {
 	// the delivery it accompanies (see the add-notification-center design). jobs
 	// is only ever set by a multi-job subscription digest (see 0091); every other
 	// kind, and a single-job digest, passes NULL and relies on public_slug instead.
-	RecordNotification(ctx context.Context, arg RecordNotificationParams) error
+	//
+	// Returns the new row's id because a subscription digest is recorded BEFORE it
+	// is sent, so the message can link to this row's matched-jobs page. Reminders
+	// and nudges record after delivery as before and discard the id.
+	RecordNotification(ctx context.Context, arg RecordNotificationParams) (int64, error)
 	// Record one matched nudge candidate. The unique index on
 	// (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the
 	// same unchanged episode is a no-op — so MATCH can freely re-run over the same

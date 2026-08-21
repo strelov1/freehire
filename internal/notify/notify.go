@@ -48,13 +48,39 @@ func ValidChannel(c string) bool {
 	return slices.Contains(Channels, c)
 }
 
+// ListLimit is how many jobs a channel message itemizes. It is a constant rather
+// than a Config field because the channel notifiers take only a base URL and a
+// transport — reaching Config into them would buy nothing, and a shared constant
+// keeps every channel's list and its "and N more" tail arithmetic in agreement.
+//
+// Ten, not the snapshot's ceiling: a digest is a notification, and a mail that
+// itemizes dozens of jobs is a page nobody reads to the bottom of.
+const ListLimit = 10
+
 // Digest is one subscription's batch of new matches, rendered by a Notifier into
-// a channel-specific message. Jobs is capped to the configured digest size; Total
-// is the true count so the renderer can show an "and N more" tail.
+// a channel-specific message. Jobs is the whole match set (bounded only by
+// Config.SnapshotCap) and is what the in-app notification records; Listed is the
+// much shorter slice a message itemizes. Total is the true count, so a renderer
+// can show an "and N more" tail under either bound.
 type Digest struct {
 	SavedSearchName string
 	Total           int
 	Jobs            []DigestJob
+	// NotificationID is the in-app notification recording this digest, which is
+	// where a channel's "and N more" tail sends the reader. Zero when the
+	// recording failed — the renderer then falls back to a generic destination
+	// rather than dropping the tail.
+	NotificationID int64
+}
+
+// Listed returns the jobs a channel message should itemize: the first ListLimit,
+// or all of them when the digest is shorter. The result has no spare capacity, so
+// a renderer that appends to it cannot scribble over the rest of Jobs.
+func (d Digest) Listed() []DigestJob {
+	if len(d.Jobs) <= ListLimit {
+		return d.Jobs
+	}
+	return d.Jobs[:ListLimit:ListLimit]
 }
 
 // DigestJob is the display shape of one matched job (no internal id). The salary
@@ -98,7 +124,11 @@ type Store interface {
 	MarkMatchesNotified(ctx context.Context, arg db.MarkMatchesNotifiedParams) (int64, error)
 	RecordMatchDeliveryFailure(ctx context.Context, arg db.RecordMatchDeliveryFailureParams) error
 	ReleaseMatchClaim(ctx context.Context, arg db.ReleaseMatchClaimParams) error
-	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
+	// RecordNotification returns the new row's id. A digest is recorded BEFORE
+	// it is sent so the message can link to that row's matched-jobs page;
+	// DeleteNotification withdraws it when the send then fails.
+	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
+	DeleteNotification(ctx context.Context, id int64) error
 	MarkDigestSent(ctx context.Context, id int64) error
 }
 
@@ -114,9 +144,13 @@ type Config struct {
 	ClaimBatch int32
 	// MaxAttempts dead-letters a match after this many failed deliveries.
 	MaxAttempts int32
-	// DigestCap bounds how many jobs are listed in one digest message (the rest
-	// are still marked notified and summarized as a count).
-	DigestCap int
+	// SnapshotCap bounds how many jobs a digest carries — which is how many the
+	// in-app notification records and its matched-jobs page can show. It is NOT
+	// the message listing bound (that is ListLimit): a message is short because a
+	// notification should be, while the recorded set is short only to keep one
+	// notification's jsonb document from growing without limit. Matches beyond it
+	// are still marked notified and still counted in Total.
+	SnapshotCap int
 }
 
 // DefaultConfig is the production tuning. MatchLimit/cadence are revisited from
@@ -127,7 +161,10 @@ func DefaultConfig() Config {
 		LeaseSeconds: 600,
 		ClaimBatch:   500,
 		MaxAttempts:  5,
-		DigestCap:    20,
+		// One query cannot match more than MatchLimit jobs in a pass, so the two
+		// agree deliberately: the snapshot is complete for every digest except a
+		// `daily` one that accumulated across many deferred passes.
+		SnapshotCap: 200,
 	}
 }
 

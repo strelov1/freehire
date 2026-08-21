@@ -67,8 +67,19 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   No snooze interval, no notified-count column. `internal/reminder`/`internal/notify` don't need
   this — a reminder fires once from a pre-scheduled `fire_at`, a subscription match is a distinct
   `(subscription, job)` pair already.
-- `Digest.Jobs` is capped to the configured digest size while `Digest.Total` carries the true
-  count, so a renderer can show the "and N more" tail. Don't derive the count from `len(Jobs)`.
+- **A digest is bounded twice, and the two bounds are not the same number.** `Digest.Jobs` is
+  the whole match set (ceiling: `Config.SnapshotCap`, 200) and is what the in-app notification
+  records — it is what `/my/notifications/:id/jobs` renders. `Digest.Listed()` is the first
+  `notify.ListLimit` (10) and is what a channel message itemizes. `Digest.Total` carries the
+  true count under either, so a renderer can show the "and N more" tail; don't derive the count
+  from `len(Jobs)`. They were one knob until 2026-08-21, which meant lowering the email's list
+  length silently truncated the on-site page the email's own "view all" pointed at.
+- **A subscription digest is recorded BEFORE it is sent** (`RecordNotification` is `:one`), so
+  the message can link to its own `/my/notifications/<id>/jobs`. A failed send withdraws the row
+  (`DeleteNotification`), so the history holds a digest if and only if it went out; a failed
+  *recording* is still non-fatal — the digest goes out with `NotificationID` zero and each
+  channel's tail falls back to `/my/notifications`. `internal/reminder` and `internal/nudge`
+  still record after delivery and discard the returned id.
 - `DigestJob` deliberately carries **no internal job id** — only the public slug and URL.
 - **The Telegram link token is deliberately NOT a JWT.** Telegram's deep-link `start`
   parameter allows only 1–64 chars of `[A-Za-z0-9_-]`, which a dotted ~200-char JWT
