@@ -1,9 +1,11 @@
-// Turning the edge's view of a request into an opening scope for the jobs feed.
+// Turning the edge's view of a request into an opening scope for the jobs feed:
+// which region a country belongs to, whether the caller is a crawler, whether the
+// guess may be offered at all, and what it applies.
 //
-// Two pure functions, deliberately free of SvelteKit and of the DOM: the endpoint
-// that answers with a region imports them on the server, and the unit tests run
-// them in plain Node. Nothing here reads a header or a store — callers pass the
-// two strings the request already carries.
+// Pure by design, and free of SvelteKit and of the DOM: the endpoint imports the
+// first two on the server, the feed imports the last two in the browser, and the
+// unit tests run all four in plain Node. Nothing here reads a header, a store, or
+// a URL — callers pass in what they already hold.
 
 import { COUNTRY_REGION_MAP } from './generated/contracts';
 

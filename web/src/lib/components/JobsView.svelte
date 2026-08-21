@@ -334,14 +334,6 @@
     jobs = next;
   }
 
-  // The feed minus the signed-in user's hidden jobs, and (when the match slider is
-  // active) minus jobs below the chosen match threshold. Dismissal is cross-referenced
-  // client-side against the shared dismissed set (loaded on mount), mirroring the
-  // viewed/saved sets — the server search is untouched. Re-derives when the page
-  // changes, when a hide/undo mutates the dismissed set, or when the slider moves, so
-  // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
-  // with no skills has no percent to test (see computeClientMatch) and stays, matching
-  // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
   // Rows kept on screen while the guessed opening scope reloads the feed underneath
   // them. A filter change builds a fresh paginator, which starts empty and `loading`
   // — for a change the visitor made that is the honest answer, but the guess is one
@@ -369,6 +361,14 @@
   // is what put "No matching jobs." over a list that was merely reloading.
   const displayItems = $derived(holdingOver ? holdover : jobs.items);
 
+  // The feed minus the signed-in user's hidden jobs, and (when the match slider is
+  // active) minus jobs below the chosen match threshold. Dismissal is cross-referenced
+  // client-side against the shared dismissed set (loaded on mount), mirroring the
+  // viewed/saved sets — the server search is untouched. Re-derives when the page
+  // changes, when a hide/undo mutates the dismissed set, or when the slider moves, so
+  // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
+  // with no skills has no percent to test (see computeClientMatch) and stays, matching
+  // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
   const visibleJobs = $derived(
     displayItems.filter((j) => {
       if (isDismissed(j.public_slug)) return false;
@@ -492,17 +492,19 @@
   const scopeInferred = $derived.by(() => {
     if (guessedRegion === null) return false;
     const f = filters.value;
+    const untouched = (param: string) => {
+      const st = f.facets[param];
+      return !st || (st.include.length === 0 && st.exclude.length === 0);
+    };
+    const ours = [guessedRegion, WORLDWIDE_REGION];
     const regions = f.facets.regions;
-    const ours = new Set([guessedRegion, WORLDWIDE_REGION]);
     return (
       !!regions &&
       regions.exclude.length === 0 &&
-      regions.include.length === ours.size &&
-      regions.include.every((r) => ours.has(r)) &&
-      !f.facets.countries?.include.length &&
-      !f.facets.countries?.exclude.length &&
-      !f.facets.cities?.include.length &&
-      !f.facets.cities?.exclude.length
+      regions.include.length === ours.length &&
+      ours.every((r) => regions.include.includes(r)) &&
+      untouched('countries') &&
+      untouched('cities')
     );
   });
 
