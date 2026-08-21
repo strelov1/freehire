@@ -18,26 +18,8 @@ function fail(message) {
   errors++;
 }
 
-// Index of the brace/bracket/paren closing the one at `open`, skipping over string
-// and template literals so a delimiter inside a default value cannot unbalance the
-// count. -1 if the source never closes it.
-function matchClose(source, open) {
-  const pairs = { '{': '}', '[': ']', '(': ')' };
-  const stack = [pairs[source[open]]];
-  for (let i = open + 1; i < source.length; i++) {
-    const char = source[i];
-    if (char === '\\') i++;
-    else if (char === '"' || char === "'" || char === '`') {
-      i = skipString(source, i);
-      if (i < 0) return -1;
-    } else if (pairs[char]) stack.push(pairs[char]);
-    else if (char === stack.at(-1)) {
-      stack.pop();
-      if (stack.length === 0) return i;
-    }
-  }
-  return -1;
-}
+const CLOSERS = { '{': '}', '[': ']', '(': ')' };
+const QUOTES = new Set(['"', "'", '`']);
 
 // Index of the quote closing the one at `open`. -1 if unterminated.
 function skipString(source, open) {
@@ -49,24 +31,56 @@ function skipString(source, open) {
   return -1;
 }
 
-// Whether the destructure ending at `from` is the one $props() fills. What sits
-// between the two is an optional type annotation, which may be a whole brace block
-// of its own — so skip balanced groups rather than scanning for the next '=', which
-// an arrow type (`() => void`) would hand us far too early.
-function isPropsDestructure(source, from) {
+// Index of the brace/bracket/paren closing the one at `open`, skipping over string
+// and template literals so a delimiter inside a default value cannot unbalance the
+// count. -1 if the source never closes it.
+function matchClose(source, open) {
+  const stack = [CLOSERS[source[open]]];
+  for (let i = open + 1; i < source.length; i++) {
+    const char = source[i];
+    if (char === '\\') i++;
+    else if (QUOTES.has(char)) {
+      i = skipString(source, i);
+      if (i < 0) return -1;
+    } else if (CLOSERS[char]) stack.push(CLOSERS[char]);
+    else if (char === stack.at(-1)) {
+      stack.pop();
+      if (stack.length === 0) return i;
+    }
+  }
+  return -1;
+}
+
+// Index of the last character of the string or balanced group opening at `i`, or
+// `i` itself where neither opens. Every scan below advances through source this
+// way, so that a delimiter nested inside one is never read as structure.
+function skipGroup(source, i) {
+  if (QUOTES.has(source[i])) return skipString(source, i);
+  if (CLOSERS[source[i]]) return matchClose(source, i);
+  return i;
+}
+
+function skipSpace(source, from) {
   let i = from;
   while (/\s/.test(source[i] ?? '')) i++;
+  return i;
+}
+
+// Whether the destructure ending at `from` is the one $props() fills.
+function isPropsDestructure(source, from) {
+  let i = skipSpace(source, from);
+  // What may sit between the two is a type annotation, itself often a whole brace
+  // block. Skip balanced groups rather than scanning for the next '=', which an
+  // arrow type (`() => void`) would hand us far too early.
   if (source[i] === ':') {
     for (i++; i < source.length; i++) {
-      if (source[i] === '"' || source[i] === "'" || source[i] === '`') i = skipString(source, i);
-      else if ('{[('.includes(source[i])) i = matchClose(source, i);
-      else if (source[i] === '=' && source[i + 1] !== '>' && source[i + 1] !== '=') break;
+      if (source[i] === '=' && source[i + 1] !== '>' && source[i + 1] !== '=') break;
+      i = skipGroup(source, i);
       if (i < 0) return false;
     }
   }
   if (source[i] !== '=') return false;
-  for (i++; /\s/.test(source[i] ?? ''); i++);
-  return source.startsWith('$props(', i);
+  return source.startsWith('$props(', skipSpace(source, i + 1));
 }
 
 // The members of a destructure, split on the commas that separate them rather than
@@ -75,13 +89,12 @@ function splitMembers(body) {
   const members = [];
   let start = 0;
   for (let i = 0; i < body.length; i++) {
-    if (body[i] === '"' || body[i] === "'" || body[i] === '`') i = skipString(body, i);
-    else if ('{[('.includes(body[i])) i = matchClose(body, i);
-    else if (body[i] === ',') {
+    if (body[i] === ',') {
       members.push(body.slice(start, i));
       start = i + 1;
       continue;
     }
+    i = skipGroup(body, i);
     if (i < 0) break;
   }
   members.push(body.slice(start));
@@ -99,11 +112,20 @@ export function propsFrom(source) {
     const close = matchClose(src, open);
     if (close < 0 || !isPropsDestructure(src, close + 1)) continue;
     return splitMembers(src.slice(open + 1, close))
-      .map((member) => member.trim().match(/^(\.\.\.)?([A-Za-z_$][\w$]*)/))
-      .filter(Boolean)
-      .map(([, spread, name]) => (spread ?? '') + name);
+      .map((member) => member.trim().match(/^(?:\.\.\.)?[A-Za-z_$][\w$]*/)?.[0])
+      .filter(Boolean);
   }
   return [];
+}
+
+// A hand-written list against the real one, in both directions. Omitting half the
+// original is as wrong as inventing an entry, and only the first is the kind of
+// drift a reader would never notice — so no check here reports one without the other.
+function drift(shipped, documented) {
+  return {
+    undocumented: shipped.filter((name) => !documented.includes(name)),
+    gone: documented.filter((name) => !shipped.includes(name)),
+  };
 }
 
 // Every story file some entity claims, so the sweep at the end can name the ones
@@ -133,11 +155,10 @@ function checkEntity(file, path, entity) {
   // A token list is a copy of the token file's keys. Drift either way means the
   // docs describe a palette the package no longer ships.
   if (entity.tokens) {
-    const authored = Object.keys(JSON.parse(readFileSync(target, 'utf-8')));
-    const shipped = authored.filter((name) => !name.startsWith('$'));
-    const documented = new Set(entity.tokens);
-    const undocumented = shipped.filter((name) => !documented.has(name));
-    const gone = entity.tokens.filter((name) => !shipped.includes(name));
+    const shipped = Object.keys(JSON.parse(readFileSync(target, 'utf-8'))).filter(
+      (name) => !name.startsWith('$'),
+    );
+    const { undocumented, gone } = drift(shipped, entity.tokens);
     if (undocumented.length) {
       fail(`${file}: entity "${entity.id}" does not document ${undocumented.join(', ')}`);
     }
@@ -153,9 +174,10 @@ function checkEntity(file, path, entity) {
   // sets so no call site has to.
   if (entity.props && target.endsWith('.svelte')) {
     const shipped = propsFrom(readFileSync(target, 'utf-8'));
-    const documented = entity.props.map((prop) => prop.name);
-    const undocumented = shipped.filter((name) => !documented.includes(name));
-    const gone = documented.filter((name) => !shipped.includes(name));
+    const { undocumented, gone } = drift(
+      shipped,
+      entity.props.map((prop) => prop.name),
+    );
     if (undocumented.length) {
       fail(`${file}: entity "${entity.id}" does not document prop(s) ${undocumented.join(', ')}`);
     }
