@@ -424,8 +424,9 @@ func TestDerive_CommercialMarketingCluster(t *testing.T) {
 // classify — which were redundant for tagging and needed only by search — these were a
 // real gap in the tagging itself: "User Experience Designer" derived the bare `design`
 // category and no ux_designer, so the role under-counted every posting titled that way.
-// Adding them therefore changes what is TAGGED, and existing rows only pick the role up
-// on the next backfill-derive.
+// Adding them therefore changes what is TAGGED — and every existing posting picks the
+// role up on the next scheduled reindex, because roles are derived at index time rather
+// than stored, so nothing has to be backfilled.
 func TestUXDesignerSpelledOutAliases(t *testing.T) {
 	for _, title := range []string{
 		"User Experience Designer",
