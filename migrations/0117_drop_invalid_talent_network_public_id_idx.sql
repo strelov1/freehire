@@ -1,0 +1,30 @@
+-- migrate: no-transaction
+--
+-- users_talent_network_public_id_key is INVALID on prod: a CREATE INDEX CONCURRENTLY
+-- that died before finishing, exactly the failure 0086 warns about in its own closing
+-- paragraph ("on an existing prod volume build it by hand, detached from the SSH
+-- session — a CONCURRENTLY build dies with its ssh session and leaves an INVALID index
+-- behind"). The warning was written into the file that creates this index, and then
+-- the build was run attached anyway.
+--
+-- An invalid index is not merely unused, it is two defects at once:
+--
+--   * The planner ignores it, so `WHERE u.talent_network_public_id = $1` — the lookup
+--     that resolves a public Talent Network profile URL — falls back to a sequential
+--     scan of users. Verified on prod: EXPLAIN returns `Seq Scan on users`.
+--   * 0086 chose a bare unique index over an inline UNIQUE as the ONLY enforcement of
+--     the public UUID's uniqueness. While the index is invalid there is no enforcement
+--     at all, so two accounts could in principle mint the same public profile address.
+--
+-- The second is the reason this is a repair and not a cleanup: nothing observes a
+-- missing guarantee until it is violated. Checked before writing this: 0 duplicate and
+-- 0 NULL values across the table, so the rebuild in 0118 has nothing to conflict with.
+--
+-- Dropped here and recreated in 0118 rather than REINDEXed, following the 0100/0101
+-- precedent for the same situation — one statement per no-transaction file, because a
+-- file's statements are sent as one multi-statement query and Postgres runs those in an
+-- implicit transaction that CONCURRENTLY refuses (see 0086's own note).
+--
+-- On an existing prod volume, run detached from the SSH session. Yes: the instruction
+-- that was ignored the first time is the one that has to be followed now.
+DROP INDEX CONCURRENTLY IF EXISTS public.users_talent_network_public_id_key;
