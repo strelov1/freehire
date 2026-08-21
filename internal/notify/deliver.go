@@ -92,13 +92,12 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 	// that lists the full match set. A recording failure is not a delivery
 	// failure — the digest goes out with a zero id and the tail falls back to a
 	// generic destination.
-	notificationID := r.recordNotification(ctx, subID, info, digest)
-	digest.NotificationID = notificationID
+	digest.NotificationID = r.recordNotification(ctx, subID, info, digest)
 
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
 		// Nothing was delivered, so the row recorded above must not survive:
 		// the history holds a digest if and only if that digest went out.
-		r.withdrawNotification(ctx, subID, notificationID)
+		r.withdrawNotification(ctx, subID, digest.NotificationID)
 		// A channel with no registered notifier (e.g. email while SES is
 		// unconfigured) is not a delivery failure: soft-skip so the matches stay
 		// pending for a pass once the channel is provisioned, without burning an

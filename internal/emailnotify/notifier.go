@@ -80,13 +80,14 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 	if more < 0 {
 		more = 0
 	}
+	viewAll := n.viewAllURL(d)
 
 	subject := fmt.Sprintf(`%d new job%s for "%s"`, d.Total, notify.Plural(d.Total), d.SavedSearchName)
 
 	var b bytes.Buffer
 	// The template is a trusted constant and the data is escaped in context, so
 	// Execute can only fail on a template bug — surfaced by the render tests.
-	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ViewAllURL: n.viewAllURL(d)})
+	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ViewAllURL: viewAll})
 
 	html := n.layout.Render(mailtpl.Body{
 		Preheader: fmt.Sprintf("%d new job%s matching your %q alert", d.Total, notify.Plural(d.Total), d.SavedSearchName),
@@ -98,7 +99,7 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 		Footer: "You’re getting this because you set up a job alert on freehire.",
 	})
 
-	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more, n.viewAllURL(d))}
+	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more, viewAll)}
 }
 
 // renderText builds the plain-text alternative, mirroring the HTML body so

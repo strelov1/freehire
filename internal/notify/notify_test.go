@@ -57,9 +57,8 @@ type fakeStore struct {
 	// nextNotificationID is the id the next RecordNotification hands back, so a
 	// test can assert the digest carried it; deletedNotifications records the
 	// ids a failed send withdrew.
-	nextNotificationID    int64
-	deletedNotifications  []int64
-	deleteNotificationErr error
+	nextNotificationID   int64
+	deletedNotifications []int64
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
@@ -152,7 +151,7 @@ func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificatio
 
 func (s *fakeStore) DeleteNotification(_ context.Context, id int64) error {
 	s.deletedNotifications = append(s.deletedNotifications, id)
-	return s.deleteNotificationErr
+	return nil
 }
 
 type fakeNotifier struct {

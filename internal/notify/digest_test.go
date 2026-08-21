@@ -40,7 +40,7 @@ func TestDigestListed_ShortDigestIsWhole(t *testing.T) {
 // digest's own snapshot, which is recorded separately.
 func TestDigestListed_AppendDoesNotOverwriteJobs(t *testing.T) {
 	d := digestOf(67)
-	appended := append(d.Listed(), DigestJob{Title: "intruder", Slug: "intruder"}) //nolint:gocritic // the append is the point
+	appended := append(d.Listed(), DigestJob{Title: "intruder", Slug: "intruder"})
 	if d.Jobs[ListLimit].Slug == "intruder" {
 		t.Fatalf("appending to Listed() overwrote Jobs[%d]: %+v", ListLimit, d.Jobs[ListLimit])
 	}
