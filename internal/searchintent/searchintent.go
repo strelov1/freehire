@@ -256,7 +256,31 @@ func (in intent) resolve() (Result, error) {
 		return Result{}, err
 	}
 	dropContradictions(out.Facets, out.Exclude)
+	dropRedundantRegionExclusions(out.Facets, out.Exclude)
 	return out, nil
+}
+
+// dropRedundantRegionExclusions removes an excluded region once any region is chosen.
+//
+// The regions are disjoint areas — the UK is its own region, NOT part of eu — so
+// choosing one already answers "which area". Excluding another on top can only strip
+// the roles that span both, and "somewhere in Europe but not the UK" is not a request
+// to lose the pan-European roles: those are exactly what that person wants.
+//
+// The prompt says this too, and saying it there is the cheaper fix. It is not enough:
+// measured against the live gateway, the same request came back clean 3 times in 5 and
+// carried the redundant exclusion the other 2. A rule that holds three fifths of the
+// time is not a rule, and the failure is invisible — a struck-through UK chip looks
+// like the filter working.
+//
+// Scoped to regions on purpose. A COUNTRY sits inside a region, so choosing Europe says
+// nothing about Germany and "not Germany" still needs its exclusion. And a skill is a
+// requirement rather than a place: "Go but not PHP" excludes real postings by design.
+func dropRedundantRegionExclusions(facets, exclude map[string][]string) {
+	if len(facets["regions"]) == 0 || len(exclude["regions"]) == 0 {
+		return
+	}
+	delete(exclude, "regions")
 }
 
 // dropContradictions removes an excluded value that is also included. The inclusion

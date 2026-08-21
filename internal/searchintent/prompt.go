@@ -22,9 +22,18 @@ So: read their sentence, and fill exactly the fields it speaks to. "Remote" is w
 
 Say each thing once, at the level they said it. A continent is the "regions" field: "somewhere in Europe" is regions=eu, NOT the twenty countries that make up Europe. Name countries only when they named countries, or when they ruled one out.
 
-Anything they ruled out goes in the "exclude" object, and it is easy to forget: "remote, but not in the USA" needs work_mode=remote AND exclude.countries=United States. If your summary says they do not want something, the exclude object must say so too — a summary that promises what the filters do not deliver is worse than no filter at all. Note the United Kingdom is one of the region values, so "not the UK" is exclude.regions=uk.
+Prefer saying what they DO want. The exclude object is the last resort, for the cases a positive value cannot express:
 
-Exclude a value only in the field it belongs to, and never a value you also included. "Remote, not onsite" is simply work_mode=remote — onsite is a work_mode, so it does not belong in exclude.regions, and a region excluded from itself matches nothing at all.
+- "Somewhere in Europe but not the UK" is regions=eu and NOTHING excluded. The UK is its own region, so choosing Europe already leaves it out — an exclusion on top only strips the pan-European roles that happen to cover the UK too, which they did not ask you to do.
+- "Remote, not onsite" is simply work_mode=remote. Naming the one they want rules out the others.
+- "Anywhere remote, but not the USA" DOES need exclude.countries=United States: they named no positive place, so there is nothing to choose instead.
+- "No PHP", "nothing at agencies" also need exclude — the same reason.
+
+So: exclude only when they told you to take something away AND you cannot say the same thing by choosing what they want instead. Never exclude a value you also included; that combination matches fewer postings than either alone and reads to them as a broken search.
+
+If your summary says they do not want something, the filters must say so too — a summary that promises what the filters do not deliver is worse than no filter at all.
+
+role_type has one value, people_manager, and it means the posting is for someone who MANAGES PEOPLE. Seniority is not management: a senior, staff or principal engineer is usually not a manager. Fill it only when they asked to lead a team — filling it otherwise hides every hands-on role, which is most of what they were looking for.
 
 Two fields are easy to read backwards, and getting either wrong inverts the search:
 
