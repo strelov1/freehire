@@ -29,35 +29,35 @@ type proposal struct {
 	// Query is free text for a concept no filter expresses, and nothing else.
 	Query string `json:"query"`
 
-	Category       []string `json:"category"`
-	Role           []string `json:"role"`
-	Seniority      []string `json:"seniority"`
-	RoleType       []string `json:"role_type"`
-	Skills         []string `json:"skills"`
-	Domains        []string `json:"domains"`
-	AIArchetype    []string `json:"ai_archetype"`
-	WorkMode       []string `json:"work_mode"`
-	Regions        []string `json:"regions"`
-	Countries      []string `json:"countries"`
-	Cities         []string `json:"cities"`
-	Relocation     []string `json:"relocation"`
-	EmploymentType []string `json:"employment_type"`
-	CompanyType    []string `json:"company_type"`
-	CompanySize    []string `json:"company_size"`
-	Collections    []string `json:"collections"`
-	EnglishLevel   []string `json:"english_level"`
-	EducationLevel []string `json:"education_level"`
-	SalaryPeriod   []string `json:"salary_period"`
+	Category       flexStrings `json:"category"`
+	Role           flexStrings `json:"role"`
+	Seniority      flexStrings `json:"seniority"`
+	RoleType       flexStrings `json:"role_type"`
+	Skills         flexStrings `json:"skills"`
+	Domains        flexStrings `json:"domains"`
+	AIArchetype    flexStrings `json:"ai_archetype"`
+	WorkMode       flexStrings `json:"work_mode"`
+	Regions        flexStrings `json:"regions"`
+	Countries      flexStrings `json:"countries"`
+	Cities         flexStrings `json:"cities"`
+	Relocation     flexStrings `json:"relocation"`
+	EmploymentType flexStrings `json:"employment_type"`
+	CompanyType    flexStrings `json:"company_type"`
+	CompanySize    flexStrings `json:"company_size"`
+	Collections    flexStrings `json:"collections"`
+	EnglishLevel   flexStrings `json:"english_level"`
+	EducationLevel flexStrings `json:"education_level"`
+	SalaryPeriod   flexStrings `json:"salary_period"`
 
 	// Exclude is what the person ruled out. "Remote, but not in the USA" is how people
 	// actually describe a search, and a filter that can only add answers a different
 	// question.
 	Exclude exclusions `json:"exclude"`
 
-	SalaryMin          *int `json:"salary_min"`
-	PostedWithinDays   *int `json:"posted_within_days"`
-	ExperienceYearsMax *int `json:"experience_years_max"`
-	VisaSponsorship    bool `json:"visa_sponsorship"`
+	SalaryMin          *flexInt `json:"salary_min"`
+	PostedWithinDays   *flexInt `json:"posted_within_days"`
+	ExperienceYearsMax *flexInt `json:"experience_years_max"`
+	VisaSponsorship    bool     `json:"visa_sponsorship"`
 }
 
 // exclusions are the filters people phrase negatively. It is deliberately a subset of
@@ -65,14 +65,14 @@ type proposal struct {
 // B2 English" or "not a full-time role", and each field offered costs tokens on every
 // request whether or not it is used.
 type exclusions struct {
-	Skills      []string `json:"skills"`
-	Countries   []string `json:"countries"`
-	Regions     []string `json:"regions"`
-	Cities      []string `json:"cities"`
-	Category    []string `json:"category"`
-	Domains     []string `json:"domains"`
-	CompanyType []string `json:"company_type"`
-	RoleType    []string `json:"role_type"`
+	Skills      flexStrings `json:"skills"`
+	Countries   flexStrings `json:"countries"`
+	Regions     flexStrings `json:"regions"`
+	Cities      flexStrings `json:"cities"`
+	Category    flexStrings `json:"category"`
+	Domains     flexStrings `json:"domains"`
+	CompanyType flexStrings `json:"company_type"`
+	RoleType    flexStrings `json:"role_type"`
 }
 
 // intent flattens the proposal into the facet map resolution walks. Every key is
@@ -113,9 +113,9 @@ func (p proposal) intent() intent {
 		},
 		Query:              p.Query,
 		Summary:            p.Summary,
-		SalaryMin:          p.SalaryMin,
-		PostedWithinDays:   p.PostedWithinDays,
-		ExperienceYearsMax: p.ExperienceYearsMax,
+		SalaryMin:          p.SalaryMin.plain(),
+		PostedWithinDays:   p.PostedWithinDays.plain(),
+		ExperienceYearsMax: p.ExperienceYearsMax.plain(),
 		VisaSponsorship:    p.VisaSponsorship,
 	}
 }
@@ -156,6 +156,10 @@ func requestSchema() (llmschema.Schema, error) {
 			llmschema.Enum("english_level", vocab.EnglishLevelValues),
 			llmschema.Enum("education_level", vocab.EducationLevelValues),
 			llmschema.Enum("salary_period", vocab.SalaryPeriodValues),
+			// Asked for as TEXT, not as a number: zero is a real filter here (postings
+			// that require no prior experience) and the model writes zero for "unset".
+			// As text, "" and "0" are different answers. See flexInt.
+			llmschema.AsText("experience_years_max"),
 		)
 		if schemaErr != nil {
 			schemaErr = fmt.Errorf("searchintent: build schema: %w", schemaErr)

@@ -72,5 +72,7 @@
 - [x] 6.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, and
   `go vet -tags=integration ./...` all pass.
 - [x] 6.2 Web unit tests pass and the applied result writes exactly the interpreted values.
-- [ ] 6.3 Walk the change end to end in the running app: describe a search, refine it,
-  apply it, remove a chip, save it as an alert.
+- [x] 6.3 Walked end to end against a locally-running server on the real gateway: described
+  a search, refined it with a contradicting constraint, applied it, saw the chips and the
+  URL, and confirmed the signed-out click opens the auth dialog. Four defects only that
+  walk could find are fixed in the same change — see flexdecode.go and the prompt.

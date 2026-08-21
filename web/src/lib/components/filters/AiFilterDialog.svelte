@@ -4,6 +4,7 @@
   import { errorMessage } from '$lib/utils';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { dynamicLabel, FACETS } from '$lib/facets';
+  import { experienceLabel, freshnessLabel } from '$lib/filterControls';
   import { filtersFromInterpretation } from '$lib/aiFilter';
   import { api } from '$lib/api';
   import type { Interpretation } from '$lib/types';
@@ -48,10 +49,13 @@
     if (result.query) push('Search', [{ text: result.query, exclude: false }]);
     if (result.salary_min != null)
       push('Salary', [{ text: `${result.salary_min.toLocaleString('en-US')}+`, exclude: false }]);
+    // The shared labels, not our own wording: the preview promises to read the same as
+    // the chips it becomes, and "Last 7 days" beside a chip saying "1 week" breaks that
+    // for no reason.
     if (result.posted_within_days != null)
-      push('Posted', [{ text: `Last ${result.posted_within_days} days`, exclude: false }]);
+      push('Posted', [{ text: freshnessLabel(result.posted_within_days), exclude: false }]);
     if (result.experience_years_max != null)
-      push('Experience', [{ text: `Up to ${result.experience_years_max} years`, exclude: false }]);
+      push('Experience', [{ text: experienceLabel(result.experience_years_max), exclude: false }]);
     if (result.visa_sponsorship) push('Visa', [{ text: 'Sponsorship', exclude: false }]);
     return groups;
   });

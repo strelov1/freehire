@@ -217,6 +217,14 @@ func bound(name string, v *int, low, high int, unresolved []string) (*int, []str
 	if v == nil {
 		return nil, unresolved
 	}
+	// A zero is how the model writes "I am not setting this" — observed on every live
+	// call, whatever the schema says about null. Reporting it would put a line in front
+	// of the user about a value that was never meant. This is safe only because both
+	// callers have a low bound above zero; the experience ceiling, where zero IS a
+	// filter, is asked for as text precisely so it never arrives here ambiguous.
+	if *v == 0 && low > 0 {
+		return nil, unresolved
+	}
 	if *v < low || *v > high {
 		return nil, append(unresolved, fmt.Sprintf("%s=%d", name, *v))
 	}
@@ -247,7 +255,35 @@ func (in intent) resolve() (Result, error) {
 	if out.Exclude, out.Unresolved, err = canonicaliseFacets(in.Exclude, out.Unresolved); err != nil {
 		return Result{}, err
 	}
+	dropContradictions(out.Facets, out.Exclude)
 	return out, nil
+}
+
+// dropContradictions removes an excluded value that is also included. The inclusion
+// wins, the same way the profile seed and the URL parser settle the overlap.
+//
+// A filter that excludes what it includes matches nothing, and a zero-result list reads
+// as "we carry no such jobs" rather than as "we contradicted ourselves". Observed live:
+// asked to change an onsite Berlin search to "remote in Europe", the model returned
+// regions=[eu] alongside exclude.regions=[eu].
+//
+// The drop is NOT reported. Nothing failed to resolve — both sides resolved perfectly,
+// and the value IS applied, as an inclusion. Naming it among the values we could not
+// place would be a second, different lie.
+func dropContradictions(facets, exclude map[string][]string) {
+	for name, excluded := range exclude {
+		kept := excluded[:0:0]
+		for _, v := range excluded {
+			if !slices.Contains(facets[name], v) {
+				kept = append(kept, v)
+			}
+		}
+		if len(kept) == 0 {
+			delete(exclude, name)
+			continue
+		}
+		exclude[name] = kept
+	}
 }
 
 // canonicaliseFacets resolves one side of the filter — what to match, or what to rule
