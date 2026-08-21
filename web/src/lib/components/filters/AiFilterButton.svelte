@@ -28,7 +28,7 @@
 >
   <MessageSquareText class="size-4" />
   Describe with AI
-  <span class="rounded bg-primary/15 px-1 text-[10px] font-semibold uppercase tracking-wide">beta</span>
+  <span class="rounded bg-primary/15 px-1 text-xs font-semibold uppercase tracking-wide">beta</span>
 </button>
 
 {#if open}

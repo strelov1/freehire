@@ -103,7 +103,7 @@
     role="dialog"
     aria-modal="true"
     aria-label="Describe your search"
-    class="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
+    class="relative z-10 flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
     {@attach focusTrap()}
   >
     <div class="flex items-start gap-3 border-b border-border p-5">
