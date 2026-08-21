@@ -28,6 +28,18 @@ import { BASE_URL, IS_LOCAL, USER_AGENT } from './config.js';
 
 const env = (k, fallback) => (__ENV[k] !== undefined && __ENV[k] !== '' ? __ENV[k] : fallback);
 
+// A knob that has to be a positive number, refused rather than coerced. `30s`
+// reads as a perfectly reasonable duration and yields NaN, which reaches k6 as
+// `duration: "NaNs"` and a preAllocatedVUs of NaN — so the run dies complaining
+// about its options and says nothing about the variable that was mistyped.
+const posNum = (k, fallback) => {
+  const n = Number(env(k, fallback));
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`${k} must be a positive number, got "${__ENV[k]}"`);
+  }
+  return n;
+};
+
 // This profile drives an origin as hard as it will go on its most expensive
 // endpoint. Its own latch, with no localhost exemption — the intended target IS
 // a loopback port on the prod host, which shares CPU, page cache, Postgres and
@@ -47,22 +59,22 @@ const STEPS = env('SCRAPER_STEPS', '1,2,5,10,20')
   .filter((n) => Number.isFinite(n) && n > 0);
 if (STEPS.length === 0) throw new Error('SCRAPER_STEPS parsed to nothing');
 
-const STEP_SEC = Number(env('SCRAPER_STEP_SEC', 30));
+const STEP_SEC = posNum('SCRAPER_STEP_SEC', 30);
 
 // How many company slugs to pull in setup(). The walk cycles through them; a
 // pool smaller than the catalogue is fine and deliberate — this measures serving
 // cost, and a warm slug costs the same as a cold one once Meili holds the whole
 // index resident (it does: RssFile ≈ usedDatabaseSize on prod).
-const SLUG_POOL = Number(env('SCRAPER_SLUG_POOL', 300));
+const SLUG_POOL = posNum('SCRAPER_SLUG_POOL', 300);
 
 // How deep the walker paginates one employer before moving on. Real extraction
 // was seen going to offset=1400. Capping it keeps a single mega-employer from
 // dominating a step, which would measure that company rather than the host.
-const MAX_PAGES = Number(env('SCRAPER_MAX_PAGES', 5));
+const MAX_PAGES = posNum('SCRAPER_MAX_PAGES', 5);
 
 // Page size the extractor asks for. 100 is what the observed clients use and is
 // the size the endpoint's cost was measured at.
-const PAGE_SIZE = Number(env('SCRAPER_PAGE_SIZE', 100));
+const PAGE_SIZE = posNum('SCRAPER_PAGE_SIZE', 100);
 
 // Seconds one company walk is expected to occupy a VU, used to size the VU pool
 // (Little's law: concurrency = arrival rate x service time). Measured ~9 s at
@@ -70,7 +82,7 @@ const PAGE_SIZE = Number(env('SCRAPER_PAGE_SIZE', 100));
 // target slowing under its own load, which is exactly when the pool must not be
 // the thing that runs out. Raise it, not the step duration, if a run reports
 // dropped iterations.
-const VU_SECONDS = Number(env('SCRAPER_VU_SECONDS', 14));
+const VU_SECONDS = posNum('SCRAPER_VU_SECONDS', 14);
 
 // A walker that presents a distinct address per VU gets its own rate-limit
 // budget, so the run measures the hardware. Left off, every VU shares one key.
@@ -100,7 +112,8 @@ const walkDuration = new Trend('scraper_company_walk_ms', true);
 export const options = {
   scenarios: buildScenarios(),
   thresholds: thresholds(),
-  // Never chase a redirect into an unrelated page and count it as extraction.
+  // The bodies ARE the measurement: walk() reads res.body.length for MiB/s and
+  // res.json('data') for the posting count, so they have to be kept.
   discardResponseBodies: false,
 };
 

@@ -165,6 +165,7 @@ latch with no localhost exemption for exactly that reason.
 | `SCRAPER_SLUG_POOL`    | `300`                         | company slugs pulled in `setup()`              |
 | `SCRAPER_MAX_PAGES`    | `5`                           | extraction depth per employer (100/page)       |
 | `SCRAPER_PAGE_SIZE`    | `100`                         | postings per extraction request                |
+| `SCRAPER_VU_SECONDS`   | `14`                          | seconds budgeted per company walk; sizes the VU pool — raise THIS, not the step duration, when a run drops iterations |
 
 ## Reading results
 
