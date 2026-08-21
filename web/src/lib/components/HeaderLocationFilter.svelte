@@ -119,14 +119,17 @@
     class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
   >
     <!-- An avatar-stack of scope glyphs, same trick as CountryFlagStack: each icon laps
-         over the previous one by `--lap` and wears a ring in the box's own background,
-         so the pair reads as two marks rather than one tangle. Earlier icons sit on
-         top, so the cluster reads left-to-right: format first, then geography. -->
-    <span class="flex shrink-0 items-center" style:--lap="0.2em">
+         over the previous one and wears a ring in the box's own background, so the pair
+         reads as two marks rather than one tangle. Earlier icons sit on top, so the
+         cluster reads left-to-right: format first, then geography. The lap is small —
+         2px of a 16px glyph, against the flags' 0.4em — because a line icon is mostly
+         the outline that names it, where a flag is a solid disc that survives being
+         half covered. -->
+    <span class="flex shrink-0 items-center">
       {#each summary.icons as name, i (name)}
         {@const Icon = ICONS[name]}
         <span
-          class={['relative inline-flex rounded-full bg-background ring-2 ring-background', i > 0 && '-ml-[var(--lap)]']}
+          class={['relative inline-flex rounded-full bg-background ring-2 ring-background', i > 0 && '-ml-0.5']}
           style:z-index={summary.icons.length - i}
         >
           <Icon class="size-4" />
