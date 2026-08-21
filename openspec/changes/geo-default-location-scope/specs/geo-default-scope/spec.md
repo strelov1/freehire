@@ -87,16 +87,21 @@ it is already serving.
 - **WHEN** a crawler that does not execute JavaScript fetches the feed
 - **THEN** it never reaches the endpoint at all, and receives the same unscoped document any first-time visitor's server render produces
 
-### Requirement: The guess must not cost the feed its page-experience metrics
+### Requirement: The guess costs the feed a bounded, watched amount of page experience
 
 The derived scope replaces a rendered list with a different one after hydration.
-The system SHALL NOT let that swap shift the surrounding layout, and SHALL NOT let
-it become the feed's largest contentful paint.
+The system SHALL keep the outgoing rows on screen until the replacement has painted,
+so the list never collapses to a loading state, and SHALL NOT let the swap become the
+feed's largest contentful paint.
 
 Both are ranking inputs measured from real Chrome users, not from crawlers, so
 excluding crawlers from the scope does not exclude the cost. The swap happens before
 any user input, which is precisely the window where a late paint replaces the
 largest-paint candidate and where a shift is attributed in full.
+
+What the system does **not** promise is a motionless page. Twenty scoped rows are not
+the same height as twenty unscoped ones, and everything below each row moves by that
+difference.
 
 The cost is **data-dependent and cannot be stated as a single number**. Holding the
 outgoing rows removes the collapse; it does not remove the difference in height
@@ -113,10 +118,10 @@ Lighthouse watchdog against the feed, and CrUX. The suggestion form — offered 
 applied on a click, no swap, no shift — remains the recorded fallback and SHALL be
 adopted if either says the cost is real.
 
-#### Scenario: The swap does not move the page
+#### Scenario: The list never collapses
 
-- **WHEN** the scoped list replaces the unscoped one
-- **THEN** the surrounding layout does not move, and no layout shift is attributed to the swap
+- **WHEN** the scoped list is being fetched to replace the unscoped one
+- **THEN** the outgoing rows stay on screen throughout — no loading state, no empty state, and no moment at which the feed has zero rows
 
 #### Scenario: The scheduled watchdog exercises this path
 

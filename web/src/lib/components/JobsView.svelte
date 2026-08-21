@@ -508,6 +508,14 @@
     );
   });
 
+  // Ours until the geography first stops matching, and not ours again after that.
+  // Without the latch, someone who clears the guess and then picks the same region
+  // by hand lands back in a state the check above cannot tell from the guess, and
+  // the trigger would tell them the site inferred a scope they chose themselves.
+  $effect(() => {
+    if (guessedRegion !== null && !scopeInferred) untrack(() => (guessedRegion = null));
+  });
+
   /** The visitor's region from the edge, or null for anyone the edge cannot place —
    *  a crawler, a missing header, a country outside the grouping. A failed request
    *  is the same answer: this is an opening convenience, never a thing to retry. */
@@ -558,13 +566,16 @@
     // A guess that cannot be recorded is a guess that re-applies on every visit and
     // cannot be dismissed, so a failed write means no scope at all.
     if (!markGeoScopeOffered()) return;
-    guessedRegion = region;
     // Keep what is on screen until the scoped page arrives, so the swap happens in
     // place instead of through a spinner the height of the whole list.
     holdover = jobs.items;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
     replaceState(`${pathname}?${geoScopeQuery(region)}`, {});
     filters.syncFromUrl();
+    // Claimed only now that the filters already carry the scope. Set before the
+    // re-seed, it would sit for a tick beside geography that does not match it, and
+    // the latch below would drop it before the trigger ever said anything.
+    guessedRegion = region;
   }
 
   // Re-seed the filters from the URL on every real navigation (initial load, the
