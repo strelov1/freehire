@@ -36,6 +36,11 @@ func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.
 type recordedMatch struct{ sub, job int64 }
 
 type fakeStore struct {
+	// unlinkedTelegram records the user ids a delivery forgot the Telegram chat
+	// for, so a test can assert the 403 path unlinks exactly once per user.
+	unlinkedTelegram  []int64
+	unlinkTelegramErr error
+
 	active      []db.ListActiveSubscriptionsRow
 	recorded    []recordedMatch
 	recordCalls int // how many times RecordSubscriptionMatches was called, not how many pairs
@@ -152,6 +157,14 @@ func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificatio
 func (s *fakeStore) DeleteNotification(_ context.Context, id int64) error {
 	s.deletedNotifications = append(s.deletedNotifications, id)
 	return nil
+}
+
+func (s *fakeStore) DeleteTelegramLink(_ context.Context, userID int64) (int64, error) {
+	s.unlinkedTelegram = append(s.unlinkedTelegram, userID)
+	if s.unlinkTelegramErr != nil {
+		return 0, s.unlinkTelegramErr
+	}
+	return 1, nil
 }
 
 type fakeNotifier struct {
@@ -1014,5 +1027,66 @@ func TestDeliver_ClaimedIDWithNoJobRowIsStillNotified(t *testing.T) {
 	}
 	if len(store.notified) != 1 || len(store.notified[0].JobIds) != 2 {
 		t.Errorf("notified = %+v, want both ids (the pruned one included)", store.notified)
+	}
+}
+
+// The bug these guard: a subscriber who blocked the Telegram bot answered every
+// send with 403. The digest counted a delivery failure, the run exited non-zero,
+// and freehire-notify.service sat in `failed` — one stranger muting a bot turning
+// a worker red every five minutes, forever, because nothing ever concluded that
+// the chat was not coming back.
+func TestDeliver_RecipientGoneUnlinksTelegramAndSoftSkips(t *testing.T) {
+	store := &fakeStore{
+		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:           deliverySubscription(),
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrRecipientGone}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.SoftSkips != 1 || stats.Failed != 0 {
+		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0 — a chat that will never accept us is not a delivery failure to retry", stats.SoftSkips, stats.Failed)
+	}
+	if len(store.unlinkedTelegram) != 1 || store.unlinkedTelegram[0] != 42 {
+		t.Errorf("unlinkedTelegram = %v, want [42] — the link is what has to go, so every later send soft-skips instead of re-failing", store.unlinkedTelegram)
+	}
+	if len(store.failures) != 0 {
+		t.Errorf("failures = %v, want none — burning attempts toward the dead-letter limit cannot help here", store.failures)
+	}
+	// The matches go back to pending rather than being stamped notified: nobody
+	// received them, and they are owed over whatever channel comes next.
+	if len(store.released) != 1 {
+		t.Errorf("released = %v, want the claim released", store.released)
+	}
+	if len(store.notified) != 0 {
+		t.Errorf("notified = %v, want none — the digest was never delivered", store.notified)
+	}
+	if len(store.deletedNotifications) != 1 || store.deletedNotifications[0] != 42 {
+		t.Errorf("deleted = %v, want [42] — nothing was delivered, so nothing belongs in the history", store.deletedNotifications)
+	}
+}
+
+// The unlink is best-effort: it changes what the NEXT pass does, and this pass
+// soft-skips either way. A store that refuses must not turn the skip back into a
+// failure, or the red-worker loop returns by another door.
+func TestDeliver_RecipientGoneSoftSkipsEvenIfUnlinkFails(t *testing.T) {
+	store := &fakeStore{
+		claimed:           []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:          deliverySubscription(),
+		digestJobs:        map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		unlinkTelegramErr: errors.New("boom"),
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrRecipientGone}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.SoftSkips != 1 || stats.Failed != 0 {
+		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0", stats.SoftSkips, stats.Failed)
 	}
 }

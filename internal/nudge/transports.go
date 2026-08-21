@@ -3,6 +3,7 @@ package nudge
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -43,12 +44,19 @@ func NewTelegramNotifier(client *telegramnotify.Client, origin string) *Telegram
 
 // Send renders the nudge and posts it to the chat encoded in dest. The channel
 // argument is ignored — this notifier only serves the telegram channel.
+// A 403 is translated to ErrRecipientGone, this engine's vocabulary for a chat
+// permanently closed to us, so the runner unlinks it instead of retrying a send
+// that cannot land. Same translation the digest and reminder notifiers do.
 func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest string, m Message) error {
 	chatID, err := strconv.ParseInt(dest, 10, 64)
 	if err != nil {
 		return fmt.Errorf("nudge: invalid telegram chat id %q: %w", dest, err)
 	}
-	return n.client.SendMessage(ctx, chatID, n.render(m))
+	err = n.client.SendMessage(ctx, chatID, n.render(m))
+	if errors.Is(err, telegramnotify.ErrChatUnreachable) {
+		return fmt.Errorf("%w: %w", ErrRecipientGone, err)
+	}
+	return err
 }
 
 func (n *TelegramNotifier) render(m Message) string {

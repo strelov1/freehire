@@ -16,6 +16,9 @@ import (
 // fakeStore is a DB-free Store. It serves canned candidate rows and delivery
 // context, and records every write the engine makes.
 type fakeStore struct {
+	// unlinkedTelegram records the user ids a delivery forgot the Telegram chat for.
+	unlinkedTelegram []int64
+
 	followUp      []db.ListFollowUpCandidatesRow
 	interviewPrep []db.ListInterviewPrepCandidatesRow
 	jobClosed     []db.ListJobClosedCandidatesRow
@@ -78,6 +81,10 @@ func (s *fakeStore) ReleaseNudgeClaim(_ context.Context, id int64) error {
 	s.released = append(s.released, id)
 	return nil
 }
+func (s *fakeStore) DeleteTelegramLink(_ context.Context, userID int64) (int64, error) {
+	s.unlinkedTelegram = append(s.unlinkedTelegram, userID)
+	return 1, nil
+}
 func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) (int64, error) {
 	if s.notifyErr != nil {
 		return 0, s.notifyErr
@@ -89,9 +96,15 @@ func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificat
 type fakeNotifier struct {
 	sent []string // "channel:dest"
 	err  error
+	// errByChannel fails only the named channels, so a test can model one channel
+	// dying while another lands — which a blanket err cannot express.
+	errByChannel map[string]error
 }
 
 func (n *fakeNotifier) Send(_ context.Context, channel, dest string, _ Message) error {
+	if err, ok := n.errByChannel[channel]; ok {
+		return err
+	}
 	if n.err != nil {
 		return n.err
 	}
@@ -679,5 +692,55 @@ func TestDeliver_DeliversOutsideQuietHours(t *testing.T) {
 	}
 	if stats.Delivered != 1 {
 		t.Errorf("stats.Delivered = %d, want 1", stats.Delivered)
+	}
+}
+
+// Same failure as the digest and reminder workers': a user who blocked the bot
+// answered every telegram send with 403, and each nudge counted that as a delivery
+// failure to retry. Retrying cannot reach a closed chat, so the link goes instead.
+func TestDeliver_RecipientGoneUnlinksTelegramInsteadOfFailing(t *testing.T) {
+	chat := int64(555)
+	row := deliveryRow(KindFollowUp, "applied", 25, true, true, []string{"telegram"}, &chat, "")
+	row.UserID = 42
+	store := &fakeStore{due: []int64{1}, row: row}
+	r := newRunner(store, &fakeNotifier{err: ErrRecipientGone})
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.unlinkedTelegram) != 1 || store.unlinkedTelegram[0] != 42 {
+		t.Errorf("unlinkedTelegram = %v, want [42]", store.unlinkedTelegram)
+	}
+	if stats.Failed != 0 {
+		t.Errorf("stats.Failed = %d, want 0 — a chat that will never accept us is not a failure to retry", stats.Failed)
+	}
+	if len(store.failed) != 0 {
+		t.Errorf("failed = %v, want none", store.failed)
+	}
+}
+
+// A nudge is delivered if ANY of its channels lands. A dead Telegram chat must not
+// cancel the email that did arrive.
+func TestDeliver_RecipientGoneOnOneChannelStillDeliversTheOther(t *testing.T) {
+	chat := int64(555)
+	row := deliveryRow(KindFollowUp, "applied", 25, true, true, []string{"telegram", "email"}, &chat, "a@b.c")
+	row.UserID = 42
+	store := &fakeStore{due: []int64{1}, row: row}
+	notifier := &fakeNotifier{errByChannel: map[string]error{"telegram": ErrRecipientGone}}
+	r := newRunner(store, notifier)
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.delivered) != 1 {
+		t.Errorf("delivered = %v, want the nudge delivered over email", store.delivered)
+	}
+	if stats.Failed != 0 {
+		t.Errorf("stats.Failed = %d, want 0", stats.Failed)
+	}
+	if len(store.unlinkedTelegram) != 1 {
+		t.Errorf("unlinkedTelegram = %v, want the dead chat forgotten anyway", store.unlinkedTelegram)
 	}
 }

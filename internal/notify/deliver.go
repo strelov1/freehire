@@ -113,6 +113,21 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 			stats.SoftSkips++
 			return
 		}
+		// The recipient is gone for good — the Telegram bot was blocked or removed,
+		// and no retry reaches that chat again. Forget the link and soft-skip: the
+		// subscription survives (relinking the bot resumes it) while every other
+		// telegram delivery for this user, in this worker and in remind/nudge alike,
+		// now reads as "not linked" and soft-skips too.
+		//
+		// Without this one blocked user failed a digest per pass forever, and the
+		// exit code that failure produces turned the whole run red — which is how a
+		// stranger's choice to mute a bot became a worker in a failed state.
+		if errors.Is(err, ErrRecipientGone) {
+			r.unlinkTelegram(ctx, subID, info.UserID, err)
+			r.release(ctx, subID, jobIDs)
+			stats.SoftSkips++
+			return
+		}
 		log.Printf("notify: deliver subscription %d: %v", subID, err)
 		if ferr := r.store.RecordMatchDeliveryFailure(ctx, db.RecordMatchDeliveryFailureParams{
 			SubscriptionID: subID,
@@ -182,6 +197,26 @@ func (r *Runner) withdrawNotification(ctx context.Context, subID, id int64) {
 	if err := r.store.DeleteNotification(ctx, id); err != nil {
 		log.Printf("notify: withdraw notification %d for subscription %d: %v", id, subID, err)
 	}
+}
+
+// unlinkTelegram forgets the user's Telegram chat after a send reported it
+// permanently closed, and says so in the log — this is a visible change to the
+// user's settings made without them asking, so it should not happen silently.
+//
+// A failure to unlink is logged and nothing more: the digest is soft-skipped
+// either way, and the next pass will meet the same 403 and try again.
+func (r *Runner) unlinkTelegram(ctx context.Context, subID, userID int64, cause error) {
+	rows, err := r.store.DeleteTelegramLink(ctx, userID)
+	if err != nil {
+		log.Printf("notify: unlink telegram for user %d (subscription %d): %v", userID, subID, err)
+		return
+	}
+	if rows == 0 {
+		// Already unlinked by an earlier subscription in this same pass — every
+		// telegram subscription this user has meets the same 403.
+		return
+	}
+	log.Printf("notify: unlinked telegram for user %d after subscription %d: %v", userID, subID, cause)
 }
 
 // release drops the lease on a subscription's claimed matches so they are retried

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,6 +14,16 @@ import (
 // defaultAPIBase is the Telegram Bot API host. A fixed, trusted host — no SSRF
 // surface — so a plain http.Client is used.
 const defaultAPIBase = "https://api.telegram.org"
+
+// ErrChatUnreachable wraps every 403 the Bot API answers a send with: the bot was
+// blocked, the account was deactivated, the bot was removed from the group, or it
+// was never allowed to open the conversation. All four say the same thing — this
+// chat will not accept messages again — and none of them is fixed by retrying.
+//
+// Matched on the status code rather than the description text, which is prose
+// Telegram is free to reword: a rule keyed to "Forbidden: bot was blocked by the
+// user" stops firing the day that sentence changes, and stops silently.
+var ErrChatUnreachable = errors.New("telegramnotify: chat unreachable")
 
 // Client is a thin Telegram Bot API client over net/http for the handful of
 // methods this feature needs (sendMessage, setWebhook). It deliberately avoids a
@@ -83,6 +94,9 @@ func (c *Client) call(ctx context.Context, method string, payload map[string]any
 		return fmt.Errorf("telegram %s: decode response: %w", method, err)
 	}
 	if !r.OK {
+		if resp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("telegram %s failed (%d): %s: %w", method, resp.StatusCode, r.Description, ErrChatUnreachable)
+		}
 		return fmt.Errorf("telegram %s failed (%d): %s", method, resp.StatusCode, r.Description)
 	}
 	return nil

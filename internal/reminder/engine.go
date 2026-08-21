@@ -36,6 +36,14 @@ type Notifier interface {
 // as a soft-skip, not a delivery failure.
 var ErrChannelNotConfigured = errors.New("reminder: channel not configured")
 
+// ErrRecipientGone is returned by a Notifier whose channel learned from the send
+// that this recipient is permanently closed to us — the Telegram bot was blocked
+// or removed. Like ErrChannelNotConfigured it is a soft-skip, and additionally the
+// runner forgets the link, so no later reminder, digest or nudge tries that chat
+// again. Mirrors notify.ErrRecipientGone; see the note there on why each engine
+// declares its own rather than sharing the transport's.
+var ErrRecipientGone = errors.New("reminder: recipient will not accept messages")
+
 // Router dispatches a reminder to the notifier registered for its channel, so the
 // engine stays channel-agnostic.
 type Router map[string]Notifier
@@ -67,6 +75,9 @@ type Store interface {
 	// delivered, so nothing needs to link to the row. Only the subscription
 	// digest, which records before sending, uses it.
 	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
+	// DeleteTelegramLink forgets a user's Telegram chat, called when a send
+	// reports it permanently closed (ErrRecipientGone).
+	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
 }
 
 // Config tunes one firing pass. Defaults come from DefaultConfig.
@@ -207,6 +218,13 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeli
 		if errors.Is(err, ErrChannelNotConfigured) {
 			continue
 		}
+		// The chat is closed to us for good. Forget it and skip this channel
+		// without recording a failure: retrying cannot reach it, and a reminder
+		// whose OTHER channel worked is still delivered.
+		if errors.Is(err, ErrRecipientGone) {
+			r.unlinkTelegram(ctx, info.UserID, err)
+			continue
+		}
 		if err != nil {
 			failedErr = err
 			continue
@@ -214,6 +232,21 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeli
 		delivered = true
 	}
 	return delivered, failedErr
+}
+
+// unlinkTelegram forgets a user's Telegram chat after a send reported it
+// permanently closed, logging it because this changes the user's settings without
+// them asking. A failure here is logged and no more: the send is skipped either
+// way, and the next reminder meets the same 403 and tries again.
+func (r *Runner) unlinkTelegram(ctx context.Context, userID int64, cause error) {
+	rows, err := r.store.DeleteTelegramLink(ctx, userID)
+	if err != nil {
+		log.Printf("reminder: unlink telegram for user %d: %v", userID, err)
+		return
+	}
+	if rows > 0 {
+		log.Printf("reminder: unlinked telegram for user %d: %v", userID, cause)
+	}
 }
 
 // recipient resolves the destination for a channel, and whether the reminder is

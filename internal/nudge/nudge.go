@@ -68,6 +68,14 @@ type Notifier interface {
 // registered notifier. The engine treats it as a soft-skip, not a delivery failure.
 var ErrChannelNotConfigured = errors.New("nudge: channel not configured")
 
+// ErrRecipientGone is returned by a Notifier whose channel learned from the send
+// that this recipient is permanently closed to us — the Telegram bot was blocked
+// or removed. Like ErrChannelNotConfigured it is a soft-skip, and additionally the
+// runner forgets the link, so no later nudge, digest or reminder tries that chat
+// again. Mirrors notify.ErrRecipientGone; see the note there on why each engine
+// declares its own rather than sharing the transport's.
+var ErrRecipientGone = errors.New("nudge: recipient will not accept messages")
+
 // Router dispatches a nudge to the notifier registered for its channel, so the
 // engine stays channel-agnostic.
 type Router map[string]Notifier
@@ -104,6 +112,9 @@ type Store interface {
 	CancelNudgeAtFire(ctx context.Context, id int64) (int64, error)
 	RecordNudgeDeliveryFailure(ctx context.Context, arg db.RecordNudgeDeliveryFailureParams) error
 	ReleaseNudgeClaim(ctx context.Context, id int64) error
+	// DeleteTelegramLink forgets a user's Telegram chat, called when a send
+	// reports it permanently closed (ErrRecipientGone).
+	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
 	// RecordNotification writes the in-app notification-center row for a
 	// delivered nudge. Called from fire right after MarkNudgeDelivered; a
 	// failure must never fail the delivery it accompanies (see
@@ -401,6 +412,13 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 		if errors.Is(err, ErrChannelNotConfigured) {
 			continue
 		}
+		// The chat is closed to us for good. Forget it and skip this channel
+		// without recording a failure: retrying cannot reach it, and a nudge whose
+		// OTHER channel worked is still delivered.
+		if errors.Is(err, ErrRecipientGone) {
+			r.unlinkTelegram(ctx, info.UserID, err)
+			continue
+		}
 		if err != nil {
 			failedErr = err
 			continue
@@ -408,6 +426,21 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 		delivered = true
 	}
 	return delivered, failedErr
+}
+
+// unlinkTelegram forgets a user's Telegram chat after a send reported it
+// permanently closed, logging it because this changes the user's settings without
+// them asking. A failure here is logged and no more: the send is skipped either
+// way, and the next nudge meets the same 403 and tries again.
+func (r *Runner) unlinkTelegram(ctx context.Context, userID int64, cause error) {
+	rows, err := r.store.DeleteTelegramLink(ctx, userID)
+	if err != nil {
+		log.Printf("nudge: unlink telegram for user %d: %v", userID, err)
+		return
+	}
+	if rows > 0 {
+		log.Printf("nudge: unlinked telegram for user %d: %v", userID, cause)
+	}
 }
 
 // recipient resolves the destination for a channel, and whether the nudge is

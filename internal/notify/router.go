@@ -16,6 +16,21 @@ const ChannelEmail = "email"
 // failed attempt is counted — rather than a delivery failure to dead-letter.
 var ErrChannelNotConfigured = errors.New("notify: channel not configured")
 
+// ErrRecipientGone is returned by a Notifier whose channel has learned, from the
+// send itself, that this recipient will not accept messages again — the Telegram
+// bot was blocked or removed, and the chat is permanently closed to us.
+//
+// Distinct from ErrChannelNotConfigured, which is about the channel being absent
+// for everyone, though the delivery loop treats both as a soft-skip. What it adds
+// is a side effect: the engine forgets the link before skipping, so the recipient
+// stops being deliverable at all rather than failing once per digest forever.
+//
+// A channel-level sentinel rather than the transport's own: internal/telegramnotify
+// imports this package for Digest, so it cannot be imported back. Each engine
+// declares its own and its Telegram notifier translates, exactly as they already do
+// for ErrChannelNotConfigured.
+var ErrRecipientGone = errors.New("notify: recipient will not accept messages")
+
 // Router is a Notifier that dispatches a digest to the per-channel notifier
 // registered for the subscription's channel, so the matching engine stays
 // channel-agnostic (it depends only on Notifier). A channel with no registered

@@ -130,6 +130,10 @@ type Store interface {
 	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
 	DeleteNotification(ctx context.Context, id int64) error
 	MarkDigestSent(ctx context.Context, id int64) error
+	// DeleteTelegramLink forgets a user's Telegram chat. Called when a send
+	// reports the chat is permanently closed (ErrRecipientGone) — the same
+	// unlink the settings page performs, reached from the delivery side.
+	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.

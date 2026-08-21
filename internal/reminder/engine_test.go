@@ -12,6 +12,9 @@ import (
 // fakeStore is a DB-free reminder.Store. It serves canned delivery rows keyed by
 // id and records which finalizers the engine invoked.
 type fakeStore struct {
+	// unlinkedTelegram records the user ids a delivery forgot the Telegram chat for.
+	unlinkedTelegram []int64
+
 	due      []int64
 	rows     map[int64]db.GetReminderForDeliveryRow
 	claimErr error
@@ -47,6 +50,10 @@ func (s *fakeStore) ReleaseReminderClaim(_ context.Context, id int64) error {
 	s.released = append(s.released, id)
 	return nil
 }
+func (s *fakeStore) DeleteTelegramLink(_ context.Context, userID int64) (int64, error) {
+	s.unlinkedTelegram = append(s.unlinkedTelegram, userID)
+	return 1, nil
+}
 func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) (int64, error) {
 	s.recorded = append(s.recorded, arg)
 	return int64(len(s.recorded)), s.recordErr
@@ -56,9 +63,16 @@ func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificat
 type fakeNotifier struct {
 	sent []string // "channel:dest"
 	err  error
+	// errByChannel fails only the named channels, so a test can model one channel
+	// dying while another lands — which is the whole point of a multi-channel
+	// reminder and the case a blanket err cannot express.
+	errByChannel map[string]error
 }
 
 func (n *fakeNotifier) Send(_ context.Context, channel, dest string, _ ReminderMessage) error {
+	if err, ok := n.errByChannel[channel]; ok {
+		return err
+	}
 	if n.err != nil {
 		return n.err
 	}
@@ -332,5 +346,51 @@ func TestRun_QuietHoursOffDoesNotDefer(t *testing.T) {
 
 	if stats.Delivered != 1 || stats.Deferred != 0 {
 		t.Errorf("stats = %+v, want Delivered=1 Deferred=0 when quiet hours are unset", stats)
+	}
+}
+
+// Same failure as the digest worker's: a user who blocked the bot answered every
+// telegram send with 403, and each reminder counted that as a delivery failure to
+// retry. Retrying cannot reach a closed chat, so the link goes instead — which
+// also stops the digest and nudge workers meeting the same wall.
+func TestRun_RecipientGoneUnlinksTelegramInsteadOfFailing(t *testing.T) {
+	chat := int64(555)
+	store := &fakeStore{
+		due:  []int64{1},
+		rows: map[int64]db.GetReminderForDeliveryRow{1: actionableRow(1, []string{"telegram"}, &chat, "a@b.c")},
+	}
+	stats := run(t, store, &fakeNotifier{err: ErrRecipientGone})
+
+	if len(store.unlinkedTelegram) != 1 || store.unlinkedTelegram[0] != 42 {
+		t.Errorf("unlinkedTelegram = %v, want [42]", store.unlinkedTelegram)
+	}
+	if len(store.failed) != 0 {
+		t.Errorf("failed = %v, want none — a chat that will never accept us is not a failure to retry", store.failed)
+	}
+	if stats.Failed != 0 {
+		t.Errorf("stats.Failed = %d, want 0", stats.Failed)
+	}
+}
+
+// A reminder is delivered if ANY of its channels lands. A dead Telegram chat must
+// not cancel the email that did arrive, nor mark the reminder undelivered.
+func TestRun_RecipientGoneOnOneChannelStillDeliversTheOther(t *testing.T) {
+	chat := int64(555)
+	store := &fakeStore{
+		due:  []int64{1},
+		rows: map[int64]db.GetReminderForDeliveryRow{1: actionableRow(1, []string{"telegram", "email"}, &chat, "a@b.c")},
+	}
+	// Telegram is gone; email works.
+	notifier := &fakeNotifier{errByChannel: map[string]error{"telegram": ErrRecipientGone}}
+	stats := run(t, store, notifier)
+
+	if len(store.delivered) != 1 {
+		t.Errorf("delivered = %v, want the reminder delivered over email", store.delivered)
+	}
+	if stats.Failed != 0 {
+		t.Errorf("stats.Failed = %d, want 0", stats.Failed)
+	}
+	if len(store.unlinkedTelegram) != 1 {
+		t.Errorf("unlinkedTelegram = %v, want the dead chat forgotten anyway", store.unlinkedTelegram)
 	}
 }

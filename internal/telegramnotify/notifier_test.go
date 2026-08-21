@@ -3,6 +3,7 @@ package telegramnotify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -215,5 +216,93 @@ func TestNotifier_RenderTailFallsBackWithoutANotificationID(t *testing.T) {
 	}
 	if want := `<a href="https://freehire.me/my/notifications">+ 57 more</a>`; !strings.Contains(got, want) {
 		t.Errorf("tail missing fallback %q in: %q", want, got)
+	}
+}
+
+// Every 403 the Bot API answers a send with means the same thing — this chat will
+// not take messages again — and the engines act on it by forgetting the link. The
+// status code is the signal, deliberately not the description: that text is prose
+// Telegram may reword, and a rule keyed to one sentence would stop firing silently.
+func TestClient_ForbiddenIsChatUnreachable(t *testing.T) {
+	for _, desc := range []string{
+		"Forbidden: bot was blocked by the user",
+		"Forbidden: user is deactivated",
+		"Forbidden: bot was kicked from the group chat",
+		"Forbidden: bot can't initiate conversation with a user",
+		"Forbidden: something Telegram has not thought of yet",
+	} {
+		t.Run(desc, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"ok":false,"description":"` + desc + `"}`))
+			}))
+			defer srv.Close()
+
+			c := NewClient("t")
+			c.base = srv.URL
+			err := c.SendMessage(context.Background(), 1, "hi")
+			if !errors.Is(err, ErrChatUnreachable) {
+				t.Errorf("SendMessage err = %v, want it to wrap ErrChatUnreachable", err)
+			}
+			if !strings.Contains(err.Error(), desc) {
+				t.Errorf("SendMessage err = %v, want it to keep the API description for the log", err)
+			}
+		})
+	}
+}
+
+// A rejection that is not a 403 stays an ordinary failure: "message is too long"
+// and "chat not found" are the engine's to retry or dead-letter, and unlinking a
+// user's chat over either would be destroying settings on a guess.
+func TestClient_NonForbiddenRejectionIsNotChatUnreachable(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		desc   string
+	}{
+		{http.StatusBadRequest, "message is too long"},
+		{http.StatusBadRequest, "chat not found"},
+		{http.StatusTooManyRequests, "Too Many Requests: retry after 30"},
+		{http.StatusInternalServerError, "Internal Server Error"},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(`{"ok":false,"description":"` + tc.desc + `"}`))
+			}))
+			defer srv.Close()
+
+			c := NewClient("t")
+			c.base = srv.URL
+			err := c.SendMessage(context.Background(), 1, "hi")
+			if err == nil {
+				t.Fatal("SendMessage succeeded, want an error")
+			}
+			if errors.Is(err, ErrChatUnreachable) {
+				t.Errorf("SendMessage err = %v, want it NOT to read as a permanently closed chat", err)
+			}
+		})
+	}
+}
+
+// The engines cannot import this package (it imports notify for Digest), so the
+// notifier is where the transport's 403 becomes the engine's vocabulary. If this
+// translation is dropped the 403 reaches the runner as a plain error and the
+// blocked-user loop comes back.
+func TestNotifier_ForbiddenSurfacesAsRecipientGone(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"ok":false,"description":"Forbidden: bot was blocked by the user"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("t")
+	c.base = srv.URL
+	n := NewNotifier(c, "https://freehire.me")
+	err := n.Send(context.Background(), notify.ChannelTelegram, "555", notify.Digest{SavedSearchName: "Go", Total: 1})
+	if !errors.Is(err, notify.ErrRecipientGone) {
+		t.Errorf("Send err = %v, want it to wrap notify.ErrRecipientGone", err)
+	}
+	if !errors.Is(err, ErrChatUnreachable) {
+		t.Errorf("Send err = %v, want the transport cause kept for the log", err)
 	}
 }

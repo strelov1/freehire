@@ -2,6 +2,7 @@ package telegramnotify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"strconv"
@@ -35,12 +36,19 @@ func NewNotifier(client *Client, jobBaseURL string) *Notifier {
 // Send renders the digest and posts it to the chat encoded in dest. The channel
 // argument is ignored — this Notifier only serves the telegram channel, which the
 // worker routes to it.
+// A 403 is translated to notify.ErrRecipientGone, the engine-side vocabulary for
+// "this recipient is permanently closed to us" — the engine unlinks the chat and
+// soft-skips instead of counting a delivery failure it would retry to no purpose.
 func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Digest) error {
 	chatID, err := strconv.ParseInt(dest, 10, 64)
 	if err != nil {
 		return fmt.Errorf("telegramnotify: invalid chat id %q: %w", dest, err)
 	}
-	return n.client.SendMessage(ctx, chatID, n.render(d))
+	err = n.client.SendMessage(ctx, chatID, n.render(d))
+	if errors.Is(err, ErrChatUnreachable) {
+		return fmt.Errorf("%w: %w", notify.ErrRecipientGone, err)
+	}
+	return err
 }
 
 // render builds the HTML message body. Job titles, company names, the salary

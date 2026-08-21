@@ -43,6 +43,18 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 - **An unconfigured channel is a soft-skip, not a failure.** `Router.Send` returns
   `ErrChannelNotConfigured` (e.g. email while SES is unset) and the engine skips it. Don't
   promote that to a delivery error — it would fail every run in environments without SES.
+- **A blocked Telegram bot unlinks the chat; it does not fail the delivery.** Every 403 the
+  Bot API answers a send with means the chat is permanently closed (blocked, deactivated,
+  bot removed), and no retry reaches it. `telegramnotify.ErrChatUnreachable` carries that up;
+  each engine's Telegram notifier translates it into its own `ErrRecipientGone`, and the
+  runner deletes the user's `telegram_links` row and soft-skips. **Matched on the 403, not on
+  the description text** — that text is prose Telegram may reword, and a rule keyed to
+  "Forbidden: bot was blocked by the user" would stop firing silently. Unlinking rather than
+  disabling the subscription is the point: blocking the bot is a fact about the USER, so one
+  delete makes every telegram delivery for them — digest, reminder and nudge alike — read as
+  "not linked" and soft-skip, while their subscriptions survive for whenever they relink.
+  Before this, one blocked subscriber failed a digest per pass forever and kept
+  `freehire-notify.service` in `failed`.
 - **Matching is O(distinct queries), not O(subscribers).** `notify.Runner.Run` groups
   subscriptions sharing a saved-search query so the search index is hit once regardless of
   how many people subscribed to it. A per-subscription loop would multiply index load by
