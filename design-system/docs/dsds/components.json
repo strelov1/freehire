@@ -41,6 +41,18 @@
           "description": "If set, renders an <a> instead of a <button>."
         },
         {
+          "name": "target",
+          "type": "string",
+          "default": "undefined",
+          "description": "Anchor target; only meaningful alongside href."
+        },
+        {
+          "name": "rel",
+          "type": "string",
+          "default": "undefined",
+          "description": "Left unset, target=\"_blank\" still gets rel=\"noopener noreferrer\" — the component fills the reverse-tabnabbing default in so no call site has to. Passing rel yourself replaces it, including that default."
+        },
+        {
           "name": "class",
           "type": "string",
           "default": "undefined"
@@ -49,6 +61,11 @@
           "name": "children",
           "type": "Snippet",
           "required": true
+        },
+        {
+          "name": "...rest",
+          "type": "HTMLButtonAttributes & HTMLAnchorAttributes",
+          "description": "Forwarded to the rendered <button> or <a> — disabled, type, onclick, aria-*."
         }
       ],
       "stories": [

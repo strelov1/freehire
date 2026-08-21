@@ -25,6 +25,25 @@ The two in bold cross the package boundary. They are **repo checks that live her
 not package checks: they read a directory the package itself knows nothing about,
 and if `design-system/` is ever extracted they stay with the repo.
 
+## What an entity has to keep true
+
+An entity in `docs/dsds/` is a hand-written copy of something in `src/`, so every
+field of it is free to drift. `scripts/validate-docs.mjs` compares three of them
+back against the package: the files an entity points at exist, its `tokens` list
+matches the token file's keys, and its `props` list matches what the component
+destructures out of `$props()`. Each comparison runs **both ways** — a copy that
+omits half the original is as wrong as one that invents a field, and only the first
+kind is the sort of drift a reader would never notice.
+
+Props are named the way a **call site** writes them, not the way the component
+destructures them: `class: className` is documented as `class`, and the rest spread
+is documented as `...rest` so the passthrough has somewhere to be described. This is
+the check with a reader in mind — an agent decides what it may pass from the `props`
+list alone. `Button` grew `target` and `rel` in #1920 and the entity never learned
+about them, so the fact that the component fills in `rel="noopener noreferrer"` for a
+`_blank` target lived only in a source comment. Nothing was red for the week it took
+this check to notice.
+
 ## Token coverage — two radii
 
 `scripts/check-token-coverage.mjs` looks for three things, all the same defect: a
