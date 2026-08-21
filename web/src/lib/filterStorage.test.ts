@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { loadJobFilters, saveJobFilters, JOB_FILTERS_KEY } from './filterStorage';
+import {
+  geoScopeOffered,
+  JOB_FILTERS_KEY,
+  loadJobFilters,
+  markGeoScopeOffered,
+  saveJobFilters,
+} from './filterStorage';
 
 // A minimal in-memory localStorage stand-in for the Node test environment (where
 // there is no browser storage). Individual tests swap in throwing/undefined
@@ -69,5 +75,69 @@ describe('filterStorage', () => {
     expect(loadJobFilters()).toBe('');
     expect(() => saveJobFilters('regions=EU')).not.toThrow();
     expect(() => saveJobFilters('')).not.toThrow();
+  });
+});
+
+describe('geo-scope marker', () => {
+  afterEach(() => {
+    // @ts-expect-error - clean up the global we install per test
+    delete globalThis.localStorage;
+  });
+
+  it('is unset in a browser that has never been offered the guess', () => {
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = new MemoryStorage();
+
+    expect(geoScopeOffered()).toBe(false);
+  });
+
+  it('stays set once marked', () => {
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = new MemoryStorage();
+
+    markGeoScopeOffered();
+
+    expect(geoScopeOffered()).toBe(true);
+  });
+
+  // The whole reason the marker is its own key: clearing the filters removes
+  // hire.jobFilters, so a guess keyed on "storage is empty" would come back on the
+  // next visit and undo the clear, every time.
+  it('survives clearing the filter set', () => {
+    const store = new MemoryStorage();
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = store;
+
+    markGeoScopeOffered();
+    saveJobFilters('');
+
+    expect(loadJobFilters()).toBe('');
+    expect(geoScopeOffered()).toBe(true);
+  });
+
+  it('reports "offered" when storage is unavailable (SSR)', () => {
+    // No globalThis.localStorage installed.
+    expect(geoScopeOffered()).toBe(true);
+    expect(() => markGeoScopeOffered()).not.toThrow();
+  });
+
+  // An unrecordable guess is one that would re-apply on every single load and fight
+  // anyone who cleared it, so the safe reading of an unreadable marker is "done".
+  it('reports "offered" when storage throws (private mode / quota)', () => {
+    // @ts-expect-error - install a throwing stand-in
+    globalThis.localStorage = {
+      getItem() {
+        throw new Error('denied');
+      },
+      setItem() {
+        throw new Error('quota');
+      },
+      removeItem() {
+        throw new Error('denied');
+      },
+    };
+
+    expect(geoScopeOffered()).toBe(true);
+    expect(() => markGeoScopeOffered()).not.toThrow();
   });
 });

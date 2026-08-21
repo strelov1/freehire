@@ -20,10 +20,15 @@
     variant = 'jobs',
     store,
     counts = null,
+    inferred = false,
   }: {
     variant?: 'jobs' | 'companies' | 'launcher';
     store?: FacetStore;
     counts?: FacetCounts | null;
+    /** The geography was guessed from the visitor's IP country, not chosen. Said
+     *  out loud, because a visitor who did not pick this scope has no other way to
+     *  tell a small catalogue from a filtered one. */
+    inferred?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -40,6 +45,13 @@
   // format with no geography draws its icon alone, worldwide draws the globe alone).
   const trailing = $derived(
     [summary.text, summary.extra > 0 ? `+${summary.extra}` : ''].filter(Boolean).join(' '),
+  );
+
+  // The accessible name carries the whole story, because the visual marking is a
+  // dashed underline and an underline reads to nobody. It also names the way out —
+  // a guessed scope the visitor cannot see themselves out of is worse than none.
+  const triggerLabel = $derived(
+    inferred ? `${summary.label} — guessed from your location, change or clear it here` : summary.label,
   );
 
   // Facets "Clear all" resets, per mode.
@@ -108,8 +120,8 @@
     type="button"
     aria-haspopup="menu"
     aria-expanded={open}
-    aria-label={summary.label}
-    title={summary.label}
+    aria-label={triggerLabel}
+    title={triggerLabel}
     onclick={(e) => {
       // Stop the toggle's own click from reaching the window outside-handler, which
       // would otherwise immediately re-close the just-opened popover.
@@ -137,7 +149,14 @@
       {/each}
     </span>
     {#if trailing}
-      <span class="hidden max-w-40 truncate sm:inline">{trailing}</span>
+      <!-- A guessed scope wears a dashed underline: the convention for a value the
+           page inferred rather than was told, and quiet enough to sit in a header. -->
+      <span
+        class={[
+          'hidden max-w-40 truncate sm:inline',
+          inferred && 'underline decoration-muted-foreground/40 decoration-dashed underline-offset-4',
+        ]}>{trailing}</span
+      >
     {/if}
     <ChevronDown class="size-3.5 shrink-0 opacity-60" />
   </button>

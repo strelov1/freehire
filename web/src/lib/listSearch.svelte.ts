@@ -23,6 +23,11 @@ export interface ListSearchTarget {
     store: FacetStore;
     counts(): FacetCounts | null;
     variant: 'jobs' | 'companies';
+    /** Whether the current geography was guessed from the visitor's IP country
+     *  rather than chosen. A getter, like `counts`, so the trigger stops saying it
+     *  the moment the visitor edits the scope. Absent on surfaces that never guess,
+     *  which read as "chosen" — the honest default, since they were. */
+    inferred?(): boolean;
   };
 
   /** Role suggestions under the header's search input, present only on jobs-backed

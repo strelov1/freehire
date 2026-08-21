@@ -2,7 +2,7 @@
   import { onMount, untrack, type Snippet } from 'svelte';
   import { Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
-  import { afterNavigate, goto } from '$app/navigation';
+  import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '$lib/api';
@@ -17,7 +17,8 @@
   import { pageCount, pageOffset } from '$lib/pagination';
   import Pagination from './Pagination.svelte';
   import { FilterStore, filtersToParams, activeFilterCount } from '$lib/filters';
-  import { loadJobFilters } from '$lib/filterStorage';
+  import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
+  import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '$lib/geoScope';
   import {
     bannerVisible,
     loadOnboardingState,
@@ -306,7 +307,7 @@
         return filters.value;
       },
       setQuery: (q) => filters.setQuery(q),
-      filterScope: { store: filters, counts: () => counts, variant: 'jobs' },
+      filterScope: { store: filters, counts: () => counts, variant: 'jobs', inferred: () => scopeInferred },
       roleSuggest: {
         counts: () => roleCounts,
         active: () => filters.facet('role').include,
@@ -341,8 +342,35 @@
   // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
   // with no skills has no percent to test (see computeClientMatch) and stays, matching
   // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
+  // Rows kept on screen while the guessed opening scope reloads the feed underneath
+  // them. A filter change builds a fresh paginator, which starts empty and `loading`
+  // — for a change the visitor made that is the honest answer, but the guess is one
+  // NOBODY asked for, landing a few hundred milliseconds into the first visit. Left
+  // alone it collapses the whole list to a spinner and re-expands it: a layout shift
+  // measured against the page, attributed in full because it happens before any input.
+  //
+  // Only the guess holds rows over. Every other reload keeps its loading state.
+  let holdover = $state.raw<Job[]>([]);
+  const holdingOver = $derived(jobs.status === 'loading' && holdover.length > 0);
+  // Released when the replacement is on screen. `holdover` is read through untrack
+  // deliberately: as a tracked read it made this effect a dependency of its own
+  // write, so capturing the rows re-ran it while the outgoing paginator was still
+  // `ready` and it cleared them in the same tick — the hold never survived to the
+  // swap it existed for.
+  $effect(() => {
+    if (jobs.status === 'loading') return;
+    untrack(() => {
+      if (holdover.length > 0) holdover = [];
+    });
+  });
+
+  // Every read of "the rows on screen" goes through this, so the held-over rows and
+  // the paginator's own cannot disagree — the empty state reading jobs.items directly
+  // is what put "No matching jobs." over a list that was merely reloading.
+  const displayItems = $derived(holdingOver ? holdover : jobs.items);
+
   const visibleJobs = $derived(
-    jobs.items.filter((j) => {
+    displayItems.filter((j) => {
       if (isDismissed(j.public_slug)) return false;
       if (matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
         return computeClientMatch(j.skills ?? [], profileSkills).percent >= minMatch;
@@ -451,6 +479,79 @@
     });
   });
 
+  // The opening scope guessed from the visitor's IP country, once it has been
+  // applied — null whenever the scope is theirs rather than ours. The header trigger
+  // reads it to say the scope was inferred; see `scopeInferred` below.
+  let guessedRegion = $state<string | null>(null);
+
+  // The guess is only still ours while the geography is EXACTLY what we set: our
+  // region plus worldwide, nothing excluded, no country or city of their own. Any
+  // edit to the scope fails this and the marking drops, with no event to subscribe
+  // to and no flag to remember to clear. Filters outside geography (seniority, a
+  // search term) leave it standing — they did not touch the scope.
+  const scopeInferred = $derived.by(() => {
+    if (guessedRegion === null) return false;
+    const f = filters.value;
+    const regions = f.facets.regions;
+    const ours = new Set([guessedRegion, WORLDWIDE_REGION]);
+    return (
+      !!regions &&
+      regions.exclude.length === 0 &&
+      regions.include.length === ours.size &&
+      regions.include.every((r) => ours.has(r)) &&
+      !f.facets.countries?.include.length &&
+      !f.facets.countries?.exclude.length &&
+      !f.facets.cities?.include.length &&
+      !f.facets.cities?.exclude.length
+    );
+  });
+
+  /** The visitor's region from the edge, or null for anyone the edge cannot place —
+   *  a crawler, a missing header, a country outside the grouping. A failed request
+   *  is the same answer: this is an opening convenience, never a thing to retry. */
+  async function fetchRegion(): Promise<string | null> {
+    try {
+      const res = await fetch('/geo/region');
+      if (!res.ok) return null;
+      return ((await res.json()) as { region: string | null }).region;
+    } catch {
+      return null;
+    }
+  }
+
+  // Open a first-time visitor on their own region plus worldwide. The precedence
+  // itself lives in `shouldOfferGeoScope`, where it is a pure function and a test
+  // can state each rule; this reads the browser and acts on the answer.
+  //
+  // The URL is written directly and re-read rather than going through
+  // `filters.apply()`: apply() is an explicit write, and on the standalone list an
+  // explicit write mirrors itself into `hire.jobFilters`. Storage records what the
+  // visitor chose, and this is a guess. Writing the address bar and re-seeding from
+  // it is the same path an ordinary navigation takes, which by construction persists
+  // nothing. It is also safe by now — `replaceState` is not available during the
+  // initial `enter`, but a network round trip has passed since.
+  async function offerGeoScope() {
+    const guards = { search: location.search, storedFilters: loadJobFilters(), offered: geoScopeOffered() };
+    if (!shouldOfferGeoScope(guards)) return;
+
+    const region = await fetchRegion();
+    // Nothing was offered, so nothing is marked: a deployment whose edge sends no
+    // country would otherwise spend its one chance per browser on a null answer.
+    if (!region) return;
+    // They filtered while we were asking. Their scope wins; ours is dropped, not
+    // queued.
+    if (location.search !== '') return;
+
+    markGeoScopeOffered();
+    guessedRegion = region;
+    // Keep what is on screen until the scoped page arrives, so the swap happens in
+    // place instead of through a spinner the height of the whole list.
+    holdover = jobs.items;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
+    replaceState(`${location.pathname}?${geoScopeQuery(region)}`, {});
+    filters.syncFromUrl();
+  }
+
   // Re-seed the filters from the URL on every real navigation (initial load, the
   // "Jobs" nav link, back/forward). On the standalone list a navigation that lands
   // on a bare /jobs (empty URL) instead restores the last persisted filters, so an
@@ -472,7 +573,12 @@
     afterNavigate((nav) => {
       const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
       if (stored) filters.apply(stored);
-      else filters.syncFromUrl();
+      else {
+        filters.syncFromUrl();
+        // Last in the precedence chain, and the only branch that runs on a cold
+        // load: URL params were just applied, or there was nothing to restore.
+        void offerGeoScope();
+      }
     });
   } else {
     syncOnNavigation(filters);
@@ -504,7 +610,7 @@
 
   <div class="min-w-0 flex-1">
     <ListToolbar
-      total={jobs.items.length > 0 ? listTotal : null}
+      total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
@@ -528,11 +634,11 @@
       </div>
     {/if}
 
-    {#if jobs.status === 'loading'}
+    {#if jobs.status === 'loading' && !holdingOver}
       <States state="loading" />
     {:else if jobs.status === 'error'}
       <States state="error" message="Failed to load jobs." />
-    {:else if jobs.items.length === 0}
+    {:else if displayItems.length === 0}
       <States state="empty" message="No matching jobs." />
       {#if standalone && relaxTarget}
         <!-- No semantic fallback in this slice: offer an honest one-step broaden

@@ -147,6 +147,7 @@
         variant={target.filterScope.variant}
         store={target.filterScope.store}
         counts={target.filterScope.counts()}
+        inferred={target.filterScope.inferred?.() ?? false}
       />
       <div class="h-5 w-px shrink-0 bg-border"></div>
     {/if}
