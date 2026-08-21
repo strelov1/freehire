@@ -13,7 +13,15 @@
 -- CONCURRENTLY in its own no-transaction file, same reasoning as 0086/0101. On an
 -- existing prod volume, run it DETACHED from the SSH session (systemd-run or nohup):
 -- attached is how the original build died and left the invalid index this pair exists
--- to clean up. Re-running after an interrupted attempt needs the 0117 drop first,
--- because a half-built index is present-but-invalid and IF NOT EXISTS would skip it.
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS users_talent_network_public_id_key
+-- to clean up.
+--
+-- Deliberately NO `IF NOT EXISTS`, unlike 0086 and 0101. A failed CONCURRENTLY build
+-- leaves an invalid index UNDER THIS NAME, and a no-transaction file that errors is not
+-- recorded as applied — so the next migrate run retries this file. With IF NOT EXISTS
+-- that retry would see the name taken, skip silently, and record the migration as done,
+-- leaving prod with the invalid index and the ledger claiming it was rebuilt. That is
+-- precisely the failure this pair exists to repair, re-created automatically and this
+-- time invisibly. Without it the retry fails loudly and the operator runs 0117 first,
+-- which is the only order that actually works.
+CREATE UNIQUE INDEX CONCURRENTLY users_talent_network_public_id_key
     ON public.users (talent_network_public_id);

@@ -27,4 +27,7 @@
 --
 -- On an existing prod volume, run detached from the SSH session. Yes: the instruction
 -- that was ignored the first time is the one that has to be followed now.
+--
+-- IF EXISTS here, unlike 0118: a drop that already succeeded should be a no-op on
+-- retry, while a create that already "succeeded" into an invalid index must not be.
 DROP INDEX CONCURRENTLY IF EXISTS public.users_talent_network_public_id_key;
