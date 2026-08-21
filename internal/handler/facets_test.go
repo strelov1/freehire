@@ -376,6 +376,26 @@ func TestJobFacets_CacheServesRepeatedRequestWithoutRecomputing(t *testing.T) {
 	}
 }
 
+func TestJobFacets_CacheKeyStableAcrossMultiFacetRequests(t *testing.T) {
+	// The filter is built by ranging over a map, so its group order is randomized
+	// per request. The cache key must canonicalize it: the SAME multi-facet request
+	// fired repeatedly must hit one cache entry, not miss on a reordered filter.
+	// Without canonicalization this fails flakily (map order occasionally repeats).
+	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
+	app := facetsAppCached(fake, cache.NewMemory())
+
+	const q = "/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=eu"
+	for i := 0; i < 8; i++ {
+		status, _ := doGet(t, app, q)
+		if status != fiber.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i, status)
+		}
+	}
+	if fake.calls != 1 {
+		t.Errorf("FacetCounts calls = %d, want 1 (multi-facet key must be order-stable)", fake.calls)
+	}
+}
+
 func TestJobFacets_CacheKeyVariesByFilter(t *testing.T) {
 	// Different filters are different results and must not collide on one key.
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}

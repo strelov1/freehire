@@ -58,13 +58,43 @@ func (h *searchHandlers) cachedFacetCounts(ctx context.Context, p search.FacetPa
 // []string); the error branch is a guard, not a real path, and its fixed key just
 // means any unmarshalable request degrades to sharing one cache slot rather than
 // panicking.
+//
+// The filter must be canonicalized first. search.FilterFromValues builds the
+// [][]string by ranging over a map (query_filter.go), so its group order — and the
+// value order inside the location OR-group — is randomized per request. Left as-is,
+// the SAME multi-facet request would hash to different keys on successive calls and
+// miss its own cache entry, defeating the cache on exactly the filtered traffic it
+// targets. AND across groups and OR within one are both order-independent, so
+// sorting is safe for keying and never touches the filter actually sent to Meili.
 func facetCacheKey(p search.FacetParams) string {
+	p.Filter = canonicalFilter(p.Filter)
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return "jobfacets:v1:unkeyable"
 	}
 	sum := sha256.Sum256(raw)
 	return "jobfacets:v1:" + hex.EncodeToString(sum[:])
+}
+
+// canonicalFilter returns f with a stable ordering when it is the [][]string the
+// facet filter uses (sorted within each group, then across groups), so an
+// order-only difference cannot change the cache key. Any other shape is returned
+// unchanged — the key still reflects it, just without canonicalization.
+func canonicalFilter(f any) any {
+	groups, ok := f.([][]string)
+	if !ok {
+		return f
+	}
+	out := make([][]string, len(groups))
+	for i, g := range groups {
+		g = slices.Clone(g)
+		slices.Sort(g)
+		out[i] = g
+	}
+	slices.SortFunc(out, func(a, b []string) int {
+		return slices.Compare(a, b)
+	})
+	return out
 }
 
 // facetCounter is the analytics backend the facets handler depends on. It is
