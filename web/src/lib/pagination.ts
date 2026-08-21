@@ -6,7 +6,9 @@
 // back a plain <nav> of <a href="?page=N"> rendered alongside the feed, so the
 // catalogue is reachable by links and not by the sitemap alone.
 //
-// Pure and dependency-free so it unit-tests without a Svelte runtime.
+// Pure, and free of the Svelte runtime, so it unit-tests in plain Node.
+
+import { toSearchString } from './urlSearchString';
 
 /** Rows per page — the LIMIT every listing `load` searches with. */
 export const PAGE_SIZE = 20;
@@ -95,13 +97,17 @@ export function pageWindow(current: number, total: number): (number | null)[] {
   return out;
 }
 
-/** `?page=N` applied to the current query string, keeping every other param
- *  (filters, sort) intact. Page 1 drops the param entirely so the canonical
- *  first page has one address, not two. */
+/** `?page=N` applied to `params` — the query string as it stands in the ADDRESS BAR
+ *  (see Pagination.svelte's prop note) — keeping every other param intact. Page 1
+ *  drops the param entirely so the canonical first page has one address, not two.
+ *
+ *  Serialized with `toSearchString`, the same call the filter store's URL write
+ *  uses, so paging can't swap the visitor onto a percent-escaped twin of the
+ *  address they are already on. */
 export function pageHref(pathname: string, params: URLSearchParams, page: number): string {
   const next = new URLSearchParams(params);
   if (page <= 1) next.delete('page');
   else next.set('page', String(page));
-  const query = next.toString();
+  const query = toSearchString(next);
   return query ? `${pathname}?${query}` : pathname;
 }

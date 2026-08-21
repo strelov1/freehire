@@ -4,6 +4,7 @@ import {
   canFetchMore,
   pageCount,
   pageExists,
+  pageHref,
   pageOffset,
   pageWindow,
   parsePage,
@@ -133,5 +134,50 @@ describe('pageExists', () => {
   it('stops at the deepest page the search window reaches', () => {
     expect(pageExists(MAX_PAGE, 5_000_000)).toBe(true);
     expect(pageExists(MAX_PAGE + 1, 5_000_000)).toBe(false);
+  });
+});
+
+describe('pageHref', () => {
+  // The bug this guards: the page links were built from `page.url.searchParams`
+  // while the filters reach the URL through a shallow replaceState that SvelteKit
+  // never writes back into `page.url`. On the site's own front door — open `/`,
+  // pick a dozen facets, click "2" — that read returned nothing and the link was a
+  // bare `?page=2`, dropping every filter the visitor had set.
+  it('carries every filter param onto the next page', () => {
+    const params = new URLSearchParams({
+      regions: 'global,latam',
+      work_mode: 'hybrid,remote',
+      skills_exclude: 'java,ruby',
+      q: 'staff engineer',
+    });
+    expect(pageHref('/', params, 2)).toBe(
+      '/?regions=global,latam&work_mode=hybrid,remote&skills_exclude=java,ruby&q=staff+engineer&page=2',
+    );
+  });
+
+  // Page 1 is the canonical address of a filtered listing, so it carries the
+  // filters and NOT a redundant `page=1`.
+  it('drops the page param on the first page but keeps the filters', () => {
+    expect(pageHref('/companies', new URLSearchParams({ industries: 'fintech' }), 1)).toBe(
+      '/companies?industries=fintech',
+    );
+  });
+
+  it('replaces the page already in the params rather than appending one', () => {
+    const params = new URLSearchParams({ category: 'backend', page: '4' });
+    expect(pageHref('/', params, 5)).toBe('/?category=backend&page=5');
+  });
+
+  // Commas stay literal: the filter store writes `skills=go,react` to the address
+  // bar, so paging must not swap the visitor onto a percent-escaped twin of the
+  // URL they are already on.
+  it('keeps comma-joined facet values readable', () => {
+    expect(pageHref('/', new URLSearchParams({ skills: 'go,react' }), 3)).toBe(
+      '/?skills=go,react&page=3',
+    );
+  });
+
+  it('leaves an unfiltered listing with a plain path', () => {
+    expect(pageHref('/jobs', new URLSearchParams(), 1)).toBe('/jobs');
   });
 });

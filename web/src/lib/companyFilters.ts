@@ -53,6 +53,11 @@ export class CompanyFilterStore implements FacetStore {
     return this.#url.applied;
   }
 
+  /** The filters as they stand in the address bar — build links off this, not `page.url`. */
+  get params(): URLSearchParams {
+    return this.#url.params;
+  }
+
   get active(): number {
     return activeCompanyFilterCount(this.#url.value);
   }

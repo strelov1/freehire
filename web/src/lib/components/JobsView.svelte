@@ -577,7 +577,7 @@
         current={activePage}
         total={pageCount(jobs.total)}
         pathname={page.url.pathname}
-        params={page.url.searchParams}
+        params={filters.params}
       />
     {/if}
   </div>

@@ -19,6 +19,11 @@
   // of these IS a navigation to a new page of results, so landing at the top is
   // the right behaviour.
   //
+  // `params` is the caller's filter store's `params` — never `page.url.searchParams`,
+  // which the shallow URL writes leave behind (UrlSyncedState.params explains why).
+  // Read from `page.url`, a listing entered bare renders every link here as a
+  // filter-stripped `?page=N`, which is exactly the bug this note exists to prevent.
+  //
   // The hrefs below skip `resolve()` (and disable the lint that asks for it):
   // `pathname` is handed in from `page.url.pathname`, which SvelteKit has already
   // resolved — base path applied, route params substituted. There is no route id

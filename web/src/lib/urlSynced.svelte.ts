@@ -82,6 +82,20 @@ export class UrlSyncedState<T> {
     this.applied = seeded;
   }
 
+  /** The query params this state currently occupies in the address bar — the very
+   *  serialization `#write` last put there, so it is in lockstep with the URL by
+   *  construction (`value` is written synchronously).
+   *
+   *  Anything building a link to "this screen, with one thing changed" (the page
+   *  links, a share/return-to URL) must read THIS, never `page.url`. The writes are
+   *  shallow: `replaceState` updates the address bar and `page.state` and nothing
+   *  else, so `page.url` still holds whatever the last real navigation carried — on
+   *  a screen entered bare, no params at all. A link built from it silently drops
+   *  every filter applied since. */
+  get params(): URLSearchParams {
+    return this.#codec.serialize(this.value);
+  }
+
   /** Discrete change (facet pill, checkbox, clear): write the URL and apply at once.
    *  A click is never typed fast, so debouncing it would only add latency. */
   setNow(next: T) {
