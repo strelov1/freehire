@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/cache"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
@@ -26,10 +27,14 @@ type searchHandlers struct {
 	descriptions jobDescriptions
 	queries      *db.Queries
 	facets       facetCounter
+	// cache holds facet distributions for facetCacheTTL. Best-effort and optional:
+	// a nil cache (search configured but no Redis) simply recomputes every request,
+	// the shape every facet test but the caching ones runs under.
+	cache cache.Cache
 }
 
-func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries) *searchHandlers {
-	return &searchHandlers{search: search, descriptions: queries, queries: queries, facets: facets}
+func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries, c cache.Cache) *searchHandlers {
+	return &searchHandlers{search: search, descriptions: queries, queries: queries, facets: facets, cache: c}
 }
 
 func (h *searchHandlers) register(api fiber.Router, mw middleware) {

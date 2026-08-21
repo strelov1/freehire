@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/cache"
 	"github.com/strelov1/freehire/internal/search"
 )
 
@@ -15,10 +16,14 @@ type fakeFacetCounter struct {
 	gotTotal any
 	res      search.FacetResult
 	err      error
+	// calls counts FacetCounts invocations, so a test can prove the cache served a
+	// repeated request without recomputing.
+	calls int
 }
 
 func (f *fakeFacetCounter) FacetCounts(_ context.Context, p search.FacetParams) (search.FacetResult, error) {
 	f.got = p
+	f.calls++
 	return f.res, f.err
 }
 
@@ -41,6 +46,14 @@ func (f *fakeFacetCounter) reqFilter(attr string) any {
 
 func facetsApp(fc facetCounter) *fiber.App {
 	h := &searchHandlers{facets: fc}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/jobs/facets", h.JobFacets)
+	return app
+}
+
+// facetsAppCached is facetsApp with a live cache wired in, for the caching tests.
+func facetsAppCached(fc facetCounter, c cache.Cache) *fiber.App {
+	h := &searchHandlers{facets: fc, cache: c}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/jobs/facets", h.JobFacets)
 	return app
@@ -343,5 +356,63 @@ func TestJobFacets_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
 
 	if _, present := body["meta"]; present {
 		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
+	}
+}
+
+func TestJobFacets_CacheServesRepeatedRequestWithoutRecomputing(t *testing.T) {
+	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
+	app := facetsAppCached(fake, cache.NewMemory())
+
+	// Two identical requests. The first computes and populates the cache; the
+	// second must be served from it, leaving FacetCounts called exactly once.
+	for i := 0; i < 2; i++ {
+		status, _ := doGet(t, app, "/jobs/facets?q=go&seniority=senior")
+		if status != fiber.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i, status)
+		}
+	}
+	if fake.calls != 1 {
+		t.Errorf("FacetCounts calls = %d, want 1 (second request should hit cache)", fake.calls)
+	}
+}
+
+func TestJobFacets_CacheKeyVariesByFilter(t *testing.T) {
+	// Different filters are different results and must not collide on one key.
+	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
+	app := facetsAppCached(fake, cache.NewMemory())
+
+	doGet(t, app, "/jobs/facets?seniority=senior")
+	doGet(t, app, "/jobs/facets?seniority=junior")
+
+	if fake.calls != 2 {
+		t.Errorf("FacetCounts calls = %d, want 2 (distinct filters must not share a cache key)", fake.calls)
+	}
+}
+
+func TestJobFacets_DisjunctiveIsNotCached(t *testing.T) {
+	// The disjunctive path is the interactive live-modal experience and is left
+	// uncached, so two identical disjunctive requests both recompute.
+	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
+	app := facetsAppCached(fake, cache.NewMemory())
+
+	doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior")
+	doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior")
+
+	if fake.calls != 0 {
+		t.Fatalf("FacetCounts calls = %d; disjunctive should not use the FacetCounts path at all", fake.calls)
+	}
+}
+
+func TestJobFacets_NilCacheStillComputes(t *testing.T) {
+	// A handler with no cache configured must fall straight through to compute,
+	// every time — this is the shape every other facet test runs under.
+	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
+	app := facetsApp(fake) // nil cache
+
+	doGet(t, app, "/jobs/facets?seniority=senior")
+	doGet(t, app, "/jobs/facets?seniority=senior")
+
+	if fake.calls != 2 {
+		t.Errorf("FacetCounts calls = %d, want 2 (no cache = always compute)", fake.calls)
 	}
 }

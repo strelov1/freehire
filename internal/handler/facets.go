@@ -2,15 +2,70 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"net/url"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/cache"
 	"github.com/strelov1/freehire/internal/search"
 )
+
+// facetCacheTTL bounds how stale a cached facet distribution may be. Facet counts
+// are identical for every caller and change only when ingest lands a wave (a few
+// times an hour), so a minute of staleness is invisible to a user while collapsing
+// the repeated recomputation that the see-also block and crawler traffic drive —
+// the endpoint measured at 55% of API handler time. It is deliberately short: the
+// win is in absorbing bursts of identical requests, not in holding a count for long.
+const facetCacheTTL = time.Minute
+
+// cachedFacetCounts wraps facetCounter.FacetCounts with a best-effort read-through
+// cache. A nil cache, a miss, or any cache error all fall straight through to a
+// live count — the cache can never fail or refuse the request, only skip work.
+// The key is a hash of the exact FacetParams (query, filter, requested attributes),
+// so two requests share a cached result only when they would compute the identical
+// one. The disjunctive path is intentionally not routed here: it is the interactive
+// live-modal experience, lower volume, and its per-facet fan-out keys poorly.
+func (h *searchHandlers) cachedFacetCounts(ctx context.Context, p search.FacetParams) (search.FacetResult, error) {
+	if h.cache == nil {
+		return h.facets.FacetCounts(ctx, p)
+	}
+
+	key := facetCacheKey(p)
+	if cached, found, err := cache.GetJSON[search.FacetResult](ctx, h.cache, key); err == nil && found {
+		return cached, nil
+	}
+
+	res, err := h.facets.FacetCounts(ctx, p)
+	if err != nil {
+		return res, err
+	}
+	// Store is best-effort: a failed write just means the next request recomputes.
+	_ = cache.SetJSON(ctx, h.cache, key, res, facetCacheTTL)
+	return res, nil
+}
+
+// facetCacheKey derives a deterministic cache key from the params that fully
+// determine a facet result. It marshals FacetParams to JSON and hashes it, so the
+// key is bounded in length regardless of how many filter values a request carries.
+// FacetParams marshals in practice (Query string, Filter [][]string, Facets
+// []string); the error branch is a guard, not a real path, and its fixed key just
+// means any unmarshalable request degrades to sharing one cache slot rather than
+// panicking.
+func facetCacheKey(p search.FacetParams) string {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return "jobfacets:v1:unkeyable"
+	}
+	sum := sha256.Sum256(raw)
+	return "jobfacets:v1:" + hex.EncodeToString(sum[:])
+}
 
 // facetCounter is the analytics backend the facets handler depends on. It is
 // deliberately separate from searcher: counting facet distributions is a
@@ -209,7 +264,7 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 		vals := queryValues(c)
 		res, err = h.facets.DisjunctiveFacetCounts(c.Context(), q, facetReqs(vals), search.FilterFromValues(vals))
 	} else {
-		res, err = h.facets.FacetCounts(c.Context(), search.FacetParams{
+		res, err = h.cachedFacetCounts(c.Context(), search.FacetParams{
 			Query:  q,
 			Filter: buildSearchFilter(c),
 			Facets: facetAttributes(only...),
