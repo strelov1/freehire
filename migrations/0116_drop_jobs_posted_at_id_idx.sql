@@ -26,4 +26,7 @@
 -- without being recorded). On an existing prod volume, run it detached from the SSH
 -- session — a CONCURRENTLY statement dies with its session, and for a drop that leaves
 -- the index present but marked invalid.
-DROP INDEX CONCURRENTLY IF EXISTS jobs_posted_at_id_idx;
+-- Schema-qualified, like every other statement in migrations/: an unqualified name
+-- resolves through search_path, so a same-named index in an earlier schema would be
+-- the one dropped.
+DROP INDEX CONCURRENTLY IF EXISTS public.jobs_posted_at_id_idx;
