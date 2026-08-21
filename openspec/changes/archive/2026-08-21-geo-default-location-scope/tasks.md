@@ -36,7 +36,7 @@
 - [x] 5.2 Issue the region request as early as the precedence allows — first thing after the URL re-seed, and only for a browser that passes all three guards
 - [x] 5.3 Measured with the country pinned by header, alternating pairs, against live prod results. **The figure is data-dependent, not a constant**: 0.026 in one session and 0.246 an hour later, from the same build — verified by stashing the later edits and re-measuring, which reproduced 0.246 exactly. Baseline 0.0014 in both. **LCP** showed no increase beyond noise either time. Before the hold-over was fixed the same measurement read 0.87
 - [x] 5.4 **Decision: ship the automatic form**, taken with the range above in hand and not with a single flattering number. Holding the rows removes the collapse but not the height difference between the outgoing and incoming twenty, so the shift tracks whatever the catalogue happens to be serving. Accepted deliberately; the watchdog and CrUX are the checks, and the suggestion form is the recorded fallback
-- [ ] 5.5 Confirm on prod that the scheduled Lighthouse watchdog still clears the floors in `perf/lighthouse/lighthouserc.json`, given it always takes the derived-scope branch
+- [x] 5.5 The watchdog's **performance** floor is not breached. It has been failing since 2026-08-20 — before this change — on `categories.seo` scoring 0.5 against a 0.9 floor for `/companies/starbridge`, and separately on the k6 prod smoke. Both are unrelated pre-existing failures and are recorded as such rather than treated as this change's
 
 ## 6. Verification
 
@@ -49,7 +49,9 @@
 
 ## 7. Ops (separate repo: freehire-ops)
 
-- [ ] 7.1 Read the Cloudflare zone's current ruleset before changing anything — a ruleset `PUT` replaces rather than merges
-- [ ] 7.2 Turn on IP Geolocation for the zone
-- [ ] 7.3 Forward `CF-IPCountry` from nginx to the SSR server
-- [ ] 7.4 Verify on prod that the header reaches SSR, and that a request without it still serves the unfiltered feed
+**None of this was needed.** The premise was wrong and measuring prod said so.
+
+- [x] 7.1 Nothing to change, so nothing to read first
+- [x] 7.2 IP Geolocation was **already on** for the zone — the endpoint answered `latam` on a plain prod request the moment it deployed
+- [x] 7.3 No nginx entry needed. nginx forwards a client's request headers to the upstream by default; `proxy_set_header` is for adding or changing them, not for passing them through. `CF-IPCountry` was arriving at SSR all along
+- [x] 7.4 Verified on prod: a plain request gets its region, a request carrying a **spoofed** `CF-IPCountry` gets the real one (Cloudflare overwrites the client's value, so the scope cannot be forged), and Googlebot and ClaudeBot both get `null`
