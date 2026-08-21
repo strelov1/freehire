@@ -3,6 +3,7 @@
   import { Button } from '$lib/ui';
   import { errorMessage } from '$lib/utils';
   import { focusTrap } from '$lib/actions/focusTrap';
+  import { portal } from '$lib/actions/portal';
   import { dynamicLabel, FACETS } from '$lib/facets';
   import { experienceLabel, freshnessLabel } from '$lib/filterControls';
   import { filtersFromInterpretation } from '$lib/aiFilter';
@@ -96,7 +97,11 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+<!-- Moved to the body: this dialog is rendered from the filter sidebar, and that sidebar
+     is `sticky`, which opens a stacking context unconditionally. Inside one, `z-50` is
+     scoped to the sidebar's layer — so the overlay painted UNDER the job cards, which
+     come later in the document. No z-index can climb out of a stacking context. -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4" {@attach portal()}>
   <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onclose}></button>
 
   <div
