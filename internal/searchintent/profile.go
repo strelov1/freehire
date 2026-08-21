@@ -1,54 +1,36 @@
 package searchintent
 
-import (
-	"fmt"
-	"strings"
-)
-
 // Profile is what the caller has already told us, in the form this package reads it.
 //
 // It is a plain struct rather than the stored profile type so the package keeps no
 // dependency on the account layer: the handler maps one to the other, and the mapping
-// is the only place that has to know both. Fields are the caller's own words — the
-// dictionaries canonicalise whatever the model makes of them, exactly as they do for a
-// typed description.
+// is the only place that has to know both.
+//
+// Every field here is ALREADY canonical — the profile validates specializations against
+// the category vocabulary and normalises skills on the way in — which is why FromProfile
+// needs no model. See its doc comment.
 type Profile struct {
+	// Specializations are category values.
 	Specializations []string
-	Skills          []string
+	// Skills are canonical skill tags.
+	Skills []string
 	// ExcludedSkills are the technologies the caller said they do not want to work
-	// with. They must reach the model as things to rule OUT: importing them as wants
-	// would build precisely the search they told us to avoid.
+	// with. They become exclusions: importing them as wants would build precisely the
+	// search they told us to avoid.
 	ExcludedSkills []string
-	// Locations are their location preferences as written.
-	Locations []string
-	// Headline and Years come from their structured CV, and are what turn "8 years,
-	// mostly Go" into a seniority the profile itself never states.
-	Headline string
-	Years    string
-}
+	// WorkModes are the arrangements they accept.
+	WorkModes []string
 
-// describe renders the profile as the material the model reads, or "" when there is
-// nothing in it. An empty profile is not a search, and a request carrying one is
-// refused rather than answered by invention.
-func (p *Profile) describe() string {
-	if p == nil {
-		return ""
-	}
-	var b strings.Builder
-	line := func(label string, values []string) {
-		if len(values) > 0 {
-			fmt.Fprintf(&b, "- %s: %s\n", label, strings.Join(values, ", "))
-		}
-	}
-	if p.Headline != "" {
-		fmt.Fprintf(&b, "- headline: %s\n", p.Headline)
-	}
-	if p.Years != "" {
-		fmt.Fprintf(&b, "- years of experience: %s\n", p.Years)
-	}
-	line("wants to work as", p.Specializations)
-	line("works with", p.Skills)
-	line("wants to avoid working with", p.ExcludedSkills)
-	line("will work from", p.Locations)
-	return b.String()
+	// The three geographies a profile holds answer different questions, and they are
+	// carried apart because collapsing them changes what the profile says.
+	//
+	// RemoteFrom is the reach they will work remotely for and RelocateTo is where they
+	// would move — both are places they asked for. BasedIn is where they live now,
+	// which is NOT a search: someone in Lisbon who is open to relocating did not ask
+	// for jobs in Portugal. It is carried so the distinction is visible in the type
+	// rather than lost at the mapping, and deliberately not filtered on.
+	RemoteFrom []string
+	BasedIn    string
+	Relocating bool
+	RelocateTo []string
 }

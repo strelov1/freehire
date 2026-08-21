@@ -15,6 +15,12 @@ import (
 // one.
 var ErrDisabled = errors.New("searchintent: no model configured")
 
+// ErrNothingToInterpret is returned for a request carrying no description, no profile
+// and no previous result. It is a sentinel rather than a plain error because the
+// caller's transport has to tell it apart from a fault: this is a bad request, and
+// rendering it as a server error would report the caller's empty box as our bug.
+var ErrNothingToInterpret = errors.New("searchintent: nothing to interpret")
+
 // MaxTextRunes bounds the description a caller may submit. Two or three sentences
 // describe a job search completely; past that the text is either pasted noise or an
 // attempt to spend someone else's tokens.
@@ -23,12 +29,12 @@ const MaxTextRunes = 1000
 // Request is one interpretation to run: what the caller wrote, optionally what we
 // already know about them, and optionally the result they are refining.
 type Request struct {
-	// Text is the caller's own description. Empty when the interpretation is seeded
-	// from the profile alone.
+	// Text is the caller's own description.
+	//
+	// There is deliberately no Profile field. A saved profile is already written in the
+	// filter's vocabulary, so FromProfile builds that search with no model at all; a
+	// caller who wants to adjust one passes the built result back as Previous.
 	Text string
-	// Profile is what the caller has already told us, for the seed that spares them
-	// typing it again. Nil when they are describing a search from scratch.
-	Profile *Profile
 	// Previous is the result being refined. Carrying it lets the model return a
 	// complete replacement rather than a diff, so the caller always sees one coherent
 	// search.
@@ -93,9 +99,8 @@ func userPrompt(req Request) (string, error) {
 		return "", fmt.Errorf("searchintent: description is longer than %d characters", MaxTextRunes)
 	}
 
-	seed := req.Profile.describe()
-	if text == "" && seed == "" && req.Previous == nil {
-		return "", errors.New("searchintent: nothing to interpret")
+	if text == "" && req.Previous == nil {
+		return "", ErrNothingToInterpret
 	}
 
 	var b strings.Builder
@@ -103,15 +108,6 @@ func userPrompt(req Request) (string, error) {
 		b.WriteString("The search so far:\n")
 		b.WriteString(describe(*req.Previous))
 		b.WriteString("\nChange it as follows, and return the WHOLE search, not just the change:\n")
-		b.WriteString(text)
-		return b.String(), nil
-	}
-	if seed != "" {
-		b.WriteString("Build a search from what this person has already told us about themselves:\n")
-		b.WriteString(seed)
-		if text != "" {
-			b.WriteString("\nThey add:\n")
-		}
 	} else {
 		b.WriteString("Build a search from this description:\n")
 	}

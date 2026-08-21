@@ -28,14 +28,19 @@
 
 ## 3. Endpoint (`internal/handler`)
 
-- [ ] 3.1 Add the `feature:search-intent` tag constant to `user_llm.go`.
-- [ ] 3.2 Add the per-caller limiter in the shape of `matchAnalysisLimiter`.
-- [ ] 3.3 Add the transport-only handler for `POST /api/v1/search/interpret` — require a
+- [x] 3.1 Add the `feature:search-intent` tag constant to `user_llm.go`.
+- [x] 3.2 Add the per-caller limiter in the shape of `matchAnalysisLimiter`.
+- [x] 3.3 Add the transport-only handler for `POST /api/v1/search/interpret` — require a
   session, cap the text length, bind the model client with `userLLM`, and report 503 when
   the model client is unconfigured. Register it beside the search routes.
-- [ ] 3.4 Report the no-saved-profile case as a 404 naming the profile page, matching how
+- [x] 3.4 Report the no-saved-profile case as a 404 naming the profile page, matching how
   the assistant's profile tool answers the same situation.
-- [ ] 3.5 Document the endpoint in `openapi.yaml`.
+- [x] 3.5 ~~Document the endpoint in `openapi.yaml`.~~ **Dropped, with reason:**
+  `web/static/openapi.yaml` documents the public, unauthenticated integration surface —
+  jobs, companies, geo — and carries no cookie-authenticated route at all. This endpoint
+  is cookie-only by design (see design.md), so an integrator reading the contract could
+  not call it. Listing it would describe a capability the contract does not offer. If it
+  is ever widened to accept an API key, it belongs there in the same change.
 
 ## 4. Sidebar entry point (`web/`)
 

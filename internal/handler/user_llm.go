@@ -20,6 +20,7 @@ const (
 	tagATSReview     = "feature:ats-review"
 	tagAutofill      = "feature:autofill"
 	tagMailRecall    = "feature:mail-recall"
+	tagSearchIntent  = "feature:search-intent"
 )
 
 // llmBinding is what a per-user surface needs to spend as its caller: the client the

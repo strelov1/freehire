@@ -499,6 +499,9 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies)
 	searchH := newSearchHandlers(jobSearch, facets, queries)
+	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
+	// search and a profile-aware conversation cannot disagree about what it says.
+	intentH := newIntentHandlers(profileSvc, llmBinding{client: cfg.LLM, keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
@@ -632,6 +635,10 @@ func Register(app *fiber.App, cfg Config) {
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
 	searchH.register(api, mw)
+	// Beside the search it builds a filter for, though it shares none of its
+	// dependencies: interpretation needs a model and the caller's profile, not the
+	// index.
+	intentH.register(api, mw)
 	sitemapH.register(api)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
