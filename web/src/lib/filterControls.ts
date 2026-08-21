@@ -15,9 +15,16 @@ export const FRESHNESS_PRESETS: { days: number | null; label: string }[] = [
   { days: null, label: 'Any' },
 ];
 
-/** Label for the current freshness value; a non-preset value reads as "Any". */
+/** Label for the current freshness value. Like experienceLabel, this does NOT fall
+ *  back to "Any" for an off-preset value: a shared link, a hand-edited URL or an
+ *  AI-built filter can carry any day count, and reporting a live bound as "Any" would
+ *  tell the user the freshness filter is off while it quietly hides every posting
+ *  older than that bound. */
 export function freshnessLabel(days: number | null): string {
-  return FRESHNESS_PRESETS.find((p) => p.days === days)?.label ?? 'Any';
+  const preset = FRESHNESS_PRESETS.find((p) => p.days === days);
+  if (preset) return preset.label;
+  if (days == null) return 'Any';
+  return `Last ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 /** Experience-ceiling presets, least→most with "Any" as the rightmost stop. Each

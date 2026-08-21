@@ -1,0 +1,146 @@
+package searchintent
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/strelov1/freehire/internal/llm"
+)
+
+// ErrDisabled is returned when the deployment has no model client. The feature is off,
+// which is a different answer from "I did not understand you" and must not be shown as
+// one.
+var ErrDisabled = errors.New("searchintent: no model configured")
+
+// MaxTextRunes bounds the description a caller may submit. Two or three sentences
+// describe a job search completely; past that the text is either pasted noise or an
+// attempt to spend someone else's tokens.
+const MaxTextRunes = 1000
+
+// Request is one interpretation to run: what the caller wrote, optionally what we
+// already know about them, and optionally the result they are refining.
+type Request struct {
+	// Text is the caller's own description. Empty when the interpretation is seeded
+	// from the profile alone.
+	Text string
+	// Profile is what the caller has already told us, for the seed that spares them
+	// typing it again. Nil when they are describing a search from scratch.
+	Profile *Profile
+	// Previous is the result being refined. Carrying it lets the model return a
+	// complete replacement rather than a diff, so the caller always sees one coherent
+	// search.
+	Previous *Result
+}
+
+// Interpreter turns a description into a Result over an llm.Client.
+type Interpreter struct {
+	client *llm.Client
+}
+
+// NewInterpreter wraps a model client. A nil client disables the feature rather than
+// failing at call time in a way that reads as a broken request.
+func NewInterpreter(client *llm.Client) *Interpreter {
+	return &Interpreter{client: client}
+}
+
+// As rebinds the interpreter to a client bound to one caller's gateway credential, so
+// the spend is theirs. The receiver is not mutated: an interpreter is shared by every
+// request, and a per-caller client written into it would leak across them.
+func (i *Interpreter) As(client *llm.Client) *Interpreter {
+	if i == nil {
+		return nil
+	}
+	return &Interpreter{client: client}
+}
+
+// Enabled reports whether interpretation can run at all.
+func (i *Interpreter) Enabled() bool { return i != nil && i.client != nil }
+
+// Interpret asks the model for one proposal and returns it resolved. One call: the
+// summary the caller is shown comes back with the values, so the two cannot disagree.
+func (i *Interpreter) Interpret(ctx context.Context, req Request) (Result, error) {
+	if !i.Enabled() {
+		return Result{}, ErrDisabled
+	}
+	user, err := userPrompt(req)
+	if err != nil {
+		return Result{}, err
+	}
+	schema, err := requestSchema()
+	if err != nil {
+		return Result{}, err
+	}
+	raw, err := i.client.GenerateJSON(ctx, systemPrompt, user, llm.WithSchema(schemaName, schema))
+	if err != nil {
+		return Result{}, fmt.Errorf("searchintent: generate: %w", err)
+	}
+	var p proposal
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return Result{}, fmt.Errorf("searchintent: parse: %w", err)
+	}
+	return p.intent().resolve()
+}
+
+// userPrompt states what to interpret. It refuses a request with nothing in it rather
+// than paying for a model call that can only invent — an empty description is a bug in
+// the caller, not a search.
+func userPrompt(req Request) (string, error) {
+	text := strings.TrimSpace(req.Text)
+	if len([]rune(text)) > MaxTextRunes {
+		return "", fmt.Errorf("searchintent: description is longer than %d characters", MaxTextRunes)
+	}
+
+	seed := req.Profile.describe()
+	if text == "" && seed == "" && req.Previous == nil {
+		return "", errors.New("searchintent: nothing to interpret")
+	}
+
+	var b strings.Builder
+	if req.Previous != nil {
+		b.WriteString("The search so far:\n")
+		b.WriteString(describe(*req.Previous))
+		b.WriteString("\nChange it as follows, and return the WHOLE search, not just the change:\n")
+		b.WriteString(text)
+		return b.String(), nil
+	}
+	if seed != "" {
+		b.WriteString("Build a search from what this person has already told us about themselves:\n")
+		b.WriteString(seed)
+		if text != "" {
+			b.WriteString("\nThey add:\n")
+		}
+	} else {
+		b.WriteString("Build a search from this description:\n")
+	}
+	b.WriteString(text)
+	return b.String(), nil
+}
+
+// describe renders a previous result back as the plain text the model reads, so a
+// refinement argues with the search that is actually live rather than with its own
+// earlier prose.
+func describe(r Result) string {
+	var b strings.Builder
+	for _, name := range sortedFacetNames(r.Facets) {
+		fmt.Fprintf(&b, "- %s: %s\n", name, strings.Join(r.Facets[name], ", "))
+	}
+	if r.Query != "" {
+		fmt.Fprintf(&b, "- free text: %s\n", r.Query)
+	}
+	if r.Scalars.SalaryMin != nil {
+		fmt.Fprintf(&b, "- salary at least: %d\n", *r.Scalars.SalaryMin)
+	}
+	if r.Scalars.PostedWithinDays != nil {
+		fmt.Fprintf(&b, "- posted within days: %d\n", *r.Scalars.PostedWithinDays)
+	}
+	if r.Scalars.ExperienceYearsMax != nil {
+		fmt.Fprintf(&b, "- experience at most (years): %d\n", *r.Scalars.ExperienceYearsMax)
+	}
+	if r.Scalars.VisaSponsorship {
+		b.WriteString("- visa sponsorship required\n")
+	}
+	return b.String()
+}

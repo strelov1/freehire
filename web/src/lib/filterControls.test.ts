@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EXPERIENCE_PRESETS, experienceLabel } from './filterControls';
+import { EXPERIENCE_PRESETS, experienceLabel, FRESHNESS_PRESETS, freshnessLabel } from './filterControls';
 
 describe('EXPERIENCE_PRESETS', () => {
   it('runs least-to-most experience with Any as the rightmost stop', () => {
@@ -39,5 +39,26 @@ describe('experienceLabel', () => {
   it('describes an off-preset bound instead of calling it Any', () => {
     expect(experienceLabel(6)).not.toBe('Any');
     expect(experienceLabel(6)).toContain('6');
+  });
+});
+
+describe('freshnessLabel', () => {
+  it('names each preset stop', () => {
+    for (const p of FRESHNESS_PRESETS) {
+      expect(freshnessLabel(p.days)).toBe(p.label);
+    }
+  });
+
+  it('reads an unset bound as Any', () => {
+    expect(freshnessLabel(null)).toBe('Any');
+  });
+
+  // Same hazard experienceLabel already guards against: a shared link, a hand-edited
+  // URL or an AI-built filter can carry a day count that is no preset stop. Reading it
+  // as "Any" tells the user the freshness filter is off while it is quietly hiding
+  // every posting older than that bound.
+  it('describes an off-preset bound instead of calling it Any', () => {
+    expect(freshnessLabel(5)).not.toBe('Any');
+    expect(freshnessLabel(5)).toContain('5');
   });
 });
