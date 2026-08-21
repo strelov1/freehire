@@ -18,11 +18,12 @@
 // The package also owns the catalog (slug → human label), the source of truth
 // for the picker labels emitted into the web contracts.
 //
-// Roles are derived at INDEX time and stored nowhere else: outside code generation,
-// internal/search/document.go is this package's only caller, and `jobs` has no roles
-// column. So a change to the tables below reaches production with the next search
-// rebuild, which re-derives every document — never through cmd/backfill-derive, which
-// re-derives Postgres columns and would spend hours here changing nothing.
+// Roles are derived at INDEX time and land only in the search document
+// (search.JobDocument.Roles) — `jobs` has no roles column. Outside code generation and
+// this package's own tests, internal/search/document.go is the only production caller.
+// So a change to the tables below reaches production with the next search rebuild,
+// which re-derives every document — never through cmd/backfill-derive, which re-derives
+// Postgres columns and would spend hours here changing nothing.
 package roletag
 
 import (
@@ -195,11 +196,11 @@ var namedRoleTable = []struct {
 	// derived the bare `design` category and no ux_designer at all, so the role
 	// under-counted every posting titled that way. 4,704 open postings carry one of
 	// these spellings, and they need nothing to pick the role up: roles are derived at
-	// INDEX time (internal/search/document.go is this package's only non-codegen
-	// caller) and are not a jobs column, so the scheduled reindex re-derives every
-	// document against whatever this table says at the time. A dictionary change here
-	// therefore reaches production with the next rebuild and NOT via backfill-derive,
-	// which re-derives Postgres columns and would spend hours changing nothing.
+	// INDEX time and are not a jobs column (see the package doc), so the scheduled
+	// reindex re-derives every document against whatever this table says at the time.
+	// A dictionary change here therefore reaches production with the next rebuild and
+	// NOT via backfill-derive, which re-derives Postgres columns and would spend hours
+	// changing nothing.
 	{"ux_designer", "UX Designer", []string{
 		"ux designer", "ui designer", "ui/ux designer", "ux/ui designer",
 		"user experience designer", "user interface designer",
