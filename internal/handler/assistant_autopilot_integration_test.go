@@ -35,6 +35,54 @@ import (
 	"github.com/strelov1/freehire/internal/resume"
 )
 
+// newAutopilotHarness wires the handlers, the app and the routes an autopilot test needs.
+// Every test here wants the same assembly — the CV tools, the editor, the experience bank and
+// a match surface — and differs only in the two models: the one that answers the turn and the
+// one that answers the fit chain.
+func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, turnM assistant.Model, fitM llms.Model) (*assistantHandlers, *fiber.App) {
+	t.Helper()
+	queries := db.New(pool)
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+	h := &assistantHandlers{
+		store: assistant.NewStore(queries), queries: queries,
+		maxPrompt:  defaultAssistantMaxPrompt,
+		stages:     queries,
+		experience: bank,
+		cv: &cvHandlers{
+			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
+			queries:            queries,
+			jobReader:          queries,
+			matchAnalysisCache: queries,
+			match: fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)),
+				matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))),
+		},
+	}
+	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	mw := middleware{
+		cookie: auth.RequireAuth(iss, testVersions),
+		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
+	}
+	h.register(api, mw)
+	h.cv.register(api, mw)
+	return h, app
+}
+
+// walkedTheRequirements is the turn model an autopilot test uses when the run itself is not
+// what it is checking: one answer, no tool calls.
+func walkedTheRequirements() *turnModel {
+	return &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
+}
+
+// fullFitChain is a fit model that answers all three stages, cycling so one model can serve
+// more than one analysis.
+func fullFitChain() *fitModel {
+	return &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
+}
+
 // seedTailoringSession creates a CV bound to a vacancy plus the tailoring session that
 // addresses it, and returns the session id and the CV id.
 func seedTailoringSession(t *testing.T, pool *pgxpool.Pool, h *assistantHandlers, userID int64) (string, uuid.UUID) {
@@ -141,34 +189,8 @@ func TestAutopilotComputesAnalysisWhenMissing(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	turnM := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
-	fitM := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
-
-	bank := experience.NewStore(experience.NewQueriesRepository(queries))
-	h := &assistantHandlers{
-		store: assistant.NewStore(queries), queries: queries,
-		maxPrompt:  defaultAssistantMaxPrompt,
-		stages:     queries,
-		experience: bank,
-		cv: &cvHandlers{
-			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
-			queries:            queries,
-			jobReader:          queries,
-			matchAnalysisCache: queries,
-			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
-		},
-	}
-	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	api := app.Group("/api/v1")
-	mw := middleware{
-		cookie: auth.RequireAuth(iss, testVersions),
-		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	}
-	h.register(api, mw)
-	h.cv.register(api, mw)
+	fitM := fullFitChain()
+	h, app := newAutopilotHarness(t, pool, iss, walkedTheRequirements(), fitM)
 
 	userID, cookie := assistantUser(t, pool, iss, "autopilot-analysis@example.test", true)
 	// The fit chain refuses to analyze a candidate with an empty bank (there is nothing to
@@ -248,34 +270,8 @@ func TestAutopilotAnswersBeforeTheColdStartAnalysis(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	turnM := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
 	fitM := newGatedFitModel(t)
-	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
-
-	bank := experience.NewStore(experience.NewQueriesRepository(queries))
-	h := &assistantHandlers{
-		store: assistant.NewStore(queries), queries: queries,
-		maxPrompt:  defaultAssistantMaxPrompt,
-		stages:     queries,
-		experience: bank,
-		cv: &cvHandlers{
-			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
-			queries:            queries,
-			jobReader:          queries,
-			matchAnalysisCache: queries,
-			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
-		},
-	}
-	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	api := app.Group("/api/v1")
-	mw := middleware{
-		cookie: auth.RequireAuth(iss, testVersions),
-		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	}
-	h.register(api, mw)
-	h.cv.register(api, mw)
+	h, app := newAutopilotHarness(t, pool, iss, walkedTheRequirements(), fitM)
 
 	userID, cookie := assistantUser(t, pool, iss, "autopilot-ttfb@example.test", true)
 	seedBankedCareer(t, queries, userID)
@@ -313,34 +309,8 @@ func TestAutopilotRefreshesAnalysisAfterEveryRun(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	turnM := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
-	fitM := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
-
-	bank := experience.NewStore(experience.NewQueriesRepository(queries))
-	h := &assistantHandlers{
-		store: assistant.NewStore(queries), queries: queries,
-		maxPrompt:  defaultAssistantMaxPrompt,
-		stages:     queries,
-		experience: bank,
-		cv: &cvHandlers{
-			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
-			queries:            queries,
-			jobReader:          queries,
-			matchAnalysisCache: queries,
-			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
-		},
-	}
-	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	api := app.Group("/api/v1")
-	mw := middleware{
-		cookie: auth.RequireAuth(iss, testVersions),
-		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	}
-	h.register(api, mw)
-	h.cv.register(api, mw)
+	fitM := fullFitChain()
+	h, app := newAutopilotHarness(t, pool, iss, walkedTheRequirements(), fitM)
 
 	userID, cookie := assistantUser(t, pool, iss, "autopilot-refresh@example.test", true)
 	seedBankedCareer(t, queries, userID)
@@ -421,33 +391,8 @@ func TestAutopilotRefreshSurvivesACancelledRun(t *testing.T) {
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	turnM := newDisconnectModel(t)
-	fitM := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
-
-	bank := experience.NewStore(experience.NewQueriesRepository(queries))
-	h := &assistantHandlers{
-		store: assistant.NewStore(queries), queries: queries,
-		maxPrompt:  defaultAssistantMaxPrompt,
-		stages:     queries,
-		experience: bank,
-		cv: &cvHandlers{
-			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
-			queries:            queries,
-			jobReader:          queries,
-			matchAnalysisCache: queries,
-			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
-		},
-	}
-	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	api := app.Group("/api/v1")
-	mw := middleware{
-		cookie: auth.RequireAuth(iss, testVersions),
-		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	}
-	h.register(api, mw)
-	h.cv.register(api, mw)
+	fitM := fullFitChain()
+	h, app := newAutopilotHarness(t, pool, iss, turnM, fitM)
 
 	userID, cookie := assistantUser(t, pool, iss, "autopilot-cancel-refresh@example.test", true)
 	seedBankedCareer(t, queries, userID)

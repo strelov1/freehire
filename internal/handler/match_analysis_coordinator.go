@@ -4,7 +4,7 @@ import "sync"
 
 // matchAnalysisCoordinator coalesces concurrent fit-analysis computes for the same (user, job)
 // pair across the two entry points that can each decide to run the three-stage LLM chain:
-// ensureCachedAnalysis (the cold-start autopilot's invisible pre-run, so cv_context has
+// autopilotAnalysis.ensure (the cold-start autopilot's invisible pre-run, so cv_context has
 // something to read) and StreamMatchAnalysis (the tailoring workspace's visible stepper,
 // started at the same cold start). Both can reach here for the identical pair within
 // milliseconds of each other; without coalescing that is two three-stage chains spent on one
@@ -22,7 +22,7 @@ import "sync"
 //
 // Billing is NOT decided here. Each caller that cares about AI credits (StreamMatchAnalysis)
 // gates and debits for itself, whether it ends up leading or following — see its own comment
-// on why that is safe to do independently without double-charging. ensureCachedAnalysis never
+// on why that is safe to do independently without double-charging. autopilotAnalysis.ensure never
 // touches credits at all, leader or follower, which is what keeps the cold-start pre-run free.
 //
 // Zero value is ready to use — the map is created lazily under the lock — so every existing
@@ -62,10 +62,10 @@ type analysisRun struct {
 // A concurrent caller for the same pair is a FOLLOWER (isLeader=false, done=nil): it gets back
 // the same *analysisRun the leader is working on, to wait on directly (<-run.done) and then
 // consult (run.succeeded). lead itself never blocks — a follower decides for itself where to
-// wait (StreamMatchAnalysis waits inside its own SSE body-writer, on the background context its
-// leader compute already runs under, rather than blocking the request that is about to open the
-// stream; ensureCachedAnalysis waits inline, exactly as it already blocked for a whole chain's
-// duration running its OWN compute before this existed).
+// wait, and both of today's callers wait from inside their own SSE body-writer rather than from
+// the request: StreamMatchAnalysis so the request that is about to open the stream is not
+// blocked, autopilotAnalysis.ensure because a wait of a whole chain's duration in the handler is
+// silence a proxy severs (see autopilotAnalysis).
 //
 // run.done carries no cancellation and lead takes no ctx: nothing that calls this today needs
 // the wait to be interruptible — see the two call sites' own comments.

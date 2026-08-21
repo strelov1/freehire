@@ -31,7 +31,7 @@ import (
 //
 // Coalesced through h.coalesce: this is also what the tailoring workspace's cold start now
 // opens to animate the fit analysis, at the same moment the autopilot's own invisible
-// ensureCachedAnalysis may be racing for the identical (user, job). Whichever claims
+// autopilotAnalysis.ensure may be racing for the identical (user, job). Whichever claims
 // leadership runs the chain for real; the other becomes a follower and replays the result via
 // followMatchAnalysis instead of paying for a second chain.
 func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
@@ -53,7 +53,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// compute below — not just the leader. A follower still spends a real credit on a
 	// genuinely new job (two tabs open on the same never-analysed job is not a discount),
 	// and an out-of-credits caller must still 402 even when someone else is already
-	// computing the same analysis for free reasons (ensureCachedAnalysis never reaches this
+	// computing the same analysis for free reasons (autopilotAnalysis.ensure never reaches this
 	// gate at all — see prepareAutopilotRun). Debiting twice for one job is safe: h.debitMatch
 	// is idempotent per (user, feature, job) — see credits.Store.Debit's DebitExists check —
 	// so a leader and a follower that both decide "I owe one credit here" collapse into a
@@ -74,7 +74,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// Leadership for (user, job) is claimed after the gate above, not before: nothing here
 	// can fail, so there is no path where a caller becomes leader and then has to immediately
 	// hand leadership back. A follower (almost always the cold-start autopilot's own invisible
-	// ensureCachedAnalysis, racing for the same pair) runs neither the LLM nor the reads below
+	// autopilotAnalysis.ensure, racing for the same pair) runs neither the LLM nor the reads below
 	// — see matchAnalysisCoordinator and followMatchAnalysis.
 	var done func(bool)
 	var run *analysisRun
@@ -163,7 +163,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 
 		if !isLeader {
 			// Someone else — almost always the cold-start autopilot's own invisible
-			// ensureCachedAnalysis — already claimed this pair. Wait for it and replay its
+			// autopilotAnalysis.ensure — already claimed this pair. Wait for it and replay its
 			// result rather than running a second chain.
 			h.followMatchAnalysis(ctx, stream, run, userID, job, blockers, isNew)
 			return
@@ -213,7 +213,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 
 // followMatchAnalysis is the graceful degrade for the rare race a visible stream loses: some
 // concurrent caller for the same (user, job) — almost always the cold-start autopilot's own
-// invisible ensureCachedAnalysis — claimed the compute first. It waits on run.done, then
+// invisible autopilotAnalysis.ensure — claimed the compute first. It waits on run.done, then
 // replays whatever landed in the cache as one synthesized burst — stage_done for all three
 // stages (there is nothing to show progressing through) followed by final — so this reader's
 // stepper still resolves instead of hanging on "pending" forever.
@@ -228,7 +228,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 // client that leaves during the wait costs nothing extra. Never emits
 // stage_start/thinking/requirements/dimensions: those describe progress this caller never
 // watched. isNew is THIS caller's own credits gate result (see StreamMatchAnalysis) — debiting
-// here when the leader was the free ensureCachedAnalysis pre-run is exactly the case that must
+// here when the leader was the free autopilotAnalysis.ensure pre-run is exactly the case that must
 // still charge a genuinely new analysis; h.debitMatch's idempotency (by user, feature, job) is
 // what keeps two callers that both decide to debit from charging twice.
 func (h *matchHandlers) followMatchAnalysis(ctx context.Context, stream *sseStream, run *analysisRun, userID int64, job db.Job, blockers []hardconstraint.Blocker, isNew bool) {

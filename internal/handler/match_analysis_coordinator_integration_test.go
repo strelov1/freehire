@@ -2,7 +2,7 @@
 
 // Integration tests for the real coalescing between the two entry points that can each decide
 // to run the three-stage fit chain for the same (user, job): the cold-start autopilot's
-// invisible ensureCachedAnalysis and the tailoring workspace's visible StreamMatchAnalysis.
+// invisible autopilotAnalysis.ensure and the tailoring workspace's visible StreamMatchAnalysis.
 // See match_analysis_coordinator.go and the tailor cold-start animation design.
 // Run with: go test -tags=integration ./internal/handler/
 package handler
@@ -114,7 +114,7 @@ func coordinatorJobSlug(prefix string, i int) string {
 
 // newCoordinatorHandlers builds the matchHandlers a coordinator test drives requests against —
 // model bound to a fresh Analyzer, everything else the fixed fixture StreamMatchAnalysis and
-// ensureCachedAnalysis both need.
+// autopilotAnalysis.ensure both need.
 func newCoordinatorHandlers(pool *pgxpool.Pool, queries *db.Queries, store *resume.Store, model llms.Model) *matchHandlers {
 	return &matchHandlers{
 		queries:            queries,
@@ -229,7 +229,7 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 	select {
 	case <-model.started:
 	case <-time.After(2 * time.Second):
-		t.Fatal("ensureCachedAnalysis never started its compute")
+		t.Fatal("autopilotAnalysis.ensure never started its compute")
 	}
 
 	stream := startStream(t, app, "/api/v1/jobs/"+coordinatorJobSlug("a", 0)+"/fit/stream", token)
@@ -237,7 +237,7 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 
 	close(model.release)
 
-	waitDone(t, ensure, 2*time.Second, "ensureCachedAnalysis never finished")
+	waitDone(t, ensure, 2*time.Second, "autopilotAnalysis.ensure never finished")
 	waitDone(t, stream, 2*time.Second, "the follower stream never finished")
 
 	if model.n != 3 {
@@ -275,7 +275,7 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 		t.Errorf("cache rows = %d, want 1", rows)
 	}
 
-	// ensureCachedAnalysis (the leader here) never touches credits — but the stream (the
+	// autopilotAnalysis.ensure (the leader here) never touches credits — but the stream (the
 	// follower) is a genuinely paying request for a never-analysed job, and must still cost
 	// its own credit even though it didn't run the chain itself: h.debitMatch is idempotent
 	// per (user, feature, job), so this is one row, not zero (a free ride for a paying
@@ -285,13 +285,13 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 		t.Fatalf("count match debits: %v", err)
 	}
 	if debits != 1 {
-		t.Errorf("match debits = %d, want 1 — the follower is a genuinely new paying request and must still be charged once, not given a free ride because ensureCachedAnalysis led", debits)
+		t.Errorf("match debits = %d, want 1 — the follower is a genuinely new paying request and must still be charged once, not given a free ride because autopilotAnalysis.ensure led", debits)
 	}
 }
 
 // TestMatchAnalysisCoordinatorStreamLeadsEnsureCachedAnalysisFollowsAndLeaderStillBills is the
 // mirror of the test above with roles reversed: the paying stream leads, the free
-// ensureCachedAnalysis pre-run follows. The leader must bill exactly as it would with no
+// autopilotAnalysis.ensure pre-run follows. The leader must bill exactly as it would with no
 // follower at all — an unmetered follower joining must never suppress a real charge (that
 // was the actual bug: a leader used to skip billing whenever ANY follower joined, which let a
 // second browser tab or a reload silently dodge the credit a new job's analysis costs).
@@ -326,12 +326,12 @@ func TestMatchAnalysisCoordinatorStreamLeadsEnsureCachedAnalysisFollowsAndLeader
 	}
 
 	ensure := startEnsure(t, app)
-	waitStillRunning(t, ensure, 200*time.Millisecond, "ensureCachedAnalysis (the follower) returned before the leader was released")
+	waitStillRunning(t, ensure, 200*time.Millisecond, "autopilotAnalysis.ensure (the follower) returned before the leader was released")
 
 	close(model.release)
 
 	waitDone(t, stream, 2*time.Second, "the leader stream never finished")
-	waitDone(t, ensure, 2*time.Second, "ensureCachedAnalysis never finished")
+	waitDone(t, ensure, 2*time.Second, "autopilotAnalysis.ensure never finished")
 
 	if model.n != 3 {
 		t.Errorf("fit model called %d times, want 3 (one chain, not two — no double spend)", model.n)
@@ -369,7 +369,7 @@ func TestMatchAnalysisCoordinatorStreamLeadsEnsureCachedAnalysisFollowsAndLeader
 // (followMatchAnalysis) — so a follower that won that race read an empty cache and degraded
 // straight to "analysis unavailable", even though the leader was about to succeed.
 //
-// ensureCachedAnalysis's own follower branch can't catch this (it never reads the cache — see
+// autopilotAnalysis.ensure's own follower branch can't catch this (it never reads the cache — see
 // the two tests above), so this drives TWO concurrent StreamMatchAnalysis calls instead: the
 // second becomes a follower via followMatchAnalysis, which does read the cache and is exactly
 // where the live bug surfaced. Repeated: the race window was narrow (a channel close vs. a

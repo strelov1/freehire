@@ -634,12 +634,12 @@ func (h *assistantHandlers) streamSSE(
 		defer cancel()
 
 		// One byte immediately, before anything this turn might wait on. Until something is
-		// written, fasthttp is holding the response line and the headers in its buffer, so
-		// "the stream is open" is true here and not yet true on the wire — and a proxy times
-		// out a request whose upstream has sent nothing, however busy that upstream is. The
-		// heartbeat below cannot cover this: its first comment is a whole interval away.
-		// A comment rather than an event because EventSource ignores it: this says nothing to
-		// the client, it only makes the connection real.
+		// written, fasthttp holds the response line and the headers in its buffer, so "the
+		// stream is open" is true here and not yet true on the wire — and a proxy times out
+		// an upstream that has sent nothing, however busy it is. The heartbeat below cannot
+		// cover this: its first comment is a whole interval away. A comment rather than an
+		// event because EventSource ignores it — this says nothing to the client, it only
+		// makes the connection real.
 		stream.comment("open")
 
 		// The heartbeat starts BEFORE the queue wait, not after it: a queued message can wait
@@ -843,8 +843,9 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	}
 	// One read of the vacancy for the whole pre-run: the fit analysis and the surface
 	// alignment both need it, and a run must not ask the database twice for the same row.
-	// This read stays in the request — it is one row, and the pre-run has nothing to prepare
-	// without it.
+	// It stays in the request because the pre-run has nothing to prepare without it; an
+	// unreadable vacancy leaves a nil analysis and an empty description, both of which the
+	// steps below already treat as nothing to do.
 	var analysis *autopilotAnalysis
 	var jobDescription string
 	if job, err := h.queries.GetJob(c.Context(), *sess.JobID); err != nil {
@@ -853,21 +854,14 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 		analysis, jobDescription = h.prepareAutopilotAnalysis(c, sess, job), job.Description
 	}
 	return h.streamSSE(c, sess, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
-		// The pre-run happens HERE, inside the stream, and not in the handler above it. On a
-		// vacancy with no cached fit analysis it runs the three-stage chain — minutes, not
-		// seconds — and a handler that has not returned has written no byte, so a proxy in
-		// front of us times the request out and the candidate is told the run failed to
-		// start. From here the response is already open and its heartbeat already ticking,
-		// so the same wait costs nothing but the wait.
-		//
-		// Order is the order it had: the analysis first, because the run plan is written from
-		// it, and cv_context reads it on the run's first step.
+		// The pre-run happens HERE rather than in the handler above, because a handler that
+		// has not returned has written no byte and a cold-start chain takes minutes — see
+		// autopilotAnalysis for what that cost. Order is the order it had: the analysis
+		// first, because the run plan is written from it and cv_context reads it on the run's
+		// first step. Surface alignment gets its own system revision — not the run's edit
+		// batch — so undoing the run leaves the vacancy's wording in place.
 		analysis.ensure(ctx)
-		if jobDescription != "" {
-			// Its own system revision — not the run's edit batch — so undoing the run leaves
-			// the vacancy's wording in place.
-			h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, jobDescription)
-		}
+		h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, jobDescription)
 		h.layDownRunPlan(ctx, sess)
 
 		err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)

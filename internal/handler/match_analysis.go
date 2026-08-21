@@ -53,7 +53,7 @@ type matchHandlers struct {
 	bank candidateProfiler
 	// coalesce ensures at most one fit-analysis compute runs at a time for a given (user, job)
 	// — see matchAnalysisCoordinator for why the cold-start autopilot's invisible pre-run and
-	// the workspace's visible stream can both reach ensureCachedAnalysis/StreamMatchAnalysis
+	// the workspace's visible stream can both reach autopilotAnalysis.ensure/StreamMatchAnalysis
 	// for the identical pair. Billing is decided per caller, not by who leads — see
 	// StreamMatchAnalysis's own comment.
 	coalesce matchAnalysisCoordinator
@@ -266,10 +266,9 @@ func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int6
 }
 
 // runAnalysis runs the three-stage fit chain under the caller's own attribution, over an
-// input built by buildAnalysisInput. Shared by the on-demand endpoint and the cold-start
-// autopilot's inline precondition (ensureCachedAnalysis) — both assemble the exact same
-// input the exact same way; only what happens to the RESULT (credits, response shape,
-// whether the caller even asked for one) differs between them.
+// input built by buildAnalysisInput, for a caller that has a live fiber ctx: the on-demand
+// endpoint. The autopilot's two halves run after the request and build that same input
+// through the same function, from plain values — see autopilotAnalysis.
 func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) (*matchanalysis.Analysis, error) {
 	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
 	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers, language))
@@ -296,7 +295,6 @@ type autopilotAnalysis struct {
 	analyzer     *matchanalysis.Analyzer
 	input        matchanalysis.Input
 	cvUploadedAt *time.Time
-	language     string
 }
 
 // prepareAutopilotRun assembles the run's analysis while the fiber ctx is still valid. It
@@ -314,7 +312,6 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 		analyzer:     h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis)),
 		input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
 		cvUploadedAt: cvUploadedAt,
-		language:     language,
 	}
 }
 
@@ -381,7 +378,7 @@ func (a *autopilotAnalysis) compute(ctx context.Context, stage string) bool {
 	if analysis == nil {
 		return false // LLM unconfigured — nothing to cache
 	}
-	a.h.cacheAnalysis(ctx, a.userID, a.job, a.cvUploadedAt, a.language, analysis)
+	a.h.cacheAnalysis(ctx, a.userID, a.job, a.cvUploadedAt, a.input.Language, analysis)
 	return true
 }
 
