@@ -196,14 +196,12 @@ func resolveCity(raw string) (string, bool) {
 	return matches[0].Name, true
 }
 
-// Bounds on the scalar filters. They are absurdity guards, not policy: a salary floor
+// Ceilings on the scalar filters. They are absurdity guards, not policy: a salary floor
 // of a billion or a four-century experience ceiling is a model that miscounted a zero,
-// and letting it through would filter the catalogue down to nothing while looking like
-// a search. Real-but-unusual values (a $500k floor) pass, because the sidebar renders
-// whatever bound is live and a person can see and lift it.
-// A freshness ceiling of a year is already "everything the catalogue holds", so a
-// larger number is not a search — it is a bound that filters nothing while looking
-// like one.
+// and letting one through filters the catalogue down to nothing while looking like a
+// search. Real-but-unusual values (a $500k floor) pass, because the sidebar renders
+// whatever bound is live and a person can see and lift it. A year of freshness is
+// already everything the catalogue holds, so anything past it bounds nothing.
 const (
 	maxSalaryFloor      = 10_000_000
 	maxExperienceYears  = 60
@@ -243,11 +241,18 @@ func (in intent) resolve() (Result, error) {
 		Query:   strings.TrimSpace(in.Query),
 		Summary: strings.TrimSpace(in.Summary),
 	}
-	var err error
+	// One place threads the drop report, so each bound reads as the range it accepts.
+	keep := func(name string, v *int, low, high int) *int {
+		var kept *int
+		kept, out.Unresolved = bound(name, v, low, high, out.Unresolved)
+		return kept
+	}
 	out.Scalars.VisaSponsorship = in.VisaSponsorship
-	out.Scalars.SalaryMin, out.Unresolved = bound("salary_min", in.SalaryMin, 1, maxSalaryFloor, out.Unresolved)
-	out.Scalars.ExperienceYearsMax, out.Unresolved = bound("experience_years_max", in.ExperienceYearsMax, 0, maxExperienceYears, out.Unresolved)
-	out.Scalars.PostedWithinDays, out.Unresolved = bound("posted_within_days", in.PostedWithinDays, 1, maxPostedWithinDays, out.Unresolved)
+	out.Scalars.SalaryMin = keep("salary_min", in.SalaryMin, 1, maxSalaryFloor)
+	out.Scalars.PostedWithinDays = keep("posted_within_days", in.PostedWithinDays, 1, maxPostedWithinDays)
+	out.Scalars.ExperienceYearsMax = keep("experience_years_max", in.ExperienceYearsMax, 0, maxExperienceYears)
+
+	var err error
 
 	if out.Facets, out.Unresolved, err = canonicaliseFacets(in.Facets, out.Unresolved); err != nil {
 		return Result{}, err
@@ -256,58 +261,25 @@ func (in intent) resolve() (Result, error) {
 		return Result{}, err
 	}
 	dropContradictions(out.Facets, out.Exclude)
-	dropRedundantRegionExclusions(out.Facets, out.Exclude)
+	dropRedundantGeography(out.Facets, out.Exclude)
 	return out, nil
 }
 
-// dropRedundantRegionExclusions removes an excluded region once any region is chosen.
-//
-// The regions are disjoint areas — the UK is its own region, NOT part of eu — so
-// choosing one already answers "which area". Excluding another on top can only strip
-// the roles that span both, and "somewhere in Europe but not the UK" is not a request
-// to lose the pan-European roles: those are exactly what that person wants.
-//
-// The prompt says this too, and saying it there is the cheaper fix. It is not enough:
-// measured against the live gateway, the same request came back clean 3 times in 5 and
-// carried the redundant exclusion the other 2. A rule that holds three fifths of the
-// time is not a rule, and the failure is invisible — a struck-through UK chip looks
-// like the filter working.
-//
-// Scoped to regions on purpose. A COUNTRY sits inside a region, so choosing Europe says
-// nothing about Germany and "not Germany" still needs its exclusion. And a skill is a
-// requirement rather than a place: "Go but not PHP" excludes real postings by design.
-func dropRedundantRegionExclusions(facets, exclude map[string][]string) {
-	chosen := facets["regions"]
-	if len(chosen) == 0 {
-		return
-	}
-	// `global` is "open anywhere", so it chooses every area rather than one of them.
-	// Under it an exclusion is the ONLY thing narrowing the search — "anywhere remote,
-	// but not the USA" — and dropping it would widen the result to the whole catalogue
-	// while the summary still promised otherwise.
-	if slices.Contains(chosen, "global") {
-		return
-	}
-	delete(exclude, "regions")
-
-	// Half the models say "not the UK" as a COUNTRY rather than as the region it is.
-	// Same redundancy and the same struck-through chip, so the rule has to follow it
-	// there — but only for a country whose whole area is already left out by the
-	// regions chosen. Germany under a chosen `eu` is the opposite case: its region WAS
-	// chosen, so "not Germany" is the only way to say it and must survive.
-	countryRegion := location.CountryToRegion()
-	kept := exclude["countries"][:0:0]
-	for _, code := range exclude["countries"] {
-		if !slices.Contains(chosen, countryRegion[code]) {
-			continue
+// keepExclusions narrows one excluded facet to the values keep accepts, removing the
+// facet entirely when nothing survives. An empty slice left behind would render as a
+// heading with no chips under it.
+func keepExclusions(exclude map[string][]string, name string, keep func(value string) bool) {
+	kept := exclude[name][:0:0]
+	for _, v := range exclude[name] {
+		if keep(v) {
+			kept = append(kept, v)
 		}
-		kept = append(kept, code)
 	}
 	if len(kept) == 0 {
-		delete(exclude, "countries")
+		delete(exclude, name)
 		return
 	}
-	exclude["countries"] = kept
+	exclude[name] = kept
 }
 
 // dropContradictions removes an excluded value that is also included. The inclusion
@@ -322,19 +294,45 @@ func dropRedundantRegionExclusions(facets, exclude map[string][]string) {
 // and the value IS applied, as an inclusion. Naming it among the values we could not
 // place would be a second, different lie.
 func dropContradictions(facets, exclude map[string][]string) {
-	for name, excluded := range exclude {
-		kept := excluded[:0:0]
-		for _, v := range excluded {
-			if !slices.Contains(facets[name], v) {
-				kept = append(kept, v)
-			}
-		}
-		if len(kept) == 0 {
-			delete(exclude, name)
-			continue
-		}
-		exclude[name] = kept
+	for name := range exclude {
+		keepExclusions(exclude, name, func(v string) bool {
+			return !slices.Contains(facets[name], v)
+		})
 	}
+}
+
+// dropRedundantGeography removes a place that choosing another place already left out.
+//
+// The regions are disjoint areas — the UK is its own region, NOT part of eu — so naming
+// one already answers "which area". Excluding a second on top can only strip the roles
+// that span both, and "somewhere in Europe but not the UK" is not a request to lose the
+// pan-European roles: those are exactly what that person wants. It covers countries too,
+// because half the models say "not the UK" as a country rather than as the region it is.
+//
+// It does NOT generalise past geography. A country sits INSIDE a region, so choosing
+// Europe says nothing about Germany and "not Germany" survives; a skill is a requirement
+// rather than a place, so "Go but not PHP" excludes real postings by design.
+//
+// The prompt says all this too, and saying it there is the cheaper fix. It is not
+// enough: measured against the live gateway, the same request came back clean 3 times in
+// 5 and carried the redundant exclusion the other 2. A rule that holds three fifths of
+// the time is not a rule, and the failure is invisible — a struck-through UK chip looks
+// exactly like the filter working.
+func dropRedundantGeography(facets, exclude map[string][]string) {
+	chosen := facets["regions"]
+	// `global` is "open anywhere", so it chooses every area rather than one of them.
+	// Under it an exclusion is the ONLY thing narrowing the search — "anywhere remote,
+	// but not the USA" — and dropping it would widen the result to the whole catalogue
+	// while the summary still promised otherwise.
+	if len(chosen) == 0 || slices.Contains(chosen, "global") {
+		return
+	}
+	delete(exclude, "regions")
+
+	countryRegion := location.CountryToRegion()
+	keepExclusions(exclude, "countries", func(code string) bool {
+		return slices.Contains(chosen, countryRegion[code])
+	})
 }
 
 // canonicaliseFacets resolves one side of the filter — what to match, or what to rule

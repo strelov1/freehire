@@ -17,6 +17,10 @@
   // user is not told about is indistinguishable from a value that WAS applied.
   let { store, onclose }: { store: FilterStore; onclose: () => void } = $props();
 
+  /** One previewed value. `exclude` draws it struck through, as the sidebar does. */
+  type PreviewChip = { text: string; exclude: boolean };
+  type PreviewGroup = { label: string; chips: PreviewChip[] };
+
   let text = $state('');
   let refinement = $state('');
   let result = $state.raw<Interpretation | null>(null); // an API payload, only reassigned
@@ -36,27 +40,26 @@
     const label = (param: string, value: string) =>
       FACETS.find((d) => d.param === param)?.options?.find((o) => o.value === value)?.label ??
       dynamicLabel(param, value);
-    const groups: { label: string; chips: { text: string; exclude: boolean }[] }[] = [];
-    const push = (heading: string, chips: { text: string; exclude: boolean }[]) => {
+    const groups: PreviewGroup[] = [];
+    const push = (heading: string, chips: PreviewChip[]) => {
       if (chips.length) groups.push({ label: heading, chips });
     };
+    const one = (heading: string, text: string) => push(heading, [{ text, exclude: false }]);
+
     for (const def of FACETS) {
       push(def.label, [
         ...(result.facets?.[def.param] ?? []).map((v) => ({ text: label(def.param, v), exclude: false })),
         ...(result.exclude?.[def.param] ?? []).map((v) => ({ text: label(def.param, v), exclude: true })),
       ]);
     }
-    if (result.query) push('Search', [{ text: result.query, exclude: false }]);
-    if (result.salary_min != null)
-      push('Salary', [{ text: `${result.salary_min.toLocaleString('en-US')}+`, exclude: false }]);
-    // The shared labels, not our own wording: the preview promises to read the same as
-    // the chips it becomes, and "Last 7 days" beside a chip saying "1 week" breaks that
-    // for no reason.
-    if (result.posted_within_days != null)
-      push('Posted', [{ text: freshnessLabel(result.posted_within_days), exclude: false }]);
-    if (result.experience_years_max != null)
-      push('Experience', [{ text: experienceLabel(result.experience_years_max), exclude: false }]);
-    if (result.visa_sponsorship) push('Visa', [{ text: 'Sponsorship', exclude: false }]);
+    // The bounds use the SHARED labels, not wording of our own: the preview promises to
+    // read the same as the chips it becomes, and "Last 7 days" beside a chip saying
+    // "1 week" breaks that for nothing.
+    if (result.query) one('Search', result.query);
+    if (result.salary_min != null) one('Salary', `${result.salary_min.toLocaleString('en-US')}+`);
+    if (result.posted_within_days != null) one('Posted', freshnessLabel(result.posted_within_days));
+    if (result.experience_years_max != null) one('Experience', experienceLabel(result.experience_years_max));
+    if (result.visa_sponsorship) one('Visa', 'Sponsorship');
     return groups;
   });
 
