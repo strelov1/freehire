@@ -33,10 +33,14 @@
   const summary = $derived(
     store
       ? summarizeScope(store, variant === 'companies' ? COMPANIES_SCOPE : JOBS_SCOPE)
-      : { icon: 'globe' as const, label: 'Location' },
+      : { icons: ['globe' as const], text: 'Location', extra: 0, label: 'Location' },
   );
   const ICONS = { globe: Globe, remote: House, hybrid: Blend, onsite: Building } as const;
-  const TriggerIcon = $derived(ICONS[summary.icon]);
+  // The head geography and its roll-up as one string; either half can be empty (a
+  // format with no geography draws its icon alone, worldwide draws the globe alone).
+  const trailing = $derived(
+    [summary.text, summary.extra > 0 ? `+${summary.extra}` : ''].filter(Boolean).join(' '),
+  );
 
   // Facets "Clear all" resets, per mode.
   const CLEAR_PARAMS = {
@@ -105,6 +109,7 @@
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={summary.label}
+    title={summary.label}
     onclick={(e) => {
       // Stop the toggle's own click from reaching the window outside-handler, which
       // would otherwise immediately re-close the just-opened popover.
@@ -113,8 +118,24 @@
     }}
     class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
   >
-    <TriggerIcon class="size-4 shrink-0" />
-    <span class="hidden max-w-40 truncate sm:inline">{summary.label}</span>
+    <!-- An avatar-stack of scope glyphs, same trick as CountryFlagStack: each icon laps
+         over the previous one by `--lap` and wears a ring in the box's own background,
+         so the pair reads as two marks rather than one tangle. Earlier icons sit on
+         top, so the cluster reads left-to-right: format first, then geography. -->
+    <span class="flex shrink-0 items-center" style:--lap="0.2em">
+      {#each summary.icons as name, i (name)}
+        {@const Icon = ICONS[name]}
+        <span
+          class={['relative inline-flex rounded-full bg-background ring-2 ring-background', i > 0 && '-ml-[var(--lap)]']}
+          style:z-index={summary.icons.length - i}
+        >
+          <Icon class="size-4" />
+        </span>
+      {/each}
+    </span>
+    {#if trailing}
+      <span class="hidden max-w-40 truncate sm:inline">{trailing}</span>
+    {/if}
     <ChevronDown class="size-3.5 shrink-0 opacity-60" />
   </button>
 
