@@ -83,6 +83,21 @@ const (
 	// off the upload response path (background) so it can be generous, but still bounded so
 	// a stalled gateway cannot leak a goroutine indefinitely.
 	resumeExtractLLMTimeout = 120 * time.Second
+	// assistantLLMTimeout bounds ONE model call in an assistant turn. The shared default of
+	// 90s was measured, on 2026-08-21, to sit inside the working range rather than past it:
+	// over three days of tailoring turns the gateway's own spend log put p95 at 58s and the
+	// slowest SUCCESSFUL call at 83.1s, with the reasoning model taking up to 51.8s before
+	// its first token on a single call. A ceiling that close to the spread cuts work that
+	// was going to finish.
+	//
+	// And a cut call does not cost a step, it costs the run: Runner.Run surfaces a model
+	// error as a failed turn, so one slow round ends an unattended pass that had thirty. On
+	// 2026-08-21 that happened to three runs, each on its SECOND call — the first round of
+	// real work, where the model writes several thousand tokens off the fit analysis.
+	//
+	// 180s is twice the slowest observed success, and still well under the gateway's own
+	// limits (its nginx reads for 300s), so a genuinely hung call is still bounded here.
+	assistantLLMTimeout = 180 * time.Second
 )
 
 // API holds the cross-cutting dependencies every route shares: the DB pool, the
@@ -527,7 +542,10 @@ func Register(app *fiber.App, cfg Config) {
 	// hub, which a browsing session reads the caller's open page through.
 	assistantH := newAssistantHandlers(queries,
 		assistantModels{
-			Agent: cfg.AssistantLLM, Keys: llmKeys,
+			// Its own per-call timeout for the same reason the fit analysis has one, and
+			// nil-safe the same way: a turn's rounds are slower than a one-shot extraction,
+			// and here a call cut short takes the whole run with it.
+			Agent: cfg.AssistantLLM.WithTimeout(assistantLLMTimeout), Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
 		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc)
