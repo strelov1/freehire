@@ -41,6 +41,11 @@ var ErrUnknownKey = fmt.Errorf("%w: key not recognised", ErrUpstream)
 // unattributed rather than hold the turn open.
 const requestTimeout = 5 * time.Second
 
+// keysPath is the governance collection every credential is created under and addressed
+// beneath. Written once because a typo in one of the three verbs that use it would fail as
+// a 404, which Block and Delete both read as "already done".
+const keysPath = "/api/governance/virtual-keys"
+
 // namePrefix labels a key for whoever reads the gateway's own listings. It is the only
 // place the account id appears at the gateway: spend is grouped by the credential's own
 // identifier, which we store, so nothing here has to double as a foreign key.
@@ -142,27 +147,14 @@ func (e envelope) key() virtualKey {
 // from the template key, so the list of providers and the weights between them stay in
 // the gateway's own configuration where they are already maintained, and adding a
 // provider never becomes a deployment of this service.
-//
-// key_ids is normalised rather than echoed: a read answers null where a write requires
-// ["*"], and passing the null straight back through mints a key pinned to no provider
-// key at all.
 func (c *Client) Mint(ctx context.Context, userID int64) (Credential, error) {
 	if c == nil {
 		return Credential{}, fmt.Errorf("%w: no admin API configured", ErrUpstream)
 	}
 
-	var tpl envelope
-	if err := c.do(ctx, http.MethodGet, "/api/governance/virtual-keys/"+url.PathEscape(c.cfg.TemplateKey), nil, &tpl); err != nil {
-		return Credential{}, fmt.Errorf("read policy template: %w", err)
-	}
-	policy := tpl.key().ProviderConfigs
-	if len(policy) == 0 {
-		return Credential{}, fmt.Errorf("%w: policy template %q allows no provider", ErrUpstream, c.cfg.TemplateKey)
-	}
-	for i := range policy {
-		if len(policy[i].KeyIDs) == 0 {
-			policy[i].KeyIDs = []string{"*"}
-		}
+	policy, err := c.policy(ctx)
+	if err != nil {
+		return Credential{}, err
 	}
 
 	body := map[string]any{
@@ -186,7 +178,7 @@ func (c *Client) Mint(ctx context.Context, userID int64) (Credential, error) {
 	}
 
 	var out envelope
-	if err := c.do(ctx, http.MethodPost, "/api/governance/virtual-keys", body, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, keysPath, body, &out); err != nil {
 		return Credential{}, err
 	}
 	minted := out.key()
@@ -197,6 +189,29 @@ func (c *Client) Mint(ctx context.Context, userID int64) (Credential, error) {
 		return Credential{}, fmt.Errorf("%w: minted an incomplete credential", ErrUpstream)
 	}
 	return Credential{ID: minted.ID, Secret: minted.Value}, nil
+}
+
+// policy is the provider allowlist a new credential is born with, read from the template
+// key rather than carried here.
+//
+// key_ids is normalised rather than echoed: a read answers null where a write requires
+// ["*"], and passing the null straight back through mints a key pinned to no provider key
+// at all.
+func (c *Client) policy(ctx context.Context) ([]providerConfig, error) {
+	var tpl envelope
+	if err := c.do(ctx, http.MethodGet, keysPath+"/"+url.PathEscape(c.cfg.TemplateKey), nil, &tpl); err != nil {
+		return nil, fmt.Errorf("read policy template: %w", err)
+	}
+	configs := tpl.key().ProviderConfigs
+	if len(configs) == 0 {
+		return nil, fmt.Errorf("%w: policy template %q allows no provider", ErrUpstream, c.cfg.TemplateKey)
+	}
+	for i := range configs {
+		if len(configs[i].KeyIDs) == 0 {
+			configs[i].KeyIDs = []string{"*"}
+		}
+	}
+	return configs, nil
 }
 
 // Block retires a credential without erasing it: it stops spending and stays in the
@@ -213,7 +228,7 @@ func (c *Client) Block(ctx context.Context, keyID string) error {
 	if c == nil || keyID == "" {
 		return nil
 	}
-	err := c.do(ctx, http.MethodPut, "/api/governance/virtual-keys/"+url.PathEscape(keyID),
+	err := c.do(ctx, http.MethodPut, keysPath+"/"+url.PathEscape(keyID),
 		map[string]any{"is_active": false}, nil)
 	if errors.Is(err, ErrUnknownKey) {
 		return nil
@@ -229,7 +244,7 @@ func (c *Client) Delete(ctx context.Context, keyID string) error {
 	if c == nil || keyID == "" {
 		return nil
 	}
-	err := c.do(ctx, http.MethodDelete, "/api/governance/virtual-keys/"+url.PathEscape(keyID), nil, nil)
+	err := c.do(ctx, http.MethodDelete, keysPath+"/"+url.PathEscape(keyID), nil, nil)
 	if errors.Is(err, ErrUnknownKey) {
 		return nil
 	}
@@ -285,12 +300,15 @@ func (c *Client) Activity(ctx context.Context, keyID string, from, to time.Time)
 		return Activity{}, err
 	}
 
-	failed := window
-	failed.Set("status", "error")
+	// Narrowed in place rather than through a copy. url.Values is a map, so `failed :=
+	// window` would alias it and the "widen the window" reasoning above would silently
+	// depend on the totals having already been read. One value, narrowed after use, says
+	// what is happening.
+	window.Set("status", "error")
 	var errs struct {
 		Requests int `json:"total_requests"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/api/logs/stats?"+failed.Encode(), nil, &errs); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/logs/stats?"+window.Encode(), nil, &errs); err != nil {
 		return Activity{}, err
 	}
 
@@ -312,22 +330,22 @@ func (c *Client) Activity(ctx context.Context, keyID string, from, to time.Time)
 //
 // Error messages carry the path and never the query or the credentials.
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
-	var reader *bytes.Reader
+	// A nil blob is an empty reader, which is what GET and DELETE want. Marshalling
+	// only when there is a body keeps the two shapes on one path.
+	var blob []byte
 	if body != nil {
-		blob, err := json.Marshal(body)
+		encoded, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("%w: encode request: %v", ErrUpstream, err)
 		}
-		reader = bytes.NewReader(blob)
-	} else {
-		reader = bytes.NewReader(nil)
+		blob = encoded
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.cfg.BaseURL+path, reader)
+	req, err := http.NewRequestWithContext(ctx, method, c.cfg.BaseURL+path, bytes.NewReader(blob))
 	if err != nil {
 		return fmt.Errorf("%w: build request: %v", ErrUpstream, err)
 	}
-	if body != nil {
+	if blob != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.SetBasicAuth(c.cfg.AdminUsername, c.cfg.AdminPassword)
