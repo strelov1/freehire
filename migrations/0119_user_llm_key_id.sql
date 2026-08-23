@@ -21,7 +21,15 @@
 -- delete each other's credential, and the wrongness would surface as somebody else's
 -- account losing AI, far from the cause.
 --
--- One nullable column: no rewrite, no default, no lock of consequence. Additive and
+-- The UNIQUE constraint builds an index under ACCESS EXCLUSIVE, which is the one thing
+-- here that blocks. It is the same shape 0067 took for the secret and for the same table,
+-- and `users` is small enough that the scan is milliseconds — but it does queue behind and
+-- ahead of anything else touching the table, so run it like any other DDL: not while the
+-- nightly dump holds its locks. If `users` ever grows past that assumption, the escape is
+-- CREATE UNIQUE INDEX CONCURRENTLY followed by ADD CONSTRAINT ... USING INDEX, which needs
+-- its own migration because CONCURRENTLY cannot run inside a transaction.
+--
+-- One nullable column: no rewrite, no default. Additive and
 -- unread by the previous binary, so deploy order does not matter and a rollback leaves
 -- the column harmlessly behind.
 ALTER TABLE public.users

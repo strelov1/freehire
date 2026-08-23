@@ -395,3 +395,22 @@ func TestRevokeIsANoopWithoutAnId(t *testing.T) {
 		})
 	}
 }
+
+// A read that fails must not let account deletion report success having revoked nothing.
+// Everywhere else in this package a failed read costs only attribution; here it would
+// leave a live credential spending for an account that no longer exists, and deleting the
+// row is what makes its id unrecoverable — so this is the last moment anyone can act.
+func TestRevokeReportsAnUnreadableStore(t *testing.T) {
+	q := newFakeQueries()
+	q.stored[7] = "sk-departing"
+	q.storedIDs[7] = keyID("sk-departing")
+	q.getErr = errors.New("database down")
+	g := &routedGateway{}
+
+	if err := testResolver(t, q, g).Revoke(context.Background(), 7); err == nil {
+		t.Fatal("Revoke must surface an unreadable store, not report a revocation it did not perform")
+	}
+	if len(g.blocked) != 0 {
+		t.Errorf("blocked %v, want nothing", g.blocked)
+	}
+}

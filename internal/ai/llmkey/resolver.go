@@ -3,6 +3,7 @@ package llmkey
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/jackc/pgx/v5"
@@ -198,7 +199,16 @@ func (r *Resolver) Revoke(ctx context.Context, userID int64) error {
 	if r == nil {
 		return nil
 	}
-	stored := r.Stored(ctx, userID)
+	// An unreadable store is not an account without a credential, and the difference
+	// matters more here than anywhere else in this package: everywhere else a failed read
+	// costs attribution, while here it would let a deletion report success having revoked
+	// nothing, leaving a live credential spending for an account that no longer exists.
+	// The error goes back so the caller decides — deleting the row is what makes the id
+	// unrecoverable, so this is the last moment anyone can.
+	stored, ok := r.read(ctx, userID)
+	if !ok {
+		return fmt.Errorf("%w: cannot read the credential to revoke", ErrUpstream)
+	}
 	if stored.ID == "" {
 		return nil
 	}
