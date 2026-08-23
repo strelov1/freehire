@@ -32,6 +32,23 @@ type Dimension struct {
 	Value string
 }
 
+// stamp writes each dimension onto a request as its own header. Both the original call
+// and the one replayed on the fallback credential go through here: a retry that dropped
+// the dimensions would file its spend under nothing, and the retry is exactly the case
+// where somebody later asks what happened.
+//
+// A half-named dimension is skipped rather than sent. `x-bf-dim-: value` is not a header
+// the gateway can group by, and an empty value is indistinguishable from an absent one at
+// the far end — so neither is worth a wire byte.
+func stamp(req *http.Request, dims []Dimension) {
+	for _, d := range dims {
+		if d.Name == "" || d.Value == "" {
+			continue
+		}
+		req.Header.Set(dimPrefix+d.Name, d.Value)
+	}
+}
+
 // Feature names the surface a call served. It is the dimension every per-user call
 // carries; see the constants in internal/api/handler/user_llm.go.
 func Feature(value string) Dimension { return Dimension{Name: "feature", Value: value} }
@@ -146,12 +163,7 @@ func (t *attribution) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	// A RoundTripper must not mutate the request it is given.
 	clone := req.Clone(req.Context())
-	for _, d := range t.dims {
-		if d.Name == "" || d.Value == "" {
-			continue
-		}
-		clone.Header.Set(dimPrefix+d.Name, d.Value)
-	}
+	stamp(clone, t.dims)
 
 	resp, err := next.RoundTrip(clone)
 	if err != nil || resp.StatusCode != http.StatusUnauthorized || t.fallback == "" {
@@ -189,12 +201,7 @@ func replay(req *http.Request, credential string, dims []Dimension) (*http.Reque
 		clone.Body = body
 	}
 	clone.Header.Set("Authorization", "Bearer "+credential)
-	for _, d := range dims {
-		if d.Name == "" || d.Value == "" {
-			continue
-		}
-		clone.Header.Set(dimPrefix+d.Name, d.Value)
-	}
+	stamp(clone, dims)
 
 	return clone, true
 }
