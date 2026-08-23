@@ -58,12 +58,14 @@ provider key at all.
 
 ## Three rules that are easy to get wrong
 
-**The usage read authenticates as the administrator, scoped by account id — never AS
-the key.** `Client.Activity` reads `GET /user/daily/activity` on the admin key with the
-account id in the query string: an internal number, not a secret, so it can travel where
-a credential could not. The handler above it (`newUsageHandlers` in `me_usage.go`) takes
-no resolver on purpose — the read needs no key, cannot mint one, and still reports a
-month during which the key was replaced.
+**The usage read authenticates as the administrator, scoped by the credential's id —
+never AS the credential.** `Client.Activity` reads `GET /api/logs/stats` as the
+administrator with the virtual key's id in the query string: opaque, not a secret, so it
+can travel where the credential could not. The handler above it (`newUsageHandlers` in
+`me_usage.go`) therefore DOES take the resolver, and takes it to read — `Stored`, never
+`For`. Minting on a page view would issue a credential to every visitor who opened it out
+of curiosity. An empty id short-circuits to zeroes without asking the gateway anything,
+which is both the never-used-AI account and the row that predates 0119.
 
 **A 401 on a per-user call means the gateway forgot the key; on an administrative call it
 means our own admin key is wrong.** Conflating them would let one mistyped environment

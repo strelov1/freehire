@@ -270,3 +270,40 @@ func TestUsageOfAnUncredentialledAccountMintsNothing(t *testing.T) {
 		t.Errorf("store holds %v, want nothing minted by a read", store.stored)
 	}
 }
+
+// A credential minted before the id column existed has a secret and nothing to ask the
+// gateway with. Zeroes are the honest answer — the account self-heals into a complete pair
+// on the first refusal — but the read must not go out at all, because an id-less query
+// asks about every credential rather than none.
+func TestUsageOfAnIdlessCredentialAsksNothing(t *testing.T) {
+	asked := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = true
+		_, _ = io.WriteString(w, `{"total_requests":999,"total_tokens":999}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(7, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	store := newStubKeyQueries()
+	store.stored[7] = "sk-pre-0119" // secret, deliberately no id
+	gateway := llmkey.New(testGatewayConfig(srv.URL))
+	h := &usageHandlers{gateway: gateway, keys: llmkey.NewResolver(store, gateway)}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
+
+	status, data := readUsage(t, app, token)
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if data["requests"] != float64(0) {
+		t.Errorf("requests = %v, want zero — there is no credential to report under", data["requests"])
+	}
+	if asked {
+		t.Error("the gateway was asked with no credential id, which is a question about everybody's usage")
+	}
+}
