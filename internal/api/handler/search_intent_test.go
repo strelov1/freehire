@@ -183,9 +183,13 @@ func TestInterpretSearchRefusesARequestWithNothingInIt(t *testing.T) {
 // Every per-user model call goes out on that user's own gateway credential under a
 // feature tag. This one is no exception, and the tag has to be a constant beside the
 // others rather than a string written here.
+//
+// The value is a bare word: the gateway names the dimension in the header, so a
+// "feature:" prefix here would file the spend under "feature:search-intent" and split
+// one feature's costs across two labels the day anybody wrote it the other way.
 func TestSearchIntentHasItsOwnFeatureTag(t *testing.T) {
-	if tagSearchIntent == "" || !strings.HasPrefix(tagSearchIntent, "feature:") {
-		t.Fatalf("tagSearchIntent = %q, want a feature: tag", tagSearchIntent)
+	if tagSearchIntent == "" || strings.Contains(tagSearchIntent, ":") {
+		t.Fatalf("tagSearchIntent = %q, want a bare feature name", tagSearchIntent)
 	}
 	if tagSearchIntent == tagAssistant {
 		t.Fatal("search intent must not be billed as assistant work")

@@ -1,13 +1,13 @@
 // Package llmkey mints, reads and revokes the per-account credentials the LLM gateway
 // knows a user by.
 //
-// It talks to the gateway's administrative API, which is a different surface from the
-// one inference uses: `/key/generate` lives at the gateway root while chat completions
-// are served under `/v1`, and the two are configured separately so the admin API need
-// not be reachable wherever inference is. Nothing here makes a model call.
+// It talks to the gateway's administrative API, which is a different surface from the one
+// inference uses: governance lives under `/api` while chat completions are served under
+// `/v1`, and the two are configured separately so the admin API need not be reachable
+// wherever inference is. Nothing here makes a model call.
 //
 // Every method is safe on a nil client, which is what an unconfigured deployment gets.
-// Absence is the off switch: no admin URL or no admin key means no minting, and every
+// Absence is the off switch: no admin URL or no administrator means no minting, and every
 // call in the system goes out on the one service credential exactly as it did before.
 package llmkey
 
@@ -41,20 +41,38 @@ var ErrUnknownKey = fmt.Errorf("%w: key not recognised", ErrUpstream)
 // unattributed rather than hold the turn open.
 const requestTimeout = 5 * time.Second
 
-const (
-	// aliasPrefix labels a key for whoever reads the gateway's own listings.
-	aliasPrefix = "freehire-user-"
-	// ownerPrefix namespaces the account this gateway aggregates spend under. The
-	// gateway serves more than one product, so a bare id would collide with another's.
-	ownerPrefix = "freehire-"
-)
+// namePrefix labels a key for whoever reads the gateway's own listings. It is the only
+// place the account id appears at the gateway: spend is grouped by the credential's own
+// identifier, which we store, so nothing here has to double as a foreign key.
+const namePrefix = "freehire-user-"
 
-// Config is the gateway's administrative endpoint and the policy applied to new keys.
+// Credential is one account's key at the gateway: what its calls present, and what an
+// administrative call addresses.
+//
+// Two fields because this gateway separates them. The secret is a bearer token and the
+// only thing a model call needs; the ID is opaque and the only thing block and delete
+// accept — aiming either at the secret answers 404. Storing one without the other yields
+// a credential that can spend but not be revoked, which is what account deletion needs.
+type Credential struct {
+	ID     string
+	Secret string
+}
+
+// Config is the gateway's administrative endpoint, the administrator it authenticates as,
+// and the policy applied to new keys.
+//
 // MaxBudget, RPMLimit and BudgetWindow are omitted from the mint request when unset,
 // because a zero sent explicitly reads as "nothing is allowed" rather than "no limit".
 type Config struct {
-	BaseURL  string
-	AdminKey string
+	BaseURL       string
+	AdminUsername string
+	AdminPassword string
+
+	// TemplateKey is the id of the virtual key whose provider policy every minted
+	// credential copies. See Mint: without a policy a new key is refused everything,
+	// and reading one rather than carrying one is what keeps the provider vocabulary
+	// out of this repository.
+	TemplateKey string
 
 	MaxBudget    float64
 	RPMLimit     int
@@ -71,53 +89,151 @@ type Client struct {
 //
 // Nil is the "this deployment does not attribute spend" answer, following
 // internal/ai/speech: callers ask whether they have a client and carry on without one,
-// rather than every call site testing two strings.
+// rather than every call site testing four strings.
+//
+// TemplateKey counts as configuration. A client without one could mint, and every
+// credential it minted would be refused by every provider — an outage that looks like a
+// model problem and is really a missing environment variable.
 func New(cfg Config) *Client {
-	if cfg.BaseURL == "" || cfg.AdminKey == "" {
+	if cfg.BaseURL == "" || cfg.AdminUsername == "" || cfg.AdminPassword == "" || cfg.TemplateKey == "" {
 		return nil
 	}
 	cfg.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
 	return &Client{cfg: cfg, http: &http.Client{Timeout: requestTimeout}}
 }
 
+// providerConfig is one entry of a virtual key's provider allowlist. The fields are
+// carried through verbatim from the template to the new key; this package does not
+// interpret them and deliberately knows no provider's name.
+type providerConfig struct {
+	Provider      string   `json:"provider"`
+	Weight        *float64 `json:"weight,omitempty"`
+	AllowedModels []string `json:"allowed_models,omitempty"`
+	KeyIDs        []string `json:"key_ids,omitempty"`
+}
+
+// virtualKey is the gateway's own shape for a credential, in both directions.
+type virtualKey struct {
+	ID              string           `json:"id"`
+	Value           string           `json:"value"`
+	ProviderConfigs []providerConfig `json:"provider_configs"`
+}
+
+// envelope covers both answer shapes the governance API uses: some routes return the key
+// at the top level, others wrap it. Reading both is cheaper than depending on which.
+type envelope struct {
+	VirtualKey *virtualKey `json:"virtual_key"`
+	virtualKey
+}
+
+func (e envelope) key() virtualKey {
+	if e.VirtualKey != nil {
+		return *e.VirtualKey
+	}
+	return e.virtualKey
+}
+
 // Mint issues a credential naming this account.
 //
-// The account is named twice on purpose. key_alias is what a human reads in the
-// gateway's listings; user_id is what the gateway aggregates daily spend under, and
-// without it the per-account rollup has nothing to group by. Both are namespaced,
-// because this gateway serves more than one product and a bare numeric id would collide.
-func (c *Client) Mint(ctx context.Context, userID int64) (string, error) {
+// It takes two calls, and the first one is not optional. A virtual key with no provider
+// policy is refused every provider — deny by default — so a key minted without one is
+// born useless, and usefully so only in the sense that the failure is total rather than
+// subtle. The policy could have been carried in configuration here; instead it is read
+// from the template key, so the list of providers and the weights between them stay in
+// the gateway's own configuration where they are already maintained, and adding a
+// provider never becomes a deployment of this service.
+//
+// key_ids is normalised rather than echoed: a read answers null where a write requires
+// ["*"], and passing the null straight back through mints a key pinned to no provider
+// key at all.
+func (c *Client) Mint(ctx context.Context, userID int64) (Credential, error) {
 	if c == nil {
-		return "", fmt.Errorf("%w: no admin API configured", ErrUpstream)
-	}
-	id := strconv.FormatInt(userID, 10)
-	body := map[string]any{
-		"key_alias": aliasPrefix + id,
-		"user_id":   ownerPrefix + id,
-	}
-	if c.cfg.MaxBudget > 0 {
-		body["max_budget"] = c.cfg.MaxBudget
-	}
-	if c.cfg.RPMLimit > 0 {
-		body["rpm_limit"] = c.cfg.RPMLimit
-	}
-	if c.cfg.BudgetWindow != "" {
-		body["budget_duration"] = c.cfg.BudgetWindow
+		return Credential{}, fmt.Errorf("%w: no admin API configured", ErrUpstream)
 	}
 
-	var out struct {
-		Key string `json:"key"`
+	var tpl envelope
+	if err := c.do(ctx, http.MethodGet, "/api/governance/virtual-keys/"+url.PathEscape(c.cfg.TemplateKey), nil, &tpl); err != nil {
+		return Credential{}, fmt.Errorf("read policy template: %w", err)
 	}
-	if err := c.post(ctx, "/key/generate", c.cfg.AdminKey, body, &out); err != nil {
-		return "", err
+	policy := tpl.key().ProviderConfigs
+	if len(policy) == 0 {
+		return Credential{}, fmt.Errorf("%w: policy template %q allows no provider", ErrUpstream, c.cfg.TemplateKey)
 	}
-	// A 200 carrying no key happens when something between us and the gateway rewrites
-	// the response. Storing "" would mark the account as credentialled for good and send
-	// every later call out unattributed, which is worse than not minting at all.
-	if out.Key == "" {
-		return "", fmt.Errorf("%w: minted an empty key", ErrUpstream)
+	for i := range policy {
+		if len(policy[i].KeyIDs) == 0 {
+			policy[i].KeyIDs = []string{"*"}
+		}
 	}
-	return out.Key, nil
+
+	body := map[string]any{
+		"name":             namePrefix + strconv.FormatInt(userID, 10),
+		"description":      "per-user spend attribution",
+		"is_active":        true,
+		"provider_configs": policy,
+	}
+	if c.cfg.MaxBudget > 0 {
+		budget := map[string]any{"max_limit": c.cfg.MaxBudget}
+		if c.cfg.BudgetWindow != "" {
+			budget["reset_duration"] = c.cfg.BudgetWindow
+		}
+		body["budgets"] = []any{budget}
+	}
+	if c.cfg.RPMLimit > 0 {
+		body["rate_limit"] = map[string]any{
+			"request_max_limit":      c.cfg.RPMLimit,
+			"request_reset_duration": "1m",
+		}
+	}
+
+	var out envelope
+	if err := c.do(ctx, http.MethodPost, "/api/governance/virtual-keys", body, &out); err != nil {
+		return Credential{}, err
+	}
+	minted := out.key()
+	// A 2xx carrying neither field happens when something between us and the gateway
+	// rewrites the response. Storing a half credential would mark the account as
+	// credentialled for good while leaving it unusable or unrevokable.
+	if minted.Value == "" || minted.ID == "" {
+		return Credential{}, fmt.Errorf("%w: minted an incomplete credential", ErrUpstream)
+	}
+	return Credential{ID: minted.ID, Secret: minted.Value}, nil
+}
+
+// Block retires a credential without erasing it: it stops spending and stays in the
+// gateway's listings, so what it was is still legible to whoever reads them.
+//
+// This is what a departing account gets. On the previous gateway it was also how the
+// spend record survived, because that record hung off the key; here the usage log is
+// keyed by the credential's id and outlives the credential itself, so the distinction
+// between this and Delete is now about legibility rather than about losing history.
+//
+// A key the gateway has already forgotten reports success — that is the state the caller
+// asked for, and account deletion must not log a fault for reaching it.
+func (c *Client) Block(ctx context.Context, keyID string) error {
+	if c == nil || keyID == "" {
+		return nil
+	}
+	err := c.do(ctx, http.MethodPut, "/api/governance/virtual-keys/"+url.PathEscape(keyID),
+		map[string]any{"is_active": false}, nil)
+	if errors.Is(err, ErrUnknownKey) {
+		return nil
+	}
+	return err
+}
+
+// Delete erases a credential outright.
+//
+// It is for a key with nothing worth keeping in the listings: one minted moments ago that
+// lost the race to store itself, or one nothing can reach any more.
+func (c *Client) Delete(ctx context.Context, keyID string) error {
+	if c == nil || keyID == "" {
+		return nil
+	}
+	err := c.do(ctx, http.MethodDelete, "/api/governance/virtual-keys/"+url.PathEscape(keyID), nil, nil)
+	if errors.Is(err, ErrUnknownKey) {
+		return nil
+	}
+	return err
 }
 
 // Activity is what an account did over a window: how many model calls it made, how many
@@ -132,108 +248,90 @@ type Activity struct {
 	Tokens   int
 }
 
-// Activity reports what one account did between two dates, inclusive.
+// Activity reports what one credential did between two dates, inclusive.
 //
-// The gateway aggregates this per day and hands back a pre-computed total, so the window
-// costs one call however long it is. It is an administrative read keyed by the account id
-// we minted under — an internal number, not a secret, so it travels in the query string
-// where a credential could not.
-func (c *Client) Activity(ctx context.Context, userID int64, from, to time.Time) (Activity, error) {
+// Two calls rather than one, because the gateway reports a success RATE and not a failure
+// count, and deriving one from the other rounds: 7 of 9 is 77.77…%, and turning that back
+// into "2 failed" is arithmetic on a display value. The second call asks the same question
+// filtered to failures and reads the count directly.
+//
+// The window is widened to whole days at both ends. The caller works in dates, the gateway
+// in instants, and a from/to pair taken literally would silently drop everything that
+// happened earlier on the first day.
+//
+// This is an administrative read keyed by the credential id — opaque, not a secret, so it
+// travels in a query string where the credential could not.
+func (c *Client) Activity(ctx context.Context, keyID string, from, to time.Time) (Activity, error) {
 	if c == nil {
 		return Activity{}, fmt.Errorf("%w: no admin API configured", ErrUpstream)
 	}
-	query := url.Values{
-		"user_id":    {ownerPrefix + strconv.FormatInt(userID, 10)},
-		"start_date": {from.UTC().Format(time.DateOnly)},
-		"end_date":   {to.UTC().Format(time.DateOnly)},
+	if keyID == "" {
+		// An account that never had a credential did nothing, which is an answer and
+		// not a fault: the usage page renders zeroes rather than an error.
+		return Activity{}, nil
 	}
-	var out struct {
-		Metadata struct {
-			Requests int `json:"total_api_requests"`
-			Failed   int `json:"total_failed_requests"`
-			Tokens   int `json:"total_tokens"`
-		} `json:"metadata"`
+
+	window := url.Values{
+		"virtual_key_ids": {keyID},
+		"start_time":      {from.UTC().Truncate(24 * time.Hour).Format(time.RFC3339)},
+		"end_time":        {to.UTC().Truncate(24 * time.Hour).Add(24*time.Hour - time.Second).Format(time.RFC3339)},
 	}
-	if err := c.get(ctx, "/user/daily/activity?"+query.Encode(), c.cfg.AdminKey, &out); err != nil {
+
+	var total struct {
+		Requests int `json:"total_requests"`
+		Tokens   int `json:"total_tokens"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/logs/stats?"+window.Encode(), nil, &total); err != nil {
 		return Activity{}, err
 	}
-	return Activity{
-		Requests: out.Metadata.Requests,
-		Failed:   out.Metadata.Failed,
-		Tokens:   out.Metadata.Tokens,
-	}, nil
+
+	failed := window
+	failed.Set("status", "error")
+	var errs struct {
+		Requests int `json:"total_requests"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/logs/stats?"+failed.Encode(), nil, &errs); err != nil {
+		return Activity{}, err
+	}
+
+	return Activity{Requests: total.Requests, Failed: errs.Requests, Tokens: total.Tokens}, nil
 }
 
-// Block retires a credential without erasing it: it stops spending and stays in the
-// gateway's records, so what was already spent with it remains attributable.
+// do carries out one administrative call and decodes its answer.
 //
-// This is what a departing account gets. Delete would take the gateway's own account of
-// the spend along with the key, and a cost record that disappears when somebody leaves is
-// not a cost record.
+// Every call here authenticates as the administrator and there is no second credential to
+// choose from, so unlike its predecessor this takes none: the gateway's management surface
+// admits exactly one identity, and offering a parameter would imply a decision that does
+// not exist.
 //
-// A key the gateway has already forgotten reports success — that is the state the caller
-// asked for, and account deletion must not log a fault for reaching it.
-func (c *Client) Block(ctx context.Context, secret string) error {
-	if c == nil {
-		return nil
+// 404 is singled out: the gateway answers it for a key it does not know, which is the
+// signal Block and Delete treat as already done. Every other non-2xx, including a 401, is
+// the gateway's own problem — a 401 here means OUR administrator credentials are wrong,
+// never that a user's key went stale, and conflating the two would turn one mistyped
+// environment variable into a re-minting storm.
+//
+// Error messages carry the path and never the query or the credentials.
+func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	var reader *bytes.Reader
+	if body != nil {
+		blob, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("%w: encode request: %v", ErrUpstream, err)
+		}
+		reader = bytes.NewReader(blob)
+	} else {
+		reader = bytes.NewReader(nil)
 	}
-	err := c.post(ctx, "/key/block", c.cfg.AdminKey, map[string]any{"key": secret}, nil)
-	if errors.Is(err, ErrUnknownKey) {
-		return nil
-	}
-	return err
-}
 
-// Delete erases a credential outright, records and all.
-//
-// It is for a key that has no records worth keeping: one minted moments ago that lost the
-// race to store itself, or one nothing can reach any more. For a credential that has
-// actually been spent with, use Block.
-func (c *Client) Delete(ctx context.Context, secret string) error {
-	if c == nil {
-		return nil
-	}
-	err := c.post(ctx, "/key/delete", c.cfg.AdminKey, map[string]any{"keys": []string{secret}}, nil)
-	if errors.Is(err, ErrUnknownKey) {
-		return nil
-	}
-	return err
-}
-
-// post and get take the bearer credential explicitly rather than defaulting to the
-// administrator's. Which credential a call travels on is a security decision, and one
-// with a silent failure mode — an over-privileged read works perfectly — so it is named
-// at every call site instead of being inherited.
-func (c *Client) post(ctx context.Context, path, bearer string, body any, out any) error {
-	blob, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("%w: encode request: %v", ErrUpstream, err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.BaseURL+path, bytes.NewReader(blob))
+	req, err := http.NewRequestWithContext(ctx, method, c.cfg.BaseURL+path, reader)
 	if err != nil {
 		return fmt.Errorf("%w: build request: %v", ErrUpstream, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	return c.do(req, bearer, out)
-}
-
-func (c *Client) get(ctx context.Context, path, bearer string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.BaseURL+path, nil)
-	if err != nil {
-		return fmt.Errorf("%w: build request: %v", ErrUpstream, err)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.do(req, bearer, out)
-}
+	req.SetBasicAuth(c.cfg.AdminUsername, c.cfg.AdminPassword)
 
-// do carries out one call and decodes its answer.
-//
-// 404 is singled out: the gateway answers it for a key it does not know regardless of who
-// asked, which is the signal a caller (Block, Delete) treats as already done. Every other
-// non-2xx, including a 401, is the gateway's own problem.
-//
-// Error messages carry the path and never the query or the credential.
-func (c *Client) do(req *http.Request, bearer string, out any) error {
-	req.Header.Set("Authorization", "Bearer "+bearer)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %s: %v", ErrUpstream, req.URL.Path, err)

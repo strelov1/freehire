@@ -965,6 +965,7 @@ type User struct {
 	TalentNetworkPublicID      uuid.UUID          `json:"talent_network_public_id"`
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Language                   string             `json:"language"`
+	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
 }
 
 type UserEmailCode struct {

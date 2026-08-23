@@ -15,13 +15,19 @@ import (
 // number to disagree with.
 type usageHandlers struct {
 	gateway *llmkey.Client
+	keys    *llmkey.Resolver
 }
 
-// newUsageHandlers takes the gateway and no resolver on purpose. The read is scoped by the
-// account id rather than by a credential, so it needs no key, cannot mint one, and still
-// reports a month during which the key was replaced.
-func newUsageHandlers(gateway *llmkey.Client) *usageHandlers {
-	return &usageHandlers{gateway: gateway}
+// newUsageHandlers takes the resolver as well as the gateway, and only to READ.
+//
+// It used to take the gateway alone, because the gateway aggregated spend under an
+// account id we already had in the request. This one aggregates under the credential's
+// own identifier, which lives in our database, so the id has to be looked up — but with
+// Stored, never For: minting here would issue a credential to every visitor who opened
+// the page out of curiosity and turn "accounts with a key" from a count of who has spent
+// into a count of who has looked.
+func newUsageHandlers(gateway *llmkey.Client, keys *llmkey.Resolver) *usageHandlers {
+	return &usageHandlers{gateway: gateway, keys: keys}
 }
 
 func (h *usageHandlers) register(api fiber.Router, mw middleware) {
@@ -70,9 +76,13 @@ func (h *usageHandlers) usage(c *fiber.Ctx, userID int64) usageResponse {
 	if h.gateway == nil {
 		return out
 	}
-	// Scoped by the account id, not by the credential — so an account whose key was
-	// re-minted mid-month still reports everything it did, under both.
-	act, err := h.gateway.Activity(c.Context(), userID, credits.PeriodStart(now), now)
+	// Scoped by the credential, which is a real narrowing: the gateway keys its usage
+	// log by the credential's id and offers no way to ask by account, so a key replaced
+	// mid-month leaves the earlier one's calls out of this figure. That happens only when
+	// the gateway refuses a stored key, which is rare, and the alternative — remembering
+	// retired ids so the read could sum them — would keep a growing list of dead
+	// credentials alive to make a usage counter slightly more complete.
+	act, err := h.gateway.Activity(c.Context(), h.keys.Stored(c.Context(), userID).ID, credits.PeriodStart(now), now)
 	if err != nil {
 		log.Printf("usage: read activity for user %d: %v", userID, err)
 		return out

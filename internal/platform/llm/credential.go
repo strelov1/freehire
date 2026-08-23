@@ -9,10 +9,15 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
-// tagHeader is how the gateway is told which feature a call served. It files one spend
-// row per tag per day, which is what makes "what does tailoring cost" answerable without
-// a table of our own.
-const tagHeader = "x-litellm-tags"
+// tagHeader is how the gateway is told which feature a call served.
+//
+// The header names the DIMENSION and carries only the value, which is why the feature
+// constants above it are bare words rather than "feature:x" pairs. The gateway files the
+// value onto the request log, its OpenTelemetry span, and — provided "feature" is listed
+// in the gateway's own prometheus_labels — onto every metric the call produces. That last
+// one is what makes "what does tailoring cost" answerable without a table of our own; it
+// is a Grafana question here rather than a SQL one.
+const tagHeader = "x-bf-dim-feature"
 
 // As returns a client that spends under a given credential and labels its calls.
 //

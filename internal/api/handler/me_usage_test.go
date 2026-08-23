@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,24 +17,40 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
-// activityGateway answers the daily-activity read per account id, so a test can give two
+// activity is one credential's month, as the fake gateway will report it.
+type activity struct{ requests, failed, tokens int }
+
+// activityGateway answers the usage read per CREDENTIAL id, so a test can give two
 // accounts different numbers and prove neither can see the other's.
-func activityGateway(t *testing.T, byAccount map[string]string) *httptest.Server {
+//
+// It serves the read twice over, because that is what the client does: once for the
+// totals and once filtered to failures, where total_requests IS the failure count. A fake
+// that ignored the filter would report every call as failed.
+//
+// The totals always carry a cost the handler must drop; see the wire-shape test below.
+func activityGateway(t *testing.T, byKey map[string]activity) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/user/daily/activity" {
+		if r.URL.Path != "/api/logs/stats" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		body, ok := byAccount[r.URL.Query().Get("user_id")]
-		if !ok {
-			body = `{"results":[],"metadata":{"total_api_requests":0,"total_failed_requests":0,"total_tokens":0}}`
+		act := byKey[r.URL.Query().Get("virtual_key_ids")]
+		if r.URL.Query().Get("status") == "error" {
+			_, _ = fmt.Fprintf(w, `{"total_requests":%d}`, act.failed)
+			return
 		}
-		_, _ = io.WriteString(w, body)
+		_, _ = fmt.Fprintf(w, `{"total_requests":%d,"total_tokens":%d,"total_cost":9.99}`,
+			act.requests, act.tokens)
 	}))
 	t.Cleanup(srv.Close)
 	return srv
 }
+
+// usageKeyID is the credential id this account's usage is filed under. The handler reads
+// it from the store rather than deriving it, so the store has to be seeded with it — an
+// account whose row holds no id reports zeroes, which is a real state and not a fault.
+func usageKeyID(userID int64) string { return fmt.Sprintf("vk-%d", userID) }
 
 func usageApp(t *testing.T, gatewayURL string, userID int64) (*fiber.App, string) {
 	t.Helper()
@@ -42,7 +59,11 @@ func usageApp(t *testing.T, gatewayURL string, userID int64) (*fiber.App, string
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &usageHandlers{gateway: llmkey.New(llmkey.Config{BaseURL: gatewayURL, AdminKey: "sk-admin"})}
+	store := newStubKeyQueries()
+	store.stored[userID] = fmt.Sprintf("sk-user-%d", userID)
+	store.storedIDs[userID] = usageKeyID(userID)
+	gateway := llmkey.New(testGatewayConfig(gatewayURL))
+	h := &usageHandlers{gateway: gateway, keys: llmkey.NewResolver(store, gateway)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
@@ -68,8 +89,8 @@ func readUsage(t *testing.T, app *fiber.App, token string) (int, map[string]any)
 }
 
 func TestUsageReportsWhatTheCallerDid(t *testing.T) {
-	gw := activityGateway(t, map[string]string{
-		"freehire-7": `{"results":[],"metadata":{"total_api_requests":128,"total_failed_requests":2,"total_tokens":450000}}`,
+	gw := activityGateway(t, map[string]activity{
+		"vk-7": {requests: 128, failed: 2, tokens: 450000},
 	})
 	app, token := usageApp(t, gw.URL, 7)
 
@@ -88,8 +109,8 @@ func TestUsageReportsWhatTheCallerDid(t *testing.T) {
 // No money, ever. The gateway's figure is a list price on a mixed pool — not our cost and
 // not the caller's price, which is credits. Two currencies for one thing, one fictional.
 func TestUsageReportsNoMoney(t *testing.T) {
-	gw := activityGateway(t, map[string]string{
-		"freehire-7": `{"results":[],"metadata":{"total_api_requests":5,"total_spend":9.99,"total_tokens":10}}`,
+	gw := activityGateway(t, map[string]activity{
+		"vk-7": {requests: 5, tokens: 10},
 	})
 	app, token := usageApp(t, gw.URL, 7)
 
@@ -104,7 +125,7 @@ func TestUsageReportsNoMoney(t *testing.T) {
 // The period must be the one credits already reset on, or a balance and a usage count sit
 // on different months and both look correct.
 func TestUsagePeriodMatchesTheCreditsCalendar(t *testing.T) {
-	gw := activityGateway(t, map[string]string{})
+	gw := activityGateway(t, map[string]activity{})
 	app, token := usageApp(t, gw.URL, 7)
 
 	_, data := readUsage(t, app, token)
@@ -117,7 +138,7 @@ func TestUsagePeriodMatchesTheCreditsCalendar(t *testing.T) {
 // Never used AI is a real and common state, and it is zero — not an error, and not a 404
 // that a client has to special-case before it can render a number.
 func TestUsageAnswersACallerWithNoneAsZeroes(t *testing.T) {
-	gw := activityGateway(t, map[string]string{})
+	gw := activityGateway(t, map[string]activity{})
 	app, token := usageApp(t, gw.URL, 7)
 
 	status, data := readUsage(t, app, token)
@@ -130,9 +151,9 @@ func TestUsageAnswersACallerWithNoneAsZeroes(t *testing.T) {
 }
 
 func TestUsageIsOwnerScoped(t *testing.T) {
-	gw := activityGateway(t, map[string]string{
-		"freehire-7": `{"results":[],"metadata":{"total_api_requests":12,"total_failed_requests":0,"total_tokens":1}}`,
-		"freehire-8": `{"results":[],"metadata":{"total_api_requests":99,"total_failed_requests":0,"total_tokens":1}}`,
+	gw := activityGateway(t, map[string]activity{
+		"vk-7": {requests: 12, tokens: 1},
+		"vk-8": {requests: 99, tokens: 1},
 	})
 
 	seven, tokenSeven := usageApp(t, gw.URL, 7)
@@ -146,7 +167,7 @@ func TestUsageIsOwnerScoped(t *testing.T) {
 }
 
 func TestUsageRequiresACredential(t *testing.T) {
-	gw := activityGateway(t, map[string]string{})
+	gw := activityGateway(t, map[string]activity{})
 	app, _ := usageApp(t, gw.URL, 7)
 
 	if status, _ := readUsage(t, app, ""); status != fiber.StatusUnauthorized {
@@ -197,8 +218,8 @@ func TestUsageWithNoGatewayConfiguredIsStillZeroes(t *testing.T) {
 // The read is scoped by the account id, never by a credential — so it needs no key, mints
 // nothing, and still reports a month during which the key was re-minted.
 func TestUsageNeitherNeedsNorReturnsACredential(t *testing.T) {
-	gw := activityGateway(t, map[string]string{
-		"freehire-7": `{"results":[],"metadata":{"total_api_requests":3,"total_failed_requests":0,"total_tokens":9}}`,
+	gw := activityGateway(t, map[string]activity{
+		"vk-7": {requests: 3, tokens: 9},
 	})
 	app, token := usageApp(t, gw.URL, 7)
 

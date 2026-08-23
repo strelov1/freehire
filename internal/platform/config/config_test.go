@@ -22,28 +22,38 @@ func TestLoad_LLMFromEnv(t *testing.T) {
 
 func TestLoad_GatewayAdminFromEnv(t *testing.T) {
 	t.Setenv("LLM_ADMIN_URL", "https://gw.example")
-	t.Setenv("LLM_ADMIN_KEY", "admin-123")
+	t.Setenv("LLM_ADMIN_USERNAME", "admin")
+	t.Setenv("LLM_ADMIN_PASSWORD", "admin-123")
+	t.Setenv("LLM_ADMIN_TEMPLATE_KEY", "vk-freehire-service")
 
 	s := Load()
-	if s.LLMAdminURL != "https://gw.example" || s.LLMAdminKey != "admin-123" {
-		t.Errorf("admin settings = %q/%q, want the env values", s.LLMAdminURL, s.LLMAdminKey)
+	if s.LLMAdminURL != "https://gw.example" || s.LLMAdminUsername != "admin" || s.LLMAdminPassword != "admin-123" {
+		t.Errorf("admin settings = %q/%q/%q, want the env values",
+			s.LLMAdminURL, s.LLMAdminUsername, s.LLMAdminPassword)
+	}
+	// The template key is what a minted credential copies its provider policy from.
+	// Losing it does not disable attribution loudly — it mints keys the gateway then
+	// refuses every provider — so it is read here rather than left to a nil check.
+	if s.LLMAdminTemplateKey != "vk-freehire-service" {
+		t.Errorf("template key = %q, want the env value", s.LLMAdminTemplateKey)
 	}
 }
 
 // The administrative endpoint is NOT the inference one: the gateway serves chat under
-// /v1 and administration at its root. Defaulting one from the other would encode a guess
+// /v1 and administration under /api. Defaulting one from the other would encode a guess
 // about how an operator wrote a URL, and would foreclose keeping the admin API off the
 // public host entirely.
 func TestLoad_GatewayAdminIsNotDerivedFromTheInferenceURL(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "https://gw.example/v1")
 	t.Setenv("LLM_API_KEY", "key-123")
 	t.Setenv("LLM_ADMIN_URL", "")
-	t.Setenv("LLM_ADMIN_KEY", "")
+	t.Setenv("LLM_ADMIN_USERNAME", "")
+	t.Setenv("LLM_ADMIN_PASSWORD", "")
 
 	s := Load()
-	if s.LLMAdminURL != "" || s.LLMAdminKey != "" {
-		t.Errorf("admin settings = %q/%q, want both empty — an unset admin API disables attribution",
-			s.LLMAdminURL, s.LLMAdminKey)
+	if s.LLMAdminURL != "" || s.LLMAdminUsername != "" || s.LLMAdminPassword != "" {
+		t.Errorf("admin settings = %q/%q/%q, want all empty — an unset admin API disables attribution",
+			s.LLMAdminURL, s.LLMAdminUsername, s.LLMAdminPassword)
 	}
 }
 

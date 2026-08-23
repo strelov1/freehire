@@ -91,15 +91,26 @@ type Settings struct {
 	// share the same six values and the same loader; what differs is that policy.
 	LLM
 
-	// LLMAdminURL and LLMAdminKey reach the gateway's administrative API, which mints
-	// the per-user credential each account's calls are spent under. They are named
-	// apart from LLMBaseURL/LLMAPIKey for two reasons: the endpoints genuinely differ
-	// (inference is served under /v1, administration at the root), and separating them
-	// is what later lets LLMAPIKey stop being an administrative credential without a
-	// code change. Either empty disables attribution entirely — every call then goes
-	// out on LLMAPIKey exactly as it did before.
-	LLMAdminURL string
-	LLMAdminKey string
+	// LLMAdminURL, LLMAdminUsername and LLMAdminPassword reach the gateway's
+	// administrative API, which mints the per-user credential each account's calls are
+	// spent under. They are named apart from LLMBaseURL/LLMAPIKey for two reasons: the
+	// endpoints genuinely differ (inference is served under /v1, administration under
+	// /api), and separating them is what lets LLMAPIKey stop being an administrative
+	// credential without a code change. It authenticates with a username and password
+	// rather than a bearer token because the management surface admits exactly one
+	// identity, and it is HTTP Basic.
+	//
+	// LLMAdminTemplateKey names the virtual key whose provider policy every minted
+	// credential copies. It is required rather than optional: the gateway denies every
+	// provider to a key that carries no policy, so minting without it produces
+	// credentials that fail on their first call.
+	//
+	// Any of them empty disables attribution entirely — every call then goes out on
+	// LLMAPIKey exactly as it did before.
+	LLMAdminURL         string
+	LLMAdminUsername    string
+	LLMAdminPassword    string
+	LLMAdminTemplateKey string
 
 	// LLMUserMaxBudget and LLMUserRPMLimit bound one account at the gateway. Both are
 	// unset by default and omitted from a minted credential when zero: a ceiling
@@ -332,7 +343,9 @@ func Load() Settings {
 		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
 
 		LLMAdminURL:         os.Getenv("LLM_ADMIN_URL"),
-		LLMAdminKey:         os.Getenv("LLM_ADMIN_KEY"),
+		LLMAdminUsername:    os.Getenv("LLM_ADMIN_USERNAME"),
+		LLMAdminPassword:    os.Getenv("LLM_ADMIN_PASSWORD"),
+		LLMAdminTemplateKey: os.Getenv("LLM_ADMIN_TEMPLATE_KEY"),
 		LLMUserMaxBudget:    envFloat("LLM_USER_MAX_BUDGET", 0),
 		LLMUserRPMLimit:     envInt("LLM_USER_RPM_LIMIT", 0),
 		LLMUserBudgetWindow: env("LLM_USER_BUDGET_WINDOW", "30d"),

@@ -11,6 +11,7 @@
   } from '$lib/assistant/api';
   import VoiceCall from '$lib/assistant/VoiceCall.svelte';
   import { canUseVoiceCall } from '$lib/assistant/voiceCall';
+  import { AUDIO_ENABLED } from '$lib/assistant/audioAvailability';
   import { track } from '$lib/analytics';
   import {
     openRehearsal,
@@ -161,6 +162,8 @@
   // not keep offering a call that can only fail. `voiceSupported` starts false and is
   // decided after mount, the same reasoning VoiceInput.svelte's `supported` gives:
   // reading navigator during SSR would disagree with the client on the first paint.
+  // It also carries AUDIO_ENABLED, which is false while the gateway migration leaves
+  // the Realtime route unproven — see audioAvailability.ts.
   let voiceCallOpen = $state(false);
   let voiceModeOff = $state(false);
   let voiceSupported = $state(false);
@@ -721,10 +724,12 @@
 
   onMount(() => {
     void boot();
-    voiceSupported = canUseVoiceCall({
-      mediaDevices: navigator.mediaDevices,
-      RTCPeerConnection: typeof RTCPeerConnection === 'undefined' ? undefined : RTCPeerConnection,
-    });
+    voiceSupported =
+      AUDIO_ENABLED &&
+      canUseVoiceCall({
+        mediaDevices: navigator.mediaDevices,
+        RTCPeerConnection: typeof RTCPeerConnection === 'undefined' ? undefined : RTCPeerConnection,
+      });
     document.addEventListener('visibilitychange', catchUpOnReturn);
     return () => {
       document.removeEventListener('visibilitychange', catchUpOnReturn);

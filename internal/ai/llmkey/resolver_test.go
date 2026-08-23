@@ -2,11 +2,11 @@ package llmkey
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -20,6 +20,10 @@ import (
 type fakeQueries struct {
 	mu     sync.Mutex
 	stored map[int64]string
+	// storedIDs holds the gateway's own identifier beside the secret, because the two
+	// are written and cleared as one credential and a test that tracked only the secret
+	// could not tell a revocable credential from an unrevocable one.
+	storedIDs map[int64]string
 
 	// commitDuringMint is the other transaction landing while we hold a freshly minted
 	// key: the first read saw nothing, and by the time we try to claim, the winner's
@@ -31,34 +35,38 @@ type fakeQueries struct {
 	claims                     int
 }
 
-func newFakeQueries() *fakeQueries { return &fakeQueries{stored: map[int64]string{}} }
+func newFakeQueries() *fakeQueries {
+	return &fakeQueries{stored: map[int64]string{}, storedIDs: map[int64]string{}}
+}
 
-func (f *fakeQueries) GetUserLLMKey(_ context.Context, id int64) (string, error) {
+func (f *fakeQueries) GetUserLLMKey(_ context.Context, id int64) (db.GetUserLLMKeyRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.getErr != nil {
-		return "", f.getErr
+		return db.GetUserLLMKeyRow{}, f.getErr
 	}
-	return f.stored[id], nil
+	return db.GetUserLLMKeyRow{LlmKey: f.stored[id], LlmKeyID: f.storedIDs[id]}, nil
 }
 
 // ClaimUserLLMKey mirrors the real statement: it writes only while the account has none,
 // and reports no rows when somebody else got there first.
-func (f *fakeQueries) ClaimUserLLMKey(_ context.Context, arg db.ClaimUserLLMKeyParams) (string, error) {
+func (f *fakeQueries) ClaimUserLLMKey(_ context.Context, arg db.ClaimUserLLMKeyParams) (db.ClaimUserLLMKeyRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.claims++
 	if f.claimErr != nil {
-		return "", f.claimErr
+		return db.ClaimUserLLMKeyRow{}, f.claimErr
 	}
 	if f.commitDuringMint != "" {
 		f.stored[arg.ID] = f.commitDuringMint
+		f.storedIDs[arg.ID] = keyID(f.commitDuringMint)
 	}
 	if f.stored[arg.ID] != "" {
-		return "", pgx.ErrNoRows
+		return db.ClaimUserLLMKeyRow{}, pgx.ErrNoRows
 	}
 	f.stored[arg.ID] = arg.LlmKey.String
-	return arg.LlmKey.String, nil
+	f.storedIDs[arg.ID] = arg.LlmKeyID.String
+	return db.ClaimUserLLMKeyRow{LlmKey: arg.LlmKey.String, LlmKeyID: arg.LlmKeyID.String}, nil
 }
 
 func (f *fakeQueries) ClearUserLLMKey(_ context.Context, arg db.ClearUserLLMKeyParams) error {
@@ -69,13 +77,20 @@ func (f *fakeQueries) ClearUserLLMKey(_ context.Context, arg db.ClearUserLLMKeyP
 	}
 	if f.stored[arg.ID] == arg.LlmKey.String {
 		delete(f.stored, arg.ID)
+		delete(f.storedIDs, arg.ID)
 	}
 	return nil
 }
 
-// routedGateway answers /key/generate with successive secrets and records every deletion
-// and block, so a test can prove an abandoned key was cleaned up (or, for a refused live
-// credential, merely retired) rather than orphaned.
+// keyID is the gateway id a test expects beside a given secret. The real gateway hands
+// back two unrelated opaque strings; deriving one from the other here keeps an assertion
+// about which credential was blocked readable — "vk-loser" beside "sk-loser" — without
+// pretending the production code may assume any such relationship.
+func keyID(secret string) string { return "vk-" + strings.TrimPrefix(secret, "sk-") }
+
+// routedGateway answers a create with successive secrets and records every deletion and
+// block BY ID, so a test can prove an abandoned key was cleaned up (or, for a refused
+// live credential, merely retired) rather than orphaned.
 type routedGateway struct {
 	mu       sync.Mutex
 	mints    []string
@@ -90,8 +105,13 @@ func (g *routedGateway) server(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		g.mu.Lock()
 		defer g.mu.Unlock()
-		switch r.URL.Path {
-		case "/key/generate":
+		const keys = "/api/governance/virtual-keys"
+		switch {
+		// The policy read every mint begins with. Answering it here rather than in
+		// each test keeps these cases about the race they exist to describe.
+		case r.Method == http.MethodGet && r.URL.Path == keys+"/"+templateKey:
+			_, _ = io.WriteString(w, templateBody)
+		case r.Method == http.MethodPost && r.URL.Path == keys:
 			if g.mintFail {
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = io.WriteString(w, `{"error":"boom"}`)
@@ -102,22 +122,12 @@ func (g *routedGateway) server(t *testing.T) *httptest.Server {
 				secret = g.mints[g.minted]
 			}
 			g.minted++
-			_, _ = io.WriteString(w, `{"key":"`+secret+`","token_id":"h"}`)
-		case "/key/delete":
-			var body struct {
-				Keys []string `json:"keys"`
-			}
-			raw, _ := io.ReadAll(r.Body)
-			_ = json.Unmarshal(raw, &body)
-			g.deleted = append(g.deleted, body.Keys...)
-			_, _ = io.WriteString(w, `{"deleted_keys":[]}`)
-		case "/key/block":
-			var body struct {
-				Key string `json:"key"`
-			}
-			raw, _ := io.ReadAll(r.Body)
-			_ = json.Unmarshal(raw, &body)
-			g.blocked = append(g.blocked, body.Key)
+			_, _ = io.WriteString(w, `{"virtual_key":{"id":"`+keyID(secret)+`","value":"`+secret+`"}}`)
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, keys+"/"):
+			g.deleted = append(g.deleted, strings.TrimPrefix(r.URL.Path, keys+"/"))
+			_, _ = io.WriteString(w, `{"deleted":true}`)
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, keys+"/"):
+			g.blocked = append(g.blocked, strings.TrimPrefix(r.URL.Path, keys+"/"))
 			_, _ = io.WriteString(w, `{}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -129,12 +139,13 @@ func (g *routedGateway) server(t *testing.T) *httptest.Server {
 
 func testResolver(t *testing.T, q Queries, g *routedGateway) *Resolver {
 	t.Helper()
-	return NewResolver(q, New(Config{BaseURL: g.server(t).URL, AdminKey: "sk-admin"}))
+	return NewResolver(q, configured(g.server(t).URL))
 }
 
 func TestForReturnsTheStoredCredentialWithoutMinting(t *testing.T) {
 	q := newFakeQueries()
 	q.stored[7] = "sk-already"
+	q.storedIDs[7] = keyID("sk-already")
 	g := &routedGateway{}
 	r := testResolver(t, q, g)
 
@@ -171,7 +182,7 @@ func TestForLosesTheRaceAndRevokesItsOwnKey(t *testing.T) {
 	if got := r.For(context.Background(), 7); got != "sk-winner" {
 		t.Errorf("For = %q, want the credential that actually got stored", got)
 	}
-	if len(g.deleted) != 1 || g.deleted[0] != "sk-loser" {
+	if len(g.deleted) != 1 || g.deleted[0] != keyID("sk-loser") {
 		t.Errorf("deleted %v, want exactly the abandoned key", g.deleted)
 	}
 	if q.stored[7] != "sk-winner" {
@@ -219,7 +230,7 @@ func TestForRevokesACredentialItCouldNotStore(t *testing.T) {
 	if got := r.For(context.Background(), 7); got != "" {
 		t.Errorf("For = %q, want \"\" — a credential we cannot store must not be used", got)
 	}
-	if len(g.deleted) != 1 || g.deleted[0] != "sk-unstorable" {
+	if len(g.deleted) != 1 || g.deleted[0] != keyID("sk-unstorable") {
 		t.Errorf("deleted %v, want the unstorable credential revoked", g.deleted)
 	}
 }
@@ -242,6 +253,7 @@ func TestNilResolverIsUnattributed(t *testing.T) {
 func TestForgetClearsTheRowAndBlocksTheKey(t *testing.T) {
 	q := newFakeQueries()
 	q.stored[7] = "sk-stale"
+	q.storedIDs[7] = keyID("sk-stale")
 	g := &routedGateway{}
 	r := testResolver(t, q, g)
 
@@ -250,7 +262,7 @@ func TestForgetClearsTheRowAndBlocksTheKey(t *testing.T) {
 	if q.stored[7] != "" {
 		t.Errorf("stored %q, want the stale credential cleared so the next call re-mints", q.stored[7])
 	}
-	if len(g.blocked) != 1 || g.blocked[0] != "sk-stale" {
+	if len(g.blocked) != 1 || g.blocked[0] != keyID("sk-stale") {
 		t.Errorf("blocked %v, want the stale credential blocked", g.blocked)
 	}
 	if len(g.deleted) != 0 {
@@ -262,6 +274,7 @@ func TestForgetClearsTheRowAndBlocksTheKey(t *testing.T) {
 func TestForgetLeavesAReplacementAlone(t *testing.T) {
 	q := newFakeQueries()
 	q.stored[7] = "sk-replacement"
+	q.storedIDs[7] = keyID("sk-replacement")
 	g := &routedGateway{}
 	r := testResolver(t, q, g)
 

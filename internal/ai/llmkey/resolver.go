@@ -14,8 +14,8 @@ import (
 // Queries is the slice of the generated query surface the resolver needs. *db.Queries
 // satisfies it; tests supply a fake.
 type Queries interface {
-	GetUserLLMKey(ctx context.Context, id int64) (string, error)
-	ClaimUserLLMKey(ctx context.Context, arg db.ClaimUserLLMKeyParams) (string, error)
+	GetUserLLMKey(ctx context.Context, id int64) (db.GetUserLLMKeyRow, error)
+	ClaimUserLLMKey(ctx context.Context, arg db.ClaimUserLLMKeyParams) (db.ClaimUserLLMKeyRow, error)
 	ClearUserLLMKey(ctx context.Context, arg db.ClearUserLLMKeyParams) error
 }
 
@@ -51,10 +51,10 @@ func (r *Resolver) For(ctx context.Context, userID int64) string {
 		// each one unstorable and each one left at the gateway.
 		return ""
 	}
-	if stored != "" {
-		return stored
+	if stored.Secret != "" {
+		return stored.Secret
 	}
-	return r.mint(ctx, userID)
+	return r.mint(ctx, userID).Secret
 }
 
 // Stored returns the credential this account already has, or "" — and never mints one.
@@ -62,7 +62,7 @@ func (r *Resolver) For(ctx context.Context, userID int64) string {
 // It is what a read of somebody's own usage uses. Minting there would create a credential
 // for every visitor who opened a page out of curiosity, and turn "accounts with a key"
 // from a count of who has spent into a count of who has looked. Nil-safe.
-func (r *Resolver) Stored(ctx context.Context, userID int64) string {
+func (r *Resolver) Stored(ctx context.Context, userID int64) Credential {
 	stored, _ := r.read(ctx, userID)
 	return stored
 }
@@ -71,61 +71,62 @@ func (r *Resolver) Stored(ctx context.Context, userID int64) string {
 // are separate answers: "this account has none" invites minting one, while "the database
 // did not answer" must not — telling them apart is what keeps an unwell database from
 // issuing a key per request.
-func (r *Resolver) read(ctx context.Context, userID int64) (string, bool) {
+func (r *Resolver) read(ctx context.Context, userID int64) (Credential, bool) {
 	if r == nil || r.q == nil {
-		return "", false
+		return Credential{}, false
 	}
 	stored, err := r.q.GetUserLLMKey(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", true // a real account with no credential yet
+		return Credential{}, true // a real account with no credential yet
 	}
 	if err != nil {
 		log.Printf("llmkey: read credential for user %d: %v", userID, err)
-		return "", false
+		return Credential{}, false
 	}
-	return stored, true
+	return Credential{ID: stored.LlmKeyID, Secret: stored.LlmKey}, true
 }
 
 // mint issues a credential and stores it, resolving the race two concurrent first calls
 // create: both mint, the database admits one, and the loser adopts the winner's value and
 // revokes its own.
-func (r *Resolver) mint(ctx context.Context, userID int64) string {
+func (r *Resolver) mint(ctx context.Context, userID int64) Credential {
 	minted, err := r.gateway.Mint(ctx, userID)
 	if err != nil {
 		log.Printf("llmkey: mint credential for user %d: %v", userID, err)
-		return ""
+		return Credential{}
 	}
-	// Mint already refuses an empty secret; this is the second lock on the same door,
+	// Mint already refuses a half credential; this is the second lock on the same door,
 	// because "" is the stored signal for "not minted" and writing it would strand the
 	// account in a state no later call can tell from a fresh one.
-	if minted == "" {
-		return ""
+	if minted.Secret == "" || minted.ID == "" {
+		return Credential{}
 	}
 
 	claimed, err := r.q.ClaimUserLLMKey(ctx, db.ClaimUserLLMKeyParams{
-		ID:     userID,
-		LlmKey: pgtype.Text{String: minted, Valid: true},
+		ID:       userID,
+		LlmKey:   pgtype.Text{String: minted.Secret, Valid: true},
+		LlmKeyID: pgtype.Text{String: minted.ID, Valid: true},
 	})
 	switch {
 	case err == nil:
-		return claimed
+		return Credential{ID: claimed.LlmKeyID, Secret: claimed.LlmKey}
 	case errors.Is(err, pgx.ErrNoRows):
 		// Somebody else claimed first. Their credential is the account's; ours was born
 		// unreferenced and has to go, or it sits at the gateway forever spending nothing
 		// and appearing in every listing.
-		r.revoke(ctx, minted)
+		r.revoke(ctx, minted.ID)
 		winner, err := r.q.GetUserLLMKey(ctx, userID)
 		if err != nil {
 			log.Printf("llmkey: re-read credential for user %d: %v", userID, err)
-			return ""
+			return Credential{}
 		}
-		return winner
+		return Credential{ID: winner.LlmKeyID, Secret: winner.LlmKey}
 	default:
 		// We hold a live credential the database will never point at again. Revoking it
 		// is the only way it does not spend under an account nothing can connect it to.
 		log.Printf("llmkey: store credential for user %d: %v", userID, err)
-		r.revoke(ctx, minted)
-		return ""
+		r.revoke(ctx, minted.ID)
+		return Credential{}
 	}
 }
 
@@ -146,6 +147,11 @@ func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 	if r == nil || r.q == nil {
 		return
 	}
+	// Read before clearing. The block below addresses the credential by the gateway's
+	// own id, and the row about to be emptied is the only place that id is written down;
+	// clearing first would leave a live key nothing can name.
+	stored, _ := r.read(ctx, userID)
+
 	err := r.q.ClearUserLLMKey(ctx, db.ClearUserLLMKeyParams{
 		ID:     userID,
 		LlmKey: pgtype.Text{String: secret, Valid: true},
@@ -153,7 +159,13 @@ func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 	if err != nil {
 		log.Printf("llmkey: clear credential for user %d: %v", userID, err)
 	}
-	if err := r.gateway.Block(ctx, secret); err != nil {
+	// Only block what the refusal was actually about. A concurrent call may already have
+	// re-minted, in which case the row now holds a different credential and blocking it
+	// would revoke a good key on the strength of a stale one's 401.
+	if stored.Secret != secret || stored.ID == "" {
+		return
+	}
+	if err := r.gateway.Block(ctx, stored.ID); err != nil {
 		log.Printf("llmkey: block refused credential: %v", err)
 	}
 }
@@ -176,18 +188,18 @@ func (r *Resolver) Revoke(ctx context.Context, userID int64) error {
 	if r == nil {
 		return nil
 	}
-	secret := r.Stored(ctx, userID)
-	if secret == "" {
+	stored := r.Stored(ctx, userID)
+	if stored.ID == "" {
 		return nil
 	}
-	return r.gateway.Block(ctx, secret)
+	return r.gateway.Block(ctx, stored.ID)
 }
 
 // revoke deletes a credential at the gateway, best-effort. Every caller has already
 // decided the value is not to be used again, so a failure here leaves a key that spends
 // nothing — worth a log line and nothing more.
-func (r *Resolver) revoke(ctx context.Context, secret string) {
-	if err := r.gateway.Delete(ctx, secret); err != nil {
+func (r *Resolver) revoke(ctx context.Context, keyID string) {
+	if err := r.gateway.Delete(ctx, keyID); err != nil {
 		log.Printf("llmkey: revoke credential: %v", err)
 	}
 }

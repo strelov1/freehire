@@ -14,13 +14,13 @@ import (
 // mints a CV and debits credits, and the work is an assistant turn under the `tailor`
 // preset — already tagged as such. A second tag would double-count the same spend.
 const (
-	tagAssistant     = "feature:assistant"
-	tagMatchAnalysis = "feature:match-analysis"
-	tagCVExtract     = "feature:cv-extract"
-	tagATSReview     = "feature:ats-review"
-	tagAutofill      = "feature:autofill"
-	tagMailRecall    = "feature:mail-recall"
-	tagSearchIntent  = "feature:search-intent"
+	tagAssistant     = "assistant"
+	tagMatchAnalysis = "match-analysis"
+	tagCVExtract     = "cv-extract"
+	tagATSReview     = "ats-review"
+	tagAutofill      = "autofill"
+	tagMailRecall    = "mail-recall"
+	tagSearchIntent  = "search-intent"
 )
 
 // llmBinding is what a per-user surface needs to spend as its caller: the client the

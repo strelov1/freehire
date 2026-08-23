@@ -17,16 +17,44 @@ lives in `internal/platform/llm` (`Client.As`); the one place per-user calls res
   owner; attributing its enrichment to whoever triggered a run would put a cost on someone
   who did not incur it. `scope_test.go` enforces this by parsing imports — a background
   entrypoint that reaches for this package fails the build's tests.
-- **Unconfigured is a normal deployment, not a degraded one.** No `LLM_ADMIN_URL` or no
-  `LLM_ADMIN_KEY` ⇒ `New` returns nil, nothing is minted, and every call goes out on
-  `LLM_API_KEY` exactly as it did before this existed. That is also the rollback.
+- **Unconfigured is a normal deployment, not a degraded one.** Any of `LLM_ADMIN_URL`,
+  `LLM_ADMIN_USERNAME`, `LLM_ADMIN_PASSWORD` or `LLM_ADMIN_TEMPLATE_KEY` unset ⇒ `New`
+  returns nil, nothing is minted, and every call goes out on `LLM_API_KEY` exactly as it
+  did before this existed. That is also the rollback. The template key counts as
+  configuration for a reason — see below; without it minting succeeds and the credentials
+  it produces are refused everything, which is a worse failure than not minting at all.
 
 ## The endpoints are not where you would guess
-Administration lives at the gateway **root**, inference under `/v1`: every call this
-client makes — `/key/generate`, `/key/block`, `/key/delete`, `/user/daily/activity` —
-is a root path on the ADMIN key. `LLM_ADMIN_URL` is therefore configured separately and
-never derived from `LLM_BASE_URL` — which also allows keeping the admin API off the
-public host.
+Administration lives under **`/api`**, inference under `/v1`. Every call this client makes
+— `POST /api/governance/virtual-keys`, `PUT` and `DELETE` on
+`/api/governance/virtual-keys/{id}`, and `GET /api/logs/stats` — authenticates as the
+ADMINISTRATOR over HTTP Basic, not with a bearer token. `LLM_ADMIN_URL` is therefore
+configured separately and never derived from `LLM_BASE_URL` — which also allows keeping
+the admin API off the public host.
+
+## A credential is two values, and both are load-bearing
+`Credential` carries a secret and an id. The secret is a bearer token and the only thing a
+model call needs; the id is opaque and the only thing block and delete accept — aimed at
+the secret they answer 404. Storing one without the other yields a credential that can
+spend but never be revoked, which is exactly what account deletion has to do. They are
+written and cleared in the same statement (`users.llm_key`, `users.llm_key_id`).
+
+Rows minted before migration 0119 hold a secret and no id. That is a real state, not a
+fault: they keep working for inference, and the first refusal sends them through the
+existing forget-and-re-mint path, which replaces them with a pair. Nothing backfills.
+
+## A key with no provider policy is a dead key
+This gateway denies every provider to a virtual key that carries no `provider_configs`, so
+minting without one produces credentials refused on their first call. `Mint` therefore
+reads the policy from the virtual key named by `LLM_ADMIN_TEMPLATE_KEY` and copies it.
+
+That indirection is the point. The alternative — carrying the provider list in this
+service's configuration — would put the provider vocabulary in two places and make adding
+a provider a deployment of freehire rather than an edit to the gateway's own config.
+
+One asymmetry to keep in mind when touching that copy: a read answers `key_ids` as null
+where a write requires `["*"]`, and echoing the null back mints a key pinned to no
+provider key at all.
 
 ## Three rules that are easy to get wrong
 
@@ -47,10 +75,12 @@ gateway refusing a user's credential on an inference call — is caught in `inte
 transport, which retries once on the fallback and calls `Resolver.Forget` to clear the
 row so the next call re-mints.
 
-**Block, do not delete, a credential that has been spent with.** The gateway's record of what
-a key spent hangs off that key, so deleting it takes the cost history along. `Revoke` (account
-deletion) blocks; `Delete` is reserved for a credential with nothing to preserve — the loser
-of a minting race, seconds old and never stored.
+**Block, do not delete, a credential that has been spent with.** This survives the gateway
+change but its reason has weakened: the usage log is keyed by the credential's id and
+outlives the credential, so deleting no longer erases the history the way it used to. What
+blocking still buys is legibility — a retired key stays in the gateway's listings. `Revoke`
+(account deletion) blocks; `Delete` is reserved for a credential with nothing to preserve —
+the loser of a minting race, seconds old and never stored.
 
 ## Minting races
 Two concurrent first calls both mint. The conditional claim
@@ -63,9 +93,25 @@ whether the store answered, because minting on a database fault would issue a fr
 request, each unstorable and each abandoned.
 
 ## Where the spend actually lands
-`LiteLLM_DailyUserSpend` and `LiteLLM_DailyTagSpend` hold months of daily rows — tokens,
-cost, request and failure counts, per key, per model, per tag. Only `LiteLLM_SpendLogs` is
-pruned (to a few days). This is why the change writes no cost table of its own.
+In the gateway's own request log, one row per call, keyed by the credential's id.
+`GET /api/logs/stats` aggregates it over a window; that is what `/me/usage` reads and why
+this package writes no cost table of its own.
+
+Two consequences worth knowing before trusting a figure:
+
+- **The read is scoped to ONE credential.** The gateway offers no way to ask by account,
+  so a key replaced mid-month leaves the earlier one's calls out of the total. Re-minting
+  only happens when the gateway refuses a stored key, so this is rare — and the fix, a
+  remembered list of retired ids, would keep dead credentials alive to make a counter
+  marginally more complete.
+- **The log write is asynchronous**, landing about five seconds after the call. Harmless
+  over a month, fatal to any read-after-write assumption.
+
+Per-feature cost is NOT an API question here. The `feature` dimension reaches the log row,
+the OpenTelemetry span, and — only while `feature` is listed in the gateway's
+`prometheus_labels` — the metrics. "What does tailoring cost" is therefore a Grafana query;
+`/api/logs/histogram/cost/by-dimension` aggregates only by provider, team, customer, user
+and business unit.
 
 **The figures are list-price, not an invoice.** The gateway prices from its model table while
 the pool behind it runs on mixed upstream keys. They compare features and periods to each
@@ -73,9 +119,11 @@ other honestly and must never be quoted as a bill.
 
 ## Adding a per-user LLM call
 1. Resolve through `userLLM` in `internal/api/handler` — the single identifier to grep for.
-2. Give it a `feature:` tag from the constants in `user_llm.go`. One tag per thing a person
-   can ask for; do not tag two surfaces the same or the report stops answering the question
-   it exists for.
+2. Give it a feature tag from the constants in `user_llm.go`. They are bare words — the
+   header `x-bf-dim-feature` names the dimension, so a `feature:` prefix in the value would
+   file the spend under `feature:assistant` and split one surface across two labels. One
+   tag per thing a person can ask for; do not tag two surfaces the same or the report stops
+   answering the question it exists for.
 3. If the service holds its client at construction, give it a one-line `As(*llm.Client)`
    clone rather than threading a second client through its constructor.
 4. Resolve BEFORE opening a stream. Minting is a network call, and making it after the

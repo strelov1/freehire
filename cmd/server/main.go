@@ -233,14 +233,16 @@ func main() {
 	// account's model calls are spent under. Nil when unconfigured, and that is an
 	// ordinary deployment rather than a degraded one: every call then goes out on
 	// LLM_API_KEY exactly as it did before this existed. It is deliberately a separate
-	// endpoint and credential from inference — administration is served at the gateway
-	// root, and the key that mints keys has no business on a chat request.
+	// endpoint and credential from inference — administration is served under /api, and
+	// the administrator that mints keys has no business on a chat request.
 	llmKeys := llmkey.New(llmkey.Config{
-		BaseURL:      cfg.LLMAdminURL,
-		AdminKey:     cfg.LLMAdminKey,
-		MaxBudget:    cfg.LLMUserMaxBudget,
-		RPMLimit:     cfg.LLMUserRPMLimit,
-		BudgetWindow: cfg.LLMUserBudgetWindow,
+		BaseURL:       cfg.LLMAdminURL,
+		AdminUsername: cfg.LLMAdminUsername,
+		AdminPassword: cfg.LLMAdminPassword,
+		TemplateKey:   cfg.LLMAdminTemplateKey,
+		MaxBudget:     cfg.LLMUserMaxBudget,
+		RPMLimit:      cfg.LLMUserRPMLimit,
+		BudgetWindow:  cfg.LLMUserBudgetWindow,
 	})
 
 	// OAuth sign-in is optional: only providers with full credentials are

@@ -325,7 +325,11 @@ type Querier interface {
 	// The `IS NULL` guard is the whole race resolution: two concurrent first calls both mint,
 	// the row lock serializes them, and the loser's UPDATE re-evaluates the guard against the
 	// committed row and matches nothing.
-	ClaimUserLLMKey(ctx context.Context, arg ClaimUserLLMKeyParams) (string, error)
+	//
+	// The guard stays on llm_key alone. That column is what decides whether an account has a
+	// credential at all; guarding on both would let a pre-0119 row — secret set, id null —
+	// read as unclaimed and be overwritten, orphaning a key that is still spending.
+	ClaimUserLLMKey(ctx context.Context, arg ClaimUserLLMKeyParams) (ClaimUserLLMKeyRow, error)
 	// Drop an application's pipeline progress while keeping the record — the notes are the
 	// candidate's own text, and reconsidering is not a claim the process never happened.
 	// Clearing both stage and applied_at is what takes it off the board (see columnOf).
@@ -371,6 +375,10 @@ type Querier interface {
 	// replacement. Conditional on the value we believe is stored: a concurrent call may have
 	// already re-minted, and clearing unconditionally would throw away that good credential
 	// and leave it orphaned at the gateway.
+	//
+	// Both columns clear together. An id left behind would point at a credential nothing can
+	// present, and the next mint would then fail a UNIQUE constraint on a value nobody can
+	// explain.
 	ClearUserLLMKey(ctx context.Context, arg ClearUserLLMKeyParams) error
 	// Clear the user's headshot pointer, after deleting the object from storage.
 	ClearUserPhoto(ctx context.Context, id int64) error
@@ -1556,7 +1564,12 @@ type Querier interface {
 	// The gateway credential this account is known by, or "" when none has been minted.
 	// coalesce keeps the empty string as the single "not minted" signal, so callers test a
 	// string rather than unwrapping a nullable through pgtype on every model call.
-	GetUserLLMKey(ctx context.Context, id int64) (string, error)
+	//
+	// The id comes back beside the secret because the two are one credential: the secret is
+	// what a model call presents, the id is what an administrative call addresses. A reader
+	// that took only the secret could spend but never revoke. The id is separately empty for
+	// a credential minted before 0119 — a real state, not a fault; see the migration.
+	GetUserLLMKey(ctx context.Context, id int64) (GetUserLLMKeyRow, error)
 	// The account's preferred interface language on its own, for a caller that needs
 	// nothing else about the user — the assistant's turn loop and the fit-analysis
 	// chain both build a language directive from just this column. Never NULL (NOT

@@ -32,7 +32,7 @@ func newHeaderProxy(t *testing.T) *headerProxy {
 
 		p.mu.Lock()
 		p.authz = append(p.authz, r.Header.Get("Authorization"))
-		p.tags = append(p.tags, r.Header.Get("X-Litellm-Tags"))
+		p.tags = append(p.tags, r.Header.Get("X-Bf-Dim-Feature"))
 		p.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -192,7 +192,7 @@ func newRefusingProxy(t *testing.T, refuse string) *headerProxy {
 	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p.mu.Lock()
 		p.authz = append(p.authz, r.Header.Get("Authorization"))
-		p.tags = append(p.tags, r.Header.Get("X-Litellm-Tags"))
+		p.tags = append(p.tags, r.Header.Get("X-Bf-Dim-Feature"))
 		p.mu.Unlock()
 
 		if r.Header.Get("Authorization") == "Bearer "+refuse {

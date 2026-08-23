@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowUp, Loader2, Trash2, Square } from '@lucide/svelte';
   import VoiceInput from '$lib/assistant/VoiceInput.svelte';
+  import { AUDIO_ENABLED } from '$lib/assistant/audioAvailability';
   import { appendTranscript } from '$lib/assistant/dictation';
 
   // The composer: the queued-message panel (messages typed mid-turn, sent
@@ -111,7 +112,7 @@
         }}
         class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-base leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
-      {#if !dictationOff}
+      {#if AUDIO_ENABLED && !dictationOff}
         <VoiceInput
           {disabled}
           onTranscript={acceptTranscript}
