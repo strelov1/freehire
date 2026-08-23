@@ -5,6 +5,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/autofillagent"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // RunAgentAutofill fills the form on whatever page the caller's browser is
@@ -41,7 +42,7 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 	report, err := autofillagent.Run(
 		c.Context(),
 		caller,
-		autofillagent.LLMPlanner{Client: h.llm.bind(c.Context(), userID, tagAutofill)},
+		autofillagent.LLMPlanner{Client: h.llm.bind(c.Context(), userID, llm.Feature(tagAutofill))},
 		profileFields(profile),
 	)
 	if err != nil {

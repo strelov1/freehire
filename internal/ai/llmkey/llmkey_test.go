@@ -303,9 +303,19 @@ func TestARefusedAdminCallIsNotAnUnknownUserKey(t *testing.T) {
 }
 
 func TestActivityCountsWhatTheCredentialDid(t *testing.T) {
-	// Both calls answer the same body here; the second is filtered to failures, so its
-	// total_requests IS the failure count. See the two-call comment on Activity.
-	srv, got := gateway(t, http.StatusOK, `{"total_requests":128,"total_tokens":450000,"total_cost":1.25,"success_rate":98.4}`)
+	// The two reads must answer DIFFERENTLY, or this test passes with the second call
+	// deleted: the failure count comes from a read filtered to errors, where
+	// total_requests IS the failures.
+	got := &captured{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.path, got.method, got.query = r.URL.Path, r.Method, r.URL.RawQuery
+		if r.URL.Query().Get("status") == "error" {
+			_, _ = io.WriteString(w, `{"total_requests":2}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"total_requests":128,"total_tokens":450000,"total_cost":1.25,"success_rate":98.4}`)
+	}))
+	t.Cleanup(srv.Close)
 
 	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
@@ -315,6 +325,11 @@ func TestActivityCountsWhatTheCredentialDid(t *testing.T) {
 	}
 	if act.Requests != 128 || act.Tokens != 450000 {
 		t.Errorf("Activity = %+v, want 128 calls and 450000 tokens", act)
+	}
+	// Read from the filtered call, not derived from success_rate: 126/128 is 98.4375%,
+	// and turning a rounded percentage back into a count is arithmetic on a display value.
+	if act.Failed != 2 {
+		t.Errorf("Failed = %d, want 2 read from the error-filtered call", act.Failed)
 	}
 	if got.path != "/api/logs/stats" || got.method != http.MethodGet {
 		t.Errorf("called %s %s, want GET /api/logs/stats", got.method, got.path)
@@ -344,7 +359,9 @@ func TestActivityWidensTheWindowToWholeDays(t *testing.T) {
 	if !strings.Contains(got.query, "start_time=2026-08-01T00%3A00%3A00Z") {
 		t.Errorf("query = %q, want the window opened at the start of the first day", got.query)
 	}
-	if !strings.Contains(got.query, "end_time=2026-08-31T23%3A59%3A59Z") {
+	// The last instant of the day, not the last whole second: an end of 23:59:59 would
+	// drop everything in the final second of the month.
+	if !strings.Contains(got.query, "end_time=2026-08-31T23%3A59%3A59.999999999Z") {
 		t.Errorf("query = %q, want the window closed at the end of the last day", got.query)
 	}
 }

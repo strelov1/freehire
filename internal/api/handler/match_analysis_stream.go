@@ -20,6 +20,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // StreamMatchAnalysis runs the three-stage fit chain over Server-Sent Events, emitting stage
@@ -103,7 +104,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	if isLeader {
 		// Bound before the stream opens: minting a credential is a network call, and making
 		// it after the headers are out would stall a stream the client is already reading.
-		analyzer = h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+		analyzer = h.matchAnalysis.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMatchAnalysis)))
 
 		// Captured up front, same as cvUploadedAt above: the cache write happens after the
 		// stream's own goroutine outlives this request, so the language it stamps must be

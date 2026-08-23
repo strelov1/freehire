@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé
@@ -342,7 +343,7 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resumeExtractLLMTimeout+30*time.Second)
 	defer cancel()
-	extractor := h.structuredExtractor.As(h.llm.bind(ctx, userID, tagCVExtract))
+	extractor := h.structuredExtractor.As(h.llm.bind(ctx, userID, llm.Feature(tagCVExtract)))
 	st, err := extractor.Extract(ctx, text)
 	if err != nil {
 		log.Printf("resume structured: user %d: %v", userID, err)

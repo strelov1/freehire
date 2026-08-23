@@ -18,9 +18,10 @@ import (
 type headerProxy struct {
 	srv *httptest.Server
 
-	mu    sync.Mutex
-	authz []string
-	tags  []string
+	mu     sync.Mutex
+	authz  []string
+	tags   []string
+	preset []string
 }
 
 func newHeaderProxy(t *testing.T) *headerProxy {
@@ -33,6 +34,7 @@ func newHeaderProxy(t *testing.T) *headerProxy {
 		p.mu.Lock()
 		p.authz = append(p.authz, r.Header.Get("Authorization"))
 		p.tags = append(p.tags, r.Header.Get("X-Bf-Dim-Feature"))
+		p.preset = append(p.preset, r.Header.Get("X-Bf-Dim-Preset"))
 		p.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -71,8 +73,8 @@ func TestAsDoesNotShareSchemaBoundModelsAcrossCredentials(t *testing.T) {
 	base := proxy.client(t)
 	schema := testSchema(t)
 
-	alice := base.As("sk-alice", nil, "feature:tailor")
-	bob := base.As("sk-bob", nil, "feature:tailor")
+	alice := base.As("sk-alice", nil, Feature("tailor"))
+	bob := base.As("sk-bob", nil, Feature("tailor"))
 
 	if _, err := alice.GenerateJSON(context.Background(), "sys", "usr", WithSchema("shape", schema)); err != nil {
 		t.Fatalf("alice: %v", err)
@@ -100,7 +102,7 @@ func TestAsRecreditsThePlainPath(t *testing.T) {
 	proxy := newHeaderProxy(t)
 	base := proxy.client(t)
 
-	if _, err := base.As("sk-alice", nil, "feature:chat").GenerateJSON(context.Background(), "sys", "usr"); err != nil {
+	if _, err := base.As("sk-alice", nil, Feature("chat")).GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("GenerateJSON: %v", err)
 	}
 
@@ -110,18 +112,28 @@ func TestAsRecreditsThePlainPath(t *testing.T) {
 	}
 }
 
-func TestAsTagsTheCall(t *testing.T) {
+// Each dimension travels in its own header, and the feature one carries the feature
+// ALONE. This is the whole reason Dimension exists: the previous gateway took a
+// comma-separated list of key:value pairs in one header and split them itself, and
+// carrying that shape across filed the assistant under "assistant,preset:tailor" — a
+// value that is neither the feature nor the preset, and that splits one surface across as
+// many labels as it has presets.
+func TestAsSendsOneHeaderPerDimension(t *testing.T) {
 	proxy := newHeaderProxy(t)
 	base := proxy.client(t)
 
-	if _, err := base.As("sk-alice", nil, "feature:assistant", "preset:tailor").
+	if _, err := base.As("sk-alice", nil, Feature("assistant"), Dimension{Name: "preset", Value: "tailor"}).
 		GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("GenerateJSON: %v", err)
 	}
 
-	_, tags := proxy.seen(t)
-	if tags[0] != "feature:assistant,preset:tailor" {
-		t.Errorf("tags = %q, want both tags — the gateway files one spend row per tag", tags[0])
+	proxy.mu.Lock()
+	defer proxy.mu.Unlock()
+	if proxy.tags[0] != "assistant" {
+		t.Errorf("feature = %q, want the feature alone — a value carrying the preset is a label nobody can group by", proxy.tags[0])
+	}
+	if proxy.preset[0] != "tailor" {
+		t.Errorf("preset = %q, want the preset under its own dimension", proxy.preset[0])
 	}
 }
 
@@ -131,7 +143,7 @@ func TestAsWithoutACredentialStillTags(t *testing.T) {
 	proxy := newHeaderProxy(t)
 	base := proxy.client(t)
 
-	if _, err := base.As("", nil, "feature:match").GenerateJSON(context.Background(), "sys", "usr"); err != nil {
+	if _, err := base.As("", nil, Feature("match")).GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("GenerateJSON: %v", err)
 	}
 
@@ -139,7 +151,7 @@ func TestAsWithoutACredentialStillTags(t *testing.T) {
 	if authz[0] != "Bearer sk-service" {
 		t.Errorf("call carried %q, want the service credential when no user credential resolved", authz[0])
 	}
-	if tags[0] != "feature:match" {
+	if tags[0] != "match" {
 		t.Errorf("tags = %q, want the feature tag even on an unattributed call", tags[0])
 	}
 }
@@ -157,7 +169,7 @@ func TestAsWithNeitherCredentialNorTagsIsTheSameClient(t *testing.T) {
 
 func TestAsIsNilSafe(t *testing.T) {
 	var c *Client
-	if got := c.As("sk-alice", nil, "feature:chat"); got != nil {
+	if got := c.As("sk-alice", nil, Feature("chat")); got != nil {
 		t.Errorf("As on a nil client = %v, want nil", got)
 	}
 }
@@ -166,7 +178,7 @@ func TestAsKeepsTheModelAndTimeout(t *testing.T) {
 	proxy := newHeaderProxy(t)
 	base := proxy.client(t).WithTimeout(1234)
 
-	clone := base.As("sk-alice", nil, "feature:chat")
+	clone := base.As("sk-alice", nil, Feature("chat"))
 	if clone.ModelID() != base.ModelID() {
 		t.Errorf("model = %q, want %q", clone.ModelID(), base.ModelID())
 	}
@@ -179,7 +191,7 @@ func TestAsKeepsTheModelAndTimeout(t *testing.T) {
 // re-crediting it is ignored the way a schema there is ignored — never fatal.
 func TestAsOnAnInjectedModelIsAPassthrough(t *testing.T) {
 	injected := NewWithModel(stubModel{})
-	if got := injected.As("sk-alice", nil, "feature:chat"); got != injected {
+	if got := injected.As("sk-alice", nil, Feature("chat")); got != injected {
 		t.Error("As on an injected model should return the receiver, not a client with no endpoint")
 	}
 }
@@ -193,6 +205,7 @@ func newRefusingProxy(t *testing.T, refuse string) *headerProxy {
 		p.mu.Lock()
 		p.authz = append(p.authz, r.Header.Get("Authorization"))
 		p.tags = append(p.tags, r.Header.Get("X-Bf-Dim-Feature"))
+		p.preset = append(p.preset, r.Header.Get("X-Bf-Dim-Preset"))
 		p.mu.Unlock()
 
 		if r.Header.Get("Authorization") == "Bearer "+refuse {
@@ -216,7 +229,7 @@ func TestARefusedCredentialFallsBackAndReportsItself(t *testing.T) {
 	base := proxy.client(t)
 
 	var refused int
-	clone := base.As("sk-stale", func() { refused++ }, "feature:chat")
+	clone := base.As("sk-stale", func() { refused++ }, Feature("chat"))
 
 	if _, err := clone.GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("a refused user credential must not fail the call: %v", err)
@@ -232,7 +245,7 @@ func TestARefusedCredentialFallsBackAndReportsItself(t *testing.T) {
 	if authz[0] != "Bearer sk-stale" || authz[1] != "Bearer sk-service" {
 		t.Errorf("credentials = %v, want the user's then the service one", authz)
 	}
-	if tags[1] != "feature:chat" {
+	if tags[1] != "chat" {
 		t.Errorf("retry tags = %q, want the feature still named on the fallback", tags[1])
 	}
 }
@@ -245,9 +258,9 @@ func TestAsChainedTwiceFallsBackToTheServiceCredentialNotAPriorUser(t *testing.T
 	proxy := newRefusingProxy(t, "sk-bob")
 	base := proxy.client(t)
 
-	alice := base.As("sk-alice", nil, "feature:tailor")
+	alice := base.As("sk-alice", nil, Feature("tailor"))
 	var refused int
-	bob := alice.As("sk-bob", func() { refused++ }, "feature:tailor")
+	bob := alice.As("sk-bob", func() { refused++ }, Feature("tailor"))
 
 	if _, err := bob.GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("a refused user credential must not fail the call: %v", err)
@@ -278,7 +291,7 @@ func TestARefusalIsRetriedOnlyOnce(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	_, _ = base.As("sk-service", nil, "feature:chat").GenerateJSON(context.Background(), "sys", "usr")
+	_, _ = base.As("sk-service", nil, Feature("chat")).GenerateJSON(context.Background(), "sys", "usr")
 
 	served, _ := proxy.seen(t)
 	if len(served) > 2 {
@@ -306,7 +319,7 @@ func TestACeilingRefusalIsNotRetried(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	var refused int
-	_, _ = base.As("sk-capped", func() { refused++ }, "feature:chat").
+	_, _ = base.As("sk-capped", func() { refused++ }, Feature("chat")).
 		GenerateJSON(context.Background(), "sys", "usr")
 
 	if served != 1 {
@@ -323,7 +336,7 @@ func TestAnUnattributedCallIsNotRetried(t *testing.T) {
 	proxy := newRefusingProxy(t, "sk-service")
 	base := proxy.client(t)
 
-	_, _ = base.As("", nil, "feature:chat").GenerateJSON(context.Background(), "sys", "usr")
+	_, _ = base.As("", nil, Feature("chat")).GenerateJSON(context.Background(), "sys", "usr")
 
 	authz, _ := proxy.seen(t)
 	if len(authz) != 1 {

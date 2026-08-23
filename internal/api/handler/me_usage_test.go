@@ -215,8 +215,10 @@ func TestUsageWithNoGatewayConfiguredIsStillZeroes(t *testing.T) {
 	}
 }
 
-// The read is scoped by the account id, never by a credential — so it needs no key, mints
-// nothing, and still reports a month during which the key was re-minted.
+// The response is about what an account DID, never about how it is known: no credential,
+// minted or stored, may appear on the wire. The figures are now scoped to the account's
+// current credential — see the design note on that narrowing — but the secret behind it
+// stays entirely server-side.
 func TestUsageNeitherNeedsNorReturnsACredential(t *testing.T) {
 	gw := activityGateway(t, map[string]activity{
 		"vk-7": {requests: 3, tokens: 9},
@@ -233,5 +235,38 @@ func TestUsageNeitherNeedsNorReturnsACredential(t *testing.T) {
 	raw, _ := io.ReadAll(resp.Body)
 	if strings.Contains(string(raw), "sk-") {
 		t.Errorf("the response looks like it carried a credential: %s", raw)
+	}
+}
+
+// Reading a usage page must never mint. Attribution exists to say what somebody spent, and
+// a credential issued to every visitor who opened the page out of curiosity would turn
+// "accounts with a key" from a count of who has spent into a count of who has looked.
+func TestUsageOfAnUncredentialledAccountMintsNothing(t *testing.T) {
+	gw := activityGateway(t, map[string]activity{})
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(7, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	// Deliberately unseeded: this account has never made an AI call.
+	store := newStubKeyQueries()
+	gateway := llmkey.New(testGatewayConfig(gw.URL))
+	h := &usageHandlers{gateway: gateway, keys: llmkey.NewResolver(store, gateway)}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
+
+	status, data := readUsage(t, app, token)
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 — never having used AI is an answer, not a fault", status)
+	}
+	if data["requests"] != float64(0) || data["tokens"] != float64(0) {
+		t.Errorf("data = %v, want zeroes", data)
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.stored) != 0 {
+		t.Errorf("store holds %v, want nothing minted by a read", store.stored)
 	}
 }

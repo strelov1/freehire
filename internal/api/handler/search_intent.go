@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/searchintent"
 )
 
@@ -144,7 +145,7 @@ func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
 		req.Previous = &previous
 	}
 
-	interpreter := searchintent.NewInterpreter(h.llm.bind(c.Context(), userID, tagSearchIntent))
+	interpreter := searchintent.NewInterpreter(h.llm.bind(c.Context(), userID, llm.Feature(tagSearchIntent)))
 	res, err := interpreter.Interpret(c.Context(), req)
 	switch {
 	case errors.Is(err, searchintent.ErrDisabled):

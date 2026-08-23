@@ -10,6 +10,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/mailrecall"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // recalledEmail is one message the sweep proposes, in the same shape the application
@@ -82,7 +83,7 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 	//
 	// The mailbox is resolved per caller and may be nil — a hosted address or a harness
 	// tier — in which case the service reads stored mail instead.
-	recall := h.recall.As(h.llm.bind(c.Context(), userID, tagMailRecall))
+	recall := h.recall.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMailRecall)))
 	if h.mailboxes != nil {
 		recall = recall.WithMailbox(h.mailboxes.For(c.Context(), userID))
 	}

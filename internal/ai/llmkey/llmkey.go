@@ -289,7 +289,7 @@ func (c *Client) Activity(ctx context.Context, keyID string, from, to time.Time)
 	window := url.Values{
 		"virtual_key_ids": {keyID},
 		"start_time":      {from.UTC().Truncate(24 * time.Hour).Format(time.RFC3339)},
-		"end_time":        {to.UTC().Truncate(24 * time.Hour).Add(24*time.Hour - time.Second).Format(time.RFC3339)},
+		"end_time":        {to.UTC().Truncate(24 * time.Hour).Add(24*time.Hour - time.Nanosecond).Format(time.RFC3339Nano)},
 	}
 
 	var total struct {

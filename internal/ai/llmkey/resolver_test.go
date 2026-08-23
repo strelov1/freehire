@@ -283,6 +283,11 @@ func TestForgetLeavesAReplacementAlone(t *testing.T) {
 	if q.stored[7] != "sk-replacement" {
 		t.Errorf("stored %q, want the replacement kept", q.stored[7])
 	}
+	// The hazard this branch guards is not the row but the gateway: blocking on the
+	// strength of a stale credential's 401 would revoke a good key.
+	if len(g.blocked) != 0 {
+		t.Errorf("blocked %v, want nothing — the refusal was about a credential the row no longer holds", g.blocked)
+	}
 }
 
 // Guard the pgtype wrapping: an empty-string key must never be written as a stored value,
@@ -300,5 +305,93 @@ func TestClaimNeverStoresAnEmptyCredential(t *testing.T) {
 	}
 	if q.claims != 0 {
 		t.Errorf("attempted %d claims for an empty credential, want none", q.claims)
+	}
+}
+
+// An unreadable store must stop Forget entirely, not merely stop it blocking. The row is
+// the only place the gateway's id is written down: clearing it while the read failed
+// would leave a live credential spending with nothing able to name it, permanently.
+func TestForgetLeavesTheRowAloneWhenItCannotBeRead(t *testing.T) {
+	q := newFakeQueries()
+	q.stored[7] = "sk-stale"
+	q.storedIDs[7] = keyID("sk-stale")
+	q.getErr = errors.New("database down")
+	g := &routedGateway{}
+	r := testResolver(t, q, g)
+
+	r.Forget(context.Background(), 7, "sk-stale")
+
+	if q.stored[7] != "sk-stale" {
+		t.Errorf("stored %q, want the credential left in place — the next refusal retries", q.stored[7])
+	}
+	if len(g.blocked) != 0 {
+		t.Errorf("blocked %v, want nothing blocked on a read we could not trust", g.blocked)
+	}
+}
+
+// A credential minted before the id column existed has nothing to block. Clearing the row
+// is still right — that is what makes the next call mint a complete pair — but reaching
+// for the gateway with an empty id would aim a request at no key at all.
+func TestForgetClearsAnIdlessRowWithoutBlocking(t *testing.T) {
+	q := newFakeQueries()
+	q.stored[7] = "sk-pre-0119"
+	g := &routedGateway{}
+	r := testResolver(t, q, g)
+
+	r.Forget(context.Background(), 7, "sk-pre-0119")
+
+	if q.stored[7] != "" {
+		t.Errorf("stored %q, want the row cleared so the next call mints a pair", q.stored[7])
+	}
+	if len(g.blocked) != 0 {
+		t.Errorf("blocked %v, want nothing blocked — there is no id to name", g.blocked)
+	}
+}
+
+// Revoke is why the id column exists: account deletion has to stop a credential spending,
+// and this gateway will not accept the secret to do it.
+func TestRevokeBlocksByIdAndLeavesTheRow(t *testing.T) {
+	q := newFakeQueries()
+	q.stored[7] = "sk-departing"
+	q.storedIDs[7] = keyID("sk-departing")
+	g := &routedGateway{}
+	r := testResolver(t, q, g)
+
+	if err := r.Revoke(context.Background(), 7); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+	if len(g.blocked) != 1 || g.blocked[0] != keyID("sk-departing") {
+		t.Errorf("blocked %v, want exactly the departing account's credential, by id", g.blocked)
+	}
+	if len(g.deleted) != 0 {
+		t.Errorf("deleted %v, want nothing deleted — a retired key stays legible in the listings", g.deleted)
+	}
+	// The row is about to go with the account's own cascade; clearing it here would only
+	// cost a write.
+	if q.stored[7] != "sk-departing" {
+		t.Errorf("stored %q, want the row left to the deletion cascade", q.stored[7])
+	}
+}
+
+// An account with no credential, and one credentialled before the id column existed, both
+// have nothing to revoke. Neither is a fault.
+func TestRevokeIsANoopWithoutAnId(t *testing.T) {
+	for name, seed := range map[string]func(*fakeQueries){
+		"never credentialled": func(*fakeQueries) {},
+		"credentialled before 0119": func(q *fakeQueries) {
+			q.stored[7] = "sk-pre-0119"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			q := newFakeQueries()
+			seed(q)
+			g := &routedGateway{}
+			if err := testResolver(t, q, g).Revoke(context.Background(), 7); err != nil {
+				t.Fatalf("Revoke: %v", err)
+			}
+			if len(g.blocked) != 0 {
+				t.Errorf("blocked %v, want nothing", g.blocked)
+			}
+		})
 	}
 }

@@ -23,9 +23,10 @@ import (
 type spendProxy struct {
 	srv *httptest.Server
 
-	mu    sync.Mutex
-	authz []string
-	tags  []string
+	mu     sync.Mutex
+	authz  []string
+	tags   []string
+	preset []string
 }
 
 func newSpendProxy(t *testing.T) *spendProxy {
@@ -35,6 +36,7 @@ func newSpendProxy(t *testing.T) *spendProxy {
 		p.mu.Lock()
 		p.authz = append(p.authz, r.Header.Get("Authorization"))
 		p.tags = append(p.tags, r.Header.Get("X-Bf-Dim-Feature"))
+		p.preset = append(p.preset, r.Header.Get("X-Bf-Dim-Preset"))
 		p.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -125,7 +127,7 @@ func TestUserLLMSpendsUnderTheCallersOwnCredential(t *testing.T) {
 	keys := llmkey.NewResolver(newStubKeyQueries(),
 		llmkey.New(testGatewayConfig(newKeyGateway(t, "sk-user-7").URL)))
 
-	client := userLLM(context.Background(), keys, proxy.llmClient(t), 7, "feature:assistant", "preset:chat")
+	client := userLLM(context.Background(), keys, proxy.llmClient(t), 7, llm.Feature("assistant"), llm.Dimension{Name: "preset", Value: "chat"})
 	if _, err := client.GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("GenerateJSON: %v", err)
 	}
@@ -135,8 +137,14 @@ func TestUserLLMSpendsUnderTheCallersOwnCredential(t *testing.T) {
 	if proxy.authz[0] != "Bearer sk-user-7" {
 		t.Errorf("call carried %q, want the caller's own credential", proxy.authz[0])
 	}
-	if proxy.tags[0] != "feature:assistant,preset:chat" {
-		t.Errorf("tags = %q, want the feature and the preset", proxy.tags[0])
+	// One header per dimension, and the feature one carries the feature alone. A value
+	// of "assistant,preset:chat" would be neither, and would split the assistant across
+	// as many labels as it has presets.
+	if proxy.tags[0] != "assistant" {
+		t.Errorf("feature = %q, want the feature alone", proxy.tags[0])
+	}
+	if proxy.preset[0] != "chat" {
+		t.Errorf("preset = %q, want the preset under its own dimension", proxy.preset[0])
 	}
 }
 
@@ -146,7 +154,7 @@ func TestUserLLMFallsBackToTheServiceCredential(t *testing.T) {
 	proxy := newSpendProxy(t)
 	keys := llmkey.NewResolver(newStubKeyQueries(), nil) // unconfigured deployment
 
-	client := userLLM(context.Background(), keys, proxy.llmClient(t), 7, "feature:match")
+	client := userLLM(context.Background(), keys, proxy.llmClient(t), 7, llm.Feature("match"))
 	if _, err := client.GenerateJSON(context.Background(), "sys", "usr"); err != nil {
 		t.Fatalf("GenerateJSON: %v", err)
 	}
@@ -156,7 +164,7 @@ func TestUserLLMFallsBackToTheServiceCredential(t *testing.T) {
 	if proxy.authz[0] != "Bearer sk-service" {
 		t.Errorf("call carried %q, want the service credential", proxy.authz[0])
 	}
-	if proxy.tags[0] != "feature:match" {
+	if proxy.tags[0] != "match" {
 		t.Errorf("tags = %q, want the feature named even unattributed", proxy.tags[0])
 	}
 }
@@ -188,7 +196,7 @@ func (nilSafeModel) Chat(context.Context, []llms.MessageContent, []llms.Tool, ll
 
 func TestUserLLMOnAnUnconfiguredModelStaysNil(t *testing.T) {
 	keys := llmkey.NewResolver(newStubKeyQueries(), nil)
-	if got := userLLM(context.Background(), keys, nil, 7, "feature:chat"); got != nil {
+	if got := userLLM(context.Background(), keys, nil, 7, llm.Feature("chat")); got != nil {
 		t.Errorf("userLLM with no model = %v, want nil so callers keep reporting the feature off", got)
 	}
 }
@@ -218,7 +226,7 @@ func TestUserLLMForgetsARejectedCredentialAfterCancellation(t *testing.T) {
 		t.Fatalf("llm.New: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	bound := userLLM(ctx, keys, client, 7, "feature:chat")
+	bound := userLLM(ctx, keys, client, 7, llm.Feature("chat"))
 	cancel() // the caller walks away as the refusal comes back
 
 	if _, err := bound.GenerateJSON(context.Background(), "sys", "usr"); err != nil {

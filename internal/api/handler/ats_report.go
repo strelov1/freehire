@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -86,7 +87,7 @@ func (h *resumeHandlers) PostATSReport(c *fiber.Ctx) error {
 		// asking the model to judge a document it cannot see.
 		return c.JSON(fiber.Map{"data": atsResponse{HasCV: true, Report: report}})
 	}
-	analyzer := h.atsAnalyzer.As(h.llm.bind(c.Context(), userID, tagATSReview))
+	analyzer := h.atsAnalyzer.As(h.llm.bind(c.Context(), userID, llm.Feature(tagATSReview)))
 	review, err := analyzer.Analyze(c.Context(), candidate)
 	if err != nil {
 		// Best-effort: log (never the CV text) and serve the deterministic report.

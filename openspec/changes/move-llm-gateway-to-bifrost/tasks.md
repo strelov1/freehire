@@ -39,7 +39,13 @@
 ## 6. Delivery gates — OPEN
 
 - [x] 6.1 `simplify` over the branch diff; tests stay green after it. Extracted `Client.policy`, hoisted the governance path to a constant, folded the request-body encode onto one path, and stopped `Activity` aliasing its `url.Values` between the two reads.
-- [ ] 6.2 Code review of the diff (`requesting-code-review`, plus `/code-review`); fix Critical and Important.
-- [ ] 6.3 `verification-before-completion`: unit suite, `go vet` under both build tags, layering guard, lint ratchet, svelte-check, web tests — each with its output, not asserted from memory.
+- [x] 6.2 Code review of the diff. Found one Critical and four Important, all fixed:
+  - **Critical** — the assistant passed two tags, which the transport joined with a comma into ONE `x-bf-dim-feature`, filing it under `assistant,preset:chat` and five siblings. None was `assistant`. The variadic tag list was the previous gateway's shape; replaced with `llm.Dimension{Name, Value}` and one header per dimension, so the preset gets `x-bf-dim-preset`.
+  - **Important** — `Forget` discarded `read`'s `ok`, so a transient database fault cleared the row (the only record of the gateway id) while declining to block, permanently orphaning a live key. Now it leaves the row alone.
+  - **Important** — `Revoke` had no test at all, and it is the reason the id column exists. Added: blocks by id, leaves the row, no-ops without an id.
+  - **Important** — `/me/usage` must never mint; nothing asserted it. Added a test with an unseeded store.
+  - **Important** — a comment in `me_usage_test.go` still asserted the pre-migration semantics.
+  - Minors taken: the failure count is now observable (the fake answers the two reads differently), and the window closes at the last instant of the day rather than dropping its final second.
+- [x] 6.3 `verification-before-completion`: unit suite, `go vet` under both build tags, layering guard, lint ratchet, svelte-check, web tests — each run with its output: gofmt clean, unit suite pass, `go vet` clean under `integration` and `llmlive`, layering guard ok, lint ratchet 0 issues, svelte-check 0 errors, 1186 web tests pass.
 - [ ] 6.4 `finishing-a-development-branch`: integrate `bifrost-gateway`.
 - [ ] 6.5 `/opsx:archive` then `/opsx:sync`.

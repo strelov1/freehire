@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
@@ -270,7 +271,7 @@ func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int6
 // endpoint. The autopilot's two halves run after the request and build that same input
 // through the same function, from plain values — see autopilotAnalysis.
 func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) (*matchanalysis.Analysis, error) {
-	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMatchAnalysis)))
 	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers, language))
 }
 
@@ -309,7 +310,7 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 		h:            h,
 		userID:       userID,
 		job:          job,
-		analyzer:     h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis)),
+		analyzer:     h.matchAnalysis.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMatchAnalysis))),
 		input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
 		cvUploadedAt: cvUploadedAt,
 	}

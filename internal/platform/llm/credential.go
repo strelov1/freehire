@@ -3,7 +3,6 @@ package llm
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/tmc/langchaingo/httputil"
 	"github.com/tmc/langchaingo/llms/openai"
@@ -17,7 +16,25 @@ import (
 // in the gateway's own prometheus_labels — onto every metric the call produces. That last
 // one is what makes "what does tailoring cost" answerable without a table of our own; it
 // is a Grafana question here rather than a SQL one.
-const tagHeader = "x-bf-dim-feature"
+const dimPrefix = "x-bf-dim-"
+
+// Dimension is one axis the gateway files a call under: a name and a value, sent as
+// `x-bf-dim-<name>: <value>`.
+//
+// A named pair rather than a list of opaque strings, because the gateway gives each
+// dimension its own header and each header one value. The shape this replaces — a
+// variadic list joined with commas — was the previous gateway's, which took
+// `key:value` pairs in one header and split them itself. Carried across unchanged it
+// filed the assistant under six values named "assistant,preset:chat" and its variants,
+// none of which was "assistant".
+type Dimension struct {
+	Name  string
+	Value string
+}
+
+// Feature names the surface a call served. It is the dimension every per-user call
+// carries; see the constants in internal/api/handler/user_llm.go.
+func Feature(value string) Dimension { return Dimension{Name: "feature", Value: value} }
 
 // As returns a client that spends under a given credential and labels its calls.
 //
@@ -37,11 +54,11 @@ const tagHeader = "x-bf-dim-feature"
 //
 // A failure to rebuild returns the receiver. Losing attribution is a log line; failing the
 // caller's request over bookkeeping is not a trade this package gets to make.
-func (c *Client) As(secret string, onRefused func(), tags ...string) *Client {
+func (c *Client) As(secret string, onRefused func(), dims ...Dimension) *Client {
 	if c == nil {
 		return nil
 	}
-	if secret == "" && len(tags) == 0 {
+	if secret == "" && len(dims) == 0 {
 		return c
 	}
 	if c.baseURL == "" {
@@ -65,7 +82,7 @@ func (c *Client) As(secret string, onRefused func(), tags ...string) *Client {
 		clone.apiKey = secret
 		clone.onRefused = onRefused
 	}
-	clone.tags = tags
+	clone.dims = dims
 
 	// The schema-model cache MUST NOT be shared with the client this was cloned from.
 	// It is keyed on the schema's name and rendered shape and on nothing else, so a
@@ -94,11 +111,11 @@ func (c *Client) As(secret string, onRefused func(), tags ...string) *Client {
 // Schema-bound models build on top of it, so a tagged client's schema calls are tagged
 // too.
 func (c *Client) transport() http.RoundTripper {
-	if len(c.tags) == 0 && c.fallbackKey == "" {
+	if len(c.dims) == 0 && c.fallbackKey == "" {
 		return httputil.DefaultTransport
 	}
 	return &attribution{
-		tags:      strings.Join(c.tags, ","),
+		dims:      c.dims,
 		fallback:  c.fallbackKey,
 		onRefused: c.onRefused,
 		// next is langchaingo's own transport, which stamps the library's User-Agent.
@@ -117,7 +134,7 @@ func (c *Client) transport() http.RoundTripper {
 // library reworded it, silently. The status code does not move.
 type attribution struct {
 	next      http.RoundTripper
-	tags      string
+	dims      []Dimension
 	fallback  string
 	onRefused func()
 }
@@ -129,8 +146,11 @@ func (t *attribution) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	// A RoundTripper must not mutate the request it is given.
 	clone := req.Clone(req.Context())
-	if t.tags != "" {
-		clone.Header.Set(tagHeader, t.tags)
+	for _, d := range t.dims {
+		if d.Name == "" || d.Value == "" {
+			continue
+		}
+		clone.Header.Set(dimPrefix+d.Name, d.Value)
 	}
 
 	resp, err := next.RoundTrip(clone)
@@ -141,7 +161,7 @@ func (t *attribution) RoundTrip(req *http.Request) (*http.Response, error) {
 	// The gateway does not know this credential. Retry once on the one it does — and
 	// only once: a gateway refusing the fallback too is a misconfiguration, and looping
 	// on it would turn one bad key into a request storm.
-	retry, ok := replay(req, t.fallback, t.tags)
+	retry, ok := replay(req, t.fallback, t.dims)
 	if !ok {
 		return resp, nil
 	}
@@ -156,7 +176,7 @@ func (t *attribution) RoundTrip(req *http.Request) (*http.Response, error) {
 // replay rebuilds a request under a different credential. It reports failure rather than
 // erroring, because a body that cannot be replayed means the original response — refusal
 // and all — is still the honest answer to give back.
-func replay(req *http.Request, credential, tags string) (*http.Request, bool) {
+func replay(req *http.Request, credential string, dims []Dimension) (*http.Request, bool) {
 	if req.Body != nil && req.GetBody == nil {
 		return nil, false
 	}
@@ -169,8 +189,11 @@ func replay(req *http.Request, credential, tags string) (*http.Request, bool) {
 		clone.Body = body
 	}
 	clone.Header.Set("Authorization", "Bearer "+credential)
-	if tags != "" {
-		clone.Header.Set(tagHeader, tags)
+	for _, d := range dims {
+		if d.Name == "" || d.Value == "" {
+			continue
+		}
+		clone.Header.Set(dimPrefix+d.Name, d.Value)
 	}
 
 	return clone, true

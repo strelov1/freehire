@@ -150,7 +150,17 @@ func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 	// Read before clearing. The block below addresses the credential by the gateway's
 	// own id, and the row about to be emptied is the only place that id is written down;
 	// clearing first would leave a live key nothing can name.
-	stored, _ := r.read(ctx, userID)
+	//
+	// An unreadable store therefore stops the whole operation rather than only the block.
+	// Clearing anyway would erase the one record of that id while the credential kept
+	// spending — permanently, since nothing could ever name it again. Leaving the row is
+	// safe: the caller's request already completed on the service credential, and the
+	// next refusal retries this.
+	stored, ok := r.read(ctx, userID)
+	if !ok {
+		log.Printf("llmkey: cannot read credential for user %d; leaving it in place", userID)
+		return
+	}
 
 	err := r.q.ClearUserLLMKey(ctx, db.ClearUserLLMKeyParams{
 		ID:     userID,

@@ -49,10 +49,10 @@ type Client struct {
 	baseURL string
 	apiKey  string
 
-	// tags label each call for the gateway's per-feature spend rollup. Set by As and
-	// empty otherwise, so a client nobody re-credentialed sends exactly what it always
-	// did.
-	tags []string
+	// dims label each call for the gateway's per-feature spend rollup, one header per
+	// dimension. Set by As and empty otherwise, so a client nobody re-credentialed sends
+	// exactly what it always did.
+	dims []Dimension
 
 	// fallbackKey and onRefused belong to a client bound to a per-user credential: the
 	// credential to retry on when the gateway no longer knows that user's, and how to
