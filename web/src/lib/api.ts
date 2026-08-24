@@ -803,8 +803,13 @@ export function createApi(
     return result.recent_auth_expires_at;
   }
 
-  function connectedIdentities(): Promise<ConnectedIdentities> {
-    return requestData<ConnectedIdentities>('/api/v2/auth/identities');
+  /** The caller's connected sign-in providers. `identities` is normalized to an array
+   *  here because Go marshals an empty slice as `null`, not `[]` — the declared type
+   *  says array, so the one place that knows the wire makes that true rather than
+   *  every call site defending against it. */
+  async function connectedIdentities(): Promise<ConnectedIdentities> {
+    const result = await requestData<ConnectedIdentities>('/api/v2/auth/identities');
+    return { ...result, identities: result.identities ?? [] };
   }
 
   /** Sign out everywhere: revokes every session for the account, including this one. */

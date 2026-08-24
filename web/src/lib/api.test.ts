@@ -101,4 +101,19 @@ describe('recent authentication adapters', () => {
     expect(seenInit?.body).toContain('correct horse');
     expect(expires).toBe('2026-08-11T00:00:00Z');
   });
+
+  // Go marshals an empty slice as `null`, so an account with no connected provider
+  // answers `{"identities":null}` while the declared type promises an array. Every
+  // caller filters the list to offer the "confirm with <provider>" buttons, and an
+  // unguarded `.filter` on null turns "you have no providers" into "could not load
+  // your providers" — the wrong story, on the screen that has to explain why an
+  // action was refused.
+  it('reads an empty identity list as an array, not null', async () => {
+    const fetcher = (() =>
+      Promise.resolve(new Response('{"data":{"has_password":true,"identities":null}}', { status: 200 }))
+    ) as unknown as typeof fetch;
+    const result = await createApi(fetcher).connectedIdentities();
+    expect(result.identities).toEqual([]);
+    expect(result.has_password).toBe(true);
+  });
 });
