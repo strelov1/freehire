@@ -955,6 +955,8 @@
   board: humansignal
 - company: HunterDouglas
   board: hunterdouglas
+- company: Lextech Global Services
+  board: lextechglobalservices
 - company: NexGen Cloud
   board: nexgencloud
 - company: iCapital Network
@@ -1825,6 +1827,8 @@
   board: systemstechnologyresearch
 - company: Strand Therapeutics
   board: strandtherapeutics
+- company: Strata Critical
+  board: stratacritical_logistics
 - company: Strata Decision Technology
   board: stratacareers
 - company: Striim

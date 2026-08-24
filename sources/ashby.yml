@@ -135,6 +135,8 @@
   board: flinn
 - company: Forge Atomics Inc.
   board: forgeatomics
+- company: Form Bio
+  board: formbio
 - company: Fronza and Francis LLC
   board: FronzaFrancis
 - company: Galliant
@@ -159,8 +161,12 @@
   board: investa
 - company: MacroHealth
   board: macrohealth
+- company: Multivista
+  board: multivista
 - company: Poetic
   board: poetic
+- company: Simply
+  board: simply
 - company: Ujwal Inc.
   board: level-ai
 - company: Luma
