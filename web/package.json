@@ -61,7 +61,7 @@
     "isomorphic-dompurify": "^3.22.0",
     "marked": "^18.0.9",
     "posthog-js": "^1.417.1",
-    "satori": "^0.29.0",
+    "satori": "^0.33.3",
     "satori-html": "^0.3.2",
     "shiki": "^4.4.3",
     "simple-icons": "^16.28.0",
