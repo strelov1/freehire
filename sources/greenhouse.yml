@@ -9,8 +9,6 @@
   board: 10alabs
 - company: 10Beauty
   board: 10beauty
-- company: 10x Genomics
-  board: 10xgenomics
 - company: 12jlkfsk
   board: 12jlkfsk
 - company: 143studiosinc
@@ -105,8 +103,6 @@
   board: aechelontechnology
 - company: AEG Worldwide
   board: aegworldwide
-- company: AeroSpike
-  board: aerospike
 - company: Aevex Aerospace
   board: aevexaerospace
 - company: affinidi
@@ -357,8 +353,6 @@
   board: brightai
 - company: Britive
   board: britive
-- company: Brooklinen
-  board: brooklinen
 - company: BSE Global
   board: bseglobal
 - company: btgpactual
@@ -415,8 +409,6 @@
   board: cellsignalingtechnology79
 - company: Celonis
   board: celonis
-- company: cerebral
-  board: cerebral
 - company: ChainGuard
   board: chainguard
 - company: ChargePoint
@@ -651,8 +643,6 @@
   board: elevationscreditunion
 - company: Elite Technology
   board: elitetechnology
-- company: Embrace
-  board: embrace
 - company: Encore
   board: encore
 - company: EnergyHub
@@ -677,8 +667,6 @@
   board: eqvilentjobs
 - company: esri
   board: esri
-- company: Esusu
-  board: esusu
 - company: Ethernova
   board: ethernovia
 - company: Ethos
@@ -909,8 +897,6 @@
   board: hangar13
 - company: Harbinger Motors
   board: harbingermotors
-- company: Harmonic
-  board: harmonic
 - company: Hasbro
   board: hasbro
 - company: Haven Studios Inc
@@ -947,8 +933,6 @@
   board: honehealth
 - company: Honor
   board: honor
-- company: hoppr
-  board: hoppr
 - company: HopSkipDrive
   board: hopskipdrive
 - company: Horace Mann
@@ -981,8 +965,6 @@
   board: industrialelectricmanufacturing
 - company: iftother
   board: iftother
-- company: iHerb
-  board: iherb
 - company: IMC Trading
   board: imc
 - company: immunefi
@@ -1015,8 +997,6 @@
   board: inspiraeducation
 - company: Inspire Medical Systems
   board: inspiremedicalsystemsinc
-- company: Inspiren
-  board: inspiren
 - company: Instabase
   board: instabase
 - company: Instacart
@@ -1069,8 +1049,6 @@
   board: jumio
 - company: Jump Crypto
   board: jumpcrypto
-- company: Jungle Scout
-  board: junglescout
 - company: JustAnswer
   board: justanswer
 - company: justworks
@@ -1187,8 +1165,6 @@
   board: logicmonitor
 - company: Lokalise
   board: lokalise
-- company: Loop
-  board: loop
 - company: Lovable
   board: lovable
 - company: Lucid
@@ -1227,8 +1203,6 @@
   board: masterclass
 - company: Matte projects
   board: matteprojects
-- company: MatX
-  board: matx
 - company: Maven Securities
   board: emergingtalent
 - company: Max Secure Software
@@ -1323,8 +1297,6 @@
   board: myfitnesspal
 - company: N26
   board: N26
-- company: NanoNets
-  board: nanonets
 - company: narvar
   board: narvar
 - company: National Information Solutions Cooperative (NISC)
@@ -1381,8 +1353,6 @@
   board: niraenergy
 - company: NK Securities Research
   board: nksecuritiesresearch
-- company: noble
-  board: noble
 - company: nomina.io
   board: nomina
 - company: Nooks
@@ -1725,8 +1695,6 @@
   board: shein
 - company: SHIELD
   board: shield
-- company: shift4
-  board: shift4
 - company: ShopMy
   board: shopmy
 - company: showpad
@@ -1907,8 +1875,6 @@
   board: tecovas
 - company: TEGNA Inc.
   board: tegnainc
-- company: Tekion Corp
-  board: tekion
 - company: Tellius
   board: tellius
 - company: Telnyx
@@ -1953,8 +1919,6 @@
   board: thiess
 - company: Think Academy U.S
   board: thinkacademyus
-- company: thinkingmachines
-  board: thinkingmachines
 - company: Tide
   board: tide
 - company: Toast
@@ -2045,8 +2009,6 @@
   board: ultimagenomics
 - company: Undead Labs
   board: undeadlabsllc
-- company: underdogfantasy
-  board: underdogfantasy
 - company: Unispace
   board: unispace
 - company: UnitedMasters
@@ -2607,8 +2569,6 @@
   board: altamiratechnologies
 - company: 'Altana '
   board: altanaai
-- company: AltiSales
-  board: altisales
 - company: Altruist
   board: altruist
 - company: AltScore
@@ -2799,8 +2759,6 @@
   board: arcotech
 - company: Ardent
   board: ardentmc
-- company: Arena.im
-  board: arenaim
 - company: Arevon
   board: arevonenergyimpltest
 - company: Ariel Alternatives
@@ -2821,8 +2779,6 @@
   board: armissecurity
 - company: ArmorCode Inc.
   board: armorcode
-- company: ARMRA Colostrum
-  board: armracolostrum
 - company: Armstrong Transport Group
   board: armstrongtransportgroup
 - company: Array
@@ -2919,8 +2875,6 @@
   board: aura
 - company: Aura
   board: aura798
-- company: Aurora Innovation
-  board: aurorainnovation
 - company: Authentic
   board: authenticinsurance
 - company: Authenticx
@@ -3063,10 +3017,6 @@
   board: beamtherapeutics
 - company: Beamup
   board: beamup
-- company: Beatbox Beverages, LLC
-  board: beatboxbeveragesllc
-- company: Beauhurst
-  board: beauhurst
 - company: Bee Genius
   board: beegenius
 - company: Behavox
@@ -3147,8 +3097,6 @@
   board: bioptimus8
 - company: Biorasi, LLC
   board: biorasillc
-- company: 3. Not on Website
-  board: biospanjobs
 - company: Biosphere
   board: biosphere
 - company: Birch Hill Equity Partners
@@ -3239,8 +3187,6 @@
   board: boingo
 - company: Boku
   board: boku
-- company: Bold Business
-  board: boldbusiness
 - company: Bold Metrics
   board: boldmetrics
 - company: Bolo AI
@@ -3257,8 +3203,6 @@
   board: boomilp
 - company: Boostlingo
   board: boostlingo
-- company: edX Bootcamps Instructional Engagement (Internal posts ONLY)
-  board: bootcampinstructionalengagement
 - company: Bosa Properties Inc.
   board: bosapropertiesinc
 - company: Boulder Care
@@ -3419,8 +3363,6 @@
   board: californiaacademyofsciences
 - company: California Psychics
   board: californiapsychics
-- company: Callibrity
-  board: callibrity
 - company: CallRail
   board: callrail
 - company: Cameo
@@ -3537,8 +3479,6 @@
   board: catawiki
 - company: Catch Creation, LLC
   board: catchcreationllc
-- company: Catena Clearing
-  board: catenaclearing
 - company: Cato Networks
   board: catonetworks
 - company: 'CATORCE '
@@ -3577,8 +3517,6 @@
   board: centrumhealth
 - company: Centura College
   board: centuracollege
-- company: Clinical Careers Page
-  board: cerebralgoogle
 - company: Ceribell, Inc
   board: ceribell
 - company: Ceros
@@ -3627,8 +3565,6 @@
   board: checkbook
 - company: 'Cheddar '
   board: cheddar
-- company: 'Chelsea Avondale '
-  board: chelseaavondale
 - company: ChenMoore
   board: chenmoore
 - company: Cherry Ventures
@@ -3677,8 +3613,6 @@
   board: cityswift
 - company: Civic Nation
   board: civicnation
-- company: 'Civil Science '
-  board: civilscience
 - company: Civis Analytics
   board: civisanalytics
 - company: Civitas Learning
@@ -3891,8 +3825,6 @@
   board: corelight
 - company: Core One
   board: coreone
-- company: CorePilot
-  board: corepilot
 - company: CoreStory
   board: corestory
 - company: CoreTrust Purchasing Group
@@ -4821,8 +4753,6 @@
   board: formationbio
 - company: FormativGroup
   board: formativgroup
-- company: Form Bio
-  board: formbio
 - company: Form Health
   board: formhealth
 - company: Forthea
@@ -4969,8 +4899,6 @@
   board: getyourguide
 - company: Ghost
   board: ghost
-- company: Giant Spoon
-  board: giantspoon
 - company: Giga Energy
   board: gigaenergy
 - company: Gigs
@@ -5067,8 +4995,6 @@
   board: goodsservices
 - company: GoodTime
   board: goodtime
-- company: GoodUnited
-  board: goodunited
 - company: Goodwin
   board: goodwin
 - company: Goody Garage Doors
@@ -5153,8 +5079,6 @@
   board: growetalentpool
 - company: Growe Talents
   board: growetalents
-- company: GrowthDay
-  board: growthday
 - company: GrowthLoop
   board: growthloop
 - company: Grüns
@@ -5237,8 +5161,6 @@
   board: hatchhirescontractors
 - company: Hatch Internships
   board: hatchinternships
-- company: HavenHub
-  board: havenhub
 - company: Hawthorne Machinery Co.
   board: hawthornemachineryco
 - company: Hazel Health
@@ -5309,8 +5231,6 @@
   board: hexium
 - company: Hex Technologies
   board: hextechnologies
-- company: heycar
-  board: heycar
 - company: HG Insights
   board: hginsights
 - company: HiddenLayer
@@ -5385,10 +5305,6 @@
   board: hotmartcareersen
 - company: Hotmart (ESP)
   board: hotmartcareersesp
-- company: Pet Waste Removal Careers
-  board: houndmoundsincdbapoop911
-- company: HouseAccount
-  board: houseaccount
 - company: House Buyers of America
   board: housebuyersofamerica
 - company: Housecall Pro
@@ -5821,8 +5737,6 @@
   board: kinetic-xyz
 - company: Kinexus Group
   board: kinexus
-- company: Kion
-  board: kion
 - company: KitchenPark
   board: kitchenpark
 - company: Kiva.org
@@ -5975,8 +5889,6 @@
   board: levittown
 - company: Lexington Medical, Inc.
   board: lexingtonmedical
-- company: Lex Tech
-  board: lextech
 - company: Thermal Works
   board: li-thermal-works
 - company: Liaison International
@@ -6041,8 +5953,6 @@
   board: liquibase
 - company: Liquid Death
   board: liquiddeath
-- company: Liquid Instruments
-  board: liquidinstruments
 - company: Liquid Personnel
   board: liquidpersonnel
 - company: Local Initiatives Support Corporation
@@ -6055,8 +5965,6 @@
   board: litmos
 - company: Little Spoon
   board: littlespoon
-- company: Little Wise Kids Preschool
-  board: littlewisekids
 - company: Little Words Project
   board: littlewordsproject
 - company: Lively
@@ -6067,8 +5975,6 @@
   board: livescore9
 - company: LVT
   board: liveviewtechnologiesinc
-- company: Livingston Associates
-  board: livingstonassociates
 - company: LLR Partners
   board: llrpartnersjobs
 - company: Long Meadow Ranch and Farmstead
@@ -6085,8 +5991,6 @@
   board: loenbro
 - company: Loft Federal
   board: loftfederal
-- company: Logiwa
-  board: logiwacareers
 - company: Logos
   board: logos
 - company: LoiZéro
@@ -6099,10 +6003,6 @@
   board: lolablankets
 - company: Long Ridge Equity Partners
   board: longridge
-- company: Lookout
-  board: lookout
-- company: Lookout Inc
-  board: lookoutinc
 - company: LRK
   board: looneyrickskiss
 - company: Lotlinx
@@ -6251,8 +6151,6 @@
   board: maslanskycareers
 - company: Massar Capital
   board: massarcapital
-- company: Mast
-  board: mast
 - company: MasterControl
   board: mastercontrol
 - company: Material Bank
@@ -6297,8 +6195,6 @@
   board: mcadams
 - company: McClure Oil Corporation
   board: mcclureoilcorporation
-- company: McCullough Robertson
-  board: mcculloughrobertson
 - company: McMaster-Carr
   board: mcmastercarr
 - company: MCO
@@ -6513,8 +6409,6 @@
   board: morganmorganstudents
 - company: MORSE Corp
   board: morsecorp
-- company: Morty
-  board: morty
 - company: Michigan Online School
   board: mos
 - company: Moshiri Orthodontics
@@ -6553,8 +6447,6 @@
   board: mullerinc
 - company: Multiquip
   board: multiquip
-- company: Multivista
-  board: multivista
 - company: Murad
   board: murad
 - company: Murj
@@ -6615,8 +6507,6 @@
   board: naturesbakery
 - company: Naughty Dog
   board: naughtydog
-- company: Nauto
-  board: nauto
 - company: Nava PBC
   board: navapbc
 - company: NAVER VIETNAM
@@ -6641,8 +6531,6 @@
   board: neonaerospace
 - company: NEORIS
   board: neoris
-- company: Neptune Bio
-  board: neptunebio
 - company: Nerdy
   board: nerdy
 - company: Neros Technologies
@@ -6773,8 +6661,6 @@
   board: nozominetworks
 - company: NTT DATA, Europe & LATAM, Branch in USA, Inc.
   board: nttdatausa
-- company: Nature's Toolbox, Inc. (NTx)
-  board: ntx
 - company: Nuance Labs
   board: nuancelabs
 - company: Nucleus Global
@@ -6917,8 +6803,6 @@
   board: oneacrefundzambia
 - company: ONE Campaign
   board: onecampaign
-- company: OneEnergy Renewables
-  board: oneenergyrenewables
 - company: One Medical
   board: onemedical
 - company: One Model
@@ -6969,8 +6853,6 @@
   board: openwork
 - company: OpenZeppelin
   board: openzeppelin
-- company: Operant AI
-  board: operantai
 - company: 'Veo - Operations Careers '
   board: operationscareers
 - company: Ophelia
@@ -7051,8 +6933,6 @@
   board: otterai
 - company: Otterbein SeniorLife
   board: otterbein
-- company: Otto Aerospace
-  board: ottoaviation
 - company: Ouihelp
   board: ouihelp
 - company: Oula
@@ -7083,8 +6963,6 @@
   board: ownershift
 - company: Ownwell
   board: ownwell
-- company: OXOS Medical
-  board: oxosmedical
 - company: Ozow
   board: ozow
 - company: 'Pacaso '
@@ -7179,8 +7057,6 @@
   board: pawapay
 - company: PAX Labs
   board: paxlabs
-- company: PayDo
-  board: paydo
 - company: PayHawk
   board: payhawk1
 - company: Payhawk
@@ -7199,8 +7075,6 @@
   board: paytient
 - company: Polyphony Digital
   board: pdi
-- company: 'PDM Group '
-  board: pdmgroupasp
 - company: 'Peachtree Dermatology '
   board: peachtree
 - company: Peachy
@@ -7331,8 +7205,6 @@
   board: pivotbio
 - company: Pixability
   board: pixability
-- company: Pixocial
-  board: pixocial
 - company: PLACE Corporate Careers
   board: place
 - company: Placements.io
@@ -7533,8 +7405,6 @@
   board: protonai
 - company: Prove
   board: prove
-- company: Providence Digital Innovation Group
-  board: providencedig
 - company: Médicos Sin Fronteras en México A.C [Proyectos internacionales]
   board: proyectosinternacionales
 - company: PsiBufet
@@ -7617,8 +7487,6 @@
   board: radar
 - company: RADaR
   board: radaranalytics
-- company: RadiantSecurity
-  board: radiantsecurity
 - company: Radicle Health
   board: radiclehealth
 - company: RadixArk
@@ -7665,8 +7533,6 @@
   board: rdsourcing
 - company: RD Station
   board: rdstation
-- company: Reach Financial
-  board: reach
 - company: Reach3 Insights
   board: reach3insights
 - company: Reachdesk Ltd
@@ -7749,8 +7615,6 @@
   board: relishworks
 - company: Relocity
   board: relocity
-- company: Relyance AI
-  board: relyance
 - company: Remedy Home Health Care
   board: remedyhomehealthcare
 - company: Remesh
@@ -8145,8 +8009,6 @@
   board: sherbournedentalassociates
 - company: Shields Health Solutions
   board: shieldshealthsolutions
-- company: Shift4 Lithuania
-  board: shift4lithuania
 - company: Shift5
   board: shift5
 - company: Shift Technology
@@ -8213,8 +8075,6 @@
   board: simplisticllc
 - company: Simpluris
   board: simpluris
-- company: Simply
-  board: simply
 - company: Simpplr
   board: simpplr
 - company: SimScale
@@ -8707,8 +8567,6 @@
   board: teamlfg
 - company: Mid-Atlantic Truck & Equipment
   board: teammate
-- company: Teampathy
-  board: teampathy
 - company: Picnic
   board: teampicnic
 - company: Team Rubicon
@@ -8997,8 +8855,6 @@
   board: tribalspain
 - company: Trillium Surveyor
   board: trilliumsurveyor
-- company: Trinity Air Medical
-  board: trinityairmedical
 - company: Trinity Logistics
   board: trinitylogistics
 - company: Trinity Park Talent Opportunities
@@ -9335,8 +9191,6 @@
   board: vts
 - company: VulnCheck
   board: vulncheck
-- company: Vultron.ai
-  board: vultronai
 - company: Inizio Ignite | Vynamic
   board: vynamic
 - company: VYNYL
@@ -9655,8 +9509,6 @@
   board: applytotruebuilt
 - company: Arena Club
   board: arenaclub
-- company: Artefact US
-  board: artefactus
 - company: CTC Lateral - Website & LinkedIn
   board: chicagotrading
 - company: Adorama
@@ -9677,8 +9529,6 @@
   board: innodatainc
 - company: Sandstone Care
   board: sandstonecare
-- company: Uplifter Inc.
-  board: uplifter
 
 - company: Goken America
   board: gokenamericallc
@@ -9923,8 +9773,6 @@
   board: cata
 - company: Samlino Group
   board: ceg
-- company: Celcuity Inc.
-  board: celcuity
 - company: Centennial Real Estate Company LLC
   board: centennial
 - company: CFG Merchant Solutions
@@ -9957,8 +9805,6 @@
   board: connectionshealthsolutions
 - company: Constellation Schools
   board: constellationschools
-- company: Contractors
-  board: contractors
 - company: Converted Board Dana
   board: converted
 - company: Coretelligent
@@ -10253,8 +10099,6 @@
   board: mapprojectoffice
 - company: Midwest Applied Solutions
   board: mas
-- company: Max Insurance
-  board: maxinsurance
 - company: Maxwell
   board: maxwell
 - company: Media Arts Lab
@@ -10425,8 +10269,6 @@
   board: restaurantsupply
 - company: Right Way Garage Doors
   board: rightway
-- company: RKE
-  board: rkellp
 - company: RMR Mechanical
   board: rmr
 - company: Road to Hire
@@ -10471,8 +10313,6 @@
   board: sj
 - company: SNS One, Inc.
   board: snsone
-- company: SoftExpert
-  board: softexpert
 - company: Southwind
   board: southwind
 - company: Space Programs
@@ -10593,8 +10433,6 @@
   board: yubico
 - company: Yuso Website
   board: yuso
-- company: Zero
-  board: zero
 - company: ARX Robotics GmbH
   board: arxroboticsgmbh
 - company: charles
@@ -11005,8 +10843,6 @@
   board: c4ads
 - company: cabi, LLC
   board: cabiclothing
-- company: Camus Energy
-  board: camusenergy
 - company: Cancos Tile & Stone
   board: cancostileandstone
 - company: Canopy Works
@@ -11091,8 +10927,6 @@
   board: corbins
 - company: Counterpart Health
   board: counterparthealth
-- company: Cover
-  board: coverai
 - company: Craftsman+ (social board)
   board: craftsmansocials
 - company: Creation Kingdom
@@ -11385,8 +11219,6 @@
   board: integratedbiosciencesinc
 - company: Integrated Merchandising Solutions LLC
   board: integratedmerchandisingsolutionsllc
-- company: Interactive Brokers NA
-  board: interactivebrokersna
 - company: Intrinsic Development
   board: intrinsicdevelopment
 - company: Intuit Dome
@@ -11411,8 +11243,6 @@
   board: jjus
 - company: Nextdoor, Inc.
   board: job-openings
-- company: 2. Pool Building
-  board: joinbiospan
 - company: Jupiter Endovascular
   board: jupiterendovascular
 - company: Kasa
@@ -11441,8 +11271,6 @@
   board: lettrlabs
 - company: LG Energy Solution Arizona
   board: lgenergyaz
-- company: Liminal
-  board: liminalbuild
 - company: LiquidStack
   board: liquidstack
 - company: Logan Premium Logistics
@@ -11779,8 +11607,6 @@
   board: sudstop
 - company: Suministro
   board: suministro
-- company: Sunrise ABA
-  board: sunriseaba
 - company: Sunrise Group
   board: sunriseunitedstatesinc
 - company: Superior Insurance Partners LLC
@@ -11789,8 +11615,6 @@
   board: swissitsecuritygroup
 - company: Symphony Communication Services
   board: symphony
-- company: Syncro
-  board: syncro
 - company: Syndax Pharmaceuticals
   board: syndaxpharmaceuticals
 - company: TabaPay
@@ -11935,8 +11759,6 @@
   board: armorous
 - company: EterniTeam GmbH
   board: eterniteamgmbh
-- company: Friendly Franchisees Corporation
-  board: friendlyfranchiseescorporation
 - company: Hone Health Medical Roles
   board: honehealthmedicalroles
 - company: JD Sports Netherlands
@@ -12007,8 +11829,6 @@
   board: omenai
 - company: Medium
   board: medium
-- company: GoPro
-  board: goprocareers
 - company: Workera
   board: workera
 - company: 1021 Creative
@@ -12147,8 +11967,6 @@
   board: arqitlimited
 - company: 'Ascent '
   board: ascenttechnologies
-- company: Ashley Northeast
-  board: ashleyfurniturefde
 - company: Aspen Animal Wellness
   board: aspenwellness
 - company: Global Career Website
@@ -12467,8 +12285,6 @@
   board: discoverycube
 - company: Dispatch Bio
   board: dispatchbio
-- company: 'DMC Engineering - Campus Recruiting '
-  board: dmcengineering2024
 - company: dmg::media
   board: dmgmedia
 - company: Dogwood Animal Hospital
@@ -12707,8 +12523,6 @@
   board: heliosx
 - company: Helping Hands Family
   board: helpinghandsfamily
-- company: Henry Meds
-  board: henrymeds
 - company: Herschel Supply Co.
   board: herschelsupplyco
 - company: HexArmor
@@ -12801,8 +12615,6 @@
   board: johnkenyoneyecenter
 - company: John M. Corcoran & Company
   board: johnmcorcorancompany
-- company: Joyous
-  board: joyousteam
 - company: Junior Achievement
   board: juniorachievementlocal
 - company: JustMarkets
@@ -12897,8 +12709,6 @@
   board: liquidiv
 - company: Listrak
   board: listrak
-- company: 'Little Angels Preschool '
-  board: littleangels
 - company: Little Giants Learning Academy
   board: littlegiants
 - company: 'Little Tykes '
@@ -13161,8 +12971,6 @@
   board: paulaschoiceskincare
 - company: 'Paumanok Veterinary Hospital '
   board: paumanokveterinaryhospital
-- company: Paymenttools
-  board: paymenttools
 - company: Pay.UK
   board: payuk
 - company: PBG
@@ -13417,8 +13225,6 @@
   board: sierraair
 - company: SimulaMet
   board: simulamet
-- company: Singularity 6
-  board: singularity6
 - company: SiteRx
   board: siterx
 - company: Skedda
@@ -13561,8 +13367,6 @@
   board: thecatpractice
 - company: DCG
   board: thedistrictcommunicationsgroup
-- company: The Learning Vine
-  board: thelearningvine
 - company: The Marshall Project
   board: themarshallproject
 - company: The Millennium Alliance
@@ -13993,8 +13797,6 @@
   board: nmcareers
 - company: Chicory
   board: chicory
-- company: Accompany Health
-  board: accompanyhealth
 - company: Akero Therapeutics
   board: akerotherapeutics
 - company: Alnylam Pharmaceuticals
@@ -14095,8 +13897,6 @@
   board: defuselabs
 - company: Dendreon
   board: dendreon
-- company: Legend
-  board: legend
 - company: mx51
   board: mx51
 - company: Neighborhoods.com
@@ -14135,8 +13935,6 @@
   board: insurityindia
 
 # link contribution, validated live 2026-08-11
-- company: Abby Care
-  board: abbycare
 - company: ACT1 Federal
   board: act1federal
 - company: Air
@@ -14239,8 +14037,6 @@
   board: omgmontreal
 - company: Alteva RCM
   board: altevarcm
-- company: Binance
-  board: binance
 - company: Gummicube
   board: gummicube
 - company: Hearst
@@ -14299,8 +14095,6 @@
   board: kcftechnologies
 - company: Legato Security
   board: legatosecurity
-- company: MedCoded
-  board: medcoded
 - company: Orbisk
   board: orbisk
 - company: Patriot Growth Insurance Services, LLC
