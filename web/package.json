@@ -60,7 +60,7 @@
     "freehire-design-system": "link:../design-system",
     "isomorphic-dompurify": "^3.22.0",
     "marked": "^18.0.10",
-    "posthog-js": "^1.417.1",
+    "posthog-js": "^1.418.10",
     "satori": "^0.33.3",
     "satori-html": "^0.3.2",
     "shiki": "^4.4.3",
