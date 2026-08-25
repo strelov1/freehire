@@ -64,7 +64,7 @@
     { provider: 'github', label: 'GitHub', href: 'https://github.com/strelov1/freehire' },
     { provider: 'linkedin', label: 'LinkedIn', href: 'https://linkedin.com/company/freehire-dev/' },
     { provider: 'telegram', label: 'Telegram', href: 'https://t.me/freehiredev' },
-    { provider: 'discord', label: 'Discord', href: 'https://discord.gg/aAXS2rghW' },
+    { provider: 'discord', label: 'Discord', href: 'https://discord.gg/sYnZksswR' },
   ];
 
   // A strip below the four groups rather than a fifth column: the grid is

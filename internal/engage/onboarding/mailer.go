@@ -50,7 +50,7 @@ const (
 // *this* Discord, and a deployment that pointed them elsewhere would be lying.
 const (
 	repoURL     = "https://github.com/strelov1/freehire"
-	discordURL  = "https://discord.gg/aAXS2rghW"
+	discordURL  = "https://discord.gg/sYnZksswR"
 	linkedInURL = "https://www.linkedin.com/in/istrelov/"
 )
 

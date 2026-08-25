@@ -23,5 +23,5 @@ single day is a bad way to find out whether anything is broken. Between now and 
 we would rather hear what does not work than collect a good number. If a filter
 misses jobs you know exist, a company page looks wrong, or a source you rely on is
 missing, tell us — on [GitHub](https://github.com/strelov1/freehire),
-[Telegram](https://t.me/freehiredev), or [Discord](https://discord.gg/aAXS2rghW).
+[Telegram](https://t.me/freehiredev), or [Discord](https://discord.gg/sYnZksswR).
 Everything reported before the 26th has a chance of being fixed by it.

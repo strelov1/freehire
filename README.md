@@ -18,7 +18,7 @@
 ![Go version](https://img.shields.io/github/go-mod/go-version/strelov1/freehire)
 ![Last commit](https://img.shields.io/github/last-commit/strelov1/freehire)
 [![Stars](https://img.shields.io/github/stars/strelov1/freehire?style=social)](https://github.com/strelov1/freehire/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/aAXS2rghW)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sYnZksswR)
 
 <br>
 
