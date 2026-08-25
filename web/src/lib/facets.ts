@@ -191,8 +191,8 @@ async function companySearch(query: string): Promise<FacetOption[]> {
 
 // Composes one /geo/cities result into a FacetOption: the value stays the bare city
 // name (what a profile's location_preferences already stores), the label adds the
-// country via the same countryLabel() resolver COUNTRY_OPTIONS uses, so two
-// otherwise-identical city names (e.g. two "Springfield"s) read as distinct choices.
+// country via the same countryLabel() resolver COUNTRY_OPTIONS uses, so the country a
+// suggestion came from is at least readable.
 export function cityOption(row: { value: string; country: string }): FacetOption {
   return { value: row.value, label: `${row.value}, ${countryLabel(row.country)}` };
 }
@@ -202,9 +202,22 @@ export function cityOption(row: { value: string; country: string }): FacetOption
 // debounce means this fires at most once per ~250ms of typing, not per keystroke).
 // `country` narrows the base-city search to the already-chosen base country; the
 // relocation-cities search omits it, since that set may span multiple countries.
+//
 export async function searchCities(query: string, country?: string): Promise<FacetOption[]> {
-  const rows = await api.searchCities(query, country);
-  return rows.map(cityOption);
+  return collapseCities(await api.searchCities(query, country));
+}
+
+// One city name is one option. /geo/cities answers per (name, country), so a prefix
+// like "london" or "victoria" comes back several times over — and since a preference
+// stores the bare name, every one of those rows would save the identical value. Listing
+// them separately offered a choice that does not exist, and the repeated value collided
+// in the picker's keyed {#each}, which in Svelte takes down the whole list rather than
+// the duplicate row. The first row per name wins: /geo/cities returns them by
+// descending population, so that is the city a reader means by the name.
+export function collapseCities(rows: { value: string; country: string }[]): FacetOption[] {
+  const byName = new Map<string, FacetOption>();
+  for (const row of rows) if (!byName.has(row.value)) byName.set(row.value, cityOption(row));
+  return [...byName.values()];
 }
 
 // Role facet values are canonical slugs (senior_backend, founding_engineer); the
@@ -254,7 +267,7 @@ export function dynamicOptions(param: string, dist: Record<string, number>, sele
   const keys = new Set<string>([...Object.keys(dist), ...selected]);
   return [...keys]
     .map((value) => ({ value, label: dynamicLabel(param, value), count: dist[value] ?? 0 }))
-    .toSorted((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
+    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
 }
 
 // Role slugs carry an optional seniority grade prefix (senior_backend); the
@@ -494,7 +507,7 @@ const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
   value,
   label: countryLabel(value),
   flag: value,
-})).toSorted((a, b) => a.label.localeCompare(b.label));
+})).sort((a, b) => a.label.localeCompare(b.label));
 
 // The full ISO country select, exported for the profile's location editor (base +
 // remote/relocation countries) so it reuses the same list/labels as the company facet.

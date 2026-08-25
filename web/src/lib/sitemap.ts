@@ -69,7 +69,7 @@ export function collectionPaths(): string[] {
  *  its own schedule. The index carries the newest post's date, since that is
  *  exactly when its content last changed. */
 export function blogPaths(posts: { slug: string; date: string }[]): PathEntry[] {
-  const newest = posts.map((post) => post.date).toSorted().at(-1);
+  const newest = posts.map((post) => post.date).sort().at(-1);
   return [
     { path: '/blog', lastmod: newest },
     ...posts.map((post) => ({ path: `/blog/${post.slug}`, lastmod: post.date })),

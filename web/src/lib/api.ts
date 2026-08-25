@@ -388,8 +388,18 @@ export function createApi(
     return toSlice(await request<Page<Job>>(`/api/v1/jobs${query(limit, offset)}`), offset);
   }
 
+  /** A job by slug. Four words can never be one: `/jobs/{search,find,facets,sitemap}`
+   *  are static API routes declared ahead of `/jobs/:slug`, so they answer 200 with
+   *  their own shape instead of the 404 a missing job gives. Reaching /jobs/search in
+   *  a browser handed the page a list where it expected a posting, and the render died
+   *  on the first field it read — a 500 where the honest answer is "no such job". The
+   *  shape is the check, not a list of the four: any future static sibling is covered. */
   async function getJob(slug: string): Promise<Job> {
-    return requestData<Job>(`/api/v1/jobs/${encodeURIComponent(slug)}`);
+    const data = await requestData<Job>(`/api/v1/jobs/${encodeURIComponent(slug)}`);
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !('public_slug' in data)) {
+      throw new ApiError(404, `not a job: /jobs/${slug}`);
+    }
+    return data;
   }
 
   /** Jobs semantically nearest to the one addressed by `slug` — the "Similar jobs"

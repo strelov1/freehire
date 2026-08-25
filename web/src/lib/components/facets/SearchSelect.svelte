@@ -72,7 +72,7 @@
   const matched = $derived(
     uniqueByValue(options)
       .filter((o) => optionMatches(o, filter, searchAliases))
-      .toSorted((a, b) => Number(isSelected(b.value)) - Number(isSelected(a.value))),
+      .sort((a, b) => Number(isSelected(b.value)) - Number(isSelected(a.value))),
   );
 
   // While unfiltered, cap the list to the top `cap` (already busiest-first) plus

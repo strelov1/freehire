@@ -203,7 +203,7 @@ function applicantRegions(
     : (regions ?? []).flatMap((r) => REGION_COUNTRIES[r] ?? []);
   const named = [
     ...new Set(iso.map(countryName).filter((n): n is string => Boolean(n))),
-  ].toSorted();
+  ].sort();
   if (named.length === 0) return undefined;
   const entries: CountryRef[] = named.map((name) => ({ '@type': 'Country', name }));
   // schema.org reads a lone object and a one-element array alike; emit the object

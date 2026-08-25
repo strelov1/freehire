@@ -143,7 +143,7 @@ export function suggestRoles(
       return { suggestion, tier: matchTier(o, q) };
     })
     .filter((r) => r.tier < fuzzyOnlyTier)
-    .toSorted(
+    .sort(
       (a, b) =>
         a.tier - b.tier ||
         gradePenalty(a.suggestion.slug) - gradePenalty(b.suggestion.slug) ||

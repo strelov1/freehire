@@ -81,7 +81,7 @@ export function pageWindow(current: number, total: number): (number | null)[] {
     if (p >= 1 && p <= total) around.add(p);
   }
 
-  const pages = [...around].toSorted((a, b) => a - b);
+  const pages = [...around].sort((a, b) => a - b);
   const out: (number | null)[] = [];
   for (const [i, page] of pages.entries()) {
     const previous = pages[i - 1];

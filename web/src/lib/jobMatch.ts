@@ -134,7 +134,7 @@ export function matchTeaser(seed: string, jobSkills: string[]): MatchTeaser | nu
   const missing = new Set(
     jobSkills
       .map((name) => ({ name, key: rand() }))
-      .toSorted((a, b) => a.key - b.key)
+      .sort((a, b) => a.key - b.key)
       .slice(0, total - matched)
       .map((s) => s.name),
   );

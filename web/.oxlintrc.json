@@ -11,7 +11,13 @@
     "perf": "warn"
   },
   "rules": {
-    "import/no-unassigned-import": "off"
+    "import/no-unassigned-import": "off",
+    // Pushes `.sort()` towards `.toSorted()`, which is the wrong direction for a
+    // browser bundle: Safari only grew the copying methods in 16.4, they are runtime
+    // methods no build target can transpile, and a throw during module init takes the
+    // page down rather than the one list. eslint.config.js bans them outright; leaving
+    // this on would have the two linters argue over every sort. Revisit together.
+    "unicorn/no-array-sort": "off"
   },
   "ignorePatterns": ["dist", "node_modules"]
 }

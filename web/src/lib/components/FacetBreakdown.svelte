@@ -20,7 +20,7 @@
   const labels = $derived(new Map((def.options ?? []).map((o) => [o.value, o.label])));
 
   // Entries sorted by count descending; bar widths scale to the top count.
-  const entries = $derived(Object.entries(dist ?? {}).toSorted((a, b) => b[1] - a[1]));
+  const entries = $derived(Object.entries(dist ?? {}).sort((a, b) => b[1] - a[1]));
   const shown = $derived(entries.slice(0, TOP));
   const hidden = $derived(entries.length - shown.length);
   const max = $derived(shown[0]?.[1] ?? 0);

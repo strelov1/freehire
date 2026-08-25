@@ -15,6 +15,15 @@ export default {
     // and API same-origin for the SameSite=Lax auth cookie.
     adapter: adapter(),
 
+    // Poll _app/version.json so `updated` can tell an open tab that the build it
+    // was served has been replaced. Without this Kit never checks, `updated.current`
+    // stays false forever, and the first the tab hears of a deploy is a dynamic
+    // import 404ing for a chunk the release deleted — which reaches the reader as
+    // the 500 page. The service-worker fix below removed one route to that failure;
+    // this closes the other, for a tab that simply sat open across a release.
+    // Five minutes: a deploy runs every few hours, and the file is a few bytes.
+    version: { pollInterval: 300_000 },
+
     // Absolute asset paths. Kit defaults `relative` to true, which sets Vite's
     // `base` to './' — and @vite-pwa/sveltekit reads that base directly
     // (`base = viteOptions.base ?? "/"`) to build the service-worker registration.

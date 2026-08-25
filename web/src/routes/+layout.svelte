@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { navigating, page } from '$app/state';
-  import { afterNavigate } from '$app/navigation';
+  import { navigating, page, updated } from '$app/state';
+  import { afterNavigate, beforeNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -90,10 +90,25 @@
     if (!isAuthenticated()) resetUserStores();
   });
 
-  // Analytics is inert unless PostHog was initialized (see hooks.client.ts), so
-  // every call below is a no-op when the key is absent. afterNavigate also fires
-  // on the initial load, so the pageview and the replay privacy toggle cover a
-  // hard-loaded route too — replay is stopped on /my/* before it can leak.
+  // A tab open across a deploy still holds the old build's route manifest, naming
+  // _app/immutable chunks the release has deleted. Its next client-side navigation
+  // import()s one, gets a 404, and SvelteKit draws the 500 page over an HTTP 200 —
+  // 265 of those reached Sentry in a day. `updated.current` flips once the version
+  // poll (see svelte.config.js) sees a new build; leaving through a full page load
+  // instead of a client-side one fetches the new manifest and the chunk resolves.
+  //
+  // Not a second copy of the service worker's onNeedReload prompt above: that one
+  // asks a tab sitting still whether to reload NOW, and takes a confirmation because
+  // saying yes drops whatever is half-typed. This one waits until the reader is
+  // already leaving, where nothing they were looking at survives the navigation
+  // either way — so it needs no prompt, and costs only the round trip. It also
+  // covers the tab whose service worker never registered, which is how these 404s
+  // outlived the `paths.relative` fix. `willUnload` means the browser is handling
+  // the navigation itself (external link, reload) and there is nothing to intercept.
+  beforeNavigate(({ willUnload, to }) => {
+    if (updated.current && !willUnload && to?.url) location.href = to.url.href;
+  });
+
   afterNavigate(() => {
     capturePageview();
     syncReplayForRoute(page.url.pathname);

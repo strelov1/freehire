@@ -49,6 +49,29 @@ export default ts.config(
     },
   },
 
+  // The change-array-by-copy methods reach the browser untranspiled — they are
+  // runtime methods, so no build target polyfills them, and Safari only grew them
+  // in 16.4. One `.toSorted()` evaluated while `facets.ts` was initialising threw
+  // on iOS 15, which takes the module down and with it the whole page — not the
+  // one sorted list. Every call we had ran on an array a `.map`/`.filter`/spread
+  // had just produced, so `.sort()` in place is the same thing without the floor
+  // on who can open the site. Lift this once the analytics say iOS 15 is gone.
+  {
+    files: ['**/*.{ts,svelte,svelte.ts}'],
+    ignores: ['**/*.test.ts', 'scripts/**', 'src/lib/server/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "MemberExpression[property.name=/^(toSorted|toReversed|toSpliced)$/][computed=false]",
+          message:
+            'Not in Safari before 16.4, and a throw here kills the whole module. Use [...x].sort() — or .sort() when the array is already a fresh copy.',
+        },
+      ],
+    },
+  },
+
   // Must come last: disables every ESLint rule that oxlint already covers.
   ...oxlint.configs['flat/recommended'],
 );

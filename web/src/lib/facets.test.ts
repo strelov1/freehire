@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COLLECTIONS, AI_ARCHETYPE_VALUES, ROLE_TYPE_VALUES } from './generated/contracts';
-import { cityOption, countryLabel, FACETS } from './facets';
+import { cityOption, collapseCities, countryLabel, FACETS } from './facets';
 
 const collectionOptions = () => FACETS.find((f) => f.param === 'collections')?.options ?? [];
 
@@ -97,5 +97,32 @@ describe('cityOption', () => {
     // just locks that cityOption doesn't hand-roll its own country formatting.
     const opt = cityOption({ value: 'Reykjavik', country: 'is' });
     expect(opt.label).toBe(`Reykjavik, ${countryLabel('is')}`);
+  });
+});
+
+describe('collapseCities', () => {
+  // A location preference stores the bare city name, so London/gb and London/ca are
+  // the same stored value — two rows offering one outcome. Worse, the picker keys its
+  // {#each} by value, and a duplicate key is a Svelte error that unmounts the entire
+  // list, so typing "london" emptied the dropdown instead of showing a wrong entry.
+  it('offers one option per city name, keeping the highest-population row', () => {
+    const options = collapseCities([
+      { value: 'London', country: 'gb' },
+      { value: 'London', country: 'ca' },
+      { value: 'Londonderry County Borough', country: 'gb' },
+    ]);
+
+    expect(options.map((o) => o.value)).toEqual(['London', 'Londonderry County Borough']);
+    // /geo/cities ranks by descending population, so the first London is the label kept.
+    expect(options[0]?.label).toBe(`London, ${countryLabel('gb')}`);
+  });
+
+  it('keeps distinct city names that merely share a prefix', () => {
+    const options = collapseCities([
+      { value: 'San Francisco', country: 'us' },
+      { value: 'San Diego', country: 'us' },
+    ]);
+
+    expect(options).toHaveLength(2);
   });
 });
