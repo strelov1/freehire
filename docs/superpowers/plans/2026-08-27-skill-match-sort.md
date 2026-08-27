@@ -10,6 +10,12 @@
 > skill rather than on a catalogue total, because the sum of per-skill counts inflates
 > with catalogue breadth and flattens the rarity contrast. `openspec/changes/skill-match-sort/`
 > carries the current specification.
+>
+> The generator also ended up stricter than sketched here: it takes its path as an
+> argument, treats only a MISSING registry as a first run, and refuses a present-but-
+> empty one — because any other read error silently rewriting positions is exactly the
+> corruption the append-only rule exists to prevent. Read `internal/dict/skillvec/gen`,
+> not the sketch below.
 
 **Goal:** Order the jobs feed by how well a vacancy's skills match the signed-in candidate's, using an IDF-weighted skill vector ranked by Meilisearch's own vector search.
 

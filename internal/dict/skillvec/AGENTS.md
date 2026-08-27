@@ -47,7 +47,7 @@ skill (`insights_facet_stats`, populated by `cmd/rollup-facets` — no worker of
 own). Rare skills weigh more: an overlap on `git` says nothing, an overlap on
 `erlang` says a great deal.
 
-```
+```text
 idf(s) = ln((maxCount + 1) / (count(s) + 1)) + 1
 ```
 
@@ -80,7 +80,7 @@ omits the field and leaves whatever is stored alone.
 ## Why the cosine is the score
 Vectors are unit length, so
 
-```
+```text
 cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
 ```
 

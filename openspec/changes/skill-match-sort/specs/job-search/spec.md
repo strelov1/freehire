@@ -15,9 +15,12 @@ The index SHALL declare:
   visa_sponsorship, salary_currency, salary_period, skills, salary_min,
   salary_max, experience_years_min, and `posted_ts`. The raw `remote` flag SHALL
   NOT be a filterable attribute (work_mode subsumes it).
-- **sortable attributes**: posted_at, created_at, salary_min, salary_max — the
-  four the endpoint accepts as `sort` values. (`created_at` was already accepted
-  and already declared in code; this list had drifted.)
+- **sortable attributes**: posted_at, created_at, enrichment.salary_min,
+  enrichment.salary_max. The endpoint's `sort` values are the bare names — a
+  request says `sort=salary_min`, which the handler maps to the nested attribute.
+  The two salary facets live under `enrichment`, the two dates do not, and this
+  list names the ATTRIBUTES rather than the aliases. (`created_at` was already
+  accepted and already declared in code; this list had drifted.)
 - **one embedder**, named for the skill vector it carries, declared as
   `userProvided` at the width `skill-match-sort` assigns. Being `userProvided`
   means Meilisearch SHALL NOT call any model: the vectors are supplied by the
