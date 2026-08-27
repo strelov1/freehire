@@ -16,6 +16,7 @@ import {
   facetAdd,
   facetRemove,
   filtersWithRole,
+  DEFAULT_JOB_SORT,
   type FacetState,
   type JobFilters,
 } from './facetModel';
@@ -250,16 +251,38 @@ describe('sign transitions (pure)', () => {
   });
 });
 
-// The CV-similarity sort mode (and its `sort=cv` URL param) was removed along with
-// /me/recommendations — JobFilters no longer has a `sort` field at all. A
-// pre-existing shared `?sort=cv` link must not error; it should read exactly like
-// a URL with no `sort` param at all (falls back to the default "Newest" feed).
-describe('sort param removal', () => {
+// `sort` came back for the profile-match feed, but only as a two-value vocabulary:
+// the default freshest-first ordering and `match`. Every other value — including the
+// retired `sort=cv` — reads as the default rather than erroring, because shared links
+// and saved searches still carry old ones.
+describe('sort', () => {
   it('ignores a legacy sort=cv param — falls back to the default feed, not an error', () => {
     expect(filtersFromParams(new URLSearchParams('sort=cv'))).toEqual(filtersFromParams(new URLSearchParams('')));
   });
 
-  it('never serializes a sort param', () => {
+  it('ignores an unknown sort value', () => {
+    expect(filtersFromParams(new URLSearchParams('sort=bogus')).sort).toBe(DEFAULT_JOB_SORT);
+  });
+
+  it('round-trips the match sort', () => {
+    expect(filtersFromParams(new URLSearchParams('sort=match')).sort).toBe('match');
+    expect(filtersToParams({ ...emptyFilters(), sort: 'match' }).get('sort')).toBe('match');
+  });
+
+  it('keeps a match sort alongside the other filters', () => {
+    const f = filtersFromParams(new URLSearchParams('sort=match&countries=DE'));
+    expect(f.sort).toBe('match');
+    expect(must(f.facets.countries).include).toEqual(['DE']);
+  });
+
+  // A signed-out visitor opening a shared match link must keep the param: the server
+  // degrades the ordering for them, and signing in should then just work.
+  it('preserves the match sort through a params round trip', () => {
+    const f = filtersFromParams(new URLSearchParams('sort=match'));
+    expect(filtersToParams(f).get('sort')).toBe('match');
+  });
+
+  it('never serializes the default sort', () => {
     expect(filtersToParams(emptyFilters()).get('sort')).toBeNull();
     expect(new URLSearchParams(savedSearchQuery(withSkills({ include: ['go'] }))).get('sort')).toBeNull();
   });

@@ -8,6 +8,7 @@ import { saveJobFilters } from './filterStorage';
 import {
   type FacetState,
   type JobFilters,
+  type JobSort,
   type Sign,
   emptyFacet,
   emptyFilters,
@@ -94,6 +95,13 @@ export class FilterStore {
   // Discrete inputs (clicked/toggled): apply immediately via setNow.
   setVisa(on: boolean) {
     this.#url.setNow({ ...this.#url.value, visa: on });
+  }
+
+  /** Switch the feed ordering. setNow, not setSoon: this is a discrete choice from a
+   *  select, not a dragged gesture, and it re-orders the whole feed — debouncing it
+   *  would leave the old order on screen with no indication anything is coming. */
+  setSort(sort: JobSort) {
+    this.#url.setNow({ ...this.#url.value, sort });
   }
 
   /** Toggle a facet between match-all (AND) and match-any (OR) of its included values. */

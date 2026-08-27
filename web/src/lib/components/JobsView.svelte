@@ -19,6 +19,7 @@
   import {
     FilterStore,
     filtersToParams,
+    type JobSort,
     activeFilterCount,
     generalCountsCoverRole,
   } from '$lib/filters';
@@ -685,6 +686,28 @@
   }
 </script>
 
+<!-- The feed's ordering control, handed to ListToolbar so it sits in the shared
+     toolbar (mobile) / above the list (desktop) — same shape as the company catalog's
+     sortSelect. Rendered only under `matchFilterAvailable`: "Best match" needs profile
+     skills to rank against, and an option that silently does nothing is worse than an
+     absent one. The URL param is NOT cleared when it disappears — the server degrades
+     the ordering for a caller it cannot serve, so a shared match link stays intact and
+     starts working the moment its opener signs in. -->
+{#snippet sortSelect()}
+  <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+    <span class="hidden sm:inline">Sort</span>
+    <select
+      aria-label="Sort jobs"
+      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+      value={filters.value.sort}
+      onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
+    >
+      <option value="newest">Newest</option>
+      <option value="match">Best match</option>
+    </select>
+  </label>
+{/snippet}
+
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
@@ -714,6 +737,7 @@
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
+      sortControl={matchFilterAvailable ? sortSelect : undefined}
     />
 
     <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;

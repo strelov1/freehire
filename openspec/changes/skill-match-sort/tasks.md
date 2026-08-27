@@ -37,7 +37,7 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 ## 7. The SPA
 
 - [ ] 7.1 Accept `match` in the sort vocabulary and round-trip it through the URL, including for a signed-out visitor opening a shared link
-- [ ] 7.2 Offer the option in the sort selector to signed-in visitors whose profile has skills
+- [x] 7.2 Offer the option in the sort selector to signed-in visitors whose profile has skills
 
 ## 8. Rollout documentation
 

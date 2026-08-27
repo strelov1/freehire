@@ -35,7 +35,20 @@ export interface JobFilters {
    *  `0` is a real bound — the jobs stating no prior experience is required — so
    *  every read of this field must test for null, never for falsiness. */
   experienceYearsMax: number | null;
+  /** Feed ordering. Only two values exist: the default freshest-first, and `match`,
+   *  which ranks by how well a vacancy's skills overlap the signed-in caller's
+   *  profile. The server degrades `match` to the default for anyone it cannot serve
+   *  it to — anonymous, no profile, no skills — so this is never gated client-side
+   *  beyond hiding the control. */
+  sort: JobSort;
 }
+
+/** The feed's ordering vocabulary. Deliberately two values: this is not a general
+ *  sort control (the API also accepts created_at and the salary bounds), it is the
+ *  profile-match feed plus its default. */
+export type JobSort = 'newest' | 'match';
+
+export const DEFAULT_JOB_SORT: JobSort = 'newest';
 
 /** Splits every raw query value on comma and flattens the result, dropping
  *  empty fragments (a stray comma) — so a repeated key (`skills=go&skills=react`)
@@ -63,6 +76,7 @@ export function emptyFilters(): JobFilters {
     salaryMin: null,
     postedWithinDays: null,
     experienceYearsMax: null,
+    sort: DEFAULT_JOB_SORT,
   };
 }
 
@@ -84,6 +98,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
   if (f.experienceYearsMax != null) p.set('experience_years_max', String(f.experienceYearsMax));
+  if (f.sort !== DEFAULT_JOB_SORT) p.set('sort', f.sort);
   return p;
 }
 
@@ -138,6 +153,11 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   const rawYears = p.get('experience_years_max')?.trim() ?? '';
   const years = Number(rawYears);
   f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
+  // Anything but the one recognized value reads as the default — including the retired
+  // `sort=cv`. Shared links and saved searches still carry old sort params, and the
+  // same rule the backend applies (ignore, never refuse) has to hold here or the two
+  // would disagree about what a stale link means.
+  f.sort = p.get('sort') === 'match' ? 'match' : DEFAULT_JOB_SORT;
   return f;
 }
 
