@@ -4,7 +4,7 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 1. The vocabulary
 
-- [ ] 1.1 Expose the skill dictionary's canonical slugs as `skilltag.Canonicals()` — sorted, deduped, a fresh slice per call, covering both the word- and phrase-alias tables
+- [x] 1.1 ~~Expose the skill dictionary's canonical slugs as `skilltag.Canonicals()`~~ — **already exists** at `internal/dict/skilltag/labels.go:377`, feeding `Labels()` and the SPA's skill catalog through `cmd/gen-contracts`. It is strictly wider than planned, drawing from all five alias tiers (word, phrase, shared/resume/category-scoped acronyms) rather than two. Measured: all tiers together yield the same **749** canonicals, and none is reachable only through an acronym — so the vector width and every disk figure in `design.md` stand.
 
 ## 2. The vector
 
