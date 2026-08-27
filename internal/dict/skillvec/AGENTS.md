@@ -63,19 +63,21 @@ Two more deliberate choices:
 - the result is floored at 1, so a skill every posting names still contributes
   something rather than vanishing from the vector entirely.
 
-`Ready()` separates "no snapshot loaded" from "this job has no skills". Callers must
-not conflate them: the first is an absence of knowledge and leaves a stored vector
-alone; the second is knowledge of an absence and clears it.
+An unloaded snapshot and a job with no skills look the same downstream, and that is
+forced rather than chosen: with the embedder declared, Meilisearch rejects a document
+that omits `_vectors`, so there is no "leave it alone" option to express. Both write
+the null opt-out. The cost is that documents written while the rollup is unavailable
+lose their vectors until the next rebuild — the indexers log loudly for that reason.
 
 ## Why `Vector` returns nil rather than a zero vector
 A zero vector is not "no opinion" — it is a document Meilisearch rejects, and a query
 that ranks against nothing. So `Vector` reports an absence: no weights loaded, no
 skills given, or no slug recognised all yield nil.
 
-What the caller does with that nil depends on WHY (see `Ready()`): with weights loaded
-it writes an explicit clear, because the index merges document fields and an omission
-would leave a stale vector ranking a job by skills it no longer has; with no weights it
-omits the field and leaves whatever is stored alone.
+The caller turns that nil into `"_vectors":{"skills":null}` — Meilisearch's documented
+opt-out. It is not an omission: the index merges document fields, so omitting would
+leave a stale vector ranking a job by skills it no longer has, AND a declared embedder
+makes the engine reject a document with no `_vectors` at all.
 
 ## Why the cosine is the score
 Vectors are unit length, so

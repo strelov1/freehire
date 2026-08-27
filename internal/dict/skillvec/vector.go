@@ -55,12 +55,6 @@ func WeightsFromCounts(counts map[string]int64) Weights {
 	return Weights{byPosition: byPosition}
 }
 
-// Ready reports whether these weights can build vectors at all. It distinguishes two
-// states a caller must NOT conflate: "the rarity snapshot is loaded and this job simply
-// has no recognisable skills" from "no snapshot is loaded, so nothing can be said".
-// The first is knowledge worth writing down; the second is an absence to leave alone.
-func (w Weights) Ready() bool { return len(w.byPosition) > 0 }
-
 // MarshalJSON serialises the weights as a plain array, so they can be cached between
 // requests. Without this the unexported field would encode as `{}` and decode as the
 // zero value — a cache that answers "no weights" on every hit, disabling the match

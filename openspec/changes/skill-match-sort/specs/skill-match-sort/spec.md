@@ -72,12 +72,12 @@ stored vector.
 - **THEN** weight loading succeeds and produces weights that build no vectors,
   rather than failing indexing or producing an unweighted ranking
 
-#### Scenario: Unloadable weights leave stored vectors alone
+#### Scenario: Unloadable weights still produce an indexable document
 
 - **WHEN** a document is built while no weights could be loaded
-- **THEN** it omits the vector field entirely rather than clearing it, so an index
-  already carrying vectors keeps them — an absence of knowledge is not knowledge of
-  an absence
+- **THEN** it carries the clearing value rather than omitting the field, so the engine
+  accepts it and the posting stays searchable — losing its match ordering until a
+  rebuild with weights restores it
 
 ### Requirement: Vector ordering rewards overlap and coverage together
 
@@ -143,10 +143,18 @@ Every code path that builds an index document SHALL supply the weights. The
 weights SHALL be a parameter of document construction rather than a field a caller
 may attach afterwards, so that a path which omits them fails to compile.
 
-A document whose weights are loaded but whose skills yield no vector SHALL carry an
-explicit CLEARING value, not an omission: the index merges document fields rather than
-replacing them, so an omitted field leaves a previously stored vector in place. Only a
-document built without loaded weights SHALL omit the field.
+Every document SHALL carry the vector field, with either a vector or an explicit
+clearing value. It SHALL NEVER be omitted, for two independent reasons: the index
+merges document fields rather than replacing them, so an omission leaves a previously
+stored vector in place; and an index with a declared embedder REJECTS a document that
+omits the field, which would drop the posting out of the index entirely rather than
+merely out of the match ordering.
+
+The second reason overrides a distinction that would otherwise be worth drawing. A
+document built while the rarity weights are unavailable therefore also carries the
+clearing value and loses its vector, even though nothing is known about its skills.
+That is a deliberate trade: a lost vector costs an ordering the next rebuild restores,
+while a rejected document costs a searchable job.
 
 #### Scenario: An indexed job carries its vector
 

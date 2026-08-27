@@ -125,8 +125,8 @@ func TestASkillListedTwiceCountsOnce(t *testing.T) {
 }
 
 func TestWeightsFromCountsRejectsAnEmptySnapshot(t *testing.T) {
-	if WeightsFromCounts(nil).Ready() {
-		t.Error("an empty snapshot produced usable weights")
+	if got := WeightsFromCounts(nil).Vector([]string{registry[0]}); got != nil {
+		t.Errorf("a nil snapshot produced %v, want no vector", got)
 	}
 	if got := WeightsFromCounts(map[string]int64{}).Vector([]string{registry[0]}); got != nil {
 		t.Errorf("an empty snapshot produced %v, want no vector", got)

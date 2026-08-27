@@ -64,25 +64,29 @@ func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
 	}
 }
 
-// Weights being unavailable is NOT the same as a job having no skills, and the
-// difference matters: "no weights" means the rarity rollup has not run or failed, and
-// wiping every vector a rebuild wrote because a drain wave could not read a snapshot
-// would be a self-inflicted outage of the whole sort. So an unweighted document omits
-// the key entirely and leaves whatever is stored alone.
-func TestFromJobWithoutWeightsLeavesTheStoredVectorAlone(t *testing.T) {
+// The key is present even with no weights loaded, and this is NOT a nicety: with the
+// embedder declared, Meilisearch rejects a document that omits it outright ("no vectors
+// provided for document"). Omitting would drop the posting out of the index entirely,
+// which costs a searchable job — far worse than the lost ordering a null costs, which
+// the next rebuild repairs.
+func TestFromJobWithoutWeightsStillCarriesTheKey(t *testing.T) {
 	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
-	if doc.Vectors != nil {
-		t.Errorf("Vectors = %v; with no weights loaded the key must be absent, not a null clear", doc.Vectors)
+	v, ok := doc.Vectors[SkillEmbedder]
+	if !ok {
+		t.Fatalf("no %q key with unloaded weights; the engine would reject the document", SkillEmbedder)
+	}
+	if v != nil {
+		t.Errorf("vector = %v, want nil", v)
 	}
 	b, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if bytes.Contains(b, []byte(`"_vectors"`)) {
-		t.Errorf("serialised as %s, want no _vectors key at all", b)
+	if !bytes.Contains(b, []byte(`"_vectors":{"skills":null}`)) {
+		t.Errorf("serialised as %s, want the documented null opt-out", b)
 	}
 }
 

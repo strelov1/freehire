@@ -184,10 +184,13 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 	})
 }
 
-// TestIntegration_EnsureIndexResetsExistingEmbedder guards the merge-semantics
-// trap: facetSettings omits the embedder, but a Meilisearch settings update only
-// MERGES, so an embedder a prior version put on the `jobs` index would survive and
-// keep embedding on every facet reindex. EnsureIndex must reset it explicitly.
+// TestIntegration_EnsureIndexResetsExistingEmbedder guards the merge-semantics trap:
+// a Meilisearch settings update only MERGES, and merges embedders BY KEY, so one a
+// prior version put on the `jobs` index would survive every update that does not name
+// it — and keep embedding on every facet reindex. EnsureIndex must strip it.
+//
+// It must strip it WITHOUT taking the skill embedder with it, which is the whole
+// reason the reset runs before the settings rather than after (see ensure()).
 func TestIntegration_EnsureIndexResetsExistingEmbedder(t *testing.T) {
 	ctx := context.Background()
 	c := startMeili(t)
@@ -217,8 +220,11 @@ func TestIntegration_EnsureIndexResetsExistingEmbedder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetEmbedders: %v", err)
 	}
-	if len(emb) != 0 {
-		t.Errorf("EnsureIndex left embedders on the facet index: %v", emb)
+	if _, inherited := emb["manual"]; inherited {
+		t.Errorf("EnsureIndex left the inherited embedder on the facet index: %v", emb)
+	}
+	if _, ours := emb[SkillEmbedder]; !ours {
+		t.Errorf("EnsureIndex stripped the skill embedder along with the inherited one: %v", emb)
 	}
 }
 

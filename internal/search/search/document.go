@@ -84,22 +84,24 @@ type JobDocument struct {
 	// internal/dict/skillvec). Like Roles and RoleType it lives on the document rather
 	// than jobview.Job, so it never enters the public wire shape.
 	//
-	// It has THREE meaningful states, because the indexers push with PUT — Meilisearch's
-	// add-or-update, which MERGES fields rather than replacing the document:
+	// The key is ALWAYS present, and carries one of two values:
 	//
 	//   {skills: vec}   the job's vector.
-	//   {skills: nil}   serialises as `"skills":null` and CLEARS a stored vector. This is
-	//                   what a job that LOST its skills needs: omitting the key would
-	//                   merge, leaving the old vector in place and the posting ranking by
-	//                   skills it no longer has. Verified against a live engine.
-	//   nil             the key is absent, so whatever is stored is left untouched. Used
-	//                   ONLY when the rarity weights could not be loaded — an absence of
-	//                   knowledge, not knowledge of an absence. Clearing every vector a
-	//                   rebuild wrote because one drain wave could not read a snapshot
-	//                   would take the sort down by itself.
+	//   {skills: nil}   serialises as `"skills":null`, which is Meilisearch's documented
+	//                   opt-out. It both declines to provide a vector AND clears any
+	//                   previously stored one — the latter matters because the indexers
+	//                   push with PUT (add-or-update), which merges fields, so a job
+	//                   that lost its skills would otherwise keep ranking by them.
 	//
-	// `omitempty` is what distinguishes that third state from the first two.
-	Vectors map[string][]float32 `json:"_vectors,omitempty"`
+	// Omitting the key is NOT a third state: with the embedder declared, Meilisearch
+	// rejects the whole document ("no vectors provided for document"), which would drop
+	// the posting out of the index rather than merely out of the match ordering. That
+	// costs a searchable job; a lost vector costs an ordering the next rebuild restores.
+	//
+	// The consequence is worth naming: while the rarity weights are unavailable, every
+	// document written carries a null and loses its vector. The indexers log loudly for
+	// exactly this reason, and the next rebuild with weights repairs it.
+	Vectors map[string][]float32 `json:"_vectors"`
 }
 
 // SkillEmbedder is the name of the Meilisearch embedder carrying skill vectors. It
@@ -146,11 +148,10 @@ func FromJob(j db.Job, w skillvec.Weights) (JobDocument, error) {
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}
-	// Set the vector — or an explicit null that CLEARS a stored one — but only when the
-	// weights are loaded. See JobDocument.Vectors for why the three states differ.
-	if w.Ready() {
-		doc.Vectors = map[string][]float32{SkillEmbedder: w.Vector(j.Skills)}
-	}
+	// ALWAYS set the key. With the embedder declared, Meilisearch REJECTS any document
+	// that omits it — "no vectors provided for document" — so an omission is not a
+	// no-op, it drops the posting out of the index entirely.
+	doc.Vectors = map[string][]float32{SkillEmbedder: w.Vector(j.Skills)}
 	return doc, nil
 }
 
