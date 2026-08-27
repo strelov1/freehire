@@ -186,7 +186,18 @@ next write. Only a *position* change corrupts, and the registry forbids that.
 3. Resolve disk, then run a full rebuild — scheduled deliberately, not via the
    ordinary timer. Until it completes the sort returns only the handful of
    postings re-indexed since.
-4. Enable the SPA option.
+4. Verify by hand: `?sort=match` is honoured from step 1 onward regardless of the
+   SPA flag, precisely so the ordering can be checked on production before anyone
+   can click it.
+5. Set `PUBLIC_MATCH_SORT=1` and restart the web server.
+
+**The SPA ships dark.** The sort control is hidden behind a runtime flag
+(`web/src/lib/features.ts`, read from `$env/dynamic/public`) that defaults OFF.
+Between steps 1 and 5 the feature is fully deployed and fully invisible: a
+near-empty match feed reads as a broken product, not a new one, so the control
+only appears once someone has confirmed the rebuild landed. Because the flag is
+read at runtime, revealing it is an env edit plus a restart — no rebuild of the
+SPA, no redeploy.
 
 **Rollback:** remove the sort option and stop sending vectors. The stored vectors
 are inert — they cost disk and nothing else. Dropping the embedder declaration

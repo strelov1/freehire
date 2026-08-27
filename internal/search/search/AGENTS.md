@@ -128,6 +128,13 @@ indexers (`cmd/reindex`, `cmd/search-drain`, `internal/ingest/linkimport`).
    retro-fill 1.36M documents; until the rebuild lands, the match sort returns only
    what has been re-indexed since. It is a thin feed, not an error, so nothing alerts.
 
+That second hazard is why the SPA ships the control dark, behind `PUBLIC_MATCH_SORT`
+(default OFF, read at runtime — see `web/src/lib/features.ts`). The API honours
+`?sort=match` from the moment the binary rolls out whether or not that flag is set,
+which is exactly how the ordering gets verified on production before anyone can click
+it. Reveal order: deploy → settings → rebuild → verify by hand → flip the flag and
+restart web.
+
 `skillvec.Dimensions` is baked into the live settings. **Changing it requires a full
 rebuild**, and until that rebuild finishes the index rejects every document carrying
 the new width.

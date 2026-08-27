@@ -8,6 +8,8 @@
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { profileStore } from '$lib/profile.svelte';
+  import { env } from '$env/dynamic/public';
+  import { matchSortEnabled } from '$lib/features';
   import { computeClientMatch } from '$lib/jobMatch';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
@@ -225,6 +227,17 @@
   $effect(() => {
     if (!matchFilterAvailable) minMatch = null;
   });
+
+  // The match SORT rides the same profile precondition as the match slider, plus a
+  // runtime flag. It ships dark: the API accepts ?sort=match as soon as the binary is
+  // out, but it ranks against skill vectors that only exist once a full index rebuild
+  // has written them — before that the sort returns a near-empty feed, which reads as
+  // broken rather than new. The flag is what reveals the control once the rebuild has
+  // landed, and flipping it is an env change plus a restart, not a redeploy.
+  //
+  // The URL param stays honoured either way, which is deliberate: it is how the sort
+  // gets verified on production before anyone can click it.
+  const sortControlVisible = $derived(matchFilterAvailable && matchSortEnabled(env));
 
   let modalOpen = $state(false);
   let started = false;
@@ -737,7 +750,7 @@
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
-      sortControl={matchFilterAvailable ? sortSelect : undefined}
+      sortControl={sortControlVisible ? sortSelect : undefined}
     />
 
     <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;

@@ -43,3 +43,8 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 - [x] 8.1 Record in `internal/search/search/AGENTS.md` both ordering hazards: the embedder must exist in the live index before a binary queries it, and the vectors only exist after a full rebuild
 - [x] 8.2 Note in `CLAUDE.md`'s `reindex` bullet that a rebuild now also writes skill vectors, costs ~10 GB more, and runs materially longer
+
+## 9. Dark launch
+
+- [x] 9.1 Hide the sort control behind `PUBLIC_MATCH_SORT` (`web/src/lib/features.ts`), default OFF — the API honours `?sort=match` regardless, so the ordering can be verified on production before the control appears
+- [x] 9.2 Document the flag and the reveal step in `web/.env.example`, the change's design, and `internal/search/search/AGENTS.md`
