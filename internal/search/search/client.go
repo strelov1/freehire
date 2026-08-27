@@ -169,23 +169,14 @@ func NewClient(url, key string, opts ...Option) *Client {
 	return c
 }
 
-// EnsureIndex creates the facet/keyword jobs index (no embedder) and applies its
-// settings. It is idempotent — safe to call on every reindex. This is the fast
+// EnsureIndex creates the facet/keyword jobs index and applies its settings,
+// including the userProvided skill embedder behind the match sort. It is idempotent — safe to call on every reindex. This is the fast
 // production index that all default (keyword) traffic and faceting hit.
 func (c *Client) EnsureIndex(ctx context.Context) error {
-	if err := c.ensure(ctx, c.facet, facetIndexUID, primaryKey, facetSettings()); err != nil {
-		return err
-	}
-	// Meilisearch settings updates MERGE: facetSettings omits the embedder, but an
-	// omitted (nil or empty) embedders map LEAVES any embedder a prior version put
-	// on this index in place — so a `jobs` index that once carried the embedder
-	// would keep embedding on every facet reindex, defeating the split. Reset it
-	// explicitly. On an index that never had one this is a harmless no-op.
-	task, err := c.facet.ResetEmbeddersWithContext(ctx)
-	if err != nil {
-		return fmt.Errorf("search: reset facet embedders: %w", err)
-	}
-	return c.awaitTask(ctx, c.facet, task.TaskUID)
+	// ensure() clears inherited embedders before applying these settings, so the live
+	// set ends up as exactly the one facetSettings declares — the skill embedder and
+	// nothing else. See ensure() for why the order is load-bearing.
+	return c.ensure(ctx, c.facet, facetIndexUID, primaryKey, facetSettings())
 }
 
 // Rebuild is a fresh-index build session for a full reindex. Documents are streamed
@@ -223,16 +214,10 @@ func (r *Rebuild) Prepare(ctx context.Context) error {
 		return err
 	}
 	r.rebuild = r.c.manager.Index(r.rebuildUID)
-	if err := r.c.ensure(ctx, r.rebuild, r.rebuildUID, primaryKey, r.settings); err != nil {
-		return err
-	}
-	// The facet index carries no embedder; reset it in case a prior version left one
-	// (mirrors EnsureIndex).
-	task, err := r.rebuild.ResetEmbeddersWithContext(ctx)
-	if err != nil {
-		return fmt.Errorf("search: reset rebuild embedders: %w", err)
-	}
-	return r.c.awaitTask(ctx, r.rebuild, task.TaskUID)
+	// ensure() clears inherited embedders first, so the rebuild index carries exactly
+	// the embedders these settings declare — which is how the skill embedder reaches
+	// production at all.
+	return r.c.ensure(ctx, r.rebuild, r.rebuildUID, primaryKey, r.settings)
 }
 
 // Push enqueues a batch into the rebuild index WITHOUT waiting for it to finish —
@@ -313,6 +298,25 @@ func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
 // index (slug-keyed, see company.go) differ only in uid, primary key, and settings.
 func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, pk string, settings *meilisearch.Settings) error {
 	if err := c.createIndex(ctx, idx, uid, pk); err != nil {
+		return err
+	}
+	// Reset embedders BEFORE applying the settings, never after.
+	//
+	// Meilisearch merges settings updates, and it merges `embedders` BY KEY: an update
+	// naming one embedder leaves any other in place. So the reset is still needed — an
+	// index that a prior version gave a model-backed embedder would otherwise keep
+	// embedding every document forever — but doing it afterwards deletes the embedder
+	// the settings just declared. That is exactly what used to happen here, and it made
+	// a rebuild ship an index with no skill embedder while every unit test still passed.
+	//
+	// Ordering it first means the live embedder set ends up as EXACTLY what `settings`
+	// declares: nothing inherited, nothing dropped. An index with no embedder is
+	// unaffected either way.
+	reset, err := idx.ResetEmbeddersWithContext(ctx)
+	if err != nil {
+		return fmt.Errorf("search: reset embedders on %s: %w", uid, err)
+	}
+	if err := c.awaitTask(ctx, idx, reset.TaskUID); err != nil {
 		return err
 	}
 	st, err := idx.UpdateSettingsWithContext(ctx, settings)

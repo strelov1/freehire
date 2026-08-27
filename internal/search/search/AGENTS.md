@@ -139,6 +139,18 @@ restart web.
 rebuild**, and until that rebuild finishes the index rejects every document carrying
 the new width.
 
+**The embedder reset runs BEFORE the settings update, never after.** Meilisearch merges
+settings, and it merges `embedders` BY KEY — an update naming one embedder leaves any
+other in place — so the reset still has to happen or an index a prior version gave a
+model-backed embedder would keep embedding forever. But doing it afterwards deletes the
+embedder the settings just declared. That shipped once: `EnsureIndex` and
+`Rebuild.Prepare` each declared the skill embedder and immediately reset it, so a
+rebuild would have produced an index with no embedder while every unit test passed and
+nothing logged. The order now lives in `ensure()` alone, and
+`embedder_integration_test.go` asserts the embedder survives both paths against a real
+engine — which is the only place that claim can be tested, since a unit test of
+`facetSettings()` cannot see what the index ends up with.
+
 A rebuild with vectors is materially slower and larger than one without — the cost is
 HNSW graph construction, so it lands on full rebuilds, not on incremental
 `search_outbox` pushes. Schedule it deliberately; `freehire-reindexw` has outgrown its
