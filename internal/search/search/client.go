@@ -316,12 +316,17 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, 
 	if err != nil {
 		return fmt.Errorf("search: reset embedders on %s: %w", uid, err)
 	}
-	if err := c.awaitTask(ctx, idx, reset.TaskUID); err != nil {
-		return err
-	}
+	// Queue the settings WITHOUT awaiting the reset. Meilisearch runs one serial task
+	// queue per index, so submission order IS execution order — the reset still lands
+	// first. Awaiting it here instead would leave a live index embedder-less for the
+	// round trip between the two, and a match-sort query arriving in that window gets a
+	// 400. Both task ids are awaited below, in the order they were queued.
 	st, err := idx.UpdateSettingsWithContext(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("search: update settings: %w", err)
+	}
+	if err := c.awaitTask(ctx, idx, reset.TaskUID); err != nil {
+		return err
 	}
 	return c.awaitTask(ctx, idx, st.TaskUID)
 }

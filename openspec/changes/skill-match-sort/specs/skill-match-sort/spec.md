@@ -95,14 +95,15 @@ scarce skill the candidate happens to hold CAN outrank a broader match on common
 ones, and SHOULD: that is what weighting by rarity means. The system SHALL NOT cap
 or flatten the weights to force a count-based order.
 
-A vector SHALL be absent — not zero-valued — when it would be meaningless: no
-weights available, no skills given, or no skill recognised. An absent vector is an
-omission the caller propagates, never a vector that ranks against everything.
+Vector CONSTRUCTION SHALL report no vector — not a zero-valued one — when the result
+would be meaningless: no weights available, no skills given, or no skill recognised. A
+zero vector is not "no opinion"; it ranks against everything.
 
-The two absences SHALL be distinguished where they reach the index. A job whose
-skills are gone SHALL have any stored vector CLEARED, since the index merges rather
-than replaces documents and an omission would leave it ranking by skills it no longer
-has. A job built without loaded weights SHALL leave the stored vector untouched.
+Document SERIALISATION is a separate question and answers it uniformly: the document
+always carries the vector field, with the clearing value standing in for every one of
+those cases. The two layers deliberately differ — construction distinguishes why there
+is no vector, the wire shape cannot, because a declared embedder rejects a document
+that omits the field.
 
 #### Scenario: A well-targeted vacancy outranks both extremes
 

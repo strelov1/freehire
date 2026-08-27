@@ -208,15 +208,20 @@ func TestIntegration_EnsureIndexResetsExistingEmbedder(t *testing.T) {
 	if _, err := c.facet.WaitForTaskWithContext(ctx, task.TaskUID, 50*time.Millisecond); err != nil {
 		t.Fatalf("await embedder set: %v", err)
 	}
-	if emb, err := c.facet.GetEmbeddersWithContext(ctx); err != nil || len(emb) == 0 {
-		t.Fatalf("precondition: embedder should be set (emb=%v err=%v)", emb, err)
+	emb, err := c.facet.GetEmbeddersWithContext(ctx)
+	if err != nil {
+		t.Fatalf("precondition: GetEmbedders: %v", err)
+	}
+	if _, ok := emb["manual"]; !ok {
+		t.Fatalf("precondition: the inherited embedder should be set, got %v", emb)
 	}
 
-	// EnsureIndex must strip it, leaving the facet index embedder-free.
+	// EnsureIndex must strip the inherited one and leave the skill embedder standing —
+	// not leave the index embedder-free, which is what it used to do.
 	if err := c.EnsureIndex(ctx); err != nil {
 		t.Fatalf("EnsureIndex (reset): %v", err)
 	}
-	emb, err := c.facet.GetEmbeddersWithContext(ctx)
+	emb, err = c.facet.GetEmbeddersWithContext(ctx)
 	if err != nil {
 		t.Fatalf("GetEmbedders: %v", err)
 	}

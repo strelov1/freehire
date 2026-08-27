@@ -142,9 +142,19 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 		t.Fatalf("IndexJobs (cleared): %v", err)
 	}
 
-	// The job must still be there and findable by text — clearing a vector is not a
-	// deletion.
-	res, err := c.Search(ctx, SearchParams{Query: "Go Engineer", Limit: 10})
+	// The claim itself: the job no longer ranks by the vector it used to carry.
+	res, err := c.Search(ctx, SearchParams{Vector: w.Vector([]string{"go"}), Limit: 10})
+	if err != nil {
+		t.Fatalf("vector Search after clearing: %v", err)
+	}
+	for _, h := range res.Hits {
+		if h.ID == 1 {
+			t.Error("the job still ranks by a vector it no longer has — the clear merged instead of replacing")
+		}
+	}
+
+	// And it is still there: clearing a vector is not a deletion.
+	res, err = c.Search(ctx, SearchParams{Query: "Go Engineer", Limit: 10})
 	if err != nil {
 		t.Fatalf("keyword Search: %v", err)
 	}
