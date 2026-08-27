@@ -517,7 +517,7 @@ func Register(app *fiber.App, cfg Config) {
 		sitemapCompanies = companySitemapIndex{c: cfg.Search}
 	}
 	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies)
-	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache)
+	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
 	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
 	// search and a profile-aware conversation cannot disagree about what it says.
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})

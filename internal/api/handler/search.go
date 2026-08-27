@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"context"
 	"slices"
 	"time"
 
-	"context"
-
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/dict/skillvec"
+	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -31,17 +33,40 @@ type searchHandlers struct {
 	// a nil cache (search configured but no Redis) simply recomputes every request,
 	// the shape every facet test but the caching ones runs under.
 	cache cache.Cache
+	// userProfile reads the caller's profile skills for the match sort. Nil disables
+	// that sort entirely, which is exactly how it degrades everywhere else.
+	userProfile profileReader
+	// facetStats reads the skill-rarity snapshot the match sort weights by.
+	// *db.Queries in production; a fake in tests.
+	facetStats facetStatsReader
 }
 
-func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries, c cache.Cache) *searchHandlers {
-	return &searchHandlers{search: search, descriptions: queries, queries: queries, facets: facets, cache: c}
+// profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
+// inject a fake. Only the skills are read here — the match sort has no opinion on
+// location preferences or specializations.
+type profileReader interface {
+	Get(ctx context.Context, userID int64) (userprofile.Profile, error)
+}
+
+// facetStatsReader reads the facet-distribution snapshot backing the skill-rarity
+// weights. It mirrors search.FacetStatsReader rather than importing it as the
+// handler's dependency, so the fake a test injects stays local to this package.
+type facetStatsReader interface {
+	ListFacetStats(ctx context.Context) ([]db.InsightsFacetStat, error)
+}
+
+func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries, c cache.Cache, profiles profileReader) *searchHandlers {
+	return &searchHandlers{
+		search: search, descriptions: queries, queries: queries, facets: facets, cache: c,
+		userProfile: profiles, facetStats: queries,
+	}
 }
 
 func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 	// Literal routes are registered before the /jobs/:slug param route (see
 	// Register) so they are not read as slugs.
 	readLimit := publicReadLimiter(mw.throttler)
-	api.Get("/jobs/search", readLimit, h.SearchJobs)
+	api.Get("/jobs/search", readLimit, mw.optional, h.SearchJobs)
 	// Agent search: same query as /jobs/search, but always full descriptions in a
 	// selectable format for programmatic consumers. Public, like the other reads.
 	api.Get("/agent/jobs/search", agentSearchLimiter(mw.throttler), h.AgentSearchJobs)
@@ -96,6 +121,71 @@ var searchSortable = map[string]string{
 	"salary_max": "enrichment.salary_max",
 }
 
+// sortMatch is the profile-match sort. Unlike every value in searchSortable it names
+// no index attribute: it ranks by cosine against the caller's own skill vector, so it
+// is resolved from the request rather than looked up in that table.
+const sortMatch = "match"
+
+// skillWeightsCacheTTL bounds how stale the skill-rarity weights may be. They change
+// only when cmd/rollup-facets runs, and the design treats weight drift as harmless —
+// a stale weight nudges the order, it cannot corrupt a stored vector. So this is
+// generous where facetCacheTTL is deliberately short.
+const skillWeightsCacheTTL = 15 * time.Minute
+
+// skillWeightsCacheKey is a constant: the snapshot is catalogue-wide, identical for
+// every caller.
+const skillWeightsCacheKey = "search:skill-weights:v1"
+
+// matchVector builds the caller's skill vector for ?sort=match, or nil when the sort
+// was not asked for or cannot be served.
+//
+// EVERY "cannot" degrades to the default feed: no session, no profile service wired,
+// no profile, no skills, no recognised skills, no weights. A saved search or a shared
+// link carrying sort=match must never 400 when opened by someone it cannot be served
+// for — the same reason the jobs list ignores unknown filters rather than refusing
+// them.
+func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
+	if c.Query("sort") != sortMatch || h.userProfile == nil || h.facetStats == nil {
+		return nil
+	}
+	// auth.UserID is what mw.optional populates; it reports false for an anonymous
+	// caller rather than erroring. requireUserID is the wrong helper here — its 401 is
+	// exactly the outcome this must avoid.
+	userID, ok := auth.UserID(c)
+	if !ok {
+		return nil
+	}
+	profile, err := h.userProfile.Get(c.Context(), userID)
+	if err != nil || len(profile.Skills) == 0 {
+		return nil
+	}
+	weights, err := h.skillWeights(c.Context())
+	if err != nil {
+		return nil
+	}
+	return weights.Vector(profile.Skills)
+}
+
+// skillWeights reads the rarity snapshot through a best-effort cache. The snapshot is
+// the whole facet distribution, so reading it per request would be a needless query
+// for a value identical across callers and near-constant in time. A nil cache, a
+// miss, or any cache error falls through to a live read.
+func (h *searchHandlers) skillWeights(ctx context.Context) (skillvec.Weights, error) {
+	if h.cache == nil {
+		return search.LoadSkillWeights(ctx, h.facetStats)
+	}
+	if cached, found, err := cache.GetJSON[skillvec.Weights](ctx, h.cache, skillWeightsCacheKey); err == nil && found {
+		return cached, nil
+	}
+	w, err := search.LoadSkillWeights(ctx, h.facetStats)
+	if err != nil {
+		return w, err
+	}
+	// Best-effort: a failed write just means the next request reloads.
+	_ = cache.SetJSON(ctx, h.cache, skillWeightsCacheKey, w, skillWeightsCacheTTL)
+	return w, nil
+}
+
 // SearchJobs runs a full-text/faceted keyword search over the jobs index. It is
 // public (unauthenticated) like the other job reads. Response: {"data": [job
 // view...], "meta": {total, limit, offset}} — results carry public_slug and never
@@ -131,10 +221,12 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
 
+	vector := h.matchVector(c)
 	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
 		Filter: buildSearchFilter(c),
-		Sort:   searchSort(c),
+		Sort:   searchSort(c, vector != nil),
+		Vector: vector,
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -151,7 +243,15 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 // Without a valid sort param, a no-text browse defaults to the freshest postings
 // first (posted_at desc) — relevance is meaningless for an empty query — while a
 // text query keeps relevance order (nil).
-func searchSort(c *fiber.Ctx) []string {
+//
+// ranked reports that the request carries a match vector. Meilisearch lets an explicit
+// sort directive take precedence over vector ranking, so returning one here would
+// silently discard the match order the caller asked for — not error, just quietly
+// serve something else.
+func searchSort(c *fiber.Ctx, ranked bool) []string {
+	if ranked {
+		return nil
+	}
 	attr, ok := searchSortable[c.Query("sort")]
 	if !ok {
 		if c.Query("q") == "" {

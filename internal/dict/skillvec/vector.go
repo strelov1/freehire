@@ -1,6 +1,10 @@
 package skillvec
 
-import "math"
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+)
 
 // Weights holds one factor per vector position: how much an overlap on the skill at
 // that position is worth. The zero value is usable and yields nil vectors — the
@@ -36,6 +40,28 @@ func WeightsFromCounts(counts map[string]int64, total int64) Weights {
 		byPosition[i] = float32(math.Log(float64(total+1)/float64(counts[skill]+1)) + 1)
 	}
 	return Weights{byPosition: byPosition}
+}
+
+// MarshalJSON serialises the weights as a plain array, so they can be cached between
+// requests. Without this the unexported field would encode as `{}` and decode as the
+// zero value — a cache that answers "no weights" on every hit, disabling the match
+// sort with nothing failing anywhere.
+func (w Weights) MarshalJSON() ([]byte, error) { return json.Marshal(w.byPosition) }
+
+// UnmarshalJSON restores weights from their cached form, rejecting any payload that
+// is neither empty nor exactly Dimensions wide. That check is the one that matters:
+// a short or long array would place weights at the wrong positions, which corrupts
+// the ranking rather than degrading it.
+func (w *Weights) UnmarshalJSON(b []byte) error {
+	var raw []float32
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	if len(raw) != 0 && len(raw) != Dimensions {
+		return fmt.Errorf("skillvec: weights payload is %d wide, want 0 or %d", len(raw), Dimensions)
+	}
+	w.byPosition = raw
+	return nil
 }
 
 // Vector builds the L2-normalised vector for a set of canonical skill slugs.

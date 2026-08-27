@@ -35,7 +35,10 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
 		Filter: withDeckExclusion(buildSearchFilter(c), excluded),
-		Sort:   searchSort(c),
+		// false: the deck sends no match vector. It is an obvious candidate for the
+		// match sort — it is already authenticated — but ordering the deck is its own
+		// product decision, so it keeps attribute sorting until that is made.
+		Sort:   searchSort(c, false),
 		Limit:  limit,
 		Offset: offset,
 	})

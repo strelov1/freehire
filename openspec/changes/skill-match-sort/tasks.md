@@ -30,9 +30,9 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 6. The endpoint
 
-- [ ] 6.1 Attach optional auth to `/jobs/search` and build the caller's vector for `sort=match`, reading the weights through the handler's cache rather than per request
-- [ ] 6.2 Suppress the attribute sort directive whenever a vector is sent, so the engine does not discard the match ordering
-- [ ] 6.3 Cover all four request cases: eligible caller ranked by vector; anonymous, profile-less, and skill-less callers served the default feed with `200`; the sort composing with facet filters
+- [x] 6.1 Attach optional auth to `/jobs/search` and build the caller's vector for `sort=match`, reading the weights through the handler's cache rather than per request
+- [x] 6.2 Suppress the attribute sort directive whenever a vector is sent, so the engine does not discard the match ordering
+- [x] 6.3 Cover all four request cases: eligible caller ranked by vector; anonymous, profile-less, and skill-less callers served the default feed with `200`; the sort composing with facet filters
 
 ## 7. The SPA
 

@@ -1,6 +1,7 @@
 package skillvec
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 )
@@ -142,5 +143,52 @@ func TestSkillAbsentFromCountsIsTreatedAsRare(t *testing.T) {
 	if dot(unseen, q) <= dot(common, q) {
 		t.Errorf("the unseen skill scored %f, not more than the ubiquitous one's %f",
 			dot(unseen, q), dot(common, q))
+	}
+}
+
+// Weights are cached between requests, so they must survive a JSON round trip. The
+// state lives in an unexported field, which without explicit marshalling would
+// serialise as `{}` and silently come back as the zero value — a cache that returns
+// "no weights" on every hit, disabling the match sort with nothing failing.
+func TestWeightsSurviveAJSONRoundTrip(t *testing.T) {
+	w := testWeights()
+	b, err := json.Marshal(w)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var got Weights
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	before, after := w.Vector([]string{registry[0], registry[3]}), got.Vector([]string{registry[0], registry[3]})
+	if after == nil {
+		t.Fatal("round-tripped weights build no vector")
+	}
+	for i := range before {
+		if before[i] != after[i] {
+			t.Fatalf("vector differs at position %d: %f before, %f after", i, before[i], after[i])
+		}
+	}
+}
+
+func TestZeroWeightsSurviveAJSONRoundTrip(t *testing.T) {
+	b, err := json.Marshal(Weights{})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var got Weights
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if v := got.Vector([]string{registry[0]}); v != nil {
+		t.Errorf("round-tripped zero Weights built %v, want nil", v)
+	}
+}
+
+// A cached payload of the wrong width would place weights at the wrong positions,
+// which is the one failure mode that corrupts rather than degrades.
+func TestWeightsRejectAWrongWidthPayload(t *testing.T) {
+	if err := json.Unmarshal([]byte(`[1,2,3]`), &Weights{}); err == nil {
+		t.Error("a payload narrower than Dimensions was accepted")
 	}
 }
