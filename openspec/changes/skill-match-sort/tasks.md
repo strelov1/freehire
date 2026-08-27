@@ -16,7 +16,7 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 3. Wiring the weights
 
-- [ ] 3.1 Add `search.LoadSkillWeights` reading the `skills` rows of `insights_facet_stats`; a snapshot with no skill rows yields the zero `Weights`, never an error
+- [x] 3.1 Add `search.LoadSkillWeights` reading the `skills` rows of `insights_facet_stats`; a snapshot with no skill rows yields the zero `Weights`, never an error
 
 ## 4. The indexed document
 
