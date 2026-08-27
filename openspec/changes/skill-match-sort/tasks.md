@@ -25,8 +25,8 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 5. The engine
 
-- [ ] 5.1 Declare the `userProvided` embedder in the index settings at `skillvec.Dimensions`, binary quantization off, with a test asserting all three
-- [ ] 5.2 Add `SearchParams.Vector` and have `Search` send it with the hybrid embedder directive at a semantic ratio of 1.0
+- [x] 5.1 Declare the `userProvided` embedder in the index settings at `skillvec.Dimensions`, binary quantization off, with a test asserting all three
+- [x] 5.2 Add `SearchParams.Vector` and have `Search` send it with the hybrid embedder directive at a semantic ratio of 1.0
 
 ## 6. The endpoint
 

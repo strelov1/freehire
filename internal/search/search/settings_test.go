@@ -4,11 +4,33 @@ import (
 	"testing"
 
 	"github.com/meilisearch/meilisearch-go"
+
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 )
 
-func TestFacetSettingsHasNoEmbedder(t *testing.T) {
-	if facetSettings().Embedders != nil {
-		t.Error("facetSettings() must not configure an embedder (keeps the facet reindex fast)")
+// The facet index carries exactly one embedder, and it must stay model-free: the
+// vectors are arithmetic over a finite dictionary, so a rebuild still contacts no
+// embedding service. A model-backed embedder here would turn every rebuild into a
+// full-catalogue inference run.
+func TestFacetSettingsDeclaresOneModelFreeEmbedder(t *testing.T) {
+	s := facetSettings()
+	if len(s.Embedders) != 1 {
+		t.Fatalf("facetSettings() declares %d embedders, want exactly 1", len(s.Embedders))
+	}
+	e, ok := s.Embedders[SkillEmbedder]
+	if !ok {
+		t.Fatalf("facetSettings() declares no %q embedder; it has %v", SkillEmbedder, s.Embedders)
+	}
+	if e.Source != meilisearch.UserProvidedEmbedderSource {
+		t.Errorf("embedder source = %q, want %q — no model may be called at index time",
+			e.Source, meilisearch.UserProvidedEmbedderSource)
+	}
+	if e.Dimensions != skillvec.Dimensions {
+		t.Errorf("embedder dimensions = %d, want %d; a mismatch makes the index reject every document",
+			e.Dimensions, skillvec.Dimensions)
+	}
+	if e.BinaryQuantized {
+		t.Error("binary quantization must stay off: on vectors this sparse it measured recall@20 of 10% against 95% unquantized, and lost the rare-skill signal entirely")
 	}
 }
 

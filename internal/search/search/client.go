@@ -1,6 +1,7 @@
 // Package search provides Meilisearch-backed full-text and faceted keyword search
 // over jobs. It owns the document shape and the single facet/keyword index
-// configuration (no embedder — the always-fresh production index), plus the
+// configuration — the always-fresh production index, carrying one `userProvided`
+// embedder for the skill vectors behind the match sort and no model-backed one — plus the
 // read/write helpers, so callers (the search handler and the reindex command) never
 // touch the meilisearch-go SDK directly. It also owns the TEI embedding calls (see
 // embed.go) that feed the pgvector-backed job_semantic_chunks table
@@ -21,11 +22,16 @@ import (
 	"time"
 
 	"github.com/meilisearch/meilisearch-go"
+
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 )
 
 const (
-	// facetIndexUID is the production search index: keyword + facets, NO embedder,
-	// so a full rebuild is ~25x faster than embedding every document. It serves all
+	// facetIndexUID is the production search index: keyword + facets, plus the
+	// `userProvided` skill embedder behind the match sort. No model is called at index
+	// time — that is what kept a full rebuild ~25x faster than embedding every document
+	// — but building the vector index is no longer free, so a rebuild is materially
+	// slower and larger than when the index carried no embedder at all. It serves all
 	// default (keyword) traffic and the facet analytics.
 	facetIndexUID = "jobs"
 	// facetRebuildUID is the throwaway index a full rebuild streams into before
@@ -446,6 +452,15 @@ type SearchParams struct {
 	Sort   []string
 	Limit  int
 	Offset int
+	// Vector, when set, ranks results by cosine against it using SkillEmbedder rather
+	// than by text relevance — the match sort. It composes with Filter: the engine
+	// applies both in one query, so the facets need no separate pass and pagination
+	// stays ordinary.
+	//
+	// Sort must be empty when this is set. An explicit sort directive takes precedence
+	// over vector ranking in Meilisearch, so sending both silently discards the match
+	// order rather than erroring.
+	Vector []float32
 }
 
 // SearchResult holds the matched documents and Meilisearch's estimated total.
@@ -468,16 +483,28 @@ func isBadRequest(err error) bool {
 	return errors.As(err, &me) && me.StatusCode == http.StatusBadRequest
 }
 
-// Search runs a query against the jobs (facet/keyword) index and decodes the hits.
-func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
+// buildSearchRequest translates SearchParams into the SDK's request. It is split out
+// of Search so the vector/hybrid pairing is unit-testable without a live engine: a
+// Vector sent without an embedder name is a 400, so the two must never drift apart.
+func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 	req := &meilisearch.SearchRequest{
 		Filter: p.Filter,
 		Sort:   p.Sort,
 		Limit:  int64(p.Limit),
 		Offset: int64(p.Offset),
 	}
+	if len(p.Vector) > 0 {
+		req.Vector = p.Vector
+		// SemanticRatio 1.0 asks for pure vector ranking. Anything less blends in the
+		// keyword score, which for the empty query this sort runs under is noise.
+		req.Hybrid = &meilisearch.SearchRequestHybrid{Embedder: SkillEmbedder, SemanticRatio: 1}
+	}
+	return req
+}
 
-	resp, err := c.facet.SearchWithContext(ctx, p.Query, req)
+// Search runs a query against the jobs (facet/keyword) index and decodes the hits.
+func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
+	resp, err := c.facet.SearchWithContext(ctx, p.Query, buildSearchRequest(p))
 	if err != nil {
 		// A cancelled/expired context surfaces here wrapped in a Meilisearch
 		// communication error that does NOT chain to context.Canceled (the SDK's
@@ -591,6 +618,30 @@ func facetSettings() *meilisearch.Settings {
 		// derives, not the raw posted_at — and needs no sortable declaration (custom
 		// ranking rules are independent of SortableAttributes).
 		RankingRules: []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "posted_ts:desc"},
+		// The match sort's embedder. `userProvided` means Meilisearch never calls a
+		// model: the vectors are arithmetic over a finite dictionary
+		// (internal/dict/skillvec), written by the indexers into each document's
+		// reserved `_vectors` object.
+		//
+		// Dimensions is the registry's declared width and CANNOT change without a full
+		// rebuild — until one completes, the index rejects every document carrying the
+		// new width. Adding this embedder to a live index is itself a rebuild-only
+		// operation, and it must land in the LIVE settings BEFORE a binary that sends a
+		// query vector: a vector search against an index with no such embedder is a 400,
+		// which surfaces as a failing /jobs/search for everyone who picked the sort.
+		// Same ordering hazard role_type documents below.
+		//
+		// BinaryQuantized is deliberately absent (false). These vectors carry 2-12
+		// non-zeros out of 749, and a sign-bit quantiser leaves 749 bits in which nearly
+		// every zero agrees across every document: measured recall@20 collapsed from 95%
+		// to 10%, and the rare skills the weighting exists to surface disappeared
+		// entirely.
+		Embedders: map[string]meilisearch.Embedder{
+			SkillEmbedder: {
+				Source:     meilisearch.UserProvidedEmbedderSource,
+				Dimensions: skillvec.Dimensions,
+			},
+		},
 		// Typo tolerance is left at Meilisearch's defaults (on, with sensible min
 		// word sizes). We deliberately do not send a TypoTolerance struct: the SDK
 		// always serializes newer fields (e.g. disableOnNumbers) that older
