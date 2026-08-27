@@ -13,6 +13,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/meilisearch/meilisearch-go"
+
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -142,19 +144,24 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 		t.Fatalf("IndexJobs (cleared): %v", err)
 	}
 
-	// The claim itself: the job no longer ranks by the vector it used to carry.
-	res, err := c.Search(ctx, SearchParams{Vector: w.Vector([]string{"go"}), Limit: 10})
-	if err != nil {
-		t.Fatalf("vector Search after clearing: %v", err)
+	// Read the STORED document rather than inferring from a search. A vector search
+	// over a one-document index returns that document whether or not it has a vector,
+	// so "is it still in the results" cannot answer this; "what does the index hold"
+	// can.
+	var stored struct {
+		Vectors map[string]struct {
+			Embeddings [][]float32 `json:"embeddings"`
+		} `json:"_vectors"`
 	}
-	for _, h := range res.Hits {
-		if h.ID == 1 {
-			t.Error("the job still ranks by a vector it no longer has — the clear merged instead of replacing")
-		}
+	if err := c.facet.GetDocumentWithContext(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &stored); err != nil {
+		t.Fatalf("GetDocument: %v", err)
+	}
+	if n := len(stored.Vectors[SkillEmbedder].Embeddings); n != 0 {
+		t.Errorf("the index still holds %d embedding(s) for a job with no skills — the clear merged instead of replacing", n)
 	}
 
-	// And it is still there: clearing a vector is not a deletion.
-	res, err = c.Search(ctx, SearchParams{Query: "Go Engineer", Limit: 10})
+	// And the job is still there: clearing a vector is not a deletion.
+	res, err := c.Search(ctx, SearchParams{Query: "Go Engineer", Limit: 10})
 	if err != nil {
 		t.Fatalf("keyword Search: %v", err)
 	}
