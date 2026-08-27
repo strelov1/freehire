@@ -27,28 +27,23 @@ const skillsFacet = "skills"
 // needs are the same ones the public /open page renders, so nothing new is computed
 // and no worker of our own is required.
 //
-// The catalogue size is the sum of the SKILL counts, not an open-job total: a job
-// naming three skills contributes to three counts, so this sum counts (job, skill)
-// pairs, which is the right denominator for an inverse document frequency over
-// skills. Rows of other facets are ignored entirely — folding a country count into
-// the total would dwarf the skill counts and flatten every weight.
+// Rows of other facets are ignored entirely: a country count would be read as a skill's
+// document frequency and skew the whole scale. skillvec anchors its scale on the
+// commonest skill it is given, so nothing but the `skills` rows may reach it.
 //
-// A snapshot with no skill rows yields the zero Weights, which builds no vectors.
-// That is the intended degradation before the first rollup — indexing must not fail
-// because a rarity snapshot is missing — and never an error.
+// A snapshot with no skill rows yields the zero Weights, which builds no vectors. That
+// is the intended degradation before the first rollup — indexing must not fail because
+// a rarity snapshot is missing — and never an error.
 func LoadSkillWeights(ctx context.Context, r FacetStatsReader) (skillvec.Weights, error) {
 	rows, err := r.ListFacetStats(ctx)
 	if err != nil {
 		return skillvec.Weights{}, fmt.Errorf("search: list facet stats: %w", err)
 	}
 	counts := make(map[string]int64)
-	var total int64
 	for _, row := range rows {
-		if row.Facet != skillsFacet {
-			continue
+		if row.Facet == skillsFacet {
+			counts[row.Value] = row.Count
 		}
-		counts[row.Value] = row.Count
-		total += row.Count
 	}
-	return skillvec.WeightsFromCounts(counts, total), nil
+	return skillvec.WeightsFromCounts(counts), nil
 }

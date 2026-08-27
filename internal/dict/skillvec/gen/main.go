@@ -14,6 +14,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
 	"os"
@@ -29,7 +30,10 @@ const target = "registry.go"
 var entry = regexp.MustCompile(`(?m)^\t"([^"]+)",$`)
 
 func main() {
-	assigned := readAssigned()
+	assigned, err := readAssigned(target)
+	if err != nil {
+		fail("read registry", err)
+	}
 	known := make(map[string]bool, len(assigned))
 	for _, s := range assigned {
 		known[s] = true
@@ -61,19 +65,31 @@ func main() {
 	fmt.Printf("skillvec: %d positions assigned (%d newly appended)\n", len(assigned), added)
 }
 
-// readAssigned parses the positions already assigned, in order. A missing file is
-// the first run and yields none.
-func readAssigned() []string {
-	b, err := os.ReadFile(target)
+// readAssigned parses the positions already assigned, in order. A MISSING file is the
+// first run and yields none; every other failure is fatal.
+//
+// The distinction is the whole safety of this generator. If an unreadable — but
+// writable — registry were treated as a first run, the rewrite would reassign every
+// position in canonical order, silently invalidating every vector already stored in
+// the search index. Nothing would error; the feed would just start ranking wrongly. A
+// file that exists but parses to no positions is corruption for the same reason.
+func readAssigned(path string) ([]string, error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	matches := entry.FindAllSubmatch(b, -1)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("%s exists but holds no positions; refusing to reassign every skill", path)
+	}
 	out := make([]string, 0, len(matches))
 	for _, m := range matches {
 		out = append(out, string(m[1]))
 	}
-	return out
+	return out, nil
 }
 
 func fail(step string, err error) {

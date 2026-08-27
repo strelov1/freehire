@@ -18,29 +18,48 @@ type Weights struct {
 
 // WeightsFromCounts derives rarity weights from how many open jobs name each skill.
 // counts is keyed by canonical slug — the `skills` rows of the facet-distribution
-// snapshot — and total is the catalogue size those counts were taken over.
+// snapshot.
 //
-// The factor is the standard inverse-document-frequency shape, floored at 1 so a
-// skill every posting names still contributes something rather than vanishing:
+// The scale is anchored on the COMMONEST skill in the snapshot rather than on a
+// catalogue size:
 //
-//	idf(s) = ln((total + 1) / (count(s) + 1)) + 1
+//	idf(s) = ln((maxCount + 1) / (count(s) + 1)) + 1
 //
-// A skill absent from counts is treated as unseen (count 0), which makes it maximally
-// rare. That is deliberate: a skill in the dictionary but not in the rollup is either
-// newly mined or genuinely obscure, and both deserve weight.
+// The textbook shape divides by the number of documents, but that count is not in this
+// package's reach and the obvious substitute — the sum of the counts — is wrong in a
+// way that matters: a job naming ten skills contributes to ten of them, so the sum
+// grows with catalogue breadth and flattens the very contrast the weighting exists to
+// create. The busiest skill is a real upper bound on document frequency, needs nothing
+// external, and keeps the contrast fixed as the snapshot grows.
 //
-// A non-positive total yields the zero Weights: there is no catalogue to be rare
-// relative to, so no honest weighting exists.
-func WeightsFromCounts(counts map[string]int64, total int64) Weights {
-	if total <= 0 {
+// The floor of 1 means the commonest skill still contributes rather than vanishing, so
+// a profile of nothing but ubiquitous skills is still rankable. A skill absent from
+// counts is treated as unseen (count 0) and so maximally rare: it is either newly
+// mined or genuinely obscure, and both deserve weight.
+//
+// An empty snapshot yields the zero Weights — there is nothing to be rare relative to.
+func WeightsFromCounts(counts map[string]int64) Weights {
+	var maxCount int64
+	for _, c := range counts {
+		if c > maxCount {
+			maxCount = c
+		}
+	}
+	if maxCount <= 0 {
 		return Weights{}
 	}
 	byPosition := make([]float32, Dimensions)
 	for i, skill := range registry {
-		byPosition[i] = float32(math.Log(float64(total+1)/float64(counts[skill]+1)) + 1)
+		byPosition[i] = float32(math.Log(float64(maxCount+1)/float64(counts[skill]+1)) + 1)
 	}
 	return Weights{byPosition: byPosition}
 }
+
+// Ready reports whether these weights can build vectors at all. It distinguishes two
+// states a caller must NOT conflate: "the rarity snapshot is loaded and this job simply
+// has no recognisable skills" from "no snapshot is loaded, so nothing can be said".
+// The first is knowledge worth writing down; the second is an absence to leave alone.
+func (w Weights) Ready() bool { return len(w.byPosition) > 0 }
 
 // MarshalJSON serialises the weights as a plain array, so they can be cached between
 // requests. Without this the unexported field would encode as `{}` and decode as the

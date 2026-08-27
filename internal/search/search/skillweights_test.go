@@ -34,10 +34,9 @@ func TestLoadSkillWeightsReadsOnlyTheSkillsFacet(t *testing.T) {
 	if rare == nil || common == nil {
 		t.Fatal("LoadSkillWeights() produced weights that build no vectors")
 	}
-	// The non-skill facets must not enter the catalogue size, or every weight shifts.
-	// 5012 is the sum of the skill rows alone — the country and seniority counts,
-	// which dwarf them, must be absent from it.
-	want := skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "erlang": 12}, 5012)
+	// The non-skill facets must not reach the weighting: skillvec anchors its scale on
+	// the commonest count it is given, and a country count would dwarf every skill.
+	want := skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "erlang": 12})
 	if got, exp := w.Vector([]string{"go", "erlang"}), want.Vector([]string{"go", "erlang"}); !sameVector(got, exp) {
 		t.Error("weights differ from ones built on the skill rows alone — a non-skill facet leaked into the total")
 	}

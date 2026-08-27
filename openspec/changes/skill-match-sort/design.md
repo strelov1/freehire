@@ -183,6 +183,15 @@ next write. Only a *position* change corrupts, and the registry forbids that.
    vector.** A vector search against an index with no such embedder is a 400 from
    the engine, surfacing as a failing `/jobs/search` for everyone who selected the
    sort. Same ordering hazard `role_type` documents at `client.go:565-570`.
+
+   The blast radius is bounded by the dark launch rather than by the ordering alone:
+   with `PUBLIC_MATCH_SORT` off, nobody can select the sort from the UI, so getting
+   this order wrong costs a hand-typed `?sort=match` rather than the live feed. That
+   is the safety margin, not an excuse to reorder the steps.
+
+   Note that documents are safe in either order: an index with no declared embedder
+   accepts `_vectors` on incoming documents without complaint (verified against a
+   live engine), so the indexers can write vectors before the settings land.
 3. Resolve disk, then run a full rebuild — scheduled deliberately, not via the
    ordinary timer. Until it completes the sort returns only the handful of
    postings re-indexed since.

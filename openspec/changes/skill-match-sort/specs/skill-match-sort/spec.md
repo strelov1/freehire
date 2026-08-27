@@ -72,28 +72,52 @@ stored vector.
 - **THEN** weight loading succeeds and produces weights that build no vectors,
   rather than failing indexing or producing an unweighted ranking
 
+#### Scenario: Unloadable weights leave stored vectors alone
+
+- **WHEN** a document is built while no weights could be loaded
+- **THEN** it omits the vector field entirely rather than clearing it, so an index
+  already carrying vectors keeps them — an absence of knowledge is not knowledge of
+  an absence
+
 ### Requirement: Vector ordering rewards overlap and coverage together
 
 The system SHALL build unit-length vectors, so that the cosine between a
 vacancy's and a candidate's expresses both how many of the candidate's skills the
 vacancy engages and what share of the vacancy's requirements they cover.
 
-Neither half SHALL be sufficient alone: a vacancy naming a single skill the
-candidate holds MUST NOT outrank one that engages many of them, and a vacancy
-listing a large undifferentiated set MUST NOT outrank a well-targeted one on
-volume.
+Neither half SHALL be sufficient alone, **at equal skill rarity**: among vacancies
+whose skills carry comparable weight, one naming a single skill the candidate holds
+MUST NOT outrank one that engages many of them, and one listing a large
+undifferentiated set MUST NOT outrank a well-targeted one on volume.
+
+The rarity qualifier is not a hedge, it is the design. A vacancy asking only for a
+scarce skill the candidate happens to hold CAN outrank a broader match on common
+ones, and SHOULD: that is what weighting by rarity means. The system SHALL NOT cap
+or flatten the weights to force a count-based order.
 
 A vector SHALL be absent — not zero-valued — when it would be meaningless: no
 weights available, no skills given, or no skill recognised. An absent vector is an
 omission the caller propagates, never a vector that ranks against everything.
 
+The two absences SHALL be distinguished where they reach the index. A job whose
+skills are gone SHALL have any stored vector CLEARED, since the index merges rather
+than replaces documents and an omission would leave it ranking by skills it no longer
+has. A job built without loaded weights SHALL leave the stored vector untouched.
+
 #### Scenario: A well-targeted vacancy outranks both extremes
 
-- **WHEN** a candidate holding five skills is ranked against a vacancy naming only
-  one of them, a vacancy naming exactly those five, and a vacancy naming those
-  five among twelve
+- **WHEN** a candidate holding five skills of comparable rarity is ranked against a
+  vacancy naming only one of them, a vacancy naming exactly those five, and a
+  vacancy naming those five among twelve
 - **THEN** the vacancy naming exactly the five ranks above the one-skill vacancy,
   and the one-skill vacancy ranks last
+
+#### Scenario: A scarce skill can outweigh a larger common overlap
+
+- **WHEN** one vacancy asks only for a skill few open jobs name, which the candidate
+  holds, and another asks for several skills that nearly every job names
+- **THEN** the scarce-skill vacancy MAY rank higher, and this is correct rather than
+  a violation of the ordering above
 
 #### Scenario: A skill listed twice does not count twice
 
@@ -119,8 +143,10 @@ Every code path that builds an index document SHALL supply the weights. The
 weights SHALL be a parameter of document construction rather than a field a caller
 may attach afterwards, so that a path which omits them fails to compile.
 
-A document with no vector SHALL omit the field entirely rather than carry an empty
-one.
+A document whose weights are loaded but whose skills yield no vector SHALL carry an
+explicit CLEARING value, not an omission: the index merges document fields rather than
+replacing them, so an omitted field leaves a previously stored vector in place. Only a
+document built without loaded weights SHALL omit the field.
 
 #### Scenario: An indexed job carries its vector
 
@@ -128,11 +154,12 @@ one.
 - **THEN** the document carries a vector of the declared width under the skill
   embedder's name
 
-#### Scenario: A job with no recognised skills carries no vector
+#### Scenario: A job that loses its skills has its stored vector cleared
 
-- **WHEN** a job whose skills are all unrecognised, or which has none, is turned
-  into an index document
-- **THEN** the document carries no vector field at all, and serialises without one
+- **WHEN** a job whose skills are all unrecognised, or which has none, is turned into
+  an index document while the weights are loaded
+- **THEN** the document carries an explicit clearing value, so pushing it removes any
+  vector the index already held for that job rather than merging around it
 
 #### Scenario: An indexer that omits the weights does not build
 

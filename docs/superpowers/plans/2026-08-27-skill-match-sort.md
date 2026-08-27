@@ -2,6 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Historical.** This plan was written before implementation and is kept as the
+> record of what was intended. Three things went differently and the CODE is the
+> authority, not this file: task 1 needed no work (`skilltag.Canonicals()` already
+> existed, drawing on five alias tiers rather than two); the SPA had no sort control at
+> all to extend, so one was restored; and the weights are anchored on the commonest
+> skill rather than on a catalogue total, because the sum of per-skill counts inflates
+> with catalogue breadth and flattens the rarity contrast. `openspec/changes/skill-match-sort/`
+> carries the current specification.
+
 **Goal:** Order the jobs feed by how well a vacancy's skills match the signed-in candidate's, using an IDF-weighted skill vector ranked by Meilisearch's own vector search.
 
 **Architecture:** Skills are canonical slugs from a finite dictionary, so the vector is arithmetic, not learned — each skill owns a permanent position, weighted by how rare it is in the catalogue. Vacancy vectors are built at index time and stored in the Meilisearch document; the candidate's vector is built per request from their profile. Meilisearch applies the vector ranking and every existing facet filter in one query, so pagination stays ordinary.

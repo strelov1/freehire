@@ -17,7 +17,7 @@ func TestSplitJobs_CarriesTheSkillVector(t *testing.T) {
 		ID: 1, Title: "Go Engineer", PublicSlug: "go-x", Category: "backend",
 		Description: "<p>Build things.</p>", Skills: []string{"go", "erlang"},
 	}
-	w := skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "erlang": 12}, 5012)
+	w := skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "erlang": 12})
 
 	docs, _, err := splitJobs([]db.Job{job}, nil, nil, time.Now(), w)
 	if err != nil {

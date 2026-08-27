@@ -47,26 +47,50 @@ skill (`insights_facet_stats`, populated by `cmd/rollup-facets` — no worker of
 own). Rare skills weigh more: an overlap on `git` says nothing, an overlap on
 `erlang` says a great deal.
 
-Two deliberate choices in `WeightsFromCounts`:
+```
+idf(s) = ln((maxCount + 1) / (count(s) + 1)) + 1
+```
+
+The scale is anchored on the **commonest skill in the snapshot**, not on a catalogue
+size. The textbook shape divides by the document count, but that number is not in this
+package's reach, and the obvious substitute — the sum of the counts — is wrong in a way
+that matters: a job naming ten skills contributes to ten of them, so the sum grows with
+catalogue breadth and flattens the very contrast the weighting exists to create.
+
+Two more deliberate choices:
 - a skill absent from the counts is treated as **maximally rare**, not weightless —
   it is either newly mined or genuinely obscure, and both warrant weight;
-- the IDF is floored at 1, so a skill every posting names still contributes
+- the result is floored at 1, so a skill every posting names still contributes
   something rather than vanishing from the vector entirely.
+
+`Ready()` separates "no snapshot loaded" from "this job has no skills". Callers must
+not conflate them: the first is an absence of knowledge and leaves a stored vector
+alone; the second is knowledge of an absence and clears it.
 
 ## Why `Vector` returns nil rather than a zero vector
 A zero vector is not "no opinion" — it is a document Meilisearch rejects, and a query
 that ranks against nothing. So `Vector` reports an absence: no weights loaded, no
-skills given, or no slug recognised all yield nil, and the caller omits the field.
+skills given, or no slug recognised all yield nil.
+
+What the caller does with that nil depends on WHY (see `Ready()`): with weights loaded
+it writes an explicit clear, because the index merges document fields and an omission
+would leave a stale vector ranking a job by skills it no longer has; with no weights it
+omits the field and leaves whatever is stored alone.
 
 ## Why the cosine is the score
 Vectors are unit length, so
 
-    cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
+```
+cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
+```
 
 The numerator is the weighted overlap; the denominator penalises both the one-tag
 vacancy (which would otherwise score 100% coverage) and the thirty-tag requirements
 dump (which would otherwise win on volume). `TestCosineOrdersOverlapAndCoverage`
-pins that worked example.
+pins that worked example — **at equal rarity**, which is the qualifier that matters.
+A vacancy asking only for a scarce skill the candidate holds CAN outrank a broader
+match on ubiquitous ones, and should: that is what weighting by rarity means. Do not
+"fix" that by capping the weights.
 
 ## Not to be confused with
 `internal/candidate/jobmatch` scores ONE job against a profile and credits adjacent

@@ -15,7 +15,9 @@ The index SHALL declare:
   visa_sponsorship, salary_currency, salary_period, skills, salary_min,
   salary_max, experience_years_min, and `posted_ts`. The raw `remote` flag SHALL
   NOT be a filterable attribute (work_mode subsumes it).
-- **sortable attributes**: posted_at, salary_min, salary_max.
+- **sortable attributes**: posted_at, created_at, salary_min, salary_max — the
+  four the endpoint accepts as `sort` values. (`created_at` was already accepted
+  and already declared in code; this list had drifted.)
 - **one embedder**, named for the skill vector it carries, declared as
   `userProvided` at the width `skill-match-sort` assigns. Being `userProvided`
   means Meilisearch SHALL NOT call any model: the vectors are supplied by the
@@ -47,8 +49,9 @@ document when the job is not yet enriched; an unenriched job SHALL still be
 indexed and findable by its text fields, and SHALL still carry any geography
 parsed from its location.
 
-The skill vector SHALL likewise be absent from a document that has none, and its
-absence SHALL NOT affect that job's presence in, or matching by, any other means.
+A job with no skill vector SHALL still be indexed and fully searchable: the vector's
+absence affects the match ordering alone, never that job's presence in the index or
+its matching by text or any facet.
 
 #### Scenario: A job is represented as one searchable document
 
@@ -92,8 +95,8 @@ absence SHALL NOT affect that job's presence in, or matching by, any other means
 #### Scenario: A job with no recognised skills is still fully searchable
 
 - **WHEN** a job whose skills are all unrecognised is indexed
-- **THEN** its document carries no vector, and the job remains findable by text
-  and filterable by every facet exactly as before
+- **THEN** it holds no usable vector, and the job remains findable by text and
+  filterable by every facet exactly as before
 
 ### Requirement: Default ordering is newest-added first
 

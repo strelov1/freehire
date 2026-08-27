@@ -14,7 +14,7 @@ func testWeights() Weights {
 		registry[1]: 10_000,
 		registry[2]: 1_000,
 		registry[3]: 10,
-	}, 100_000)
+	})
 }
 
 func dot(a, b []float32) float64 {
@@ -69,7 +69,7 @@ func TestCosineOrdersOverlapAndCoverage(t *testing.T) {
 	for _, s := range registry[:12] {
 		counts[s] = 5_000
 	}
-	w := WeightsFromCounts(counts, 100_000)
+	w := WeightsFromCounts(counts)
 
 	profile := w.Vector(registry[:5])
 	oneTag := w.Vector(registry[:1])
@@ -124,9 +124,51 @@ func TestASkillListedTwiceCountsOnce(t *testing.T) {
 	}
 }
 
-func TestWeightsFromCountsRejectsAnEmptyCatalogue(t *testing.T) {
-	if got := WeightsFromCounts(map[string]int64{registry[0]: 5}, 0).Vector([]string{registry[0]}); got != nil {
-		t.Errorf("a zero catalogue size produced %v, want no vector", got)
+func TestWeightsFromCountsRejectsAnEmptySnapshot(t *testing.T) {
+	if WeightsFromCounts(nil).Ready() {
+		t.Error("an empty snapshot produced usable weights")
+	}
+	if got := WeightsFromCounts(map[string]int64{}).Vector([]string{registry[0]}); got != nil {
+		t.Errorf("an empty snapshot produced %v, want no vector", got)
+	}
+}
+
+// The scale is anchored on the COMMONEST skill, not on a catalogue size the caller
+// would have to supply. Anchoring on a job count is the textbook IDF shape, but the
+// count is not in this package's reach; anchoring on the busiest skill needs nothing
+// external and keeps the full contrast between common and rare, which is the entire
+// point of weighting.
+func TestTheCommonestSkillAnchorsTheScale(t *testing.T) {
+	w := WeightsFromCounts(map[string]int64{registry[0]: 90_000, registry[3]: 10})
+	v := w.Vector([]string{registry[0]})
+	if v == nil {
+		t.Fatal("the commonest skill built no vector")
+	}
+	// It still contributes — a floor of 1, never zero — so a profile of nothing but
+	// ubiquitous skills is still rankable.
+	if v[0] == 0 {
+		t.Error("the commonest skill was weighted to nothing")
+	}
+}
+
+// Regression: the denominator used to be the sum of the counts, which inflates with
+// every extra skill a job names and flattens the contrast the weighting exists for.
+func TestContrastDoesNotShrinkAsTheSnapshotGrows(t *testing.T) {
+	small := WeightsFromCounts(map[string]int64{registry[0]: 1_000, registry[1]: 10})
+	// The same two skills, plus many more rows — a bigger snapshot, identical rarity.
+	bigger := map[string]int64{registry[0]: 1_000, registry[1]: 10}
+	for i := 4; i < 200; i++ {
+		bigger[registry[i]] = 500
+	}
+	big := WeightsFromCounts(bigger)
+
+	ratio := func(w Weights) float64 {
+		rare, common := w.Vector([]string{registry[1]}), w.Vector([]string{registry[0]})
+		q := w.Vector([]string{registry[0], registry[1]})
+		return dot(rare, q) / dot(common, q)
+	}
+	if math.Abs(ratio(small)-ratio(big)) > 1e-6 {
+		t.Errorf("rare/common contrast moved with snapshot size: %f vs %f", ratio(small), ratio(big))
 	}
 }
 

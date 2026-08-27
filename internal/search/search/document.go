@@ -84,9 +84,21 @@ type JobDocument struct {
 	// internal/dict/skillvec). Like Roles and RoleType it lives on the document rather
 	// than jobview.Job, so it never enters the public wire shape.
 	//
-	// `omitempty` is load-bearing: a job with no recognised skills must carry NO
-	// _vectors key at all. An empty vector object is a document Meilisearch rejects,
-	// not one that merely sits out the ranking.
+	// It has THREE meaningful states, because the indexers push with PUT — Meilisearch's
+	// add-or-update, which MERGES fields rather than replacing the document:
+	//
+	//   {skills: vec}   the job's vector.
+	//   {skills: nil}   serialises as `"skills":null` and CLEARS a stored vector. This is
+	//                   what a job that LOST its skills needs: omitting the key would
+	//                   merge, leaving the old vector in place and the posting ranking by
+	//                   skills it no longer has. Verified against a live engine.
+	//   nil             the key is absent, so whatever is stored is left untouched. Used
+	//                   ONLY when the rarity weights could not be loaded — an absence of
+	//                   knowledge, not knowledge of an absence. Clearing every vector a
+	//                   rebuild wrote because one drain wave could not read a snapshot
+	//                   would take the sort down by itself.
+	//
+	// `omitempty` is what distinguishes that third state from the first two.
 	Vectors map[string][]float32 `json:"_vectors,omitempty"`
 }
 
@@ -134,8 +146,10 @@ func FromJob(j db.Job, w skillvec.Weights) (JobDocument, error) {
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}
-	if v := w.Vector(j.Skills); v != nil {
-		doc.Vectors = map[string][]float32{SkillEmbedder: v}
+	// Set the vector — or an explicit null that CLEARS a stored one — but only when the
+	// weights are loaded. See JobDocument.Vectors for why the three states differ.
+	if w.Ready() {
+		doc.Vectors = map[string][]float32{SkillEmbedder: w.Vector(j.Skills)}
 	}
 	return doc, nil
 }
