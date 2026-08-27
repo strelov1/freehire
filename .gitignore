@@ -16,27 +16,57 @@ hire
 # ignored every new file under internal/migrate/, and `enrich`/`embed`/`ingest` did the same
 # to theirs. 26 package directories were shadowed this way; a new source file in one of them
 # would simply never be committed.
+/apple-revoke
+/auth-cleanup
+/backfill-application-events
+/backfill-applications
+/backfill-blank-company
 /backfill-company-info
 /backfill-company-names
 /backfill-derive
 /backfill-descriptions
+/backfill-duplicate-marker-owner
+/backfill-echojobs
 /backfill-experience
+/backfill-resume-geo
 /backfill-resume-structured
+/backfill-slug-folded
+/broadcast
+/cal-sync
+/capture-apply-form
 /classify-mail
+/cv-previews
 /embed
 /enrich
+/ghost-crosscheck
 /gmail-sync
+/harvest-linkedin
+/harvest-orphans
 /hire-api
+/hydrate-adzuna-description
+/import-company-industries
 /ingest
 /liveness
 /mail-ingest
+/mail-preview
 /migrate
 /mine-titles
 /notify
+/nudge
+/onboarding
 /prune
+/push-receipts
+/queue-metrics
 /recount-companies
 /reindex
 /remind
+/resolve-url
+/rollup-company
+/rollup-views
+/search-drain
+/seed-adzuna-description-queue
+/similar-backfill
+/validate-sources
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
 /backfill-derive

@@ -39,7 +39,7 @@ var blocks = map[string][]string{
 	// config-to-Settings conversion across eight cmd/ entrypoints or to add a package
 	// holding one function. The classification was wrong, not the code.
 	"platform": {
-		"arch/layering", "backfillpage", "blobstore", "cache", "config", "database", "db",
+		"arch", "arch/layering", "backfillpage", "blobstore", "cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "linktoken", "llm", "llmschema", "migrate",
 		"modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt", "tracerlink", "worker",
