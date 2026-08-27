@@ -8,11 +8,11 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 2. The vector
 
-- [ ] 2.1 Write the append-only registry generator (`internal/dict/skillvec/gen`) and generate `registry.go`; the generator appends unassigned canonical skills and never reorders
-- [ ] 2.2 Add `Dimensions`, `Position`, and `RegistrySize`, with tests that the registry has no duplicates, covers every canonical skill, and cannot outgrow the declared width
-- [ ] 2.3 Register `skillvec` in the `dict` block of `internal/platform/arch/layering/blocks.go` and confirm the layering guard passes
-- [ ] 2.4 Implement `Weights`, `WeightsFromCounts`, and `Weights.Vector` — IDF-shaped weights, unit-length vectors, nil for every unusable input, unknown slugs ignored, a duplicated skill counted once
-- [ ] 2.5 Write `internal/dict/skillvec/AGENTS.md`: why a position is permanent and a weight is not, what `Dimensions` costs, how to regenerate
+- [x] 2.1 Write the append-only registry generator (`internal/dict/skillvec/gen`) and generate `registry.go`; the generator appends unassigned canonical skills and never reorders
+- [x] 2.2 Add `Dimensions`, `Position`, and `RegistrySize`, with tests that the registry has no duplicates, covers every canonical skill, and cannot outgrow the declared width
+- [x] 2.3 Register `skillvec` in the `dict` block of `internal/platform/arch/layering/blocks.go` and confirm the layering guard passes
+- [x] 2.4 Implement `Weights`, `WeightsFromCounts`, and `Weights.Vector` — IDF-shaped weights, unit-length vectors, nil for every unusable input, unknown slugs ignored, a duplicated skill counted once
+- [x] 2.5 Write `internal/dict/skillvec/AGENTS.md`: why a position is permanent and a weight is not, what `Dimensions` costs, how to regenerate
 
 ## 3. Wiring the weights
 
