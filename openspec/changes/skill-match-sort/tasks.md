@@ -36,10 +36,10 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 7. The SPA
 
-- [ ] 7.1 Accept `match` in the sort vocabulary and round-trip it through the URL, including for a signed-out visitor opening a shared link
+- [x] 7.1 **The feed had no sort control at all** — it went with `sort=cv`: `JobFilters` had no `sort` field and a test asserted the param was never serialized. So this restored the mechanism (field, URL round trip, a deliberately two-value vocabulary) rather than extending an existing one. An unrecognized value reads as the default, mirroring the backend.
 - [x] 7.2 Offer the option in the sort selector to signed-in visitors whose profile has skills
 
 ## 8. Rollout documentation
 
-- [ ] 8.1 Record in `internal/search/search/AGENTS.md` both ordering hazards: the embedder must exist in the live index before a binary queries it, and the vectors only exist after a full rebuild
-- [ ] 8.2 Note in `CLAUDE.md`'s `reindex` bullet that a rebuild now also writes skill vectors, costs ~10 GB more, and runs materially longer
+- [x] 8.1 Record in `internal/search/search/AGENTS.md` both ordering hazards: the embedder must exist in the live index before a binary queries it, and the vectors only exist after a full rebuild
+- [x] 8.2 Note in `CLAUDE.md`'s `reindex` bullet that a rebuild now also writes skill vectors, costs ~10 GB more, and runs materially longer

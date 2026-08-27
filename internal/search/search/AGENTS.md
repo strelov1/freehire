@@ -110,6 +110,33 @@ knowing about: nothing on a user path filters it, and its only caller — the ga
 on a lookup error. So a missed settings patch costs an ingest gate that is off until the next
 rebuild, not a broken page. The order is still the one above; the blast radius just differs.
 
+## Skill vectors and the match sort
+
+The facet index carries ONE embedder, named `skills` and sourced `userProvided`. No
+model is ever called: the vectors are arithmetic over `internal/dict/skillvec`'s
+permanent position registry, written into each document's `_vectors` by the three
+indexers (`cmd/reindex`, `cmd/search-drain`, `internal/ingest/linkimport`).
+
+**Two ordering hazards, and both look like an outage rather than a missing feature:**
+
+1. **The embedder must exist in the LIVE index before a binary queries it.** A vector
+   search against an index without it is a 400, which this package's error mapping
+   turns into a 500 — the same shape as the filterable-attribute window above, and it
+   breaks `/jobs/search` for everyone who picked the sort. Patch settings first, roll
+   the binary second.
+2. **The vectors only exist after a full rebuild.** Declaring the embedder does not
+   retro-fill 1.36M documents; until the rebuild lands, the match sort returns only
+   what has been re-indexed since. It is a thin feed, not an error, so nothing alerts.
+
+`skillvec.Dimensions` is baked into the live settings. **Changing it requires a full
+rebuild**, and until that rebuild finishes the index rejects every document carrying
+the new width.
+
+A rebuild with vectors is materially slower and larger than one without — the cost is
+HNSW graph construction, so it lands on full rebuilds, not on incremental
+`search_outbox` pushes. Schedule it deliberately; `freehire-reindexw` has outgrown its
+slot before, and the disk floor already refuses rebuilds when free space is tight.
+
 ## Limitations
 
 - A Meili filter error 500s the page instead of degrading. That's the robustness seam.
