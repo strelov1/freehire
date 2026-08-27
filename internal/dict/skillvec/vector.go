@@ -77,6 +77,58 @@ func (w *Weights) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// ballastPosition is the vector slot the JOB side fills and the profile never does.
+// It sits past the registry, in the headroom Dimensions leaves — so it can never
+// collide with a skill, and adding skills to the registry can never reach it.
+const ballastPosition = Dimensions - 1
+
+// ballastPerSkill and ballastFloorSkills shape how hard a posting dilutes itself.
+//
+// Without ballast, the cosine rewards the SIZE of the overlap: a vacancy sitting
+// almost entirely inside a large profile scores about √(overlap) / ‖profile‖, so one
+// listing 79 skills of which the reader holds 63 beats one listing 5 they hold
+// entirely. Measured on production against a 162-skill profile, the whole top ten was
+// postings with 52-92 skills — from a catalogue whose median is 7.
+//
+// The floor is not a detail. Swept over real data, ballast strong enough to lift
+// genuinely full-coverage postings ALSO lifts one-tag ones, because a single tag the
+// reader holds is 100% covered: the top ten filled with single-skill nursing vacancies.
+// Flooring the ballast at six skills prices that out while leaving real postings alone.
+//
+// Values chosen by sweeping k ∈ [2,12] and floor ∈ [5,12] over a stratified sample of
+// production postings; results plateau from k=4 upward, so this is the gentlest setting
+// that gets there — full coverage leads the ranking, the median result carries nine
+// skills, and no 1-3 tag posting reaches the top ten.
+const (
+	ballastPerSkill    = 4.0
+	ballastFloorSkills = 6
+)
+
+// JobVector builds the vector stored on a JOB document. It is Vector plus the ballast:
+// a component the profile side never sets, so it adds nothing to the cosine's numerator
+// and lengthens this vector alone. The effect is that a posting is discounted in
+// proportion to how much it asks for, which is what makes coverage — not raw overlap —
+// decide the order.
+func (w Weights) JobVector(skills []string) []float32 {
+	v := w.vector(skills, ballast(len(skills)))
+	return v
+}
+
+// ProfileVector builds the vector for the READER. No ballast: the position must stay
+// zero on this side, since that is what keeps it out of the numerator. If both sides
+// set it, every pair would match on it and the ranking would flatten.
+func (w Weights) ProfileVector(skills []string) []float32 {
+	return w.vector(skills, 0)
+}
+
+// ballast is how much a posting listing n skills dilutes itself by.
+func ballast(n int) float64 {
+	if n < ballastFloorSkills {
+		n = ballastFloorSkills
+	}
+	return ballastPerSkill * float64(n)
+}
+
 // Vector builds the L2-normalised vector for a set of canonical skill slugs.
 //
 // Normalising is what makes the cosine of two such vectors read as "how many of my
@@ -87,7 +139,12 @@ func (w *Weights) UnmarshalJSON(b []byte) error {
 // Returns nil — never a zero vector — when the result would be meaningless: no
 // weights loaded, no skills given, or no skill recognised. A nil vector is an absence
 // the caller omits, not a document that ranks against everything.
-func (w Weights) Vector(skills []string) []float32 {
+func (w Weights) Vector(skills []string) []float32 { return w.vector(skills, 0) }
+
+// vector is the shared construction. extra is a value placed at ballastPosition before
+// normalisation, so it counts toward the length without ever meeting a profile's
+// non-zero component.
+func (w Weights) vector(skills []string, extra float64) []float32 {
 	if len(w.byPosition) == 0 || len(skills) == 0 {
 		return nil
 	}
@@ -105,7 +162,12 @@ func (w Weights) Vector(skills []string) []float32 {
 		sumSq += float64(x) * float64(x)
 	}
 	if sumSq == 0 {
+		// Nothing recognised: the ballast alone would be a vector about nothing.
 		return nil
+	}
+	if extra != 0 {
+		v[ballastPosition] = float32(extra)
+		sumSq += extra * extra
 	}
 	norm := float32(math.Sqrt(sumSq))
 	for i, x := range v {

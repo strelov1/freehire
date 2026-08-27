@@ -151,7 +151,7 @@ func FromJob(j db.Job, w skillvec.Weights) (JobDocument, error) {
 	// ALWAYS set the key. With the embedder declared, Meilisearch REJECTS any document
 	// that omits it — "no vectors provided for document" — so an omission is not a
 	// no-op, it drops the posting out of the index entirely.
-	doc.Vectors = map[string][]float32{SkillEmbedder: w.Vector(j.Skills)}
+	doc.Vectors = map[string][]float32{SkillEmbedder: w.JobVector(j.Skills)}
 	return doc, nil
 }
 

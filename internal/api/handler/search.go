@@ -163,7 +163,8 @@ func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
 	if err != nil {
 		return nil
 	}
-	return weights.Vector(profile.Skills)
+	// ProfileVector, never JobVector: the ballast belongs to the stored side only.
+	return weights.ProfileVector(profile.Skills)
 }
 
 // skillWeights reads the rarity snapshot through a best-effort cache. The snapshot is

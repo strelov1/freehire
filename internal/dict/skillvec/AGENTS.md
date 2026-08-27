@@ -79,19 +79,41 @@ opt-out. It is not an omission: the index merges document fields, so omitting wo
 leave a stale vector ranking a job by skills it no longer has, AND a declared embedder
 makes the engine reject a document with no `_vectors` at all.
 
-## Why the cosine is the score
+## Why the cosine is the score, and why it needed a ballast
 Vectors are unit length, so
 
 ```text
 cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
 ```
 
-The numerator is the weighted overlap; the denominator penalises both the one-tag
-vacancy (which would otherwise score 100% coverage) and the thirty-tag requirements
-dump (which would otherwise win on volume). `TestCosineOrdersOverlapAndCoverage`
-pins that worked example — **at equal rarity**, which is the qualifier that matters.
-A vacancy asking only for a scarce skill the candidate holds CAN outrank a broader
-match on ubiquitous ones, and should: that is what weighting by rarity means. Do not
+That alone is NOT enough, and the reason is worth understanding before touching this.
+When a vacancy sits almost entirely inside a large profile, the expression collapses to
+roughly `√(overlap) / ‖A‖` — it rewards the SIZE of the overlap, and the denominator
+only penalises the vacancy's skills the reader does NOT hold. So a posting listing 79
+skills of which the reader holds 63 beats one listing 5 they hold entirely.
+
+That is not theoretical. Against a real 162-skill profile the entire top ten was
+postings carrying 52-92 skills, out of a catalogue whose median is **7**. The feed
+served the 369 most cluttered postings in the catalogue and read as random.
+
+**The fix is `ballastPosition`:** one slot the profile never sets. It contributes
+nothing to the numerator and lengthens the job's vector, so a posting dilutes itself in
+proportion to how much it asks for — which is how coverage comes to matter more than
+raw overlap. Hence two constructors: `JobVector` (with ballast) and `ProfileVector`
+(without). Swapping them silently restores the defect, and
+`TestFromJobUsesTheJobSideConstructor` is what catches that.
+
+**The floor of six skills is load-bearing.** Ballast strong enough to lift genuinely
+full-coverage postings also lifts one-tag ones, because a single tag the reader holds
+is 100% covered: swept over real data, the top ten filled with single-skill nursing
+vacancies. The floor prices that out.
+
+Constants came from a sweep over a stratified production sample (k ∈ [2,12],
+floor ∈ [5,12]); results plateau from k=4, so the shipped setting is the gentlest one
+that reaches the plateau.
+
+Rarity still outranks breadth at the margin: a vacancy asking only for a scarce skill
+the candidate holds CAN outrank a broader match on ubiquitous ones, and should. Do not
 "fix" that by capping the weights.
 
 ## Not to be confused with

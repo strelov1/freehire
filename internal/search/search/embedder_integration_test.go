@@ -94,7 +94,7 @@ func TestIntegration_VectorSearchRanksByTheSkillVector(t *testing.T) {
 	}
 
 	// A candidate who knows Go and Docker: the Go posting must come first.
-	res, err := c.Search(ctx, SearchParams{Vector: w.Vector([]string{"go", "docker"}), Limit: 10})
+	res, err := c.Search(ctx, SearchParams{Vector: w.ProfileVector([]string{"go", "docker"}), Limit: 10})
 	if err != nil {
 		t.Fatalf("vector Search: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 	if err := c.IndexJobs(ctx, []JobDocument{withSkills}); err != nil {
 		t.Fatalf("IndexJobs: %v", err)
 	}
-	if res, err := c.Search(ctx, SearchParams{Vector: w.Vector([]string{"go"}), Limit: 10}); err != nil {
+	if res, err := c.Search(ctx, SearchParams{Vector: w.ProfileVector([]string{"go"}), Limit: 10}); err != nil {
 		t.Fatalf("vector Search: %v", err)
 	} else if len(res.Hits) == 0 {
 		t.Fatal("the job is not rankable by vector before losing its skills")

@@ -111,3 +111,24 @@ func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
 		t.Errorf("_vectors[%q] has %d values, want %d", SkillEmbedder, len(out.Vectors[SkillEmbedder]), skillvec.Dimensions)
 	}
 }
+
+// The two sides must not be swapped. A document built with the PROFILE constructor
+// would carry no ballast, so it would rank as if it asked for nothing — the exact
+// defect the ballast exists to fix, reintroduced silently. Assert the stored vector
+// carries it.
+func TestFromJobUsesTheJobSideConstructor(t *testing.T) {
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}}, docWeights())
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	stored := doc.Vectors[SkillEmbedder]
+	want := docWeights().JobVector([]string{"go", "docker"})
+	if len(stored) != len(want) {
+		t.Fatalf("vector width = %d, want %d", len(stored), len(want))
+	}
+	for i := range want {
+		if stored[i] != want[i] {
+			t.Fatalf("document vector differs from JobVector at position %d — is it built with ProfileVector?", i)
+		}
+	}
+}
