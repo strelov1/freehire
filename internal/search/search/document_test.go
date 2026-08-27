@@ -10,13 +10,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
 	// Composite from resolved seniority+category.
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"})
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -24,7 +25,7 @@ func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
 		t.Errorf("roles = %v, want to contain senior_backend", doc.Roles)
 	}
 	// Named role from the title even with an empty grid.
-	named, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Founding Engineer"})
+	named, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Founding Engineer"}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
 }
 
 func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
-	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"})
+	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -69,7 +70,7 @@ func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
 
 	// An unresolved title carries no value — and is still indexed. Empty means "no
 	// marker in the title", never "individual contributor".
-	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"})
+	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 	doc, err := FromJob(db.Job{
 		ID: 1, PublicSlug: "s", Category: "ai_engineering",
 		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
-	})
+	}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -201,7 +202,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 	nonAI, err := FromJob(db.Job{
 		ID: 2, PublicSlug: "s2", Category: "backend",
 		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
-	})
+	}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -240,7 +241,7 @@ func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	// and the embedded jobview.Job must flatten (no nesting) so its fields are
 	// the searchable attributes. A json tag on the embedded field would break
 	// this. Enrichment itself stays a nested object (filtered via dot paths).
-	doc, err := FromJob(db.Job{ID: 42, Title: "Go Dev", PublicSlug: "go-dev-acme-x"})
+	doc, err := FromJob(db.Job{ID: 42, Title: "Go Dev", PublicSlug: "go-dev-acme-x"}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -271,7 +272,7 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	created := pgtype.Timestamptz{Time: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC), Valid: true}
 	past := pgtype.Timestamptz{Time: time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), Valid: true}
 
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past})
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -280,7 +281,7 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	}
 
 	future := pgtype.Timestamptz{Time: time.Now().Add(48 * time.Hour), Valid: true}
-	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future})
+	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob future: %v", err)
 	}
@@ -315,7 +316,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	// serves the full text from Postgres. A long description is trimmed to at most
 	// maxIndexedDescriptionRunes runes; a short one is left verbatim.
 	long := strings.Repeat("alpha beta ", 600) // ~6000 runes
-	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: long})
+	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: long}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -327,7 +328,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	}
 
 	short := "Build backend services in Go."
-	docShort, err := FromJob(db.Job{ID: 2, Title: "Go Dev", Description: short})
+	docShort, err := FromJob(db.Job{ID: 2, Title: "Go Dev", Description: short}, skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("FromJob short: %v", err)
 	}

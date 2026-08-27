@@ -10,6 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/dict/roletag"
 	"github.com/strelov1/freehire/internal/dict/roletype"
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -23,6 +24,10 @@ import (
 // keeps a fresh rebuild small enough to swap in within the host's free disk.
 // Descriptions average ~4900 runes; 1000 captures the role summary and the first
 // requirements, where keyword matches that matter overwhelmingly land.
+//
+// The skill vectors (see JobDocument.Vectors) are the other large contributor to that
+// footprint, and unlike this cap their width is fixed rather than tunable: it is
+// declared in the index settings, so trimming it means a full rebuild.
 const maxIndexedDescriptionRunes = 1000
 
 // JobDocument is a job as stored in the Meilisearch index: the internal id (the
@@ -74,7 +79,21 @@ type JobDocument struct {
 	// side — "reid-health" finding "reidhealth", never the reverse, because there is no
 	// guessing where hyphens go. Folding BOTH sides needs the fold stored, and here it is.
 	CompanySlugFolded string `json:"company_slug_folded"`
+	// Vectors carries the job's skill vector under Meilisearch's reserved `_vectors`
+	// key — the userProvided embedder that backs the match sort (see
+	// internal/dict/skillvec). Like Roles and RoleType it lives on the document rather
+	// than jobview.Job, so it never enters the public wire shape.
+	//
+	// `omitempty` is load-bearing: a job with no recognised skills must carry NO
+	// _vectors key at all. An empty vector object is a document Meilisearch rejects,
+	// not one that merely sits out the ranking.
+	Vectors map[string][]float32 `json:"_vectors,omitempty"`
 }
+
+// SkillEmbedder is the name of the Meilisearch embedder carrying skill vectors. It
+// keys both the document's _vectors object and the hybrid search request, so the
+// stored side and the query side cannot drift apart.
+const SkillEmbedder = "skills"
 
 // FromJob maps a database job row to its index document. An empty or absent
 // enrichment payload yields the zero Enrichment (the job is still fully
@@ -84,7 +103,14 @@ type JobDocument struct {
 // set here (it needs the caller's clock and role-cluster counts); the caller
 // attaches it to the returned document via doc.Reality so it backs the
 // `reality.class` facet.
-func FromJob(j db.Job) (JobDocument, error) {
+//
+// The skill weights ARE a parameter, unlike the reality signal, and deliberately so:
+// they are a plain value rather than something needing a clock and cluster counts, so
+// taking them here makes the compiler catch an indexer that forgets. A document
+// silently missing its vector would drop out of the match ordering with nothing
+// raised anywhere. The zero Weights is legitimate and yields a document with no
+// vector — the state before the rarity rollup has ever run.
+func FromJob(j db.Job, w skillvec.Weights) (JobDocument, error) {
 	view, err := jobview.FromRow(j)
 	if err != nil {
 		return JobDocument{}, err
@@ -107,6 +133,9 @@ func FromJob(j db.Job) (JobDocument, error) {
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
+	}
+	if v := w.Vector(j.Skills); v != nil {
+		doc.Vectors = map[string][]float32{SkillEmbedder: v}
 	}
 	return doc, nil
 }

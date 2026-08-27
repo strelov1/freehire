@@ -21,6 +21,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -95,7 +96,7 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j)
+		d, err := FromJob(j, skillvec.Weights{})
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -248,7 +249,7 @@ func TestSearchFiltersBySkillsFacet(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j)
+		d, err := FromJob(j, skillvec.Weights{})
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -297,7 +298,7 @@ func TestSearchFiltersByPostedWithinDays(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j)
+		d, err := FromJob(j, skillvec.Weights{})
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -348,7 +349,7 @@ func TestSearchFiltersByCollectionsFacet(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j)
+		d, err := FromJob(j, skillvec.Weights{})
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -382,7 +383,7 @@ func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
 	t.Helper()
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j)
+		d, err := FromJob(j, skillvec.Weights{})
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}

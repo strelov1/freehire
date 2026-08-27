@@ -20,8 +20,8 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 ## 4. The indexed document
 
-- [ ] 4.1 Add `SkillEmbedder` and `JobDocument.Vectors` (`_vectors`, omitted when empty), and change `FromJob` to take the weights so an indexer that forgets fails to compile
-- [ ] 4.2 Update the three indexers (`cmd/reindex`, `cmd/search-drain`, `internal/ingest/linkimport`) to load the weights once per run and pass them; a weight-load failure logs and continues rather than aborting the run
+- [x] 4.1 Add `SkillEmbedder` and `JobDocument.Vectors` (`_vectors`, omitted when empty), and change `FromJob` to take the weights so an indexer that forgets fails to compile
+- [x] 4.2 Update the three indexers (`cmd/reindex`, `cmd/search-drain`, `internal/ingest/linkimport`) to load the weights once per run and pass them; a weight-load failure logs and continues rather than aborting the run
 
 ## 5. The engine
 

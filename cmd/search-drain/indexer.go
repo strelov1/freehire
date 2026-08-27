@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -20,6 +21,12 @@ import (
 type searchIndexer struct {
 	client *search.Client
 	q      *db.Queries
+	// skillWeights are the match sort's rarity weights, resolved once when the worker
+	// starts. They describe the catalogue, not any single posting, so re-reading them
+	// per wave would be a query every drain pass for a snapshot that changes only when
+	// cmd/rollup-facets runs. The zero value is legitimate: documents then carry no
+	// vector, exactly as they did before the match sort existed.
+	skillWeights skillvec.Weights
 }
 
 // clusterKey identifies one role cluster. RoleClusterCountsFor/RoleClusterGeoFor match
@@ -106,7 +113,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		if search.CategoryUnresolved(job) || search.DescriptionMissing(job) {
 			continue
 		}
-		doc, err := search.FromJob(job)
+		doc, err := search.FromJob(job, ix.skillWeights)
 		if err != nil {
 			return fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}

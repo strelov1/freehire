@@ -2,8 +2,14 @@
 // Postgres. It ensures the index settings exist, then scans the WHOLE table in
 // batches and upserts their documents into a fresh rebuild index before atomically
 // swapping it in. Run it on a schedule (e.g. cron); it processes the whole table and
-// exits. Indexing is idempotent (upsert by id), so re-runs are safe. A full rebuild
-// is minutes, not hours — the index carries no embedder.
+// exits. Indexing is idempotent (upsert by id), so re-runs are safe.
+//
+// The index carries ONE embedder, and it is `userProvided`: the skill vectors backing
+// the match sort are computed here (internal/dict/skillvec) rather than fetched, so a
+// rebuild still contacts no embedding service. It is not free, though — building the
+// vector index is what makes a rebuild materially slower and larger than it was when
+// the index carried no embedder at all, so this is a run to schedule deliberately
+// rather than one to leave on a tight timer.
 package main
 
 import (
@@ -17,6 +23,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -26,10 +33,12 @@ import (
 )
 
 // reindexBatchSize bounds how many jobs are read from Postgres and pushed to
-// Meilisearch per round. Once the facet index dropped the per-document embedder,
-// the per-batch round-trip became the throughput lever, so the batch is sized up
-// from 500 to amortize it (Postgres read and the ~7KB-doc payload are both cheap
-// at this size). A const for now; promote to config if it needs tuning.
+// Meilisearch per round. When the facet index dropped its model-backed embedder, the
+// per-batch round-trip became the throughput lever, so the batch was sized up from
+// 500 to amortize it (Postgres read and the ~7KB-doc payload are both cheap at this
+// size). The skill vectors added since do not change that: they are computed locally
+// and add bytes to the payload, not a round trip. A const for now; promote to config
+// if it needs tuning.
 const reindexBatchSize = 2000
 
 // progressInterval is how often reindex emits a heartbeat with its running totals.
@@ -108,10 +117,19 @@ func run() int {
 		return 1
 	}
 
+	// Skill-rarity weights for the match sort's vectors: one snapshot per run, since
+	// they describe the catalogue rather than any single posting. A failure here is
+	// deliberately NOT fatal — a rebuild that ships without the match sort is far
+	// better than no rebuild, and this worker already refuses to run on a tight disk.
+	skillWeights, err := search.LoadSkillWeights(ctx, q)
+	if err != nil {
+		log.Printf("reindex: skill weights unavailable, this rebuild carries no skill vectors: %v", err)
+	}
+
 	// Builds a fresh index and atomically swaps it in — transiently a second full copy
 	// of the index (disk already guarded up front, before the recompute).
 	log.Print("reindex: target=facet scope=full mode=swap")
-	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, time.Now())
+	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, time.Now(), skillWeights)
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -180,7 +198,7 @@ type rebuilder interface {
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo clusterGeoLookup, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo clusterGeoLookup, now time.Time, w skillvec.Weights) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -202,7 +220,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		}
 	}()
 
-	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, now, b.Push)
+	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, now, w, b.Push)
 	if err != nil {
 		return indexed, skipped, err
 	}
@@ -220,7 +238,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // used to also back an in-place semantic rehydration path that shared this loop and
 // differed only in the per-batch sink; that path is gone (see openspec/changes/
 // drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
-func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo clusterGeoLookup, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo clusterGeoLookup, now time.Time, w skillvec.Weights, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -237,7 +255,7 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 		skipped += len(corrupted)
 
 		if len(jobs) > 0 {
-			docs, _, err := splitJobs(jobs, lookup, geo, now) // closed jobs (deleteIDs) are dropped, not indexed
+			docs, _, err := splitJobs(jobs, lookup, geo, now, w) // closed jobs (deleteIDs) are dropped, not indexed
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
@@ -455,7 +473,7 @@ func buildClusterGeoLookup(ctx context.Context, q *db.Queries) (clusterGeoLookup
 // reality signal, classified against `now` and its cluster counts); closed, private,
 // or category-unresolved jobs become deletions so they leave the index (the index
 // contains only open, non-private, categorized jobs — see the job-search spec).
-func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
+func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now time.Time, w skillvec.Weights) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
@@ -476,7 +494,7 @@ func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now ti
 		if lookup != nil {
 			repost, mass = lookup(j.CompanySlug, j.RoleFingerprint.String)
 		}
-		doc, err := search.FromJob(j)
+		doc, err := search.FromJob(j, w)
 		if err != nil {
 			return nil, nil, err
 		}

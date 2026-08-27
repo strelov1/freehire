@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -23,7 +24,7 @@ func TestSplitJobs_OpenBecomeDocsClosedBecomeDeletions(t *testing.T) {
 	closed := db.Job{ID: 2, Title: "Closed", PublicSlug: "closed-x",
 		ClosedAt: pgtype.Timestamptz{Time: open.CreatedAt.Time, Valid: true}}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{open, closed}, nil, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{open, closed}, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -42,7 +43,7 @@ func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
 	repost := db.Job{ID: 2, Title: "Repost", PublicSlug: "repost-x",
 		DuplicateOf: pgtype.Int8{Int64: 1, Valid: true}}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{canon, repost}, nil, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{canon, repost}, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestSplitJobs_PrivateJobsAreDeletedNotIndexed(t *testing.T) {
 	public := db.Job{ID: 1, Title: "Public", PublicSlug: "public-x", Category: "backend", Description: "<p>Build things.</p>"}
 	private := db.Job{ID: 2, Title: "Private", PublicSlug: "private-x", IsPrivate: true}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{public, private}, nil, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{public, private}, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -82,7 +83,7 @@ func TestSplitJobs_CategoryUnresolvedDeletedNotIndexed(t *testing.T) {
 	llmOther := db.Job{ID: 3, Title: "Mystery Role", PublicSlug: "mystery-x",
 		Enrichment: []byte(`{"category":"other"}`)}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{categorized, unresolved, llmOther}, nil, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{categorized, unresolved, llmOther}, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -105,7 +106,7 @@ func TestSplitJobs_BodylessJobsDeletedNotIndexed(t *testing.T) {
 	markupOnly := db.Job{ID: 3, Title: "Backend Engineer", PublicSlug: "markup-x",
 		Category: "backend", Description: "<p>&nbsp;</p>"}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{readable, bodyless, markupOnly}, nil, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{readable, bodyless, markupOnly}, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -133,7 +134,7 @@ func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
 		return nil, nil, nil
 	}
 
-	docs, _, err := splitJobs([]db.Job{canon}, nil, geo, time.Now())
+	docs, _, err := splitJobs([]db.Job{canon}, nil, geo, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -195,7 +196,7 @@ func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: page}}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}
@@ -221,7 +222,7 @@ func TestReindexFull_CleansUpOnAbort(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}}}}
 	f := &fakeRebuilder{pushErr: errors.New("push boom")}
 
-	_, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
+	_, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now(), skillvec.Weights{})
 	if err == nil {
 		t.Fatal("expected reindexFull to return the push error")
 	}
@@ -239,7 +240,7 @@ func TestReindexFull_NoCleanupOnSuccess(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}}}}
 	f := &fakeRebuilder{}
 
-	if _, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now()); err != nil {
+	if _, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now(), skillvec.Weights{}); err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}
 	if slices.Contains(f.calls, "cleanup") {
@@ -262,7 +263,7 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 	}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now(), skillvec.Weights{})
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}

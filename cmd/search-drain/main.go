@@ -48,10 +48,19 @@ func run() int {
 
 	dcfg := config.LoadSearchDrain()
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+	q := db.New(pool)
+
+	// One snapshot of the match sort's rarity weights per run. Not fatal on failure:
+	// the drain's job is to keep the index current, and dropping this wave's vectors is
+	// a far smaller loss than dropping the wave. The next full rebuild rewrites them.
+	skillWeights, err := search.LoadSkillWeights(ctx, q)
+	if err != nil {
+		log.Printf("search-drain: skill weights unavailable, this run's documents carry no skill vector: %v", err)
+	}
 
 	runner := searchdrain.Runner{
 		Store:   newDBStore(pool),
-		Indexer: searchIndexer{client: client, q: db.New(pool)},
+		Indexer: searchIndexer{client: client, q: q, skillWeights: skillWeights},
 	}
 
 	opt := searchdrain.RunOptions{
