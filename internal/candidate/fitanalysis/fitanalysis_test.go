@@ -318,28 +318,6 @@ func TestFollow(t *testing.T) {
 		}
 	})
 
-	t.Run("a failed leader gives this caller's reservation back", func(t *testing.T) {
-		// Nothing cached, so this caller genuinely reserved; the leader — typically the free
-		// autopilot pre-run — produced nothing, so there is nothing to pay for.
-		meter := newMeter(10, 1)
-		svc := newService(&fakeStore{}, meter)
-		reserve(t, meter, jobID)
-
-		_, err := svc.Follow(ctx, fitanalysis.Request{
-			UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
-			Claim: followerOf(svc, false),
-		})
-		if !errors.Is(err, fitanalysis.ErrUnavailable) {
-			t.Fatalf("err = %v, want ErrUnavailable", err)
-		}
-		if len(meter.releases) != 1 {
-			t.Errorf("releases = %v, want the reservation given back", meter.releases)
-		}
-		if meter.remaining != 10 {
-			t.Errorf("remaining = %d, want 10 — a run that produced nothing costs nothing", meter.remaining)
-		}
-	})
-
 	t.Run("a successful leader's result is replayed and this caller still pays", func(t *testing.T) {
 		// The leader here stands in for the autopilot's free pre-run: it never charges, so
 		// the follower's own genuinely-new analysis must still be billed once.
@@ -613,33 +591,93 @@ func TestRunKeepsTheReservationWhenItProducesAnAnalysis(t *testing.T) {
 	}
 }
 
-// TestReleaseNeverVoidsACreditAnExistingAnalysisEarned is the shared-ledger-row rule. A credit
-// buys HAVING the analysis, and two concurrent callers for one (candidate, job) share a single
-// debit — so a caller that got nothing must not void a charge somebody else's result earned.
-//
-// The live case: a leader whose CACHE WRITE fails still returns its analysis to the caller that
-// paid for it. A follower then finds no readable row and, without this rule, would release the
-// shared debit and make that served analysis free.
-func TestReleaseNeverVoidsACreditAnExistingAnalysisEarned(t *testing.T) {
+// TestReleaseNeverVoidsACreditAnEarlierRunEarned pins the other half of the rule: a LATER run
+// that fails — the autopilot's refresh, a recompute — must not give back the credit an earlier
+// run already earned. A credit buys HAVING the analysis, not the attempt that produced it.
+func TestReleaseNeverVoidsACreditAnEarlierRunEarned(t *testing.T) {
 	ctx := context.Background()
 	meter := newMeter(10, 1)
-	// An analysis exists for the pair — whoever produced it, the charge is earned.
+	// An analysis exists for the pair, and it was paid for.
 	svc := newService(&fakeStore{row: cachedRow(t, 80)}, meter)
+	reserve(t, meter, jobID)
+
+	// A recompute runs later and produces nothing. It reaches the release (it ran the chain),
+	// and the guard is what stops it giving back the earlier run's credit.
+	if _, err := svc.Run(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID},
+		Analyzer: matchanalysis.NewAnalyzer(nil),
+	}, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(meter.releases) != 0 {
+		t.Errorf("releases = %v, want none — the analysis it was paid for still exists", meter.releases)
+	}
+	if meter.remaining != 9 {
+		t.Errorf("remaining = %d, want 9", meter.remaining)
+	}
+}
+
+// TestAFreeLeaderReleasesThePayingFollowersCredit is why the release belongs to whoever ran the
+// chain rather than to whoever paid. The autopilot's cold-start pre-run leads for free; a
+// streaming caller reserved and is following it. When the pre-run produces nothing, the
+// follower is told the analysis is unavailable — and the charge standing against that pair is
+// theirs, so the leader gives it back on their behalf.
+func TestAFreeLeaderReleasesThePayingFollowersCredit(t *testing.T) {
+	ctx := context.Background()
+	meter := newMeter(10, 1)
+	svc := newService(&fakeStore{}, meter)
+
+	// The streaming caller reserved before it started following.
 	reserve(t, meter, jobID)
 	if meter.remaining != 9 {
 		t.Fatalf("remaining = %d, want the credit held", meter.remaining)
 	}
 
-	// A caller that believes it owes nothing tries to give the credit back.
+	leader := svc.Claim(userID, jobID)
+	follower := svc.Claim(userID, jobID)
+
+	// The pre-run: nothing cached, a nil client, so it computes nothing. Reserved is false —
+	// this half never charges.
+	svc.Ensure(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID}, Claim: leader,
+		Analyzer: matchanalysis.NewAnalyzer(nil),
+	})
+
+	if _, err := svc.Follow(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID}, Reserved: true, Claim: follower,
+	}); !errors.Is(err, fitanalysis.ErrUnavailable) {
+		t.Fatalf("follower err = %v, want ErrUnavailable", err)
+	}
+
+	if meter.remaining != 10 {
+		t.Errorf("remaining = %d, want 10 — nobody got an analysis, so nobody pays", meter.remaining)
+	}
+	if len(meter.releases) != 1 {
+		t.Errorf("releases = %v, want exactly one, from the leader", meter.releases)
+	}
+}
+
+// TestAFollowerNeverReleasesOnItsOwn is the other side: the debit is per (candidate, job) and
+// shared, so a follower giving it back could void a charge the leader's result earned. The
+// route that matters is a leader whose CACHE WRITE fails — it still returned its analysis to
+// whoever paid for it, and leaves no row for the follower to read.
+func TestAFollowerNeverReleasesOnItsOwn(t *testing.T) {
+	ctx := context.Background()
+	meter := newMeter(10, 1)
+	// No row: the leader "succeeded" but its cache write did not land.
+	svc := newService(&fakeStore{}, meter)
+	reserve(t, meter, jobID)
+
 	if _, err := svc.Follow(ctx, fitanalysis.Request{
 		UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
-		Claim: followerOf(svc, false),
+		Claim: followerOf(svc, true), // leader reports success
 	}); !errors.Is(err, fitanalysis.ErrUnavailable) {
 		t.Fatalf("err = %v, want ErrUnavailable", err)
 	}
 
 	if len(meter.releases) != 0 {
-		t.Errorf("releases = %v, want none — an analysis exists, so the charge stands", meter.releases)
+		t.Errorf("releases = %v, want none — the leader was served and earned the charge", meter.releases)
 	}
 	if meter.remaining != 9 {
 		t.Errorf("remaining = %d, want 9 — the served analysis stays paid for", meter.remaining)

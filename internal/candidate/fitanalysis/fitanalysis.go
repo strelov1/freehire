@@ -253,11 +253,16 @@ func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Ev
 	if r.Claim.IsLeader() {
 		defer func() { r.Claim.Release(succeeded) }()
 	}
-	// Nothing produced means nothing owed. Deferred so a panic anywhere below — in the chain,
-	// the emit callback or the cache write — gives the credit back too, rather than leaving a
-	// candidate charged for an analysis that does not exist.
+	// Nothing produced means nothing owed — and whoever RAN THE CHAIN says so for everyone.
+	// Only a leader or a caller that is not coalescing at all reaches Run (a follower goes to
+	// Follow), so this is exactly the caller that knows the outcome. It releases the ref
+	// rather than just its own reservation: when the leader is the free autopilot pre-run, the
+	// charge standing against that ref belongs to a follower about to be told there is nothing.
+	//
+	// Deferred so a panic anywhere below — in the chain, the emit callback or the cache write
+	// — gives the credit back too.
 	defer func() {
-		if !succeeded && r.Reserved {
+		if !succeeded {
 			s.release(ctx, r.UserID, r.Job.ID)
 		}
 	}()
@@ -298,19 +303,15 @@ var ErrUnavailable = errors.New("fitanalysis: analysis unavailable")
 // autopilot pre-run is exactly the case that must still charge a genuinely new analysis.
 func (s *Service) Follow(ctx context.Context, r Request) (*matchanalysis.Analysis, error) {
 	if !r.Claim.wait() {
-		// The leader produced nothing, so this caller owes nothing either. Its own reservation
-		// is separate from the leader's when the leader was the free autopilot pre-run.
-		if r.Reserved {
-			s.release(ctx, r.UserID, r.Job.ID)
-		}
+		// No release here, deliberately. The debit is per (candidate, job) and this caller
+		// shares it with the leader, so giving it back could void a charge the leader's own
+		// result earned — a leader whose CACHE WRITE failed still returned its analysis to
+		// whoever paid for it. The leader releases on failure for everyone; see Run.
 		return nil, ErrUnavailable
 	}
 	row, err := s.store.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID})
 	analysis := DecodeAnalysis(row.Analysis)
 	if err != nil || analysis == nil {
-		if r.Reserved {
-			s.release(ctx, r.UserID, r.Job.ID)
-		}
 		return nil, ErrUnavailable
 	}
 	return analysis, nil
@@ -337,7 +338,15 @@ func (s *Service) Ensure(ctx context.Context, r Request) {
 		return
 	}
 	succeeded := false
-	defer func() { r.Claim.Release(succeeded) }()
+	defer func() {
+		r.Claim.Release(succeeded)
+		// This half never charges, but it can LEAD a paying caller. When it produces nothing,
+		// the follower waiting on it gets nothing either, and the charge standing against this
+		// ref is that follower's — so the leader gives it back on their behalf.
+		if !succeeded {
+			s.release(ctx, r.UserID, r.Job.ID)
+		}
+	}()
 
 	if _, err := s.store.GetUserJobAnalysis(ctx,
 		db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID}); err == nil {
@@ -409,16 +418,17 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	if s.credits == nil {
 		return
 	}
-	// A credit buys HAVING the analysis, not the attempt that produced it, and two concurrent
-	// callers for one pair share a single ledger row. So a caller that got nothing must not
-	// void a charge somebody else's result earned: if an analysis exists for this pair, the
-	// charge stands whoever produced it.
+	// A credit buys HAVING the analysis, not the attempt that produced it. A later run that
+	// fails — the autopilot's refresh, a recompute — must not give back the credit an EARLIER
+	// run earned, so a release stops when an analysis exists for the pair.
 	//
-	// The case is real rather than theoretical. A leader whose cache write fails still returns
-	// its analysis to the caller that paid for it; a follower then finds no readable row, and
-	// without this check would release the shared debit and make that served analysis free.
-	if analysis, _, err := s.Cached(ctx, userID, jobID); err == nil && analysis != nil {
-		return
+	// A service with no store cannot answer that question and simply releases: it is the
+	// nil-degrades-rather-than-panics rule the reads already follow, and a tool runs inside an
+	// SSE writer's goroutine where a panic reaches no recover.
+	if s.store != nil {
+		if analysis, _, err := s.Cached(ctx, userID, jobID); err == nil && analysis != nil {
+			return
+		}
 	}
 	if _, err := s.credits.Release(ctx, userID, credits.FeatureMatch, debitRef(jobID)); err != nil {
 		log.Printf("credits: releasing a match reservation for user %d job %d: %v", userID, jobID, err)
