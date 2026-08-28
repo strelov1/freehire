@@ -74,7 +74,6 @@ func TestIntegration_VectorSearchRanksByTheSkillVector(t *testing.T) {
 		t.Fatalf("EnsureIndex: %v", err)
 	}
 
-	w := skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "docker": 4000, "erlang": 12})
 	jobs := []db.Job{
 		{ID: 1, Title: "Go Engineer", Company: "Acme", Location: "Berlin", PublicSlug: "go-acme-a",
 			Category: "backend", Description: "Build things.", Skills: []string{"go", "docker"}},
@@ -83,7 +82,7 @@ func TestIntegration_VectorSearchRanksByTheSkillVector(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, w)
+		d, err := FromJob(j)
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -94,7 +93,7 @@ func TestIntegration_VectorSearchRanksByTheSkillVector(t *testing.T) {
 	}
 
 	// A candidate who knows Go and Docker: the Go posting must come first.
-	res, err := c.Search(ctx, SearchParams{Vector: w.ProfileVector([]string{"go", "docker"}), Limit: 10})
+	res, err := c.Search(ctx, SearchParams{Vector: skillvec.ProfileVector([]string{"go", "docker"}), Limit: 10})
 	if err != nil {
 		t.Fatalf("vector Search: %v", err)
 	}
@@ -116,19 +115,18 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 		t.Fatalf("EnsureIndex: %v", err)
 	}
 
-	w := skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "docker": 4000})
 	job := db.Job{ID: 1, Title: "Go Engineer", Company: "Acme", Location: "Berlin",
 		PublicSlug: "go-acme-a", Category: "backend", Description: "Build things.",
 		Skills: []string{"go", "docker"}}
 
-	withSkills, err := FromJob(job, w)
+	withSkills, err := FromJob(job)
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
 	if err := c.IndexJobs(ctx, []JobDocument{withSkills}); err != nil {
 		t.Fatalf("IndexJobs: %v", err)
 	}
-	if res, err := c.Search(ctx, SearchParams{Vector: w.ProfileVector([]string{"go"}), Limit: 10}); err != nil {
+	if res, err := c.Search(ctx, SearchParams{Vector: skillvec.ProfileVector([]string{"go"}), Limit: 10}); err != nil {
 		t.Fatalf("vector Search: %v", err)
 	} else if len(res.Hits) == 0 {
 		t.Fatal("the job is not rankable by vector before losing its skills")
@@ -136,7 +134,7 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 
 	// The same job, re-indexed with its skills gone.
 	job.Skills = nil
-	cleared, err := FromJob(job, w)
+	cleared, err := FromJob(job)
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}

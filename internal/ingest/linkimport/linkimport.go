@@ -316,16 +316,7 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 		repost, mass = c.RepostCount, c.MassCount
 		askGeo = mass > 1
 	}
-	// The match sort's rarity weights, read here rather than held on the Importer: one
-	// import already fetches and parses a remote page, so a snapshot read disappears
-	// into that, and reading fresh avoids a long-lived server process pinning weights
-	// from whenever it started. A failure degrades to a vector-less document — the next
-	// rebuild writes one — and never blocks the import.
-	weights, err := search.LoadSkillWeights(ctx, im.q)
-	if err != nil {
-		log.Printf("linkimport: skill weights for job %d unavailable, indexing without a vector: %v", saved.Job.ID, err)
-	}
-	doc, err := search.FromJob(saved.Job, weights)
+	doc, err := search.FromJob(saved.Job)
 	if err != nil {
 		log.Printf("linkimport: build index doc for job %d: %v", saved.Job.ID, err)
 		return

@@ -41,80 +41,51 @@ the tail is occupied, and at catalogue scale each 256 dimensions costs roughly 2
 of index. Changing it forces a full rebuild, and until that rebuild finishes the
 index rejects every document carrying the new width.
 
-## Weights
-`Weights` holds one factor per position, derived from how many open jobs name each
-skill (`insights_facet_stats`, populated by `cmd/rollup-facets` — no worker of our
-own). Rare skills weigh more: an overlap on `git` says nothing, an overlap on
-`erlang` says a great deal.
+## Why there are no rarity weights
+An earlier version weighted each skill by how rare it is in the catalogue, so that
+matching `erlang` counted for more than matching `git`. That is a defensible idea and it
+is **gone**, because it is incompatible with the ordering the feed promises.
 
-```text
-idf(s) = ln((maxCount + 1) / (count(s) + 1)) + 1
-```
+The promise is that the feed reads as one descending run of coverage: every 100% match,
+then every 95%, and so on. Rarity weights break it — an IDF spread of 1..13 is far wider
+than the gap between 100% and 95%, so a 93% match on scarce skills outranks a 100% match
+on ordinary ones. Measured on production, the top forty carried fourteen such
+inversions, the worst a 33-point drop, and the feed read as random.
 
-The scale is anchored on the **commonest skill in the snapshot**, not on a catalogue
-size. The textbook shape divides by the document count, but that number is not in this
-package's reach, and the obvious substitute — the sum of the counts — is wrong in a way
-that matters: a job naming ten skills contributes to ten of them, so the sum grows with
-catalogue breadth and flattens the very contrast the weighting exists to create.
+Damping did not rescue it. Swept over real data, a factor of 0.05 was clean across forty
+results and broke by a hundred; only removing the tilt entirely holds the order at
+depth. So **every recognised skill contributes the same amount**, and what a posting is
+worth is decided by how much of it the reader covers.
 
-Two more deliberate choices:
-- a skill absent from the counts is treated as **maximally rare**, not weightless —
-  it is either newly mined or genuinely obscure, and both warrant weight;
-- the result is floored at 1, so a skill every posting names still contributes
-  something rather than vanishing from the vector entirely.
+The consequence is worth stating plainly: 100% of `[git, sql]` ranks with 100% of
+`[erlang, rust]`. Within one coverage band the posting asking for MORE skills wins,
+since engaging twenty you hold beats engaging six.
 
-An unloaded snapshot and a job with no skills look the same downstream, and that is
-forced rather than chosen: with the embedder declared, Meilisearch rejects a document
-that omits `_vectors`, so there is no "leave it alone" option to express. Both write
-the null opt-out. The cost is that documents written while the rollup is unavailable
-lose their vectors until the next rebuild — the indexers log loudly for that reason.
-
-## Why `Vector` returns nil rather than a zero vector
-A zero vector is not "no opinion" — it is a document Meilisearch rejects, and a query
-that ranks against nothing. So `Vector` reports an absence: no weights loaded, no
-skills given, or no slug recognised all yield nil.
-
-The caller turns that nil into `"_vectors":{"skills":null}` — Meilisearch's documented
-opt-out. It is not an omission: the index merges document fields, so omitting would
-leave a stale vector ranking a job by skills it no longer has, AND a declared embedder
-makes the engine reject a document with no `_vectors` at all.
+`TestOrderIsStrictlyDescendingCoverage` is the guard. If rarity ever comes back, it will
+fail — and it should.
 
 ## Why the cosine is the score, and why it needed a ballast
-Vectors are unit length, so
-
-```text
-cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
-```
-
-That alone is NOT enough, and the reason is worth understanding before touching this.
-When a vacancy sits almost entirely inside a large profile, the expression collapses to
-roughly `√(overlap) / ‖A‖` — it rewards the SIZE of the overlap, and the denominator
-only penalises the vacancy's skills the reader does NOT hold. So a posting listing 79
-skills of which the reader holds 63 beats one listing 5 they hold entirely.
-
-That is not theoretical. Against a real 162-skill profile the entire top ten was
-postings carrying 52-92 skills, out of a catalogue whose median is **7**. The feed
-served the 369 most cluttered postings in the catalogue and read as random.
+Vectors are unit length, so the cosine is the overlap over the product of lengths. That
+alone is NOT enough. When a vacancy sits almost entirely inside a large profile the
+expression collapses to roughly `sqrt(overlap) / ||A||` — it rewards the SIZE of the
+overlap, and the denominator only penalises the vacancy's skills the reader does NOT
+hold. So a posting listing 79 skills of which the reader holds 63 beats one listing 5
+they hold entirely. Against a real 162-skill profile the entire top ten was postings
+carrying 52-92 skills, out of a catalogue whose median is **7**.
 
 **The fix is `ballastPosition`:** one slot the profile never sets. It contributes
-nothing to the numerator and lengthens the job's vector, so a posting dilutes itself in
-proportion to how much it asks for — which is how coverage comes to matter more than
-raw overlap. Hence two constructors: `JobVector` (with ballast) and `ProfileVector`
-(without). Swapping them silently restores the defect, and
-`TestFromJobUsesTheJobSideConstructor` is what catches that.
+nothing to the numerator and lengthens the job's vector, so the score reduces to about
+`overlap / |B|` — coverage. Hence two constructors, `JobVector` (with ballast) and
+`ProfileVector` (without). Swapping them silently restores the defect, and
+`TestFromJobUsesTheJobSideConstructor` catches that.
 
-**The floor of six skills is load-bearing.** Ballast strong enough to lift genuinely
-full-coverage postings also lifts one-tag ones, because a single tag the reader holds
-is 100% covered: swept over real data, the top ten filled with single-skill nursing
-vacancies. The floor prices that out.
+**The floor of six skills is load-bearing.** A single tag the reader holds is 100%
+covered, so without a floor the feed fills with one-skill postings — swept over real
+data, the top ten became single-skill nursing vacancies.
 
-Constants came from a sweep over a stratified production sample (k ∈ [2,12],
-floor ∈ [5,12]); results plateau from k=4, so the shipped setting is the gentlest one
-that reaches the plateau.
-
-Rarity still outranks breadth at the margin: a vacancy asking only for a scarce skill
-the candidate holds CAN outrank a broader match on ubiquitous ones, and should. Do not
-"fix" that by capping the weights.
+Constants come from a sweep over a stratified production sample (k in [2,12], floor in
+[5,12]); results plateau from k=4, so the shipped setting is the gentlest that reaches
+it.
 
 ## Not to be confused with
 `internal/candidate/jobmatch` scores ONE job against a profile and credits adjacent

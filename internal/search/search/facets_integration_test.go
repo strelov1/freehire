@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
-	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -60,7 +59,7 @@ func TestIntegration_FacetCounts(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, skillvec.Weights{})
+		d, err := FromJob(j)
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -143,7 +142,7 @@ func TestIntegration_IsTechFilter(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, skillvec.Weights{})
+		d, err := FromJob(j)
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}

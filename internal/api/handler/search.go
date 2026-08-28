@@ -36,9 +36,6 @@ type searchHandlers struct {
 	// userProfile reads the caller's profile skills for the match sort. Nil disables
 	// that sort entirely, which is exactly how it degrades everywhere else.
 	userProfile profileReader
-	// facetStats reads the skill-rarity snapshot the match sort weights by.
-	// *db.Queries in production; a fake in tests.
-	facetStats facetStatsReader
 }
 
 // profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
@@ -48,17 +45,10 @@ type profileReader interface {
 	Get(ctx context.Context, userID int64) (userprofile.Profile, error)
 }
 
-// facetStatsReader reads the facet-distribution snapshot backing the skill-rarity
-// weights. It mirrors search.FacetStatsReader rather than importing it as the
-// handler's dependency, so the fake a test injects stays local to this package.
-type facetStatsReader interface {
-	ListFacetStats(ctx context.Context) ([]db.InsightsFacetStat, error)
-}
-
 func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries, c cache.Cache, profiles profileReader) *searchHandlers {
 	return &searchHandlers{
 		search: search, descriptions: queries, queries: queries, facets: facets, cache: c,
-		userProfile: profiles, facetStats: queries,
+		userProfile: profiles,
 	}
 }
 
@@ -126,16 +116,6 @@ var searchSortable = map[string]string{
 // is resolved from the request rather than looked up in that table.
 const sortMatch = "match"
 
-// skillWeightsCacheTTL bounds how stale the skill-rarity weights may be. They change
-// only when cmd/rollup-facets runs, and the design treats weight drift as harmless —
-// a stale weight nudges the order, it cannot corrupt a stored vector. So this is
-// generous where facetCacheTTL is deliberately short.
-const skillWeightsCacheTTL = 15 * time.Minute
-
-// skillWeightsCacheKey is a constant: the snapshot is catalogue-wide, identical for
-// every caller.
-const skillWeightsCacheKey = "search:skill-weights:v1"
-
 // matchVector builds the caller's skill vector for ?sort=match, or nil when the sort
 // was not asked for or cannot be served.
 //
@@ -145,7 +125,7 @@ const skillWeightsCacheKey = "search:skill-weights:v1"
 // for — the same reason the jobs list ignores unknown filters rather than refusing
 // them.
 func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
-	if c.Query("sort") != sortMatch || h.userProfile == nil || h.facetStats == nil {
+	if c.Query("sort") != sortMatch || h.userProfile == nil {
 		return nil
 	}
 	// auth.UserID is what mw.optional populates; it reports false for an anonymous
@@ -159,32 +139,8 @@ func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
 	if err != nil || len(profile.Skills) == 0 {
 		return nil
 	}
-	weights, err := h.skillWeights(c.Context())
-	if err != nil {
-		return nil
-	}
 	// ProfileVector, never JobVector: the ballast belongs to the stored side only.
-	return weights.ProfileVector(profile.Skills)
-}
-
-// skillWeights reads the rarity snapshot through a best-effort cache. The snapshot is
-// the whole facet distribution, so reading it per request would be a needless query
-// for a value identical across callers and near-constant in time. A nil cache, a
-// miss, or any cache error falls through to a live read.
-func (h *searchHandlers) skillWeights(ctx context.Context) (skillvec.Weights, error) {
-	if h.cache == nil {
-		return search.LoadSkillWeights(ctx, h.facetStats)
-	}
-	if cached, found, err := cache.GetJSON[skillvec.Weights](ctx, h.cache, skillWeightsCacheKey); err == nil && found {
-		return cached, nil
-	}
-	w, err := search.LoadSkillWeights(ctx, h.facetStats)
-	if err != nil {
-		return w, err
-	}
-	// Best-effort: a failed write just means the next request reloads.
-	_ = cache.SetJSON(ctx, h.cache, skillWeightsCacheKey, w, skillWeightsCacheTTL)
-	return w, nil
+	return skillvec.ProfileVector(profile.Skills)
 }
 
 // SearchJobs runs a full-text/faceted keyword search over the jobs index. It is

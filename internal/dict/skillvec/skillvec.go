@@ -2,10 +2,11 @@
 // so a vacancy's skills and a candidate's can be compared by cosine in the search
 // engine rather than by a set operation over a window in application code.
 //
-// A skill's position is PERMANENT (see registry.go). The weights that fill those
-// positions are not: they express how rare a skill is in the live catalogue and are
-// recomputed as it changes. Shifting a position corrupts every stored vector;
-// shifting a weight only nudges the ranking.
+// A skill's position is PERMANENT (see registry.go): shifting one corrupts every
+// vector already stored in the search index, silently.
+//
+// Every recognised skill contributes the SAME amount. Weighting by rarity was tried and
+// removed — it is incompatible with the ordering the feed promises. See AGENTS.md.
 package skillvec
 
 //go:generate go run ./gen

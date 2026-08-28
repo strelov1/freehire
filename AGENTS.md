@@ -138,7 +138,7 @@ Each is self-contained and can be read independently.
 | **Enrichment** (Enrichment contract, LLM Provider; enums live in `internal/dict/vocab`) | [internal/ai/enrich/AGENTS.md](internal/ai/enrich/AGENTS.md) |
 | **Geography** (country/region codes, work-mode hint, dict-only vs hybrid) | [internal/dict/location/AGENTS.md](internal/dict/location/AGENTS.md) |
 | **Skill tagging** (alias→canonical dictionary, jobs.skills facet) | [internal/dict/skilltag/AGENTS.md](internal/dict/skilltag/AGENTS.md) |
-| **Skill vectors** (the permanent position registry, IDF weights, the match sort's ordering) | [internal/dict/skillvec/AGENTS.md](internal/dict/skillvec/AGENTS.md) |
+| **Skill vectors** (the permanent position registry, the ballast, why coverage decides the order) | [internal/dict/skillvec/AGENTS.md](internal/dict/skillvec/AGENTS.md) |
 | **Seniority & category** (title→seniority/category, dict-only) | [internal/dict/classify/AGENTS.md](internal/dict/classify/AGENTS.md) |
 | **`internal/ai`** — the block itself: what it is, what it may import | [internal/ai/AGENTS.md](internal/ai/AGENTS.md) |
 | **Browser tools** (relays tool frames between agent harness and extension) | [internal/ai/browsertools/AGENTS.md](internal/ai/browsertools/AGENTS.md) |

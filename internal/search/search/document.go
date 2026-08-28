@@ -95,12 +95,7 @@ type JobDocument struct {
 	//
 	// Omitting the key is NOT a third state: with the embedder declared, Meilisearch
 	// rejects the whole document ("no vectors provided for document"), which would drop
-	// the posting out of the index rather than merely out of the match ordering. That
-	// costs a searchable job; a lost vector costs an ordering the next rebuild restores.
-	//
-	// The consequence is worth naming: while the rarity weights are unavailable, every
-	// document written carries a null and loses its vector. The indexers log loudly for
-	// exactly this reason, and the next rebuild with weights repairs it.
+	// the posting out of the index rather than merely out of the match ordering.
 	Vectors map[string][]float32 `json:"_vectors"`
 }
 
@@ -117,14 +112,7 @@ const SkillEmbedder = "skills"
 // set here (it needs the caller's clock and role-cluster counts); the caller
 // attaches it to the returned document via doc.Reality so it backs the
 // `reality.class` facet.
-//
-// The skill weights ARE a parameter, unlike the reality signal, and deliberately so:
-// they are a plain value rather than something needing a clock and cluster counts, so
-// taking them here makes the compiler catch an indexer that forgets. A document
-// silently missing its vector would drop out of the match ordering with nothing
-// raised anywhere. The zero Weights is legitimate and yields a document with no
-// vector — the state before the rarity rollup has ever run.
-func FromJob(j db.Job, w skillvec.Weights) (JobDocument, error) {
+func FromJob(j db.Job) (JobDocument, error) {
 	view, err := jobview.FromRow(j)
 	if err != nil {
 		return JobDocument{}, err
@@ -151,7 +139,7 @@ func FromJob(j db.Job, w skillvec.Weights) (JobDocument, error) {
 	// ALWAYS set the key. With the embedder declared, Meilisearch REJECTS any document
 	// that omits it — "no vectors provided for document" — so an omission is not a
 	// no-op, it drops the posting out of the index entirely.
-	doc.Vectors = map[string][]float32{SkillEmbedder: w.JobVector(j.Skills)}
+	doc.Vectors = map[string][]float32{SkillEmbedder: skillvec.JobVector(j.Skills)}
 	return doc, nil
 }
 

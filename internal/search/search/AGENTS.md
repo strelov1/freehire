@@ -114,7 +114,8 @@ rebuild, not a broken page. The order is still the one above; the blast radius j
 
 The facet index carries ONE embedder, named `skills` and sourced `userProvided`. No
 model is ever called: the vectors are arithmetic over `internal/dict/skillvec`'s
-permanent position registry, written into each document's `_vectors` by the three
+permanent position registry (unweighted — see that package on why rarity weighting was
+removed), written into each document's `_vectors` by the three
 indexers (`cmd/reindex`, `cmd/search-drain`, `internal/ingest/linkimport`).
 
 **Two ordering hazards, and both look like an outage rather than a missing feature:**

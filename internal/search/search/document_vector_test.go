@@ -9,13 +9,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// docWeights are rarity weights over two real dictionary slugs.
-func docWeights() skillvec.Weights {
-	return skillvec.WeightsFromCounts(map[string]int64{"go": 5000, "erlang": 12})
-}
-
 func TestFromJobCarriesTheSkillVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "erlang"}}, docWeights())
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "erlang"}})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -33,7 +28,7 @@ func TestFromJobCarriesTheSkillVector(t *testing.T) {
 // `_vectors` leaves the old one in place and the posting keeps ranking by skills it no
 // longer has — verified against a live engine. An explicit null is what clears it.
 func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}}, docWeights())
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -54,7 +49,7 @@ func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
 }
 
 func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, docWeights())
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -64,36 +59,10 @@ func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
 	}
 }
 
-// The key is present even with no weights loaded, and this is NOT a nicety: with the
-// embedder declared, Meilisearch rejects a document that omits it outright ("no vectors
-// provided for document"). Omitting would drop the posting out of the index entirely,
-// which costs a searchable job — far worse than the lost ordering a null costs, which
-// the next rebuild repairs.
-func TestFromJobWithoutWeightsStillCarriesTheKey(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, skillvec.Weights{})
-	if err != nil {
-		t.Fatalf("FromJob: %v", err)
-	}
-	v, ok := doc.Vectors[SkillEmbedder]
-	if !ok {
-		t.Fatalf("no %q key with unloaded weights; the engine would reject the document", SkillEmbedder)
-	}
-	if v != nil {
-		t.Errorf("vector = %v, want nil", v)
-	}
-	b, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if !bytes.Contains(b, []byte(`"_vectors":{"skills":null}`)) {
-		t.Errorf("serialised as %s, want the documented null opt-out", b)
-	}
-}
-
 // TestFromJobVectorSerialisesUnderTheReservedKey pins the wire contract: Meilisearch
 // reads document vectors from the reserved `_vectors` object, keyed by embedder name.
 func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, docWeights())
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -117,12 +86,12 @@ func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
 // defect the ballast exists to fix, reintroduced silently. Assert the stored vector
 // carries it.
 func TestFromJobUsesTheJobSideConstructor(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}}, docWeights())
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
 	stored := doc.Vectors[SkillEmbedder]
-	want := docWeights().JobVector([]string{"go", "docker"})
+	want := skillvec.JobVector([]string{"go", "docker"})
 	if len(stored) != len(want) {
 		t.Fatalf("vector width = %d, want %d", len(stored), len(want))
 	}

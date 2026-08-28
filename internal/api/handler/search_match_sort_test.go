@@ -11,7 +11,6 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 type fakeProfiles struct {
@@ -23,26 +22,10 @@ func (f fakeProfiles) Get(context.Context, int64) (userprofile.Profile, error) {
 	return f.profile, f.err
 }
 
-type fakeStats struct {
-	rows []db.InsightsFacetStat
-	err  error
-}
-
-func (f fakeStats) ListFacetStats(context.Context) ([]db.InsightsFacetStat, error) {
-	return f.rows, f.err
-}
-
-// skillRows is a rarity snapshot naming two real dictionary slugs.
-var skillRows = []db.InsightsFacetStat{
-	{Facet: "skills", Value: "go", Count: 5000},
-	{Facet: "skills", Value: "docker", Count: 4000},
-	{Facet: "countries", Value: "DE", Count: 40000},
-}
-
 // matchSortApp mounts /jobs/search with the match-sort dependencies. userID 0 means
 // an anonymous caller — the route is public, so no session is attached.
-func matchSortApp(s searcher, userID int64, profiles profileReader, stats facetStatsReader) *fiber.App {
-	h := &searchHandlers{search: s, userProfile: profiles, facetStats: stats}
+func matchSortApp(s searcher, userID int64, profiles profileReader) *fiber.App {
+	h := &searchHandlers{search: s, userProfile: profiles}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/jobs/search", func(c *fiber.Ctx) error {
 		if userID != 0 {
@@ -55,7 +38,7 @@ func matchSortApp(s searcher, userID int64, profiles profileReader, stats facetS
 
 func TestSearchSortMatch_SignedInCallerIsRankedByVector(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go", "docker"}}}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go", "docker"}}})
 
 	status, _ := doGet(t, app, "/jobs/search?sort=match")
 	if status != fiber.StatusOK {
@@ -71,7 +54,7 @@ func TestSearchSortMatch_SignedInCallerIsRankedByVector(t *testing.T) {
 
 func TestSearchSortMatch_AnonymousCallerGetsTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 0, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 0, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}})
 
 	status, _ := doGet(t, app, "/jobs/search?sort=match")
 	if status != fiber.StatusOK {
@@ -87,7 +70,7 @@ func TestSearchSortMatch_AnonymousCallerGetsTheDefaultFeed(t *testing.T) {
 
 func TestSearchSortMatch_ProfileWithNoSkillsGetsTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{}}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{}})
 
 	status, _ := doGet(t, app, "/jobs/search?sort=match")
 	if status != fiber.StatusOK {
@@ -103,7 +86,7 @@ func TestSearchSortMatch_ProfileWithNoSkillsGetsTheDefaultFeed(t *testing.T) {
 
 func TestSearchSortMatch_MissingProfileGetsTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{err: errors.New("no profile")}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 7, fakeProfiles{err: errors.New("no profile")})
 
 	status, _ := doGet(t, app, "/jobs/search?sort=match")
 	if status != fiber.StatusOK {
@@ -114,22 +97,9 @@ func TestSearchSortMatch_MissingProfileGetsTheDefaultFeed(t *testing.T) {
 	}
 }
 
-func TestSearchSortMatch_UnavailableWeightsGetTheDefaultFeed(t *testing.T) {
-	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}}, fakeStats{err: errors.New("db down")})
-
-	status, _ := doGet(t, app, "/jobs/search?sort=match")
-	if status != fiber.StatusOK {
-		t.Fatalf("status = %d, want 200 — an unavailable rarity snapshot must not fail the feed", status)
-	}
-	if len(fake.got.Vector) != 0 {
-		t.Error("weights failed to load but a vector was still sent")
-	}
-}
-
 func TestSearchSortMatch_UnrecognisedSkillsGetTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"definitely-not-a-skill"}}}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"definitely-not-a-skill"}}})
 
 	status, _ := doGet(t, app, "/jobs/search?sort=match")
 	if status != fiber.StatusOK {
@@ -142,7 +112,7 @@ func TestSearchSortMatch_UnrecognisedSkillsGetTheDefaultFeed(t *testing.T) {
 
 func TestSearchSortMatch_ComposesWithFacetFilters(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}})
 
 	doGet(t, app, "/jobs/search?sort=match&countries=DE&seniority=senior")
 
@@ -158,7 +128,7 @@ func TestSearchSortMatch_ComposesWithFacetFilters(t *testing.T) {
 // attribute must not also send a vector.
 func TestSearchSortMatch_AnAttributeSortSendsNoVector(t *testing.T) {
 	fake := &fakeSearcher{}
-	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}}, fakeStats{rows: skillRows})
+	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}})
 
 	doGet(t, app, "/jobs/search?sort=posted_at&order=asc")
 
