@@ -1,0 +1,83 @@
+---
+title: Sort the job feed by how well it matches your skills
+date: 2026-08-28
+summary: A new Best match sort orders the whole catalogue by what share of a job's skills you already have — full matches first, then progressively deeper. No AI, no credits, and it works with every filter.
+type: changelog
+tags:
+  - search
+  - job-seekers
+  - skills
+draft: false
+---
+
+The jobs feed could sort by date, by salary, or by keyword relevance. None of those knew
+anything about you. There is now a **Best match** option that does: it orders the whole
+catalogue by how much of each job's skill list your profile already covers.
+
+It reads as one descending run. Every job you fully cover comes first, then the ones you
+cover 95% of, then 90%, and so on. If a posting asks for nine skills and you have all
+nine, it is above a posting asking for forty of which you have thirty — even though the
+second one overlaps you more.
+
+Within a band, breadth wins: a job engaging twenty skills you hold ranks above one
+engaging six, since both are fully covered but the first puts more of you to work.
+
+The control appears in the feed's toolbar once you are signed in and your profile lists
+some skills. If it has nothing to rank against, it stays out of the way.
+
+## No model is involved
+
+This is worth being explicit about, because "match" usually means an embedding somewhere.
+
+Skills on freehire are not free text. They resolve to a fixed dictionary of canonical
+tags, so a job's skills and yours are both just sets drawn from the same finite
+vocabulary. Comparing two sets is arithmetic. There is no model to call, nothing to
+infer, and it costs no AI credits — the ordering is computed by the search engine itself,
+the same way it already sorts by date.
+
+That also rules out a failure mode a real embedding would have. Text embeddings place
+`java spring kotlin` very close to `go docker kubernetes`, because both read as "backend".
+Ranked that way, a Go developer's feed fills with Java roles that merely sound similar.
+Counting literal overlap cannot do that: a skill either appears in both lists or it does
+not.
+
+## It composes with everything else
+
+Best match is not a separate view with its own rules. It is a sort order on the ordinary
+feed, so every filter still applies — country, seniority, salary, work mode, remote
+region, freshness. Narrow to senior backend roles in Germany posted this month, then sort
+by match, and you get exactly that list in match order. Paging works normally too; there
+is no window it can only see inside of.
+
+Links keep working for everyone. A URL carrying the match sort opens fine when you are
+signed out — it just shows the default newest-first feed, and starts ordering by match
+once you sign in.
+
+## Coverage, not raw overlap
+
+The distinction took some getting right, so it is worth stating plainly.
+
+An earlier version ranked by how many of your skills a job engaged. That sounds the same
+and is not: a posting listing seventy-nine skills, of which you happen to hold sixty-three,
+engages far more of you than a tight posting listing five you hold entirely. So the first
+version put the catalogue's most cluttered postings on top — the ones that list every
+technology anyone in the building has heard of. The median job on freehire names seven
+skills; that feed was showing jobs naming fifty to ninety.
+
+What you actually want to know is what share of the job you cover. That is what the sort
+uses now, which is why the percentage shown on each card and the position it sits in
+finally agree.
+
+One deliberate consequence: covering all of `git, sql` counts the same as covering all of
+`erlang, rust`. Weighting scarce skills higher is a reasonable idea, and we tried it — but
+it makes the order jump around, putting a 93% match above a 100% one, and that costs more
+in confusion than it buys in precision.
+
+## Where it does not apply
+
+A job with no recognised skills has nothing to match against, so it sits out of this
+ordering. It is still fully searchable by text and every filter — it just cannot be
+ranked by a signal it does not carry.
+
+If your profile has no skills yet, [fill it in](/my/profile) — the sort has nothing to work
+with until it does.

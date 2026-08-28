@@ -48,3 +48,30 @@ below is one TDD cycle: red, green, refactor, simplify, review, then tick.
 
 - [x] 9.1 Hide the sort control behind `PUBLIC_MATCH_SORT` (`web/src/lib/features.ts`), default OFF — the API honours `?sort=match` regardless, so the ordering can be verified on production before the control appears
 - [x] 9.2 Document the flag and the reveal step in `web/.env.example`, the change's design, and `internal/search/search/AGENTS.md`
+
+## 10. What shipping it actually took
+
+Recorded after the fact, because the gap between the plan and the outcome is the useful
+part.
+
+- [x] 10.1 **The embedder was deleted the moment it was declared** (#2221). `EnsureIndex`
+  and `Rebuild.Prepare` applied the settings and then called `ResetEmbedders`. Every unit
+  test passed; a rebuild would have produced an index with no embedder and every
+  `sort=match` would have 500'd. Only an integration test against a live engine can see
+  this, so that is what now guards it.
+- [x] 10.2 **A declared embedder REJECTS documents that omit `_vectors`** (#2221). My
+  spike had tested the two cases that tolerate an omission — updating an existing
+  document, and pushing into an index with no embedder — and missed the one that
+  matters. CI caught it.
+- [x] 10.3 **The first ordering served the catalogue's 369 most cluttered postings**
+  (#2223). A cosine rewards the SIZE of the overlap, so 63-of-79 beat 5-of-5. The test
+  that should have caught it passed: its profile was five skills where the real one is
+  162. Fixed with a ballast component sized by what the posting asks for.
+- [x] 10.4 **Rarity weighting had to go entirely** (#2224). It reordered 100% below 93%,
+  and no damping factor reconciled it at depth. Coverage now decides alone; the weights,
+  their loader, their cache and the rollup dependency were removed with it.
+- [x] 10.5 **A 26 MB worker binary reached the repo and broke every deploy** (#2222).
+  `go build ./cmd/X/` writes into the checkout root and `git add -A` took it. The
+  hand-maintained ignore list had fallen 30 targets behind; a test now keeps it honest.
+- [x] 10.6 Three full rebuilds, a disk floor recalculated against the current index size,
+  and 662 MB of stale build artifacts plus 14 leaked testcontainers cleared from prod.

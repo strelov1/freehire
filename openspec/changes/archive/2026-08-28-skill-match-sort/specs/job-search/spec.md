@@ -24,9 +24,9 @@ The index SHALL declare:
 - **one embedder**, named for the skill vector it carries, declared as
   `userProvided` at the width `skill-match-sort` assigns. Being `userProvided`
   means Meilisearch SHALL NOT call any model: the vectors are supplied by the
-  indexers. Binary quantization SHALL be off — the vectors are sparse, and
-  quantizing them was measured to drop recall@20 from 95% to 10%, taking the
-  rare-skill signal with it.
+  indexers. Binary quantization SHALL be off — the vectors are sparse (a handful of
+  non-zeros out of hundreds of dimensions), and quantizing them was measured to drop
+  recall@20 from 95% to 10%.
 
 The declared embedder width SHALL NOT change without a full index rebuild, and
 until such a rebuild completes the index rejects documents carrying the new width.
@@ -152,11 +152,12 @@ Ranking SHALL compose with every existing facet filter in a single engine query,
 and pagination SHALL behave as it does for any other ordering — there is no
 window, and no ceiling beyond the endpoint's existing pagination guard.
 
-The caller's vector SHALL be built per request from their profile; the rarity
-weights it uses SHALL NOT be re-read from the database on every request.
+The caller's vector SHALL be built per request from their profile alone. It SHALL
+require no database read: the vector depends on nothing but the skills the profile
+names.
 
 **`sort=match` SHALL NEVER return an error.** Every reason it cannot be served —
-no session, no profile, no skills, no recognised skills, no weights available —
+no session, no profile, no skills, no recognised skills —
 SHALL degrade to the endpoint's default ordering. A saved search or a shared link
 carrying `sort=match` must not break when opened by someone it cannot be served
 for, which is the same reason the jobs list ignores unknown filters rather than
