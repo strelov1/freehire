@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
+	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -80,11 +82,11 @@ const twoRequirementAnalysis = `{
 func contextToolAPI(t *testing.T, description string, atoms []experience.Atom) (*assistantHandlers, *bankStub) {
 	t.Helper()
 	bank := &bankStub{atoms: atoms}
+	// No cvHandlers in sight: cv_context reads the fit service and one job row, and now says
+	// so — the point of moving these reads off the CV surface.
 	h := &assistantHandlers{
-		cv: &cvHandlers{
-			matchAnalysisCache: analysisCache{analysis: twoRequirementAnalysis},
-			jobReader:          jobStub{job: db.Job{Title: "Senior Backend Engineer", Company: "Acme", PublicSlug: "senior-backend-acme", Description: description}},
-		},
+		fit:        fitanalysis.New(analysisCache{analysis: twoRequirementAnalysis}, nil, matchanalysis.NewAnalyzer(nil)),
+		jobs:       jobStub{job: db.Job{Title: "Senior Backend Engineer", Company: "Acme", PublicSlug: "senior-backend-acme", Description: description}},
 		experience: bank,
 	}
 	return h, bank
@@ -225,5 +227,19 @@ func TestCVContextLeavesTheNarrativeToThePanel(t *testing.T) {
 		if !strings.Contains(payload, wanted) {
 			t.Errorf("the agent's context lost %s:\n%s", wanted, payload)
 		}
+	}
+}
+
+// TestCVContextReportsAnUnwiredDeployment mirrors the interview tool's guard. The tool runs
+// inside the SSE writer's goroutine, where Registry.Call's error path cannot reach a panic and
+// Fiber's recover is not listening — so a collaborator nobody wired must be a sentence the
+// model can act on, not a segfault that takes the process down.
+func TestCVContextReportsAnUnwiredDeployment(t *testing.T) {
+	bare := &assistantHandlers{}
+
+	_, err := toolByName(t, bare.assistantCVTools(testCVID, 9, uuid.New()), "cv_context").
+		Run(context.Background(), 3, json.RawMessage(`{}`))
+	if err == nil {
+		t.Fatal("cv_context answered from a handler wired to nothing")
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -105,13 +106,11 @@ func (s invitationStub) InterviewInvitation(context.Context, int64, int64) (inbo
 func rehearsalAPI(t *testing.T, analysis string, atoms []experience.Atom, stage stageStub, invite invitationStub) *assistantHandlers {
 	t.Helper()
 	return &assistantHandlers{
-		cv: &cvHandlers{
-			matchAnalysisCache: analysisCache{analysis: analysis},
-			jobReader: jobStub{job: db.Job{
-				Title: "Senior Backend Engineer", Company: "Acme",
-				PublicSlug: "senior-backend-acme", Description: "We need Kafka in production.",
-			}},
-		},
+		fit: fitanalysis.New(analysisCache{analysis: analysis}, nil, matchanalysis.NewAnalyzer(nil)),
+		jobs: jobStub{job: db.Job{
+			Title: "Senior Backend Engineer", Company: "Acme",
+			PublicSlug: "senior-backend-acme", Description: "We need Kafka in production.",
+		}},
 		experience: &bankStub{atoms: atoms},
 		stages:     stage,
 		invitation: invite,

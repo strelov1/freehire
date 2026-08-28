@@ -68,7 +68,7 @@ func (h *cvHandlers) GetCVJobMatch(c *fiber.Ctx) error {
 	// A missing analysis degrades Requirements Coverage; it does not fail the read. The
 	// workspace opens before any analysis is guaranteed current, and a score of the other
 	// three categories is worth more than a refusal.
-	analysis, hasAnalysis := h.cachedAnalysisOrNone(c.Context(), userID, tailored.JobID)
+	analysis, hasAnalysis := h.fit.Optional(c.Context(), userID, tailored.JobID)
 
 	score, err := h.cvJobMatchScore(c.Context(), tailored.Document, tmpl, cvmatch.Input{
 		JobTitle:     job.Title,
@@ -103,26 +103,6 @@ func (h *cvHandlers) cvJobMatchScore(ctx context.Context, doc cv.Document, tmpl 
 	in.CVText = text
 	in.CVSkills = skilltag.Parse(text, skilltag.WithResumeAcronyms())
 	return cvmatch.Compute(in), nil
-}
-
-// cachedAnalysisOrNone reads the cached fit analysis, reporting its absence rather than
-// refusing the request the way the tailoring endpoints do. Those endpoints cannot proceed
-// without it; this one can, and says so in the score.
-//
-// "No analysis cached" arrives as a 409 and is an ordinary state here. Anything else is a
-// failed read, which degrades the same way — the other three categories are worth more than
-// a refusal — but is logged: a broken database must not look to us like a candidate who
-// never ran their fit analysis.
-func (h *cvHandlers) cachedAnalysisOrNone(ctx context.Context, userID, jobID int64) (*matchanalysis.Analysis, bool) {
-	analysis, err := h.cachedAnalysisCtx(ctx, userID, jobID)
-	if err != nil {
-		var fe *fiber.Error
-		if !errors.As(err, &fe) || fe.Code != fiber.StatusConflict {
-			log.Printf("cv job-match: cached analysis for user %d job %d: %v", userID, jobID, err)
-		}
-		return nil, false
-	}
-	return analysis, true
 }
 
 // cvJobMatchRequirements projects the cached ledger onto the scorer's input, carrying a

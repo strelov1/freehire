@@ -18,6 +18,9 @@ The chain has four entry points and only one of them speaks HTTP:
 | `POST /jobs/:slug/match-analysis` | `Authorize` → `Run` | first analysis of that job only |
 | `GET …/match-analysis/stream` | `Authorize` → `Claim` → `Run` or `Follow` | same rule, per caller |
 | the autopilot's cold-start fill and post-run refresh | `Ensure` / `Refresh` | **never** |
+| `GET /me/cvs/:id/tailor-context` + the agent's `cv_context` tool | `TailoringContext` | never (read only) |
+| `GET /me/cvs/:id/job-match` + the agent's `job_match` tool | `Optional` | never (read only) |
+| the agent's `interview_context` tool, the autopilot's run plan | `Required` | never (read only) |
 
 The last two execute **after** the request, from a detached SSE-writer goroutine, with no fiber
 ctx at all. A rule written where one caller happens to reach it is a rule the other three never
@@ -50,6 +53,29 @@ reachable only through a `*fiber.Ctx`.
   analysis is already computed by then. `Balance` answers nil on any failure; the atomic `Debit`
   is the real ceiling, not the pre-check.
 
+## Reading a cached analysis
+
+Three readers, three shapes, one rule about what "no analysis" means:
+
+- **`Required`** — `ErrNoAnalysis` when there is none. For readers that cannot proceed.
+- **`Optional`** — `(nil, false)`. For readers that carry on and say so in the result. A failed
+  read degrades the same way but is **logged**: a broken database must not look like a candidate
+  who never ran their analysis.
+- **`Cached`** — the analysis plus the stamps it was written under, for the surface that reports
+  staleness.
+
+An unreadable stored blob reads exactly like an absent one. Both mean "there is nothing to ground
+on, offer them a run", and a decode failure must not become a 500 on a surface whose honest answer
+is "run the fit analysis first".
+
+**`ErrNoAnalysis` never becomes a status here.** `internal/api/handler`'s `classify` maps it to 409
+once, at the port boundary, so no call site invents its own code.
+
+**A nil `*Service`, or one with no store, degrades rather than panicking** — `Required` answers
+`ErrNoAnalysis`, `Optional` answers `false`, `Balance` answers `nil`. Agent tools run inside an SSE
+writer's goroutine where a panic reaches no recover and takes the process down, so a partially
+wired harness has to fail soft. The tools guard their other collaborators for the same reason.
+
 ## Ports
 
 - `Store` — the analysis cache. `*db.Queries` satisfies it. It trades generated row types
@@ -77,6 +103,11 @@ an analysis that does not exist would put a query on the commonest read there is
 
 ## Gotchas
 
+- `ProjectTailoring` strips the posting's markup and clips it. The posting is the largest thing
+  in a turn and the least trusted; sending markup spends the context window on tags and widens
+  what there is to misread.
+- `TailoringContext` takes the job rather than reading it, so this package needs no job port —
+  every caller has already loaded and authorized that row.
 - `Refresh` claims nothing, on purpose: by the time it runs the turn is over, so there is no
   concurrent caller for that pair to coalesce with.
 - `Run` with a nil `emit` runs the sync chain; non-nil streams it. That is the only difference

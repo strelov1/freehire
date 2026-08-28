@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
+	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -18,13 +20,13 @@ func jobMatchToolAPI(t *testing.T, doc string, job db.Job, analysis string) (*as
 	t.Helper()
 	repo := &cvRepo{id: testCVID, userID: 3, jobID: 9, data: []byte(doc)}
 	h := &cvHandlers{
-		cvStore:            cv.NewStore(repo),
-		cvRenderer:         &fakeCVRenderer{pdf: []byte(scorableCV)},
-		extractPDFText:     textFromPDF,
-		jobReader:          jobStub{job: job},
-		matchAnalysisCache: analysisCache{analysis: analysis},
+		cvStore:        cv.NewStore(repo),
+		cvRenderer:     &fakeCVRenderer{pdf: []byte(scorableCV)},
+		extractPDFText: textFromPDF,
+		jobReader:      jobStub{job: job},
+		fit:            fitanalysis.New(analysisCache{analysis: analysis}, nil, matchanalysis.NewAnalyzer(nil)),
 	}
-	return &assistantHandlers{cv: h}, repo
+	return &assistantHandlers{cv: h, fit: h.fit, jobs: jobStub{job: job}}, repo
 }
 
 func TestJobMatchToolScoresTheCurrentCV(t *testing.T) {

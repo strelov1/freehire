@@ -113,7 +113,7 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 	// inside the SSE writer's goroutine, where Registry.Call's error path cannot reach it
 	// and Fiber's recover is not listening. Production always wires both, so this guards
 	// the next partially-wired harness rather than a live caller.
-	if h.stages == nil || h.cv == nil {
+	if h.stages == nil || h.jobs == nil {
 		return interviewContext{}, errors.New("the rehearsal context is unavailable in this deployment")
 	}
 	stage, err := h.stages.GetUserJobStage(ctx, db.GetUserJobStageParams{UserID: userID, JobID: jobID})
@@ -121,7 +121,7 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 		return interviewContext{}, err
 	}
 
-	job, err := h.cv.jobReader.GetJob(ctx, jobID)
+	job, err := h.jobs.GetJob(ctx, jobID)
 	if err != nil {
 		return interviewContext{}, err
 	}
@@ -143,7 +143,7 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 	// A missing analysis is not a refused rehearsal. The vacancy and the bank carry most
 	// of the value, and the candidate opening this the night before an interview is
 	// exactly who should not be told to go and run something else first.
-	if analysis, err := h.cv.cachedAnalysisCtx(ctx, userID, jobID); err == nil && analysis != nil {
+	if analysis, err := h.fit.Required(ctx, userID, jobID); err == nil && analysis != nil {
 		out.Verdict = analysis.Verdict
 		out.OverallScore = analysis.OverallScore
 		out.Requirements = h.evidenceFor(ctx, userID, capRequirements(analysis.RequirementMatch))

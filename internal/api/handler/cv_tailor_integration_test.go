@@ -56,11 +56,11 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		// refused. A fixture asserting otherwise tests nothing that ships.
 		editor: cvedit.NewEditor(cvedit.NewRepository(pool, queries),
 			bankGate{bank: bank}),
-		resume:             resumeStore,
-		seeder:             bankedSeeder{resume: resumeStore, bank: bank},
-		matchAnalysisCache: queries,
-		credits:            creditsStore,
-		match:              &matchHandlers{fit: fitanalysis.New(queries, creditsStore, matchanalysis.NewAnalyzer(nil))},
+		resume:  resumeStore,
+		seeder:  bankedSeeder{resume: resumeStore, bank: bank},
+		fit:     fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		credits: creditsStore,
+		match:   &matchHandlers{fit: fitanalysis.New(queries, creditsStore, matchanalysis.NewAnalyzer(nil))},
 		// Same adapter Register wires: bootstrap must place the vacancy on the board.
 		jobs: trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, pool)},
 		// The tailoring bootstrap mints its conversation through the assistant's store,
@@ -590,7 +590,7 @@ func TestTailorContextSplit(t *testing.T) {
 		t.Fatalf("context = %d, want 200", resp.StatusCode)
 	}
 	var got struct {
-		Data tailorContextResponse `json:"data"`
+		Data fitanalysis.TailoringContext `json:"data"`
 	}
 	json.NewDecoder(resp.Body).Decode(&got)
 	resp.Body.Close()

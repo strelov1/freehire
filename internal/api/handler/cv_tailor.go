@@ -11,17 +11,14 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
-	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/auth"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 type tailorCVRequest struct {
@@ -320,21 +317,6 @@ func clipRunes(s string, max int) string {
 	return strings.TrimSpace(string(r[:max])) + "…"
 }
 
-// tailorContextResponse is the reasoning context the agent reads (freehire cv context): the
-// vacancy, the verdict and recommendation, per-dimension comments, and the requirement split
-// the honest wall turns on — missing_have (reframe existing evidence) vs missing_gap (ask first).
-type tailorContextResponse struct {
-	Job            tailorJob                   `json:"job"`
-	Verdict        string                      `json:"verdict"`
-	OverallScore   int                         `json:"overall_score"`
-	Recommendation string                      `json:"recommendation"`
-	Dimensions     []matchanalysis.Dimension   `json:"dimensions"`
-	MissingHave    []matchanalysis.Requirement `json:"missing_have"`
-	MissingGap     []matchanalysis.Requirement `json:"missing_gap"`
-	Strengths      []string                    `json:"strengths"`
-	Gaps           []string                    `json:"gaps"`
-}
-
 // TailorContext serves the cached fit analysis for a tailored CV, projected to the tailoring
 // reasoning context. Cookie or API key. 409 when the CV is not a tailored copy (no bound
 // vacancy) or has no cached analysis; never calls the LLM.
@@ -354,7 +336,13 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	if rec.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
 	}
-	ctx, err := h.tailoringContext(c.Context(), userID, rec.JobID)
+	job, err := h.jobReader.GetJob(c.Context(), rec.JobID)
+	if err != nil {
+		return err
+	}
+	// fitanalysis.ErrNoAnalysis renders as the 409 this endpoint documents; classify maps it
+	// once, at the port boundary, for every route that can meet it.
+	ctx, err := h.fit.TailoringContext(c.Context(), userID, job)
 	if err != nil {
 		return err
 	}
@@ -362,77 +350,11 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 }
 
 // optionalAnalysis loads the cached fit analysis for (user, job) if one exists, returning nil
-// without error when none is cached yet (or the cached blob is empty/corrupt) rather than a
-// 409 — the tailoring bootstrap no longer requires one to exist before starting.
+// when none is cached yet (or the cached blob is unreadable) rather than refusing — the
+// tailoring bootstrap no longer requires one to exist before starting.
 func (h *cvHandlers) optionalAnalysis(ctx context.Context, userID, jobID int64) *matchanalysis.Analysis {
-	analysis, _ := h.cachedAnalysisCtx(ctx, userID, jobID)
+	analysis, _ := h.fit.Optional(ctx, userID, jobID)
 	return analysis
-}
-
-// cachedAnalysisCtx is cachedAnalysis over a plain context, so the assistant's CV
-// tools — which have no fiber request — read the analysis through the same path
-// the HTTP endpoints do.
-func (h *cvHandlers) cachedAnalysisCtx(ctx context.Context, userID, jobID int64) (*matchanalysis.Analysis, error) {
-	row, err := h.matchAnalysisCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fiber.NewError(fiber.StatusConflict, "run the fit analysis first")
-	}
-	if err != nil {
-		return nil, err
-	}
-	analysis := fitanalysis.DecodeAnalysis(row.Analysis)
-	if analysis == nil {
-		return nil, fiber.NewError(fiber.StatusConflict, "run the fit analysis first")
-	}
-	return analysis, nil
-}
-
-// tailorContext projects an analysis + its vacancy to the agent's reasoning context, splitting
-// requirements into the reframe-able (missing-have) and the genuine gaps (missing-gap).
-func tailorContext(a *matchanalysis.Analysis, job db.Job) tailorContextResponse {
-	var have, gap []matchanalysis.Requirement
-	for _, r := range a.RequirementMatch {
-		switch r.Status {
-		case matchanalysis.StatusMissingHave:
-			have = append(have, r)
-		case matchanalysis.StatusMissingGap:
-			gap = append(gap, r)
-		}
-	}
-	return tailorContextResponse{
-		Job: tailorJob{
-			Title:   job.Title,
-			Company: job.Company,
-			Slug:    job.PublicSlug,
-			// The posting is the largest thing in the turn and the least trusted: it reaches
-			// the model as words, bounded, the same way get_job already serves it. Sending
-			// markup spends the context window on tags and widens what there is to misread.
-			Description: clipRunes(formatDescription(job.Description, "markdown"), tailorDescriptionLimit),
-		},
-		Verdict:        a.Verdict,
-		OverallScore:   a.OverallScore,
-		Recommendation: a.Recommendation,
-		Dimensions:     a.Dimensions,
-		MissingHave:    have,
-		MissingGap:     gap,
-		Strengths:      a.Strengths,
-		Gaps:           a.Gaps,
-	}
-}
-
-// tailoringContext assembles what a tailoring reader needs: the cached analysis, projected
-// over the vacancy it is about. Both the HTTP endpoint and the agent's tool go through here,
-// so neither can drift into reading a different analysis or a different vacancy.
-func (h *cvHandlers) tailoringContext(ctx context.Context, userID, jobID int64) (tailorContextResponse, error) {
-	analysis, err := h.cachedAnalysisCtx(ctx, userID, jobID)
-	if err != nil {
-		return tailorContextResponse{}, err
-	}
-	job, err := h.jobReader.GetJob(ctx, jobID)
-	if err != nil {
-		return tailorContextResponse{}, err
-	}
-	return tailorContext(analysis, job), nil
 }
 
 // tailoredCVTitle names a tailored copy from the vacancy title (bounded/defaulted like any CV

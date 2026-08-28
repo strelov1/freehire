@@ -55,10 +55,10 @@ type cvHandlers struct {
 	photos  *headshot.Store
 	queries *db.Queries
 	credits *credits.Store
-	// matchAnalysisCache reads the cached fit analysis the tailoring context grounds on.
-	// The read only, deliberately: fitanalysis.Service owns every write, the staleness rule
-	// and the metering, and this surface needs none of them.
-	matchAnalysisCache fitanalysis.Store
+	// fit reads the cached fit analysis the tailoring context and the CV-vs-job score
+	// ground on. Reads only, from this surface: the writes, the staleness rule and the
+	// metering are the same service's and belong to the match surface.
+	fit *fitanalysis.Service
 	// jobReader serves the vacancy a tailoring context is about. Narrow on purpose: the
 	// tailoring path reads one row by id and nothing else.
 	jobReader jobReader
@@ -139,17 +139,17 @@ func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, a
 		// something attached afterwards: PATCH /me/cvs/:id edits as the agent for any
 		// API-key caller, so the wall cannot depend on which other features the assembly
 		// built.
-		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), gate).SetRefuseListCap(refuseListCap),
-		jobReader:          queries,
-		resume:             resumeStore,
-		photos:             photoStore,
-		seeder:             bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
-		queries:            queries,
-		credits:            creditsStore,
-		matchAnalysisCache: queries,
-		match:              match,
-		jobs:               jobs,
-		extractPDFText:     resume.ExtractPDFText,
+		editor:         cvedit.NewEditor(cvedit.NewRepository(pool, queries), gate).SetRefuseListCap(refuseListCap),
+		jobReader:      queries,
+		resume:         resumeStore,
+		photos:         photoStore,
+		seeder:         bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
+		queries:        queries,
+		credits:        creditsStore,
+		fit:            match.fit,
+		match:          match,
+		jobs:           jobs,
+		extractPDFText: resume.ExtractPDFText,
 	}
 	return h
 }

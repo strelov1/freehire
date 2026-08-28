@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,5 +340,103 @@ func TestEnsureReleasesItsClaimWhenTheCacheReadFails(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("the follower was never released by a leader that failed its cache read")
+	}
+}
+
+// TestRequiredAndOptional pin the two readers of one cached analysis: the tailoring surfaces
+// that cannot proceed without it, and the CV-vs-job score that can.
+func TestRequiredAndOptional(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("no analysis is ErrNoAnalysis for Required, plain absence for Optional", func(t *testing.T) {
+		svc := newService(&fakeStore{}, nil)
+		if _, err := svc.Required(ctx, userID, jobID); !errors.Is(err, fitanalysis.ErrNoAnalysis) {
+			t.Errorf("Required err = %v, want ErrNoAnalysis", err)
+		}
+		if a, ok := svc.Optional(ctx, userID, jobID); ok || a != nil {
+			t.Errorf("Optional = %v/%v, want nil/false", a, ok)
+		}
+	})
+
+	t.Run("an unreadable blob reads the same as none", func(t *testing.T) {
+		// Both mean "there is nothing to ground on" — a decode failure must not become a
+		// 500 on a surface whose honest answer is "run the analysis first".
+		store := &fakeStore{row: &db.GetUserJobAnalysisRow{Analysis: []byte("{not json")}}
+		svc := newService(store, nil)
+		if _, err := svc.Required(ctx, userID, jobID); !errors.Is(err, fitanalysis.ErrNoAnalysis) {
+			t.Errorf("Required err = %v, want ErrNoAnalysis", err)
+		}
+	})
+
+	t.Run("a store failure surfaces on Required and degrades on Optional", func(t *testing.T) {
+		svc := newService(&fakeStore{readErr: errors.New("db down")}, nil)
+		if _, err := svc.Required(ctx, userID, jobID); err == nil || errors.Is(err, fitanalysis.ErrNoAnalysis) {
+			t.Errorf("Required err = %v, want the read failure itself, not ErrNoAnalysis", err)
+		}
+		if _, ok := svc.Optional(ctx, userID, jobID); ok {
+			t.Error("Optional must report no analysis when the read failed")
+		}
+	})
+
+	t.Run("a service wired to nothing degrades rather than panicking", func(t *testing.T) {
+		// Tools run inside an SSE writer's goroutine, where a panic reaches no recover.
+		var svc *fitanalysis.Service
+		if _, err := svc.Required(ctx, userID, jobID); !errors.Is(err, fitanalysis.ErrNoAnalysis) {
+			t.Errorf("Required on a nil service = %v, want ErrNoAnalysis", err)
+		}
+		if _, ok := svc.Optional(ctx, userID, jobID); ok {
+			t.Error("Optional on a nil service must report no analysis")
+		}
+	})
+
+	t.Run("a cached analysis comes back to both", func(t *testing.T) {
+		svc := newService(&fakeStore{row: cachedRow(t, 80)}, nil)
+		got, err := svc.Required(ctx, userID, jobID)
+		if err != nil || got == nil || got.OverallScore != 80 {
+			t.Fatalf("Required = %+v, %v; want the cached analysis", got, err)
+		}
+		if a, ok := svc.Optional(ctx, userID, jobID); !ok || a.OverallScore != 80 {
+			t.Errorf("Optional = %+v/%v, want the same analysis/true", a, ok)
+		}
+	})
+}
+
+// TestProjectTailoring pins the requirement split the honest wall turns on: the agent may
+// reframe a missing_have from evidence the candidate already owns, and must ASK about a
+// missing_gap. Putting one in the other's list is what would let it write an unbacked claim.
+func TestProjectTailoring(t *testing.T) {
+	a := &matchanalysis.Analysis{
+		Verdict:      "Good Fit",
+		OverallScore: 71,
+		RequirementMatch: []matchanalysis.Requirement{
+			{Text: "Kafka in production", Status: matchanalysis.StatusMissingHave},
+			{Text: "Kubernetes operator authoring", Status: matchanalysis.StatusMissingGap},
+			{Text: "Go", Status: matchanalysis.StatusCovered},
+			{Text: "Terraform", Status: matchanalysis.StatusMissingHave},
+		},
+	}
+	job := db.Job{Title: "Senior Backend", Company: "Acme", PublicSlug: "senior-backend-acme",
+		Description: "<p>We need <strong>Kafka</strong> in production.</p>"}
+
+	got := fitanalysis.ProjectTailoring(a, job)
+
+	if len(got.MissingHave) != 2 || got.MissingHave[0].Text != "Kafka in production" {
+		t.Errorf("MissingHave = %+v, want the two reframe-able requirements", got.MissingHave)
+	}
+	if len(got.MissingGap) != 1 || got.MissingGap[0].Text != "Kubernetes operator authoring" {
+		t.Errorf("MissingGap = %+v, want only the genuine gap", got.MissingGap)
+	}
+	// A covered requirement belongs in neither list: there is nothing to reframe and nothing
+	// to ask about.
+	for _, r := range append(got.MissingHave, got.MissingGap...) {
+		if r.Status == matchanalysis.StatusCovered {
+			t.Errorf("a covered requirement (%q) leaked into the split", r.Text)
+		}
+	}
+	if strings.Contains(got.Job.Description, "<p>") || strings.Contains(got.Job.Description, "<strong>") {
+		t.Errorf("the posting reaches the model as markup: %q", got.Job.Description)
+	}
+	if got.Job.Slug != "senior-backend-acme" || got.Verdict != "Good Fit" || got.OverallScore != 71 {
+		t.Errorf("projection = %+v, want the vacancy and verdict carried through", got)
 	}
 }

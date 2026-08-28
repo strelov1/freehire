@@ -18,6 +18,8 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvmatch"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
+	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -50,10 +52,10 @@ func newJobMatchFixture(t *testing.T, pool *pgxpool.Pool) jobMatchFixture {
 	renderer := &fakeCVRenderer{pdf: []byte(jobMatchCVText)}
 	h := &cvHandlers{
 		queries: queries, jobReader: queries, cvStore: store,
-		matchAnalysisCache: queries,
-		resume:             resume.New(nil, resume.NewQueriesRepository(queries)),
-		cvRenderer:         renderer,
-		extractPDFText:     textFromPDF,
+		fit:            fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		resume:         resume.New(nil, resume.NewQueriesRepository(queries)),
+		cvRenderer:     renderer,
+		extractPDFText: textFromPDF,
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{

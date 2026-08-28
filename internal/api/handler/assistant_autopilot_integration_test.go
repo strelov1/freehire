@@ -28,6 +28,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -48,12 +49,16 @@ func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, tur
 		maxPrompt:  defaultAssistantMaxPrompt,
 		stages:     queries,
 		experience: bank,
+		// The run plan reads the cached analysis through the service, and the tools read the
+		// vacancy through jobs — both held by the assistant itself now.
+		fit:  fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		jobs: queries,
 		cv: &cvHandlers{
-			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
-			queries:            queries,
-			jobReader:          queries,
-			matchAnalysisCache: queries,
+			cvStore:   cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:    cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
+			queries:   queries,
+			jobReader: queries,
+			fit:       fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
 			match: fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)),
 				matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))),
 		},

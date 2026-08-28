@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/application/inbox"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -106,6 +107,11 @@ func classify(err error) (status int, msg string, report bool) {
 		return fiber.StatusBadRequest, err.Error(), false
 	case errors.Is(err, inbox.ErrPendingSuggestion):
 		return fiber.StatusConflict, err.Error(), false
+	// The candidate has not run their fit analysis for this job, so the tailoring surfaces
+	// have nothing to ground on. A state, not a fault — and one both readers of the fit
+	// service meet, so the status is decided here rather than at each call site.
+	case errors.Is(err, fitanalysis.ErrNoAnalysis):
+		return fiber.StatusConflict, "run the fit analysis first", false
 	// The client cancelled the request (navigated away, closed the tab). The
 	// cancellation propagates through downstream calls (DB, Meilisearch) as
 	// context.Canceled — not a server fault, and there is no one left to answer.

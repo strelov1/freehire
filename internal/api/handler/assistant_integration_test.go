@@ -31,6 +31,8 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
+	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -70,14 +72,17 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 		// reason — which is why the editor below is CONSTRUCTED with it, exactly as the
 		// production assembly does, rather than having it attached afterwards.
 		experience: bank,
+		// The run's plan, the tailoring context and the rehearsal all read the cached fit
+		// analysis and the vacancy. They take both directly, exactly as the production
+		// wiring hands them over — not through whichever HTTP surface happens to hold one.
+		fit:  fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		jobs: queries,
 		// The tailoring tools and the autopilot run reach the CV store, so the assistant
 		// under test carries the same CV service the HTTP surface uses.
 		cv: &cvHandlers{
 			cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 			editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}), queries: queries, jobReader: queries,
-			// The run reads the cached fit analysis to lay down its plan, so the CV handlers
-			// under test carry the same cache the production wiring gives them.
-			matchAnalysisCache: queries,
+			fit: fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
 		},
 	}
 	if model != nil {

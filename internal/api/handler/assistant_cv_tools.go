@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/cvmatch"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 )
 
@@ -193,7 +194,18 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			base, err := h.cv.tailoringContext(ctx, userID, jobID)
+			// A tool error is a sentence the model can act on; a nil dereference here is a
+			// panic inside the SSE writer's goroutine, where Registry.Call's error path
+			// cannot reach it and Fiber's recover is not listening. Production always wires
+			// this, so the guard is for the next partially-wired harness.
+			if h.jobs == nil {
+				return nil, errors.New("the tailoring context is unavailable in this deployment")
+			}
+			job, err := h.jobs.GetJob(ctx, jobID)
+			if err != nil {
+				return nil, err
+			}
+			base, err := h.fit.TailoringContext(ctx, userID, job)
 			if err != nil {
 				return nil, err
 			}
@@ -229,11 +241,11 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 			if err != nil {
 				return nil, cvToolError(err)
 			}
-			job, err := h.cv.jobReader.GetJob(ctx, jobID)
+			job, err := h.jobs.GetJob(ctx, jobID)
 			if err != nil {
 				return nil, err
 			}
-			analysis, hasAnalysis := h.cv.cachedAnalysisOrNone(ctx, userID, jobID)
+			analysis, hasAnalysis := h.fit.Optional(ctx, userID, jobID)
 			score, err := h.cv.cvJobMatchScore(ctx, rec.Document, tmpl, cvmatch.Input{
 				JobTitle:     job.Title,
 				JobSkills:    job.Skills,
@@ -365,11 +377,11 @@ type requirementEvidence struct {
 // So the agent gets what it works from: the vacancy, the score in one line for tone, and the
 // requirements with the bank's answer attached.
 type agentTailorContext struct {
-	Job          tailorJob              `json:"job"`
-	Verdict      string                 `json:"verdict"`
-	OverallScore int                    `json:"overall_score"`
-	MissingHave  []evidencedRequirement `json:"missing_have"`
-	MissingGap   []evidencedRequirement `json:"missing_gap"`
+	Job          fitanalysis.TailoringJob `json:"job"`
+	Verdict      string                   `json:"verdict"`
+	OverallScore int                      `json:"overall_score"`
+	MissingHave  []evidencedRequirement   `json:"missing_have"`
+	MissingGap   []evidencedRequirement   `json:"missing_gap"`
 }
 
 // evidencePerRequirement bounds what one requirement may carry. Three is enough to write a
@@ -385,7 +397,7 @@ const evidencePerRequirement = 3
 //
 // A bank that cannot be read degrades to no evidence rather than to an error: the requirements
 // are worth reading either way, and an empty list already means "nothing found".
-func (h *assistantHandlers) withBankEvidence(ctx context.Context, userID int64, base tailorContextResponse) agentTailorContext {
+func (h *assistantHandlers) withBankEvidence(ctx context.Context, userID int64, base fitanalysis.TailoringContext) agentTailorContext {
 	return agentTailorContext{
 		Job:          base.Job,
 		Verdict:      base.Verdict,

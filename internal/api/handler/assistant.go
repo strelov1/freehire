@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -50,7 +51,14 @@ type assistantHandlers struct {
 	// at a time. Its zero value works; see assistant_turns.go.
 	turns turnRegistry
 
-	queries  *db.Queries
+	queries *db.Queries
+	// fit reads the cached fit analysis the tailoring and interview tools ground on. Held
+	// directly rather than reached for through the CV handlers: these are use cases, and a
+	// tool must not depend on which HTTP surface happens to assemble them.
+	fit *fitanalysis.Service
+	// jobs serves the vacancy a tool is about — one row by id, the same narrow read the CV
+	// surface takes.
+	jobs     jobReader
 	search   *searchHandlers
 	resume   *resumeHandlers
 	tracking *trackingHandlers
@@ -111,6 +119,7 @@ func newAssistantHandlers(queries *db.Queries, models assistantModels, store *as
 		screeningAnswers: screeningAnswers,
 		store:            store,
 		queries:          queries,
+		jobs:             queries,
 		search:           search,
 		resume:           resumeH,
 		tracking:         tracking,
@@ -119,6 +128,12 @@ func newAssistantHandlers(queries *db.Queries, models assistantModels, store *as
 		browserTools:     browserTools,
 		mail:             mail,
 		stages:           queries,
+	}
+	// The fit reads come from the service, not from whichever handler happens to hold it:
+	// a tool that grounds on the cached analysis must not break because the CV surface was
+	// reshaped.
+	if cvH != nil {
+		h.fit = cvH.fit
 	}
 	// The rehearsal reads the invitation through the mail service, not through the store:
 	// the guarantee that this read leaves read_at alone is inbox's, and reaching past it
@@ -897,10 +912,10 @@ func (h *assistantHandlers) prepareAutopilotAnalysis(c *fiber.Ctx, sess assistan
 // Best-effort: a missing or unreadable analysis leaves the report as it was. The run itself
 // is worth starting either way, and the agent replaces the whole report when it reports.
 func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.Session) {
-	if h.cv.matchAnalysisCache == nil {
+	if h.fit == nil {
 		return
 	}
-	analysis, err := h.cv.cachedAnalysisCtx(ctx, sess.UserID, *sess.JobID)
+	analysis, err := h.fit.Required(ctx, sess.UserID, *sess.JobID)
 	if err != nil || analysis == nil {
 		return
 	}
