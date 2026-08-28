@@ -409,6 +409,17 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	if s.credits == nil {
 		return
 	}
+	// A credit buys HAVING the analysis, not the attempt that produced it, and two concurrent
+	// callers for one pair share a single ledger row. So a caller that got nothing must not
+	// void a charge somebody else's result earned: if an analysis exists for this pair, the
+	// charge stands whoever produced it.
+	//
+	// The case is real rather than theoretical. A leader whose cache write fails still returns
+	// its analysis to the caller that paid for it; a follower then finds no readable row, and
+	// without this check would release the shared debit and make that served analysis free.
+	if analysis, _, err := s.Cached(ctx, userID, jobID); err == nil && analysis != nil {
+		return
+	}
 	if _, err := s.credits.Release(ctx, userID, credits.FeatureMatch, debitRef(jobID)); err != nil {
 		log.Printf("credits: releasing a match reservation for user %d job %d: %v", userID, jobID, err)
 	}

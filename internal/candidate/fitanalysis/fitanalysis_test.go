@@ -286,25 +286,43 @@ func reserve(t *testing.T, m *fakeMeter, jobID int64) {
 	}
 }
 
+// followerOf claims for the leader, then again for a follower, and releases the leader with the
+// given outcome — the shape a streaming caller is in when it loses the race.
+func followerOf(svc *fitanalysis.Service, leaderSucceeded bool) *fitanalysis.Claim {
+	leader := svc.Claim(userID, jobID)
+	follower := svc.Claim(userID, jobID)
+	leader.Release(leaderSucceeded)
+	return follower
+}
+
 func TestFollow(t *testing.T) {
 	ctx := context.Background()
 
-	// followerOf claims for the leader, then again for a follower, and releases the leader
-	// with the given outcome — the shape the streaming caller is in when it loses the race.
-	followerOf := func(svc *fitanalysis.Service, leaderSucceeded bool) *fitanalysis.Claim {
-		leader := svc.Claim(userID, jobID)
-		follower := svc.Claim(userID, jobID)
-		leader.Release(leaderSucceeded)
-		return follower
-	}
-
 	t.Run("a failed leader is reported, never papered over with the older row", func(t *testing.T) {
 		// The row is present and readable: only run.succeeded says the leader failed, and
-		// serving this row would dress a stale analysis up as the live result.
+		// serving this row would dress a stale analysis up as the live result. Reserved is
+		// false because a cached analysis is exactly what makes a run free.
 		store := &fakeStore{row: cachedRow(t, 80)}
 		meter := newMeter(10, 1)
 		svc := newService(store, meter)
-		// This caller reserved before it started waiting, exactly as the streaming path does.
+
+		_, err := svc.Follow(ctx, fitanalysis.Request{
+			UserID: userID, Job: db.Job{ID: jobID}, Reserved: false,
+			Claim: followerOf(svc, false),
+		})
+		if !errors.Is(err, fitanalysis.ErrUnavailable) {
+			t.Fatalf("err = %v, want ErrUnavailable", err)
+		}
+		if len(meter.releases) != 0 {
+			t.Errorf("releases = %v, want none — this caller reserved nothing", meter.releases)
+		}
+	})
+
+	t.Run("a failed leader gives this caller's reservation back", func(t *testing.T) {
+		// Nothing cached, so this caller genuinely reserved; the leader — typically the free
+		// autopilot pre-run — produced nothing, so there is nothing to pay for.
+		meter := newMeter(10, 1)
+		svc := newService(&fakeStore{}, meter)
 		reserve(t, meter, jobID)
 
 		_, err := svc.Follow(ctx, fitanalysis.Request{
@@ -314,9 +332,11 @@ func TestFollow(t *testing.T) {
 		if !errors.Is(err, fitanalysis.ErrUnavailable) {
 			t.Fatalf("err = %v, want ErrUnavailable", err)
 		}
-		// The caller had already paid before waiting; nothing was served, so it gets it back.
 		if len(meter.releases) != 1 {
 			t.Errorf("releases = %v, want the reservation given back", meter.releases)
+		}
+		if meter.remaining != 10 {
+			t.Errorf("remaining = %d, want 10 — a run that produced nothing costs nothing", meter.remaining)
 		}
 	})
 
@@ -590,5 +610,38 @@ func TestRunKeepsTheReservationWhenItProducesAnAnalysis(t *testing.T) {
 	}
 	if meter.remaining != 9 || len(meter.releases) != 0 {
 		t.Fatalf("remaining=%d releases=%v after reserving", meter.remaining, meter.releases)
+	}
+}
+
+// TestReleaseNeverVoidsACreditAnExistingAnalysisEarned is the shared-ledger-row rule. A credit
+// buys HAVING the analysis, and two concurrent callers for one (candidate, job) share a single
+// debit — so a caller that got nothing must not void a charge somebody else's result earned.
+//
+// The live case: a leader whose CACHE WRITE fails still returns its analysis to the caller that
+// paid for it. A follower then finds no readable row and, without this rule, would release the
+// shared debit and make that served analysis free.
+func TestReleaseNeverVoidsACreditAnExistingAnalysisEarned(t *testing.T) {
+	ctx := context.Background()
+	meter := newMeter(10, 1)
+	// An analysis exists for the pair — whoever produced it, the charge is earned.
+	svc := newService(&fakeStore{row: cachedRow(t, 80)}, meter)
+	reserve(t, meter, jobID)
+	if meter.remaining != 9 {
+		t.Fatalf("remaining = %d, want the credit held", meter.remaining)
+	}
+
+	// A caller that believes it owes nothing tries to give the credit back.
+	if _, err := svc.Follow(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
+		Claim: followerOf(svc, false),
+	}); !errors.Is(err, fitanalysis.ErrUnavailable) {
+		t.Fatalf("err = %v, want ErrUnavailable", err)
+	}
+
+	if len(meter.releases) != 0 {
+		t.Errorf("releases = %v, want none — an analysis exists, so the charge stands", meter.releases)
+	}
+	if meter.remaining != 9 {
+		t.Errorf("remaining = %d, want 9 — the served analysis stays paid for", meter.remaining)
 	}
 }

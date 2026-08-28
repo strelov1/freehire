@@ -353,3 +353,34 @@ func TestRelease_isIdempotentAndSafeOnNothing(t *testing.T) {
 		t.Errorf("Remaining after three releases = %d, want 20 — a release gives back once", b.Remaining)
 	}
 }
+
+// TestRelease_acrossAPeriodRolloverGivesBackNoMoreThanItTook is the ordering the reset forces.
+// Putting the cost back AFTER applying the monthly reset would floor the balance at the fresh
+// grant and then add on top, so a release that crossed a month boundary would hand out a
+// credit the candidate never had.
+func TestRelease_acrossAPeriodRolloverGivesBackNoMoreThanItTook(t *testing.T) {
+	pool := startPostgres(t)
+	s := newStore(pool, Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
+	uid := insertUser(t, pool, "release-rollover@example.test")
+	ctx := context.Background()
+
+	if _, err := s.Debit(ctx, uid, FeatureMatch, "job-1"); err != nil {
+		t.Fatalf("Debit: %v", err)
+	}
+	// Age the stored row into a previous period, leaving 19 banked there.
+	if _, err := pool.Exec(ctx,
+		`UPDATE credit_balances SET period = '1970-01' WHERE user_id = $1`, uid); err != nil {
+		t.Fatalf("age the balance row: %v", err)
+	}
+
+	bal, err := s.Release(ctx, uid, FeatureMatch, "job-1")
+	if err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if bal.Remaining != 20 {
+		t.Errorf("Remaining = %d, want exactly the fresh grant 20 — never grant+cost", bal.Remaining)
+	}
+	if b, _ := s.Balance(ctx, uid); b.Remaining != 20 {
+		t.Errorf("stored Remaining = %d, want 20", b.Remaining)
+	}
+}

@@ -208,10 +208,15 @@ func (s *Store) Release(ctx context.Context, userID int64, feature Feature, ref 
 		return Balance{}, err
 	}
 
-	remaining := s.applicableRemaining(row.Period, cur, row.Remaining)
+	// The cost goes back onto the STORED balance and the period reset is applied after, not
+	// the other way round. Reversed, a release that crosses a month boundary would floor the
+	// balance at the fresh grant and then add the cost on top — a grant of 20 with 19 left
+	// would come back as 21, so a failed analysis would hand out a credit.
+	restored := row.Remaining
 	if removed > 0 {
-		remaining += cost
+		restored += cost
 	}
+	remaining := s.applicableRemaining(row.Period, cur, restored)
 	if err := q.UpdateBalance(ctx, db.UpdateBalanceParams{UserID: userID, Period: cur, Remaining: remaining}); err != nil {
 		return Balance{}, err
 	}
