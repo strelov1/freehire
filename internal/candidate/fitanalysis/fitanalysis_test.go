@@ -95,7 +95,13 @@ func (m *fakeMeter) Debit(_ context.Context, _ int64, f credits.Feature, ref str
 	return credits.Balance{Remaining: m.remaining}, nil
 }
 
-func (m *fakeMeter) Release(_ context.Context, _ int64, f credits.Feature, ref string) (credits.Balance, error) {
+func (m *fakeMeter) Release(ctx context.Context, _ int64, f credits.Feature, ref string) (credits.Balance, error) {
+	// A real ledger opens a transaction, so a cancelled context means the release never
+	// happens. Modelling that is the only way a test can show the cleanup outliving the
+	// cancellation that triggered it.
+	if err := ctx.Err(); err != nil {
+		return credits.Balance{Remaining: m.remaining}, err
+	}
 	if m.charged[ref] {
 		delete(m.charged, ref)
 		m.remaining += m.cost
@@ -681,5 +687,39 @@ func TestAFollowerNeverReleasesOnItsOwn(t *testing.T) {
 	}
 	if meter.remaining != 9 {
 		t.Errorf("remaining = %d, want 9 — the served analysis stays paid for", meter.remaining)
+	}
+}
+
+// TestACancelledRunStillGivesTheCreditBack is the disconnect case. The on-demand endpoint runs
+// on the request's own context, so a client that walks away mid-analysis cancels it — the chain
+// fails with the cancellation, and a release on that same context could not even open its
+// transaction. The candidate would stay charged for an analysis they never received, in exactly
+// the situation the release exists for.
+func TestACancelledRunStillGivesTheCreditBack(t *testing.T) {
+	meter := newMeter(10, 1)
+	svc := newService(&fakeStore{}, meter)
+
+	if _, err := svc.Reserve(context.Background(), userID, jobID); err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	if meter.remaining != 9 {
+		t.Fatalf("remaining = %d, want the credit held", meter.remaining)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the reader is gone before the run even starts
+
+	if _, err := svc.Run(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
+		Analyzer: matchanalysis.NewAnalyzer(nil),
+	}, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if meter.remaining != 10 {
+		t.Errorf("remaining = %d, want 10 — a run nobody waited for still costs nothing", meter.remaining)
+	}
+	if len(meter.releases) != 1 {
+		t.Errorf("releases = %v, want the reservation given back despite the cancellation", meter.releases)
 	}
 }

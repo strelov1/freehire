@@ -418,6 +418,14 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	if s.credits == nil {
 		return
 	}
+	// The cleanup has to survive the cancellation that caused it. A client that disconnects
+	// mid-run cancels the request context, the chain fails with it, and a release on that same
+	// context cannot even open its transaction — leaving the candidate charged for an analysis
+	// they never received, in exactly the case this exists for. Bounded, because a detached
+	// context with no deadline is a goroutine nobody will ever stop.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+	defer cancel()
+
 	// A credit buys HAVING the analysis, not the attempt that produced it. A later run that
 	// fails — the autopilot's refresh, a recompute — must not give back the credit an EARLIER
 	// run earned, so a release stops when an analysis exists for the pair.
@@ -434,6 +442,10 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 		log.Printf("credits: releasing a match reservation for user %d job %d: %v", userID, jobID, err)
 	}
 }
+
+// releaseTimeout bounds the detached cleanup. Generous for two small statements, and short
+// enough that a wedged database cannot pile up goroutines behind it.
+const releaseTimeout = 5 * time.Second
 
 // debitRef identifies what a match credit was spent on. One charge per job, ever.
 func debitRef(jobID int64) string { return strconv.FormatInt(jobID, 10) }
