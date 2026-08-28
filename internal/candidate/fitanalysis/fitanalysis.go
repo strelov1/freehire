@@ -421,24 +421,31 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	// The cleanup has to survive the cancellation that caused it. A client that disconnects
 	// mid-run cancels the request context, the chain fails with it, and a release on that same
 	// context cannot even open its transaction — leaving the candidate charged for an analysis
-	// they never received, in exactly the case this exists for. Bounded, because a detached
-	// context with no deadline is a goroutine nobody will ever stop.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
-	defer cancel()
+	// they never received, in exactly the case this exists for.
+	detached := context.WithoutCancel(ctx)
 
 	// A credit buys HAVING the analysis, not the attempt that produced it. A later run that
-	// fails — the autopilot's refresh, a recompute — must not give back the credit an EARLIER
+	// fails — a recompute, the autopilot's refresh — must not give back the credit an EARLIER
 	// run earned, so a release stops when an analysis exists for the pair.
 	//
 	// A service with no store cannot answer that question and simply releases: it is the
 	// nil-degrades-rather-than-panics rule the reads already follow, and a tool runs inside an
-	// SSE writer's goroutine where a panic reaches no recover.
+	// SSE writer's goroutine where a panic reaches no recover. A read that FAILS releases too —
+	// an unanswered question is not a yes, and leaving a candidate charged is the worse error.
 	if s.store != nil {
-		if analysis, _, err := s.Cached(ctx, userID, jobID); err == nil && analysis != nil {
+		read, cancelRead := context.WithTimeout(detached, releaseTimeout)
+		analysis, _, err := s.Cached(read, userID, jobID)
+		cancelRead()
+		if err == nil && analysis != nil {
 			return
 		}
 	}
-	if _, err := s.credits.Release(ctx, userID, credits.FeatureMatch, debitRef(jobID)); err != nil {
+
+	// Its own budget, not the read's leftovers: a slow cache read must not spend the deadline
+	// the refund needs and leave the reservation standing.
+	write, cancel := context.WithTimeout(detached, releaseTimeout)
+	defer cancel()
+	if _, err := s.credits.Release(write, userID, credits.FeatureMatch, debitRef(jobID)); err != nil {
 		log.Printf("credits: releasing a match reservation for user %d job %d: %v", userID, jobID, err)
 	}
 }

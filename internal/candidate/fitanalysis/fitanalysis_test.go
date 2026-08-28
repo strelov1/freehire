@@ -723,3 +723,31 @@ func TestACancelledRunStillGivesTheCreditBack(t *testing.T) {
 		t.Errorf("releases = %v, want the reservation given back despite the cancellation", meter.releases)
 	}
 }
+
+// TestAFailedEarnedCheckStillGivesTheCreditBack pins the direction the cleanup errs in. The
+// check that stops a release — "does an analysis already exist for this pair?" — is a database
+// read, and it can fail or time out. An unanswered question is not a yes: leaving a candidate
+// charged for a run that produced nothing is the worse of the two errors.
+func TestAFailedEarnedCheckStillGivesTheCreditBack(t *testing.T) {
+	ctx := context.Background()
+	meter := newMeter(10, 1)
+	store := &fakeStore{}
+	svc := newService(store, meter)
+
+	if _, err := svc.Reserve(ctx, userID, jobID); err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	// From here the cache is unreadable, so the release cannot learn whether anything exists.
+	store.readErr = errors.New("db down")
+
+	if _, err := svc.Run(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
+		Analyzer: matchanalysis.NewAnalyzer(nil),
+	}, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if meter.remaining != 10 {
+		t.Errorf("remaining = %d, want 10 — an unanswerable check must not keep the charge", meter.remaining)
+	}
+}
