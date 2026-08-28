@@ -266,7 +266,14 @@ func (s *Store) UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a At
 	// safe to leave alone, because Provenance.Publishable fails closed on anything it does not
 	// recognise.
 	keepStoredLabel := author == AuthorRewrite
-	if !keepStoredLabel {
+	if keepStoredLabel {
+		// Nothing writes this column on the rewrite path, so the caller's value must not be
+		// JUDGED either — "a body-supplied provenance is inert" has to mean inert, not
+		// "rejected on a technicality" by Validate below. It is normalised to what an
+		// unlabelled rewrite means; the statement omits the column, so this never reaches
+		// the row.
+		a.Provenance = ProvenanceFor(AuthorRewrite, "")
+	} else {
 		a.Provenance = ProvenanceFor(author, "")
 	}
 

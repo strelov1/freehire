@@ -799,3 +799,30 @@ func TestRewriteKeepsTheStoredLabelWithoutReadingIt(t *testing.T) {
 		t.Error("a rewrite promoted a model's reading to CV-publishable")
 	}
 }
+
+// TestRewriteIgnoresAJunkProvenanceRatherThanRefusing closes the gap the atomic rewrite opened:
+// with the label no longer overwritten before Validate, a caller's nonsense survived long
+// enough to be rejected. "Inert" has to mean inert — the field is not written, so it is not
+// judged either, and the stored standing is untouched.
+func TestRewriteIgnoresAJunkProvenanceRatherThanRefusing(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	atom, err := s.AddAtom(ctx, owner, Atom{Claim: "Ran the migration"}, AuthorAgent)
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+
+	atom.Claim = "Ran the migration across three regions"
+	atom.Provenance = "vibes"
+	got, err := s.UpdateAtom(ctx, atom.ID, owner, atom, AuthorRewrite)
+	if err != nil {
+		t.Fatalf("a junk provenance must be ignored, not refused: %v", err)
+	}
+	if got.Claim != "Ran the migration across three regions" {
+		t.Errorf("Claim = %q, want the rewritten words", got.Claim)
+	}
+	if got.Provenance != ProvenanceAgentInferred {
+		t.Errorf("Provenance = %q, want the stored agent_inferred", got.Provenance)
+	}
+}
