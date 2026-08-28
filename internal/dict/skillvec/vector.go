@@ -109,19 +109,18 @@ const (
 // and lengthens this vector alone. The effect is that a posting is discounted in
 // proportion to how much it asks for, which is what makes coverage — not raw overlap —
 // decide the order.
-func (w Weights) JobVector(skills []string) []float32 {
-	v := w.vector(skills, ballast(len(skills)))
-	return v
-}
+func (w Weights) JobVector(skills []string) []float32 { return w.vector(skills, true) }
 
 // ProfileVector builds the vector for the READER. No ballast: the position must stay
 // zero on this side, since that is what keeps it out of the numerator. If both sides
 // set it, every pair would match on it and the ranking would flatten.
-func (w Weights) ProfileVector(skills []string) []float32 {
-	return w.vector(skills, 0)
-}
+func (w Weights) ProfileVector(skills []string) []float32 { return w.vector(skills, false) }
 
-// ballast is how much a posting listing n skills dilutes itself by.
+// ballast is how much a posting asking for n skills dilutes itself by.
+//
+// n counts what actually REACHED the vector, not the raw slice: unknown slugs and
+// repeats contribute no component, so charging for them would push a posting down for
+// asking more than it does. ["go","go","retired-slug"] asks for one skill.
 func ballast(n int) float64 {
 	if n < ballastFloorSkills {
 		n = ballastFloorSkills
@@ -139,17 +138,18 @@ func ballast(n int) float64 {
 // Returns nil — never a zero vector — when the result would be meaningless: no
 // weights loaded, no skills given, or no skill recognised. A nil vector is an absence
 // the caller omits, not a document that ranks against everything.
-func (w Weights) Vector(skills []string) []float32 { return w.vector(skills, 0) }
+func (w Weights) Vector(skills []string) []float32 { return w.vector(skills, false) }
 
-// vector is the shared construction. extra is a value placed at ballastPosition before
-// normalisation, so it counts toward the length without ever meeting a profile's
-// non-zero component.
-func (w Weights) vector(skills []string, extra float64) []float32 {
+// vector is the shared construction. withBallast places a value at ballastPosition
+// before normalisation, so it counts toward the length without ever meeting a
+// profile's non-zero component.
+func (w Weights) vector(skills []string, withBallast bool) []float32 {
 	if len(w.byPosition) == 0 || len(skills) == 0 {
 		return nil
 	}
 	v := make([]float32, Dimensions)
 	var sumSq float64
+	var placed int
 	for _, s := range skills {
 		pos, ok := Position(s)
 		if !ok || v[pos] != 0 {
@@ -160,14 +160,17 @@ func (w Weights) vector(skills []string, extra float64) []float32 {
 		x := w.byPosition[pos]
 		v[pos] = x
 		sumSq += float64(x) * float64(x)
+		placed++
 	}
 	if sumSq == 0 {
 		// Nothing recognised: the ballast alone would be a vector about nothing.
 		return nil
 	}
-	if extra != 0 {
-		v[ballastPosition] = float32(extra)
-		sumSq += extra * extra
+	if withBallast {
+		// Priced on `placed`, not len(skills) — see ballast.
+		b := ballast(placed)
+		v[ballastPosition] = float32(b)
+		sumSq += b * b
 	}
 	norm := float32(math.Sqrt(sumSq))
 	for i, x := range v {

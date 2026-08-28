@@ -114,3 +114,28 @@ func TestJobVectorOfUnrecognisedSkillsIsStillNil(t *testing.T) {
 		t.Errorf("JobVector(nil) = %v, want nil", got)
 	}
 }
+
+// Ballast must be priced on what actually reached the vector, not on the raw slice.
+// A posting listing ["go","go","retired-slug"] contributes ONE component but would be
+// charged for three, so a job whose tags are half unrecognised — or simply repeated —
+// would be pushed down for asking more than it does.
+func TestBallastCountsOnlyWhatEnteredTheVector(t *testing.T) {
+	counts := make(map[string]int64, 8)
+	for _, s := range registry[:8] {
+		counts[s] = 5_000
+	}
+	w := WeightsFromCounts(counts)
+
+	// Eight real skills, so both sides clear the six-skill floor and the ballast is
+	// actually doing something.
+	clean := w.JobVector(registry[:8])
+	noisy := w.JobVector(append(append([]string{}, registry[:8]...),
+		registry[0], registry[1], "retired-slug", "another-unknown"))
+
+	for i := range clean {
+		if clean[i] != noisy[i] {
+			t.Fatalf("duplicates and unknown slugs changed the vector at position %d (%f vs %f): ballast is priced on the raw slice",
+				i, clean[i], noisy[i])
+		}
+	}
+}
