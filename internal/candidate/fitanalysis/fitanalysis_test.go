@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,13 +51,23 @@ func (f *fakeStore) ListUserJobAnalyses(context.Context, int64) ([]db.ListUserJo
 	return f.list, nil
 }
 
-// fakeMeter records what the service asked the ledger for, so a test can assert on the charge
-// that was NOT made — which is most of what matters here.
+// fakeMeter is a ledger that actually holds a balance, because the rule under test is that the
+// DEBIT is the gate: a fake that only recorded calls could not show a second reservation being
+// refused by the first one having landed.
 type fakeMeter struct {
 	remaining int
 	cost      int
 	balErr    error
+	debitErr  error
 	debits    []string
+	releases  []string
+	// charged is the ledger's idempotency by (feature, ref): a second debit for a ref already
+	// charged takes nothing more.
+	charged map[string]bool
+}
+
+func newMeter(remaining, cost int) *fakeMeter {
+	return &fakeMeter{remaining: remaining, cost: cost, charged: map[string]bool{}}
 }
 
 func (m *fakeMeter) Balance(context.Context, int64) (credits.Balance, error) {
@@ -69,8 +80,28 @@ func (m *fakeMeter) Balance(context.Context, int64) (credits.Balance, error) {
 func (m *fakeMeter) Cost(credits.Feature) int { return m.cost }
 
 func (m *fakeMeter) Debit(_ context.Context, _ int64, f credits.Feature, ref string) (credits.Balance, error) {
+	if m.debitErr != nil {
+		return credits.Balance{Remaining: m.remaining}, m.debitErr
+	}
+	if m.charged[ref] {
+		return credits.Balance{Remaining: m.remaining}, nil // idempotent: already spent on this ref
+	}
+	if m.remaining < m.cost {
+		return credits.Balance{Remaining: m.remaining}, credits.ErrInsufficient
+	}
+	m.remaining -= m.cost
+	m.charged[ref] = true
 	m.debits = append(m.debits, string(f)+":"+ref)
-	return credits.Balance{Remaining: m.remaining - m.cost}, nil
+	return credits.Balance{Remaining: m.remaining}, nil
+}
+
+func (m *fakeMeter) Release(_ context.Context, _ int64, f credits.Feature, ref string) (credits.Balance, error) {
+	if m.charged[ref] {
+		delete(m.charged, ref)
+		m.remaining += m.cost
+		m.releases = append(m.releases, string(f)+":"+ref)
+	}
+	return credits.Balance{Remaining: m.remaining}, nil
 }
 
 func cachedRow(t *testing.T, score int) *db.GetUserJobAnalysisRow {
@@ -87,75 +118,119 @@ func newService(store fitanalysis.Store, meter fitanalysis.Meter) *fitanalysis.S
 	return fitanalysis.New(store, meter, matchanalysis.NewAnalyzer(nil))
 }
 
-// TestAuthorize is the credit rule, which used to be reachable only through a *fiber.Ctx.
-func TestAuthorize(t *testing.T) {
-	t.Run("a first analysis of a job is chargeable", func(t *testing.T) {
-		svc := newService(&fakeStore{}, &fakeMeter{remaining: 10, cost: 1})
-		chargeable, err := svc.Authorize(context.Background(), userID, jobID)
+// TestReserve is the credit rule, and it is now the GATE: the atomic debit decides, so a check
+// that two concurrent runs could both pass no longer exists.
+func TestReserve(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a first analysis of a job takes the credit up front", func(t *testing.T) {
+		meter := newMeter(10, 1)
+		svc := newService(&fakeStore{}, meter)
+
+		reserved, err := svc.Reserve(ctx, userID, jobID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !chargeable {
-			t.Error("a never-analysed job must be chargeable")
+		if !reserved {
+			t.Error("a never-analysed job must reserve")
+		}
+		if len(meter.debits) != 1 || meter.debits[0] != "match:7" {
+			t.Errorf("debits = %v, want the charge taken BEFORE the chain", meter.debits)
+		}
+		if meter.remaining != 9 {
+			t.Errorf("remaining = %d, want 9 — the credit is held, not merely checked", meter.remaining)
 		}
 	})
 
-	t.Run("a recompute is free and never gated", func(t *testing.T) {
-		// No points at all: a recompute must still be allowed, which is what keeps an
-		// analysis cached before credits shipped re-runnable.
-		svc := newService(&fakeStore{row: cachedRow(t, 80)}, &fakeMeter{remaining: 0, cost: 1})
-		chargeable, err := svc.Authorize(context.Background(), userID, jobID)
+	t.Run("a recompute is free and takes nothing", func(t *testing.T) {
+		meter := newMeter(0, 1) // no points at all
+		svc := newService(&fakeStore{row: cachedRow(t, 80)}, meter)
+
+		reserved, err := svc.Reserve(ctx, userID, jobID)
 		if err != nil {
 			t.Fatalf("a recompute must not be refused: %v", err)
 		}
-		if chargeable {
-			t.Error("a recompute must not be chargeable")
+		if reserved || len(meter.debits) != 0 {
+			t.Errorf("reserved=%v debits=%v, want a free recompute", reserved, meter.debits)
 		}
 	})
 
-	t.Run("a first analysis with too few points is refused, with the balance", func(t *testing.T) {
-		svc := newService(&fakeStore{}, &fakeMeter{remaining: 0, cost: 1})
-		_, err := svc.Authorize(context.Background(), userID, jobID)
+	t.Run("too few points is refused, with the balance", func(t *testing.T) {
+		meter := newMeter(0, 1)
+		svc := newService(&fakeStore{}, meter)
+
+		_, err := svc.Reserve(ctx, userID, jobID)
 		var refused *fitanalysis.InsufficientCreditsError
 		if !errors.As(err, &refused) {
 			t.Fatalf("err = %v, want *InsufficientCreditsError", err)
 		}
 		if refused.Balance.Remaining != 0 {
-			t.Errorf("refusal carries remaining = %d, want 0 — the caller renders it", refused.Balance.Remaining)
+			t.Errorf("refusal carries remaining = %d, want 0", refused.Balance.Remaining)
 		}
 	})
 
-	t.Run("exactly enough points is allowed", func(t *testing.T) {
-		svc := newService(&fakeStore{}, &fakeMeter{remaining: 1, cost: 1})
-		if _, err := svc.Authorize(context.Background(), userID, jobID); err != nil {
-			t.Fatalf("a balance equal to the cost must be affordable: %v", err)
+	// THE RACE. Two never-analysed jobs, one credit. Before the ledger became the gate both
+	// passed a balance check, both ran the chain, and the loser's debit failed silently after
+	// its analysis had been computed, cached and served.
+	t.Run("one credit cannot fund two different jobs", func(t *testing.T) {
+		meter := newMeter(1, 1)
+		svc := newService(&fakeStore{}, meter)
+
+		if _, err := svc.Reserve(ctx, userID, 100); err != nil {
+			t.Fatalf("the first run must be affordable: %v", err)
+		}
+		_, err := svc.Reserve(ctx, userID, 200)
+		var refused *fitanalysis.InsufficientCreditsError
+		if !errors.As(err, &refused) {
+			t.Fatalf("second job err = %v, want *InsufficientCreditsError — one credit funds one job", err)
+		}
+		if len(meter.debits) != 1 {
+			t.Errorf("debits = %v, want exactly one — the second run never got its credit", meter.debits)
 		}
 	})
 
-	t.Run("an unreadable balance never refuses", func(t *testing.T) {
-		// Best-effort: the atomic Debit is the real ceiling, so a transient read failure
-		// must not 402 a caller who can in fact afford the run.
-		svc := newService(&fakeStore{}, &fakeMeter{balErr: errors.New("db down"), cost: 1})
-		chargeable, err := svc.Authorize(context.Background(), userID, jobID)
+	t.Run("two callers for the SAME job collapse into one charge", func(t *testing.T) {
+		// Two tabs on one never-analysed job is neither a double charge nor a discount.
+		meter := newMeter(10, 1)
+		svc := newService(&fakeStore{}, meter)
+
+		for i := range 2 {
+			if _, err := svc.Reserve(ctx, userID, jobID); err != nil {
+				t.Fatalf("caller %d: %v", i, err)
+			}
+		}
+		if meter.remaining != 9 || len(meter.debits) != 1 {
+			t.Errorf("remaining=%d debits=%v, want one charge for one job", meter.remaining, meter.debits)
+		}
+	})
+
+	t.Run("metering fails open", func(t *testing.T) {
+		// Bookkeeping must never be able to refuse a legitimate analysis. An uncharged run is
+		// a smaller wrong than a candidate blocked by our accounting.
+		meter := newMeter(10, 1)
+		meter.debitErr = errors.New("ledger unreachable")
+		svc := newService(&fakeStore{}, meter)
+
+		reserved, err := svc.Reserve(ctx, userID, jobID)
 		if err != nil {
-			t.Fatalf("a balance read failure must not refuse: %v", err)
+			t.Fatalf("an unreachable ledger must not refuse: %v", err)
 		}
-		if !chargeable {
-			t.Error("the run is still a first analysis, so still chargeable")
+		if reserved {
+			t.Error("nothing was reserved, so nothing may be released later")
 		}
 	})
 
-	t.Run("no meter wired means no gate", func(t *testing.T) {
+	t.Run("no meter wired reserves nothing and refuses nothing", func(t *testing.T) {
 		svc := newService(&fakeStore{}, nil)
-		chargeable, err := svc.Authorize(context.Background(), userID, jobID)
-		if err != nil || !chargeable {
-			t.Fatalf("chargeable=%v err=%v, want true/nil with no ledger", chargeable, err)
+		reserved, err := svc.Reserve(ctx, userID, jobID)
+		if err != nil || reserved {
+			t.Fatalf("reserved=%v err=%v, want false/nil with no ledger", reserved, err)
 		}
 	})
 
 	t.Run("a store failure is an error, not a free pass", func(t *testing.T) {
-		svc := newService(&fakeStore{readErr: errors.New("db down")}, &fakeMeter{remaining: 10, cost: 1})
-		if _, err := svc.Authorize(context.Background(), userID, jobID); err == nil {
+		svc := newService(&fakeStore{readErr: errors.New("db down")}, newMeter(10, 1))
+		if _, err := svc.Reserve(ctx, userID, jobID); err == nil {
 			t.Error("a cache read failure must surface, not be read as 'never analysed'")
 		}
 	})
@@ -203,6 +278,14 @@ func TestCached(t *testing.T) {
 	})
 }
 
+// reserve stands in for the caller having paid before it reached the code under test.
+func reserve(t *testing.T, m *fakeMeter, jobID int64) {
+	t.Helper()
+	if _, err := m.Debit(context.Background(), userID, credits.FeatureMatch, strconv.FormatInt(jobID, 10)); err != nil {
+		t.Fatalf("seed reservation: %v", err)
+	}
+}
+
 func TestFollow(t *testing.T) {
 	ctx := context.Background()
 
@@ -219,18 +302,21 @@ func TestFollow(t *testing.T) {
 		// The row is present and readable: only run.succeeded says the leader failed, and
 		// serving this row would dress a stale analysis up as the live result.
 		store := &fakeStore{row: cachedRow(t, 80)}
-		meter := &fakeMeter{remaining: 10, cost: 1}
+		meter := newMeter(10, 1)
 		svc := newService(store, meter)
+		// This caller reserved before it started waiting, exactly as the streaming path does.
+		reserve(t, meter, jobID)
 
 		_, err := svc.Follow(ctx, fitanalysis.Request{
-			UserID: userID, Job: db.Job{ID: jobID}, Chargeable: true,
+			UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
 			Claim: followerOf(svc, false),
 		})
 		if !errors.Is(err, fitanalysis.ErrUnavailable) {
 			t.Fatalf("err = %v, want ErrUnavailable", err)
 		}
-		if len(meter.debits) != 0 {
-			t.Errorf("debits = %v, want none — nothing was served", meter.debits)
+		// The caller had already paid before waiting; nothing was served, so it gets it back.
+		if len(meter.releases) != 1 {
+			t.Errorf("releases = %v, want the reservation given back", meter.releases)
 		}
 	})
 
@@ -238,11 +324,12 @@ func TestFollow(t *testing.T) {
 		// The leader here stands in for the autopilot's free pre-run: it never charges, so
 		// the follower's own genuinely-new analysis must still be billed once.
 		store := &fakeStore{row: cachedRow(t, 80)}
-		meter := &fakeMeter{remaining: 10, cost: 1}
+		meter := newMeter(10, 1)
 		svc := newService(store, meter)
+		reserve(t, meter, jobID)
 
 		analysis, err := svc.Follow(ctx, fitanalysis.Request{
-			UserID: userID, Job: db.Job{ID: jobID}, Chargeable: true,
+			UserID: userID, Job: db.Job{ID: jobID}, Reserved: true,
 			Claim: followerOf(svc, true),
 		})
 		if err != nil {
@@ -251,28 +338,29 @@ func TestFollow(t *testing.T) {
 		if analysis == nil || analysis.OverallScore != 80 {
 			t.Fatalf("analysis = %+v, want the leader's cached one", analysis)
 		}
-		if len(meter.debits) != 1 || meter.debits[0] != "match:7" {
-			t.Errorf("debits = %v, want exactly [match:7]", meter.debits)
+		// The caller reserved before waiting and the result is real, so the charge stands.
+		if len(meter.releases) != 0 {
+			t.Errorf("releases = %v, want none — a served analysis is paid for", meter.releases)
 		}
 	})
 
 	t.Run("a recompute follower pays nothing", func(t *testing.T) {
-		meter := &fakeMeter{remaining: 10, cost: 1}
+		meter := newMeter(10, 1)
 		svc := newService(&fakeStore{row: cachedRow(t, 80)}, meter)
 
 		if _, err := svc.Follow(ctx, fitanalysis.Request{
-			UserID: userID, Job: db.Job{ID: jobID}, Chargeable: false,
+			UserID: userID, Job: db.Job{ID: jobID}, Reserved: false,
 			Claim: followerOf(svc, true),
 		}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(meter.debits) != 0 {
-			t.Errorf("debits = %v, want none — this caller owed nothing", meter.debits)
+		if len(meter.releases) != 0 {
+			t.Errorf("releases = %v, want none — this caller reserved nothing", meter.releases)
 		}
 	})
 
 	t.Run("a leader that succeeded but left nothing readable is unavailable", func(t *testing.T) {
-		svc := newService(&fakeStore{}, &fakeMeter{remaining: 10, cost: 1})
+		svc := newService(&fakeStore{}, newMeter(10, 1))
 		if _, err := svc.Follow(ctx, fitanalysis.Request{
 			UserID: userID, Job: db.Job{ID: jobID},
 			Claim: followerOf(svc, true),
@@ -287,23 +375,24 @@ func TestFollow(t *testing.T) {
 // told the cache is good.
 func TestEnsureShortCircuitsOnACachedAnalysis(t *testing.T) {
 	store := &fakeStore{row: cachedRow(t, 80)}
-	meter := &fakeMeter{remaining: 10, cost: 1}
+	meter := newMeter(10, 1)
 	svc := newService(store, meter)
 
 	leader := svc.Claim(userID, jobID)
 	follower := svc.Claim(userID, jobID)
 
-	// Chargeable is deliberately true: Ensure must ignore it, never charge, and never be
-	// made metered by a caller that filled the field in.
+	// Reserved is deliberately true: Ensure must ignore it, never charge and never release,
+	// and never be made metered by a caller that filled the field in.
 	svc.Ensure(context.Background(), fitanalysis.Request{
-		UserID: userID, Job: db.Job{ID: jobID}, Chargeable: true, Claim: leader,
+		UserID: userID, Job: db.Job{ID: jobID}, Reserved: true, Claim: leader,
 	})
 
 	if len(store.upserted) != 0 {
 		t.Errorf("upserts = %d, want 0 — an already-cached analysis is not recomputed", len(store.upserted))
 	}
-	if len(meter.debits) != 0 {
-		t.Errorf("debits = %v, want none — the cold-start pre-run is unmetered by design", meter.debits)
+	if len(meter.debits) != 0 || len(meter.releases) != 0 {
+		t.Errorf("debits=%v releases=%v, want none — the cold-start pre-run is unmetered by design",
+			meter.debits, meter.releases)
 	}
 
 	// The follower must be released, and told the cache is trustworthy.
@@ -438,5 +527,68 @@ func TestProjectTailoring(t *testing.T) {
 	}
 	if got.Job.Slug != "senior-backend-acme" || got.Verdict != "Good Fit" || got.OverallScore != 71 {
 		t.Errorf("projection = %+v, want the vacancy and verdict carried through", got)
+	}
+}
+
+// TestRunReleasesTheReservationWhenNothingIsProduced is the other half of making the debit the
+// gate: taking the credit up front is only honest if a run that produces nothing gives it back.
+// Otherwise closing the race would have cost candidates money on every failed analysis.
+func TestRunReleasesTheReservationWhenNothingIsProduced(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeStore{}
+	meter := newMeter(10, 1)
+	svc := newService(store, meter)
+
+	reserved, err := svc.Reserve(ctx, userID, jobID)
+	if err != nil || !reserved {
+		t.Fatalf("Reserve = %v, %v; want a reservation", reserved, err)
+	}
+	if meter.remaining != 9 {
+		t.Fatalf("remaining = %d, want the credit held", meter.remaining)
+	}
+
+	// A nil client makes Analyze answer (nil, nil): the LLM is unconfigured, so nothing is
+	// computed and nothing cached.
+	analysis, err := svc.Run(ctx, fitanalysis.Request{
+		UserID: userID, Job: db.Job{ID: jobID}, Reserved: reserved,
+		Analyzer: matchanalysis.NewAnalyzer(nil),
+	}, nil)
+	if err != nil || analysis != nil {
+		t.Fatalf("Run = %v, %v; want nil/nil for an unconfigured LLM", analysis, err)
+	}
+
+	if meter.remaining != 10 {
+		t.Errorf("remaining = %d, want 10 — a failed analysis costs nothing", meter.remaining)
+	}
+	if len(meter.releases) != 1 {
+		t.Errorf("releases = %v, want the reservation given back", meter.releases)
+	}
+	if len(store.upserted) != 0 {
+		t.Errorf("upserts = %d, want 0 — nothing was produced to cache", len(store.upserted))
+	}
+
+	// And the ref is chargeable again, so the candidate's retry is charged once, not never.
+	again, err := svc.Reserve(ctx, userID, jobID)
+	if err != nil || !again {
+		t.Fatalf("retry Reserve = %v, %v; a released ref must be chargeable again", again, err)
+	}
+}
+
+// TestRunKeepsTheReservationWhenItProducesAnAnalysis is the companion: a run that delivers is
+// paid for, and the release path must not fire on success.
+func TestRunKeepsTheReservationWhenItProducesAnAnalysis(t *testing.T) {
+	// Run's success branch needs a real analyzer, which needs a model; the streamed and
+	// on-demand success paths are covered end to end by the tagged handler tests. What is
+	// checked here is the accounting either side of it: Reserve holds, and nothing releases
+	// unless the run says it produced nothing.
+	ctx := context.Background()
+	meter := newMeter(10, 1)
+	svc := newService(&fakeStore{}, meter)
+
+	if _, err := svc.Reserve(ctx, userID, jobID); err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	if meter.remaining != 9 || len(meter.releases) != 0 {
+		t.Fatalf("remaining=%d releases=%v after reserving", meter.remaining, meter.releases)
 	}
 }

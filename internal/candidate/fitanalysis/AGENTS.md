@@ -15,8 +15,8 @@ The chain has four entry points and only one of them speaks HTTP:
 | Caller | Enters through | Charged? |
 |---|---|---|
 | `GET /jobs/:slug/match-analysis` | `Cached` | never (no LLM at all) |
-| `POST /jobs/:slug/match-analysis` | `Authorize` → `Run` | first analysis of that job only |
-| `GET …/match-analysis/stream` | `Authorize` → `Claim` → `Run` or `Follow` | same rule, per caller |
+| `POST /jobs/:slug/match-analysis` | `Reserve` → `Run` | first analysis of that job only, released if it produces nothing |
+| `GET …/match-analysis/stream` | `Reserve` → `Claim` → `Run` or `Follow` | same rule, per caller |
 | the autopilot's cold-start fill and post-run refresh | `Ensure` / `Refresh` | **never** |
 | `GET /me/cvs/:id/tailor-context` + the agent's `cv_context` tool | `TailoringContext` | never (read only) |
 | `GET /me/cvs/:id/job-match` + the agent's `job_match` tool | `Optional` | never (read only) |
@@ -29,16 +29,29 @@ reachable only through a `*fiber.Ctx`.
 
 ## Always true
 
+- **The debit IS the gate.** `Reserve` takes the credit BEFORE the chain starts, so the ledger's
+  own row lock decides. It used to check a balance and charge afterwards, which is a
+  check-then-act: two concurrent runs for two never-analysed jobs both passed a balance only one
+  of them could afford, and the loser's debit then failed silently — after its analysis had been
+  computed, cached and served.
+- **A run that produces nothing gives the credit back.** `Run` and `Follow` release on every
+  failure path, from a defer, so a panic returns it too. Taking the credit up front is only
+  honest if a failed analysis still costs nothing.
+- **A released ref is chargeable again**, which is what makes a retry cost one credit rather
+  than none. `credits.Store.Release` DELETES the debit row instead of appending a compensating
+  one, and it has to: `credit_ledger_debit_ref_uniq` allows one debit per `(user, feature, ref)`,
+  so a compensating entry would leave the ref permanently spent.
 - **Only a FIRST analysis of a job is chargeable.** A recompute is always free, so an analysis
-  cached before credits shipped re-runs for nothing. `Authorize` decides it; `Request.Chargeable`
-  carries the answer.
-- **Every caller gates for ITSELF, leader or follower.** Two tabs on one never-analysed job each
-  genuinely owe a credit — following someone else's compute is not a discount. Charging is
-  idempotent per `(candidate, feature, job)` (`credits.Store.Debit`'s `DebitExists`), so two
-  callers that both decide "I owe one here" collapse into one ledger row.
-- **The autopilot's two halves never charge.** `Ensure` ignores `Chargeable` rather than trusting
-  it. Their spend is tracked only by the LLM attribution every call already carries.
-- **The gate runs before the LLM and before a stream's headers.** `Authorize` refuses with
+  cached before credits shipped re-runs for nothing. `Request.Reserved` carries the answer.
+- **Every caller reserves for ITSELF, leader or follower.** Two tabs on one never-analysed job
+  are neither a double charge nor a discount: the debit is idempotent per
+  `(candidate, feature, job)`, so both collapse into one ledger row.
+- **Metering fails OPEN.** An unreachable ledger logs and lets the run through unreserved.
+  Bookkeeping must never be able to refuse a legitimate analysis, and an uncharged run is a
+  smaller wrong than a candidate blocked by our accounting.
+- **The autopilot's two halves never charge.** `Ensure` ignores `Reserved` rather than trusting
+  it, so it reserves nothing and has nothing to release. Their spend is tracked only by the LLM attribution every call already carries.
+- **The gate runs before the LLM and before a stream's headers.** `Reserve` refuses with
   `*InsufficientCreditsError`, carrying the balance — the caller renders the 402. An out-of-credits
   request must never become an event on a stream that already returned 200.
 - **The cache stores the UNCAPPED analysis.** The hard-constraint ceiling is recomputed and applied

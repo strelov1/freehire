@@ -42,24 +42,21 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		return err
 	}
 	cvUploadedAt, hasCV := h.cvUploadedAt(c, userID)
-	// Gate on points before opening the stream (the fiber ctx is still valid here, so an
+	// Reserve the credit before opening the stream (the fiber ctx is still valid here, so an
 	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed
 	// request would run the LLM; without one the stream just reports has_cv. A recompute is
-	// free — only a new analysis is charged, and only after it persists (in the writer).
+	// free, and a run that produces nothing gives the credit back.
 	//
-	// Every caller runs this gate for ITSELF, whether it ends up leading or following the
-	// compute below — not just the leader. A follower still spends a real credit on a
-	// genuinely new job (two tabs open on the same never-analysed job is not a discount),
-	// and an out-of-credits caller must still 402 even when someone else is already
-	// computing the same analysis for free reasons (autopilotAnalysis.ensure never reaches this
-	// gate at all — see prepareAutopilotRun). Debiting twice for one job is safe: the charge
-	// is idempotent per (user, feature, job) — see credits.Store.Debit's DebitExists check —
-	// so a leader and a follower that both decide "I owe one credit here" collapse into a
-	// single ledger row, whichever of them reaches it first.
-	chargeable := false
+	// Every caller reserves for ITSELF, whether it ends up leading or following the compute
+	// below — an out-of-credits caller must still 402 even when someone else is already
+	// computing the same analysis for free reasons (autopilotAnalysis.ensure never reaches
+	// this gate at all — see prepareAutopilotRun). Reserving twice for one job is safe: the
+	// debit is idempotent per (user, feature, job), so a leader and a follower collapse into
+	// a single ledger row, whichever reaches it first.
+	reserved := false
 	if hasCV {
 		var err error
-		if chargeable, err = h.fit.Authorize(c.Context(), userID, job.ID); err != nil {
+		if reserved, err = h.fit.Reserve(c.Context(), userID, job.ID); err != nil {
 			if refusal, refused := renderCreditsRefusal(c, err); refused {
 				return refusal
 			}
@@ -95,7 +92,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		UserID:       userID,
 		Job:          job,
 		CVUploadedAt: cvUploadedAt,
-		Chargeable:   chargeable,
+		Reserved:     reserved,
 		Claim:        claim,
 	}
 	if claim.IsLeader() {

@@ -836,6 +836,22 @@ type Querier interface {
 	// garbage, since a vanished job cannot be indexed. Here it is the whole point — cmd/prune
 	// hard-deletes jobs, and their documents still have to leave the index.
 	DeleteDeadSearchDeleteOutbox(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+	// Void a debit taken as a RESERVATION for work that then produced nothing.
+	//
+	// It deletes rather than appending a compensating row, and that is forced by
+	// credit_ledger_debit_ref_uniq: at most one debit may exist per (user, feature, ref), so a
+	// compensating entry would leave the ref permanently spent and the candidate's retry would
+	// find it already charged and never re-reserve. Deleting frees the ref.
+	//
+	// The ledger's reconstructability is untouched — a voided reservation is a charge that did not
+	// happen, and the balance still sums correctly from what remains. What is not kept is the
+	// record that a reservation was briefly held, which is bookkeeping about our own retry, not
+	// about the candidate's spending.
+	//
+	// Returns the number of rows removed, so the caller adds the cost back exactly when it really
+	// took one away — a double release, or a release of a charge someone else already voided,
+	// removes nothing and returns 0.
+	DeleteDebit(ctx context.Context, arg DeleteDebitParams) (int64, error)
 	// Unlink Discord. Returns the affected row count: 0 means there was no link.
 	DeleteDiscordLink(ctx context.Context, userID int64) (int64, error)
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error

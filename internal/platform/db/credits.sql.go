@@ -37,6 +37,43 @@ func (q *Queries) DebitExists(ctx context.Context, arg DebitExistsParams) (bool,
 	return exists, err
 }
 
+const deleteDebit = `-- name: DeleteDebit :execrows
+DELETE FROM credit_ledger
+WHERE user_id = $1
+  AND kind = 'debit'
+  AND feature = $2::text
+  AND ref = $3::text
+`
+
+type DeleteDebitParams struct {
+	UserID  int64  `json:"user_id"`
+	Feature string `json:"feature"`
+	Ref     string `json:"ref"`
+}
+
+// Void a debit taken as a RESERVATION for work that then produced nothing.
+//
+// It deletes rather than appending a compensating row, and that is forced by
+// credit_ledger_debit_ref_uniq: at most one debit may exist per (user, feature, ref), so a
+// compensating entry would leave the ref permanently spent and the candidate's retry would
+// find it already charged and never re-reserve. Deleting frees the ref.
+//
+// The ledger's reconstructability is untouched — a voided reservation is a charge that did not
+// happen, and the balance still sums correctly from what remains. What is not kept is the
+// record that a reservation was briefly held, which is bookkeeping about our own retry, not
+// about the candidate's spending.
+//
+// Returns the number of rows removed, so the caller adds the cost back exactly when it really
+// took one away — a double release, or a release of a charge someone else already voided,
+// removes nothing and returns 0.
+func (q *Queries) DeleteDebit(ctx context.Context, arg DeleteDebitParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDebit, arg.UserID, arg.Feature, arg.Ref)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const ensureBalance = `-- name: EnsureBalance :exec
 INSERT INTO credit_balances (user_id, period, remaining)
 VALUES ($1, $2, $3)

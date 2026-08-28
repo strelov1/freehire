@@ -43,6 +43,28 @@ SELECT EXISTS (
 INSERT INTO credit_ledger (user_id, period, kind, feature, delta, ref)
 VALUES (sqlc.arg(user_id), sqlc.arg(period), 'debit', sqlc.arg(feature)::text, sqlc.arg(delta), sqlc.arg(ref)::text);
 
+-- name: DeleteDebit :execrows
+-- Void a debit taken as a RESERVATION for work that then produced nothing.
+--
+-- It deletes rather than appending a compensating row, and that is forced by
+-- credit_ledger_debit_ref_uniq: at most one debit may exist per (user, feature, ref), so a
+-- compensating entry would leave the ref permanently spent and the candidate's retry would
+-- find it already charged and never re-reserve. Deleting frees the ref.
+--
+-- The ledger's reconstructability is untouched — a voided reservation is a charge that did not
+-- happen, and the balance still sums correctly from what remains. What is not kept is the
+-- record that a reservation was briefly held, which is bookkeeping about our own retry, not
+-- about the candidate's spending.
+--
+-- Returns the number of rows removed, so the caller adds the cost back exactly when it really
+-- took one away — a double release, or a release of a charge someone else already voided,
+-- removes nothing and returns 0.
+DELETE FROM credit_ledger
+WHERE user_id = sqlc.arg(user_id)
+  AND kind = 'debit'
+  AND feature = sqlc.arg(feature)::text
+  AND ref = sqlc.arg(ref)::text;
+
 -- name: RewardExists :one
 -- Whether the caller already received a reward for this ref (e.g. an accepted contribution).
 -- True means the reward was already granted and must not be granted again (idempotency).

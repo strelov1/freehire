@@ -285,3 +285,71 @@ func TestDebit_concurrentNoOversell(t *testing.T) {
 		t.Errorf("debit rows after race = %d, want exactly 1", total)
 	}
 }
+
+// TestRelease_givesTheCreditBackAndFreesTheRef exercises the void statement for real. sqlc
+// generates Go from SQL but never runs it, and this one deletes a row that a partial unique
+// index depends on — the whole reason a reservation is voided rather than compensated.
+func TestRelease_givesTheCreditBackAndFreesTheRef(t *testing.T) {
+	pool := startPostgres(t)
+	s := newStore(pool, Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
+	uid := insertUser(t, pool, "release@example.test")
+	ctx := context.Background()
+
+	if _, err := s.Debit(ctx, uid, FeatureMatch, "job-1"); err != nil {
+		t.Fatalf("Debit: %v", err)
+	}
+
+	bal, err := s.Release(ctx, uid, FeatureMatch, "job-1")
+	if err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if bal.Remaining != 20 {
+		t.Errorf("Remaining after release = %d, want the full grant back", bal.Remaining)
+	}
+	if got := countDebits(t, pool, uid, "match", "job-1"); got != 0 {
+		t.Errorf("debit rows after release = %d, want 0", got)
+	}
+
+	// The ref is chargeable again, which is the point: a candidate whose analysis failed
+	// retries and is charged once, not never and not twice. A compensating ledger row could
+	// not do this — credit_ledger_debit_ref_uniq would still hold the ref.
+	if _, err := s.Debit(ctx, uid, FeatureMatch, "job-1"); err != nil {
+		t.Fatalf("re-Debit after release: %v", err)
+	}
+	if got := countDebits(t, pool, uid, "match", "job-1"); got != 1 {
+		t.Errorf("debit rows after re-charge = %d, want 1", got)
+	}
+	if b, _ := s.Balance(ctx, uid); b.Remaining != 19 {
+		t.Errorf("Remaining after re-charge = %d, want 19", b.Remaining)
+	}
+}
+
+// TestRelease_isIdempotentAndSafeOnNothing pins what lets every failure path call it without
+// first working out whether it owes one.
+func TestRelease_isIdempotentAndSafeOnNothing(t *testing.T) {
+	pool := startPostgres(t)
+	s := newStore(pool, Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
+	uid := insertUser(t, pool, "release-idem@example.test")
+	ctx := context.Background()
+
+	// Never charged: nothing to give back, and no balance invented.
+	bal, err := s.Release(ctx, uid, FeatureMatch, "never-charged")
+	if err != nil {
+		t.Fatalf("Release of an uncharged ref: %v", err)
+	}
+	if bal.Remaining != 20 {
+		t.Errorf("Remaining = %d, want the untouched grant", bal.Remaining)
+	}
+
+	if _, err := s.Debit(ctx, uid, FeatureMatch, "job-2"); err != nil {
+		t.Fatalf("Debit: %v", err)
+	}
+	for i := range 3 {
+		if _, err := s.Release(ctx, uid, FeatureMatch, "job-2"); err != nil {
+			t.Fatalf("Release %d: %v", i, err)
+		}
+	}
+	if b, _ := s.Balance(ctx, uid); b.Remaining != 20 {
+		t.Errorf("Remaining after three releases = %d, want 20 — a release gives back once", b.Remaining)
+	}
+}

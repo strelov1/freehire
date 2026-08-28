@@ -57,6 +57,8 @@ type Meter interface {
 	Balance(ctx context.Context, userID int64) (credits.Balance, error)
 	Cost(f credits.Feature) int
 	Debit(ctx context.Context, userID int64, feature credits.Feature, ref string) (credits.Balance, error)
+	// Release voids a debit taken as a reservation for work that produced nothing.
+	Release(ctx context.Context, userID int64, feature credits.Feature, ref string) (credits.Balance, error)
 }
 
 // InsufficientCreditsError refuses a run the candidate cannot afford. It carries the balance
@@ -92,11 +94,14 @@ type Request struct {
 	// stamping a newer CV's time on an older CV's analysis.
 	CVUploadedAt *time.Time
 
-	// Chargeable is THIS caller's own credit decision (Authorize's answer), not the leader's.
-	// Two callers racing for one never-analysed job each genuinely owe a credit — two tabs on
-	// the same job is not a discount — and Charge is idempotent per (candidate, feature, job),
-	// so both deciding "I owe one here" collapses into a single ledger row.
-	Chargeable bool
+	// Reserved says THIS caller has already paid for the run (Reserve's answer), not the
+	// leader's. Two callers racing for one never-analysed job each reserve, and the debit is
+	// idempotent per (candidate, feature, job), so both collapse into a single ledger row —
+	// two tabs on the same job is neither a double charge nor a discount.
+	//
+	// A run that produces nothing releases what it took, so a failed analysis still costs
+	// nothing.
+	Reserved bool
 
 	// Claim is this caller's role in the coalesced compute, from Claim. Nil means the caller
 	// is not coalescing at all (the plain POST run), which races nothing today because the
@@ -144,27 +149,44 @@ func (s *Service) Balance(ctx context.Context, userID int64) *credits.Balance {
 	return &bal
 }
 
-// Authorize decides whether this run may proceed and whether it is chargeable.
+// Reserve decides whether this run is chargeable and, if it is, TAKES the credit before the
+// chain starts. The atomic debit is the gate.
 //
-// A run is chargeable only when it would be the candidate's FIRST analysis of that job — no
-// cached row exists. A recompute is always free, so an analysis cached before credits shipped
-// re-runs for nothing. Only a chargeable run is gated, and it is refused with
-// InsufficientCreditsError when the balance cannot cover the cost.
+// It used to check the balance and charge afterwards, which is a check-then-act: two
+// concurrent runs for two never-analysed jobs could both pass a check only one of them could
+// afford, and the loser's debit then failed silently — after its analysis had been computed,
+// cached and served. Debiting first makes the ledger's own row lock the arbiter, so the second
+// run is refused rather than given away.
 //
-// The gate runs before the LLM is touched, and before a streaming caller opens its response,
-// so the refusal can still be rendered as a status rather than as an event on a stream that
-// already returned 200.
-func (s *Service) Authorize(ctx context.Context, userID, jobID int64) (chargeable bool, err error) {
+// A run is chargeable only when it would be the candidate's FIRST analysis of that job, so a
+// recompute is always free and an analysis cached before credits shipped re-runs for nothing.
+// A run that cannot afford its credit is refused with InsufficientCreditsError, before the LLM
+// is touched and before a streaming caller opens its response — so the refusal can still be a
+// status rather than an event on a stream that already returned 200.
+//
+// Metering fails OPEN. An unreachable ledger logs and lets the run through unreserved, exactly
+// as the balance read always did: bookkeeping must never be able to refuse a legitimate
+// analysis, and an uncharged run is a smaller wrong than a candidate blocked by our accounting.
+func (s *Service) Reserve(ctx context.Context, userID, jobID int64) (reserved bool, err error) {
 	isNew, err := s.isNew(ctx, userID, jobID)
 	if err != nil || !isNew {
 		return false, err
 	}
 	if s.credits == nil {
-		return true, nil
+		return false, nil
 	}
-	if bal := s.Balance(ctx, userID); bal != nil && bal.Remaining < s.credits.Cost(credits.FeatureMatch) {
-		return false, &InsufficientCreditsError{Balance: *bal}
+	bal, err := s.credits.Debit(ctx, userID, credits.FeatureMatch, debitRef(jobID))
+	if errors.Is(err, credits.ErrInsufficient) {
+		return false, &InsufficientCreditsError{Balance: bal}
 	}
+	if err != nil {
+		log.Printf("credits: reserving a match for user %d job %d: %v", userID, jobID, err)
+		return false, nil
+	}
+	// True even when the debit no-opped on an already-charged ref. isNew said there is no
+	// analysis for this job, so a charge standing against it has bought the candidate nothing
+	// — and releasing it if this run also fails is the right answer, not a refund of somebody
+	// else's work.
 	return true, nil
 }
 
@@ -231,6 +253,14 @@ func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Ev
 	if r.Claim.IsLeader() {
 		defer func() { r.Claim.Release(succeeded) }()
 	}
+	// Nothing produced means nothing owed. Deferred so a panic anywhere below — in the chain,
+	// the emit callback or the cache write — gives the credit back too, rather than leaving a
+	// candidate charged for an analysis that does not exist.
+	defer func() {
+		if !succeeded && r.Reserved {
+			s.release(ctx, r.UserID, r.Job.ID)
+		}
+	}()
 
 	var analysis *matchanalysis.Analysis
 	var err error
@@ -247,9 +277,6 @@ func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Ev
 	}
 	s.Cache(ctx, r.UserID, r.Job, r.CVUploadedAt, r.Input.Language, analysis)
 	succeeded = true
-	if r.Chargeable {
-		s.charge(ctx, r.UserID, r.Job.ID)
-	}
 	return analysis, nil
 }
 
@@ -271,15 +298,20 @@ var ErrUnavailable = errors.New("fitanalysis: analysis unavailable")
 // autopilot pre-run is exactly the case that must still charge a genuinely new analysis.
 func (s *Service) Follow(ctx context.Context, r Request) (*matchanalysis.Analysis, error) {
 	if !r.Claim.wait() {
+		// The leader produced nothing, so this caller owes nothing either. Its own reservation
+		// is separate from the leader's when the leader was the free autopilot pre-run.
+		if r.Reserved {
+			s.release(ctx, r.UserID, r.Job.ID)
+		}
 		return nil, ErrUnavailable
 	}
 	row, err := s.store.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID})
 	analysis := DecodeAnalysis(row.Analysis)
 	if err != nil || analysis == nil {
+		if r.Reserved {
+			s.release(ctx, r.UserID, r.Job.ID)
+		}
 		return nil, ErrUnavailable
-	}
-	if r.Chargeable {
-		s.charge(ctx, r.UserID, r.Job.ID)
 	}
 	return analysis, nil
 }
@@ -369,15 +401,18 @@ func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploade
 	}
 }
 
-// charge debits one match against the candidate's points after a fresh analysis has
-// persisted, idempotent by job id. Best-effort: the analysis is already computed and cached,
-// so a debit error (including a rare insufficient-balance race the pre-check let through) is
-// logged, not surfaced.
-func (s *Service) charge(ctx context.Context, userID, jobID int64) {
+// release gives back a credit reserved for a run that produced nothing, and is best-effort:
+// the candidate is already being told the analysis is unavailable, and a failure to return
+// their point is not something to fail them a second time over. It is idempotent, so every
+// failure path may call it without first working out whether it owes one.
+func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	if s.credits == nil {
 		return
 	}
-	if _, err := s.credits.Debit(ctx, userID, credits.FeatureMatch, strconv.FormatInt(jobID, 10)); err != nil {
-		log.Printf("credits: match debit user=%d job=%d: %v", userID, jobID, err)
+	if _, err := s.credits.Release(ctx, userID, credits.FeatureMatch, debitRef(jobID)); err != nil {
+		log.Printf("credits: releasing a match reservation for user %d job %d: %v", userID, jobID, err)
 	}
 }
+
+// debitRef identifies what a match credit was spent on. One charge per job, ever.
+func debitRef(jobID int64) string { return strconv.FormatInt(jobID, 10) }

@@ -217,11 +217,11 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// risk stamping a newer CV's time on an older CV's analysis. language is captured the
 	// same way, for the same reason.
 	language := h.callerLanguage(c.Context(), userID)
-	// Gate on points before touching the LLM: a new job needs at least the match cost, a
-	// recompute of an already-analyzed job is always free. Only new analyses are charged,
-	// and only after they persist, so a legacy cached job re-runs for free. The rule and the
+	// Take the credit before touching the LLM: the atomic debit IS the gate, so two
+	// concurrent runs cannot both pass a balance only one of them could afford. A recompute
+	// is free, and a run that produces nothing gives the credit back. The rule and the
 	// refusal are the service's; only the status code is ours.
-	chargeable, err := h.fit.Authorize(c.Context(), userID, job.ID)
+	reserved, err := h.fit.Reserve(c.Context(), userID, job.ID)
 	if err != nil {
 		if refusal, refused := renderCreditsRefusal(c, err); refused {
 			return refusal
@@ -243,7 +243,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 		Analyzer:     h.boundAnalyzer(c.Context(), userID),
 		Input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
 		CVUploadedAt: cvUploadedAt,
-		Chargeable:   chargeable,
+		Reserved:     reserved,
 	}, nil)
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
@@ -305,9 +305,9 @@ func (h *matchHandlers) boundAnalyzer(ctx context.Context, userID int64) *matcha
 // A nil *autopilotAnalysis is a working no-op — the caller has no match surface wired — so
 // PostAssistantAutopilot needs no branch of its own.
 //
-// Neither half is chargeable, and the request it carries says so by leaving Chargeable false:
+// Neither half is chargeable, and the request it carries says so by leaving Reserved false:
 // the cold-start pre-run is unmetered by design, tracked only by the LLM spend attribution
-// every call already carries.
+// every call already carries — so it reserves nothing and has nothing to release.
 type autopilotAnalysis struct {
 	fit *fitanalysis.Service
 	req fitanalysis.Request

@@ -167,6 +167,60 @@ func (s *Store) Debit(ctx context.Context, userID int64, feature Feature, ref st
 	return Balance{Remaining: int(remaining), ResetsAt: resetsAt(now)}, debitErr
 }
 
+// Release voids a debit taken as a reservation for work that produced nothing, atomically and
+// idempotently by (feature, ref): the points go back and the ref becomes chargeable again, so
+// a candidate whose analysis failed can retry and be charged once, not twice and not never.
+//
+// It takes the same row lock as Debit, so a release cannot interleave with a concurrent charge
+// for the same user and leave the materialized balance disagreeing with the ledger.
+//
+// Releasing something that was never charged — a free recompute, a caller that did not reserve,
+// a second release of the same reservation — removes nothing and reports the balance unchanged.
+// That is what lets every failure path call it without first working out whether it owes one.
+func (s *Store) Release(ctx context.Context, userID int64, feature Feature, ref string) (Balance, error) {
+	now := time.Now().UTC()
+	cur := periodKey(now)
+	cost := int32(s.cfg.cost(feature))
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Balance{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+
+	row, err := q.GetBalanceForUpdate(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// No balance row means nothing was ever charged here, so there is nothing to give
+		// back — and the caller is reported at the full monthly grant, the same reading
+		// Balance gives a fresh user. Answering zero would say "out of credits" about
+		// somebody who has spent nothing.
+		return Balance{Remaining: s.cfg.MonthlyGrant, ResetsAt: resetsAt(now)}, nil
+	}
+	if err != nil {
+		return Balance{}, err
+	}
+
+	removed, err := q.DeleteDebit(ctx, db.DeleteDebitParams{
+		UserID: userID, Feature: string(feature), Ref: ref,
+	})
+	if err != nil {
+		return Balance{}, err
+	}
+
+	remaining := s.applicableRemaining(row.Period, cur, row.Remaining)
+	if removed > 0 {
+		remaining += cost
+	}
+	if err := q.UpdateBalance(ctx, db.UpdateBalanceParams{UserID: userID, Period: cur, Remaining: remaining}); err != nil {
+		return Balance{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Balance{}, err
+	}
+	return Balance{Remaining: int(remaining), ResetsAt: resetsAt(now)}, nil
+}
+
 // Reward credits the configured contribution reward to a user, atomically and idempotently
 // by ref (e.g. the accepted contribution id). The reward banks above the monthly grant and
 // survives the period reset (applicableRemaining preserves any surplus). A non-positive
