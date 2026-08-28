@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -41,7 +42,9 @@ func TestBuildAnalysisItems(t *testing.T) {
 		},
 	}
 
-	items := buildAnalysisItems(rows, &now, "model-a", "en")
+	// No job hash on the caller-wide stamps: each row carries its own live one, which is what
+	// makes "this job was re-ingested" per-item rather than all-or-nothing.
+	items := buildAnalysisItems(rows, fitanalysis.Stamps{CVUploadedAt: &now, Model: "model-a", Language: "en"})
 	if len(items) != 3 {
 		t.Fatalf("got %d items, want 3 (corrupt row skipped)", len(items))
 	}

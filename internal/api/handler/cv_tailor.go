@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -72,7 +73,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	h.match.capServedAnalysis(c.Context(), userID, job, analysis)
 	// Gate on points before creating anything: an out-of-credits caller is a 402 and no
 	// tailored CV or session is minted. The debit itself lands after the CV exists (below).
-	if bal := h.match.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureTailor) {
+	if bal := h.match.fit.Balance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureTailor) {
 		return creditsError(c, *bal)
 	}
 	// When the base CV is behind the latest résumé upload, refresh it from the seed before
@@ -379,7 +380,7 @@ func (h *cvHandlers) cachedAnalysisCtx(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return nil, err
 	}
-	analysis := decodeAnalysis(row.Analysis)
+	analysis := fitanalysis.DecodeAnalysis(row.Analysis)
 	if analysis == nil {
 		return nil, fiber.NewError(fiber.StatusConflict, "run the fit analysis first")
 	}

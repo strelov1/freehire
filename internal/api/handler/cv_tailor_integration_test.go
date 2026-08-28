@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
@@ -59,7 +60,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		seeder:             bankedSeeder{resume: resumeStore, bank: bank},
 		matchAnalysisCache: queries,
 		credits:            creditsStore,
-		match:              &matchHandlers{credits: creditsStore},
+		match:              &matchHandlers{fit: fitanalysis.New(queries, creditsStore, matchanalysis.NewAnalyzer(nil))},
 		// Same adapter Register wires: bootstrap must place the vacancy on the board.
 		jobs: trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, pool)},
 		// The tailoring bootstrap mints its conversation through the assistant's store,

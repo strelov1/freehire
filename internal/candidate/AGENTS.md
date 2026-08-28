@@ -14,4 +14,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`atscheck` `cv` `cvedit` `cvmatch` `cvsection` `experience` `hardconstraint` `hardconstraint/credentials` `headshot` `jobmatch` `matchanalysis` `pii` `resume` `resumeextract`
+`atscheck` `cv` `cvedit` `cvmatch` `cvsection` `experience` `fitanalysis` `hardconstraint` `hardconstraint/credentials` `headshot` `jobmatch` `matchanalysis` `pii` `resume` `resumeextract`

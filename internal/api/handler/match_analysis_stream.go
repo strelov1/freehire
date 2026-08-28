@@ -15,12 +15,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
-	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
-	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // StreamMatchAnalysis runs the three-stage fit chain over Server-Sent Events, emitting stage
@@ -30,7 +27,7 @@ import (
 // after that. Everything the stream needs is captured before the body writer starts,
 // because the fiber ctx is released once this handler returns.
 //
-// Coalesced through h.coalesce: this is also what the tailoring workspace's cold start now
+// Coalesced through fitanalysis.Claim: this is also what the tailoring workspace's cold start
 // opens to animate the fit analysis, at the same moment the autopilot's own invisible
 // autopilotAnalysis.ensure may be racing for the identical (user, job). Whichever claims
 // leadership runs the chain for real; the other becomes a follower and replays the result via
@@ -55,33 +52,29 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// genuinely new job (two tabs open on the same never-analysed job is not a discount),
 	// and an out-of-credits caller must still 402 even when someone else is already
 	// computing the same analysis for free reasons (autopilotAnalysis.ensure never reaches this
-	// gate at all — see prepareAutopilotRun). Debiting twice for one job is safe: h.debitMatch
+	// gate at all — see prepareAutopilotRun). Debiting twice for one job is safe: the charge
 	// is idempotent per (user, feature, job) — see credits.Store.Debit's DebitExists check —
 	// so a leader and a follower that both decide "I owe one credit here" collapse into a
 	// single ledger row, whichever of them reaches it first.
-	isNew := false
+	chargeable := false
 	if hasCV {
 		var err error
-		if isNew, err = h.matchIsNew(c.Context(), userID, job.ID); err != nil {
-			return err
-		}
-		if isNew {
-			if bal := h.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureMatch) {
-				return creditsError(c, *bal)
+		if chargeable, err = h.fit.Authorize(c.Context(), userID, job.ID); err != nil {
+			if refusal, refused := renderCreditsRefusal(c, err); refused {
+				return refusal
 			}
+			return err
 		}
 	}
 
 	// Leadership for (user, job) is claimed after the gate above, not before: nothing here
 	// can fail, so there is no path where a caller becomes leader and then has to immediately
 	// hand leadership back. A follower (almost always the cold-start autopilot's own invisible
-	// autopilotAnalysis.ensure, racing for the same pair) runs neither the LLM nor the reads below
-	// — see matchAnalysisCoordinator and followMatchAnalysis.
-	var done func(bool)
-	var run *analysisRun
-	isLeader := true
+	// autopilotAnalysis.ensure, racing for the same pair) runs neither the LLM nor the reads
+	// below — see fitanalysis.Claim and followMatchAnalysis.
+	var claim *fitanalysis.Claim
 	if hasCV {
-		done, run, isLeader = h.coalesce.lead(userID, job.ID)
+		claim = h.fit.Claim(userID, job.ID)
 	}
 	profile, _ := h.userProfile.Get(c.Context(), userID)
 
@@ -95,37 +88,26 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// the same way before replaying the leader's cached analysis.
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
-	// Everything below is the leader's own compute setup — a follower runs neither the LLM
-	// nor these reads, and reaches its own path (followMatchAnalysis) once the body-writer
-	// opens.
-	var analyzer *matchanalysis.Analyzer
-	var language string
-	var input matchanalysis.Input
-	if isLeader {
+	// One request value carries everything both roles need. A follower fills no Analyzer and
+	// no Input: it runs neither the LLM nor the reads that assemble one, and reaches its own
+	// path (followMatchAnalysis) once the body-writer opens.
+	req := fitanalysis.Request{
+		UserID:       userID,
+		Job:          job,
+		CVUploadedAt: cvUploadedAt,
+		Chargeable:   chargeable,
+		Claim:        claim,
+	}
+	if claim.IsLeader() {
 		// Bound before the stream opens: minting a credential is a network call, and making
 		// it after the headers are out would stall a stream the client is already reading.
-		analyzer = h.matchAnalysis.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMatchAnalysis)))
+		req.Analyzer = h.boundAnalyzer(c.Context(), userID)
 
-		// Captured up front, same as cvUploadedAt above: the cache write happens after the
-		// stream's own goroutine outlives this request, so the language it stamps must be
-		// the one the chain actually ran under, not whatever a profile edit changes it to
-		// mid-stream.
-		language = h.callerLanguage(c.Context(), userID)
-		input = matchanalysis.Input{
-			JobTitle:            job.Title,
-			JobDescription:      job.Description,
-			CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-			StructuredResume:    h.candidateProfile(c, userID),
-			Match:               jobmatch.Compute(job.Skills, profile.Skills),
-			JobWorkMode:         job.WorkMode,
-			JobRemote:           job.Remote,
-			JobLocation:         job.Location,
-			JobRegions:          job.Regions,
-			JobCountries:        job.Countries,
-			LocationPreferences: string(profile.LocationPreferences),
-			Blockers:            blockers,
-			Language:            language,
-		}
+		// The language is captured up front, same as cvUploadedAt above: the cache write
+		// happens after the stream's own goroutine outlives this request, so the language it
+		// stamps must be the one the chain actually ran under, not whatever a profile edit
+		// changes it to mid-stream.
+		req.Input = h.buildAnalysisInput(c, job, userID, profile, blockers, h.callerLanguage(c.Context(), userID))
 	}
 
 	sseHeaders(c)
@@ -146,7 +128,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		stream := newSSEStream(w, conn, sseWriteTimeout)
 		start := time.Now()
-		log.Printf("matchanalysis: stream start user=%d job=%d has_cv=%v leader=%v", userID, job.ID, hasCV, isLeader)
+		log.Printf("matchanalysis: stream start user=%d job=%d has_cv=%v leader=%v", userID, job.ID, hasCV, claim.IsLeader())
 		stream.event("meta", map[string]bool{"has_cv": hasCV})
 		if !hasCV {
 			return
@@ -162,22 +144,13 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		// connection — a limit a reload could reset would bound nothing at all.
 		ctx := context.Background()
 
-		if !isLeader {
+		if !claim.IsLeader() {
 			// Someone else — almost always the cold-start autopilot's own invisible
 			// autopilotAnalysis.ensure — already claimed this pair. Wait for it and replay its
 			// result rather than running a second chain.
-			h.followMatchAnalysis(ctx, stream, run, userID, job, blockers, isNew)
+			h.followMatchAnalysis(ctx, stream, req, blockers)
 			return
 		}
-
-		// succeeded reports to any follower whether the cache is left in a trustworthy state
-		// by the time done runs. Deferred (not called ad hoc at each return below) so a panic
-		// between here and the end — anywhere in AnalyzeStream, the cache write, or the debit
-		// — still releases a waiting follower instead of stranding that (user, job) pair
-		// behind a leader that never finishes; see matchAnalysisCoordinator's own comment on
-		// why a bare, non-deferred done() was a real hazard here.
-		succeeded := false
-		defer func() { done(succeeded) }()
 
 		events := 0
 		// A long stage (a silent LLM call with no thinking tokens) would let the
@@ -187,7 +160,11 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		// and the stage callback both write, which sseStream serializes.
 		stopHeartbeat := stream.keepalive(sseKeepalive)
 
-		analysis, err := analyzer.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
+		// The claim is released inside Run, from a defer that also covers this callback — so a
+		// panic anywhere in the chain, the emit, the cache write or the debit still wakes a
+		// waiting follower instead of stranding that (user, job) pair behind a leader that
+		// never finishes.
+		analysis, err := h.fit.Run(ctx, req, func(e matchanalysis.Event) {
 			events++
 			stream.event(string(e.Kind), capFinalEvent(e, blockers))
 		})
@@ -202,11 +179,6 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
 			return
 		}
-		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, language, analysis)
-		succeeded = true
-		if isNew {
-			h.debitMatch(ctx, userID, job.ID)
-		}
 		log.Printf("matchanalysis: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))
 	return nil
@@ -219,31 +191,23 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 // stages (there is nothing to show progressing through) followed by final — so this reader's
 // stepper still resolves instead of hanging on "pending" forever.
 //
-// run.succeeded is checked before trusting the cache at all: a leader whose attempt failed
-// leaves an OLDER (or absent) row behind, not a fresh one, and reading it unconditionally would
-// serve a stale analysis dressed up as this run's live result — a follower must report the
-// same failure the leader saw, not paper over it.
+// Waiting for the leader, deciding whether its result can be trusted, and charging this
+// caller's own credit are fitanalysis.Service.Follow's — including why a failed leader must
+// report the same failure rather than serve the older row it left behind. What is left here is
+// the replay: three stage_done events and a final, because this reader's stepper must resolve
+// instead of hanging on "pending" forever. It never emits
+// stage_start/thinking/requirements/dimensions — those describe progress this caller never
+// watched.
 //
 // The wait runs on ctx (StreamMatchAnalysis's background context, taken after the fiber ctx is
 // gone): the same disconnect-proof posture the leader's own compute already runs under, so a
-// client that leaves during the wait costs nothing extra. Never emits
-// stage_start/thinking/requirements/dimensions: those describe progress this caller never
-// watched. isNew is THIS caller's own credits gate result (see StreamMatchAnalysis) — debiting
-// here when the leader was the free autopilotAnalysis.ensure pre-run is exactly the case that must
-// still charge a genuinely new analysis; h.debitMatch's idempotency (by user, feature, job) is
-// what keeps two callers that both decide to debit from charging twice.
-func (h *matchHandlers) followMatchAnalysis(ctx context.Context, stream *sseStream, run *analysisRun, userID int64, job db.Job, blockers []hardconstraint.Blocker, isNew bool) {
+// client that leaves during the wait costs nothing extra.
+func (h *matchHandlers) followMatchAnalysis(ctx context.Context, stream *sseStream, req fitanalysis.Request, blockers []hardconstraint.Blocker) {
 	stopHeartbeat := stream.keepalive(sseKeepalive) // the wait can run as long as a full chain
-	<-run.done
+	analysis, err := h.fit.Follow(ctx, req)
 	stopHeartbeat()
 
-	if !run.succeeded {
-		stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
-		return
-	}
-	row, err := h.matchAnalysisCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID})
-	analysis := decodeAnalysis(row.Analysis)
-	if err != nil || analysis == nil {
+	if err != nil {
 		stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
 		return
 	}
@@ -255,9 +219,6 @@ func (h *matchHandlers) followMatchAnalysis(ctx context.Context, stream *sseStre
 		})
 	}
 	stream.event(string(matchanalysis.EventFinal), matchanalysis.Event{Kind: matchanalysis.EventFinal, Analysis: &served})
-	if isNew {
-		h.debitMatch(ctx, userID, job.ID)
-	}
 }
 
 // capFinalEvent applies the caller's hard-constraint blockers to the audited `final`

@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -51,10 +52,13 @@ type cvHandlers struct {
 	resume        *resume.Store
 	// photos serves the headshot the photo-bearing templates print. Nil-safe: an
 	// unconfigured bucket, like a member with no photo, means the placeholder.
-	photos             *headshot.Store
-	queries            *db.Queries
-	credits            *credits.Store
-	matchAnalysisCache matchAnalysisStore
+	photos  *headshot.Store
+	queries *db.Queries
+	credits *credits.Store
+	// matchAnalysisCache reads the cached fit analysis the tailoring context grounds on.
+	// The read only, deliberately: fitanalysis.Service owns every write, the staleness rule
+	// and the metering, and this surface needs none of them.
+	matchAnalysisCache fitanalysis.Store
 	// jobReader serves the vacancy a tailoring context is about. Narrow on purpose: the
 	// tailoring path reads one row by id and nothing else.
 	jobReader jobReader

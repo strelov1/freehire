@@ -53,14 +53,14 @@ func TestCapFinalEvent_CapsTheStreamedFinalEventByUnmetHardConstraint(t *testing
 		t.Error("streamed final event should surface the unmet certification blocker")
 	}
 
-	// The object AnalyzeStream returns to StreamMatchAnalysis — the one h.cacheAnalysis
+	// The object AnalyzeStream returns to the leader — the one the cache write
 	// upserts right after — must stay uncapped, exactly as PostMatchAnalysis leaves the
 	// cache: capFinalEvent must cap a copy, never the caller's own Analysis.
 	if uncapped.OverallScore != 88 {
-		t.Errorf("the analysis fed to h.cacheAnalysis was mutated: overall_score = %d, want 88 (uncapped)", uncapped.OverallScore)
+		t.Errorf("the analysis fed to the cache was mutated: overall_score = %d, want 88 (uncapped)", uncapped.OverallScore)
 	}
 	if len(uncapped.Blockers) != 0 {
-		t.Errorf("the analysis fed to h.cacheAnalysis carries blockers = %v, want none (uncapped, cache-side copy)", uncapped.Blockers)
+		t.Errorf("the analysis fed to the cache carries blockers = %v, want none (uncapped, cache-side copy)", uncapped.Blockers)
 	}
 }
 

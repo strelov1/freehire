@@ -22,7 +22,9 @@ import (
 	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
+	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -53,7 +55,7 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 		resume.New(nil, resume.NewQueriesRepository(queries)),
 		headshot.New(nil, headshot.NewQueriesRepository(queries)),
 		creditsStore,
-		&matchHandlers{credits: creditsStore},
+		&matchHandlers{fit: fitanalysis.New(queries, creditsStore, matchanalysis.NewAnalyzer(nil))},
 		bankGate{bank: bank},
 		nil, // tracking save unused — this fixture never bootstraps tailor
 		true,

@@ -23,6 +23,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
@@ -101,8 +102,9 @@ func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *re
 	return &matchHandlers{
 		queries:     queries,
 		userProfile: userprofile.New(ownedProfile()),
-		resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
-		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
+		resume:      store, matchAnalysis: an,
+		fit: fitanalysis.New(queries,
+			credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}), an),
 	}
 }
 
@@ -300,8 +302,9 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		h := &matchHandlers{
 			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
-			resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
-			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: grant, CostMatch: 1, CostTailor: 3}),
+			resume:      store, matchAnalysis: an,
+			fit: fitanalysis.New(queries,
+				credits.NewStore(queries, pool, credits.Config{MonthlyGrant: grant, CostMatch: 1, CostTailor: 3}), an),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)

@@ -152,6 +152,7 @@ Each is self-contained and can be read independently.
 | **OAuth sign-in** (provider registry, state cookie, identity resolution) | [internal/identity/auth/oauth/AGENTS.md](internal/identity/auth/oauth/AGENTS.md) |
 | **`internal/candidate`** — the block itself: what it is, what it may import | [internal/candidate/AGENTS.md](internal/candidate/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/candidate/matchanalysis/AGENTS.md](internal/candidate/matchanalysis/AGENTS.md) |
+| **Fit-analysis use cases** (the cache, the staleness stamp, the credit rule, coalescing) | [internal/candidate/fitanalysis/AGENTS.md](internal/candidate/fitanalysis/AGENTS.md) |
 | **Job-match scoring** (deterministic CV-vs-vacancy score, the unverifiable rule) | [internal/candidate/cvmatch/AGENTS.md](internal/candidate/cvmatch/AGENTS.md) |
 | **ATS-readiness score** (deterministic CV score, de-identified LLM review, delta) | [internal/candidate/atscheck/AGENTS.md](internal/candidate/atscheck/AGENTS.md) |
 | **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/candidate/experience/AGENTS.md](internal/candidate/experience/AGENTS.md) |

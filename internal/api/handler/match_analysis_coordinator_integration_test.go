@@ -26,6 +26,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
@@ -116,13 +117,14 @@ func coordinatorJobSlug(prefix string, i int) string {
 // model bound to a fresh Analyzer, everything else the fixed fixture StreamMatchAnalysis and
 // autopilotAnalysis.ensure both need.
 func newCoordinatorHandlers(pool *pgxpool.Pool, queries *db.Queries, store *resume.Store, model llms.Model) *matchHandlers {
+	an := matchanalysis.NewAnalyzer(llm.NewWithModel(model))
 	return &matchHandlers{
-		queries:            queries,
-		userProfile:        userprofile.New(ownedProfile()),
-		resume:             store,
-		matchAnalysis:      matchanalysis.NewAnalyzer(llm.NewWithModel(model)),
-		matchAnalysisCache: queries,
-		credits:            credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
+		queries:       queries,
+		userProfile:   userprofile.New(ownedProfile()),
+		resume:        store,
+		matchAnalysis: an,
+		fit: fitanalysis.New(queries,
+			credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}), an),
 	}
 }
 
@@ -277,7 +279,7 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 
 	// autopilotAnalysis.ensure (the leader here) never touches credits — but the stream (the
 	// follower) is a genuinely paying request for a never-analysed job, and must still cost
-	// its own credit even though it didn't run the chain itself: h.debitMatch is idempotent
+	// its own credit even though it didn't run the chain itself: the charge is idempotent
 	// per (user, feature, job), so this is one row, not zero (a free ride for a paying
 	// caller) or two (double-billed).
 	var debits int
@@ -364,7 +366,7 @@ func TestMatchAnalysisCoordinatorStreamLeadsEnsureCachedAnalysisFollowsAndLeader
 
 // TestMatchAnalysisCoordinatorSecondStreamNeverSeesAnalysisUnavailable is a regression test
 // for a real race caught live: a leader used to call done() (releasing any follower)
-// immediately after AnalyzeStream returned, BEFORE its own h.cacheAnalysis write landed. A
+// immediately after AnalyzeStream returned, BEFORE its own cache write landed. A
 // follower unblocks the instant done() runs and reads the cache right away
 // (followMatchAnalysis) — so a follower that won that race read an empty cache and degraded
 // straight to "analysis unavailable", even though the leader was about to succeed.

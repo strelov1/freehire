@@ -2,18 +2,15 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
@@ -22,13 +19,17 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // matchHandlers serves the per-job match surfaces: the read-only skill match, the
 // on-demand three-stage LLM fit analysis (GET cached / POST run / SSE stream), and
-// the caller's list of analyzed jobs. The LLM analyzer is nil-safe (a nil client
-// degrades Analyze to a no-op); the cache and the AI-points meter ride along.
+// the caller's list of analyzed jobs.
+//
+// The use cases behind those routes — the cache, the staleness stamp, the credit rule and
+// the coalescing — live in internal/candidate/fitanalysis, because the autopilot's two
+// invisible halves reach them with no fiber ctx at all and the assistant's tools will too.
+// What stays here is transport: slug → job, binding the caller's gateway credential, SSE
+// framing, and rendering the 402 that fitanalysis refuses with.
 type matchHandlers struct {
 	queries *db.Queries
 	// userProfile loads the caller's profile (skills for the match bar, location
@@ -39,37 +40,41 @@ type matchHandlers struct {
 	resume *resume.Store
 	// matchAnalysis runs the on-demand three-stage LLM fit analysis for one
 	// (candidate, job). Its client is nil when the LLM is unconfigured; Analyze then
-	// degrades to a no-op.
+	// degrades to a no-op. Held here to bind it per caller (fit.Analyzer wants the bound
+	// one) — the unbound analyzer the service holds only answers ModelID.
 	matchAnalysis *matchanalysis.Analyzer
 	// llm binds the model client and the credential resolver, so an analysis is spent
 	// under the account that asked for it.
 	llm llmBinding
-	// matchAnalysisCache reads/writes the per-(user, job) cached fit analysis
-	// (backed by *db.Queries).
-	matchAnalysisCache matchAnalysisStore
-	// credits meters the per-user AI-points balance the analysis debits.
-	credits *credits.Store
+	// fit is the fit-analysis use case: the cache, the staleness rule, the credit decision
+	// and the coalescing. It also answers the points balance every fit surface reports, so
+	// this handler holds no ledger of its own. Nil in a fixture that exercises only the
+	// skill-match or candidate-profile paths.
+	fit *fitanalysis.Service
 	// bank supplies the candidate's work history. Nil when there are no queries to build
 	// it over, which reads as an empty bank — and an empty bank means no analysis.
 	bank candidateProfiler
-	// coalesce ensures at most one fit-analysis compute runs at a time for a given (user, job)
-	// — see matchAnalysisCoordinator for why the cold-start autopilot's invisible pre-run and
-	// the workspace's visible stream can both reach autopilotAnalysis.ensure/StreamMatchAnalysis
-	// for the identical pair. Billing is decided per caller, not by who leads — see
-	// StreamMatchAnalysis's own comment.
-	coalesce matchAnalysisCoordinator
 }
 
 func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, creditsStore *credits.Store) *matchHandlers {
 	return &matchHandlers{
-		queries:            queries,
-		userProfile:        userProfile,
-		resume:             resumeStore,
-		matchAnalysis:      analyzer,
-		matchAnalysisCache: queries,
-		bank:               newCandidateProfiler(queries),
-		credits:            creditsStore,
+		queries:       queries,
+		userProfile:   userProfile,
+		resume:        resumeStore,
+		matchAnalysis: analyzer,
+		fit:           fitanalysis.New(queries, meterOrNil(creditsStore), analyzer),
+		bank:          newCandidateProfiler(queries),
 	}
+}
+
+// meterOrNil keeps a nil *credits.Store out of the service as a NON-nil interface holding a
+// nil pointer, which would defeat fitanalysis's own nil-meter check and panic on the first
+// balance read. Only fixtures assemble without a ledger; production always has one.
+func meterOrNil(s *credits.Store) fitanalysis.Meter {
+	if s == nil {
+		return nil
+	}
+	return s
 }
 
 func (h *matchHandlers) register(api fiber.Router, mw middleware) {
@@ -119,12 +124,27 @@ func creditsError(c *fiber.Ctx, bal credits.Balance) error {
 	})
 }
 
-// matchAnalysisStore reads/writes the per-(user, job) cached fit analysis. *db.Queries satisfies
-// it; a fake backs the DB-less handler tests.
-type matchAnalysisStore interface {
-	GetUserJobAnalysis(ctx context.Context, arg db.GetUserJobAnalysisParams) (db.GetUserJobAnalysisRow, error)
-	UpsertUserJobAnalysis(ctx context.Context, arg db.UpsertUserJobAnalysisParams) error
-	ListUserJobAnalyses(ctx context.Context, userID int64) ([]db.ListUserJobAnalysesRow, error)
+// renderCreditsRefusal turns fitanalysis's transport-agnostic refusal into the 402 body, and
+// reports whether err was one. Every fit route gates through fitanalysis.Authorize, so this is
+// the single place the refusal becomes a status.
+func renderCreditsRefusal(c *fiber.Ctx, err error) (error, bool) {
+	var refused *fitanalysis.InsufficientCreditsError
+	if !errors.As(err, &refused) {
+		return nil, false
+	}
+	return creditsError(c, refused.Balance), true
+}
+
+// liveStamps assembles what a cached analysis is judged fresh against right now. cvUploadedAt
+// is passed in rather than re-read: the caller captured it up front, and a second read could
+// date an analysis by a CV that replaced the one it was computed from.
+func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time) fitanalysis.Stamps {
+	return fitanalysis.Stamps{
+		CVUploadedAt:   cvUploadedAt,
+		JobContentHash: job.ContentHash,
+		Model:          h.fit.ModelID(),
+		Language:       h.callerLanguage(ctx, userID),
+	}
 }
 
 // matchAnalysisResponse is the wire shape for the LLM fit analysis. HasCV is false when the
@@ -158,15 +178,11 @@ func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
-	bal := h.creditsBalance(c.Context(), userID)
-	row, err := h.matchAnalysisCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Credits: bal}})
-	}
+	bal := h.fit.Balance(c.Context(), userID)
+	analysis, stored, err := h.fit.Cached(c.Context(), userID, job.ID)
 	if err != nil {
 		return err
 	}
-	analysis := decodeAnalysis(row.Analysis)
 	if analysis == nil {
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Credits: bal}})
 	}
@@ -174,7 +190,7 @@ func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
 	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
 	// change takes effect without marking the cache stale.
 	h.capServedAnalysis(c.Context(), userID, job, analysis)
-	stale := !stampsFresh(row, cvUploadedAt, job.ContentHash, h.matchAnalysis.ModelID(), h.callerLanguage(c.Context(), userID))
+	stale := !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
 	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Credits: bal}})
 }
 
@@ -203,16 +219,14 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	language := h.callerLanguage(c.Context(), userID)
 	// Gate on points before touching the LLM: a new job needs at least the match cost, a
 	// recompute of an already-analyzed job is always free. Only new analyses are charged,
-	// and only after they persist (below), so a legacy cached job re-runs for free.
-	isNew, err := h.matchIsNew(c.Context(), userID, job.ID)
+	// and only after they persist, so a legacy cached job re-runs for free. The rule and the
+	// refusal are the service's; only the status code is ours.
+	chargeable, err := h.fit.Authorize(c.Context(), userID, job.ID)
 	if err != nil {
-		return err
-	}
-	if isNew {
-		bal := h.creditsBalance(c.Context(), userID)
-		if bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureMatch) {
-			return creditsError(c, *bal)
+		if refusal, refused := renderCreditsRefusal(c, err); refused {
+			return refusal
 		}
+		return err
 	}
 
 	// The caller's profile drives both the deterministic skills anchor and the location
@@ -223,19 +237,22 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// (below) and the same list caps the served score (applyBlockers, after caching).
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
-	analysis, err := h.runAnalysis(c, userID, job, profile, blockers, language)
+	analysis, err := h.fit.Run(c.Context(), fitanalysis.Request{
+		UserID:       userID,
+		Job:          job,
+		Analyzer:     h.boundAnalyzer(c.Context(), userID),
+		Input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
+		CVUploadedAt: cvUploadedAt,
+		Chargeable:   chargeable,
+	}, nil)
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
 		log.Printf("matchanalysis: analyze failed for user %d job %d: %v", userID, job.ID, err)
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
 	}
 	if analysis == nil {
-		// LLM unconfigured — nothing to cache.
+		// LLM unconfigured — nothing was cached.
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
-	}
-	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, language, analysis)
-	if isNew {
-		h.debitMatch(c.Context(), userID, job.ID)
 	}
 	// Cache holds the uncapped LLM analysis; cap the served copy from the blockers we
 	// already computed for the prompt (same recompute-on-read the GET path does).
@@ -266,13 +283,11 @@ func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int6
 	}
 }
 
-// runAnalysis runs the three-stage fit chain under the caller's own attribution, over an
-// input built by buildAnalysisInput, for a caller that has a live fiber ctx: the on-demand
-// endpoint. The autopilot's two halves run after the request and build that same input
-// through the same function, from plain values — see autopilotAnalysis.
-func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) (*matchanalysis.Analysis, error) {
-	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMatchAnalysis)))
-	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers, language))
+// boundAnalyzer returns the analyzer that spends under this caller's own gateway credential.
+// Binding is a network call, so a streaming caller makes it before its headers go out —
+// afterwards it would stall a stream the client is already reading.
+func (h *matchHandlers) boundAnalyzer(ctx context.Context, userID int64) *matchanalysis.Analyzer {
+	return h.matchAnalysis.As(h.llm.bind(ctx, userID, llm.Feature(tagMatchAnalysis)))
 }
 
 // autopilotAnalysis is one autopilot run's fit analysis: the cold-start fill the run's first
@@ -289,13 +304,13 @@ func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, prof
 //
 // A nil *autopilotAnalysis is a working no-op — the caller has no match surface wired — so
 // PostAssistantAutopilot needs no branch of its own.
+//
+// Neither half is chargeable, and the request it carries says so by leaving Chargeable false:
+// the cold-start pre-run is unmetered by design, tracked only by the LLM spend attribution
+// every call already carries.
 type autopilotAnalysis struct {
-	h            *matchHandlers
-	userID       int64
-	job          db.Job
-	analyzer     *matchanalysis.Analyzer
-	input        matchanalysis.Input
-	cvUploadedAt *time.Time
+	fit *fitanalysis.Service
+	req fitanalysis.Request
 }
 
 // prepareAutopilotRun assembles the run's analysis while the fiber ctx is still valid. It
@@ -307,138 +322,38 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 	language := h.callerLanguage(c.Context(), userID)
 	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
 	return &autopilotAnalysis{
-		h:            h,
-		userID:       userID,
-		job:          job,
-		analyzer:     h.matchAnalysis.As(h.llm.bind(c.Context(), userID, llm.Feature(tagMatchAnalysis))),
-		input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
-		cvUploadedAt: cvUploadedAt,
+		fit: h.fit,
+		req: fitanalysis.Request{
+			UserID:       userID,
+			Job:          job,
+			Analyzer:     h.boundAnalyzer(c.Context(), userID),
+			Input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
+			CVUploadedAt: cvUploadedAt,
+		},
 	}
 }
 
-// ensure computes and caches the analysis when none is cached yet. It exists for the
-// cold-start autopilot run, whose first tool call reads the cache and errors without one —
-// this is what lets that run start without requiring the candidate to have produced an
-// analysis first.
-//
-// Best-effort and silent: a lookup or compute failure (no LLM configured, an analyzer error)
-// is logged and left uncached, exactly as PostMatchAnalysis already degrades. No credits
-// debit — this path is unmetered, tracked only by the same LLM spend attribution every call
-// already carries (see the tailor-coldstart-autopilot design's "no new metering" decision).
-//
-// Coalesced through h.coalesce: the tailoring workspace's visible match-analysis stream
-// starts at the same cold start this runs at, so both routinely race for the identical
-// (user, job) — see matchAnalysisCoordinator for why only one of them ever actually computes.
+// ensure fills the cache before a cold-start autopilot run, whose first tool call reads it
+// and errors without one. Coalesced, best-effort, and never charged — the rules are
+// fitanalysis.Service.Ensure's; the claim is taken here because it is per attempt, not per
+// prepared run.
 func (a *autopilotAnalysis) ensure(ctx context.Context) {
 	if a == nil {
 		return
 	}
-	done, run, isLeader := a.h.coalesce.lead(a.userID, a.job.ID)
-	if !isLeader {
-		// The visible stream (or another concurrent call for this pair) already claimed the
-		// compute — wait for it rather than spending a second three-stage chain on the same
-		// input. Best-effort either way, exactly as before this coalescing existed: whether
-		// the leader actually cached anything is not this function's concern.
-		<-run.done
-		return
-	}
-	succeeded := false
-	defer func() { done(succeeded) }()
-
-	if _, err := a.h.matchAnalysisCache.GetUserJobAnalysis(ctx,
-		db.GetUserJobAnalysisParams{UserID: a.userID, JobID: a.job.ID}); err == nil {
-		succeeded = true // already cached — nothing to compute, and it's a good row for a follower to read
-		return
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v",
-			a.userID, a.job.ID, err)
-		return
-	}
-	succeeded = a.compute(ctx, "inline compute before an autopilot run")
+	req := a.req
+	req.Claim = a.fit.Claim(req.UserID, req.Job.ID)
+	a.fit.Ensure(ctx, req)
 }
 
-// refresh UNCONDITIONALLY recomputes the chain and overwrites the (user, job) cache, even
-// when nothing was cached or an analysis was already there. This is what repeals the
-// fit-analysis-post-autopilot-verify design's predecessor rule that the fit analysis is a
-// frozen snapshot of the base profile.
+// refresh recomputes the analysis after the run, unconditionally — see
+// fitanalysis.Service.Refresh. It claims nothing: by the time it runs the turn is over, so
+// there is no concurrent caller for this pair to coalesce with.
 func (a *autopilotAnalysis) refresh(ctx context.Context) {
 	if a == nil {
 		return
 	}
-	a.compute(ctx, "post-autopilot refresh")
-}
-
-// compute runs the chain and caches what it produced, reporting whether the cache is left
-// holding this call's own result — which is what a coalescing follower waits to learn.
-func (a *autopilotAnalysis) compute(ctx context.Context, stage string) bool {
-	analysis, err := a.analyzer.Analyze(ctx, a.input)
-	if err != nil {
-		log.Printf("matchanalysis: %s, user %d job %d: %v", stage, a.userID, a.job.ID, err)
-		return false
-	}
-	if analysis == nil {
-		return false // LLM unconfigured — nothing to cache
-	}
-	a.h.cacheAnalysis(ctx, a.userID, a.job, a.cvUploadedAt, a.input.Language, analysis)
-	return true
-}
-
-// creditsBalance reports the caller's current points, or nil on a DB error (logged).
-// Best-effort: a transient hiccup must neither block a legitimate analysis nor 402 the
-// caller — the atomic Debit remains the real ceiling.
-func (h *matchHandlers) creditsBalance(ctx context.Context, userID int64) *credits.Balance {
-	bal, err := h.credits.Balance(ctx, userID)
-	if err != nil {
-		log.Printf("credits: balance for user %d: %v", userID, err)
-		return nil
-	}
-	return &bal
-}
-
-// matchIsNew reports whether analysing (userID, jobID) would be the caller's FIRST
-// analysis of that job — i.e. no cached row exists. A recompute (row present) is free and
-// never charged, so a legacy analysis cached before credits shipped re-runs for free.
-func (h *matchHandlers) matchIsNew(ctx context.Context, userID, jobID int64) (bool, error) {
-	_, err := h.matchAnalysisCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
-	if err == nil {
-		return false, nil
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return true, nil
-	}
-	return false, err
-}
-
-// debitMatch charges one match against the caller's points after a fresh analysis has
-// persisted, idempotent by job id. Best-effort: the analysis is already computed and
-// cached, so a debit error (including a rare insufficient-balance race the pre-check let
-// through) is logged, not surfaced.
-func (h *matchHandlers) debitMatch(ctx context.Context, userID, jobID int64) {
-	if _, err := h.credits.Debit(ctx, userID, credits.FeatureMatch, strconv.FormatInt(jobID, 10)); err != nil {
-		log.Printf("credits: match debit user=%d job=%d: %v", userID, jobID, err)
-	}
-}
-
-// cacheAnalysis upserts the analysis stamped with the analyzed CV's upload time, the job
-// content hash, the language it was written in, and the model that produced it. It takes
-// a plain context (not the fiber ctx) so the SSE stream can cache after the request
-// handler has returned. Best-effort: a cache failure is logged, not surfaced.
-func (h *matchHandlers) cacheAnalysis(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, language string, analysis *matchanalysis.Analysis) {
-	blob, err := json.Marshal(analysis)
-	if err != nil {
-		return
-	}
-	if err := h.matchAnalysisCache.UpsertUserJobAnalysis(ctx, db.UpsertUserJobAnalysisParams{
-		UserID:         userID,
-		JobID:          job.ID,
-		Analysis:       blob,
-		Model:          h.matchAnalysis.ModelID(),
-		CvUploadedAt:   pgconv.Timestamptz(cvUploadedAt),
-		JobContentHash: job.ContentHash,
-		Language:       language,
-	}); err != nil {
-		log.Printf("matchanalysis: cache analysis for user %d job %d: %v", userID, job.ID, err)
-	}
+	a.fit.Refresh(ctx, a.req)
 }
 
 // cvUploadedAt reports the caller's stored-CV upload time; ok=false (no error) when CV
@@ -524,54 +439,4 @@ func (h *matchHandlers) companyInfo(c *fiber.Ctx, companySlug string) string {
 		return ""
 	}
 	return string(company.CompanyInfo)
-}
-
-// stampsFresh reports whether a cached row still matches the live CV upload time, job
-// content hash, profile language, and current model. A model change (LLM_MODEL upgrade)
-// invalidates the cache so the improved model re-analyzes — the analogue of the
-// enrichment version and semantic-embedder staleness guards. A language change
-// (freehire#1837) invalidates it the same way, so switching the profile language re-runs
-// the free-text commentary rather than leaving it in the old language until the CV or
-// job text happens to change too. Absent-on-both-sides hash stamps count as unchanged
-// (a non-board job with no content_hash is never re-crawled, so its text is stable and a
-// NULL stamp must not force an endless recompute); a stamp appearing on one side only is
-// a change.
-func stampsFresh(row db.GetUserJobAnalysisRow, cvUploadedAt *time.Time, jobHash pgtype.Text, model, language string) bool {
-	return stampsMatch(row.Model, row.CvUploadedAt, row.JobContentHash, row.Language, cvUploadedAt, jobHash, model, language)
-}
-
-// stampsMatch is stampsFresh over the raw stored stamps, so callers holding a different
-// row type (e.g. the analysed-jobs list) can reuse the same freshness rule.
-func stampsMatch(storedModel string, storedCV pgtype.Timestamptz, storedHash pgtype.Text, storedLanguage string, liveCV *time.Time, liveHash pgtype.Text, liveModel, liveLanguage string) bool {
-	return storedModel == liveModel &&
-		storedLanguage == liveLanguage &&
-		sameTime(storedCV, liveCV) &&
-		sameText(storedHash, liveHash)
-}
-
-func sameTime(stored pgtype.Timestamptz, live *time.Time) bool {
-	if stored.Valid != (live != nil) {
-		return false
-	}
-	return !stored.Valid || stored.Time.Equal(*live)
-}
-
-func sameText(stored, live pgtype.Text) bool {
-	if stored.Valid != live.Valid {
-		return false
-	}
-	return !stored.Valid || stored.String == live.String
-}
-
-// decodeAnalysis unmarshals a cached analysis blob, returning nil on empty/corrupt data
-// (treated as "no analysis" — the caller re-offers a compute).
-func decodeAnalysis(blob []byte) *matchanalysis.Analysis {
-	if len(blob) == 0 {
-		return nil
-	}
-	var a matchanalysis.Analysis
-	if err := json.Unmarshal(blob, &a); err != nil {
-		return nil
-	}
-	return &a
 }

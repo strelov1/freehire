@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -70,11 +71,13 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 		t.Fatalf("seed CV: %v", err)
 	}
 
+	an := matchanalysis.NewAnalyzer(nil)
 	h := &matchHandlers{
 		queries:     queries,
 		userProfile: userprofile.New(ownedProfile()),
-		resume:      store, matchAnalysis: matchanalysis.NewAnalyzer(nil), matchAnalysisCache: queries,
-		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
+		resume:      store, matchAnalysis: an,
+		fit: fitanalysis.New(queries,
+			credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}), an),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/tracking/analyses", auth.RequireAuth(iss, testVersions), h.ListMyAnalyses)

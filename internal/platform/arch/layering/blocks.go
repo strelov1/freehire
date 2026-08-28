@@ -62,6 +62,9 @@ var blocks = map[string][]string{
 	},
 	"candidate": {
 		"atscheck", "cv", "cvedit", "cvmatch", "cvsection", "experience",
+		// fitanalysis orchestrates matchanalysis (cache, staleness, the credit rule,
+		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
+		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
 		"matchanalysis", "pii", "resume", "resumeextract",
 	},
