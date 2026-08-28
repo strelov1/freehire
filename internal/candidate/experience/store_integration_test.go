@@ -176,3 +176,49 @@ func TestQueriesRepositoryMergeAtoms_RefusesAStaleUpdatedAt(t *testing.T) {
 		t.Errorf("GetAtom lose: %v, want the loser to survive an aborted merge", err)
 	}
 }
+
+// TestQueriesRepositoryUpdateAtomKeepingProvenance_RunsAgainstPostgres exercises the rewrite
+// statement for real. sqlc generates Go from SQL but does not run it, so a column omitted from
+// a SET list — which is the whole point of this query — is only proved correct here.
+//
+// It also pins the behaviour the statement exists for: the words change, the label does not,
+// and there is no read in between for a concurrent write to slip through.
+func TestQueriesRepositoryUpdateAtomKeepingProvenance_RunsAgainstPostgres(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	queries := db.New(pool)
+	userID := insertExperienceIntegrationUser(t, pool, "rewrite-keeps-provenance@example.test")
+
+	s := NewStore(NewQueriesRepository(queries))
+
+	// Banked as the model's own reading: the label a laundering rewrite would want replaced.
+	atom, err := s.AddAtom(ctx, userID, Atom{Claim: "Ran the payments migration"}, AuthorAgent)
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+	if atom.Provenance != ProvenanceAgentInferred {
+		t.Fatalf("seed provenance = %q, want agent_inferred", atom.Provenance)
+	}
+
+	atom.Claim = "Ran the payments migration across three regions"
+	atom.Provenance = ProvenanceManual // asked for, and must be ignored
+	got, err := s.UpdateAtom(ctx, atom.ID, userID, atom, AuthorRewrite)
+	if err != nil {
+		t.Fatalf("UpdateAtom(rewrite): %v", err)
+	}
+	if got.Claim != "Ran the payments migration across three regions" {
+		t.Errorf("Claim = %q, want the rewritten words", got.Claim)
+	}
+	if got.Provenance != ProvenanceAgentInferred {
+		t.Errorf("Provenance = %q, want agent_inferred left untouched by the statement", got.Provenance)
+	}
+
+	// And it is the STORED row that kept it, not just the returned value.
+	reread, err := s.GetAtom(ctx, atom.ID, userID)
+	if err != nil {
+		t.Fatalf("GetAtom: %v", err)
+	}
+	if reread.Provenance != ProvenanceAgentInferred || reread.Provenance.Publishable() {
+		t.Errorf("stored provenance = %q, want agent_inferred and unpublishable", reread.Provenance)
+	}
+}

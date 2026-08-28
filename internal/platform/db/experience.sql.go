@@ -630,6 +630,61 @@ func (q *Queries) UpdateExperienceAtom(ctx context.Context, arg UpdateExperience
 	return i, err
 }
 
+const updateExperienceAtomKeepingProvenance = `-- name: UpdateExperienceAtomKeepingProvenance :one
+UPDATE experience_atoms
+SET employment_id = $3, claim = $4, claim_key = $5, context = $6, metrics = $7, skills = $8,
+    updated_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, employment_id, claim, claim_key, context, metrics, skills, provenance, source_ref, created_at, updated_at
+`
+
+type UpdateExperienceAtomKeepingProvenanceParams struct {
+	ID           uuid.UUID  `json:"id"`
+	UserID       int64      `json:"user_id"`
+	EmploymentID *uuid.UUID `json:"employment_id"`
+	Claim        string     `json:"claim"`
+	ClaimKey     string     `json:"claim_key"`
+	Context      string     `json:"context"`
+	Metrics      []string   `json:"metrics"`
+	Skills       []string   `json:"skills"`
+}
+
+// The rewrite path: changes the words and leaves the standing of the claim exactly where it is.
+//
+// provenance is deliberately ABSENT from the SET list rather than read and written back. A
+// read-then-write would leave a window in which a concurrent write lands, and the rewrite then
+// restores a label it never saw — which is the laundering route experience.Author exists to
+// close, taken at a different door. Omitting the column makes the preservation the statement's
+// own, so there is nothing to race.
+func (q *Queries) UpdateExperienceAtomKeepingProvenance(ctx context.Context, arg UpdateExperienceAtomKeepingProvenanceParams) (ExperienceAtom, error) {
+	row := q.db.QueryRow(ctx, updateExperienceAtomKeepingProvenance,
+		arg.ID,
+		arg.UserID,
+		arg.EmploymentID,
+		arg.Claim,
+		arg.ClaimKey,
+		arg.Context,
+		arg.Metrics,
+		arg.Skills,
+	)
+	var i ExperienceAtom
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.EmploymentID,
+		&i.Claim,
+		&i.ClaimKey,
+		&i.Context,
+		&i.Metrics,
+		&i.Skills,
+		&i.Provenance,
+		&i.SourceRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateExperienceEmployment = `-- name: UpdateExperienceEmployment :one
 UPDATE experience_employments
 SET kind = $3, company = $4, role = $5, location = $6, period_start = $7, period_end = $8,

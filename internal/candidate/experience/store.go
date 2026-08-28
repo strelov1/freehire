@@ -42,6 +42,9 @@ type Repository interface {
 	GetAtom(ctx context.Context, id uuid.UUID, userID int64) (db.ExperienceAtom, error)
 	InsertAtomIfNew(ctx context.Context, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
 	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
+	// UpdateAtomKeepingProvenance writes the same content but leaves the stored provenance
+	// untouched, in one statement. It exists so AuthorRewrite needs no read: see UpdateAtom.
+	UpdateAtomKeepingProvenance(ctx context.Context, id uuid.UUID, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
 	DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
 	// MergeAtoms writes only when both rows' updated_at still match what the caller read —
 	// see Store.MergeAtoms and the query's own comment for why.
@@ -256,18 +259,16 @@ func (s *Store) insertAtom(ctx context.Context, userID int64, a Atom) (Atom, err
 // UpdateAtom replaces an owned atom's content. The claim key moves with the claim, so
 // the uniqueness guarantee holds after an edit as well as after an insert.
 func (s *Store) UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom, author Author) (Atom, error) {
-	// AuthorRewrite keeps the standing the claim already had, so the stored label has to be
-	// read before the words are overwritten. Read here rather than trusted from the caller:
-	// a rule that depends on an argument the caller computes is a rule the caller can skip.
-	var existing Provenance
-	if author == AuthorRewrite {
-		stored, err := s.GetAtom(ctx, id, userID)
-		if err != nil {
-			return Atom{}, err
-		}
-		existing = stored.Provenance
+	// AuthorRewrite keeps the standing the claim already had, and it does so WITHOUT reading
+	// it: the statement simply omits the column. Reading the label and writing it back would
+	// leave a window in which a concurrent write lands and the rewrite then restores a label
+	// it never saw — the same laundering, taken at a different door. A corrupt stored label is
+	// safe to leave alone, because Provenance.Publishable fails closed on anything it does not
+	// recognise.
+	keepStoredLabel := author == AuthorRewrite
+	if !keepStoredLabel {
+		a.Provenance = ProvenanceFor(author, "")
 	}
-	a.Provenance = ProvenanceFor(author, existing)
 
 	a.Sanitize()
 	if err := a.Validate(); err != nil {
@@ -276,7 +277,12 @@ func (s *Store) UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a At
 	if err := s.ownsEmployment(ctx, userID, a.EmploymentID); err != nil {
 		return Atom{}, err
 	}
-	row, err := s.repo.UpdateAtom(ctx, id, userID, a, ClaimKey(a.Claim))
+
+	write := s.repo.UpdateAtom
+	if keepStoredLabel {
+		write = s.repo.UpdateAtomKeepingProvenance
+	}
+	row, err := write(ctx, id, userID, a, ClaimKey(a.Claim))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Atom{}, ErrNotFound
 	}

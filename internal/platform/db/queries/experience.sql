@@ -113,6 +113,20 @@ SET employment_id = $3, claim = $4, claim_key = $5, context = $6, metrics = $7, 
 WHERE id = $1 AND user_id = $2
 RETURNING id, user_id, employment_id, claim, claim_key, context, metrics, skills, provenance, source_ref, created_at, updated_at;
 
+-- name: UpdateExperienceAtomKeepingProvenance :one
+-- The rewrite path: changes the words and leaves the standing of the claim exactly where it is.
+--
+-- provenance is deliberately ABSENT from the SET list rather than read and written back. A
+-- read-then-write would leave a window in which a concurrent write lands, and the rewrite then
+-- restores a label it never saw — which is the laundering route experience.Author exists to
+-- close, taken at a different door. Omitting the column makes the preservation the statement's
+-- own, so there is nothing to race.
+UPDATE experience_atoms
+SET employment_id = $3, claim = $4, claim_key = $5, context = $6, metrics = $7, skills = $8,
+    updated_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, employment_id, claim, claim_key, context, metrics, skills, provenance, source_ref, created_at, updated_at;
+
 -- name: DeleteExperienceAtom :execrows
 -- The only path that removes an atom, and it belongs to the user. Import never deletes.
 DELETE FROM experience_atoms

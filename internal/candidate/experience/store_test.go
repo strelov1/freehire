@@ -191,6 +191,20 @@ func (f *fakeRepo) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a A
 	return row, nil
 }
 
+// UpdateAtomKeepingProvenance mirrors the statement it stands for: it writes the content and
+// does not touch the label, so a test can tell a preserved label from a re-written one.
+func (f *fakeRepo) UpdateAtomKeepingProvenance(_ context.Context, id uuid.UUID, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error) {
+	row, ok := f.atoms[id]
+	if !ok || row.UserID != userID {
+		return db.ExperienceAtom{}, pgx.ErrNoRows
+	}
+	row.EmploymentID, row.Claim, row.ClaimKey = a.EmploymentID, a.Claim, claimKey
+	row.Context, row.Metrics, row.Skills = a.Context, a.Metrics, a.Skills
+	row.UpdatedAt = f.stamp()
+	f.atoms[id] = row
+	return row, nil
+}
+
 func (f *fakeRepo) DeleteAtom(_ context.Context, id uuid.UUID, userID int64) (int64, error) {
 	if a, ok := f.atoms[id]; ok && a.UserID == userID {
 		delete(f.atoms, id)
@@ -745,5 +759,43 @@ func TestStoreMergeAtomsNotFoundAndCrossEmployment(t *testing.T) {
 	}
 	if _, err := s.MergeAtoms(ctx, owner, a.ID, a.ID); !errors.Is(err, ErrInvalidMerge) {
 		t.Errorf("same id = %v, want ErrInvalidMerge", err)
+	}
+}
+
+// TestRewriteKeepsTheStoredLabelWithoutReadingIt is the atomicity half of the anti-laundering
+// rule. AuthorRewrite must reach a statement that leaves provenance alone, not read it and
+// write it back: a read-then-write leaves a window in which a concurrent write lands and the
+// rewrite restores a label it never saw.
+//
+// The fake proves it structurally — UpdateAtomKeepingProvenance never touches the column, so
+// if the store took the reading path the assertion below would see the caller's value instead.
+func TestRewriteKeepsTheStoredLabelWithoutReadingIt(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	// Banked by the agent: unpublishable, which is the label a laundering edit would want gone.
+	atom, err := s.AddAtom(ctx, owner, Atom{Claim: "Ran the migration"}, AuthorAgent)
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+	if atom.Provenance != ProvenanceAgentInferred {
+		t.Fatalf("seed provenance = %q, want agent_inferred", atom.Provenance)
+	}
+
+	// A keyed rewrite, asking loudly for a promotion it must not get.
+	atom.Claim = "Ran the migration across three regions"
+	atom.Provenance = ProvenanceManual
+	got, err := s.UpdateAtom(ctx, atom.ID, owner, atom, AuthorRewrite)
+	if err != nil {
+		t.Fatalf("UpdateAtom: %v", err)
+	}
+	if got.Claim != "Ran the migration across three regions" {
+		t.Errorf("Claim = %q, want the rewritten words — a rewrite still rewrites", got.Claim)
+	}
+	if got.Provenance != ProvenanceAgentInferred {
+		t.Errorf("Provenance = %q, want agent_inferred untouched", got.Provenance)
+	}
+	if got.Provenance.Publishable() {
+		t.Error("a rewrite promoted a model's reading to CV-publishable")
 	}
 }

@@ -84,6 +84,13 @@ func (r queriesRepository) UpdateAtom(ctx context.Context, id uuid.UUID, userID 
 	})
 }
 
+func (r queriesRepository) UpdateAtomKeepingProvenance(ctx context.Context, id uuid.UUID, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error) {
+	return r.q.UpdateExperienceAtomKeepingProvenance(ctx, db.UpdateExperienceAtomKeepingProvenanceParams{
+		ID: id, UserID: userID, EmploymentID: a.EmploymentID, Claim: a.Claim, ClaimKey: claimKey,
+		Context: a.Context, Metrics: a.Metrics, Skills: a.Skills,
+	})
+}
+
 func (r queriesRepository) DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) (int64, error) {
 	return r.q.DeleteExperienceAtom(ctx, db.DeleteExperienceAtomParams{ID: id, UserID: userID})
 }

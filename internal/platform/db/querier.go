@@ -3773,6 +3773,14 @@ type Querier interface {
 	// Owner-scoped edit. claim_key moves with the claim, so the uniqueness guarantee holds after
 	// an edit as well as after an insert.
 	UpdateExperienceAtom(ctx context.Context, arg UpdateExperienceAtomParams) (ExperienceAtom, error)
+	// The rewrite path: changes the words and leaves the standing of the claim exactly where it is.
+	//
+	// provenance is deliberately ABSENT from the SET list rather than read and written back. A
+	// read-then-write would leave a window in which a concurrent write lands, and the rewrite then
+	// restores a label it never saw — which is the laundering route experience.Author exists to
+	// close, taken at a different door. Omitting the column makes the preservation the statement's
+	// own, so there is nothing to race.
+	UpdateExperienceAtomKeepingProvenance(ctx context.Context, arg UpdateExperienceAtomKeepingProvenanceParams) (ExperienceAtom, error)
 	// A full owner-scoped replacement, used by the profile UI where the user is editing the
 	// fields directly and means what they typed — including blanking one.
 	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (ExperienceEmployment, error)
