@@ -92,7 +92,9 @@ func seedBankedCareer(t *testing.T, queries *db.Queries, userID int64) {
 	_, err = bank.AddAtom(ctx, userID, experience.Atom{
 		EmploymentID: &place.ID, Claim: "Built and ran the Go services behind Acme's API",
 		Skills: []string{"go"}, Provenance: experience.ProvenanceCVImport,
-	})
+	},
+		experience.AuthorCandidate,
+	)
 	if err != nil && !errors.Is(err, experience.ErrAlreadyBanked) {
 		t.Fatalf("seed atom: %v", err)
 	}

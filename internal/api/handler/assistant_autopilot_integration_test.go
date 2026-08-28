@@ -542,7 +542,9 @@ func TestAnAutopilotRunSearchesEditsAndReports(t *testing.T) {
 		Claim:      "Ran the payments Kafka cluster through a 10x traffic year.",
 		Skills:     []string{"kafka"},
 		Provenance: experience.ProvenanceStatedInChat,
-	})
+	},
+		experience.AuthorQuoted,
+	)
 	if err != nil {
 		t.Fatalf("seed experience atom: %v", err)
 	}

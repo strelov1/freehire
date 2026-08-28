@@ -24,8 +24,8 @@ type experienceBankTools interface {
 	ListEmployments(ctx context.Context, userID int64) ([]experience.Employment, error)
 	ListAtoms(ctx context.Context, userID int64) ([]experience.Atom, error)
 	GetAtom(ctx context.Context, id uuid.UUID, userID int64) (experience.Atom, error)
-	AddAtom(ctx context.Context, userID int64, a experience.Atom) (experience.Atom, error)
-	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error)
+	AddAtom(ctx context.Context, userID int64, a experience.Atom, author experience.Author) (experience.Atom, error)
+	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom, author experience.Author) (experience.Atom, error)
 	MergeAtoms(ctx context.Context, userID int64, a, b uuid.UUID) (experience.Atom, error)
 }
 
@@ -317,9 +317,8 @@ func (h *assistantHandlers) experienceAddTool(sessionID uuid.UUID) assistant.Too
 				Context:      in.Context,
 				Metrics:      in.Metrics,
 				Skills:       in.Skills,
-				Provenance:   h.provenanceFor(ctx, sessionID, in.Said),
 			}
-			stored, err := h.experience.AddAtom(ctx, userID, atom)
+			stored, err := h.experience.AddAtom(ctx, userID, atom, h.authorFor(ctx, sessionID, in.Said))
 			if errors.Is(err, experience.ErrAlreadyBanked) {
 				// Not a failure: the candidate learns it is already recorded, and the
 				// model stops trying to record it again.
@@ -384,11 +383,13 @@ func (h *assistantHandlers) experienceUpdateTool(sessionID uuid.UUID) assistant.
 			if err != nil {
 				return nil, err
 			}
-			// Content the provenance is meant to vouch for is changing, so the provenance is
-			// re-derived rather than carried over from the fetch — otherwise a confirmed atom
-			// stays "confirmed" no matter how far the model edits it from what was said.
+			// Content the label is meant to vouch for is changing, so the authorship is
+			// re-derived rather than carried over — otherwise a confirmed atom stays
+			// "confirmed" no matter how far the model edits it from what was said. An edit
+			// that touches no content is a rewrite of nothing and keeps the standing it had.
+			author := experience.AuthorRewrite
 			if in.Claim != nil || in.Context != nil || in.Metrics != nil {
-				atom.Provenance = h.provenanceFor(ctx, sessionID, in.Said)
+				author = h.authorFor(ctx, sessionID, in.Said)
 			}
 			if in.Claim != nil {
 				atom.Claim = *in.Claim
@@ -410,7 +411,7 @@ func (h *assistantHandlers) experienceUpdateTool(sessionID uuid.UUID) assistant.
 				atom.EmploymentID = employmentID
 			}
 
-			stored, err := h.experience.UpdateAtom(ctx, id, userID, atom)
+			stored, err := h.experience.UpdateAtom(ctx, id, userID, atom, author)
 			if err != nil {
 				return nil, err
 			}
@@ -533,26 +534,29 @@ func (h *assistantHandlers) checkExperienceContextRequired(ctx context.Context, 
 // provenanceFor decides how an atom entered the bank, and it is the one place the honest
 // wall is actually enforced on the write side.
 //
-// The model supplies the candidate's words; the service checks them against what the
+// The model supplies the candidate's words; the entry point checks them against what the
 // candidate really said in this session. A quote that appears in their messages makes the
-// atom theirs. A quote that does not — a paraphrase, a summary, an invention — is the
-// model speaking, and is recorded as such rather than rejected: the agent needs its own
-// hypothesis on record in order to ask the candidate about it.
-func (h *assistantHandlers) provenanceFor(ctx context.Context, sessionID uuid.UUID, said string) experience.Provenance {
+// claim theirs. A quote that does not — a paraphrase, a summary, an invention — is the model
+// speaking, and is recorded as such rather than rejected: the agent needs its own hypothesis
+// on record in order to ask the candidate about it.
+//
+// This is the only place a claim's standing can go UP, and it can only because something
+// outside the model confirmed the words. The bank turns the answer into the stored label.
+func (h *assistantHandlers) authorFor(ctx context.Context, sessionID uuid.UUID, said string) experience.Author {
 	said = strings.TrimSpace(said)
 	if said == "" || h.store == nil {
-		return experience.ProvenanceAgentInferred
+		return experience.AuthorAgent
 	}
 	transcript, err := h.store.Transcript(ctx, sessionID)
 	if err != nil {
 		// Unverifiable is not verified. Failing closed costs the candidate a confirmation
 		// step; failing open would put an unchecked claim on their CV.
-		return experience.ProvenanceAgentInferred
+		return experience.AuthorAgent
 	}
 	if assistant.UserSaid(transcript, said) {
-		return experience.ProvenanceStatedInChat
+		return experience.AuthorQuoted
 	}
-	return experience.ProvenanceAgentInferred
+	return experience.AuthorAgent
 }
 
 // optionalUUID parses an id that may be absent, returning nil for an empty string.

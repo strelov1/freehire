@@ -250,7 +250,9 @@ func TestStoreAddAtomSyncsSkillsToProfile(t *testing.T) {
 
 	if _, err := s.AddAtom(context.Background(), owner, Atom{
 		Claim: "Cut latency", Skills: []string{"k8s"}, Provenance: ProvenanceManual,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 	if len(profile.calls) != 1 {
@@ -266,7 +268,7 @@ func TestStoreAddAtomSyncsSkillsToProfile(t *testing.T) {
 
 func TestStoreUpdateAtomSyncsSkillsToProfile(t *testing.T) {
 	s, _ := newStore()
-	atom, err := s.AddAtom(context.Background(), owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual})
+	atom, err := s.AddAtom(context.Background(), owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual}, AuthorCandidate)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
@@ -275,7 +277,9 @@ func TestStoreUpdateAtomSyncsSkillsToProfile(t *testing.T) {
 	s.SetProfileSkills(profile)
 	if _, err := s.UpdateAtom(context.Background(), atom.ID, owner, Atom{
 		Claim: "Cut latency further", Skills: []string{"golang"}, Provenance: ProvenanceManual,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("UpdateAtom: %v", err)
 	}
 	if len(profile.calls) != 1 {
@@ -292,7 +296,9 @@ func TestStoreAddAtomToleratesProfileSyncFailure(t *testing.T) {
 
 	got, err := s.AddAtom(context.Background(), owner, Atom{
 		Claim: "Cut latency", Skills: []string{"k8s"}, Provenance: ProvenanceManual,
-	})
+	},
+		AuthorCandidate,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom: %v, want the atom write to succeed despite the sync failure", err)
 	}
@@ -306,7 +312,9 @@ func TestStoreAddAtomWithoutProfileSkillsDependency(t *testing.T) {
 
 	if _, err := s.AddAtom(context.Background(), owner, Atom{
 		Claim: "Cut latency", Skills: []string{"k8s"}, Provenance: ProvenanceManual,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("AddAtom: %v, want it to work with no ProfileSkills dependency set", err)
 	}
 }
@@ -319,7 +327,9 @@ func TestStoreAddAtomSanitizesAndStamps(t *testing.T) {
 		Skills:     []string{"k8s", "blorptech"},
 		Metrics:    []string{"20s -> 1s", "  "},
 		Provenance: ProvenanceStatedInChat,
-	})
+	},
+		AuthorQuoted,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
@@ -340,11 +350,38 @@ func TestStoreAddAtomSanitizesAndStamps(t *testing.T) {
 func TestStoreAddAtomRejectsInvalid(t *testing.T) {
 	s, _ := newStore()
 
-	if _, err := s.AddAtom(context.Background(), owner, Atom{Claim: "   ", Provenance: ProvenanceManual}); !errors.Is(err, ErrEmptyClaim) {
+	if _, err := s.AddAtom(context.Background(), owner, Atom{Claim: "   ", Provenance: ProvenanceManual}, AuthorCandidate); !errors.Is(err, ErrEmptyClaim) {
 		t.Errorf("AddAtom(no claim) = %v, want ErrEmptyClaim", err)
 	}
-	if _, err := s.AddAtom(context.Background(), owner, Atom{Claim: "Did a thing", Provenance: "vibes"}); !errors.Is(err, ErrInvalidProvenance) {
-		t.Errorf("AddAtom(bad provenance) = %v, want ErrInvalidProvenance", err)
+}
+
+// TestAddAtomIgnoresABodySuppliedProvenance is the wall Author was introduced for. A caller
+// that fills the field in — a mis-wired handler, a cmd worker, the CLI, a future assistant
+// tool — must not be able to name a model's invention as something the candidate asserted, and
+// so make it CV-publishable through the evidence gate.
+func TestAddAtomIgnoresABodySuppliedProvenance(t *testing.T) {
+	s, _ := newStore()
+
+	got, err := s.AddAtom(context.Background(), owner,
+		Atom{Claim: "Rebuilt the billing pipeline", Provenance: ProvenanceManual}, AuthorAgent)
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+	if got.Provenance != ProvenanceAgentInferred {
+		t.Errorf("Provenance = %q, want agent_inferred — the author decides, not the struct", got.Provenance)
+	}
+	if got.Provenance.Publishable() {
+		t.Error("a model's own reading came back CV-publishable because the caller asked for it")
+	}
+
+	// The nonsense a caller could previously smuggle in is now simply inert.
+	got, err = s.AddAtom(context.Background(), owner,
+		Atom{Claim: "Ran the migration", Provenance: "vibes"}, AuthorCandidate)
+	if err != nil {
+		t.Fatalf("AddAtom with a junk provenance: %v", err)
+	}
+	if got.Provenance != ProvenanceManual {
+		t.Errorf("Provenance = %q, want manual", got.Provenance)
 	}
 }
 
@@ -355,10 +392,10 @@ func TestStoreAddAtomReportsAnAlreadyBankedClaim(t *testing.T) {
 	s, _ := newStore()
 	ctx := context.Background()
 
-	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency 20s to 1s", Provenance: ProvenanceCVImport}); err != nil {
+	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency 20s to 1s", Provenance: ProvenanceCVImport}, AuthorCandidate); err != nil {
 		t.Fatalf("first AddAtom: %v", err)
 	}
-	_, err := s.AddAtom(ctx, owner, Atom{Claim: "cut  latency 20s to 1s.", Provenance: ProvenanceStatedInChat})
+	_, err := s.AddAtom(ctx, owner, Atom{Claim: "cut  latency 20s to 1s.", Provenance: ProvenanceStatedInChat}, AuthorQuoted)
 	if !errors.Is(err, ErrAlreadyBanked) {
 		t.Errorf("second AddAtom = %v, want ErrAlreadyBanked", err)
 	}
@@ -369,10 +406,10 @@ func TestStoreAddAtomIsScopedPerOwner(t *testing.T) {
 	s, _ := newStore()
 	ctx := context.Background()
 
-	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Led the migration", Provenance: ProvenanceManual}); err != nil {
+	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Led the migration", Provenance: ProvenanceManual}, AuthorCandidate); err != nil {
 		t.Fatalf("owner AddAtom: %v", err)
 	}
-	if _, err := s.AddAtom(ctx, stranger, Atom{Claim: "Led the migration", Provenance: ProvenanceManual}); err != nil {
+	if _, err := s.AddAtom(ctx, stranger, Atom{Claim: "Led the migration", Provenance: ProvenanceManual}, AuthorCandidate); err != nil {
 		t.Errorf("stranger AddAtom = %v, want success — the claim key is owner-scoped", err)
 	}
 }
@@ -381,7 +418,7 @@ func TestStoreOwnershipIsAbsence(t *testing.T) {
 	s, _ := newStore()
 	ctx := context.Background()
 
-	atom, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual})
+	atom, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual}, AuthorCandidate)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
@@ -401,7 +438,7 @@ func TestStoreDeleteAtomIsTheOnlyRemoval(t *testing.T) {
 	s, _ := newStore()
 	ctx := context.Background()
 
-	atom, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual})
+	atom, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual}, AuthorCandidate)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
@@ -454,7 +491,9 @@ func TestStoreDeleteEmploymentTakesItsAtoms(t *testing.T) {
 	}
 	if _, err := s.AddAtom(ctx, owner, Atom{
 		EmploymentID: &job.ID, Claim: "Cut latency", Provenance: ProvenanceManual,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 
@@ -487,17 +526,19 @@ func TestStoreAtomCannotAttachToAnotherOwnersEmployment(t *testing.T) {
 
 	_, err = s.AddAtom(ctx, owner, Atom{
 		EmploymentID: &theirs.ID, Claim: "Cut latency", Provenance: ProvenanceManual,
-	})
+	},
+		AuthorCandidate,
+	)
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("AddAtom with a foreign employment = %v, want ErrNotFound", err)
 	}
 
-	mine, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual})
+	mine, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual}, AuthorCandidate)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 	mine.EmploymentID = &theirs.ID
-	if _, err := s.UpdateAtom(ctx, mine.ID, owner, mine); !errors.Is(err, ErrNotFound) {
+	if _, err := s.UpdateAtom(ctx, mine.ID, owner, mine, AuthorCandidate); !errors.Is(err, ErrNotFound) {
 		t.Errorf("UpdateAtom onto a foreign employment = %v, want ErrNotFound", err)
 	}
 
@@ -505,7 +546,9 @@ func TestStoreAtomCannotAttachToAnotherOwnersEmployment(t *testing.T) {
 	ghost := uuid.New()
 	if _, err := s.AddAtom(ctx, owner, Atom{
 		EmploymentID: &ghost, Claim: "Ran the cluster", Provenance: ProvenanceManual,
-	}); !errors.Is(err, ErrNotFound) {
+	},
+		AuthorCandidate,
+	); !errors.Is(err, ErrNotFound) {
 		t.Errorf("AddAtom with an unknown employment = %v, want ErrNotFound", err)
 	}
 }
@@ -519,7 +562,9 @@ func TestStorePromoteUnplacedAtomToProject(t *testing.T) {
 	atom, err := s.AddAtom(ctx, owner, Atom{
 		Claim:      "Reverse-engineered game data for a Portuguese localization mod",
 		Provenance: ProvenanceStatedInChat,
-	})
+	},
+		AuthorQuoted,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
@@ -532,7 +577,7 @@ func TestStorePromoteUnplacedAtomToProject(t *testing.T) {
 	}
 
 	atom.EmploymentID = &project.ID
-	if _, err := s.UpdateAtom(ctx, atom.ID, owner, atom); err != nil {
+	if _, err := s.UpdateAtom(ctx, atom.ID, owner, atom, AuthorCandidate); err != nil {
 		t.Fatalf("UpdateAtom attach: %v", err)
 	}
 
@@ -563,7 +608,9 @@ func TestStoreMergeAtomsUnionsAndDeletesLoser(t *testing.T) {
 	a, err := s.AddAtom(ctx, owner, Atom{
 		Claim:  "Built a Chromium plugin with faster-whisper for live and batch",
 		Skills: []string{"python"}, Provenance: ProvenanceAgentInferred,
-	})
+	},
+		AuthorAgent,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom a: %v", err)
 	}
@@ -571,7 +618,9 @@ func TestStoreMergeAtomsUnionsAndDeletesLoser(t *testing.T) {
 		Claim:   "Built a Chromium plugin with VAD filtering on faster-whisper",
 		Context: "small/medium/large-v3 model profiles", Metrics: []string{"VAD"},
 		Skills: []string{"nlp"}, Provenance: ProvenanceAgentInferred,
-	})
+	},
+		AuthorAgent,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom b: %v", err)
 	}
@@ -627,11 +676,11 @@ func TestStoreMergeAtomsRejectsAConcurrentWriteInTheReadWriteGap(t *testing.T) {
 	s, repo := newStore()
 	ctx := context.Background()
 
-	a, err := s.AddAtom(ctx, owner, Atom{Claim: "Did the thing", Provenance: ProvenanceManual})
+	a, err := s.AddAtom(ctx, owner, Atom{Claim: "Did the thing", Provenance: ProvenanceManual}, AuthorCandidate)
 	if err != nil {
 		t.Fatalf("AddAtom a: %v", err)
 	}
-	b, err := s.AddAtom(ctx, owner, Atom{Claim: "Did the other thing", Provenance: ProvenanceManual})
+	b, err := s.AddAtom(ctx, owner, Atom{Claim: "Did the other thing", Provenance: ProvenanceManual}, AuthorCandidate)
 	if err != nil {
 		t.Fatalf("AddAtom b: %v", err)
 	}
@@ -670,13 +719,17 @@ func TestStoreMergeAtomsNotFoundAndCrossEmployment(t *testing.T) {
 	}
 	a, err := s.AddAtom(ctx, owner, Atom{
 		EmploymentID: &roleA.ID, Claim: "Did the thing at A", Provenance: ProvenanceManual,
-	})
+	},
+		AuthorCandidate,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom a: %v", err)
 	}
 	b, err := s.AddAtom(ctx, owner, Atom{
 		EmploymentID: &roleB.ID, Claim: "Did the thing at B", Provenance: ProvenanceManual,
-	})
+	},
+		AuthorCandidate,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom b: %v", err)
 	}

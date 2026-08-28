@@ -27,29 +27,17 @@ import (
 //
 // So the label follows the credential. A keyed correction may fix the words and must leave
 // the standing of the claim exactly where it was.
-func TestProvenanceForUpdate(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		viaKey   bool
-		existing experience.Provenance
-		want     experience.Provenance
-	}{
-		{"candidate confirms their own inferred atom", false, experience.ProvenanceAgentInferred, experience.ProvenanceManual},
-		{"candidate corrects an imported one", false, experience.ProvenanceCVImport, experience.ProvenanceManual},
-		{"agent may not promote its own reading", true, experience.ProvenanceAgentInferred, experience.ProvenanceAgentInferred},
-		{"agent corrects what the candidate said", true, experience.ProvenanceStatedInChat, experience.ProvenanceStatedInChat},
-		{"agent corrects a manual atom", true, experience.ProvenanceManual, experience.ProvenanceManual},
-		// A row whose label is somehow unset must not become publishable by being edited
-		// with a key. Falling back to the strongest claim would be the same laundering.
-		{"agent editing an unlabelled row", true, "", experience.ProvenanceAgentInferred},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := provenanceForUpdate(tc.viaKey, tc.existing); got != tc.want {
-				t.Errorf("provenanceForUpdate(%v, %q) = %q, want %q", tc.viaKey, tc.existing, got, tc.want)
-			}
-		})
+func TestUpdateAuthor(t *testing.T) {
+	if got := updateAuthor(false); got != experience.AuthorCandidate {
+		t.Errorf("cookie PUT author = %q, want AuthorCandidate — the person is editing their own bank", got)
+	}
+	if got := updateAuthor(true); got != experience.AuthorRewrite {
+		t.Errorf("keyed PUT author = %q, want AuthorRewrite — a keyed edit rewrites words and may not relabel", got)
 	}
 }
+
+// What each authorship then MEANS is experience.provenanceFor's, tested next to the rule in
+// TestProvenanceFor — including the laundering route this door exists to close.
 
 // TestExperienceRegister_Gates pins each route's gate against the real register().
 //

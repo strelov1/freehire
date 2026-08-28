@@ -144,7 +144,9 @@ func TestWorkHistory_PlacelessTrailsChronologicalRoles(t *testing.T) {
 	}
 	if _, err := s.AddAtom(ctx, owner, Atom{
 		Claim: "Certified cloud architect", Provenance: ProvenanceStatedInChat,
-	}); err != nil {
+	},
+		AuthorQuoted,
+	); err != nil {
 		t.Fatalf("AddAtom placeless: %v", err)
 	}
 	hist, err := s.WorkHistory(ctx, owner)

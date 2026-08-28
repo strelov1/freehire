@@ -132,8 +132,11 @@ type Atom struct {
 	Context      string     `json:"context,omitempty"`
 	Metrics      []string   `json:"metrics,omitempty"`
 	Skills       []string   `json:"skills,omitempty"`
-	Provenance   Provenance `json:"provenance"`
-	SourceRef    string     `json:"source_ref,omitempty"`
+	// Provenance is READ-ONLY on a write. Store derives it from the Author the entry point
+	// names, and ignores whatever is here — see Author for the laundering route that closes.
+	// It is serialised because every reader needs to see the standing of a claim.
+	Provenance Provenance `json:"provenance"`
+	SourceRef  string     `json:"source_ref,omitempty"`
 }
 
 // Sanitize bounds every string and caps every array. Skills are canonicalized through

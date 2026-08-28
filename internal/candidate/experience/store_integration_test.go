@@ -72,7 +72,9 @@ func TestStoreAddAtom_SyncsSkillsIntoAnExistingProfile(t *testing.T) {
 		Claim:      "Migrated the cluster to Kubernetes",
 		Skills:     []string{"k8s"},
 		Provenance: ProvenanceManual,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 
@@ -108,7 +110,9 @@ func TestStoreAddAtom_LeavesNoProfileBehindForAUserWithNone(t *testing.T) {
 		Claim:      "Migrated the cluster to Kubernetes",
 		Skills:     []string{"k8s"},
 		Provenance: ProvenanceManual,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 

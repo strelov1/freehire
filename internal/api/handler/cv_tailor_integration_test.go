@@ -493,7 +493,9 @@ func TestPatchCVViaKey(t *testing.T) {
 	bank := experience.NewStore(experience.NewQueriesRepository(h.queries))
 	atom, err := bank.AddAtom(ctx, owner, experience.Atom{
 		Claim: "Cut latency", Provenance: experience.ProvenanceStatedInChat,
-	})
+	},
+		experience.AuthorQuoted,
+	)
 	if err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}

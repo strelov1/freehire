@@ -221,7 +221,11 @@ func (s *Store) GetAtom(ctx context.Context, id uuid.UUID, userID int64) (Atom, 
 // recorded — under any spelling — comes back as ErrAlreadyBanked rather than a second
 // row: the unique index on (user_id, claim_key) swallows the insert, and the absent row
 // is the signal.
-func (s *Store) AddAtom(ctx context.Context, userID int64, a Atom) (Atom, error) {
+func (s *Store) AddAtom(ctx context.Context, userID int64, a Atom, author Author) (Atom, error) {
+	// The label is DERIVED from who is asserting the claim, never taken from the value the
+	// caller built. See Author: this is the wall the CV evidence gate stands on, and a
+	// struct field a caller can fill in is not a wall.
+	a.Provenance = ProvenanceFor(author, "")
 	a.Sanitize()
 	if err := a.Validate(); err != nil {
 		return Atom{}, err
@@ -251,7 +255,20 @@ func (s *Store) insertAtom(ctx context.Context, userID int64, a Atom) (Atom, err
 
 // UpdateAtom replaces an owned atom's content. The claim key moves with the claim, so
 // the uniqueness guarantee holds after an edit as well as after an insert.
-func (s *Store) UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom) (Atom, error) {
+func (s *Store) UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom, author Author) (Atom, error) {
+	// AuthorRewrite keeps the standing the claim already had, so the stored label has to be
+	// read before the words are overwritten. Read here rather than trusted from the caller:
+	// a rule that depends on an argument the caller computes is a rule the caller can skip.
+	var existing Provenance
+	if author == AuthorRewrite {
+		stored, err := s.GetAtom(ctx, id, userID)
+		if err != nil {
+			return Atom{}, err
+		}
+		existing = stored.Provenance
+	}
+	a.Provenance = ProvenanceFor(author, existing)
+
 	a.Sanitize()
 	if err := a.Validate(); err != nil {
 		return Atom{}, err

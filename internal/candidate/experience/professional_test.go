@@ -49,11 +49,27 @@ func seedBank(t *testing.T, employments []Employment, atoms []Atom, placeOf []in
 		if place := placeOf[i]; place >= 0 {
 			a.EmploymentID = &ids[place]
 		}
-		if _, err := s.AddAtom(ctx, owner, a); err != nil {
+		// The seed states each atom's authorship, since the bank derives the label from it:
+		// a fixture that banked everything as the candidate could not express the
+		// unpublishable rows these tests exist to check.
+		if _, err := s.AddAtom(ctx, owner, a, authorOf(a.Provenance)); err != nil {
 			t.Fatalf("AddAtom: %v", err)
 		}
 	}
 	return s
+}
+
+// authorOf names the entry point that would have produced a given label, so a fixture can
+// still seed the full range of standings now that the bank derives them.
+func authorOf(p Provenance) Author {
+	switch p {
+	case ProvenanceStatedInChat:
+		return AuthorQuoted
+	case ProvenanceAgentInferred:
+		return AuthorAgent
+	default:
+		return AuthorCandidate
+	}
 }
 
 // professionalOf is the assertion subject of every test below: the live path the fit chain and
@@ -227,7 +243,9 @@ func TestStoreProfessional(t *testing.T) {
 	}
 	if _, err := s.AddAtom(ctx, owner, Atom{
 		EmploymentID: &role.ID, Claim: "Cut latency", Provenance: ProvenanceCVImport,
-	}); err != nil {
+	},
+		AuthorCandidate,
+	); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 

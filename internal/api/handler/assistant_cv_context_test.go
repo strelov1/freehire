@@ -60,10 +60,15 @@ func (b *bankStub) ListAtoms(context.Context, int64) ([]experience.Atom, error) 
 func (b *bankStub) GetAtom(context.Context, uuid.UUID, int64) (experience.Atom, error) {
 	return experience.Atom{}, experience.ErrNotFound
 }
-func (b *bankStub) AddAtom(_ context.Context, _ int64, a experience.Atom) (experience.Atom, error) {
+
+// Both derive the label the way the real Store does, so a test that asserts on provenance is
+// asserting on the rule rather than on what it handed in.
+func (b *bankStub) AddAtom(_ context.Context, _ int64, a experience.Atom, author experience.Author) (experience.Atom, error) {
+	a.Provenance = experience.ProvenanceFor(author, "")
 	return a, nil
 }
-func (b *bankStub) UpdateAtom(_ context.Context, _ uuid.UUID, _ int64, a experience.Atom) (experience.Atom, error) {
+func (b *bankStub) UpdateAtom(_ context.Context, _ uuid.UUID, _ int64, a experience.Atom, author experience.Author) (experience.Atom, error) {
+	a.Provenance = experience.ProvenanceFor(author, a.Provenance)
 	return a, nil
 }
 func (b *bankStub) MergeAtoms(context.Context, int64, uuid.UUID, uuid.UUID) (experience.Atom, error) {

@@ -10,6 +10,25 @@ is one piece of evidence at the grain of a CV bullet.
   replaced: `resume_structured` is regenerated on each upload, a tailored CV is thrown away
   with its vacancy. The bank accumulates, and **only its owner removes anything** — import
   never deletes, and there is no reconciler that prunes.
+- **The label is DERIVED from the Author, never taken from the caller's value.** `Store.AddAtom`
+  and `UpdateAtom` take an `Author` — who is asserting the claim, decided by the entry point
+  that received the request — and overwrite `Atom.Provenance` from it. A body-supplied
+  provenance is inert. Same rule and same reason as `cvedit.Actor`: a caller naming itself is
+  not evidence of who it is.
+
+  | Author | Label | Who passes it |
+  |---|---|---|
+  | `AuthorCandidate` | `manual` | the person, from their own session (cookie POST/PUT) |
+  | `AuthorQuoted` | `stated_in_chat` | the assistant, after checking the words against the session transcript — **the only authorship that can raise standing** |
+  | `AuthorAgent` | `agent_inferred` | a model's own reading, asserted now |
+  | `AuthorRewrite` | keeps the stored label | a keyed edit: rewriting words is not re-asserting them. An absent or corrupt label falls to `agent_inferred` |
+
+  Anything unrecognised — a new entry point that forgets to name itself — lands on
+  `agent_inferred`, which the CV evidence gate refuses. Failing closed is the point.
+
+  This closes the laundering route the cookie-only gate used to guard by routing alone: bank an
+  inference as `agent_inferred`, edit it, read back `manual`, cite it in a CV.
+
 - **Provenance decides publication, and the check is in the service.** `cv_import`,
   `stated_in_chat` and `manual` are the candidate speaking and may reach a CV;
   `agent_inferred` is the model speaking and may not, until the candidate confirms it and

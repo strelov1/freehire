@@ -42,7 +42,9 @@ func TestAutopilotRevisesAnOverstatedBulletAfterFidelityCheck(t *testing.T) {
 	atom, err := h.experience.AddAtom(ctx, userID, experience.Atom{
 		Claim:      "Listed AWS as a familiar technology",
 		Provenance: experience.ProvenanceStatedInChat,
-	})
+	},
+		experience.AuthorQuoted,
+	)
 	if err != nil {
 		t.Fatalf("seed experience atom: %v", err)
 	}

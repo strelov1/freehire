@@ -452,7 +452,9 @@ func TestResetCVFromResume_RefusesWhenTheBankSeedExceedsTheBulletCap(t *testing.
 			EmploymentID: &emp.ID,
 			Claim:        fmt.Sprintf("Banked achievement %d", i+1),
 			Provenance:   experience.ProvenanceStatedInChat,
-		}); err != nil {
+		},
+			experience.AuthorQuoted,
+		); err != nil {
 			t.Fatalf("AddAtom %d: %v", i, err)
 		}
 	}

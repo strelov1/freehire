@@ -50,21 +50,26 @@ func (b *stubBank) ListEmployments(context.Context, int64) ([]experience.Employm
 	return b.employments, nil
 }
 func (b *stubBank) ListAtoms(context.Context, int64) ([]experience.Atom, error) { return b.list, nil }
-func (b *stubBank) AddAtom(_ context.Context, userID int64, a experience.Atom) (experience.Atom, error) {
+func (b *stubBank) AddAtom(_ context.Context, userID int64, a experience.Atom, author experience.Author) (experience.Atom, error) {
 	if b.addErr != nil {
 		return experience.Atom{}, b.addErr
 	}
 	if strings.TrimSpace(a.Claim) == "" {
 		return experience.Atom{}, experience.ErrEmptyClaim
 	}
+	// Derive the label exactly as the real Store does — a fake that echoed the caller's
+	// value would let a handler test pass while the live path laundered.
+	a.Provenance = experience.ProvenanceFor(author, "")
 	stored := b.add(userID, a)
 	b.reindex()
 	return stored, nil
 }
-func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error) {
-	if _, ok := b.atoms[id]; !ok || b.owner[id] != userID {
+func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a experience.Atom, author experience.Author) (experience.Atom, error) {
+	prev, ok := b.atoms[id]
+	if !ok || b.owner[id] != userID {
 		return experience.Atom{}, experience.ErrNotFound
 	}
+	a.Provenance = experience.ProvenanceFor(author, prev.Provenance)
 	a.ID = id
 	b.atoms[id] = a
 	b.reindex()

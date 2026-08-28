@@ -38,8 +38,8 @@ type experienceBankOwner interface {
 	CreateEmployment(ctx context.Context, userID int64, e experience.Employment) (experience.Employment, error)
 	UpdateEmployment(ctx context.Context, id uuid.UUID, userID int64, e experience.Employment) (experience.Employment, error)
 	DeleteEmployment(ctx context.Context, id uuid.UUID, userID int64) error
-	AddAtom(ctx context.Context, userID int64, a experience.Atom) (experience.Atom, error)
-	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error)
+	AddAtom(ctx context.Context, userID int64, a experience.Atom, author experience.Author) (experience.Atom, error)
+	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom, author experience.Author) (experience.Atom, error)
 	DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) error
 	MergeAtoms(ctx context.Context, userID int64, a, b uuid.UUID) (experience.Atom, error)
 }
@@ -251,11 +251,12 @@ func (h *experienceHandlers) AddAtom(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	in.Provenance = experience.ProvenanceManual
 	if err := h.checkContextRequired(c.Context(), userID, in.Context); err != nil {
 		return experienceError(err)
 	}
-	created, err := h.bank.AddAtom(c.Context(), userID, in)
+	// The door names who is asserting this; the bank derives the label. A provenance in the
+	// body is inert.
+	created, err := h.bank.AddAtom(c.Context(), userID, in, experience.AuthorCandidate)
 	if err != nil {
 		return experienceError(err)
 	}
@@ -390,15 +391,10 @@ func (h *experienceHandlers) UpdateAtom(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	// Read the standing of the claim before overwriting its words: a keyed caller may
-	// change what an achievement says and may not change who is held to have said it.
-	// The read also owner-scopes the write, so a foreign id is a 404 before any update.
-	existing, err := h.bank.GetAtom(c.Context(), id, userID)
-	if err != nil {
-		return experienceError(err)
-	}
-	in.Provenance = provenanceForUpdate(auth.ViaAPIKey(c), existing.Provenance)
-	updated, err := h.bank.UpdateAtom(c.Context(), id, userID, in)
+	// A keyed caller may change what an achievement says and may not change who is held to
+	// have said it — AuthorRewrite is that rule, and the bank reads the standing itself
+	// rather than trusting a label computed up here.
+	updated, err := h.bank.UpdateAtom(c.Context(), id, userID, in, updateAuthor(auth.ViaAPIKey(c)))
 	if err != nil {
 		return experienceError(err)
 	}
@@ -441,21 +437,16 @@ func (h *experienceHandlers) checkContextRequired(ctx context.Context, userID in
 //
 // A candidate editing their own entry IS asserting it — that is what `manual` records, and
 // it is why the browser path stamps every correction with it regardless of where the row
-// came from. The tailoring agent holds a key, and the same stamp on its path would let it
-// promote its own reading: bank an inference as `agent_inferred` (which the CV evidence
-// gate refuses), PUT it, read back `manual`, and cite it. So a keyed edit rewrites the
-// words and leaves the label untouched.
-//
-// An unlabelled row falls to `agent_inferred` on the keyed path rather than to the strongest
-// claim, because a missing label is not evidence that anyone said anything.
-func provenanceForUpdate(viaKey bool, existing experience.Provenance) experience.Provenance {
-	if !viaKey {
-		return experience.ProvenanceManual
+// came from. The tailoring agent holds a key, and stamping its path would let it promote its
+// own reading: bank an inference as `agent_inferred` (which the CV evidence gate refuses),
+// PUT it, read back `manual`, and cite it. So a keyed edit rewrites the words and leaves the
+// label untouched, which is what AuthorRewrite means; the cookie path is the person, so it is
+// AuthorCandidate.
+func updateAuthor(viaKey bool) experience.Author {
+	if viaKey {
+		return experience.AuthorRewrite
 	}
-	if !existing.Valid() {
-		return experience.ProvenanceAgentInferred
-	}
-	return existing
+	return experience.AuthorCandidate
 }
 
 func ownedEntry(c *fiber.Ctx) (int64, uuid.UUID, error) {

@@ -114,7 +114,7 @@ func TestRetrieveReturnsRankedMatchesWithinTheLimit(t *testing.T) {
 		{EmploymentID: &role.ID, Claim: "Cut message-posting latency 20s to 1s", Provenance: ProvenanceCVImport},
 		{Claim: "Wrote the onboarding handbook", Provenance: ProvenanceManual},
 	} {
-		if _, err := s.AddAtom(ctx, owner, a); err != nil {
+		if _, err := s.AddAtom(ctx, owner, a, AuthorCandidate); err != nil {
 			t.Fatalf("AddAtom: %v", err)
 		}
 	}
@@ -140,7 +140,7 @@ func TestRetrieveReturnsNothingWhenNothingMatches(t *testing.T) {
 	s, _ := newStore()
 	ctx := context.Background()
 
-	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Wrote the onboarding handbook", Provenance: ProvenanceManual}); err != nil {
+	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Wrote the onboarding handbook", Provenance: ProvenanceManual}, AuthorCandidate); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestRetrieveIsOwnerScoped(t *testing.T) {
 	s, _ := newStore()
 	ctx := context.Background()
 
-	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Ran the cluster", Skills: []string{"kubernetes"}, Provenance: ProvenanceManual}); err != nil {
+	if _, err := s.AddAtom(ctx, owner, Atom{Claim: "Ran the cluster", Skills: []string{"kubernetes"}, Provenance: ProvenanceManual}, AuthorCandidate); err != nil {
 		t.Fatalf("AddAtom: %v", err)
 	}
 	matches, err := s.Retrieve(ctx, stranger, Query{Skills: []string{"kubernetes"}}, 5)
