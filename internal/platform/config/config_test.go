@@ -145,7 +145,11 @@ func TestLoad_MaxBulletsFromEnv(t *testing.T) {
 	}
 }
 
-func TestLoad_MatchAnalysisDefaults(t *testing.T) {
+// TestLoad_MatchAnalysisUnsetLeavesZero pins the half of the contract this layer
+// owns: with nothing in the environment, every field stays zero. The numbers a
+// zero turns into belong to internal/candidate/matchanalysis, which this block may
+// not import — TestSetBounds_ZeroRestoresDefaults over there pins the other half.
+func TestLoad_MatchAnalysisUnsetLeavesZero(t *testing.T) {
 	for _, key := range []string{
 		"MATCH_ANALYSIS_MAX_COMMENT_RUNES",
 		"MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES",
@@ -161,15 +165,8 @@ func TestLoad_MatchAnalysisDefaults(t *testing.T) {
 	} {
 		t.Setenv(key, "")
 	}
-	s := Load()
-	want := MatchAnalysisSettings{
-		MaxCommentRunes: 240, MaxListItemRunes: 200, MaxRecommendRunes: 1200,
-		MaxReqTextRunes: 200, MaxReqEvidenceRunes: 240,
-		MaxStrengths: 6, MaxGaps: 6, MaxRequirements: 30,
-		MaxSignals: 5, MaxSignalQuoteRunes: 200, MaxSignalInsightRunes: 200,
-	}
-	if s.MatchAnalysis != want {
-		t.Fatalf("MatchAnalysis = %+v, want %+v", s.MatchAnalysis, want)
+	if s := Load(); s.MatchAnalysis != (MatchAnalysisSettings{}) {
+		t.Fatalf("MatchAnalysis = %+v, want the zero value", s.MatchAnalysis)
 	}
 }
 
@@ -183,8 +180,8 @@ func TestLoad_MatchAnalysisFromEnv(t *testing.T) {
 	if s.MatchAnalysis.MaxSignals != 9 {
 		t.Fatalf("MaxSignals = %d, want 9", s.MatchAnalysis.MaxSignals)
 	}
-	if s.MatchAnalysis.MaxCommentRunes != 240 {
-		t.Fatalf("MaxCommentRunes = %d, want untouched default 240", s.MatchAnalysis.MaxCommentRunes)
+	if s.MatchAnalysis.MaxCommentRunes != 0 {
+		t.Fatalf("MaxCommentRunes = %d, want 0 — an override of one key must not stamp the others", s.MatchAnalysis.MaxCommentRunes)
 	}
 }
 

@@ -46,11 +46,11 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 	// Resolve the slug before writing: an unknown one changes nothing.
 	var jobID pgtype.Int8
 	if v.Slug != "" {
-		job, err := s.q.GetJobBySlug(ctx, v.Slug)
+		resolved, err := s.q.GetJobIDBySlug(ctx, v.Slug)
 		if err != nil {
 			return Message{}, err
 		}
-		jobID = pgtype.Int8{Int64: job.ID, Valid: true}
+		jobID = pgtype.Int8{Int64: resolved, Valid: true}
 	}
 
 	var confidence pgtype.Float4
@@ -87,13 +87,13 @@ func (s *Service) Link(ctx context.Context, userID, id int64, slug string) (Mess
 	if slug == "" {
 		return Message{}, ErrSlugRequired
 	}
-	job, err := s.q.GetJobBySlug(ctx, slug)
+	jobID, err := s.q.GetJobIDBySlug(ctx, slug)
 	if err != nil {
 		return Message{}, err
 	}
 	return s.mutate(ctx, userID, id, func() (int64, error) {
 		return s.q.LinkEmailToJob(ctx, db.LinkEmailToJobParams{
-			ID: id, UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+			ID: id, UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
 		})
 	})
 }
@@ -146,7 +146,7 @@ func (s *Service) RecordApplication(ctx context.Context, userID, id int64, slug 
 	if email.SuggestedJobID.Valid && !email.JobID.Valid {
 		return Message{}, ErrPendingSuggestion
 	}
-	job, err := s.q.GetJobBySlug(ctx, slug)
+	jobID, err := s.q.GetJobIDBySlug(ctx, slug)
 	if err != nil {
 		return Message{}, err
 	}
@@ -159,7 +159,7 @@ func (s *Service) RecordApplication(ctx context.Context, userID, id int64, slug 
 	}
 	return s.mutate(ctx, userID, id, func() (int64, error) {
 		return s.q.LinkEmailToJob(ctx, db.LinkEmailToJobParams{
-			ID: id, UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+			ID: id, UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
 		})
 	})
 }

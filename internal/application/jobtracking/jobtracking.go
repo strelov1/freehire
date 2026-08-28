@@ -7,6 +7,7 @@ package jobtracking
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/strelov1/freehire/internal/application/userjob"
@@ -254,14 +255,66 @@ type Repository interface {
 // occasionally re-see a long-ago-seen job, which is acceptable.
 const excludedJobsCap int32 = 1000
 
+// Reminders is the come-back-and-apply reminder, as this package needs it.
+//
+// It is declared here rather than imported because internal/engage sits ABOVE
+// internal/application in the block order: reminder.Service satisfies it
+// structurally and the composition root supplies it, so the dependency points the
+// way the layering allows.
+//
+// It lives on the service and not on a caller because saving is what creates the
+// intent a reminder nudges, and applying or unsaving is what ends it. Every caller
+// of these use cases means the same thing by them — the HTTP handler, the in-app
+// assistant, the mail reconstruction — so the side effect belongs where the use
+// case is, not repeated at each door.
+type Reminders interface {
+	ScheduleOnSave(ctx context.Context, userID, jobID int64) error
+	Cancel(ctx context.Context, userID, jobID int64) error
+}
+
+// Option configures a Service at construction.
+type Option func(*Service)
+
+// WithReminders attaches the reminder side effects to save, unsave and apply.
+// Without it those calls schedule and cancel nothing, which is what a caller with
+// no reminder store wants.
+func WithReminders(r Reminders) Option { return func(s *Service) { s.reminders = r } }
+
 // Service implements the per-user job-tracking use cases.
 type Service struct {
-	repo Repository
+	repo      Repository
+	reminders Reminders
 }
 
 // New creates a Service backed by the given Repository.
-func New(repo Repository) *Service {
-	return &Service{repo: repo}
+func New(repo Repository, opts ...Option) *Service {
+	s := &Service{repo: repo}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// scheduleReminder and cancelReminder are best-effort. The tracking write has
+// already succeeded and is the primary action, and the reminder worker re-checks
+// the intent (still open, still saved-but-unapplied) immediately before sending —
+// so a lost schedule or cancel degrades the nudge rather than corrupting anything.
+func (s *Service) scheduleReminder(ctx context.Context, userID, jobID int64) {
+	if s.reminders == nil {
+		return
+	}
+	if err := s.reminders.ScheduleOnSave(ctx, userID, jobID); err != nil {
+		log.Printf("jobtracking: schedule reminder user=%d job=%d: %v", userID, jobID, err)
+	}
+}
+
+func (s *Service) cancelReminder(ctx context.Context, userID, jobID int64) {
+	if s.reminders == nil {
+		return
+	}
+	if err := s.reminders.Cancel(ctx, userID, jobID); err != nil {
+		log.Printf("jobtracking: cancel reminder user=%d job=%d: %v", userID, jobID, err)
+	}
 }
 
 // ListTracked validates the filter (the vocabulary and its default live in
@@ -334,7 +387,13 @@ func (s *Service) MarkApplied(ctx context.Context, userID int64, slug, source st
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.MarkApplied(ctx, userID, jobID, source)
+	row, err := s.repo.MarkApplied(ctx, userID, jobID, source)
+	if err != nil {
+		return row, err
+	}
+	// Applying ends the "come back and apply" intent.
+	s.cancelReminder(ctx, userID, jobID)
+	return row, nil
 }
 
 // MarkAppliedAt resolves slug → jobID then records an application dated by `at`
@@ -344,7 +403,15 @@ func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, 
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.MarkAppliedAt(ctx, userID, jobID, at, source)
+	row, err := s.repo.MarkAppliedAt(ctx, userID, jobID, at, source)
+	if err != nil {
+		return row, err
+	}
+	// An application reconstructed from mail ends the intent exactly as a clicked
+	// one does. Only the HTTP door used to cancel, so this path never did — the
+	// same omission this side effect moved down here to stop repeating.
+	s.cancelReminder(ctx, userID, jobID)
+	return row, nil
 }
 
 // MarkAppliedOn records an application on the day the candidate states, overwriting a date
@@ -366,7 +433,12 @@ func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, 
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.MarkAppliedOn(ctx, userID, jobID, applydate.Instant(day), source)
+	row, err := s.repo.MarkAppliedOn(ctx, userID, jobID, applydate.Instant(day), source)
+	if err != nil {
+		return row, err
+	}
+	s.cancelReminder(ctx, userID, jobID)
+	return row, nil
 }
 
 // SaveJob resolves slug → jobID then delegates to the repository.
@@ -375,7 +447,13 @@ func (s *Service) SaveJob(ctx context.Context, userID int64, slug string) (Inter
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.SaveJob(ctx, userID, jobID)
+	row, err := s.repo.SaveJob(ctx, userID, jobID)
+	if err != nil {
+		return row, err
+	}
+	// Saving is what creates the intent the reminder nudges toward.
+	s.scheduleReminder(ctx, userID, jobID)
+	return row, nil
 }
 
 // Unsave resolves slug → jobID then clears the saved mark. If the repository
@@ -388,9 +466,14 @@ func (s *Service) Unsave(ctx context.Context, userID int64, slug string) (Intera
 	}
 	row, err := s.repo.UnsaveJob(ctx, userID, jobID)
 	if errors.Is(err, ErrNoInteraction) {
-		return Interaction{JobID: jobID}, nil
+		row, err = Interaction{JobID: jobID}, nil
 	}
-	return row, err
+	if err != nil {
+		return row, err
+	}
+	// Unsaving withdraws the intent the reminder was nudging toward.
+	s.cancelReminder(ctx, userID, jobID)
+	return row, nil
 }
 
 // Dismiss resolves slug → jobID then delegates to the repository, marking the

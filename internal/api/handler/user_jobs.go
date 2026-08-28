@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,8 +17,9 @@ import (
 // trackingHandlers serves the per-user job interactions (view/apply/save/dismiss/
 // track), the user-scoped tracking reads (the Kanban listing, slug sets, pipeline,
 // swipe deck), and the saved-job reminder controls. The interaction use cases live
-// in jobtracking.Service, the reminder scheduling in reminder.Service — the save/
-// apply/unsave handlers orchestrate both; the cmd/remind worker fires the scheduled
+// in jobtracking.Service, which also owns the reminder side effect of save/unsave/
+// apply — reminder.Service is handed to it as a port, and is held here only for the
+// notification-settings endpoints. The cmd/remind worker fires the scheduled
 // reminders.
 type trackingHandlers struct {
 	tracking *jobtracking.Service
@@ -28,9 +28,14 @@ type trackingHandlers struct {
 }
 
 func newTrackingHandlers(queries *db.Queries, pool *pgxpool.Pool, search searcher) *trackingHandlers {
+	// One reminder service, handed to tracking as its Reminders port and kept here
+	// for the notification-settings endpoints. Save/unsave/apply schedule and cancel
+	// inside the tracking service, so every caller of it — this handler, the in-app
+	// assistant, the mail reconstruction — gets the same side effect.
+	rem := reminder.New(reminder.NewQueriesRepository(queries))
 	return &trackingHandlers{
-		tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
-		reminder: reminder.New(reminder.NewQueriesRepository(queries)),
+		tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool), jobtracking.WithReminders(rem)),
+		reminder: rem,
 		search:   search,
 	}
 }
@@ -184,8 +189,6 @@ func (h *trackingHandlers) MarkApplied(c *fiber.Ctx) error {
 	if err != nil {
 		return trackingError(err)
 	}
-	// Applying ends the "come back and apply" intent, so drop any pending reminder.
-	h.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
@@ -234,33 +237,7 @@ func (h *trackingHandlers) SaveJob(c *fiber.Ctx) error {
 	if err != nil {
 		return trackingError(err)
 	}
-	h.scheduleReminderOnSave(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
-}
-
-// scheduleReminderOnSave applies the reminder decision for a just-saved job. It is
-// a best-effort side effect of the save: a failure is logged, never surfaced — the
-// save already succeeded and is the primary action, and the worker's fire-time
-// re-check backstops correctness.
-func (h *trackingHandlers) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
-	if h.reminder == nil {
-		return
-	}
-	if err := h.reminder.ScheduleOnSave(c.Context(), userID, jobID); err != nil {
-		log.Printf("reminder: schedule on save user=%d job=%d: %v", userID, jobID, err)
-	}
-}
-
-// cancelReminderBestEffort cancels a job's pending reminder after the user applied
-// or unsaved it. Best-effort: a failure is logged, not surfaced — the worker's
-// fire-time re-check cancels a missed one anyway.
-func (h *trackingHandlers) cancelReminderBestEffort(c *fiber.Ctx, userID, jobID int64) {
-	if h.reminder == nil {
-		return
-	}
-	if err := h.reminder.Cancel(c.Context(), userID, jobID); err != nil {
-		log.Printf("reminder: cancel user=%d job=%d: %v", userID, jobID, err)
-	}
 }
 
 // UnsaveJob clears a job's saved mark for the authenticated user. The interaction
@@ -276,8 +253,6 @@ func (h *trackingHandlers) UnsaveJob(c *fiber.Ctx) error {
 	if err != nil {
 		return trackingError(err)
 	}
-	// Unsaving withdraws the intent the reminder was nudging toward, so cancel it.
-	h.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 

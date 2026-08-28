@@ -279,31 +279,37 @@ type OAuthCredentials struct {
 	PrivateKey   string
 }
 
-// MatchAnalysisSettings holds the sanitize ceilings for fit-analysis model output.
-// Defaults match internal/candidate/matchanalysis.DefaultBounds(); cmd/server applies them via
+// MatchAnalysisSettings carries the MATCH_ANALYSIS_* overrides for the sanitize
+// ceilings on fit-analysis model output; cmd/server applies them via
 // matchanalysis.SetBounds at boot. Restart required after any change.
+//
+// A field left at zero means "not overridden": SetBounds substitutes that field's
+// own Default* from internal/candidate/matchanalysis, which is where every default
+// number lives. This layer deliberately holds none of them — it is not supposed to
+// know what a fit analysis is, and a second copy here would be the one the server
+// actually reads, silently retiring the domain's own defaults.
 type MatchAnalysisSettings struct {
-	// MaxCommentRunes caps each dimension's Comment (default 240).
+	// MaxCommentRunes caps each dimension's Comment.
 	MaxCommentRunes int
-	// MaxListItemRunes caps each Strengths / Gaps bullet (default 200).
+	// MaxListItemRunes caps each Strengths / Gaps bullet.
 	MaxListItemRunes int
-	// MaxRecommendRunes caps the free-text Recommendation (default 1200).
+	// MaxRecommendRunes caps the free-text Recommendation.
 	MaxRecommendRunes int
-	// MaxReqTextRunes caps Requirement.Text (default 200).
+	// MaxReqTextRunes caps Requirement.Text.
 	MaxReqTextRunes int
-	// MaxReqEvidenceRunes caps Requirement.Evidence (default 240).
+	// MaxReqEvidenceRunes caps Requirement.Evidence.
 	MaxReqEvidenceRunes int
-	// MaxStrengths caps the Strengths list length (default 6).
+	// MaxStrengths caps the Strengths list length.
 	MaxStrengths int
-	// MaxGaps caps the Gaps list length (default 6).
+	// MaxGaps caps the Gaps list length.
 	MaxGaps int
-	// MaxRequirements caps the RequirementMatch list length (default 30).
+	// MaxRequirements caps the RequirementMatch list length.
 	MaxRequirements int
-	// MaxSignals caps the HiddenSignals list length (default 5).
+	// MaxSignals caps the HiddenSignals list length.
 	MaxSignals int
-	// MaxSignalQuoteRunes caps Signal.Quote (default 200).
+	// MaxSignalQuoteRunes caps Signal.Quote.
 	MaxSignalQuoteRunes int
-	// MaxSignalInsightRunes caps Signal.Insight (default 200).
+	// MaxSignalInsightRunes caps Signal.Insight.
 	MaxSignalInsightRunes int
 }
 
@@ -370,18 +376,19 @@ func Load() Settings {
 		CVEditAllowBulletTruncation: envBool("CV_EDIT_ALLOW_BULLET_TRUNCATION", false),
 		CVMaxBullets:                envInt("CV_MAX_BULLETS", 20),
 
+		// Zero is the "unset" fallback on purpose — see MatchAnalysisSettings.
 		MatchAnalysis: MatchAnalysisSettings{
-			MaxCommentRunes:       envInt("MATCH_ANALYSIS_MAX_COMMENT_RUNES", 240),
-			MaxListItemRunes:      envInt("MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES", 200),
-			MaxRecommendRunes:     envInt("MATCH_ANALYSIS_MAX_RECOMMEND_RUNES", 1200),
-			MaxReqTextRunes:       envInt("MATCH_ANALYSIS_MAX_REQ_TEXT_RUNES", 200),
-			MaxReqEvidenceRunes:   envInt("MATCH_ANALYSIS_MAX_REQ_EVIDENCE_RUNES", 240),
-			MaxStrengths:          envInt("MATCH_ANALYSIS_MAX_STRENGTHS", 6),
-			MaxGaps:               envInt("MATCH_ANALYSIS_MAX_GAPS", 6),
-			MaxRequirements:       envInt("MATCH_ANALYSIS_MAX_REQUIREMENTS", 30),
-			MaxSignals:            envInt("MATCH_ANALYSIS_MAX_SIGNALS", 5),
-			MaxSignalQuoteRunes:   envInt("MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES", 200),
-			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 200),
+			MaxCommentRunes:       envInt("MATCH_ANALYSIS_MAX_COMMENT_RUNES", 0),
+			MaxListItemRunes:      envInt("MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES", 0),
+			MaxRecommendRunes:     envInt("MATCH_ANALYSIS_MAX_RECOMMEND_RUNES", 0),
+			MaxReqTextRunes:       envInt("MATCH_ANALYSIS_MAX_REQ_TEXT_RUNES", 0),
+			MaxReqEvidenceRunes:   envInt("MATCH_ANALYSIS_MAX_REQ_EVIDENCE_RUNES", 0),
+			MaxStrengths:          envInt("MATCH_ANALYSIS_MAX_STRENGTHS", 0),
+			MaxGaps:               envInt("MATCH_ANALYSIS_MAX_GAPS", 0),
+			MaxRequirements:       envInt("MATCH_ANALYSIS_MAX_REQUIREMENTS", 0),
+			MaxSignals:            envInt("MATCH_ANALYSIS_MAX_SIGNALS", 0),
+			MaxSignalQuoteRunes:   envInt("MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES", 0),
+			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 0),
 		},
 
 		SentryDSN:         os.Getenv("SENTRY_DSN"),

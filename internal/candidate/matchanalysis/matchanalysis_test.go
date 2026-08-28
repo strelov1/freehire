@@ -235,6 +235,21 @@ func TestProductionSanitizeBoundsLocked(t *testing.T) {
 	}
 }
 
+// TestSetBounds_ZeroRestoresDefaults pins the boot contract with the config layer.
+// config.Load leaves every MATCH_ANALYSIS_* field at zero when the environment says
+// nothing, precisely so the defaults live here and nowhere else; cmd/server then
+// hands that zero Bounds straight to SetBounds. If this stopped restoring the
+// defaults, an unconfigured server would run with erased ceilings.
+func TestSetBounds_ZeroRestoresDefaults(t *testing.T) {
+	prev := CurrentBounds()
+	t.Cleanup(func() { SetBounds(prev) })
+
+	SetBounds(Bounds{})
+	if got := CurrentBounds(); got != DefaultBounds() {
+		t.Fatalf("CurrentBounds() = %+v after SetBounds(Bounds{}), want DefaultBounds() %+v", got, DefaultBounds())
+	}
+}
+
 func TestSetBoundsRejectsNonPositive(t *testing.T) {
 	prev := CurrentBounds()
 	t.Cleanup(func() { SetBounds(prev) })

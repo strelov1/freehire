@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -78,11 +79,17 @@ func (s *Store) Validate(ctx context.Context, raw string, userID int64, tokenVer
 	return nil
 }
 
-func (s *Store) Consume(ctx context.Context, raw string, userID int64, tokenVersion int32, sessionHash []byte) error {
+// execer is satisfied by both *pgxpool.Pool and pgx.Tx, so Consume and ConsumeTx
+// spend a proof through one statement instead of two copies of the predicate.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func consume(ctx context.Context, q execer, raw string, userID int64, tokenVersion int32, sessionHash []byte) error {
 	if raw == "" || len(sessionHash) != sha256.Size {
 		return ErrRequired
 	}
-	tag, err := s.pool.Exec(ctx, `
+	tag, err := q.Exec(ctx, `
 		UPDATE recent_auth_proofs SET consumed_at=now()
 		WHERE proof_hash=$1 AND user_id=$2 AND token_version=$3 AND session_hash=$4
 		  AND consumed_at IS NULL AND expires_at > now()`, hash(raw), userID, tokenVersion, sessionHash)
@@ -93,6 +100,19 @@ func (s *Store) Consume(ctx context.Context, raw string, userID int64, tokenVers
 		return ErrRequired
 	}
 	return nil
+}
+
+func (s *Store) Consume(ctx context.Context, raw string, userID int64, tokenVersion int32, sessionHash []byte) error {
+	return consume(ctx, s.pool, raw, userID, tokenVersion, sessionHash)
+}
+
+// ConsumeTx spends the proof inside a caller's transaction, for the callers that
+// must serialize the spend with the write it authorises — unlinking a sign-in
+// method locks the account first, so it cannot reach the pool-backed Consume.
+// It takes no Store because a proof is identified entirely by its arguments;
+// tightening the predicate here reaches every caller.
+func ConsumeTx(ctx context.Context, tx pgx.Tx, raw string, userID int64, tokenVersion int32, sessionHash []byte) error {
+	return consume(ctx, tx, raw, userID, tokenVersion, sessionHash)
 }
 
 func (s *Store) Revoke(ctx context.Context, raw string) error {

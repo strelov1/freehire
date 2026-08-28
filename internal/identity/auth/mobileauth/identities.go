@@ -2,14 +2,13 @@ package mobileauth
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/strelov1/freehire/internal/identity/auth/apple"
+	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -198,8 +197,6 @@ func (s *Store) ActivateAppleCompensation(ctx context.Context, jobID uuid.UUID) 
 	return err
 }
 
-func proofDigest(raw string) []byte { sum := sha256.Sum256([]byte(raw)); return sum[:] }
-
 // ReleaseAppleGrantsForDeletion queues Apple revocation for every grant the
 // account holds and clears the apple_grants rows, freeing the FK
 // (ON DELETE RESTRICT) that would otherwise block deleting the user. The
@@ -282,15 +279,13 @@ func (s *Store) unlinkIdentityOnce(ctx context.Context, userID int64, tokenVersi
 	if err = tx.QueryRow(ctx, `SELECT password_hash IS NOT NULL FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&hasPassword); err != nil {
 		return false, err
 	}
-	if len(sessionHash) != sha256.Size {
-		return false, ErrSession
-	}
-	tag, err := tx.Exec(ctx, `UPDATE recent_auth_proofs SET consumed_at=now() WHERE proof_hash=$1 AND user_id=$2 AND token_version=$3 AND session_hash=$4 AND consumed_at IS NULL AND expires_at>now()`, proofDigest(recentProof), userID, tokenVersion, sessionHash)
-	if err != nil {
+	// The proof is spent inside this transaction, after the account lock, so a
+	// concurrent unlink cannot reuse it. recentauth owns the predicate.
+	if err = recentauth.ConsumeTx(ctx, tx, recentProof, userID, tokenVersion, sessionHash); err != nil {
+		if errors.Is(err, recentauth.ErrRequired) {
+			return false, ErrSession
+		}
 		return false, err
-	}
-	if tag.RowsAffected() != 1 {
-		return false, fmt.Errorf("%w", ErrSession)
 	}
 	rows, err := tx.Query(ctx, `SELECT provider,provider_user_id,status FROM user_identities WHERE user_id=$1 ORDER BY provider,provider_user_id FOR UPDATE`, userID)
 	if err != nil {

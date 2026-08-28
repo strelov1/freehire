@@ -20,7 +20,7 @@ type fakeQueries struct {
 	total      int64
 	state      []db.CountEmailsByStateRow
 	email      db.GetEmailRow
-	job        db.Job
+	jobID      int64
 	invitation db.GetInterviewInvitationRow
 
 	// failures to inject
@@ -91,8 +91,8 @@ func (f *fakeQueries) GetInterviewInvitation(context.Context, db.GetInterviewInv
 	return f.invitation, f.invitationErr
 }
 
-func (f *fakeQueries) GetJobBySlug(context.Context, string) (db.Job, error) {
-	return f.job, f.jobErr
+func (f *fakeQueries) GetJobIDBySlug(context.Context, string) (int64, error) {
+	return f.jobID, f.jobErr
 }
 
 func (f *fakeQueries) AgentTriageEmail(_ context.Context, arg db.AgentTriageEmailParams) (int64, error) {

@@ -68,7 +68,7 @@ func TestTriageWithAnUnknownSlugWritesNothing(t *testing.T) {
 
 // A linked verdict that implies progress moves the application forward.
 func TestTriageAdvancesTheStageOfALinkedApplication(t *testing.T) {
-	q := &fakeQueries{job: db.Job{ID: 42}, stage: "applied"}
+	q := &fakeQueries{jobID: 42, stage: "applied"}
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "interview_invitation", Slug: "go-dev-acme"}); err != nil {
 		t.Fatalf("Triage: %v", err)
@@ -84,7 +84,7 @@ func TestTriageAdvancesTheStageOfALinkedApplication(t *testing.T) {
 // The verdict is already durable by the time the stage is considered, so a failed
 // advance must not fail the triage the caller successfully recorded.
 func TestTriageSurvivesAFailedStageAdvance(t *testing.T) {
-	q := &fakeQueries{job: db.Job{ID: 42}, stage: "applied", advanceErr: errors.New("deadlock")}
+	q := &fakeQueries{jobID: 42, stage: "applied", advanceErr: errors.New("deadlock")}
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {
 		t.Fatalf("Triage failed because the stage advance did: %v", err)
@@ -94,7 +94,7 @@ func TestTriageSurvivesAFailedStageAdvance(t *testing.T) {
 // Mail linked to a job the caller does not track has no stage to advance — that is
 // not an error, it is simply nothing to do.
 func TestTriageIgnoresAnUntrackedJob(t *testing.T) {
-	q := &fakeQueries{job: db.Job{ID: 42}, stageErr: errNoRows}
+	q := &fakeQueries{jobID: 42, stageErr: errNoRows}
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {
 		t.Fatalf("Triage: %v", err)
@@ -145,7 +145,7 @@ func TestRecordApplicationIsDatedByTheMail(t *testing.T) {
 	wrote := time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)
 	q := &fakeQueries{
 		email: db.GetEmailRow{ID: 812, Source: "hosted", ReceivedAt: pgtype.Timestamptz{Time: wrote, Valid: true}},
-		job:   db.Job{ID: 42},
+		jobID: 42,
 	}
 	apps := &fakeApps{}
 
@@ -167,7 +167,7 @@ func TestRecordApplicationIsDatedByTheMail(t *testing.T) {
 func TestRecordApplicationRefusesAnUnknownMailStore(t *testing.T) {
 	q := &fakeQueries{
 		email: db.GetEmailRow{ID: 812, Source: "imap", ReceivedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
-		job:   db.Job{ID: 42},
+		jobID: 42,
 	}
 	apps := &fakeApps{}
 
@@ -266,7 +266,7 @@ func TestEveryLinkMutationReconcilesTheLedger(t *testing.T) {
 	} {
 		q := &fakeQueries{
 			email: db.GetEmailRow{ID: 812, Source: "gmail"},
-			job:   db.Job{ID: 42},
+			jobID: 42,
 		}
 		if err := call(New(q, nil)); err != nil {
 			t.Fatalf("%s: %v", name, err)

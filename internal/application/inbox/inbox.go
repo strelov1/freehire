@@ -41,7 +41,10 @@ type Queries interface {
 	CountEmailsByState(ctx context.Context, userID int64) ([]db.CountEmailsByStateRow, error)
 	GetEmail(ctx context.Context, arg db.GetEmailParams) (db.GetEmailRow, error)
 	GetInterviewInvitation(ctx context.Context, arg db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error)
-	GetJobBySlug(ctx context.Context, publicSlug string) (db.Job, error)
+	// Every slug this package resolves is resolved to an id and nothing else, so it
+	// takes the slim lookup: the wide row would TOAST a description and an
+	// enrichment blob on every triage, link and application recorded from mail.
+	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
 	AgentTriageEmail(ctx context.Context, arg db.AgentTriageEmailParams) (int64, error)
 	LinkEmailToJob(ctx context.Context, arg db.LinkEmailToJobParams) (int64, error)
 	UnlinkEmail(ctx context.Context, arg db.UnlinkEmailParams) (int64, error)

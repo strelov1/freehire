@@ -48,9 +48,13 @@ func (r *stubReminderRepo) CancelReminder(context.Context, int64, int64) error {
 func remindersApp(settings reminder.Settings) (*fiber.App, *auth.Issuer, *stubReminderRepo) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	repo := &stubReminderRepo{settings: settings}
+	rem := reminder.New(repo)
 	h := &trackingHandlers{
-		tracking: jobtracking.New(stubTrackingRepo{}),
-		reminder: reminder.New(repo),
+		// Wired the way newTrackingHandlers wires production: the reminder service is
+		// tracking's Reminders port, so the scheduling these tests assert on happens in
+		// the service every caller shares, not in the Fiber handler.
+		tracking: jobtracking.New(stubTrackingRepo{}, jobtracking.WithReminders(rem)),
+		reminder: rem,
 	}
 	app := fiber.New()
 	gate := auth.RequireAuth(iss, testVersions)
