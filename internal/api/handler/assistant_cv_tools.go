@@ -233,6 +233,12 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			// Same reason cv_context guards: a nil dereference here is a panic on the SSE
+			// writer's goroutine, which takes the process down rather than one request.
+			// This tool needs both the CV surface and the vacancy read.
+			if h.cv == nil || h.jobs == nil {
+				return nil, errors.New("the job-match score is unavailable in this deployment")
+			}
 			rec, err := h.cv.cvStore.GetForModel(ctx, cvID, userID)
 			if err != nil {
 				return nil, cvToolError(err)

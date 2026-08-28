@@ -92,3 +92,17 @@ func TestJobMatchToolReflectsAnEditedDocument(t *testing.T) {
 		t.Errorf("score did not change after the rendered text changed: %s", beforePayload)
 	}
 }
+
+// TestJobMatchReportsAnUnwiredDeployment is the companion to cv_context's own guard: a tool
+// that dereferences a collaborator nobody wired must report it, because the call runs inside
+// the SSE writer's goroutine where Registry.Call's error path cannot reach a panic and Fiber's
+// recover is not listening — so it takes the process down, not one request.
+func TestJobMatchReportsAnUnwiredDeployment(t *testing.T) {
+	bare := &assistantHandlers{}
+
+	_, err := toolByName(t, bare.assistantCVTools(testCVID, 9, uuid.New()), "job_match").
+		Run(context.Background(), 3, json.RawMessage(`{}`))
+	if err == nil {
+		t.Fatal("job_match answered from a handler wired to nothing")
+	}
+}
