@@ -10,7 +10,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -73,28 +72,34 @@ type companyDetailResponse struct {
 // updated_at, is_reference, company_info_at), so those never leak onto
 // GET /api/v1/companies/:slug. Every field the company page renders is kept.
 type companyView struct {
-	Slug             string          `json:"slug"`
-	Name             string          `json:"name"`
-	Collections      []string        `json:"collections"`
-	JobCount         int32           `json:"job_count"`
-	Regions          []string        `json:"regions"`
-	Countries        []string        `json:"countries"`
-	Domains          []string        `json:"domains"`
-	CompanyTypes     []string        `json:"company_types"`
-	CompanySizes     []string        `json:"company_sizes"`
-	Industries       []string        `json:"industries"`
-	YearFounded      pgtype.Int4     `json:"year_founded"`
-	EmployeeCount    pgtype.Int4     `json:"employee_count"`
-	HqCountry        pgtype.Text     `json:"hq_country"`
-	OrganizationType pgtype.Text     `json:"organization_type"`
-	Tagline          pgtype.Text     `json:"tagline"`
+	Slug         string   `json:"slug"`
+	Name         string   `json:"name"`
+	Collections  []string `json:"collections"`
+	JobCount     int32    `json:"job_count"`
+	Regions      []string `json:"regions"`
+	Countries    []string `json:"countries"`
+	Domains      []string `json:"domains"`
+	CompanyTypes []string `json:"company_types"`
+	CompanySizes []string `json:"company_sizes"`
+	Industries   []string `json:"industries"`
+	// The nullable columns are pointers, not pgtype: this file's own companyListItem says
+	// why ("without putting a persistence vocabulary on a public contract"), and the two
+	// company endpoints answered the same logical fields through two different encodings
+	// until they agreed. The wire is unchanged — pgtype's MarshalJSON already emitted a bare
+	// number/string or null — but the shape of GET /companies/:slug is now decided here
+	// rather than by a pgx minor version.
+	YearFounded      *int            `json:"year_founded"`
+	EmployeeCount    *int            `json:"employee_count"`
+	HqCountry        *string         `json:"hq_country"`
+	OrganizationType *string         `json:"organization_type"`
+	Tagline          *string         `json:"tagline"`
 	CompanyInfo      json.RawMessage `json:"company_info"`
 	RemoteRegions    []string        `json:"remote_regions"`
 	YcBatch          []string        `json:"yc_batch"`
 	YcStatus         []string        `json:"yc_status"`
 	YcStage          []string        `json:"yc_stage"`
 	YcFlags          []string        `json:"yc_flags"`
-	Maturity         pgtype.Text     `json:"maturity"`
+	Maturity         *string         `json:"maturity"`
 	// UpvoteCount/DownvoteCount are the company's materialized public thumbs counters,
 	// served straight from the companies columns. MyVote is the caller's own vote
 	// (-1, 0, 1), caller-scoped — set only on the auth-aware detail read, 0 otherwise.
@@ -104,8 +109,8 @@ type companyView struct {
 	// FeedbackCount/FeedbackRatingAvg are the company's materialized feedback
 	// counters (internal/engage/companyfeedback), the same read-straight-from-the-row
 	// shape as UpvoteCount/DownvoteCount above.
-	FeedbackCount     int32         `json:"feedback_count"`
-	FeedbackRatingAvg pgtype.Float4 `json:"feedback_rating_avg"`
+	FeedbackCount     int32    `json:"feedback_count"`
+	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
 }
 
 // companyViewFrom projects a stored company onto its public view, dropping only the
@@ -122,22 +127,22 @@ func companyViewFrom(c db.Company) companyView {
 		CompanyTypes:      c.CompanyTypes,
 		CompanySizes:      c.CompanySizes,
 		Industries:        c.Industries,
-		YearFounded:       c.YearFounded,
-		EmployeeCount:     c.EmployeeCount,
-		HqCountry:         c.HqCountry,
-		OrganizationType:  c.OrganizationType,
-		Tagline:           c.Tagline,
+		YearFounded:       pgconv.IntPtr(c.YearFounded),
+		EmployeeCount:     pgconv.IntPtr(c.EmployeeCount),
+		HqCountry:         pgconv.TextPtr(c.HqCountry),
+		OrganizationType:  pgconv.TextPtr(c.OrganizationType),
+		Tagline:           pgconv.TextPtr(c.Tagline),
 		CompanyInfo:       c.CompanyInfo,
 		RemoteRegions:     c.RemoteRegions,
 		YcBatch:           c.YcBatch,
 		YcStatus:          c.YcStatus,
 		YcStage:           c.YcStage,
 		YcFlags:           c.YcFlags,
-		Maturity:          c.Maturity,
+		Maturity:          pgconv.TextPtr(c.Maturity),
 		UpvoteCount:       c.UpvoteCount,
 		DownvoteCount:     c.DownvoteCount,
 		FeedbackCount:     c.FeedbackCount,
-		FeedbackRatingAvg: c.FeedbackRatingAvg,
+		FeedbackRatingAvg: pgconv.Float4Ptr(c.FeedbackRatingAvg),
 	}
 }
 

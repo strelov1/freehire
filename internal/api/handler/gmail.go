@@ -97,7 +97,7 @@ func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *g
 		queries:        queries,
 		pool:           pool,
 		tracking:       tracking,
-		inbox:          inbox.New(queries, trackingApplications{tracking}),
+		inbox:          inbox.New(queries, trackingApplications{tracking}, inbox.WithIngester(inbox.NewQueriesIngester(pool, queries))),
 		timeline:       apptimeline.New(queries),
 		gmailConnector: gmailConnector,
 		gmailCipher:    gmailCipher,

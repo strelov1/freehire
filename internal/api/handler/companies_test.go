@@ -142,3 +142,62 @@ func assertJSON(t *testing.T, label string, v any, want string) {
 		t.Errorf("%s body changed — this is an API change, not a refactor\n got: %s\nwant: %s", label, got, want)
 	}
 }
+
+// The detail endpoint's golden bodies. GET /companies/:slug had no byte-level pin at all while
+// its nullable fields were pgtype, so the shape a client received was decided by pgx's
+// MarshalJSON rather than by this file — a pgx major bump could have changed the public
+// contract with nothing here failing. These are the same three states the listing pins.
+const (
+	goldenCompanyDetailFull = `{"slug":"euro-lab","name":"Euro Lab","collections":["yc"],"job_count":12,` +
+		`"regions":null,"countries":null,"domains":null,"company_types":null,"company_sizes":null,` +
+		`"industries":["fintech"],"year_founded":1999,"employee_count":250,"hq_country":"de",` +
+		`"organization_type":"private","tagline":"We ship fridges","company_info":null,` +
+		`"remote_regions":null,"yc_batch":null,"yc_status":null,"yc_stage":null,"yc_flags":null,` +
+		`"maturity":"growth","upvote_count":3,"downvote_count":1,"my_vote":0,` +
+		`"feedback_count":2,"feedback_rating_avg":4.25}`
+	goldenCompanyDetailEmpty = `{"slug":"x","name":"X","collections":null,"job_count":0,` +
+		`"regions":null,"countries":null,"domains":null,"company_types":null,"company_sizes":null,` +
+		`"industries":null,"year_founded":null,"employee_count":null,"hq_country":null,` +
+		`"organization_type":null,"tagline":null,"company_info":null,` +
+		`"remote_regions":null,"yc_batch":null,"yc_status":null,"yc_stage":null,"yc_flags":null,` +
+		`"maturity":null,"upvote_count":0,"downvote_count":0,"my_vote":0,` +
+		`"feedback_count":0,"feedback_rating_avg":null}`
+)
+
+func TestCompanyViewJSONIsStable(t *testing.T) {
+	got := companyViewFrom(db.Company{
+		Slug: "euro-lab", Name: "Euro Lab", JobCount: 12,
+		Collections:       []string{"yc"},
+		Industries:        []string{"fintech"},
+		YearFounded:       pgtype.Int4{Int32: 1999, Valid: true},
+		EmployeeCount:     pgtype.Int4{Int32: 250, Valid: true},
+		HqCountry:         pgtype.Text{String: "de", Valid: true},
+		OrganizationType:  pgtype.Text{String: "private", Valid: true},
+		Tagline:           pgtype.Text{String: "We ship fridges", Valid: true},
+		Maturity:          pgtype.Text{String: "growth", Valid: true},
+		UpvoteCount:       3,
+		DownvoteCount:     1,
+		FeedbackCount:     2,
+		FeedbackRatingAvg: pgtype.Float4{Float32: 4.25, Valid: true},
+	})
+	assertJSON(t, "detail", got, goldenCompanyDetailFull)
+}
+
+// Absence is the half a struct comparison cannot see, and the half the listing and the detail
+// endpoint used to disagree about: an unset column must serialize as null on both.
+func TestCompanyViewJSONKeepsAbsenceShapes(t *testing.T) {
+	assertJSON(t, "detail", companyViewFrom(db.Company{Slug: "x", Name: "X"}), goldenCompanyDetailEmpty)
+}
+
+// A stored empty string is NOT absence: a company whose tagline was deliberately cleared reads
+// as "" and must not collapse into null, which is the one case a naive pointer conversion gets
+// wrong.
+func TestCompanyViewKeepsAnEmptyStringDistinctFromNull(t *testing.T) {
+	got := companyViewFrom(db.Company{Slug: "x", Name: "X", Tagline: pgtype.Text{String: "", Valid: true}})
+	if got.Tagline == nil {
+		t.Fatal("a stored empty tagline collapsed to null — absence and emptiness are different answers")
+	}
+	if *got.Tagline != "" {
+		t.Errorf("Tagline = %q, want the stored empty string", *got.Tagline)
+	}
+}

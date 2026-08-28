@@ -38,11 +38,51 @@ func refuseIfSanitizeDropsContent(applied, _ State) error {
 	return nil
 }
 
+// ListCapRemedy is the model-facing half of a list-cap refusal: the correction the agent can
+// act on inside the turn. It is separated from the candidate-facing half because the banner
+// must not tell a person to "set an existing bullet" — that is an instruction to a tool.
+//
+// Exported because the SPA's own alert strips exactly this trailing sentence off the tool
+// error (web/src/lib/assistant/bulletCapAlert.ts). TestListCapWireShape pins it, so rewording
+// it here fails a Go test instead of silently degrading a banner in another language's build.
+const ListCapRemedy = "Set an existing bullet or remove one before inserting"
+
+// ListCapError is a refused list-cap edit as DATA: which role is at the ceiling and what the
+// ceiling was. Both audiences are rendered FROM those fields — the model reads Error(), the
+// candidate reads UserMessage() — so neither is recovered by cutting the other's prose.
+//
+// It used to be one English sentence that two other layers took apart with string surgery.
+// Rewording it broke a banner and an SPA parser with no test failing anywhere.
+type ListCapError struct {
+	// Where names the role or project at the ceiling, as the candidate would recognise it
+	// on their own CV ("Staff Engineer at Contoso", "project Atlas").
+	Where string
+	// Max is the ceiling in force when the edit was refused.
+	Max int
+}
+
+// Error is the model-facing sentence: the refusal, the reason, and the remedy.
+func (e *ListCapError) Error() string {
+	return fmt.Sprintf("%s: %s: %s %s", ErrListCap, ListCapCode, e.reason(), ListCapRemedy)
+}
+
+// Unwrap makes errors.Is(err, ErrListCap) hold, which every caller already relies on.
+func (e *ListCapError) Unwrap() error { return ErrListCap }
+
+// UserMessage is the sentence shown to the candidate: no internal prefix, no instruction
+// meant for a tool, and an explicit reassurance that nothing of theirs was lost.
+func (e *ListCapError) UserMessage() string {
+	return e.reason() + " Your existing bullets were kept."
+}
+
+// reason is the half both audiences share.
+func (e *ListCapError) reason() string {
+	return fmt.Sprintf("%s already has %d bullets (the maximum). "+
+		"The edit was not applied and no existing bullets were deleted.", e.Where, e.Max)
+}
+
 func listCapErr(where string) error {
-	return fmt.Errorf("%w: %s: %s already has %d bullets (the maximum). "+
-		"The edit was not applied and no existing bullets were deleted. "+
-		"Set an existing bullet or remove one before inserting",
-		ErrListCap, ListCapCode, where, cv.MaxBullets)
+	return &ListCapError{Where: where, Max: cv.MaxBullets}
 }
 
 func countNonEmpty(bullets []string) int {
@@ -77,18 +117,13 @@ func projectLabel(p cv.Project, i int) string {
 	return fmt.Sprintf("projects[%d]", i)
 }
 
-// UserListCapMessage turns an ErrListCap into the sentence shown to the candidate.
-// Internal prefixes and model-facing remedy stay out of the banner.
+// UserListCapMessage turns a list-cap refusal into the sentence shown to the candidate, or ""
+// when err is not one. It reads the error's FIELDS — no cutting of its own prose, which is
+// what used to make rewording the message a silent break.
 func UserListCapMessage(err error) string {
-	if err == nil || !errors.Is(err, ErrListCap) {
+	var capErr *ListCapError
+	if !errors.As(err, &capErr) {
 		return ""
 	}
-	msg := err.Error()
-	if _, rest, ok := strings.Cut(msg, ListCapCode+": "); ok {
-		msg = rest
-	}
-	if before, _, ok := strings.Cut(msg, ". Set an existing"); ok {
-		return before + ". Your existing bullets were kept."
-	}
-	return msg
+	return capErr.UserMessage()
 }

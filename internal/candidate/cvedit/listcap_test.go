@@ -269,3 +269,69 @@ func TestCommitDocumentAllowsAWholeDocumentSaveUnderTheCap(t *testing.T) {
 		t.Fatalf("summary = %q, want the save applied", repo.state.Summary)
 	}
 }
+
+// TestListCapWireShape pins the parts of a list-cap refusal that a SECOND LANGUAGE takes apart.
+//
+// web/src/lib/assistant/bulletCapAlert.ts turns the tool error into the candidate's banner by
+// finding the stable code and stripping the trailing remedy. Neither of those literals lives in
+// Go, so before this test a reword here degraded that banner with nothing failing anywhere.
+//
+// If this test fails, the SPA parser needs the same edit — check bulletCapAlert.ts and its test.
+func TestListCapWireShape(t *testing.T) {
+	err := &ListCapError{Where: "Staff Engineer at Contoso", Max: 20}
+
+	msg := err.Error()
+	if !strings.HasPrefix(msg, ErrListCap.Error()+": "+ListCapCode+": ") {
+		t.Errorf("Error() = %q; the SPA finds the banner by the %q token, so it must lead", msg, ListCapCode)
+	}
+	if !strings.HasSuffix(msg, ListCapRemedy) {
+		t.Errorf("Error() = %q; the SPA strips exactly %q off the end", msg, ListCapRemedy)
+	}
+	if !strings.Contains(msg, "Staff Engineer at Contoso already has 20 bullets (the maximum).") {
+		t.Errorf("Error() = %q; the model is told which role and what the ceiling is", msg)
+	}
+
+	user := err.UserMessage()
+	if strings.Contains(user, ListCapCode) {
+		t.Errorf("UserMessage() = %q; an internal token must not reach a person", user)
+	}
+	if strings.Contains(user, ListCapRemedy) {
+		t.Errorf("UserMessage() = %q; %q is an instruction to a tool, not to a candidate", user, ListCapRemedy)
+	}
+	if !strings.Contains(user, "Your existing bullets were kept.") {
+		t.Errorf("UserMessage() = %q; the reassurance is the whole point of the banner", user)
+	}
+	if !strings.Contains(user, "Staff Engineer at Contoso") {
+		t.Errorf("UserMessage() = %q; the candidate is told WHICH role is full", user)
+	}
+
+	// Both audiences read one reason, so the banner can never describe a different refusal
+	// from the one the model was given.
+	const reason = "Staff Engineer at Contoso already has 20 bullets (the maximum). " +
+		"The edit was not applied and no existing bullets were deleted."
+	if !strings.Contains(msg, reason) || !strings.HasPrefix(user, reason) {
+		t.Errorf("the two renderings disagree about the reason:\n  model: %q\n  user:  %q", msg, user)
+	}
+}
+
+// TestUserListCapMessageReadsFieldsNotProse guards the change this file's typed error was for:
+// UserListCapMessage must survive a reworded Error(), because it no longer cuts one out of the
+// other.
+func TestUserListCapMessageReadsFieldsNotProse(t *testing.T) {
+	if got := UserListCapMessage(&ListCapError{Where: "project Atlas", Max: 12}); got !=
+		"project Atlas already has 12 bullets (the maximum). "+
+			"The edit was not applied and no existing bullets were deleted. Your existing bullets were kept." {
+		t.Errorf("UserListCapMessage = %q", got)
+	}
+	if got := UserListCapMessage(errors.New("something else")); got != "" {
+		t.Errorf("UserListCapMessage(other) = %q, want \"\"", got)
+	}
+	if got := UserListCapMessage(nil); got != "" {
+		t.Errorf("UserListCapMessage(nil) = %q, want \"\"", got)
+	}
+	// Wrapped by a caller adding context: errors.As must still find the fields.
+	wrapped := fmt.Errorf("commit: %w", &ListCapError{Where: "project Atlas", Max: 12})
+	if UserListCapMessage(wrapped) == "" {
+		t.Error("a wrapped ListCapError must still render a banner")
+	}
+}

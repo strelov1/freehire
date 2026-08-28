@@ -92,6 +92,7 @@ func reportUnexpected(c *fiber.Ctx, err error) {
 func classify(err error) (status int, msg string, report bool) {
 	var fe *fiber.Error
 	var invalidValue *inbox.InvalidError
+	var badBatch *inbox.BatchError
 	switch {
 	case errors.As(err, &fe):
 		return fe.Code, fe.Message, false
@@ -105,6 +106,10 @@ func classify(err error) (status int, msg string, report bool) {
 		return fiber.StatusBadRequest, invalidValue.Error(), false
 	case errors.Is(err, inbox.ErrSlugRequired):
 		return fiber.StatusBadRequest, err.Error(), false
+	// A harness pushed a batch the mail service refuses: empty, over the ceiling, or missing
+	// the deduplication key. A caller mistake, named so they can fix it.
+	case errors.As(err, &badBatch):
+		return fiber.StatusBadRequest, badBatch.Error(), false
 	case errors.Is(err, inbox.ErrPendingSuggestion):
 		return fiber.StatusConflict, err.Error(), false
 	// The candidate has not run their fit analysis for this job, so the tailoring surfaces

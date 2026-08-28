@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,10 +11,9 @@ import (
 )
 
 func TestMapCVErrorListCapIsConflictWithSafeMessage(t *testing.T) {
-	raw := fmt.Errorf("%w: %s: Staff Engineer at Contoso already has %d bullets (the maximum). "+
-		"The edit was not applied and no existing bullets were deleted. "+
-		"Set an existing bullet or remove one before inserting",
-		cvedit.ErrListCap, cvedit.ListCapCode, cv.MaxBullets)
+	// The real error value, not a hand-rebuilt copy of its sentence: this test used to
+	// reconstruct the format string, so it agreed with itself no matter what the package did.
+	raw := error(&cvedit.ListCapError{Where: "Staff Engineer at Contoso", Max: cv.MaxBullets})
 
 	mapped := mapCVError(raw)
 	var fe *fiber.Error

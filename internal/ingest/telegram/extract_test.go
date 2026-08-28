@@ -3,8 +3,11 @@ package telegram
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/job/job"
 )
 
 type fakeExtractor struct {
@@ -23,12 +26,12 @@ func (f *fakeExtractor) Extract(_ context.Context, _ string, kind Kind) (Extract
 
 type completion struct {
 	post PendingPost
-	jobs []ExtractedJob
+	jobs []job.Job
 }
 
 type linkCompletion struct {
 	post PendingPost
-	jobs []ResolvedJob
+	jobs []job.Job
 }
 
 type fakeExtractStore struct {
@@ -60,12 +63,12 @@ func (s *fakeExtractStore) Claim(_ context.Context, _ int32, batch int32) ([]Pen
 	return out, nil
 }
 
-func (s *fakeExtractStore) Complete(_ context.Context, post PendingPost, jobs []ExtractedJob) error {
+func (s *fakeExtractStore) Complete(_ context.Context, post PendingPost, jobs []job.Job) error {
 	s.completed = append(s.completed, completion{post: post, jobs: jobs})
 	return nil
 }
 
-func (s *fakeExtractStore) CompleteLinks(_ context.Context, post PendingPost, jobs []ResolvedJob) error {
+func (s *fakeExtractStore) CompleteLinks(_ context.Context, post PendingPost, jobs []job.Job) error {
 	s.linkCompleted = append(s.linkCompleted, linkCompletion{post: post, jobs: jobs})
 	return nil
 }
@@ -186,8 +189,8 @@ func TestExtractRoutesLinkPostToResolverAndSkipsLLM(t *testing.T) {
 	if len(store.linkCompleted) != 1 || len(store.linkCompleted[0].jobs) != 1 {
 		t.Fatalf("linkCompleted = %+v, want one completion with 1 job", store.linkCompleted)
 	}
-	if store.linkCompleted[0].jobs[0].Source != "habr_career" {
-		t.Errorf("resolved job source = %q, want habr_career", store.linkCompleted[0].jobs[0].Source)
+	if got := store.linkCompleted[0].jobs[0].Fields().Source; got != "habr_career" {
+		t.Errorf("resolved job source = %q, want habr_career", got)
 	}
 	if len(ex.prompts) != 0 {
 		t.Errorf("LLM extractor was called %d times, want 0 (link post bypasses the LLM)", len(ex.prompts))
@@ -249,5 +252,105 @@ func TestExtractUnknownChannelKindDefaultsToBoard(t *testing.T) {
 	}
 	if len(ex.prompts) != 1 || ex.prompts[0] != KindBoard {
 		t.Errorf("kind = %v, want board fallback for a channel no longer configured", ex.prompts)
+	}
+}
+
+// TestExtractCountsDroppedJobsAsSkippedNotWritten covers the extraction path's blind spot:
+// Validate drops a malformed vacancy in place and keeps the rest, and the run used to report
+// only what survived — so a post whose extraction was half garbage looked identical to a clean
+// one naming a single role.
+func TestExtractCountsDroppedJobsAsSkippedNotWritten(t *testing.T) {
+	ex := &fakeExtractor{result: Extraction{Jobs: []ExtractedJob{
+		{Title: "ML Engineer", Company: "Claimsorted", Description: "AI claims workflows"},
+		// No description: Validate drops this one and keeps the first.
+		{Title: "Full-stack Engineer", Company: "Claimsorted"},
+	}}}
+	store := &fakeExtractStore{pending: []PendingPost{pendingPost()}}
+	r := ExtractRunner{Extractor: ex, Store: store, Kinds: kinds()}
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if stats.Jobs != 1 {
+		t.Errorf("Jobs = %d, want 1 — only the vacancy actually written", stats.Jobs)
+	}
+	if stats.Skipped != 1 {
+		t.Errorf("Skipped = %d, want 1 — the dropped vacancy has to be visible somewhere", stats.Skipped)
+	}
+	if stats.Processed != 1 || stats.Failed != 0 {
+		t.Errorf("stats = %+v; a partly-malformed extraction is not a failed POST", stats)
+	}
+	if len(store.completed) != 1 || len(store.completed[0].jobs) != 1 {
+		t.Fatalf("the store must receive only the good job, got %+v", store.completed)
+	}
+	if got := store.completed[0].jobs[0].Fields().Title; got != "ML Engineer" {
+		t.Errorf("written job title = %q, want the well-formed one", got)
+	}
+}
+
+// TestExtractRefusedLinkJobsAreSkippedNotWritten is the lie this change was really for. The
+// link path has NO Validate — a ResolvedJob goes straight to the writer — so a resolver that
+// returned a titleless vacancy had it dropped silently by the adapter while the runner counted
+// it as written. jobs= was then simply wrong, not merely optimistic.
+func TestExtractRefusedLinkJobsAreSkippedNotWritten(t *testing.T) {
+	links := &fakeLinkResolver{jobs: []ResolvedJob{
+		{Source: "habr_career", ExternalID: "1", URL: "https://career.habr.com/vacancies/1",
+			Title: "Backend Engineer", Company: "Acme", Description: "Go and Postgres."},
+		// No title: job.New refuses it, and nothing upstream would have caught it.
+		{Source: "habr_career", ExternalID: "2", URL: "https://career.habr.com/vacancies/2",
+			Company: "Acme", Description: "A link the parser could not read."},
+	}}
+	store := &fakeExtractStore{pending: []PendingPost{linkPost()}}
+	r := ExtractRunner{Extractor: &fakeExtractor{}, Store: store, Kinds: kinds(), Links: links}
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if stats.Jobs != 1 || stats.Skipped != 1 {
+		t.Errorf("stats = %+v, want Jobs=1 Skipped=1", stats)
+	}
+	if len(store.linkCompleted) != 1 || len(store.linkCompleted[0].jobs) != 1 {
+		t.Fatalf("the store must receive only the buildable link job, got %+v", store.linkCompleted)
+	}
+}
+
+// The Telegram post's timestamp is the posting's source posted time: supplied rather than
+// derived, and it must reach the built aggregate intact so the derived columns fingerprint the
+// posted_at that is actually stored.
+func TestDraftJobsCarriesThePostTimestamp(t *testing.T) {
+	post := pendingPost()
+	post.PostedAt = time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+
+	built, skipped := ExtractRunner{}.draftJobs(post, []ExtractedJob{
+		{Title: "Senior Go Developer", Company: "Acme", Location: "Berlin",
+			Description: "We use Golang and PostgreSQL."},
+	})
+	if skipped != 0 || len(built) != 1 {
+		t.Fatalf("built %d jobs, skipped %d; want 1/0", len(built), skipped)
+	}
+	got := built[0].Fields()
+	if got.PostedAt == nil || !got.PostedAt.Equal(post.PostedAt) {
+		t.Errorf("PostedAt = %v, want %v", got.PostedAt, post.PostedAt)
+	}
+	if got.ExternalID != post.Channel+"/"+strconv.FormatInt(post.MsgID, 10)+"/0" {
+		t.Errorf("ExternalID = %q; identity is channel/msg/index", got.ExternalID)
+	}
+}
+
+// A resolved job that states its own posted time keeps it: the destination page knows better
+// than the Telegram post that linked to it.
+func TestDraftLinkJobsPrefersTheResolvedPostedTime(t *testing.T) {
+	own := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	built, skipped := ExtractRunner{}.draftLinkJobs(pendingPost(), []ResolvedJob{
+		{Source: "habr_career", ExternalID: "7", URL: "https://career.habr.com/vacancies/7",
+			Title: "Backend Engineer", Company: "Acme", Description: "Go.", PostedAt: &own},
+	})
+	if skipped != 0 || len(built) != 1 {
+		t.Fatalf("built %d jobs, skipped %d; want 1/0", len(built), skipped)
+	}
+	if got := built[0].Fields().PostedAt; got == nil || !got.Equal(own) {
+		t.Errorf("PostedAt = %v, want the resolved job's own %v", got, own)
 	}
 }

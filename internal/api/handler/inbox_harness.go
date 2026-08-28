@@ -10,26 +10,16 @@
 package handler
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/application/inbox"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// maxIngestBatch bounds one push. A harness syncing a mailbox pages through it;
-// an unbounded batch would be one transaction holding an arbitrary number of rows.
-// An oversized batch is refused rather than truncated, so "inserted" is never a
-// partial truth the caller has to guess at.
-const maxIngestBatch = 100
-
-// ingestMessage is one message a caller's own mail client fetched and handed over.
-// ExternalID is the deduplication key — a Message-ID in practice — and is the only
-// required field beyond a timestamp: everything else may legitimately be empty in
-// real ATS mail.
+// ingestMessage is one message a caller's own mail client fetched and handed over — the WIRE
+// shape. The rules it must satisfy, and the atomicity of the batch, belong to
+// internal/application/inbox: this tier is not the only reader of that store.
 type ingestMessage struct {
 	ExternalID string    `json:"external_id"`
 	ThreadID   string    `json:"thread_id"`
@@ -41,104 +31,61 @@ type ingestMessage struct {
 	ReceivedAt time.Time `json:"received_at"`
 }
 
-// ingestRequest is the push payload: a bounded batch of messages.
+// ingestRequest is the push payload: a batch of messages.
 type ingestRequest struct {
 	Messages []ingestMessage `json:"messages"`
 }
 
-// ingestResult reports how the batch landed, so a syncing agent can tell new mail
-// from a re-run of the same window without diffing anything itself.
+// ingestResult reports how the batch landed, so a syncing agent can tell new mail from a
+// re-run of the same window without diffing anything itself.
 type ingestResult struct {
 	Inserted int `json:"inserted"`
 	Updated  int `json:"updated"`
 }
 
-// IngestEmails stores a batch of messages the caller's own harness fetched, under
-// source 'external'. freehire provides no transport here: the caller owns the mail
-// client, and this endpoint is where its output enters the ordinary inbox.
+// IngestEmails stores a batch of messages the caller's own harness fetched, under source
+// 'external'. freehire provides no transport here: the caller owns the mail client, and this
+// endpoint is where its output enters the ordinary inbox.
 //
-// The whole batch is one transaction. A partially-applied batch would leave the
-// caller unable to tell what to retry, and the reported counts would be a lie.
+// It maps and renders. It used to open its own pgx transaction and write through sqlc — the
+// only handler in this package that did — which is why the in-app assistant, which reaches
+// inbox.Service directly and issues no HTTP request, could not ingest mail at all.
 func (h *inboxHandlers) IngestEmails(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
+	if h.inbox == nil {
+		return fiber.NewError(fiber.StatusNotImplemented, "mail ingest is not configured")
+	}
 	var req ingestRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	if err := validateIngestBatch(req.Messages); err != nil {
-		return err
+	msgs := make([]inbox.IncomingMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		msgs[i] = m.incoming()
 	}
-
-	tx, err := h.pool.Begin(c.Context())
+	// A refused batch arrives as inbox.BatchError and renders as a 400 through classify —
+	// the same rule the assistant's tools will report to the model.
+	out, err := h.inbox.Ingest(c.Context(), userID, msgs)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(c.Context()) }()
-
-	qtx := h.queries.WithTx(tx)
-	var out ingestResult
-	for _, m := range req.Messages {
-		row, err := qtx.UpsertExternalEmail(c.Context(), m.upsertParams(userID))
-		if err != nil {
-			return err
-		}
-		if row.Inserted {
-			out.Inserted++
-		} else {
-			out.Updated++
-		}
-	}
-	if err := tx.Commit(c.Context()); err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": out})
+	return c.JSON(fiber.Map{"data": ingestResult{Inserted: out.Inserted, Updated: out.Updated}})
 }
 
-// validateIngestBatch rejects a batch before any of it is written, so a bad
-// message at the end cannot leave the earlier ones stored under a 400.
-func validateIngestBatch(msgs []ingestMessage) error {
-	if len(msgs) == 0 {
-		return fiber.NewError(fiber.StatusBadRequest, "messages required")
-	}
-	if len(msgs) > maxIngestBatch {
-		return fiber.NewError(fiber.StatusBadRequest,
-			"batch too large: at most "+strconv.Itoa(maxIngestBatch)+" messages per request")
-	}
-	for i, m := range msgs {
-		if m.ExternalID == "" {
-			return fiber.NewError(fiber.StatusBadRequest,
-				"messages["+strconv.Itoa(i)+"]: external_id is required — it is the deduplication key")
-		}
-	}
-	return nil
-}
-
-// upsertParams projects a pushed message onto the store's parameters, defaulting
-// a missing timestamp to now so a client that omits one still orders sensibly.
-func (m ingestMessage) upsertParams(userID int64) db.UpsertExternalEmailParams {
-	receivedAt := m.ReceivedAt
-	if receivedAt.IsZero() {
-		receivedAt = time.Now()
-	}
-	return db.UpsertExternalEmailParams{
-		UserID:     userID,
+// incoming maps the wire shape onto the service's own.
+func (m ingestMessage) incoming() inbox.IncomingMessage {
+	return inbox.IncomingMessage{
 		ExternalID: m.ExternalID,
 		ThreadID:   m.ThreadID,
 		FromAddr:   m.FromAddr,
 		FromName:   m.FromName,
 		Subject:    m.Subject,
 		BodyText:   m.BodyText,
-		BodyHtml:   m.BodyHTML,
-		ReceivedAt: pgtype.Timestamptz{Time: receivedAt, Valid: true},
-		// No meeting identifier: this tier receives a JSON projection, not MIME, so
-		// there is no text/calendar part to read one out of. Pushed mail therefore
-		// yields no automatic calendar link, which is the same shape as the tier's
-		// existing bargain — it is never classified server-side either. Accepting a
-		// caller-supplied ical_uid would change the ingest contract and can wait for
-		// a harness that wants it.
+		BodyHTML:   m.BodyHTML,
+		ReceivedAt: m.ReceivedAt,
 	}
 }
 

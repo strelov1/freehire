@@ -68,14 +68,28 @@ type Applications interface {
 
 // Service is the mail use cases.
 type Service struct {
-	q    Queries
-	apps Applications
+	q      Queries
+	apps   Applications
+	ingest Ingester
 }
+
+// Option configures a Service at construction.
+type Option func(*Service)
+
+// WithIngester attaches the harness-push writer. Without it Ingest reports itself
+// unavailable, which is what a caller with no mail transport wants.
+func WithIngester(i Ingester) Option { return func(s *Service) { s.ingest = i } }
 
 // New builds the service. apps may be nil in a caller that never records an
 // application from mail; RecordApplication then reports itself unavailable rather
 // than panicking.
-func New(q Queries, apps Applications) *Service { return &Service{q: q, apps: apps} }
+func New(q Queries, apps Applications, opts ...Option) *Service {
+	s := &Service{q: q, apps: apps}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
 
 // The link states partition the mailbox: every live message is in exactly one, so
 // their counts always sum to the total. A message that is both linked and carrying

@@ -73,7 +73,11 @@ func run() int {
 		log.Printf("extract: %v", err)
 		return 1
 	}
-	log.Printf("tg-extract done: processed=%d jobs=%d failed=%d",
-		stats.Processed, stats.Jobs, stats.Failed)
+	// skipped is the mis-extraction count: vacancies the model produced that the domain
+	// refused for having no title or identity. It used to be invisible — the adapter dropped
+	// them and jobs counted them anyway — so a run whose extraction was degrading looked
+	// exactly like a healthy one.
+	log.Printf("tg-extract done: processed=%d jobs=%d skipped=%d failed=%d",
+		stats.Processed, stats.Jobs, stats.Skipped, stats.Failed)
 	return worker.ExitCode(stats.Failed, 0)
 }

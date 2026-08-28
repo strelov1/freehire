@@ -4,49 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"strconv"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ingest/telegram"
 	"github.com/strelov1/freehire/internal/job/job"
-	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
-
-// buildParams constructs the UpsertJob params for one Telegram-sourced job through
-// the Job aggregate factory, so the dictionary facets and slugs are derived exactly
-// as ingest and the moderator path derive them (job.New wraps jobderive) — no more
-// inline derivation that could drift from the shared dictionaries. workMode carries
-// a structured signal (link-resolved jobs may state it); "" lets the parser decide.
-// It returns job.ErrInvalidDraft for an extracted job with no title/identity.
-func buildParams(source, externalID, url, title, company, loc string, remote bool, description, workMode string, postedAt pgtype.Timestamptz) (db.UpsertJobParams, error) {
-	j, err := job.New(job.Draft{
-		Input: jobderive.Input{
-			Source:      source,
-			ExternalID:  externalID,
-			Title:       title,
-			Company:     company,
-			Location:    loc,
-			Description: description,
-			WorkMode:    workMode,
-		},
-		URL:    url,
-		Remote: remote,
-		// The Telegram post's timestamp is the posting's source posted time. It rides
-		// the draft rather than being written over the mapped params, so the derived
-		// columns fingerprint the posted_at that is actually stored.
-		PostedAt: pgconv.TimePtr(postedAt),
-	})
-	if err != nil {
-		return db.UpsertJobParams{}, err
-	}
-	return j.Fields().UpsertParams(), nil
-}
 
 // maxAttempts is the retry budget per post: the first failure leaves the post
 // retryable (after its lease expires), the second dead-letters it.
@@ -99,57 +64,26 @@ func decodeLinks(b []byte) []telegram.Link {
 	return links
 }
 
-func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, jobs []telegram.ExtractedJob) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
-
-	base := post.Channel + "/" + strconv.FormatInt(post.MsgID, 10)
-	for i, j := range jobs {
-		externalID := base + "/" + strconv.Itoa(i)
-		descHTML := telegram.TextToHTML(j.Description)
-		params, err := buildParams("telegram", externalID, "https://t.me/"+base,
-			j.Title, j.Company, j.Location, j.Remote, descHTML, "",
-			pgtype.Timestamptz{Time: post.PostedAt, Valid: true})
-		if err != nil {
-			// An extracted job with no title/identity is junk (a mis-extraction); skip it
-			// rather than persisting it or failing the whole post.
-			log.Printf("tg-extract: skipping job %s: %v", externalID, err)
-			continue
-		}
-		saved, err := qtx.UpsertJob(ctx, params)
-		if err != nil {
-			return fmt.Errorf("upsert job %s: %w", externalID, err)
-		}
-		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
-			TargetVersion: int32(enrich.Version),
-			JobID:         saved.Job.ID,
-		}); err != nil {
-			return fmt.Errorf("enqueue enrichment %s: %w", externalID, err)
-		}
-	}
-
-	if err := qtx.MarkTelegramPostExtracted(ctx, db.MarkTelegramPostExtractedParams{
-		Channel: post.Channel,
-		MsgID:   post.MsgID,
-	}); err != nil {
-		return fmt.Errorf("mark extracted %s: %w", base, err)
-	}
-	return tx.Commit(ctx)
+func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, jobs []job.Job) error {
+	return s.write(ctx, post, jobs)
 }
 
-// CompleteLinks writes link-resolved jobs — each under the destination platform's own
-// source identity — through the canonical UpsertJob + enrichment enqueue, and marks the
-// post extracted, all in one transaction. Same shape as Complete; the identity (source,
-// external_id, url) comes from the resolved job rather than the Telegram post.
-func (s *extractStore) CompleteLinks(
-	ctx context.Context,
-	post telegram.PendingPost,
-	jobs []telegram.ResolvedJob,
-) error {
+// CompleteLinks writes link-resolved jobs — each already carrying the destination platform's
+// own source identity rather than the Telegram post's. By the time they reach here that is the
+// only thing that ever distinguished them from an extracted job, and it is already spent, so
+// both go through one writer.
+func (s *extractStore) CompleteLinks(ctx context.Context, post telegram.PendingPost, jobs []job.Job) error {
+	return s.write(ctx, post, jobs)
+}
+
+// write persists every job through the canonical UpsertJob (which upserts the company and
+// gates on the dedup key), enqueues enrichment for each, and marks the post extracted — all in
+// one transaction, so a crash never half-persists a post.
+//
+// It maps and nothing else. Building the aggregate, and refusing a mis-extraction that has no
+// title or identity, is the runner's — which is what lets a run report how many it refused
+// instead of dropping them here and counting them as written.
+func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, jobs []job.Job) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -158,28 +92,16 @@ func (s *extractStore) CompleteLinks(
 	qtx := s.q.WithTx(tx)
 
 	for _, j := range jobs {
-		postedAt := pgtype.Timestamptz{Time: post.PostedAt, Valid: true}
-		if j.PostedAt != nil {
-			postedAt = pgtype.Timestamptz{Time: *j.PostedAt, Valid: true}
-		}
-		// The resolved job may carry a structured work-mode; job.New gives it precedence
-		// over the location parser (an empty value lets the parser decide), matching the
-		// prior j.WorkMode || geo.WorkMode fallback.
-		params, err := buildParams(j.Source, j.ExternalID, j.URL,
-			j.Title, j.Company, j.Location, j.Remote, j.Description, j.WorkMode, postedAt)
+		f := j.Fields()
+		saved, err := qtx.UpsertJob(ctx, f.UpsertParams())
 		if err != nil {
-			log.Printf("tg-extract: skipping link job %s/%s: %v", j.Source, j.ExternalID, err)
-			continue
-		}
-		saved, err := qtx.UpsertJob(ctx, params)
-		if err != nil {
-			return fmt.Errorf("upsert job %s/%s: %w", j.Source, j.ExternalID, err)
+			return fmt.Errorf("upsert job %s/%s: %w", f.Source, f.ExternalID, err)
 		}
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion: int32(enrich.Version),
 			JobID:         saved.Job.ID,
 		}); err != nil {
-			return fmt.Errorf("enqueue enrichment %s/%s: %w", j.Source, j.ExternalID, err)
+			return fmt.Errorf("enqueue enrichment %s/%s: %w", f.Source, f.ExternalID, err)
 		}
 	}
 
