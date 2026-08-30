@@ -3,6 +3,7 @@ package sources
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -124,6 +125,62 @@ func (c *fingerprintHTTP) GetHTML(ctx context.Context, url string) (*html.Node, 
 	return node, nil
 }
 
+// GetJSON fetches url over the Chrome-fingerprint client and decodes its JSON body into v.
+func (c *fingerprintHTTP) GetJSON(ctx context.Context, url string, v any) error {
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(body, v); err != nil {
+		return fmt.Errorf("sources: decode %s: %w", url, err)
+	}
+	return nil
+}
+
+// post is the POST sibling of get: a Chrome-shaped POST with the raw payload, returning
+// the bounded response body and erroring on any non-2xx status. No retry, for the same
+// reason get does not retry.
+func (c *fingerprintHTTP) post(ctx context.Context, url string, payload []byte) ([]byte, error) {
+	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("sources: build request %s: %w", url, err)
+	}
+	req.Header = fpPostHeaders()
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("sources: POST %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("sources: POST %s: status %d", url, resp.StatusCode)
+	}
+	body, err := io.ReadAll(newCappedReader(resp.Body, url, maxResponseBody))
+	if err != nil {
+		return nil, fmt.Errorf("sources: read %s: %w", url, err)
+	}
+	return body, nil
+}
+
+// PostJSON sends a Chrome-shaped POST with the JSON-encoded body and decodes the JSON
+// response into v. jobleads' search endpoint is POST-only, and its Cloudflare edge
+// rejects the default Go TLS+HTTP2 fingerprint exactly as the meta/bayt/gulftalent/
+// uber edges do — hence the transport lives here, not on the shared client.
+func (c *fingerprintHTTP) PostJSON(ctx context.Context, url string, body, v any) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("sources: marshal POST body for %s: %w", url, err)
+	}
+	raw, err := c.post(ctx, url, payload)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, v); err != nil {
+		return fmt.Errorf("sources: decode %s: %w", url, err)
+	}
+	return nil
+}
+
 // fpHeaders is a Chrome-shaped header set with an explicit order (fhttp's HeaderOrderKey). The
 // header presence and order are part of the fingerprint the edge checks, so they are kept
 // consistent with the spoofed Chrome_144 profile.
@@ -142,6 +199,28 @@ func fpHeaders() fhttp.Header {
 		fhttp.HeaderOrderKey: {
 			"sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "user-agent",
 			"accept", "sec-fetch-site", "sec-fetch-mode", "sec-fetch-user",
+			"sec-fetch-dest", "accept-language",
+		},
+	}
+}
+
+// fpPostHeaders is the fetch()-call sibling of fpHeaders: the header set a Chrome page
+// emits for an XHR/fetch request (the search and JSON endpoints of jobleads).
+func fpPostHeaders() fhttp.Header {
+	return fhttp.Header{
+		"sec-ch-ua":          {`"Chromium";v="144", "Not(A:Brand";v="99"`},
+		"sec-ch-ua-mobile":   {"?0"},
+		"sec-ch-ua-platform": {`"macOS"`},
+		"user-agent":         {fpUserAgent},
+		"accept":             {"application/json, text/plain, */*"},
+		"content-type":       {"application/json"},
+		"sec-fetch-site":     {"same-origin"},
+		"sec-fetch-mode":     {"cors"},
+		"sec-fetch-dest":     {"empty"},
+		"accept-language":    {"en-US,en;q=0.9"},
+		fhttp.HeaderOrderKey: {
+			"sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "user-agent",
+			"accept", "content-type", "sec-fetch-site", "sec-fetch-mode",
 			"sec-fetch-dest", "accept-language",
 		},
 	}
