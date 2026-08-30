@@ -1,0 +1,34 @@
+# JobLeads — a multi-country job aggregator crawled as a multi-company source.
+#
+# Each entry's board is a SEARCH KEYWORD: the search API (/job-search/search) is
+# keyword-first and there is no per-employer board, so a keyword is how a slice of the
+# catalogue is selected — the same board-as-slice shape as sources/hh.yml and
+# sources/whatjobs.yml. `region` scopes the search to a market (a location filter on the
+# country's alpha-2 code, verified live 2026-08-30); omit it for a keyword that must run
+# across countries. `company` is a display label only — the real employer comes from each
+# posting, never this placeholder.
+#
+# Keyless POST API behind a Cloudflare edge that 403s the plain Go fingerprint (the
+# adapter's fingerprint transport is served 200). The feed's totalResultCount is
+# page-scoped, the result window ends somewhere between ~200 and ~300 pages at limit=100
+# and its edge is volatile, and the vdb ranking rotates between runs — so a crawl walks
+# until a page stops returning postings and the provider is swept on a 14-day grace
+# window. Descriptions and the company name are paywalled on the detail API for a
+# logged-out caller; descriptions are assembled from the public jobSummary/
+# responsibilities/qualifications/benefits sections, companies come from the search
+# feed itself. All of it verified live on 2026-08-30.
+- company: JobLeads — Frontend Developer
+  board: Frontend Developer
+  region: IT
+- company: JobLeads — Backend Developer
+  board: Backend Developer
+  region: IT
+- company: JobLeads — Full Stack Developer
+  board: Full Stack Developer
+  region: IT
+- company: JobLeads — React Developer
+  board: React Developer
+  region: IT
+- company: JobLeads — DevOps Engineer
+  board: DevOps Engineer
+  region: IT

@@ -406,24 +406,32 @@ func All(c HTTPClient) map[string]Source {
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
-	// bayt/gulftalent aggregators). Build it only when there is a real client to serve (the
-	// c == nil marker/listing path — e.g. FilterableProviders — must stay transport-free, so
-	// these register with a nil client there; Provider()/boardless() never touch it). If the
-	// deterministic transport build ever fails, all five are left unregistered so config
-	// validation fails fast on their board entries, rather than registering a client guaranteed
-	// to be rejected by the edge.
+	// bayt/gulftalent aggregators and by jobleads — whose search edge rejects the plain Go
+	// fingerprint the same way and serves a Chrome one 200, keyless). Build it only when there
+	// is a real client to serve (the c == nil marker/listing path — e.g. FilterableProviders —
+	// must stay transport-free, so these register with a nil client there; Provider()/boardless()
+	// never touch it). If the deterministic transport build ever fails, all six are left
+	// unregistered so config validation fails fast on their board entries, rather than
+	// registering a client guaranteed to be rejected by the edge.
 	if c == nil {
 		registry["meta"] = NewMetaCareers(nil)
 		registry["bayt"] = NewBayt(nil)
 		registry["gulftalent"] = NewGulfTalent(nil)
 		registry["uber"] = NewUber(nil)
 		registry["gusto"] = NewGusto(nil)
+		// jobleads must register on the taxonomy path too: classification (AggregatorProviders,
+		// the source facet) reads this registry, and an aggregator it does not know is never
+		// suppressed in the cross-source dedup.
+		registry["jobleads"] = NewJobleads(nil)
 	} else if fp, err := newFingerprintHTTP(); err == nil {
 		registry["meta"] = NewMetaCareers(fp)
 		registry["bayt"] = NewBayt(fp)
 		registry["gulftalent"] = NewGulfTalent(fp)
 		registry["uber"] = NewUber(fp)
 		registry["gusto"] = NewGusto(fp)
+		// The search and detail paths are both paced through one limiter per run, wired here
+		// so every board competes for the same bucket (see pacedJobleadsPoster).
+		registry["jobleads"] = NewJobleads(pacedJobleadsPoster(fp))
 	}
 	return registry
 }
