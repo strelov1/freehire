@@ -15,8 +15,15 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SQUAWK = ['squawk'];
+// Resolved relative to THIS FILE, not to the caller's PATH. The lefthook command runs
+// `node scripts/check-migrations.mjs` directly — no `pnpm run` wrapper — so
+// node_modules/.bin is not on PATH and a bare `squawk` fails for everyone with the hook
+// installed. Falls back to PATH for a global install.
+const LOCAL_SQUAWK = fileURLToPath(new URL('../node_modules/.bin/squawk', import.meta.url));
+const SQUAWK = existsSync(LOCAL_SQUAWK) ? LOCAL_SQUAWK : 'squawk';
+
 const MIGRATIONS_DIR = 'migrations';
 const RUNNER_SOURCE = 'internal/platform/migrate/migrate.go';
 
@@ -108,14 +115,14 @@ function squawk(files, { inTransaction }) {
   const args = [...files];
   if (inTransaction) args.push('--assume-in-transaction');
   try {
-    execFileSync(SQUAWK[0], [...SQUAWK.slice(1), ...args], { stdio: 'inherit' });
+    execFileSync(SQUAWK, args, { stdio: 'inherit' });
     return false;
   } catch (err) {
+    // A missing binary FAILS rather than passing quietly. A migration check that
+    // reports nothing because the linter was absent is worse than no check: it makes
+    // the commit look examined.
     if (err.code === 'ENOENT') {
-      console.error(
-        'squawk is not installed. Run `pnpm install` at the repository root, or use\n' +
-          '`pnpm exec node scripts/check-migrations.mjs` so the local binary is on PATH.',
-      );
+      console.error('squawk is not installed. Run `pnpm install` at the repository root.');
       process.exit(1);
     }
     return true;
