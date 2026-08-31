@@ -115,22 +115,26 @@ pre-commit:
     # Thirteen such files sat outside every hook here, checked one at a time with
     # `lefthook run pre-commit --file`: only gitleaks fired, because it has no glob.
     #
-    # `.oxlintrc.json` is in the glob for the reason the go-lint hook lists
-    # `.golangci.yml`: a file that decides what a check does is a file that can break
-    # it, and a rule switched off is quieter than a rule that fails.
+    # NO `.oxlintrc.json` IN THESE TWO, THOUGH IT IS IN design-system-lint BELOW, AND
+    # the difference is what the command does with its glob. These two pass
+    # {staged_files} to eslint, which does not read that file and answers "File ignored
+    # because no matching configuration was supplied" — a warning where the intent was a
+    # check, so the glob would add noise and cover nothing. design-system-lint runs
+    # `pnpm run lint` over its whole package, which is `oxlint && eslint .`, so there
+    # the config genuinely decides the outcome. The web and extension CI jobs run that
+    # same whole-package lint on every push, which is what covers a rule switched off
+    # here.
     web-lint:
       root: "web/"
       glob:
         - "web/**/*.{js,ts,svelte}"
         - "web/*.{js,ts,svelte}"
-        - "web/.oxlintrc.json"
       run: pnpm exec eslint {staged_files}
     extension-lint:
       root: "extension/"
       glob:
         - "extension/**/*.{js,ts,svelte}"
         - "extension/*.{js,ts,svelte}"
-        - "extension/.oxlintrc.json"
       run: pnpm exec eslint {staged_files}
     # The remaining design-system-* commands mirror the fast checks from the
     # `design-system` CI job (see .github/workflows/ci.yml) so a broken commit
