@@ -151,6 +151,16 @@ func (c Collection) Admits(company Company, r Record) bool {
 	return c.Gate == nil || c.Gate(company, r)
 }
 
+// HandList reports whether this collection's membership is authored in this repo —
+// a static Slugs list or an embedded membership file — rather than fetched from a
+// third party. Only a hand list's unmatched entries are worth naming: they are ours
+// to fix, and there are few enough to read. The distinction lived in the import
+// worker and was drawn as "Slugs != nil", which silenced the embedded files (the
+// largest hand lists we have) and made a typo in one of them invisible.
+func (c Collection) HandList() bool {
+	return c.Slugs != nil || (c.Dataset != nil && len(c.Dataset.Data) > 0)
+}
+
 // All is the fixed registry, in display order. Adding a collection is one entry
 // here — a static Slugs list or a Dataset; the import worker resolves whichever is
 // set.
@@ -382,9 +392,9 @@ var BigTechSlugs = []string{
 // internationally (a hand-curated seed plus the larger eastern-roots company list).
 // "Eastern roots" is a fact about the company, so all of its roles belong here. It is
 // our own curated fact, not a third-party feed, so it is committed to the repo and
-// embedded rather than fetched. One canonical company slug (normalize.Slug) per line;
-// the list is matched against the catalogue at import time and unmatched slugs are
-// simply logged.
+// embedded rather than fetched. One canonical company slug (normalize.CompanySlug)
+// per line; the list is matched against the catalogue at import time and unmatched
+// slugs are logged by name.
 //
 //go:embed eastern_roots.txt
 var easternRootsData []byte
@@ -398,9 +408,9 @@ var easternRootsData []byte
 //go:embed indian_roots.txt
 var indianRootsData []byte
 
-// ParseSlugList parses a newline-delimited slug list (the embedded russian-roots
-// file): one entry per line, blank lines and #-comment lines skipped, surrounding
-// whitespace trimmed. Entries are returned verbatim (Match normalizes them).
+// ParseSlugList parses a newline-delimited slug list (the embedded eastern_roots.txt
+// and indian_roots.txt): one entry per line, blank lines and #-comment lines skipped,
+// surrounding whitespace trimmed. Entries are returned verbatim (Match normalizes them).
 func ParseSlugList(data []byte) ([]string, error) {
 	var out []string
 	for _, line := range strings.Split(string(data), "\n") {
@@ -668,15 +678,4 @@ func csvColumns(data []byte, delim rune, colNames ...string) ([][]string, error)
 		out = append(out, vals)
 	}
 	return out, nil
-}
-
-// embeddedSlugList parses an embedded membership file to its slugs, for the test that
-// guards every hand list against the catalogue's slug rule. It exists for the package's
-// tests only, because the file is embedded and there is no other way to read it back.
-func embeddedSlugList(data []byte) []string {
-	slugs, err := ParseSlugList(data)
-	if err != nil {
-		return nil
-	}
-	return slugs
 }

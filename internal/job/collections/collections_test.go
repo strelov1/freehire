@@ -529,16 +529,17 @@ var errBoom = errors.New("boom")
 // produce — one still carrying a corporate form — matches nothing, and nothing says so: the
 // collection just quietly holds fewer companies than it names.
 //
-// The test is that each entry is a fixed point of the rule. eastern_roots.txt is included
-// because it is the same kind of list, only larger and easier to add to carelessly.
+// The test is that each entry is a fixed point of the rule. The embedded membership files
+// are included because they are the same kind of list, only larger and easier to add to
+// carelessly.
 func TestHandListSlugsAreCompanySlugStable(t *testing.T) {
 	lists := map[string][]string{
 		"AICompanySlugs":   AICompanySlugs,
 		"Mag7Slugs":        Mag7Slugs,
 		"BigTechSlugs":     BigTechSlugs,
 		"AINativeSlugs":    AINativeSlugs,
-		"easternRootsData": embeddedSlugList(easternRootsData),
-		"indianRootsData":  embeddedSlugList(indianRootsData),
+		"easternRootsData": embeddedSlugList(t, easternRootsData),
+		"indianRootsData":  embeddedSlugList(t, indianRootsData),
 	}
 	var checked int
 	for name, slugs := range lists {
@@ -557,4 +558,46 @@ func TestHandListSlugsAreCompanySlugStable(t *testing.T) {
 		t.Errorf("checked only %d hand-list slugs, expected the curated lists to be far larger "+
 			"— has a list been renamed out from under this test?", checked)
 	}
+}
+
+// TestHandListCoversEmbeddedMembershipFiles pins which collections get their unmatched
+// entries named in the import log. The rule was "Slugs != nil" until 2026-08-31, which
+// read as "hand list" but excluded the embedded files — the two largest lists we author
+// — so a typo in one matched nothing and reported nothing. A fetched dataset must stay
+// out: it has thousands of unmatched names and would bury every hand list's few.
+func TestHandListCoversEmbeddedMembershipFiles(t *testing.T) {
+	want := map[string]bool{
+		"bigtech":        true, // static Slugs
+		"ai-native":      true, // static Slugs
+		"eastern-roots":  true, // embedded file
+		"indian-roots":   true, // embedded file
+		"yc":             false,
+		"unicorn":        false,
+		"us-h1b-sponsor": false,
+	}
+	for _, c := range All {
+		expected, ok := want[c.Slug]
+		if !ok {
+			continue
+		}
+		if got := c.HandList(); got != expected {
+			t.Errorf("%s: HandList() = %v, want %v", c.Slug, got, expected)
+		}
+		delete(want, c.Slug)
+	}
+	for slug := range want {
+		t.Errorf("%q is no longer in the registry — this test has stopped covering it", slug)
+	}
+}
+
+// embeddedSlugList parses an embedded membership file to its slugs. A parse failure is
+// fatal rather than an empty list: the population floor above is summed across every list,
+// so one file silently yielding nothing would still clear it on the others' entries.
+func embeddedSlugList(t *testing.T, data []byte) []string {
+	t.Helper()
+	slugs, err := ParseSlugList(data)
+	if err != nil {
+		t.Fatalf("parse embedded membership file: %v", err)
+	}
+	return slugs
 }

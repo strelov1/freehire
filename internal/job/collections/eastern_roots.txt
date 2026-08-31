@@ -1,8 +1,8 @@
 # eastern-roots collection membership (canonical company slugs, one per line).
 # Companies with Eastern European / Russian-speaking founding roots operating internationally.
 # Source: hand-curated seed + the eastern-roots company list (Airtable, 312 slugs).
-# Matched to our catalogue via normalize.Slug at import (cmd/import-collections);
-# unmatched slugs are simply logged. Lines starting with # are comments.
+# Matched to our catalogue via normalize.CompanySlug at import (cmd/import-collections);
+# unmatched slugs are logged by name. Lines starting with # are comments.
 10web
 1inch
 1password

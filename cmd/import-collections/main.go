@@ -156,9 +156,9 @@ func report(p planResult, companies int) {
 			continue
 		}
 		log.Printf("import-collections: %s matched=%d unmatched=%d", c.Slug, s.Matched, s.Unmatched)
-		// For a hand list the unmatched entries are actionable (a typo'd slug, or a
-		// marquee company we don't ingest yet), so list them. Datasets have thousands
-		// of unmatched names — only their count is logged, above.
+		// For a hand list the unmatched entries are actionable — an entry we wrote
+		// that matches nothing is a typo or a company that left the catalogue — so
+		// list them. A fetched dataset has thousands; only its count is logged, above.
 		if len(s.UnmatchedNames) > 0 {
 			log.Printf("import-collections: %s unmatched entries: %s", c.Slug, strings.Join(s.UnmatchedNames, ", "))
 		}
@@ -339,7 +339,7 @@ func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections
 	stats := make(map[string]collections.MatchStat, len(resolved))
 	for _, c := range collections.All {
 		matched, s := c.Members(resolved[c.Slug], companies)
-		if c.Slugs != nil { // hand list: keep the unmatched entries for diagnostics
+		if c.HandList() { // ours to fix: keep the unmatched entries for diagnostics
 			s.UnmatchedNames = s.UnmatchedNames[:min(len(s.UnmatchedNames), collections.MaxLoggedUnmatched)]
 		} else {
 			s.UnmatchedNames = nil

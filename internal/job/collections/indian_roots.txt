@@ -9,30 +9,37 @@
 # tracking the same Tracxn/Inc42 ecosystem count, ~130 unicorns as of Aug 2026),
 # Wikipedia's list of Indian IT companies, plus a hand seed for the diaspora strand.
 #
-# Everything above the second header was verified present in the catalogue at
-# curation time; the tail is well-known companies we do not carry yet, kept so the
-# tag lands the day their board is ingested. Matched via normalize.CompanySlug at
-# import (cmd/import-collections); unmatched slugs are simply logged. Lines starting
-# with # are comments.
+# Every entry was verified present in the catalogue at curation time. The list
+# deliberately does NOT carry marquee companies we do not ingest yet: an entry that
+# matches nothing is indistinguishable from a typo in the import's unmatched report,
+# and 71 speculative ones would bury a real one. Add a company when its board lands.
+#
+# Matched via normalize.CompanySlug at import (cmd/import-collections); unmatched
+# slugs are logged. Lines starting with # are comments.
 #
 # Ambiguous single-word slugs are deliberately absent: `porter`, `locus` and `slice`
 # in our catalogue are the US companies of those names, not the Indian ones.
 3i-infotech
+acko
 aerospike
 apna
 aryaka
 atlan
 birlasoft
 browserstack
+capillary-technologies
 cardekho
 cars24
 cashfree-payments
+chargebee
 coforge
 cohesity
+coindcx
 coinswitch
 cred
 cyient
 darwinbox
+dehaat
 dream-sports
 druva
 eclerx
@@ -58,6 +65,7 @@ innovaccer
 jar
 juspay
 kellton
+khatabook
 kpit
 kreditbee
 l-t-technology-services
@@ -74,6 +82,7 @@ navi
 netradyne
 newgen-software-technologies
 ninjacart
+nobroker
 nucleus-software-exports
 nutanix
 observe-ai
@@ -81,10 +90,16 @@ oyo
 paytm
 persistent-systems
 phonepe
+physicswallah
 postman
+purplle
 quest-global
+quikr
 razorpay
+rebel-foods
 rubrik
+sasken
+sharechat
 signoz
 snapdeal
 sonata-software
@@ -93,8 +108,13 @@ swiggy
 tata-consultancy-services
 tech-mahindra
 thoughtspot
+udaan
+unacademy
 uniphore
 upgrad
+upstox
+vedantu
+vymo
 whatfix
 wingify
 wipro
@@ -107,96 +127,5 @@ zensar
 zepto
 zeta
 zoho
-zscaler
-
-# --- Not in the catalogue yet (well-known; the tag lands when their board arrives) ---
-acko
-amagi
-ather-energy
-aye-finance
-bharatpe
-bigbasket
-blackbuck
-blusmart
-byjus
-capillary-technologies
-chargebee
-clevertap
-coindcx
-curefit
-dailyhunt
-dealshare
-dehaat
-delhivery
-dream11
-droom
-elasticrun
-entropik
-eruditus
-firstcry
-freshtohome
-games24x7
-globalbees
-gupshup
-hashedin
-hasura
-homelane
-incred
-infra-market
-instamojo
-interviewbit
-jumbotail
-jupiter-money
-khatabook
-kissflow
-knowlarity
-krutrim
-leadsquared
-licious
-livspace
-mamaearth
-mensa-brands
-microland
-mobikwik
-moglix
-mu-sigma
-nobroker
-nykaa
-ofbusiness
-ola-electric
-onecard
-oxyzo
-pepperfry
-perfios
-pharmeasy
-physicswallah
-pine-labs
-policybazaar
-practo
-purplle
-quikr
-ramco-systems
-rapido
-rebel-foods
-renew-power
-rivigo
-route-mobile
-sasken
-sharechat
-shiprocket
-tally-solutions
-tanla-platforms
-turtlemint
-udaan
-unacademy
-upstox
-urban-company
-vedantu
-vymo
-wakefit
-waycool
-xpressbees
-zerodha
-zetwerk
-zluri
 zomato
+zscaler
