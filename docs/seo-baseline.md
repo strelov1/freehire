@@ -314,6 +314,18 @@ East African searchers convert an order of magnitude better than the site averag
 (0.95%) and hit a catalogue holding roughly a hundred postings for them. That is a
 sourcing question for the ingest fleet, not a discoverability one.
 
+Three cheap routes into that supply were probed on 2026-08-31 and ruled out. Curating
+known employers is exhausted: 19 of 28 well-known African tech employers are already
+in `sources/`, and the 15 that resolve contribute 412 open jobs between them. Regional
+aggregators are closed: Fuzu returns 403, MyJobMag serves a Cloudflare challenge, and
+BrighterMonday and Jobberman expose neither a sitemap nor `JobPosting` JSON-LD.
+Guessing board slugs from employer names yields nothing: 25 names slugified from the
+Ethiojobs directory and probed against the public Greenhouse and Workable board APIs
+returned 0 hits.
+
+What survived is using a board's employer directory as a worklist rather than as a
+source — `openspec/changes/harvest-employer-directories`.
+
 ## What this leaves
 
 Everything the site controls technically is working: sitemap coverage is complete
