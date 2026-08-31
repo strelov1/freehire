@@ -35,6 +35,39 @@ pre-commit:
           exit 0
         fi
         govulncheck ./... || echo "govulncheck reported findings above (non-blocking for now, see lefthook.yml)"
+    # internal/platform/db is generated and committed, so a query edited without
+    # regenerating ships the OLD Go with every check green — nothing else here reads
+    # both halves. Same shape of check as design-system's check:dist, except that an
+    # untracked file counts too: a *new* generated file that was never committed is
+    # untracked rather than modified, and a plain diff misses it.
+    #
+    # Globbed on the migrations as well as the queries. A renamed column is the other
+    # way to make the generated code wrong, and sqlc.yaml decides what is generated at
+    # all — a config that stops matching disables this check while it still reports
+    # success.
+    sqlc-drift:
+      glob: "{migrations/*.sql,internal/platform/db/queries/*.sql,sqlc.yaml}"
+      # An explicit `if` rather than `A && B || C`, which reads like "if A and B, else C"
+      # and is not: a *failing* `make sqlc` would fall into C and report the code as
+      # stale, a message pointing away from the real problem.
+      #
+      # The question here is "did regenerating leave anything UNSTAGED", which is not the
+      # question CI asks. `git status --porcelain` reports two columns — index against
+      # HEAD, and worktree against index — so the bare form would count the staged
+      # generated changes being committed as drift, and block the very commit that fixes
+      # it. CI keeps the bare form correctly: a fresh clone has an empty index, so there
+      # the two questions have the same answer.
+      run: |
+        set -e
+        make sqlc
+        unstaged="$(git diff --name-only -- internal/platform/db)"
+        untracked="$(git ls-files --others --exclude-standard -- internal/platform/db)"
+        if [ -n "$unstaged$untracked" ]; then
+          printf '%s\n' $unstaged $untracked
+          echo 'Generated code was stale — make sqlc has just fixed it; stage the result.'
+          exit 1
+        fi
+
     # Expand/contract for migrations, which was prose in AGENTS.md and read by nothing.
     # It is here rather than only in CI because the mistakes it catches — a UNIQUE
     # constraint that takes ACCESS EXCLUSIVE on a live table, a constraint added without

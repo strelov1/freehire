@@ -61,7 +61,7 @@ Non-obvious:
   manager installs a linked/`file:` package's own dependencies for you.
 - `extension/` — the browser extension (WXT + Svelte side-panel agent client), npm-managed
   unlike the rest of the JS in this repo. See [extension/AGENTS.md](extension/AGENTS.md).
-- `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc`.
+- `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc`. The pre-commit hook and the `sqlc` CI job regenerate and diff, so a query edited without regenerating no longer ships the old Go with every check green. Both use `make sqlc`, which holds the only version pin — a second pin would be a second answer, and the drift between them would look exactly like stale code.
 - `services/pii-filter` — a standalone service, not a Go package.
 
 ## Commands

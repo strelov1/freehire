@@ -104,6 +104,37 @@ jobs:
           path: coverage/*.out
           if-no-files-found: ignore
 
+  # internal/platform/db is generated and committed. Nothing compared the two until now,
+  # so a query edited without `make sqlc` shipped the old Go and every job stayed green —
+  # the same class of gap the design-system `check:dist` step exists for.
+  #
+  # `make sqlc` rather than a pinned action, because the Makefile already holds the
+  # version (SQLC_VERSION) and it is the one developers run. Two pins would be two
+  # answers to the same question, and the drift between them would look exactly like
+  # stale generated code.
+  sqlc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Regenerate
+        run: make sqlc
+
+      # The bare `git status --porcelain` is correct HERE and would be wrong in the
+      # pre-commit hook: a fresh clone has an empty index, so "differs from HEAD" and
+      # "is unstaged" have the same answer. See lefthook.yml for the other half.
+      - name: Assert the generated code matches the queries
+        run: |
+          if [ -n "$(git status --porcelain -- internal/platform/db)" ]; then
+            git status --porcelain -- internal/platform/db
+            git --no-pager diff -- internal/platform/db
+            echo
+            echo 'internal/platform/db is stale. Run `make sqlc` and commit the result.'
+            exit 1
+          fi
+          echo 'Generated code matches internal/platform/db/queries.'
+
   # Lints only the migrations this pull request ADDS. The applied history carries 1322
   # findings and is never going to be fixed — "never edit an applied migration" is the
   # rule this repository runs on, and rewriting one is a worse hazard than any finding.
