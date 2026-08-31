@@ -323,8 +323,35 @@ Guessing board slugs from employer names yields nothing: 25 names slugified from
 Ethiojobs directory and probed against the public Greenhouse and Workable board APIs
 returned 0 hits.
 
-What survived is using a board's employer directory as a worklist rather than as a
-source — `openspec/changes/harvest-employer-directories`.
+A fourth route — using a board's employer directory as a *worklist* rather than as a
+source — was proposed, gated on a measurement, and closed by it.
+
+The idea: `ethiojobs.net/sitemap-companies.xml` lists 5,141 employers, and each company
+page carries the employer's own website in its `__NEXT_DATA__` payload, which is the
+`{name, website}` shape `cmd/harvest-ats resolve` already consumes. The proposal's first
+task was to measure the detected-board rate before building anything.
+
+| Step | Result |
+|---|---:|
+| Companies sampled uniformly across the directory | 280 |
+| Carrying a website | 36 (12.9%) |
+| Resolving to a detectable ATS board | 3 |
+| **Of those, not already in `sources/`** | **1** |
+
+The two rejects are the informative part: NRC's Oracle board and Mastercard
+Foundation's Workday board were already committed. One new board per 280 companies
+extrapolates to roughly **18** across the whole directory — for a 5,141-page crawl and
+a parser reading a third party's internal payload.
+
+Note how the website rate fell as the sample grew: 33% (n=12), 18% (n=60), 12.9%
+(n=280). The first two samples were clustered rather than uniform.
+
+The overlap repeats the 19-of-28 finding above from a different angle: the
+internationally-operating half of an East African directory is largely the half
+curation has already found. Employer-level board discovery for this region is closer
+to complete than its job counts suggest, and the remaining Ethiopian supply sits with
+local employers that run no ATS and publish no website — reachable only by crawling
+Ethiojobs itself.
 
 ## What this leaves
 
