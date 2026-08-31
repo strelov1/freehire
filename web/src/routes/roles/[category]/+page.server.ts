@@ -1,5 +1,10 @@
-import { error } from '@sveltejs/kit';
-import { categoryFromSlug, landingCategories, publishedCountries } from '$lib/roleLandings';
+import { error, redirect } from '@sveltejs/kit';
+import {
+  categoryFromSlug,
+  categorySlug,
+  landingCategories,
+  publishedCountries,
+} from '$lib/roleLandings';
 import { categoryLabel } from '$lib/labels';
 import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
@@ -18,6 +23,12 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const category = categoryFromSlug(params.category);
   if (!category) error(404, 'Not found');
 
+  // categoryFromSlug accepts any case, so /roles/Backend would render and then build
+  // its canonical and links from the raw param — a second URL for one page. See the
+  // pair route for the reasoning behind 308 over 404.
+  const canonicalSlug = categorySlug(category);
+  if (params.category !== canonicalSlug) redirect(308, `/roles/${canonicalSlug}`);
+
   const counts = await serverApi(fetch).facetCounts(new URLSearchParams({ category }), {
     facets: ['countries'],
   });
@@ -31,7 +42,7 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
 
   return {
     category,
-    categorySlug: params.category,
+    categorySlug: canonicalSlug,
     label: categoryLabel(category),
     total: counts.total,
     countries,

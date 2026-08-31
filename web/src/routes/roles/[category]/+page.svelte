@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import Seo from '$lib/components/Seo.svelte';
+  import { MIN_PAIR_OPEN } from '$lib/roleLandings';
   import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
   import { CountryFlag, Table } from '$lib/ui';
   import type { PageData } from './$types';
@@ -12,8 +13,11 @@
   const canonical = $derived(`${origin}/roles/${data.categorySlug}`);
   const heading = $derived(`${data.label} Jobs by Country`);
   const count = (n: number) => n.toLocaleString('en-US');
+  // "countries with at least N openings", not "countries hiring": the table lists only
+  // what clears the publication gate, and a country with 40 postings is hiring and
+  // absent here. Same rule as the salary and english blocks — say what is shown.
   const description = $derived(
-    `${count(data.total)} open ${data.label} jobs on freehire, broken down by the ${data.countries.length} countries hiring for them.`,
+    `${count(data.total)} open ${data.label} jobs on freehire, across the ${data.countries.length} countries with at least ${MIN_PAIR_OPEN} of them.`,
   );
   // The category's own feed. A query string on a resolve()d base — there is no
   // dynamic route segment here for resolve() to fill.

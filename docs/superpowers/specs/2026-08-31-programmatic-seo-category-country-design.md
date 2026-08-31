@@ -46,7 +46,7 @@ Roles remain a candidate for phase 2, gated on what the category pages actually 
 
 ## URL structure and hierarchy
 
-```
+```text
 /roles                         hub: all published categories
 /roles/[category]              per-category country table
 /roles/[category]/[country]    the landing: figures + job list
@@ -93,6 +93,21 @@ collide.
 A pure function, covered by tests asserting the map is injective, that every published
 code round-trips, and that slugs are URL-safe. No new country table enters the
 repository, so there is nothing to drift.
+
+### Case, and why it redirects
+
+Both resolvers accept any case, which on its own would publish a page TWICE: a request
+for `/roles/Backend/Germany` resolves, renders, and then builds its canonical URL,
+breadcrumbs and sibling links out of the raw route params — so the self-canonical would
+point at the mixed-case URL rather than at the one the sitemap lists.
+
+Any spelling but the canonical one therefore 308s to it, and the loaders return the
+canonical slugs rather than `params`. 308 rather than 404 because the request did name
+a real page (`/collections` 404s here, but its lookup is case-SENSITIVE, so the case
+never arises), and rather than merely fixing the canonical tag because one URL beats
+two plus a pointer between them.
+
+Found in review, not in design.
 
 ### Cannibalisation guard
 

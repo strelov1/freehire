@@ -1,8 +1,9 @@
-import { error } from '@sveltejs/kit';
-import { countryFromSlug, countryLabel } from '$lib/facets';
+import { error, redirect } from '@sveltejs/kit';
+import { countryFromSlug, countryLabel, countrySlug } from '$lib/facets';
 import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import {
   categoryFromSlug,
+  categorySlug,
   englishBreakdown,
   freshCount,
   isPairPublished,
@@ -54,6 +55,17 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
   const countryCode = countryFromSlug(params.country);
   if (!countryCode) error(404, 'Not found');
 
+  // Both resolvers accept any case, so /roles/Backend/Germany would render — and then
+  // build its canonical, breadcrumbs and sibling links out of the RAW params, publishing
+  // a second URL for one page. Send every spelling to the one canonical form instead:
+  // 308 rather than 404 because the request named a real page, and rather than merely
+  // canonicalising because one URL beats two plus a pointer between them.
+  const canonicalCategory = categorySlug(category);
+  const canonicalCountry = countrySlug(countryCode);
+  if (params.category !== canonicalCategory || params.country !== canonicalCountry) {
+    redirect(308, `/roles/${canonicalCategory}/${canonicalCountry}${url.search}`);
+  }
+
   const api = serverApi(fetch);
   const scope = { category, countries: countryCode };
 
@@ -96,9 +108,12 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
 
   return {
     category,
-    categorySlug: params.category,
+    // The canonical spellings, not the raw params — the page builds its canonical URL
+    // and every internal link out of these, and the redirect above has already sent
+    // any other spelling here.
+    categorySlug: canonicalCategory,
     countryCode,
-    countrySlug: params.country,
+    countrySlug: canonicalCountry,
     countryLabel: countryLabel(countryCode),
     scope,
     total,
