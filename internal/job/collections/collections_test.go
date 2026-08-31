@@ -533,12 +533,12 @@ var errBoom = errors.New("boom")
 // because it is the same kind of list, only larger and easier to add to carelessly.
 func TestHandListSlugsAreCompanySlugStable(t *testing.T) {
 	lists := map[string][]string{
-		"AICompanySlugs": AICompanySlugs,
-		"Mag7Slugs":      Mag7Slugs,
-		"BigTechSlugs":   BigTechSlugs,
-		"AINativeSlugs":  AINativeSlugs,
-		"eastern_roots":  embeddedSlugList(easternRootsData),
-		"indian_roots":   embeddedSlugList(indianRootsData),
+		"AICompanySlugs":   AICompanySlugs,
+		"Mag7Slugs":        Mag7Slugs,
+		"BigTechSlugs":     BigTechSlugs,
+		"AINativeSlugs":    AINativeSlugs,
+		"easternRootsData": embeddedSlugList(easternRootsData),
+		"indianRootsData":  embeddedSlugList(indianRootsData),
 	}
 	var checked int
 	for name, slugs := range lists {
