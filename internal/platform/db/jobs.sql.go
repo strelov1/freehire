@@ -1397,6 +1397,47 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 	return i, err
 }
 
+const jobDescriptionsByIDs = `-- name: JobDescriptionsByIDs :many
+SELECT id, description FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type JobDescriptionsByIDsRow struct {
+	ID          int64  `json:"id"`
+	Description string `json:"description"`
+}
+
+// Descriptions for a named set of ids, for cmd/backfill-clearance.
+//
+// Ids come from a Meilisearch query rather than from a SQL predicate on the text, and
+// that is the point: any WHERE over `description` de-TOASTs the column for every row it
+// examines, which on this table means 8M out-of-line reads to find ~38k matches. The
+// search index already holds the text, so it can name the candidates in seconds and
+// this query reads only their bodies.
+//
+// Closed rows are included. A closed posting still carries a clearance requirement, the
+// detail endpoint still serves it, and leaving it unmarked would make the facet's
+// meaning depend on lifecycle state.
+func (q *Queries) JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, jobDescriptionsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JobDescriptionsByIDsRow{}
+	for rows.Next() {
+		var i JobDescriptionsByIDsRow
+		if err := rows.Scan(&i.ID, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const latestOpenJobAddedAt = `-- name: LatestOpenJobAddedAt :one
 SELECT (
     SELECT created_at
@@ -2992,6 +3033,35 @@ func (q *Queries) SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentPara
 		arg.ID,
 	)
 	return err
+}
+
+const setJobRequiresClearance = `-- name: SetJobRequiresClearance :execrows
+UPDATE jobs
+SET requires_clearance = $1
+WHERE id = $2
+  AND requires_clearance IS DISTINCT FROM $1
+`
+
+type SetJobRequiresClearanceParams struct {
+	RequiresClearance pgtype.Bool `json:"requires_clearance"`
+	ID                int64       `json:"id"`
+}
+
+// Write one row's requires_clearance, for cmd/backfill-clearance.
+//
+// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
+// the derived value is not rewritten, so a re-run writes nothing, produces no dead
+// tuples, and stopping the pass mid-way costs nothing to resume.
+//
+// It also means the backfill never needs to know which rows it has already visited —
+// the guard answers that per row, which is cheaper and more honest than a cursor that
+// would go stale the moment ingest writes a new posting behind it.
+func (q *Queries) SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setJobRequiresClearance, arg.RequiresClearance, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const suppressAggregatorDuplicatesForCompanies = `-- name: SuppressAggregatorDuplicatesForCompanies :one

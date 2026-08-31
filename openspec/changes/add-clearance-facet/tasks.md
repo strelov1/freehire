@@ -56,17 +56,17 @@
 
 ## 5. Backfill
 
-- [ ] 5.1 Write the backfill as a one-off `cmd/` worker: name candidates via
+- [x] 5.1 Write the backfill as a one-off `cmd/` worker: name candidates via
   Meilisearch (the `clearance` token plus `ts/sci`, `polygraph`, `bpss`,
   `vetting`, `agsva`), re-derive only those rows, `IS DISTINCT FROM`-guarded so a
   re-run writes nothing.
-- [ ] 5.2 Test that it is idempotent and that it reads only candidate rows.
+- [x] 5.2 Test that it is idempotent and that it reads only candidate rows.
 
 ## 6. Verification and rollout
 
-- [ ] 6.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, and
+- [x] 6.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, and
   `go vet -tags=integration ./...` all pass.
-- [ ] 6.2 Sample the matcher against real prod descriptions and record the
+- [x] 6.2 Sample the matcher against real prod descriptions and record the
   measured precision — no false positive among the inspected marked rows.
 - [ ] 6.3 Apply migration 0119 on prod.
 - [ ] 6.4 Patch the live Meilisearch settings to declare the attribute, and read

@@ -1745,6 +1745,18 @@ type Querier interface {
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
+	// Descriptions for a named set of ids, for cmd/backfill-clearance.
+	//
+	// Ids come from a Meilisearch query rather than from a SQL predicate on the text, and
+	// that is the point: any WHERE over `description` de-TOASTs the column for every row it
+	// examines, which on this table means 8M out-of-line reads to find ~38k matches. The
+	// search index already holds the text, so it can name the candidates in seconds and
+	// this query reads only their bodies.
+	//
+	// Closed rows are included. A closed posting still carries a clearance requirement, the
+	// detail endpoint still serves it, and leaving it unmarked would make the facet's
+	// meaning depend on lifecycle state.
+	JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error)
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -3509,6 +3521,16 @@ type Querier interface {
 	// min/max does not blank the other's payload value; each overlay only fires at all
 	// when at least one of its own bounds is set (the presence signal).
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
+	// Write one row's requires_clearance, for cmd/backfill-clearance.
+	//
+	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
+	// the derived value is not rewritten, so a re-run writes nothing, produces no dead
+	// tuples, and stopping the pass mid-way costs nothing to resume.
+	//
+	// It also means the backfill never needs to know which rows it has already visited —
+	// the guard answers that per row, which is cheaper and more honest than a cursor that
+	// would go stale the moment ingest writes a new posting behind it.
+	SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error)
 	// Publish a saved search as a board: set its public slug and (optional) author label,
 	// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing
 	// one on re-share, minting a fresh one otherwise), so this sets it verbatim; a
