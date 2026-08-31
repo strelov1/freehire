@@ -49,6 +49,13 @@ type Client struct {
 	baseURL string
 	apiKey  string
 
+	// schemaMode is how this gateway wants a schema asked for. Empty is strict mode,
+	// so a client built without an opinion behaves as every client did before this
+	// existed. Carried on the Client rather than passed per call because it
+	// describes the endpoint, and because it is part of the schema-bound model's
+	// cache key by way of the rendered format.
+	schemaMode SchemaMode
+
 	// dims label each call for the gateway's per-feature spend rollup, one header per
 	// dimension. Set by As and empty otherwise, so a client nobody re-credentialed sends
 	// exactly what it always did.
@@ -91,6 +98,15 @@ func (c *Client) WithTimeout(d time.Duration) *Client {
 // changing the constructors' required parameters, so existing call sites compile
 // unchanged.
 type Option func(*Client)
+
+// WithSchemaMode sets how WithSchema asks for its shape on this endpoint. The zero
+// value (strict mode) is what every caller got before this option existed, so a
+// client built without it is unchanged.
+func WithSchemaMode(mode SchemaMode) Option {
+	return func(c *Client) {
+		c.schemaMode = mode
+	}
+}
 
 // WithTracer attaches a tracer and the source label recorded on each observation.
 // A nil tracer is fine — the client simply performs no tracing.
@@ -136,6 +152,11 @@ type Settings struct {
 	APIKey  string
 	Model   string
 
+	// SchemaMode is how WithSchema asks for its shape. The zero value is strict
+	// mode, so a caller that says nothing keeps sending exactly what it sent
+	// before — the same rule GenOption follows.
+	SchemaMode SchemaMode
+
 	// Langfuse tracing is optional: all three set ⇒ every call is traced under the
 	// caller's source label; otherwise the client runs untraced.
 	LangfuseBaseURL   string
@@ -160,7 +181,7 @@ func NewClient(s Settings, source string) (*Client, func(), error) {
 	if !s.Enabled() {
 		return nil, noop, nil
 	}
-	var opts []Option
+	opts := []Option{WithSchemaMode(s.SchemaMode)}
 	flush := noop
 	if tracer := NewTracer(s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey); tracer != nil {
 		opts = append(opts, WithTracer(tracer, source))

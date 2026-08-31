@@ -152,6 +152,50 @@ func TestGenerateJSON_WithSchemaSendsItStrict(t *testing.T) {
 	}
 }
 
+// The gateway, not the call, decides how a schema is asked for — and on a gateway
+// that answers a strict schema worse than none, WithSchema must degrade to plain JSON
+// mode rather than to nothing. Losing the schema silently would be the same bug this
+// package's fence-stripping exists to catch, one layer earlier.
+func TestGenerateJSON_JSONObjectModeSendsNoSchema(t *testing.T) {
+	proxy := newRecordingProxy(t)
+
+	c, err := New(proxy.srv.URL, "test-key", "test-model", WithSchemaMode(SchemaModeJSONObject))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if _, err := c.GenerateJSON(context.Background(), "sys", "user",
+		WithSchema("verdict", testSchema(t))); err != nil {
+		t.Fatalf("GenerateJSON: %v", err)
+	}
+
+	format, ok := proxy.lastRequest(t)["response_format"].(map[string]any)
+	if !ok {
+		t.Fatal("request carried no response_format at all")
+	}
+	if format["type"] != "json_object" {
+		t.Errorf("response_format.type = %v, want json_object", format["type"])
+	}
+	if _, ok := format["json_schema"]; ok {
+		t.Error("json_object mode still sent a json_schema")
+	}
+}
+
+// A client built without an opinion is the one every existing caller has.
+func TestGenerateJSON_DefaultModeIsStrict(t *testing.T) {
+	proxy := newRecordingProxy(t)
+
+	if _, err := proxy.client(t).GenerateJSON(context.Background(), "sys", "user",
+		WithSchema("verdict", testSchema(t))); err != nil {
+		t.Fatalf("GenerateJSON: %v", err)
+	}
+
+	format, _ := proxy.lastRequest(t)["response_format"].(map[string]any)
+	if format["type"] != "json_schema" {
+		t.Errorf("response_format.type = %v, want json_schema", format["type"])
+	}
+}
+
 func TestGenerateJSONStream_WithSchemaSendsItToo(t *testing.T) {
 	proxy := newRecordingProxy(t)
 

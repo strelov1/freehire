@@ -25,6 +25,22 @@ type LLM struct {
 	APIKey  string
 	Model   string
 
+	// StrictSchema says whether the model behind this gateway honours
+	// `response_format: json_schema`. Default true, because that is the stronger
+	// request and every model this ran against until now understood it.
+	//
+	// It is a deployment fact, not a vendor name: the same reason no model is
+	// hard-coded here. Measured on 2026-08-31 against z.ai's glm-4.7-flash, which
+	// answers a strict schema with a fenced array of invented objects and answers
+	// `json_object` — the same prompt, one weaker request — with the exact shape
+	// asked for, three times out of three. Asking for less got more.
+	//
+	// Turning it off does not remove the contract: every caller here already
+	// spells its shape out in the prompt, and every caller validates what comes
+	// back. See internal/ai/enrich/langchain.go's buildSystemPrompt, which lists
+	// every field and every allowed enum value before any schema is attached.
+	StrictSchema bool
+
 	// Langfuse tracing is optional observability. All three empty simply means tracing is off
 	// and the caller runs unchanged; a partial configuration is treated as off, mirroring how a
 	// missing MEILI_MASTER_KEY disables search.
@@ -39,6 +55,7 @@ func LoadLLM() LLM {
 		BaseURL:           os.Getenv("LLM_BASE_URL"),
 		APIKey:            os.Getenv("LLM_API_KEY"),
 		Model:             os.Getenv("LLM_MODEL"),
+		StrictSchema:      envBool("LLM_STRICT_SCHEMA", true),
 		LangfuseBaseURL:   os.Getenv("LANGFUSE_BASE_URL"),
 		LangfusePublicKey: os.Getenv("LANGFUSE_PUBLIC_KEY"),
 		LangfuseSecretKey: os.Getenv("LANGFUSE_SECRET_KEY"),
@@ -77,8 +94,21 @@ func (l LLM) Settings(model string) llm.Settings {
 		BaseURL:           l.BaseURL,
 		APIKey:            l.APIKey,
 		Model:             model,
+		SchemaMode:        schemaMode(l.StrictSchema),
 		LangfuseBaseURL:   l.LangfuseBaseURL,
 		LangfusePublicKey: l.LangfusePublicKey,
 		LangfuseSecretKey: l.LangfuseSecretKey,
 	}
+}
+
+// schemaMode turns the env's yes/no into the library's vocabulary. The two are
+// deliberately different words: the deployment answers "does this gateway honour a
+// strict schema", while the library takes "how should a schema be asked for" — and
+// the second has room for an answer the first does not anticipate.
+func schemaMode(strict bool) llm.SchemaMode {
+	if strict {
+		return llm.SchemaModeStrict
+	}
+
+	return llm.SchemaModeJSONObject
 }

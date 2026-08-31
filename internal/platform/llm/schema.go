@@ -15,6 +15,31 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llmschema"
 )
 
+// SchemaMode selects how a schema is asked for on the wire. It is a property of the
+// GATEWAY, not of any call, which is why it lives on Settings rather than on a
+// GenOption: one deployment's model either honours strict mode or it does not, and a
+// per-call answer would just be the same answer repeated at every call site.
+type SchemaMode string
+
+const (
+	// SchemaModeStrict sends the schema itself, as `response_format: json_schema`
+	// with strict: true. The zero value, and the right request wherever it is
+	// understood.
+	SchemaModeStrict SchemaMode = ""
+
+	// SchemaModeJSONObject sends `response_format: json_object` and no schema, for
+	// a gateway whose model answers a strict schema worse than it answers no
+	// schema at all. Measured on z.ai's glm-4.7-flash: a strict two-field object
+	// came back as a fenced array of invented job postings, while json_object with
+	// the same prompt returned the exact shape three times out of three.
+	//
+	// The shape is still asked for — every caller in this repository spells its
+	// fields out in the system prompt — and still checked, by the caller's own
+	// validator. What is lost is the provider-side guarantee, which the package
+	// documentation already declines to treat as one.
+	SchemaModeJSONObject SchemaMode = "json_object"
+)
+
 // GenOption configures a single JSON generation. Options are variadic so a call site
 // that asks for nothing keeps sending exactly what it sent before.
 type GenOption func(*genConfig)
@@ -114,7 +139,7 @@ func (c *Client) modelFor(cfg genConfig) (llms.Model, error) {
 		return c.model, nil
 	}
 
-	format, err := responseFormat(cfg)
+	format, err := responseFormat(cfg, c.schemaMode)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +170,7 @@ func (c *Client) modelFor(cfg genConfig) (llms.Model, error) {
 }
 
 // responseFormat renders the strict json_schema response format for cfg.
-func responseFormat(cfg genConfig) (json.RawMessage, error) {
+func responseFormat(cfg genConfig, mode SchemaMode) (json.RawMessage, error) {
 	format := map[string]any{
 		"type": "json_schema",
 		"json_schema": map[string]any{
@@ -153,6 +178,9 @@ func responseFormat(cfg genConfig) (json.RawMessage, error) {
 			"strict": true,
 			"schema": cfg.schema,
 		},
+	}
+	if mode == SchemaModeJSONObject {
+		format = map[string]any{"type": "json_object"}
 	}
 
 	raw, err := json.Marshal(format)

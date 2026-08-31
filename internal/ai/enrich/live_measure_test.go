@@ -32,6 +32,13 @@ func liveClient(t *testing.T) *llm.Client {
 		APIKey:  os.Getenv("LLM_API_KEY"),
 		Model:   os.Getenv("LLM_MODEL"),
 	}
+	// LLM_STRICT_SCHEMA=false measures the gateway the way a deployment that set it
+	// would run: same prompt, plain JSON mode, no schema on the wire. Comparing the
+	// two is the only way to answer whether a model that ignores a strict schema can
+	// still be trusted with this contract.
+	if os.Getenv("LLM_STRICT_SCHEMA") == "false" {
+		s.SchemaMode = llm.SchemaModeJSONObject
+	}
 	if !s.Enabled() {
 		t.Skip("LLM_BASE_URL/LLM_API_KEY/LLM_MODEL not set")
 	}
@@ -91,10 +98,15 @@ func TestLive_EnrichmentFillsUnderTheSchema(t *testing.T) {
 		}
 	}
 
-	// Fields the prompt does not ask for must not come back at all.
-	if got.Seniority != "" || got.WorkMode != "" || len(got.Skills) > 0 {
-		t.Errorf("model returned dictionary-covered facets: seniority=%q work_mode=%q skills=%v",
-			got.Seniority, got.WorkMode, got.Skills)
+	// Fields the prompt does not ask for must not come back at all — the list is
+	// unaskedFields in schema.go, and skills is deliberately NOT on it: both the
+	// schema and the prompt request skills (see buildSystemPrompt's "Other keys"
+	// line). Asserting otherwise failed identically on gpt-4o-mini under a strict
+	// schema and on glm-4.7-flash under plain JSON mode, which is the shape of a
+	// test that outlived its contract rather than of a model that misbehaves.
+	if got.Seniority != "" || got.WorkMode != "" {
+		t.Errorf("model returned dictionary-covered facets: seniority=%q work_mode=%q",
+			got.Seniority, got.WorkMode)
 	}
 }
 
