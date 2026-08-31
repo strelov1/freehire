@@ -6,6 +6,7 @@
 import { UrlSyncedState } from './urlSynced.svelte';
 import { saveJobFilters } from './filterStorage';
 import {
+  type ClearanceFilter,
   type FacetState,
   type JobFilters,
   type JobSort,
@@ -97,8 +98,8 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, visa: on });
   }
 
-  setHideClearance(on: boolean) {
-    this.#url.setNow({ ...this.#url.value, hideClearance: on });
+  setClearance(v: ClearanceFilter) {
+    this.#url.setNow({ ...this.#url.value, clearance: v });
   }
 
   /** Switch the feed ordering. setNow, not setSoon: this is a discrete choice from a

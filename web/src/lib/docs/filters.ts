@@ -119,4 +119,5 @@ export const RECIPES: Recipe[] = [
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
   { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },
   { title: 'Excluding jobs that need a security clearance', query: 'requires_clearance=false' },
+  { title: 'Only jobs that need a security clearance', query: 'requires_clearance=true' },
 ];

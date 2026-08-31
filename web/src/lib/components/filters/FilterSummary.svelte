@@ -77,9 +77,13 @@
     push('Salary', salary);
 
     if (f.visa) push('Visa', [{ text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
-    if (f.hideClearance)
+    if (f.clearance !== 'any')
       push('Clearance', [
-        { text: 'Hidden', exclude: false, remove: () => store.setHideClearance(false) },
+        {
+          text: f.clearance === 'hide' ? 'Hidden' : 'Required only',
+          exclude: false,
+          remove: () => store.setClearance('any'),
+        },
       ]);
     if (f.postedWithinDays != null) push('Posted', [{ text: freshnessLabel(f.postedWithinDays), exclude: false, remove: () => store.setPostedWithinDays(null) }]);
     // `!= null`, not truthiness: a zero bound is the entry-level filter, and hiding

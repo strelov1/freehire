@@ -9,6 +9,7 @@
 import type { FacetStore } from './facets';
 import type { UserProfile } from './types';
 import {
+  type ClearanceFilter,
   activeFilterCount,
   emptyFacet,
   emptyFilters,
@@ -84,8 +85,8 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, visa: on };
   }
 
-  setHideClearance(on: boolean): void {
-    this.#f = { ...this.#f, hideClearance: on };
+  setClearance(v: ClearanceFilter): void {
+    this.#f = { ...this.#f, clearance: v };
   }
 
   setPostedWithinDays(n: number | null): void {

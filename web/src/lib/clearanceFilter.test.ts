@@ -1,43 +1,55 @@
 import { describe, it, expect } from 'vitest';
 import { emptyFilters, filtersToParams, filtersFromParams, activeFilterCount } from './facetModel';
 
-// The control is phrased as an exclusion — "hide jobs requiring security clearance" —
-// so the checked state serializes to requires_clearance=false. The inversion is
-// deliberate: the API param names the facet's value, while the control names what the
-// user wants done about it.
-describe('hideClearance filter', () => {
-  it('serializes the checked state as requires_clearance=false', () => {
+// The clearance control has three states, not two, because the facet answers two
+// different people: someone who cannot hold a clearance wants these postings gone, and
+// someone who holds one wants nothing else. A checkbox can only say one of those.
+//
+// The API param names the facet's VALUE (`requires_clearance=false` means "postings not
+// marked"), while the control names the user's INTENT ("hide them"). The two therefore
+// read inverted, which is why the mapping is asserted in both directions here.
+describe('clearance filter', () => {
+  it('defaults to any, writing no param', () => {
     const f = emptyFilters();
-    f.hideClearance = true;
+    expect(f.clearance).toBe('any');
+    expect(filtersToParams(f).has('requires_clearance')).toBe(false);
+  });
+
+  it('hide serializes to requires_clearance=false', () => {
+    const f = emptyFilters();
+    f.clearance = 'hide';
     expect(filtersToParams(f).get('requires_clearance')).toBe('false');
   });
 
-  it('writes no param when unchecked, so the default listing is unfiltered', () => {
-    expect(filtersToParams(emptyFilters()).has('requires_clearance')).toBe(false);
-  });
-
-  it('round-trips through the URL', () => {
+  it('only serializes to requires_clearance=true', () => {
     const f = emptyFilters();
-    f.hideClearance = true;
-    expect(filtersFromParams(filtersToParams(f)).hideClearance).toBe(true);
+    f.clearance = 'only';
+    expect(filtersToParams(f).get('requires_clearance')).toBe('true');
   });
 
-  it('reads an absent param as unchecked', () => {
-    expect(filtersFromParams(new URLSearchParams()).hideClearance).toBe(false);
-  });
-
-  // requires_clearance=true is a valid API request — a cleared candidate searching for
-  // the work they are uniquely eligible for — but it is not what this checkbox means,
-  // so it must not tick it.
-  it('does not read requires_clearance=true as hiding them', () => {
-    expect(filtersFromParams(new URLSearchParams('requires_clearance=true')).hideClearance).toBe(
-      false,
-    );
-  });
-
-  it('counts towards the mobile filter badge', () => {
+  it.each(['hide', 'only'] as const)('round-trips %s through the URL', (state) => {
     const f = emptyFilters();
-    f.hideClearance = true;
-    expect(activeFilterCount(f)).toBe(1);
+    f.clearance = state;
+    expect(filtersFromParams(filtersToParams(f)).clearance).toBe(state);
+  });
+
+  it('reads an absent param as any', () => {
+    expect(filtersFromParams(new URLSearchParams()).clearance).toBe('any');
+  });
+
+  // A hand-edited or truncated link must not land the control in a state it cannot
+  // render. Anything unrecognised reads as the neutral default.
+  it('reads a malformed value as any', () => {
+    expect(filtersFromParams(new URLSearchParams('requires_clearance=maybe')).clearance).toBe('any');
+  });
+
+  it.each([
+    ['hide', 1],
+    ['only', 1],
+    ['any', 0],
+  ] as const)('counts %s towards the filter badge as %i', (state, want) => {
+    const f = emptyFilters();
+    f.clearance = state;
+    expect(activeFilterCount(f)).toBe(want);
   });
 });

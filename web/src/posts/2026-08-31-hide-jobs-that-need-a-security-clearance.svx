@@ -1,0 +1,64 @@
+---
+title: Hide jobs that need a security clearance
+date: 2026-08-31
+summary: 21 414 postings in the catalogue require a government security clearance — UK SC/DV, US Secret/TS-SCI, Australian NV1. One checkbox now takes them out of your results, or shows only them if you hold one.
+type: changelog
+tags:
+  - filters
+  - job-seekers
+draft: false
+---
+
+Someone asked us: *"Any way of filtering jobs to exclude the ones that need SC
+clearance?"*
+
+Now there is. Open **All filters → Relocation** and you will find **Security clearance**
+with three settings: **Any**, **Hide**, **Only**. It covers every scheme the catalogue
+actually carries — UK SC, DV, CTC and BPSS; US Secret, Top Secret, TS/SCI, public trust
+and polygraph; Australian Baseline, NV1 and NV2.
+
+**21 414 postings** are affected. That is a small share of the catalogue overall, and
+close to all of it if you are looking at UK government work or US defence contracting —
+which is exactly why it was worth doing. Being told about a job you are not allowed to
+hold is not a job listing, it is noise.
+
+**Only** exists because the filter has two audiences, not one. If you already hold a
+clearance, those 21 414 postings are not clutter — they are the shortlist almost nobody
+else can apply to, and now you can look at just them.
+
+Over the API it is one parameter: `requires_clearance=false` to drop them,
+`requires_clearance=true` to see nothing else.
+
+### The bit that nearly went wrong
+
+Our first estimate said 37 000 postings. It was wrong by more than double, and the
+reason is worth writing down.
+
+We sized the feature by asking the search index how many postings mention a clearance.
+Search engines treat a quoted phrase as a phrase — except this one, in this
+configuration, does not. Asking it for `"public trust"` and asking it for
+`"trust public"` returned the same 5 077 results, because it was matching documents
+containing both words *somewhere*, not the phrase. Half those documents said things
+like "our commitment to public trust", which is a press release, not a vetting tier.
+
+The same artefact inflated the opposite number. We believed 355 postings explicitly say
+no clearance is needed. The real figure, checked against the text itself, is close to
+zero: the word `no` is a stop word, so the engine had thrown it away and counted
+postings that said the reverse.
+
+Every rule in the filter was then checked against 2 084 real postings rather than
+reasoned about, and that caught things no amount of thinking would have:
+
+- **Job descriptions are HTML**, and one posting read
+  `<p><b>Security Clearance: </b></p>None/Not Required`. Read as markup, the label and
+  its answer are separated by tags — so the filter marked a job that explicitly needs
+  *no* clearance. It now reads what a person would see, not how the page is typeset.
+- **Employers state it as a form field**, not a sentence: `Clearance: Secret`,
+  `CLEARANCE REQUIRED FOR START: Yes`. That was about a fifth of all real matches and
+  no list of phrases could have caught it.
+- **Two-letter scheme names hide inside ordinary words** — `sc` in "describe", `ts` in
+  "contracts", `dv` in "advise". Each one would have flagged a job at random.
+
+The bias throughout is the same: when in doubt, leave the posting visible. Missing a
+clearance job costs you one line in a list. Wrongly hiding one costs you a job you
+could have had.

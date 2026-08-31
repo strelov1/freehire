@@ -8,7 +8,7 @@
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import { notifications } from '$lib/notifications.svelte';
-  import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
+  import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '$lib/filters';
   import { StagedFilters } from '$lib/stagedFilters.svelte';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
@@ -136,6 +136,15 @@
     ),
   ]);
 
+  // The clearance control's three states. It is not a FACETS entry (it filters on a
+  // single boolean attribute, not a value vocabulary), so its options live here rather
+  // than in the facet registry.
+  const CLEARANCE_OPTIONS: { value: ClearanceFilter; label: string }[] = [
+    { value: 'any', label: 'Any' },
+    { value: 'hide', label: 'Hide' },
+    { value: 'only', label: 'Only' },
+  ];
+
   const jobCollectionValues = JOB_COLLECTION.map((o) => o.value);
   const employerCredentialValues = EMPLOYER_CREDENTIALS.map((o) => o.value);
 
@@ -166,7 +175,7 @@
       return (
         selCount(f, 'relocation') +
         (f.visa ? 1 : 0) +
-        (f.hideClearance ? 1 : 0) +
+        (f.clearance !== 'any' ? 1 : 0) +
         selCount(f, 'collections', employerCredentialValues)
       );
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
@@ -443,15 +452,24 @@
       <span>Offers visa sponsorship</span>
     </label>
     <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
-    <label class="flex cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={staged.value.hideClearance}
-        onchange={(e) => staged.setHideClearance(e.currentTarget.checked)}
-      />
-      <span>Hide jobs requiring security clearance</span>
-    </label>
+    <div class="inline-flex overflow-hidden rounded-md border border-border" role="group">
+      {#each CLEARANCE_OPTIONS as opt (opt.value)}
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm transition-colors {staged.value.clearance === opt.value
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-background hover:bg-muted'}"
+          aria-pressed={staged.value.clearance === opt.value}
+          onclick={() => staged.setClearance(opt.value)}
+        >
+          {opt.label}
+        </button>
+      {/each}
+    </div>
+    <p class="mt-2 text-xs text-muted-foreground">
+      Government vetting — UK SC/DV, US Secret/TS-SCI, AU NV1. Only is for candidates who
+      already hold one.
+    </p>
   {:else if entry.kind === 'posted'}
     <div class="mb-2 flex items-center justify-between">
       <h3 class="text-sm font-semibold tracking-tight">Posted within</h3>
