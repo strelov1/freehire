@@ -27,6 +27,11 @@ Coverage — pages earning at least one impression in 28 days:
 | `/collections/*` | 103 | 11 | 10.7% |
 | `/insights/*` | 106 | 11 | 10.4% |
 
+Read the last two rows with care: a 10% *rate* over 103 pages is 11 pages holding 28
+impressions between them and no clicks at all. See hypothesis 5 — the rate counts
+pages with at least one impression, which flatters a small section to the point of
+being misleading.
+
 Authority (DataForSEO, same date): 30 referring domains (28 root, 8 nofollow), 44
 backlinks, domain first seen 2025-02-07.
 
