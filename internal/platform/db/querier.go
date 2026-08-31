@@ -572,6 +572,13 @@ type Querier interface {
 	// Whether this (feature, ref) was already charged. True means the caller is retrying,
 	// reconnecting, or recomputing work already paid for, and must not be charged again.
 	ConsumptionExists(ctx context.Context, arg ConsumptionExistsParams) (bool, error)
+	// How many turns a session has run, counted as the candidate's own messages.
+	//
+	// This is what both metered questions about a session are asked against: whether a
+	// tailoring session has reached its turn ceiling, and which turn a charge belongs to. It
+	// counts user rows only — an answer, a tool call and its result are all one turn's work,
+	// and counting them would make a turn's price depend on how the model chose to do it.
+	CountAssistantUserTurns(ctx context.Context, sessionID uuid.UUID) (int64, error)
 	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
 	// would touch without writing anything.
 	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)

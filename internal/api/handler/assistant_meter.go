@@ -1,0 +1,156 @@
+package handler
+
+import (
+	"context"
+	"log"
+	"strconv"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/ai/plan"
+)
+
+// A turn is the unit charged, not the model call.
+//
+// One turn ran 7.1 model calls on average in production, and that number is invisible to
+// the person who asked the question — it depends on how many tools the model decided to
+// reach for. Charging per call would make two identical-looking requests cost differently
+// for reasons the candidate can neither see nor influence.
+//
+// Which allowance a turn draws on depends on the preset, and the split is not cosmetic.
+// The tailoring workspace is metered by its OWN two bounds (a daily session count and a
+// per-session turn ceiling), so a turn inside it consumes no assistant allowance: charging
+// it twice would let the daily assistant allowance decide how deep one CV may be edited.
+// Every other preset draws on the shared assistant allowance, chat and profile together —
+// they are the same conversation surface pointed at different things, and a per-preset
+// allowance would only teach a candidate which name to type.
+
+// turnCharge is what a metered turn took, so the caller can give it back if the turn
+// produces nothing. A zero value means nothing was charged and a release is a no-op.
+type turnCharge struct {
+	feature plan.Feature
+	ref     string
+}
+
+// meterTurn decides whether a turn may run and takes what it costs, BEFORE the stream
+// opens. That ordering is the point: a 402 written after the headers are out is an event
+// inside a 200, invisible to anything that checks status codes, and the SPA would render
+// an empty answer instead of an upgrade prompt.
+//
+// It returns what was charged, whether it refused, and the error from writing that refusal.
+//
+// The middle value is load-bearing and cannot be inferred from the error: writing a 402
+// through Fiber SUCCEEDS, so a refusal that has been written returns a nil error. Deciding
+// by the error alone would let a refused turn fall through and open its stream anyway —
+// which is exactly what happened once, and what the test asserting no event stream on a
+// 402 now catches.
+//
+// Metering fails OPEN. A counter that cannot be read logs and lets the turn through
+// uncharged: bookkeeping must never be able to refuse a legitimate question, and an
+// uncharged turn is a smaller wrong than a candidate stopped by our accounting.
+func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (turnCharge, bool, error) {
+	if h.plans == nil {
+		return turnCharge{}, false, nil
+	}
+	turns, err := h.queries.CountAssistantUserTurns(c.Context(), sess.ID)
+	if err != nil {
+		log.Printf("plan: counting turns for session %s: %v", sess.ID, err)
+		return turnCharge{}, false, nil
+	}
+
+	if sess.Preset == assistant.PresetTailor {
+		d, err := h.plans.AllowTurn(c.Context(), sess.UserID, sess.ID.String(), int(turns))
+		if err != nil {
+			log.Printf("plan: tailoring turn allowance for session %s: %v", sess.ID, err)
+			return turnCharge{}, false, nil
+		}
+		if d.Allowed {
+			return turnCharge{}, false, nil
+		}
+		return turnCharge{}, true, refuse(c, tailorCeilingRefusal(d))
+	}
+
+	// The reference identifies WHICH turn, so a retry of an interrupted one is not charged
+	// again: a retry does not append a second user message, so it counts the same turn
+	// number the original charge was filed under and the consumption is idempotent.
+	ref := sess.ID.String() + "#turn-" + strconv.FormatInt(turns+1, 10)
+	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
+	switch {
+	case err == nil:
+		return turnCharge{feature: plan.FeatureAssistant, ref: ref}, false, nil
+	case isRefusal(err):
+		return turnCharge{}, true, refuse(c, d)
+	default:
+		log.Printf("plan: charging an assistant turn for user %d: %v", sess.UserID, err)
+		return turnCharge{}, false, nil
+	}
+}
+
+// meterRetry is meterTurn for a resumed turn: the user message already exists, so the turn
+// being paid for is the one already counted rather than the next one.
+func (h *assistantHandlers) meterRetry(c *fiber.Ctx, sess assistant.Session) (turnCharge, bool, error) {
+	if h.plans == nil {
+		return turnCharge{}, false, nil
+	}
+	turns, err := h.queries.CountAssistantUserTurns(c.Context(), sess.ID)
+	if err != nil || turns == 0 {
+		return turnCharge{}, false, nil
+	}
+	if sess.Preset == assistant.PresetTailor {
+		// A retry of a tailoring turn re-runs work inside a ceiling that was already
+		// checked when the message was first sent. Checking it again against a turn count
+		// that now includes that message would refuse the retry of the very turn the
+		// ceiling admitted.
+		return turnCharge{}, false, nil
+	}
+	ref := sess.ID.String() + "#turn-" + strconv.FormatInt(turns, 10)
+	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
+	switch {
+	case err == nil:
+		return turnCharge{feature: plan.FeatureAssistant, ref: ref}, false, nil
+	case isRefusal(err):
+		return turnCharge{}, true, refuse(c, d)
+	default:
+		log.Printf("plan: charging an assistant retry for user %d: %v", sess.UserID, err)
+		return turnCharge{}, false, nil
+	}
+}
+
+// turnReleaseTimeout bounds the detached cleanup. Generous for two small statements, and
+// short enough that a wedged database cannot pile up goroutines behind it.
+const turnReleaseTimeout = 5 * time.Second
+
+// releaseTurn gives back what a turn took when it produced nothing the candidate can use.
+// Safe to call blind: a zero charge releases nothing, and a release of something never
+// charged is a no-op in the store.
+//
+// It runs on a detached context on purpose. A client that disconnects mid-turn cancels the
+// request context, the turn fails with it, and a release on that same context could not
+// even open its transaction — leaving the candidate charged for an answer they never got,
+// in exactly the case this exists for.
+func (h *assistantHandlers) releaseTurn(sess assistant.Session, charge turnCharge) {
+	if h.plans == nil || charge.ref == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), turnReleaseTimeout)
+	defer cancel()
+	if err := h.plans.Release(ctx, sess.UserID, charge.feature, charge.ref); err != nil {
+		log.Printf("plan: releasing an assistant turn for user %d: %v", sess.UserID, err)
+	}
+}
+
+// tailorCeilingRefusal turns a turn-ceiling stop into the refusal shape the 402 renders.
+// It reports the TAILORING feature, not the assistant one, because what the candidate has
+// to do about it is spend another of today's tailoring sessions — naming the assistant
+// allowance would send them to look at a number that is not the one stopping them.
+func tailorCeilingRefusal(d plan.TurnDecision) plan.Decision {
+	return plan.Decision{
+		Tier:      plan.TierFree,
+		Feature:   plan.FeatureTailor,
+		Used:      d.Turns,
+		Limit:     d.Ceiling,
+		Unlimited: d.Unlimited,
+	}
+}

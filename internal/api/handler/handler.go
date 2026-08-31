@@ -534,7 +534,7 @@ func Register(app *fiber.App, cfg Config) {
 	if cfg.Speech != nil {
 		stt = cfg.Speech
 	}
-	speechH := newSpeechHandlers(stt)
+	speechH := newSpeechHandlers(stt, plans)
 	// The in-app agent is a facade over the feature handlers above: its tools call
 	// the same services their endpoints do, so a tool result and the API can never
 	// disagree. The tailoring bootstrap mints its conversations through the same
@@ -548,7 +548,7 @@ func Register(app *fiber.App, cfg Config) {
 			Agent: cfg.AssistantLLM.WithTimeout(assistantLLMTimeout), Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
-		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc)
+		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc, plans)
 	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
 	if cfg.Realtime != nil {

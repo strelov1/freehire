@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -34,6 +35,26 @@ func (q *Queries) ConsumptionExists(ctx context.Context, arg ConsumptionExistsPa
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const countAssistantUserTurns = `-- name: CountAssistantUserTurns :one
+SELECT count(*)
+FROM assistant_messages
+WHERE session_id = $1
+  AND role = 'user'
+`
+
+// How many turns a session has run, counted as the candidate's own messages.
+//
+// This is what both metered questions about a session are asked against: whether a
+// tailoring session has reached its turn ceiling, and which turn a charge belongs to. It
+// counts user rows only — an answer, a tool call and its result are all one turn's work,
+// and counting them would make a turn's price depend on how the model chose to do it.
+func (q *Queries) CountAssistantUserTurns(ctx context.Context, sessionID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssistantUserTurns, sessionID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countConsumptionsByRefPrefix = `-- name: CountConsumptionsByRefPrefix :one

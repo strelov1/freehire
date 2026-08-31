@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -68,6 +69,11 @@ func refusalMessage(d plan.Decision) string {
 		return "You've used today's allowance for this."
 	}
 }
+
+// isRefusal reports whether an error is the meter saying no, as opposed to the meter
+// itself failing. The two must never be confused: one is an answer to give the caller,
+// the other is a fault to log and let the request through.
+func isRefusal(err error) bool { return errors.Is(err, plan.ErrRefused) }
 
 // refuse writes the 402 a spent allowance answers with: what ran out, where the caller
 // stands, when it resets, and where to upgrade.

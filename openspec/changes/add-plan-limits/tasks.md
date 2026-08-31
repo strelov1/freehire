@@ -20,7 +20,7 @@
 ## 3. Tailoring: two bounds
 
 - [x] 3.1 Charge one tailoring-session allowance when the bootstrap creates a NEW session; returning to an existing session charges nothing (ref = the session id)
-- [ ] 3.2 Turn ceiling: derive the ceiling in force from the count of ledger entries for the session (`<session_id>#<n>` refs) and the turns used from `assistant_messages`; refuse the turn past the ceiling with 402 naming the session
+- [x] 3.2 Turn ceiling: derive the ceiling in force from the count of ledger entries for the session (`<session_id>#<n>` refs) and the turns used from `assistant_messages`; refuse the turn past the ceiling with 402 naming the session
 - [x] 3.3 "Continue" consumes one further tailoring allowance and writes the `#n+1` ref; assert a double-clicked continue consumes exactly one
 - [x] 3.4 Assert a tailoring turn does NOT draw on the assistant-message allowance, and that an exhausted assistant allowance does not block a tailoring turn
 - [x] 3.5 Release the session allowance when a bootstrap fails before a usable session exists
@@ -28,8 +28,8 @@
 ## 4. The other metered features
 
 - [x] 4.1 Fit analysis: replace the credit debit in `internal/candidate/fitanalysis` with the allowance; keep the existing reserve-before / release-on-nothing shape from d5df7abd; keep recompute free
-- [ ] 4.2 Assistant chat and profile presets: consume one allowance per turn before the first model call, release on terminal failure, and charge a resumed turn exactly once — exercise this against the `assistant-turn-survives-disconnect` behaviour
-- [ ] 4.3 Dictation: consume one allowance per accepted transcription before the audio goes upstream; keep the per-caller rate limit and keep 402 distinguishable from 429
+- [x] 4.2 Assistant chat and profile presets: consume one allowance per turn before the first model call, release on terminal failure, and charge a resumed turn exactly once — exercise this against the `assistant-turn-survives-disconnect` behaviour
+- [x] 4.3 Dictation: consume one allowance per accepted transcription before the audio goes upstream; keep the per-caller rate limit and keep 402 distinguishable from 429
 - [x] 4.4 Remove the contribution reward from `CreateContribution` and the Telegram webhook's shared `rewardContribution` helper, leaving the contribution recorded and attributed
 - [x] 4.5 Delete the credit debits and `credits.Store` call sites once nothing calls them; leave the `credit_ledger` tables in place
 
@@ -37,7 +37,7 @@
 
 - [x] 5.1 Replace `GET /api/v1/me/credits` and `/me/credits/history` with the plan/usage surface; the word "credits" appears in no response field
 - [x] 5.2 Re-point the 402 body (`creditsError` / `renderCreditsRefusal`) at the new refusal: feature, reset instant, upgrade destination
-- [ ] 5.3 Assert the streaming fit endpoint and the assistant SSE issue 402 as a real status BEFORE the stream opens, not as a frame inside a 200
+- [x] 5.3 Assert the streaming fit endpoint and the assistant SSE issue 402 as a real status BEFORE the stream opens, not as a frame inside a 200
 - [x] 5.4 `GET /api/v1/jobs/:slug/fit` reports today's allowance (used/allowed/reset, or unlimited for pro) instead of the 30-day `quota` object
 - [ ] 5.5 Confirm a `cv`-scoped API key is still refused with 403 on every allowance-consuming endpoint
 - [x] 5.6 `/me/usage` reports over the UTC day, matching the period the allowances reset on

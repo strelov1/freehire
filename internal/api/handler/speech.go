@@ -3,13 +3,16 @@ package handler
 import (
 	"context"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
@@ -28,17 +31,20 @@ type speechHandlers struct {
 	// *speech.Client: a nil pointer in an interface is not a nil interface, and that
 	// mistake turns "the feature is absent" into a panic on the first recording.
 	stt transcriber
+	// plans meters a transcription against the caller's plan. Nil leaves dictation
+	// unmetered, which is what a fixture gets; production always wires one.
+	plans *plan.Store
 }
 
-func newSpeechHandlers(stt transcriber) *speechHandlers {
-	return &speechHandlers{stt: stt}
+func newSpeechHandlers(stt transcriber, plans *plan.Store) *speechHandlers {
+	return &speechHandlers{stt: stt, plans: plans}
 }
 
 // transcriptionsPerHour bounds how many recordings one caller may transcribe per
-// hour. Transcription is billed per minute of audio and the assistant is not metered,
-// so this limit and the upload cap are the only things standing between a script and
-// our bill. Sixty is far past anyone dictating into a chat and far below anything
-// worth doing with a stolen session.
+// hour. It bounds the RATE; the daily dictation allowance bounds the volume, and the two
+// are not interchangeable — a burst of sixty in a minute and sixty spread over a day are
+// different problems. Sixty is far past anyone dictating into a chat and far below
+// anything worth doing with a stolen session.
 const transcriptionsPerHour = 60
 
 // perCallerLimiter throttles per authenticated caller rather than per address — an IP
@@ -87,14 +93,70 @@ func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	// Charged before the audio goes upstream, and given back below if nothing usable comes
+	// out. The rate limiter above bounds how FAST a caller may ask; this bounds how much
+	// they may have in a day — and the two answer differently on purpose, 429 against 402,
+	// because one clears in seconds and the other clears tomorrow.
+	charge, refusal, refused := h.chargeTranscription(c)
+	if refused {
+		return refusal
+	}
+
 	text, err := h.stt.Transcribe(c.Context(), audio, filename)
 	if err != nil {
+		h.releaseTranscription(c, charge)
 		// Every failure from here is the gateway's: a refusal, a fault, an answer we
 		// could not read. The caller did nothing wrong and has no remedy, so it is a
 		// 502 rather than anything that blames them.
 		return fiber.NewError(fiber.StatusBadGateway, "transcription failed")
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"text": text}})
+}
+
+// chargeTranscription takes one dictation allowance, reporting what it charged and — when
+// the plan says no — the refusal to write.
+//
+// The reference is a fresh id rather than anything derived from the audio: two recordings
+// of the same words are two dictations, and keying them alike would make the second free.
+// That also means a retry after a 502 is charged again, which is correct — the release
+// below has already given the first one back.
+//
+// Fails open, like every other meter on a request path: a counter that cannot be read logs
+// and lets the recording through uncharged.
+func (h *speechHandlers) chargeTranscription(c *fiber.Ctx) (ref string, refusal error, refused bool) {
+	if h.plans == nil {
+		return "", nil, false
+	}
+	userID, err := requireUserID(c)
+	if err != nil {
+		return "", nil, false // the route's own gate already answered; nothing to meter
+	}
+	ref = uuid.NewString()
+	d, err := h.plans.Consume(c.Context(), userID, plan.FeatureDictation, ref)
+	switch {
+	case err == nil:
+		return ref, nil, false
+	case isRefusal(err):
+		return "", refuse(c, d), true
+	default:
+		log.Printf("plan: charging a transcription for user %d: %v", userID, err)
+		return "", nil, false
+	}
+}
+
+// releaseTranscription gives the allowance back for a recording that produced nothing.
+// Safe to call blind: an empty reference releases nothing.
+func (h *speechHandlers) releaseTranscription(c *fiber.Ctx, ref string) {
+	if h.plans == nil || ref == "" {
+		return
+	}
+	userID, err := requireUserID(c)
+	if err != nil {
+		return
+	}
+	if err := h.plans.Release(c.Context(), userID, plan.FeatureDictation, ref); err != nil {
+		log.Printf("plan: releasing a transcription for user %d: %v", userID, err)
+	}
 }
 
 // audioContainers is what a browser's MediaRecorder actually emits: webm/opus in
