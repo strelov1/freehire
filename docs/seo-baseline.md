@@ -196,6 +196,73 @@ measured yield of zero.
 site, 11 of 103" — was true and meaningless: the rate counts pages with ≥1
 impression, and the impressions are one to ten each.)
 
+## The taxonomy is shaped for a catalogue we no longer have
+
+`vocab.CategoryValues` holds 37 values and covers 95.6% of the catalogue, so
+coverage is not the problem. The *shape* is: the vocabulary is finely divided where
+the catalogue is thin and undivided where it is fat.
+
+| Category | Postings | Share |
+|---|---:|---:|
+| `management` | 210,322 | 15.6% |
+| `sales` | 146,935 | 10.9% |
+| `support` | 101,177 | 7.5% |
+| … | | |
+| `developer_relations` | 435 | 0.03% |
+| `blockchain` | 427 | 0.03% |
+
+`management` and `support` hold 311,499 postings — 23% of the catalogue — and both
+are **title-token buckets rather than domain buckets**. In a 300-title sample of
+`management`, 279 titles contain the word "Manager": Tax Credit Property Manager, EHS
+Manager, Warehouse Manager, Senior Analog Engineering Manager and Art Studio Manager
+share one facet value. In `support`, 219 of 300 contain "support", placing Technical
+Support Engineer beside Direct Support Professional (children's residential care) and
+Customer Service Representative.
+
+A jobseeker filtering on `management` learns nothing about the work. These are also
+the categories the traffic comes through — `support` is 14.4% of the postings that
+earn impressions and `management` 12.9%.
+
+Note that "is this a people-management role?" is **already a separate facet**:
+`role_type = people_manager`, derived from the title alone, 80,081 postings. The
+`management` category answers the same question on the wrong axis — a category should
+say what field the work is in, and the manager/IC distinction already has its own
+attribute.
+
+## Facet coverage, and which gaps are fixable
+
+| Facet | Whole catalogue | Tech categories | Non-tech categories |
+|---|---:|---:|---:|
+| `category` | 95.6% | — | — |
+| `countries` | 93.2% | — | — |
+| `employment_type` | 38.6% | 34.1% | 43.2% |
+| `seniority` | 30.9% | 40.5% | **21.2%** |
+| `work_mode` | 27.6% | 29.2% | 25.6% |
+| `salary` | 13.5% | 15.9% | **3.9%** |
+| `education_level` | 6.9% | — | — |
+| `role_type` | 5.9% | — | — |
+| `english_level` | 5.7% | — | — |
+| `ai_archetype` | 0.5% | — | — |
+
+The gaps have two different causes, and only one is a decision we control:
+
+- **`salary` and `seniority`** are 4× and 2× better inside the tech categories. That
+  is the enrichment enqueue gate (`is_tech IS TRUE`) working as designed — non-tech
+  postings never reach the LLM. Filling them means spending enrichment budget on
+  644,000 postings the gate deliberately excludes, and the queries' comments argue
+  why it was closed.
+- **`work_mode` and `employment_type`** are flat across the split — `employment_type`
+  is actually *higher* for non-tech — so the enrichment gate does not explain them.
+  They are thin because postings do not state the fact and the dictionary sets them
+  only on an explicit marker. Sizing what better detection could recover: 127,437
+  postings contain the token `remote` and 90,262 of those (71%) already carry a
+  `work_mode`; `hybrid` is 74,834 against 39,861. About 70,000 postings are
+  recoverable from the obvious tokens, against a 978,000 gap — **7%**.
+
+Do not size this with a multi-word `q=`: Meilisearch does not phrase-match here, so
+`q=work from home` returns 404,277 documents containing those three words anywhere.
+Single tokens only.
+
 ## The supply gap this uncovered
 
 Not an SEO finding, recorded here because the data is the same query:
