@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Read-only, at the workflow level so it covers every job here and every job added later —
+# the other workflows already declare this, and CI was the one that did not. Nothing in it
+# writes to the repository: it builds, tests and reports. A job that ever needs to write
+# should say so itself, which is the point of putting the floor here.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -113,6 +120,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # This job runs a downloaded container image and an npx package over the
+          # checkout. Neither needs the token, and leaving it in .git/config hands it to
+          # both.
+          persist-credentials: false
 
       # web/static/install.sh is served at https://freehire.me/install.sh and documented as
       # `curl -fsSL … | sh`, so a mistake in it runs on someone else's machine, as them.

@@ -28,6 +28,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
 # to match the version verified against the ATS extraction test (local == prod output). ---
 FROM alpine:3.20 AS typst
 ARG TYPST_VERSION=0.15.0
+# hadolint ignore=DL3018
 RUN apk add --no-cache curl xz \
  && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz \
  && tar -xJf /tmp/typst.tar.xz -C /tmp \
@@ -42,6 +43,7 @@ RUN apk add --no-cache curl xz \
 # distroless nonroot) keeps volume ownership stable.
 FROM debian:stable-slim
 WORKDIR /app
+# hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends poppler-utils ca-certificates \
  && rm -rf /var/lib/apt/lists/* \

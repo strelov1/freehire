@@ -60,6 +60,7 @@ FROM node:22-alpine
 # includes /etc/nginx/modules/*.conf, so installing the package is all the wiring
 # the load_module lines need. Without it, `brotli`/`brotli_static` in nginx.conf
 # are unknown directives and nginx refuses to start.
+# hadolint ignore=DL3018
 RUN apk add --no-cache nginx nginx-mod-http-brotli
 WORKDIR /app
 COPY --from=build /src/build ./build

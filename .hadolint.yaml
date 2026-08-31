@@ -1,21 +1,17 @@
-# Dockerfile linting. Two rules are ignored here and nothing else is; anything else hadolint
-# reports fails the build, and a finding that is wrong for a specific line gets a
-# `# hadolint ignore=<rule>` beside it, where the argument sits next to what it argues about.
+# Dockerfile linting. NOTHING IS IGNORED HERE, and that is the point of the file existing
+# at all rather than being deleted: every exclusion is a `# hadolint ignore=<rule>` beside
+# the line it excuses, where the argument sits next to what it argues about and a new
+# Dockerfile inherits nothing.
 #
-# Both exclusions are the same rule in two package managers, and the reason is not taste.
-# Pinning an exact package version in a distro image trades one failure for a worse one: the
-# version disappears from the repository on the next security update, and the build stops
-# working — not on the change that introduced it, but weeks later, on an unrelated commit,
-# in whichever image happened to rebuild first. The base image tag is what is pinned here
-# instead, and that is the pin that reproduces a build.
+# The version-pinning rules (DL3018, DL3008) were briefly listed here and moved out for
+# that reason. Ignoring them globally would have meant the next Dockerfile added to this
+# repository silently inherited the exemption — including one that installs something where
+# the version genuinely matters. The three lines that carry the marker today each install
+# tooling from a pinned base image, and pinning the package version on top trades one
+# failure for a worse one: the version disappears on the next security update, and the
+# build then breaks weeks later, on an unrelated commit, in whichever image rebuilt first.
 #
-# Neither is a claim that unpinned packages are ideal. It is a claim that this repository
-# rebuilds from a pinned base and would rather have a build that works.
-ignored:
-  - DL3018 # apk add without a version
-  - DL3008 # apt-get install without a version
-
 # `info` findings do not fail. They are style — consecutive RUN instructions, a non-numeric
-# user id — and a Dockerfile that reads clearly is worth more than one that reads as a single
-# concatenated layer.
+# user id — and a Dockerfile that reads clearly is worth more than one flattened into a
+# single layer to satisfy a linter.
 failure-threshold: warning
