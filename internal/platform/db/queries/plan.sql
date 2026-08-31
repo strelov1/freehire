@@ -62,6 +62,24 @@ SELECT EXISTS (
 INSERT INTO usage_ledger (user_id, feature, day, kind, delta, ref)
 VALUES (sqlc.arg(user_id), sqlc.arg(feature)::text, sqlc.arg(day), 'consume', sqlc.arg(delta), sqlc.arg(ref)::text);
 
+-- name: GetConsumptionDay :one
+-- Which day a consumption was recorded against, read WITHOUT a lock.
+--
+-- A release must decrement the counter of the day the charge landed on, not of the day
+-- the release happens — otherwise a reservation taken at 23:59 and released at 00:01
+-- gives back an allowance the user never spent today, and the day it really spent stays
+-- spent. Reading it first is also what keeps the lock order the same in both directions:
+-- every path takes usage_daily before usage_ledger, so a consumption and a release for
+-- the same user cannot deadlock each other.
+--
+-- No rows means nothing was charged under this reference, and the release is a no-op.
+SELECT day
+FROM usage_ledger
+WHERE user_id = sqlc.arg(user_id)
+  AND kind = 'consume'
+  AND feature = sqlc.arg(feature)::text
+  AND ref = sqlc.arg(ref)::text;
+
 -- name: DeleteConsumption :execrows
 -- Void a consumption taken as a RESERVATION for work that then produced nothing.
 --

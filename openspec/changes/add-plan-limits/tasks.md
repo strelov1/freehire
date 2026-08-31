@@ -7,15 +7,15 @@
 
 ## 2. The plan/allowance package
 
-- [ ] 2.1 Create `internal/ai/plan` and register it in `internal/platform/arch/layering/blocks.go`; confirm `golangci-lint run` and the layering test both pass with the new package in the table
-- [ ] 2.2 Plan configuration: one structure naming each plan, each feature, its daily allowance, its fair-use guard, and its enforcement switch — with defaults from the spec (2 tailor sessions, 3 fit analyses, 10 assistant messages, 10 dictations) and enforcement OFF for every feature
-- [ ] 2.3 `Resolve(userID) → Plan`: reads `users.pro_until` only, future = pro, NULL/past = free; assert by test that it makes no network call
-- [ ] 2.4 `Consume(userID, feature, ref) → Decision`: atomic reserve with `SELECT FOR UPDATE`, lazy day rollover, idempotent by `(user, feature, ref)`, returning allowed/refused plus used/allowed/reset
-- [ ] 2.5 `Release(userID, feature, ref)`: returns a consumption, idempotent, and a no-op when nothing was consumed — port the semantics and the month-boundary ordering trap from `credits.Release`
-- [ ] 2.6 `Usage(userID) → per-feature used/allowed/reset`, reporting a pro-plan caller as unlimited rather than as a number
-- [ ] 2.7 Shadow mode: with enforcement off, `Consume` records and reports but never refuses; with it on, the same path refuses. One code path, one switch
-- [ ] 2.8 Fair-use guard for the pro plan: refuse past the guard, and emit an operator-visible signal when it fires (never silent — see the design's open question)
-- [ ] 2.9 Concurrency test: two simultaneous consumptions with one allowance left — exactly one succeeds, recorded consumption never exceeds the allowance
+- [x] 2.1 Create `internal/ai/plan` and register it in `internal/platform/arch/layering/blocks.go`; confirm `golangci-lint run` and the layering test both pass with the new package in the table
+- [x] 2.2 Plan configuration: one structure naming each plan, each feature, its daily allowance, its fair-use guard, and its enforcement switch — with defaults from the spec (2 tailor sessions, 3 fit analyses, 10 assistant messages, 10 dictations) and enforcement OFF for every feature
+- [x] 2.3 `Resolve(userID) → Plan`: reads `users.pro_until` only, future = pro, NULL/past = free; assert by test that it makes no network call
+- [x] 2.4 `Consume(userID, feature, ref) → Decision`: atomic reserve with `SELECT FOR UPDATE`, lazy day rollover, idempotent by `(user, feature, ref)`, returning allowed/refused plus used/allowed/reset
+- [x] 2.5 `Release(userID, feature, ref)`: returns a consumption, idempotent, and a no-op when nothing was consumed — port the semantics and the month-boundary ordering trap from `credits.Release`
+- [x] 2.6 `Usage(userID) → per-feature used/allowed/reset`, reporting a pro-plan caller as unlimited rather than as a number
+- [x] 2.7 Shadow mode: with enforcement off, `Consume` records and reports but never refuses; with it on, the same path refuses. One code path, one switch
+- [x] 2.8 Fair-use guard for the pro plan: refuse past the guard, and emit an operator-visible signal when it fires (never silent — see the design's open question)
+- [x] 2.9 Concurrency test: two simultaneous consumptions with one allowance left — exactly one succeeds, recorded consumption never exceeds the allowance
 
 ## 3. Tailoring: two bounds
 

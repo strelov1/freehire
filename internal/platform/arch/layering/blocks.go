@@ -54,7 +54,16 @@ var blocks = map[string][]string{
 	},
 	"ai": {
 		"aiarchetype", "assistant", "autofillagent", "browsertools", "credits", "embed",
-		"enrich", "llmkey", "speech",
+		"enrich", "llmkey",
+		// plan holds the plan a user is on and the per-day allowance each metered feature
+		// draws from. It reads users.pro_until, which argues for identity — but identity
+		// sits on this same layer, so a package there could not be called from assistant
+		// or speech, where two of the metered features live. The rule would be satisfied
+		// and the code impossible. It reads one column through platform/db rather than
+		// using identity's behaviour, which is what makes the placement honest as well as
+		// necessary.
+		"plan",
+		"speech",
 	},
 	"identity": {
 		"accountdelete", "accounts", "auth", "auth/apple", "auth/applejobs",

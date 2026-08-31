@@ -140,6 +140,38 @@ func (q *Queries) EnsureUsageDay(ctx context.Context, arg EnsureUsageDayParams) 
 	return err
 }
 
+const getConsumptionDay = `-- name: GetConsumptionDay :one
+SELECT day
+FROM usage_ledger
+WHERE user_id = $1
+  AND kind = 'consume'
+  AND feature = $2::text
+  AND ref = $3::text
+`
+
+type GetConsumptionDayParams struct {
+	UserID  int64  `json:"user_id"`
+	Feature string `json:"feature"`
+	Ref     string `json:"ref"`
+}
+
+// Which day a consumption was recorded against, read WITHOUT a lock.
+//
+// A release must decrement the counter of the day the charge landed on, not of the day
+// the release happens — otherwise a reservation taken at 23:59 and released at 00:01
+// gives back an allowance the user never spent today, and the day it really spent stays
+// spent. Reading it first is also what keeps the lock order the same in both directions:
+// every path takes usage_daily before usage_ledger, so a consumption and a release for
+// the same user cannot deadlock each other.
+//
+// No rows means nothing was charged under this reference, and the release is a no-op.
+func (q *Queries) GetConsumptionDay(ctx context.Context, arg GetConsumptionDayParams) (pgtype.Date, error) {
+	row := q.db.QueryRow(ctx, getConsumptionDay, arg.UserID, arg.Feature, arg.Ref)
+	var day pgtype.Date
+	err := row.Scan(&day)
+	return day, err
+}
+
 const getProUntil = `-- name: GetProUntil :one
 SELECT pro_until
 FROM users

@@ -1345,6 +1345,17 @@ type Querier interface {
 	GetCompanySlugAlias(ctx context.Context, aliasSlug string) (string, error)
 	// The caller's current vote for a company (0 when none). Always returns one row.
 	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
+	// Which day a consumption was recorded against, read WITHOUT a lock.
+	//
+	// A release must decrement the counter of the day the charge landed on, not of the day
+	// the release happens — otherwise a reservation taken at 23:59 and released at 00:01
+	// gives back an allowance the user never spent today, and the day it really spent stays
+	// spent. Reading it first is also what keeps the lock order the same in both directions:
+	// every path takes usage_daily before usage_ledger, so a consumption and a release for
+	// the same user cannot deadlock each other.
+	//
+	// No rows means nothing was charged under this reference, and the release is a no-op.
+	GetConsumptionDay(ctx context.Context, arg GetConsumptionDayParams) (pgtype.Date, error)
 	// The caller's linked Discord account (link-status endpoint + delivery resolution).
 	GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
