@@ -167,6 +167,7 @@ paths:
         - $ref: "#/components/parameters/Skills"
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
+        - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -237,6 +238,7 @@ paths:
         - $ref: "#/components/parameters/Skills"
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
+        - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -320,6 +322,7 @@ paths:
         - $ref: "#/components/parameters/Skills"
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
+        - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -891,6 +894,23 @@ components:
         `and` requires a posting to carry EVERY listed skill instead of any of
         them. The same `<facet>_mode=and` switch works on any non-geography
         facet.
+    RequiresClearance:
+      name: requires_clearance
+      in: query
+      schema:
+        type: boolean
+      description: |
+        Whether the posting states a government security-clearance requirement
+        (UK SC/DV/BPSS, US Secret/TS-SCI/polygraph, AU baseline/NV1), derived
+        deterministically from the description.
+
+        `false` returns every posting NOT marked as requiring one — including the
+        vast majority, where the description says nothing about clearance. It is
+        the "hide the jobs I cannot be hired into" filter, not an assertion that
+        those postings promise no clearance is needed.
+
+        `true` returns only the marked postings, for a cleared candidate seeking
+        exactly that work. Omitting the parameter filters nothing.
     IsTech:
       name: is_tech
       in: query
@@ -1368,6 +1388,13 @@ components:
             - tech
             - non_tech
           description: Absent when unknown.
+        requires_clearance:
+          type: boolean
+          description: |
+            Present and `true` only when the posting states a government
+            security-clearance requirement. Absent otherwise — there is no
+            `false`, because "no requirement was detected" is not the same claim
+            as "this posting needs no clearance".
         posted_at:
           type: string
           format: date-time

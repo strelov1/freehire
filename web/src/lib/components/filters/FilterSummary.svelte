@@ -77,6 +77,10 @@
     push('Salary', salary);
 
     if (f.visa) push('Visa', [{ text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
+    if (f.hideClearance)
+      push('Clearance', [
+        { text: 'Hidden', exclude: false, remove: () => store.setHideClearance(false) },
+      ]);
     if (f.postedWithinDays != null) push('Posted', [{ text: freshnessLabel(f.postedWithinDays), exclude: false, remove: () => store.setPostedWithinDays(null) }]);
     // `!= null`, not truthiness: a zero bound is the entry-level filter, and hiding
     // its chip would leave the narrowest experience filter with no way to remove it.

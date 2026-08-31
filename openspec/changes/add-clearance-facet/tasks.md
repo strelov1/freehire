@@ -47,11 +47,11 @@
 
 ## 4. Documentation and UI
 
-- [ ] 4.1 Document the parameter in `web/static/openapi.yaml` and
+- [x] 4.1 Document the parameter in `web/static/openapi.yaml` and
   `web/src/lib/docs/filters.ts`.
-- [ ] 4.2 Add the facet to the web filter model and URL encoding
+- [x] 4.2 Add the facet to the web filter model and URL encoding
   (`web/src/lib/facetModel.ts`, `web/src/lib/types.ts`).
-- [ ] 4.3 Add the "Hide jobs requiring security clearance" checkbox to the filter
+- [x] 4.3 Add the "Hide jobs requiring security clearance" checkbox to the filter
   panel.
 
 ## 5. Backfill

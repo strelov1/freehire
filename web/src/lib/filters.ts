@@ -97,6 +97,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, visa: on });
   }
 
+  setHideClearance(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, hideClearance: on });
+  }
+
   /** Switch the feed ordering. setNow, not setSoon: this is a discrete choice from a
    *  select, not a dragged gesture, and it re-orders the whole feed — debouncing it
    *  would leave the old order on screen with no indication anything is coming. */

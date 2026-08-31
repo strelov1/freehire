@@ -84,6 +84,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, visa: on };
   }
 
+  setHideClearance(on: boolean): void {
+    this.#f = { ...this.#f, hideClearance: on };
+  }
+
   setPostedWithinDays(n: number | null): void {
     this.#f = { ...this.#f, postedWithinDays: n };
   }

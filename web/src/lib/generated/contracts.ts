@@ -223,6 +223,16 @@ export interface Job {
    * empty. Derived from title + category (jobderive), never from the LLM.
    */
   is_tech?: string;
+  /**
+   * RequiresClearance marks a posting that states a government security-clearance
+   * requirement (UK SC/DV, US Secret/TS-SCI, AU NV1). Deterministic, derived from
+   * the description (internal/dict/location), never from the LLM.
+   * A plain bool with omitempty rather than the tri-state IsTech renders as: the
+   * stored column only ever holds true or NULL, so the key is present exactly when
+   * a requirement was detected. There is no serialized false, because "we detected
+   * nothing" must not reach a reader as "this job needs no clearance".
+   */
+  requires_clearance?: boolean;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;

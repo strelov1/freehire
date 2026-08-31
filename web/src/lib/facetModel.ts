@@ -26,6 +26,13 @@ export interface JobFilters {
   /** Facet state keyed by the facet's query param (see FACETS). */
   facets: Record<string, FacetState>;
   visa: boolean;
+  /** Hide postings that state a government security-clearance requirement (UK SC/DV,
+   *  US Secret/TS-SCI, AU NV1). Serialized as `requires_clearance=false` — the param
+   *  names the facet's value, this flag names what the user wants done about it, so
+   *  the two are deliberately inverted. `requires_clearance=true` is a valid API
+   *  request (a cleared candidate seeking exactly that work) but not something this
+   *  control expresses, so it does not set the flag. */
+  hideClearance: boolean;
   salaryMin: number | null;
   /** Freshness: keep only jobs posted within the last N days (null = any age).
    *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
@@ -73,6 +80,7 @@ export function emptyFilters(): JobFilters {
     q: '',
     facets: emptyFacets(),
     visa: false,
+    hideClearance: false,
     salaryMin: null,
     postedWithinDays: null,
     experienceYearsMax: null,
@@ -95,6 +103,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
     if (st.matchAll && st.include.length > 1) p.set(`${def.param}_mode`, 'and');
   }
   if (f.visa) p.set('visa_sponsorship', 'true');
+  if (f.hideClearance) p.set('requires_clearance', 'false');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
   if (f.experienceYearsMax != null) p.set('experience_years_max', String(f.experienceYearsMax));
@@ -139,6 +148,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
     f.facets[def.param] = { include, exclude, matchAll };
   }
   f.visa = p.get('visa_sponsorship') === 'true';
+  f.hideClearance = p.get('requires_clearance') === 'false';
   const salary = Number(p.get('salary_min'));
   f.salaryMin = p.get('salary_min') && !Number.isNaN(salary) ? salary : null;
   // Freshness is a positive whole number of days; anything else (absent, zero,
@@ -169,6 +179,7 @@ export function activeFilterCount(f: JobFilters): number {
     if (st) n += st.include.length + st.exclude.length;
   }
   if (f.visa) n += 1;
+  if (f.hideClearance) n += 1;
   if (f.salaryMin != null) n += 1;
   if (f.postedWithinDays != null) n += 1;
   if (f.experienceYearsMax != null) n += 1;

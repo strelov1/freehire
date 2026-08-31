@@ -65,6 +65,7 @@ export const FILTER_FACETS: FilterRow[] = [
  *  query_filter.go outside StringFacets, so they are documented by hand. */
 export const FILTER_EXTRAS: FilterRow[] = [
   { param: 'visa_sponsorship', label: 'Visa sponsorship', values: 'true, false' },
+  { param: 'requires_clearance', label: 'Security clearance required', values: 'true, false' },
   {
     param: 'salary_min',
     label: 'Minimum salary',
@@ -117,4 +118,5 @@ export const RECIPES: Recipe[] = [
   { title: 'Must use both Go and Rust', query: 'skills=go,rust&skills_mode=and' },
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
   { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },
+  { title: 'Excluding jobs that need a security clearance', query: 'requires_clearance=false' },
 ];

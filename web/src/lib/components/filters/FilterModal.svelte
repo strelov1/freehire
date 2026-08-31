@@ -163,7 +163,12 @@
       return selCount(f, 'domains') + selCount(f, 'company_type') + selCount(f, 'collections', jobCollectionValues);
     if (e.kind === 'language') return selCount(f, 'english_level') + selCount(f, 'posting_language');
     if (e.kind === 'relocation')
-      return selCount(f, 'relocation') + (f.visa ? 1 : 0) + selCount(f, 'collections', employerCredentialValues);
+      return (
+        selCount(f, 'relocation') +
+        (f.visa ? 1 : 0) +
+        (f.hideClearance ? 1 : 0) +
+        selCount(f, 'collections', employerCredentialValues)
+      );
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
@@ -436,6 +441,16 @@
         onchange={(e) => staged.setVisa(e.currentTarget.checked)}
       />
       <span>Offers visa sponsorship</span>
+    </label>
+    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
+    <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={staged.value.hideClearance}
+        onchange={(e) => staged.setHideClearance(e.currentTarget.checked)}
+      />
+      <span>Hide jobs requiring security clearance</span>
     </label>
   {:else if entry.kind === 'posted'}
     <div class="mb-2 flex items-center justify-between">
