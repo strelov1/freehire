@@ -35,6 +35,11 @@ var StringFacets = map[string]string{
 	// requires_clearance is a true-or-absent boolean (see jobview), so facetEq
 	// special-cases the "false" value rather than emitting an equality against a
 	// value the index never carries.
+	//
+	// Being in this map also enrols it in the /jobs/facets distribution (see
+	// handler.facetAttributes, which reads this map), which is why the Meilisearch
+	// settings patch declaring the attribute filterable MUST reach the live index
+	// before a binary carrying this line does — otherwise every facets request 500s.
 	"requires_clearance": "requires_clearance",
 	"role":               "roles",
 	"ai_archetype":       "ai_archetype",
@@ -75,7 +80,7 @@ func facetEq(param, attr, val string) string {
 		return IsEmpty(attr)
 	}
 	if param == RequiresClearanceParam {
-		return clearanceFragment(val)
+		return clearanceFragment(attr, val)
 	}
 	return Eq(attr, val)
 }
@@ -90,11 +95,11 @@ const RequiresClearanceParam = "requires_clearance"
 // false` matches nothing and would silently empty a result set the caller expected to
 // be nearly the whole catalogue. Negating the positive is what actually answers
 // "everything not marked", including the documents that omit the attribute.
-func clearanceFragment(val string) string {
+func clearanceFragment(attr, val string) string {
 	if val == "false" {
-		return "NOT " + EqBool(RequiresClearanceParam, true)
+		return "NOT " + EqBool(attr, true)
 	}
-	return EqBool(RequiresClearanceParam, true)
+	return EqBool(attr, true)
 }
 
 // facetNeq builds a facet's exclude fragment: an inequality, except the regions
