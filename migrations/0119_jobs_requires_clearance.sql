@@ -1,0 +1,13 @@
+-- requires_clearance marks a posting that states a government security-clearance
+-- requirement — UK SC/DV/BPSS, US Secret/TS-SCI/polygraph, AU baseline/NV1 — derived
+-- from the description by internal/dict/location.
+--
+-- Tri-state, but only two states are ever written: TRUE when the requirement is
+-- stated, NULL when it is not. There is deliberately no FALSE. The dictionary cannot
+-- tell a posting that promises no clearance is needed from one that is simply silent,
+-- and a sampled 923 catalogue rows carried the explicit denial exactly zero times, so
+-- a stored FALSE would claim a distinction the data does not support.
+--
+-- Nullable on purpose, which also makes this additive: no table rewrite, no long lock.
+-- Backfill existing rows with cmd/backfill-clearance.
+ALTER TABLE jobs ADD COLUMN requires_clearance boolean;

@@ -80,6 +80,11 @@ type Derived struct {
 	// nil when neither resolves (unknown — never coerced, so the coverage gap stays
 	// measurable).
 	IsTech *bool
+	// RequiresClearance marks a posting that states a government security-clearance
+	// requirement (internal/dict/location). Tri-state in shape but only ever true or
+	// nil: the dictionary cannot tell a posting that promises no clearance from one
+	// that is silent, so a denial produces the absence of a true, not a false.
+	RequiresClearance *bool
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -199,6 +204,7 @@ func Derive(in Input) Derived {
 		Seniority:          seniority,
 		Category:           category,
 		IsTech:             isTech,
+		RequiresClearance:  deriveRequiresClearance(in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     jobfacts.EducationLevel(in.Description),
@@ -209,6 +215,19 @@ func Derive(in Input) Derived {
 		SalaryCurrency:     in.SalaryCurrency,
 		SalaryPeriod:       in.SalaryPeriod,
 	}
+}
+
+// deriveRequiresClearance lifts the dictionary's boolean into the column's tri-state.
+// Only a positive is asserted: a description the dictionary does not mark yields nil
+// (unknown), never false. The dictionary reports "not stated", and storing that as a
+// false would read as "stated to be unnecessary", which is a different claim and one
+// the catalogue almost never makes.
+func deriveRequiresClearance(desc string) *bool {
+	if !location.RequiresClearanceFromDescription(desc) {
+		return nil
+	}
+	required := true
+	return &required
 }
 
 // deriveIsTech computes the tri-state is_tech signal from the already-resolved

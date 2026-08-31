@@ -71,6 +71,8 @@ func jobFromRow(r db.Job) (Job, error) {
 		Category:  r.Category,
 		IsTech:    boolPtr(r.IsTech),
 
+		RequiresClearance: boolPtr(r.RequiresClearance),
+
 		PostingLanguage:    r.PostingLanguage,
 		EmploymentType:     r.EmploymentType,
 		EducationLevel:     r.EducationLevel,

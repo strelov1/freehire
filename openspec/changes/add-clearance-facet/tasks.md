@@ -20,18 +20,18 @@
 
 ## 2. Derivation and storage
 
-- [ ] 2.1 Add migration `0119_jobs_requires_clearance.sql` — `ALTER TABLE jobs ADD
+- [x] 2.1 Add migration `0119_jobs_requires_clearance.sql` — `ALTER TABLE jobs ADD
   COLUMN requires_clearance boolean`, with a comment stating the tri-state meaning,
   modelled on `0017_jobs_is_tech.sql`.
-- [ ] 2.2 Add `RequiresClearance *bool` to `jobderive.Derived`, test-first, and
+- [x] 2.2 Add `RequiresClearance *bool` to `jobderive.Derived`, test-first, and
   populate it from the dictionary in `Derive`.
-- [ ] 2.3 Thread the field through the `job` aggregate (`internal/job/job/job.go`)
+- [x] 2.3 Thread the field through the `job` aggregate (`internal/job/job/job.go`)
   — the struct field and all four persistence shapes — following `IsTech`
   line for line.
-- [ ] 2.4 Add the column to the upsert/update statements in
+- [x] 2.4 Add the column to the upsert/update statements in
   `internal/platform/db/queries/jobs.sql` everywhere `is_tech` appears, then run
   `make sqlc`.
-- [ ] 2.5 Verify all three write paths (ingest, moderator authoring, Telegram)
+- [x] 2.5 Verify all three write paths (ingest, moderator authoring, Telegram)
   derive it, per the spec scenario that they cannot diverge.
 
 ## 3. Serving and filtering

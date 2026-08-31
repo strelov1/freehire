@@ -89,6 +89,10 @@ type Fields struct {
 	// IsTech is the tri-state technical/non-technical signal (nil = unknown), derived
 	// from title + category; served as a filterable facet. See jobderive.Derived.IsTech.
 	IsTech *bool
+	// RequiresClearance marks a posting that states a government security-clearance
+	// requirement (nil = not stated); served as a filterable facet. Only ever true or
+	// nil — see jobderive.Derived.RequiresClearance for why there is no false.
+	RequiresClearance *bool
 
 	// synthetic enrichment facets (deterministic stand-ins)
 	PostingLanguage    string
@@ -171,6 +175,8 @@ func New(d Draft) (Job, error) {
 		Category:  der.Category,
 		IsTech:    der.IsTech,
 
+		RequiresClearance: der.RequiresClearance,
+
 		PostingLanguage:    der.PostingLanguage,
 		EmploymentType:     der.EmploymentType,
 		EducationLevel:     der.EducationLevel,
@@ -226,6 +232,8 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Seniority:   f.Seniority,
 		Category:    f.Category,
 		IsTech:      pgconv.Bool(f.IsTech),
+
+		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -292,6 +300,8 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		Category:    f.Category,
 		IsTech:      pgconv.Bool(f.IsTech),
 
+		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
 		EducationLevel:     f.EducationLevel,
@@ -352,6 +362,8 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 		Category:    f.Category,
 		IsTech:      pgconv.Bool(f.IsTech),
 
+		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
 		EducationLevel:     f.EducationLevel,
@@ -392,6 +404,8 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 		Seniority:   f.Seniority,
 		Category:    f.Category,
 		IsTech:      pgconv.Bool(f.IsTech),
+
+		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
