@@ -54,6 +54,7 @@ they are manual job intake rather than applications.
 Non-obvious:
 
 - `migrations/` — the source for **both** sqlc codegen and Postgres initdb. Never edit an applied migration; add a new file. `pnpm check:sql` (squawk, via `scripts/check-migrations.mjs`) lints the ones a change ADDS — the applied history holds 1322 findings that stay, because rewriting an applied file is a worse hazard than any of them. Whether a file runs inside a transaction is a property of the FILE (the `migrate: no-transaction` marker), so the check runs two passes; `.squawk.toml` carries the argument. Suppress a rule with `-- squawk-ignore <rule-name>` on the line before the statement, with the reason beside it.
+- Dead JS code and unused dependencies: `pnpm check:dead` (knip, the `dead-code` CI job) gates **files, dependencies and binaries** across `web/`, `design-system/` and the root scripts. `pnpm check:dead:exports` reports unused exports as well and nothing gates them — `knip.config.js` argues where the line is and why. CI only, since knip needs both packages' dependencies installed and a fresh worktree usually has neither.
 - `sources/` — YAML board files, not Go. One file per ATS provider, plus `custom.yml` and `telegram.yml`.
 - `design-system/` — a separate pnpm package, sibling to `web/` and `extension/`, linked via
   pnpm's `link:../design-system` (`web/`) or npm's `file:../design-system` (`extension/`) — both

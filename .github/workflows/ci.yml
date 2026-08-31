@@ -104,6 +104,45 @@ jobs:
           path: coverage/*.out
           if-no-files-found: ignore
 
+  # Dead files, unused dependencies and unresolved binaries across the three JS packages.
+  # Read knip.config.js for where the gate's line is drawn and why exports sit outside it.
+  #
+  # CI ONLY, NOT A PRE-COMMIT HOOK, and not because of the four seconds. knip needs the
+  # dependencies of BOTH web and design-system installed to resolve anything, and a fresh
+  # worktree routinely has neither — so as a hook it would fail for a reason that has
+  # nothing to do with the commit, which is the fastest way to teach people --no-verify.
+  # What it catches is cumulative rather than urgent: a file that stopped being imported,
+  # a dependency nobody removed. That can wait for the pull request.
+  dead-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install root tooling
+        run: pnpm install --frozen-lockfile
+
+      # design-system before web: web resolves it through a `link:` symlink, and pnpm does
+      # not install a linked package's own dependencies for its consumer.
+      - name: Install design-system dependencies
+        run: pnpm --dir design-system install --frozen-lockfile
+
+      - name: Install web dependencies
+        run: pnpm --dir web install --frozen-lockfile
+
+      - name: Check for dead code and unused dependencies
+        run: pnpm check:dead
+
   # internal/platform/db is generated and committed. Nothing compared the two until now,
   # so a query edited without `make sqlc` shipped the old Go and every job stayed green —
   # the same class of gap the design-system `check:dist` step exists for.
