@@ -58,7 +58,7 @@
     "flag-icons": "^7.5.0",
     "freehire-design-system": "link:../design-system",
     "isomorphic-dompurify": "^3.22.0",
-    "marked": "^18.0.10",
+    "marked": "^18.0.11",
     "posthog-js": "^1.418.10",
     "satori": "^0.33.3",
     "satori-html": "^0.3.2",
