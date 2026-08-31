@@ -50,6 +50,38 @@ Of the 1,351,207 documents the jobs index holds (and the sitemap therefore offer
 | `salary_min` ∩ `seniority` | 57,566 | — |
 | `salary_min` ∪ `seniority` | 504,431 | 37% |
 
+## Demand does not match the catalogue
+
+The catalogue is an even split — `is_tech` reports 648,706 tech against 643,289
+non-tech. The demand it captures is not:
+
+| | Clicks | Share | Impressions | Share |
+|---|---:|---:|---:|---:|
+| Queries naming a tech role or technology | 18 | **9.7%** | 1,262 | 6.5% |
+| Everything else | 168 | 90.3% | 18,125 | 93.5% |
+
+Half the catalogue is technical; under a tenth of the demand is. The queries earning
+clicks are `world vision vacancy in gambella`, `jobs in somalia`, `part time jobs
+singapore`, `production assistant jobs vancouver`, `princess cruises careers`.
+Counting geographic markers across all 12,000 queries: Uganda 11 clicks, `vagas`
+(Portuguese) 10, Singapore 5, Somalia 3, Ethiopia 3.
+
+Measured over 12,000 query rows covering 186 of the period's 358 clicks — Search
+Console withholds long-tail queries, and the tech/non-tech split is a keyword-list
+classification, so treat the exact percentages as approximate. The gap is an order
+of magnitude, which no plausible correction closes.
+
+This is the one measurement here that implies work, and the work is a product
+decision rather than a code change: the site's title, H1 and `og:description` promise
+"the open-source search engine for tech jobs".
+
+**This measurement deliberately avoids joining Search Console pages to the jobs API.**
+Two attempts to do so failed the same way: the single-job API returns `is_tech` for
+23% of sampled postings and `enrichment.category` for 23%, where the search index
+reports 96% coverage for the latter. Whatever the cause, the populated subset is not
+a random sample of the catalogue, so any rate measured across that join is
+unreliable. Classifying the queries needs no join.
+
 ## Four hypotheses that failed
 
 ### 1. "Only company pages rank; job pages cannot compete on duplicated text"
