@@ -68,13 +68,15 @@
   `go vet -tags=integration ./...` all pass.
 - [x] 6.2 Sample the matcher against real prod descriptions and record the
   measured precision — no false positive among the inspected marked rows.
-- [ ] 6.3 Apply migration 0119 on prod.
-- [ ] 6.4 Patch the live Meilisearch settings to declare the attribute, and read
+- [x] 6.3 Apply migration 0119 on prod.
+- [x] 6.4 Patch the live Meilisearch settings to declare the attribute, and read
   the settings back to confirm — **before** deploying the binary.
-- [ ] 6.5 Deploy, then verify `/api/v1/jobs/facets` still answers 200 and
+- [x] 6.5 Deploy, then verify `/api/v1/jobs/facets` still answers 200 and
   `?requires_clearance=false` filters.
-- [ ] 6.6 Run the backfill and record the true marked-posting count.
-- [ ] 6.7 Run a full Meilisearch rebuild. The incremental push only sends documents
-  whose `content_hash` moved, and the new column is not in that hash — the trap
-  `is_tech` already fell into — so without this the facet is empty for every
-  pre-existing posting. Pause `freehire-reindexw.timer` first.
+- [x] 6.6 Run the backfill and record the true marked-posting count.
+- [x] 6.7 Let the scheduled `freehire-reindexw` carry the values into the index. A
+  manual rebuild turned out to be unnecessary and strictly riskier: the timer's next
+  run started AFTER the backfill finished, so it rebuilds from rows that already
+  carry the column. (The hazard the task was written for is real — the incremental
+  push only sends documents whose `content_hash` moved, and the new column is not in
+  that hash — it just did not need a hand-run rebuild to clear.)
