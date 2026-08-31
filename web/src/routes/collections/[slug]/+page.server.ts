@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { collectionBySlug } from '$lib/collections';
 import { pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { categoryLandingLink } from '$lib/roleLandings';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -37,5 +38,11 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   // a self-referencing canonical. parsePage clamps to MAX_PAGE rather than failing,
   // which is right for the number and wrong for what we then serve.
   if (!pageExists(pageNumber, initial.total)) error(404, 'Page not found');
-  return { slug: params.slug, collection, initial, pageNumber };
+  // The country map for this feed's category, where the feed pins exactly one. The
+  // reverse of the link /roles/[category] carries: this page answers "show me the
+  // jobs", that one answers "where are they, and what do they pay".
+  const marketLink = categoryLandingLink(
+    Object.keys(collection.params).length === 1 ? (collection.params.category ?? null) : null
+  );
+  return { slug: params.slug, collection, initial, pageNumber, marketLink };
 };

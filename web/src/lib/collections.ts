@@ -657,6 +657,24 @@ export function collectionBySlug(slug: string): ResolvedCollection | undefined {
   return undefined;
 }
 
+// The curated feed for a category, where one exists — the counterpart link from the
+// /roles country table, which is a market map rather than a feed and so wants to hand
+// the reader the feed rather than reimplement it.
+//
+// Matches only a collection whose ONLY pin is the category. A feed pinning the
+// category alongside anything else is narrower than "all <category> jobs", and
+// offering it under that label would send the reader somewhere smaller than promised.
+// 15 of the 37 categories have one; the rest returning undefined is ordinary.
+export function collectionForCategory(
+  category: string
+): { slug: string; title: string } | undefined {
+  if (!category) return undefined;
+  const match = FILTER_COLLECTIONS.find(
+    (c) => c.params.category === category && Object.keys(c.params).length === 1
+  );
+  return match ? { slug: match.slug, title: match.title } : undefined;
+}
+
 // Every collection slug across both registries — the sitemap's source for the
 // collection landing URLs. Slugs are unique across the two sets.
 export function collectionSlugs(): string[] {

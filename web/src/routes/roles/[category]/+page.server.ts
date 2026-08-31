@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { collectionForCategory } from '$lib/collections';
 import {
   categoryFromSlug,
   categorySlug,
@@ -44,6 +45,10 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     category,
     categorySlug: canonicalSlug,
     label: categoryLabel(category),
+    // The curated feed for this category, where one exists. This page is the map; the
+    // feed is /collections. Linking it is what keeps the two from reading as rivals
+    // for one query — see the cannibalisation note in the spec.
+    feed: collectionForCategory(category) ?? null,
     total: counts.total,
     countries,
     siblings: landingCategories().filter((c) => c.category !== category),

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import JobsView from '$lib/components/JobsView.svelte';
   import Seo from '$lib/components/Seo.svelte';
@@ -81,6 +82,16 @@
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       {data.collection.description}
     </p>
+    {#if data.marketLink}
+      <p class="mt-3 text-sm">
+        <a
+          href={resolve('/roles/[category]', { category: data.marketLink.slug })}
+          class="text-brand-strong hover:underline"
+        >
+          {data.marketLink.label} jobs by country — openings, pay and top skills →
+        </a>
+      </p>
+    {/if}
   </header>
 
   <!-- Remount on slug change so the seeded paginator/filters start fresh per

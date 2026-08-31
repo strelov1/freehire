@@ -14,6 +14,7 @@
         { label: 'Jobs', href: resolve('/') },
         { label: 'Companies', href: resolve('/companies') },
         { label: 'Collections', href: resolve('/collections') },
+        { label: 'Jobs by role', href: resolve('/roles') },
         { label: 'Recruiters', href: resolve('/recruiters') },
       ],
     },

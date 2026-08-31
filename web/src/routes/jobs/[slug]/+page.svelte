@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import JobRelated from '$lib/components/JobRelated.svelte';
   import JobSeeAlso from '$lib/components/JobSeeAlso.svelte';
   import JobView from '$lib/components/JobView.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import { categoryLandingLink } from '$lib/roleLandings';
   import {
     breadcrumbJsonLd,
     jobPageTitle,
@@ -15,6 +17,7 @@
 
   let { data }: { data: PageData } = $props();
 
+  const marketLink = $derived(categoryLandingLink(data.job.enrichment.category));
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/jobs/${data.job.public_slug}`);
   // The per-job OG preview lives beside the canonical URL; og:image must be absolute.
@@ -67,4 +70,20 @@
   />
 
   <JobSeeAlso cards={data.seeAlso} />
+
+  <!-- The bridge from a posting to the market pages. Costs nothing to render: the
+       category is already on the job, and the category table needs no gate check
+       (see categoryLandingLink). Without this the /roles tree is reachable only from
+       the footer and the sitemap, which is how a page ends up crawled but not
+       weighted. -->
+  {#if marketLink}
+    <p class="mt-8 text-sm">
+      <a
+        href={resolve('/roles/[category]', { category: marketLink.slug })}
+        class="text-brand-strong hover:underline"
+      >
+        {marketLink.label} jobs by country — openings, pay and top skills →
+      </a>
+    </p>
+  {/if}
 </div>

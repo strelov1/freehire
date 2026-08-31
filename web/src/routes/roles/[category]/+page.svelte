@@ -53,8 +53,19 @@
     <!-- The feed lives at /collections; this page is the map. Linking it keeps the
          two from reading as rivals for the same query. -->
     <p class="mt-3 text-sm">
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
-      <a href={jobsHref} class="text-primary hover:underline">Browse all {data.label} jobs →</a>
+      {#if data.feed}
+        <!-- The curated feed owns this query; prefer it over a raw /jobs filter, which
+             the list canonicalises back to bare /jobs and so cannot rank. -->
+        <a
+          href={resolve('/collections/[slug]', { slug: data.feed.slug })}
+          class="text-brand-strong hover:underline"
+        >
+          Browse all {data.label} jobs →
+        </a>
+      {:else}
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
+        <a href={jobsHref} class="text-brand-strong hover:underline">Browse all {data.label} jobs →</a>
+      {/if}
     </p>
   </header>
 
@@ -73,7 +84,7 @@
               category: data.categorySlug,
               country: c.slug,
             })}
-            class="flex items-center gap-2 text-primary hover:underline"
+            class="flex items-center gap-2 text-brand-strong hover:underline"
           >
             <CountryFlag code={c.code} label={c.label} />
             {c.label}

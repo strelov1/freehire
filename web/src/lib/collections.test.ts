@@ -3,6 +3,7 @@ import {
   FILTER_COLLECTIONS,
   POPULAR_COLLECTION_FALLBACK,
   collectionBySlug,
+  collectionForCategory,
   collectionSlugs,
   jobFacetsFromJob,
   popularCollectionLinks,
@@ -302,5 +303,29 @@ describe('popularCollectionLinks', () => {
     const slugs = popularCollectionLinks().map((l) => l.slug);
     expect(slugs).toEqual(POPULAR_COLLECTION_FALLBACK.filter((s) => collectionBySlug(s)));
     expect(new Set(slugs).size).toBe(slugs.length);
+  });
+});
+
+describe('collectionForCategory', () => {
+  it('finds the feed that pins exactly this category', () => {
+    expect(collectionForCategory('backend')).toMatchObject({ slug: 'backend' });
+    expect(collectionForCategory('devops')).toMatchObject({ slug: 'devops' });
+  });
+
+  it('returns nothing for a category no collection covers', () => {
+    // Only 15 of the 37 categories have a curated feed; the rest are not an error.
+    expect(collectionForCategory('legal')).toBeUndefined();
+    expect(collectionForCategory('')).toBeUndefined();
+  });
+
+  it('ignores a collection that pins the category ALONGSIDE something else', () => {
+    // Such a feed is not "all <category> jobs" — linking to it as if it were would
+    // send the reader somewhere narrower than the label promises.
+    const multi = FILTER_COLLECTIONS.filter(
+      (c) => c.params.category && Object.keys(c.params).length > 1
+    );
+    for (const c of multi) {
+      expect(collectionForCategory(c.params.category as string)?.slug).not.toBe(c.slug);
+    }
   });
 });

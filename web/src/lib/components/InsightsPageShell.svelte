@@ -7,6 +7,7 @@
   import { resolve } from '$app/paths';
   import type { Snippet } from 'svelte';
   import type { CoveredCategory } from '$lib/insights';
+  import { categoryLandingLink } from '$lib/roleLandings';
 
   type Kind = 'salary' | 'skills' | 'roles';
 
@@ -53,6 +54,8 @@
   );
   // A few sibling categories to cross-link (excluding the current one).
   const siblings = $derived(covered.filter((c) => c.category !== category).slice(0, 8));
+  // The /roles country table for this category, when it publishes one.
+  const marketLink = $derived(categoryLandingLink(category));
 </script>
 
 <article class="mx-auto w-full max-w-4xl px-4 py-8">
@@ -77,10 +80,21 @@
       <span class="font-medium text-foreground">More on {label}:</span>
       {#each otherKinds as k (k)}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href is resolve()d inside kindHref; the linter can't trace it through the helper -->
-        <a href={kindHref(k, category)} class="text-blue-600 hover:underline">{KIND_LABEL[k]}</a>
+        <a href={kindHref(k, category)} class="text-brand-strong hover:underline">{KIND_LABEL[k]}</a>
       {/each}
+      <!-- These pages are global; the country breakdown is the geographic cut of the
+           same data, so it belongs in this row rather than being reachable only from
+           the footer. -->
+      {#if marketLink}
+        <a
+          href={resolve('/roles/[category]', { category: marketLink.slug })}
+          class="text-brand-strong hover:underline"
+        >
+          By country
+        </a>
+      {/if}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
-      <a href={`${resolve('/jobs')}?category=${encodeURIComponent(category)}`} class="text-blue-600 hover:underline">
+      <a href={`${resolve('/jobs')}?category=${encodeURIComponent(category)}`} class="text-brand-strong hover:underline">
         Browse {label} jobs →
       </a>
     </div>

@@ -48,7 +48,6 @@
   "web/src/lib/components/HomeView.svelte": 16,
   "web/src/lib/components/InboxLandingView.svelte": 4,
   "web/src/lib/components/InboxView.svelte": 8,
-  "web/src/lib/components/InsightsPageShell.svelte": 2,
   "web/src/lib/components/JobDrawer.svelte": 7,
   "web/src/lib/components/JobMatch.svelte": 1,
   "web/src/lib/components/JobMatchBar.svelte": 1,

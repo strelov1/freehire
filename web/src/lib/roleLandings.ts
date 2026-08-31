@@ -59,6 +59,25 @@ export interface LandingCategory {
   label: string;
 }
 
+/** The landing a posting can be linked to from its own page, or null when it carries
+ *  no category we publish.
+ *
+ *  Deliberately the CATEGORY table and not the (category, country) pair the posting
+ *  actually belongs to. The pair would be the more relevant link, and checking whether
+ *  it clears the gate costs a facet call — on the single hottest page on the site,
+ *  which declared crawlers already fetch tens of thousands of times an hour. Linking
+ *  it unchecked is worse than not linking: only 1,471 of the ~8,800 possible pairs are
+ *  published, so most postings would point at a 404 from an indexed page.
+ *
+ *  The category table needs no check: it is published whenever ANY of its countries
+ *  is, so a category with a page for the posting's country necessarily has one here —
+ *  and the posting's country is a row in the table it lands on, one click away. */
+export function categoryLandingLink(category: string | null | undefined): LandingCategory | null {
+  if (!category) return null;
+  const slug = categorySlug(category);
+  return CATEGORY_BY_SLUG.has(slug) ? { category, slug, label: categoryLabel(category) } : null;
+}
+
 /** Every category that gets pages, in vocabulary order. */
 export function landingCategories(): LandingCategory[] {
   return [...CATEGORY_BY_SLUG.entries()].map(([slug, category]) => ({

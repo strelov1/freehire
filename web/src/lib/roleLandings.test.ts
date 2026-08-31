@@ -7,6 +7,7 @@ import {
   englishBreakdown,
   freshCount,
   landingCategories,
+  categoryLandingLink,
   landingIntro,
   MIN_PAIR_OPEN,
   MIN_SALARY_SAMPLE,
@@ -206,5 +207,29 @@ describe('internal linking', () => {
     );
     expect(Object.keys(many).length).toBeGreaterThan(8);
     expect(neighbourCountries(many, 'de').length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('the link a job page offers', () => {
+  it('points at the category table, which is published whenever any country is', () => {
+    expect(categoryLandingLink('backend')).toMatchObject({
+      category: 'backend',
+      slug: 'backend',
+      label: 'Backend',
+    });
+  });
+
+  it('offers nothing for the catch-all category', () => {
+    expect(categoryLandingLink('other')).toBeNull();
+  });
+
+  it('offers nothing when the posting carries no category', () => {
+    expect(categoryLandingLink(null)).toBeNull();
+    expect(categoryLandingLink(undefined)).toBeNull();
+    expect(categoryLandingLink('')).toBeNull();
+  });
+
+  it('offers nothing for a value outside the vocabulary', () => {
+    expect(categoryLandingLink('astrology')).toBeNull();
   });
 });
