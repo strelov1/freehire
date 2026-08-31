@@ -3,8 +3,8 @@
 Measured 2026-08-31 against the `sc-domain:freehire.me` Search Console property
 (period 2026-08-01 → 2026-08-28), the live public API, and DataForSEO.
 
-This document exists because four plausible optimisation hypotheses were tested
-against this data and **all four failed**. Without a record, each is the kind of idea
+This document exists because five plausible optimisation hypotheses were tested
+against this data and **all five failed**. Without a record, each is the kind of idea
 that gets re-proposed every few months, sounds obviously right, and costs a week.
 
 ## The numbers
@@ -82,7 +82,7 @@ reports 96% coverage for the latter. Whatever the cause, the populated subset is
 a random sample of the catalogue, so any rate measured across that join is
 unreliable. Classifying the queries needs no join.
 
-## Four hypotheses that failed
+## Five hypotheses that failed
 
 ### 1. "Only company pages rank; job pages cannot compete on duplicated text"
 
@@ -162,6 +162,50 @@ Median `job_count` of a productive company page: **1**.
 reaches. Sitemap discovery is doing the job. Raising the pagination cap would change
 nothing. (Large companies are over-represented per page — 14.1% against a 6.2%
 base — but the long tail still carries the volume.)
+
+### 5. "Programmatic landing pages are the way to capture this demand"
+
+**The idea:** the demand is geographic (`jobs in somalia`, `part time jobs
+singapore`, `engineering jobs in uganda today 2026`), the `FilterCollection`
+machinery maps a slug to arbitrary `/jobs` facet params in one frontend entry, and
+every existing geographic collection pins `work_mode: 'remote'` — so there are no
+country landings for on-site work, which is what the demand asks for. Adding them
+looked like a one-line-per-country change.
+
+**What the shipped ones do:** all 103 collection pages together earned **28
+impressions and 0 clicks** in 28 days. Ten pages saw any impression at all, the best
+of them ten impressions.
+
+| Collection | Clicks | Impressions |
+|---|---:|---:|
+| `frontend` | 0 | 10 |
+| `junior` | 0 | 4 |
+| `network-engineering` | 0 | 4 |
+| the other 7 | 0 | 1–2 each |
+
+The `programmatic-seo-collections` change is complete and deployed. Its output does
+not rank. Adding country variants would be adding more of a page type with a
+measured yield of zero.
+
+(An earlier reading of this data — "collections have the best impression rate on the
+site, 11 of 103" — was true and meaningless: the rate counts pages with ≥1
+impression, and the impressions are one to ten each.)
+
+## The supply gap this uncovered
+
+Not an SEO finding, recorded here because the data is the same query:
+
+| Searcher country | Clicks | Impressions | CTR | Jobs in catalogue |
+|---|---:|---:|---:|---:|
+| Ethiopia | 20 | 211 | **9.5%** | 158 |
+| Kenya | 28 | 420 | **6.7%** | 713 |
+| Nigeria | 14 | 248 | 5.6% | 2,945 |
+| Uganda | 14 | 291 | 4.8% | 119 |
+| United States | 50 | 12,499 | 0.4% | 567,816 |
+
+East African searchers convert an order of magnitude better than the site average
+(0.95%) and hit a catalogue holding roughly a hundred postings for them. That is a
+sourcing question for the ingest fleet, not a discoverability one.
 
 ## What this leaves
 
