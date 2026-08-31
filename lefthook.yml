@@ -146,25 +146,43 @@ pre-commit:
         - "design-system/scripts/build-tokens.mjs"
         - "design-system/dist/**"
       run: pnpm run check:dist
+    # BOTH PATTERNS, AND THE PAIR IS THE POINT. `**/` requires a separator, so
+    # `design-system/src/**/*.svelte` matches src/email/email-preview.svelte and
+    # NOT src/alert.svelte — which is 25 of the 26 primitives, every one of them a
+    # direct child of src/. Measured with lefthook 1.13.6: `--file
+    # design-system/src/alert.svelte` reported "skip, no matching staged files"
+    # while the nested path ran.
     design-system-docs:
       root: "design-system/"
       glob:
         - "design-system/docs/**"
+        - "design-system/src/*.svelte"
         - "design-system/src/**/*.svelte"
         - "design-system/src/*.stories.ts"
       run: pnpm run validate:docs
-    # check:tokens and check:adoption also have a radius over ../web/src (a
-    # colour literal or an unreachable primitive can be introduced from either
-    # side), so both trigger on web/src changes too, not just design-system/.
+
+    # NO `root:` ON THESE TWO, AND THAT IS LOAD-BEARING. `root` does not merely set
+    # the working directory: lefthook first discards every staged file outside it,
+    # and only then applies the glob. So a command with `root: design-system/` can
+    # never be triggered by a change under web/, however its glob is written — and
+    # these two are the only commands here whose radius spans both sides. A colour
+    # literal or an unreachable primitive can be introduced from either, which is
+    # what the comment above them used to claim they caught. They did not: measured
+    # with lefthook 1.13.6, `--file web/src/lib/logo.ts` skipped both.
+    #
+    # `pnpm --dir` from the repository root instead, where every path means what it
+    # says. Not `--filter`: design-system and web are separate packages with their
+    # own lockfiles, not a pnpm workspace.
     design-system-tokens:
-      root: "design-system/"
       glob:
+        - "design-system/src/*.svelte"
         - "design-system/src/**/*.svelte"
+        - "design-system/scripts/check-token-coverage.mjs"
         - "web/src/**/*.{svelte,ts,js}"
-      run: pnpm run check:tokens
+      run: pnpm --dir design-system run check:tokens
     design-system-adoption:
-      root: "design-system/"
       glob:
         - "design-system/src/index.ts"
+        - "design-system/scripts/check-adoption.mjs"
         - "web/src/**/*.{svelte,ts,js}"
-      run: pnpm run check:adoption
+      run: pnpm --dir design-system run check:adoption
