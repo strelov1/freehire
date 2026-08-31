@@ -34,9 +34,18 @@ COPY web/ ./
 # so no release coordination is needed) and production frontend stack traces are
 # un-minified. Build-stage only — these do NOT persist into the runtime image below.
 # Absent token ⇒ upload is skipped and the build still succeeds.
+#
+# hadolint's DL3064 is right about the class and wrong about this line: a credential in ARG
+# or ENV is recorded in that stage's layer history, so it leaks with the image. This is a
+# build stage, and nothing from it is copied into the runtime stage below except the built
+# app — the stage carrying the token is discarded, never tagged and never pushed. The rule
+# cannot see that, which is why the argument is here rather than in .hadolint.yaml: it is
+# true of these three lines, not of the repository.
+# hadolint ignore=DL3064
 ARG SENTRY_AUTH_TOKEN=""
 ARG SENTRY_ORG=""
 ARG SENTRY_PROJECT=""
+# hadolint ignore=DL3064
 ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
 ENV SENTRY_ORG=$SENTRY_ORG
 ENV SENTRY_PROJECT=$SENTRY_PROJECT

@@ -104,6 +104,51 @@ jobs:
           path: coverage/*.out
           if-no-files-found: ignore
 
+  # The three artefacts this repository hands to someone else, none of which any other job
+  # reads: a shell script the site serves to be piped into sh, the images that get deployed,
+  # and the API description integrations are built against. A mistake in any of them is
+  # discovered by whoever is on the receiving end.
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # web/static/install.sh is served at https://freehire.me/install.sh and documented as
+      # `curl -fsSL … | sh`, so a mistake in it runs on someone else's machine, as them.
+      # web/docker-entrypoint.sh is what starts the site. shellcheck ships on the runner.
+      #
+      # The list comes from git rather than being written out here: a script added next year
+      # is covered the day it is committed, not the day someone remembers this job exists.
+      - name: Check shell scripts
+        run: |
+          mapfile -t scripts < <(git ls-files '*.sh')
+          if [ ${#scripts[@]} -eq 0 ]; then
+            echo "No shell scripts tracked — this job has lost its subject."
+            exit 1
+          fi
+          printf 'Checking %d script(s):\n' "${#scripts[@]}"
+          printf '  %s\n' "${scripts[@]}"
+          shellcheck "${scripts[@]}"
+
+      # Read .hadolint.yaml for which two rules are ignored and why; a finding that is wrong
+      # for one line carries its argument inline instead.
+      - name: Lint the Dockerfiles
+        run: |
+          mapfile -t files < <(git ls-files 'Dockerfile' '*/Dockerfile')
+          printf '  %s\n' "${files[@]}"
+          for f in "${files[@]}"; do
+            docker run --rm -i -v "$PWD/.hadolint.yaml:/.hadolint.yaml:ro" \
+              hadolint/hadolint:v2.15.1-alpine hadolint --config /.hadolint.yaml - < "$f"
+          done
+
+      # `minimal` is the OpenAPI specification itself, not Redocly's style opinions. The
+      # question this gate asks is "can a client generator read this", and the answer stops
+      # being yes on a mistyped $ref or a schema that does not parse — neither of which
+      # anything else here would notice, since the file is served as a static asset.
+      - name: Validate the OpenAPI description
+        run: npx --yes @redocly/cli@2.49.0 lint web/static/openapi.yaml --extends=minimal
+
   # Every relative Markdown link, because this repository navigates by document and a
   # rename breaks one silently. Needs no dependencies — git and node — so it is its own
   # job rather than a step tacked onto one that installs a package tree.

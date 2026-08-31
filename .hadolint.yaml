@@ -1,0 +1,21 @@
+# Dockerfile linting. Two rules are ignored here and nothing else is; anything else hadolint
+# reports fails the build, and a finding that is wrong for a specific line gets a
+# `# hadolint ignore=<rule>` beside it, where the argument sits next to what it argues about.
+#
+# Both exclusions are the same rule in two package managers, and the reason is not taste.
+# Pinning an exact package version in a distro image trades one failure for a worse one: the
+# version disappears from the repository on the next security update, and the build stops
+# working — not on the change that introduced it, but weeks later, on an unrelated commit,
+# in whichever image happened to rebuild first. The base image tag is what is pinned here
+# instead, and that is the pin that reproduces a build.
+#
+# Neither is a claim that unpinned packages are ideal. It is a claim that this repository
+# rebuilds from a pinned base and would rather have a build that works.
+ignored:
+  - DL3018 # apk add without a version
+  - DL3008 # apt-get install without a version
+
+# `info` findings do not fail. They are style — consecutive RUN instructions, a non-numeric
+# user id — and a Dockerfile that reads clearly is worth more than one that reads as a single
+# concatenated layer.
+failure-threshold: warning
