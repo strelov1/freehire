@@ -80,10 +80,8 @@
       <h1 class="text-2xl font-semibold tracking-tight">Contribute a board</h1>
       <p class="text-sm text-muted-foreground">
         Found a company we don't cover yet? Paste any link from its ATS careers page — a vacancy
-        or the board itself. If it's a board we don't crawl, we add it and you earn
-        <span class="font-medium text-foreground">1 AI credit</span>. We then pull in all of its
-        jobs. Track your balance on the
-        <a href={resolve('/my/credits')} class="font-medium underline underline-offset-4">Credits page</a>.
+        or the board itself. If it's a board we don't crawl, we add it and pull in all of its
+        jobs.
       </p>
     </div>
 

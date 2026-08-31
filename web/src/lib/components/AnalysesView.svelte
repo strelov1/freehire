@@ -11,7 +11,7 @@
 
   // The Activity → Matches tab: the jobs the caller has run the AI match analysis on. Read-only —
   // never triggers the LLM (each row links to the Tailor workspace, which owns compute/recompute).
-  // The AI-credits balance lives on its own page (/my/credits), not inline here.
+  // The plan's allowances live on their own page (/my/plan), not inline here.
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let items = $state<MyAnalysisItem[]>([]);
 

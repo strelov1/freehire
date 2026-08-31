@@ -39,6 +39,6 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/api-keys': Key,
   '/my/submissions': FileText,
   '/my/contributions': Link2,
-  '/my/credits': Coins,
+  '/my/plan': Coins,
   '/my/security': ShieldCheck,
 };

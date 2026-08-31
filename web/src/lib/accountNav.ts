@@ -25,7 +25,7 @@ export const accountNav = [
   // builder below, nothing meters its spend yet.
   { href: '/my/assistant', label: 'Agent' },
   // The tailoring workspace's re-open list: CVs already tailored to a vacancy. Open to every
-  // signed-in user (credits meter the AI spend). Named after what the section is FOR — a CV
+  // signed-in user (the plan meters the AI spend). Named after what the section is FOR — a CV
   // here is always aimed at one posting, and "CV builder" described the tool it grew out of.
   { href: '/my/cvs', label: 'Tailor' },
   // Employee referrals: request a referral, offer to refer (moderated), and — for
@@ -41,11 +41,11 @@ export const accountNav = [
   { href: '/my/integrations', label: 'Integrations' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },
-  // Paste a job link we don't have yet; a supported, novel link earns AI credits.
+  // Paste a job link we don't have yet; a supported, novel link adds a board we don't crawl.
   { href: '/my/contributions', label: 'Contributions' },
-  // The AI-credits balance and the transaction history (grants, match/tailor debits,
+  // The plan's daily allowances and what they were spent on (analyses, CV editing,
   // contribution rewards).
-  { href: '/my/credits', label: 'Credits' },
+  { href: '/my/plan', label: 'Plan' },
   // Password and sessions: change the password, and sign out everywhere when a
   // device is lost or a session is suspect.
   { href: '/my/security', label: 'Security' },

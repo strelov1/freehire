@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
+  import { isSpent, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { track } from '$lib/analytics';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -80,11 +81,11 @@
   // paints instantly and offers a manual Recompute — so a refresh never silently burns
   // three LLM calls, and a fresh cache never recomputes.
   const coldStart = $derived(!fit?.analysis);
-  // A brand-new job can't be analysed once the monthly AI credits are spent — the stream
-  // would 402. A recompute of an already-cached analysis stays free, so this gates cold
-  // starts only (never the Recompute button).
-  const credits = $derived(fit?.credits ?? null);
-  const blockedNew = $derived(coldStart && !!credits && credits.remaining <= 0);
+  // A brand-new job can't be analysed once today's allowance is spent — the stream would
+  // 402. A recompute of an already-cached analysis stays free, so this gates cold starts
+  // only (never the Recompute button).
+  const allowance = $derived(fit?.allowance ?? null);
+  const blockedNew = $derived(coldStart && isSpent(allowance));
   const dimensions = $derived(analysis?.dimensions ?? []);
   const requirements = $derived(
     analysis?.requirement_match?.length ? analysis.requirement_match : stream.requirements,
@@ -217,12 +218,12 @@
     // context, and a stale derived read here would leave a cold Job Match tab never
     // opening its stream (stages stuck on "pending" forever).
     const hasAnalysis = !!fit?.analysis;
-    const outOfCredits = !hasAnalysis && !!fit?.credits && fit.credits.remaining <= 0;
+    const noAllowance = !hasAnalysis && isSpent(fit?.allowance);
     if (
       isAuthenticated() &&
       !hasAnalysis &&
       (fit?.has_cv ?? true) &&
-      !outOfCredits &&
+      !noAllowance &&
       autoRun
     ) {
       start();
@@ -364,13 +365,13 @@
       </p>
     {/if}
 
-    <!-- Monthly AI credits spent: a fresh analysis can't run (recompute of an
+    <!-- Today's analyses are spent: a fresh one can't run (a recompute of an
          already-analysed role stays available on those pages). -->
     {#if blockedNew}
       <div class="fit-reveal flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card p-10 text-center" style="--i:1">
-        <p class="text-sm font-medium">You're out of AI credits for this month.</p>
+        <p class="text-sm font-medium">You've used today's job analyses.</p>
         <p class="text-xs text-muted-foreground">
-          Your credits renew {credits ? new Date(credits.resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'next month'}. Analyses you've already run stay available.
+          More at {resetsAtLabel(allowance)}. Analyses you've already run stay available.
         </p>
       </div>
     {/if}

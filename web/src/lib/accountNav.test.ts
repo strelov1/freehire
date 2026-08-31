@@ -35,7 +35,7 @@ describe('visibleAccountNav', () => {
     // with their own Claude, so there is nothing left to ration.
     expect(hrefs).toContain('/my/assistant');
     expect(hrefs).toContain('/my/inbox');
-    expect(hrefs).toContain('/my/cvs'); // the tailoring list is public now (credits meter the AI spend)
+    expect(hrefs).toContain('/my/cvs'); // the tailoring list is public now (the plan meters the AI spend)
   });
 
   it('shows the tailoring section to every signed-in user, gate-free', () => {

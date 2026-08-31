@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { ArrowRight, FileText, SquarePen } from '@lucide/svelte';
+  import { isSpent, remaining, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -40,10 +41,10 @@
 
   const analysis = $derived(data?.analysis ?? null);
   const topGap = $derived(analysis?.gaps?.[0] ?? null);
-  // A new (never-analysed) job can't be analysed once the monthly AI credits are spent; a
+  // A new (never-analysed) job can't be analysed once today's allowance is spent; a
   // recompute of an already-analysed job stays free, so this only gates the fresh CTA.
-  const credits = $derived(data?.credits ?? null);
-  const creditsSpent = $derived(!!credits && credits.remaining <= 0);
+  const allowance = $derived(data?.allowance ?? null);
+  const allowanceSpent = $derived(isSpent(allowance));
 
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
@@ -91,8 +92,8 @@
         View full analysis <ArrowRight class="size-3.5 transition-transform group-hover:translate-x-0.5" />
       </span>
     </a>
-  {:else if creditsSpent}
-    <p class="text-sm text-muted-foreground">You're out of AI credits for this month. They renew {credits ? new Date(credits.resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'next month'}.</p>
+  {:else if allowanceSpent}
+    <p class="text-sm text-muted-foreground">You've used today's job analyses. More at {resetsAtLabel(allowance)}.</p>
   {:else}
     <p class="text-sm text-muted-foreground">How your CV reads against this role — fit, gaps, and ATS flags.</p>
     <Button
@@ -106,10 +107,12 @@
       <SquarePen class="size-[1.15rem]" aria-hidden="true" />
     </Button>
     <!-- The line under the button says what happens next: for a signed-in viewer that's
-         the credit it will spend, for a guest that it runs on a CV they haven't given us
-         yet. A guest has no credits to report, so the two never both apply. -->
-    {#if credits}
-      <p class="text-xs text-muted-foreground">{credits.remaining} AI credits left this month</p>
+         what today still allows, for a guest that it runs on a CV they haven't given us
+         yet. A guest has no allowance to report, so the two never both apply. -->
+    {#if allowance && !allowance.unlimited}
+      <p class="text-xs text-muted-foreground">
+        {remaining(allowance)} of today's job analyses left
+      </p>
     {:else if guest}
       <p class="text-xs text-muted-foreground">Sign in and add a CV to run it.</p>
     {/if}

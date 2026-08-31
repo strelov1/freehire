@@ -41,21 +41,21 @@
 - [x] 5.4 `GET /api/v1/jobs/:slug/fit` reports today's allowance (used/allowed/reset, or unlimited for pro) instead of the 30-day `quota` object
 - [ ] 5.5 Confirm a `cv`-scoped API key is still refused with 403 on every allowance-consuming endpoint
 - [x] 5.6 `/me/usage` reports over the UTC day, matching the period the allowances reset on
-- [ ] 5.7 Update `web/static/openapi.yaml` for every changed and removed endpoint, and check it still validates
+- [x] 5.7 Update `web/static/openapi.yaml` for every changed and removed endpoint, and check it still validates
 
 ## 6. Account deletion
 
-- [ ] 6.1 Erase `usage_ledger`, `usage_daily` and clear `pro_until` on account deletion, alongside the existing `credit_ledger` / `credit_balances` erasure
-- [ ] 6.2 Test: no row keyed to a deleted user survives in either the old or the new tables
-- [ ] 6.3 Deletion surface copy: list the plan among what is erased, and state that deletion does not cancel a subscription held by the payment provider
+- [x] 6.1 Erase `usage_ledger`, `usage_daily` and clear `pro_until` on account deletion, alongside the existing `credit_ledger` / `credit_balances` erasure
+- [x] 6.2 Test: no row keyed to a deleted user survives in either the old or the new tables
+- [x] 6.3 Deletion surface copy: list the plan among what is erased, and state that deletion does not cancel a subscription held by the payment provider
 
 ## 7. SPA
 
-- [ ] 7.1 Re-cast the credits page and `CreditsView.svelte` as today's usage per feature — used, allowed, reset — with no balance and no "credits"
-- [ ] 7.2 Handle 402 on every metered surface: name the exhausted feature, the reset time, and the upgrade path
+- [x] 7.1 Re-cast the credits page and `CreditsView.svelte` as today's usage per feature — used, allowed, reset — with no balance and no "credits"
+- [x] 7.2 Handle 402 on every metered surface: name the exhausted feature, the reset time, and the upgrade path
 - [ ] 7.3 Tailor preflight prompt states what starting a session costs and how many remain; with none left it says so instead of offering a confirm that would be refused
 - [ ] 7.4 Show the per-session turn ceiling as it is approached, and offer "continue" when it is reached
-- [ ] 7.5 Remove every remaining "credits" string from the SPA copy
+- [x] 7.5 Remove every remaining "credits" string from the SPA copy
 
 ## 8. Configuration and ops
 

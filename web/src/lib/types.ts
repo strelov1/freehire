@@ -53,19 +53,32 @@ export type {
   Signal,
 } from './generated/contracts';
 
-/** The caller's AI-credits balance. Present on GET reads (with a CV); `remaining` is the
- *  credits left this month and `resets_at` the ISO date the monthly grant renews. A new-job
- *  analysis is blocked when `remaining` is 0; a recompute of an already-analysed job is
- *  always free. */
-export interface AiCredits {
-  remaining: number;
+/** Where the caller stands on one metered feature today. Usage against a limit, never a
+ *  balance: `used` is what they have spent since midnight UTC, `limit` what the day allows
+ *  (absent when `unlimited`), and `resets_at` the ISO instant it starts over. A new-job
+ *  analysis is blocked when `used` has reached `limit`; a recompute of an already-analysed
+ *  job is always free. */
+export interface Allowance {
+  feature: string;
+  used: number;
+  limit?: number;
+  unlimited: boolean;
   resets_at: string;
+}
+
+/** The caller's plan and every metered feature's standing today (`GET /api/v1/me/plan`).
+ *  Every feature is listed, including untouched ones: the surface shows what the plan IS,
+ *  and a feature missing because no row exists yet would read as one they do not have. */
+export interface PlanState {
+  plan: 'free' | 'pro';
+  resets_at: string;
+  allowances: Allowance[];
 }
 
 /** What the caller's account did this period (`GET /api/v1/me/usage`), read from the LLM
  *  gateway. Counts, never currency: the gateway's cost figure is a list price against a
- *  mixed upstream pool, so it is neither what we pay nor what the caller pays — their
- *  price is credits, over this same calendar month. */
+ *  mixed upstream pool, so it is neither what we pay nor what the caller pays — what they
+ *  spend is a plan allowance, over this same UTC day. */
 export interface AiUsage {
   requests: number;
   failed: number;
@@ -74,13 +87,14 @@ export interface AiUsage {
   resets_at: string;
 }
 
-/** One row of the Credits transaction history (`GET /api/v1/me/credits/history`), newest
- *  first. `kind` is the ledger kind ('grant' | 'debit' | 'reward' | 'purchase'); `delta` is the
- *  signed change; `label` is the display name (e.g. "Monthly grant", "Match analysis") and
- *  `subtitle`, when present, names the job a metered debit was spent on. `created_at` is ISO. */
-export interface CreditHistoryEntry {
+/** One row of the plan's usage history (`GET /api/v1/me/plan/history`), newest first.
+ *  `kind` is 'consume' | 'release' | 'grant'; `feature` names what it was spent on; `label`
+ *  is the display name (e.g. "Job analysis") and `subtitle`, when present, names the
+ *  vacancy. `day` is the UTC day it counted against; `created_at` is ISO. */
+export interface UsageHistoryEntry {
+  feature: string;
+  day: string;
   kind: string;
-  delta: number;
   label: string;
   subtitle?: string;
   created_at: string;
@@ -89,13 +103,13 @@ export interface CreditHistoryEntry {
 /** The job-match analysis response: `has_cv` is false when the caller has no stored CV
  *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
- *  block then offers a recompute); `credits` reports the points balance on reads (omitted
- *  on the no-CV read and on compute responses). */
+ *  block then offers a recompute); `allowance` reports where the caller stands today on
+ *  reads (omitted on the no-CV read and on compute responses). */
 export interface MatchAnalysisResponse {
   has_cv: boolean;
   stale: boolean;
   analysis: MatchAnalysisContract | null;
-  credits?: AiCredits;
+  allowance?: Allowance;
 }
 
 /** One row of the Activity → Matches tab: a compact projection of a cached match analysis
@@ -683,7 +697,7 @@ export interface TrackedApplication {
 }
 
 /** The assembled follow-up message for a silent application. Deterministic and
- *  template-built server-side — no model, no credits. `recipient` is present only
+ *  template-built server-side — no model, no allowance. `recipient` is present only
  *  when linked mail supplied an address; an unanswered application (the commonest
  *  silent one) has nobody to address, and the draft is issued without one. */
 /** One interpreted search — a written description turned into filter values, as

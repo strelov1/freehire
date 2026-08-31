@@ -54,6 +54,6 @@ export const EXTENSION_FAQ: FaqItem[] = [
   {
     question: 'What does it cost?',
     answer:
-      'The extension is free. The agent spends AI credits, the same currency the rest of freehire runs on: every account gets a monthly grant, and contributing a company board we do not track yet earns more.',
+      'The extension is free. The agent draws on the same daily allowances the rest of freehire runs on: every plan can do every AI feature, and how much of each you can do in a day is what differs. It starts over every night.',
   },
 ];

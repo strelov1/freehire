@@ -1,7 +1,7 @@
 <script lang="ts">
   // How well the CV being edited matches this vacancy — measured on the rendered PDF's text
   // layer, against the vacancy and nothing else. Unlike the match analysis below it in the
-  // same tab, this number moves as the candidate types: it is deterministic, costs no AI credits,
+  // same tab, this number moves as the candidate types: it is deterministic, costs no allowance,
   // and is recomputed after every saved edit.
   //
   // An unavailable score renders nothing at all. A panel that says "score unavailable"

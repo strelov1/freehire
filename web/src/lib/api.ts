@@ -69,9 +69,10 @@ import type {
   ATSResponse,
   JobMatchResult,
   MatchAnalysisResponse,
-  AiCredits,
+  Allowance,
   AiUsage,
-  CreditHistoryEntry,
+  PlanState,
+  UsageHistoryEntry,
   MyAnalysisItem,
   ResumeProfile,
   PhotoMeta,
@@ -975,19 +976,20 @@ export function createApi(
     );
   }
 
-  /** The jobs the current user has run the AI match analysis on (newest first), plus their
-   *  AI-credits balance — powers the Activity → Matches tab. Never triggers the LLM. */
-  async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; credits: AiCredits | null }> {
-    const res = await request<{ data: MyAnalysisItem[]; meta: { credits: AiCredits | null } }>(
+  /** The jobs the current user has run the AI match analysis on (newest first), plus where
+   *  they stand on today's analysis allowance — powers the Activity → Matches tab. Never
+   *  triggers the LLM. */
+  async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; allowance: Allowance | null }> {
+    const res = await request<{ data: MyAnalysisItem[]; meta: { allowance: Allowance | null } }>(
       '/api/v1/me/tracking/analyses',
     );
-    return { items: res.data, credits: res.meta.credits };
+    return { items: res.data, allowance: res.meta.allowance };
   }
 
-  /** The caller's current AI-credits balance (credits left this month + reset date).
-   *  Never triggers the LLM. Powers the Credits page balance headline. */
-  async function myCredits(): Promise<AiCredits> {
-    return requestData<AiCredits>('/api/v1/me/credits');
+  /** The caller's plan and every metered feature's standing today. Never triggers the LLM.
+   *  Powers the plan page. */
+  async function myPlan(): Promise<PlanState> {
+    return requestData<PlanState>('/api/v1/me/plan');
   }
 
   /** What the caller's account did this period: model calls, failures and tokens, read
@@ -997,10 +999,10 @@ export function createApi(
     return requestData<AiUsage>('/api/v1/me/usage');
   }
 
-  /** The caller's credit transaction history, newest first — grants, match/tailor debits,
-   *  and contribution rewards, each labelled for display. Powers the Credits page list. */
-  async function myCreditsHistory(): Promise<CreditHistoryEntry[]> {
-    return requestData<CreditHistoryEntry[]>('/api/v1/me/credits/history');
+  /** The caller's usage history, newest first — what each metered action was spent on and
+   *  what was given back, each labelled for display. Powers the plan page's list. */
+  async function myPlanHistory(): Promise<UsageHistoryEntry[]> {
+    return requestData<UsageHistoryEntry[]>('/api/v1/me/plan/history');
   }
 
   /** The public slugs of every job the current user has interacted with. The
@@ -1769,7 +1771,7 @@ export function createApi(
     return requestData<EmailBody>(`/api/v1/me/emails/${id}/unlink`, { method: 'POST' });
   }
 
-  // --- CVs and tailoring (open to every signed-in user; credits meter the AI spend) ---
+  // --- CVs and tailoring (open to every signed-in user; the plan meters the AI spend) ---
 
   /** The caller's headshot: whether the feature is configured at all (`enabled`), whether
    *  one is stored, and when it was uploaded. Always 200 — "no photo yet" and "storage is
@@ -2128,8 +2130,8 @@ export function createApi(
     myTimeline,
     myInterviews,
     myAnalyses,
-    myCredits,
-    myCreditsHistory,
+    myPlan,
+    myPlanHistory,
     myUsage,
     listViewedSlugs,
     listSavedSlugs,

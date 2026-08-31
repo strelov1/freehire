@@ -136,6 +136,12 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 		{"cv", `INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}'::jsonb)`, []any{leaver}},
 		{"credit balance", `INSERT INTO credit_balances (user_id, period, remaining) VALUES ($1, '2026-07', 10)`, []any{leaver}},
 		{"credit ledger", `INSERT INTO credit_ledger (user_id, period, kind, delta) VALUES ($1, '2026-07', 'grant', 10)`, []any{leaver}},
+		// The plan's two tables and the plan itself. The old credit pair above is still
+		// seeded because it still exists: it is written by nobody now, dropped in a later
+		// change, and until then deletion has to reach both.
+		{"usage counter", `INSERT INTO usage_daily (user_id, feature, day, used) VALUES ($1, 'match', CURRENT_DATE, 2)`, []any{leaver}},
+		{"usage ledger", `INSERT INTO usage_ledger (user_id, feature, day, kind, delta, ref) VALUES ($1, 'match', CURRENT_DATE, 'consume', 1, 'job-1')`, []any{leaver}},
+		{"pro subscription", `UPDATE users SET pro_until = now() + interval '30 days' WHERE id = $1`, []any{leaver}},
 		{"saved search", `INSERT INTO saved_searches (user_id, name, query) VALUES ($1, 'go jobs', 'q=go')`, []any{leaver}},
 		{"profile", `INSERT INTO user_profiles (user_id, specializations, skills) VALUES ($1, ARRAY['backend'], ARRAY['go'])`, []any{leaver}},
 		{"mailbox", `INSERT INTO mailboxes (user_id, address) VALUES ($1, 'leaver@mail.test')`, []any{leaver}},
@@ -199,6 +205,12 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 			{"cvs", "user_id"},
 			{"credit_balances", "user_id"},
 			{"credit_ledger", "user_id"},
+			// The plan's tables. A daily counter that outlived its owner would follow a
+			// new account registered on the same address into a spent allowance it never
+			// used — the address is released deliberately, so what hangs off the old id
+			// has to go with it.
+			{"usage_daily", "user_id"},
+			{"usage_ledger", "user_id"},
 			{"saved_searches", "user_id"},
 			{"user_profiles", "user_id"},
 			{"mailboxes", "user_id"},

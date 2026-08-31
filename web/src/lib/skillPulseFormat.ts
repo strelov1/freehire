@@ -3,7 +3,7 @@
 // sign/rounding rule lives in exactly one place.
 
 /** Sign, then magnitude — a true minus sign (not a hyphen), matching
- *  CreditsView's fmtDelta. `rounded` must already be rounded to a whole
+ *  PlanView's signed-amount formatting. `rounded` must already be rounded to a whole
  *  percent; a fractional point is noise here. */
 export function fmtPct(rounded: number): string {
   return rounded > 0 ? `+${rounded}%` : rounded < 0 ? `−${Math.abs(rounded)}%` : '0%';

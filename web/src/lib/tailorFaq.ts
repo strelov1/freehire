@@ -35,6 +35,6 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'What does it cost?',
     answer:
-      'AI credits, the same currency the match analysis uses. Every account gets a monthly grant, and contributing a company board we do not track yet earns more. Your balance and what each action spent are on your credits page.',
+      "One of the day's CV editing sessions, the same allowance the match analysis draws its own from. Every plan has every feature; what differs is how much of each you can do in a day, and it starts over every night. Your plan page shows where you stand.",
   },
 ];

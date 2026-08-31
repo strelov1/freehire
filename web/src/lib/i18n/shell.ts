@@ -18,7 +18,7 @@ export const messages = defineMessages(
       '/my/api-keys': 'API keys',
       '/my/submissions': 'My submissions',
       '/my/contributions': 'Contributions',
-      '/my/credits': 'Credits',
+      '/my/plan': 'Plan',
       '/my/security': 'Security',
     },
     shell: {
@@ -47,7 +47,7 @@ export const messages = defineMessages(
       '/my/api-keys': 'API-ключи',
       '/my/submissions': 'Мои публикации',
       '/my/contributions': 'Вклад',
-      '/my/credits': 'Кредиты',
+      '/my/plan': 'Тариф',
       '/my/security': 'Безопасность',
     },
     shell: {

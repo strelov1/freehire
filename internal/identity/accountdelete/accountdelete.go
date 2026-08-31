@@ -4,7 +4,7 @@
 // than in a handler where it could not be tested with fakes.
 //
 // Postgres does most of the work by itself: every user-owned table declares
-// ON DELETE CASCADE, so one DELETE reaches the CVs, mail, credits, tracking, keys,
+// ON DELETE CASCADE, so one DELETE reaches the CVs, mail, plan usage, tracking, keys,
 // and community persona. What the cascade cannot reach is what this package adds:
 // the objects in the bucket, the OAuth grant held at Google, and the gateway
 // credential the account's model calls were spent under.

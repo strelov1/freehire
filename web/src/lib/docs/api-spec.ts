@@ -376,8 +376,8 @@ export const GROUPS: Group[] = [
     intro:
       'Personalized signals computed against the caller’s profile or stored CV. ' +
       'All accept the session cookie or an API key. The skill-match endpoint is ' +
-      'deterministic (no LLM); the match-analysis endpoints run the LLM chain and cost AI ' +
-      'credits. All take the same facet filter params as search where they narrow a ' +
+      'deterministic (no LLM); the match-analysis endpoints run the LLM chain and draw on ' +
+      'your daily allowance. All take the same facet filter params as search where they narrow a ' +
       'market or candidate set.',
     endpoints: [
       {
@@ -411,8 +411,8 @@ export const GROUPS: Group[] = [
         description:
           'Returns the cached analysis, flagged `stale` when your CV or the job ' +
           'changed since it was computed, or a null analysis when none is cached. ' +
-          '`has_cv` is false when you have no stored CV. `credits` reports your AI-points ' +
-          'balance and when it resets.',
+          '`has_cv` is false when you have no stored CV. `allowance` reports how much of ' +
+          'today you have used against what the day allows, and when it resets.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl "${BASE_URL}/jobs/<slug>/match-analysis" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -428,7 +428,7 @@ export const GROUPS: Group[] = [
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "credits": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }`,
       },
@@ -439,8 +439,8 @@ export const GROUPS: Group[] = [
         summary: 'Run the three-stage AI match analysis and cache it.',
         description:
           'Runs the match prompt-chain over your stored CV and the job, caches the ' +
-          'result, and returns it fresh (no `credits` on this response). Analysing a new ' +
-          'job costs one AI credit; if you have none left it is a `402`, and recomputing ' +
+          'result, and returns it fresh (no `allowance` on this response). Analysing a new ' +
+          'job draws on your daily analysis allowance; with none left it is a `402`, and recomputing ' +
           'an already-analyzed job is free. `has_cv` is false when no CV is stored; a ' +
           'failing or unconfigured LLM returns a null analysis (200).',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
@@ -1220,7 +1220,7 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         description:
           'Newest first, closed jobs included (with `closed: true`). Each item carries the ' +
           'overall score and verdict; `stale` marks an analysis whose CV, job, or model has ' +
-          'changed since. `meta.credits` reports your AI-points balance. Never runs the LLM.',
+          'changed since. `meta.allowance` reports where you stand on the day’s analyses. Never runs the LLM.',
         curl: `curl "${BASE_URL}/me/tracking/analyses" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": [
@@ -1235,21 +1235,29 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
       "stale": false
     }
   ],
-  "meta": { "credits": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" } }
+  "meta": { "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" } }
 }`,
       },
       {
         method: 'GET',
-        path: '/me/credits',
+        path: '/me/plan',
         auth: 'cookie-or-key',
-        summary: 'Your current AI-credits balance.',
+        summary: 'Your plan and what it allows today.',
         description:
-          'The points left this month (`remaining`) and when the monthly grant renews ' +
-          '(`resets_at`). AI credits are spent on the match analysis (1) and CV tailoring (3), ' +
-          'topped up by the monthly grant and by accepted board contributions. Never runs the LLM.',
-        curl: `curl "${BASE_URL}/me/credits" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+          'Which plan you are on and, for every metered AI feature, how much of today you ' +
+          'have used against what the day allows. Every plan offers every feature; what ' +
+          'differs is the daily amount, and it resets at `resets_at`. A pro caller reads as ' +
+          '`unlimited` rather than as a number. Never runs the LLM.',
+        curl: `curl "${BASE_URL}/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
-  "data": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" }
+  "data": {
+    "plan": "free",
+    "resets_at": "2026-09-01T00:00:00Z",
+    "allowances": [
+      { "feature": "tailor", "used": 1, "limit": 2, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" },
+      { "feature": "match", "used": 0, "limit": 3, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" }
+    ]
+  }
 }`,
       },
       {
