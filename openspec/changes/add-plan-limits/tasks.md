@@ -22,7 +22,7 @@
 - [ ] 3.1 Charge one tailoring-session allowance when the bootstrap creates a NEW session; returning to an existing session charges nothing (ref = the session id)
 - [ ] 3.2 Turn ceiling: derive the ceiling in force from the count of ledger entries for the session (`<session_id>#<n>` refs) and the turns used from `assistant_messages`; refuse the turn past the ceiling with 402 naming the session
 - [ ] 3.3 "Continue" consumes one further tailoring allowance and writes the `#n+1` ref; assert a double-clicked continue consumes exactly one
-- [ ] 3.4 Assert a tailoring turn does NOT draw on the assistant-message allowance, and that an exhausted assistant allowance does not block a tailoring turn
+- [x] 3.4 Assert a tailoring turn does NOT draw on the assistant-message allowance, and that an exhausted assistant allowance does not block a tailoring turn
 - [ ] 3.5 Release the session allowance when a bootstrap fails before a usable session exists
 
 ## 4. The other metered features
