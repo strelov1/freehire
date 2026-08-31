@@ -38,17 +38,53 @@ jobs:
           # A shallow clone hides exactly the commit someone would want hidden.
           # This is also what makes the assertion below meaningful.
           fetch-depth: 0
+          # This job reads the history and writes nothing. Leaving the token in
+          # .git/config would hand it to anything the steps below run — and the steps
+          # below deliberately execute a downloaded binary over the repository.
+          persist-credentials: false
 
+      # The archive is executed, so its integrity is checked before it is unpacked
+      # rather than trusted because the URL looked right. The digest is the one in the
+      # release's own checksums file and moves with GITLEAKS_VERSION; a bump that
+      # forgets it fails loudly here instead of silently running something else.
       - name: Install gitleaks
         env:
           # Pinned so a finding here reproduces on a laptop with the same version
           # instead of being argued about. Bumped deliberately, like any other tool.
           GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
           curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check --strict -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
+
+      # A CANARY, because "no leaks found" is what a working scan and a disabled one
+      # both print. The commit-count assertion below catches a scanner that could not
+      # read the repository; this catches one that read it and was configured not to
+      # care — an allowlist widened until it matches everything, a `paths` entry, a
+      # rule set replaced rather than extended. It runs the SAME config the real scan
+      # uses, against a secret shaped like a credential no allowlist here mentions.
+      #
+      # `gitleaks dir` on a scratch path, not a file in the tree: nothing is committed,
+      # so the history the next step reads is unchanged.
+      #
+      # The token is assembled by printf rather than written whole, so this workflow file
+      # is not itself a finding when the next step scans the history — and the tail is
+      # exactly 36 characters, which is what the `github-pat` rule matches. A shorter one
+      # is not detected, and the canary would then fail on every run for the wrong reason.
+      - name: Assert the scanner still detects a planted secret
+        run: |
+          mkdir -p /tmp/canary
+          printf 'const t = "ghp_%s"\n' 'K3nQ7bZ2mR9xTvL4nWc8YpJ1dHsA6eG0uFiO' > /tmp/canary/planted.txt
+          if gitleaks dir /tmp/canary --config .gitleaks.toml --no-banner --redact >/dev/null 2>&1; then
+            echo 'gitleaks did not report a planted credential. The rule set or the'
+            echo 'allowlist in .gitleaks.toml has disabled detection — every green run'
+            echo 'since that change examined nothing.'
+            exit 1
+          fi
+          echo 'Canary detected. The scanner is looking.'
 
       # THE COMMIT COUNT IS ASSERTED, AND THAT IS NOT BELT-AND-BRACES. Given a
       # repository it cannot read, gitleaks prints "0 commits scanned", says "no leaks
@@ -56,10 +92,19 @@ jobs:
       # checkout would each produce a green job that examined nothing — the same
       # silent pass the scanner exists to prevent. Success is not evidence that the
       # work happened; the count is.
+      #
+      # `--redact` because this repository is public and so are its run logs. Without
+      # it a finding publishes the credential to a wider audience than the leak already
+      # had, which is the opposite of what this job is for. The finding's file, line
+      # and rule are still printed — everything needed to act on it.
+      #
+      # `--config` explicitly, though discovery would find the same file: a renamed or
+      # deleted .gitleaks.toml then fails the job instead of quietly falling back to the
+      # default rule set and reporting the ten allowlisted fixtures as fresh leaks.
       - name: Scan history
         run: |
           set -o pipefail
-          gitleaks git --no-banner 2>&1 | tee /tmp/gitleaks.log
+          gitleaks git --config .gitleaks.toml --no-banner --redact 2>&1 | tee /tmp/gitleaks.log
           scanned=$(sed -n 's/.*[^0-9]\([0-9][0-9]*\) commits scanned.*/\1/p' /tmp/gitleaks.log | tail -1)
           if [ -z "$scanned" ] || [ "$scanned" -lt 1 ]; then
             echo "gitleaks reported no commits scanned — the scan was blind, not clean."

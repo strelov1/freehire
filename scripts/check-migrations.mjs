@@ -94,9 +94,15 @@ function mergeBase() {
 
 function changedMigrations() {
   const base = mergeBase();
+  // ADDED ONLY. A modified migration is a rule violation in its own right — "never edit
+  // an applied migration" — but linting its CONTENT is the wrong response to it: fixing
+  // a typo in the comment on 0012 would dump every historical finding in that file into
+  // a change that touched a comment, and the useful signal would be the one line nobody
+  // reads by then. What this check owes a new migration is a verdict on what it does to
+  // a live table; what an edited one needs is a reviewer.
   const out = execFileSync(
     'git',
-    ['diff', '--name-only', '--diff-filter=ACMR', base, 'HEAD', '--', `${MIGRATIONS_DIR}/*.sql`],
+    ['diff', '--name-only', '--diff-filter=A', base, 'HEAD', '--', `${MIGRATIONS_DIR}/*.sql`],
     { encoding: 'utf8' },
   );
   return out.split('\n').filter(Boolean);
