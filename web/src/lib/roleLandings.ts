@@ -12,7 +12,7 @@
 // one way on an indexed page and another way in the app.
 
 import type { InsightSalaryBand } from './api';
-import { countryLabel, countrySlug, slugifiedCountries } from './facets';
+import { countryLabel, countrySlug } from './facets';
 import { CATEGORY_VALUES } from './generated/contracts';
 import { categoryLabel } from './labels';
 
@@ -217,10 +217,4 @@ export function neighbourCategories(
     rows.push({ category, slug: categorySlug(category), label: categoryLabel(category), openCount });
   }
   return rows.sort((a, b) => b.openCount - a.openCount).slice(0, NEIGHBOUR_LIMIT);
-}
-
-/** The country axis, for the sitemap and the per-category hub: every country that
- *  could hold a page, before any count is known. The gate still decides. */
-export function candidateCountries(): { code: string; slug: string }[] {
-  return slugifiedCountries();
 }
