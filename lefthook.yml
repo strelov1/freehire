@@ -109,13 +109,28 @@ pre-commit:
           exit 1
         fi
         gitleaks git --staged --no-banner
+    # A PACKAGE'S OWN ROOT IS NOT UNDER `**/`. The second pattern in each pair is
+    # what reaches vite.config.ts, svelte.config.js, eslint.config.js and — in web —
+    # cluster.js, which is the process that actually serves the site in production.
+    # Thirteen such files sat outside every hook here, checked one at a time with
+    # `lefthook run pre-commit --file`: only gitleaks fired, because it has no glob.
+    #
+    # `.oxlintrc.json` is in the glob for the reason the go-lint hook lists
+    # `.golangci.yml`: a file that decides what a check does is a file that can break
+    # it, and a rule switched off is quieter than a rule that fails.
     web-lint:
       root: "web/"
-      glob: "web/**/*.{js,ts,svelte}"
+      glob:
+        - "web/**/*.{js,ts,svelte}"
+        - "web/*.{js,ts,svelte}"
+        - "web/.oxlintrc.json"
       run: pnpm exec eslint {staged_files}
     extension-lint:
       root: "extension/"
-      glob: "extension/**/*.{js,ts,svelte}"
+      glob:
+        - "extension/**/*.{js,ts,svelte}"
+        - "extension/*.{js,ts,svelte}"
+        - "extension/.oxlintrc.json"
       run: pnpm exec eslint {staged_files}
     # The remaining design-system-* commands mirror the fast checks from the
     # `design-system` CI job (see .github/workflows/ci.yml) so a broken commit
@@ -124,11 +139,19 @@ pre-commit:
     # still catches those for anyone who skips hooks.
     design-system-lint:
       root: "design-system/"
-      glob: "design-system/**/*.{js,ts,svelte}"
+      glob:
+        - "design-system/**/*.{js,ts,svelte}"
+        - "design-system/*.{js,ts,svelte}"
+        - "design-system/.oxlintrc.json"
       run: pnpm run lint
+    # svelte.config.js and vitest.setup.ts are read by `svelte-kit sync`, which is the
+    # first thing `check` runs, so a change to either can only be caught here.
     design-system-check:
       root: "design-system/"
-      glob: "design-system/**/*.{svelte,ts}"
+      glob:
+        - "design-system/**/*.{svelte,ts}"
+        - "design-system/*.{svelte,ts}"
+        - "design-system/{tsconfig.json,svelte.config.js}"
       run: pnpm run check
     design-system-test:
       root: "design-system/"
