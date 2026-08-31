@@ -35,6 +35,35 @@ pre-commit:
           exit 0
         fi
         govulncheck ./... || echo "govulncheck reported findings above (non-blocking for now, see lefthook.yml)"
+    # THE ONLY HOOK HERE THAT PREVENTS SOMETHING RATHER THAN REPORTING IT.
+    #
+    # Everything else in this file is a convenience: it fails locally so CI does not
+    # have to, and skipping it costs a red run. This one is different. Once a
+    # credential reaches the remote it is leaked — it is in the history, in every
+    # clone and in the runner's cache — and the only real response is to revoke it.
+    # Rewriting history does not un-leak anything. This hook is the last moment at
+    # which that has not happened yet.
+    #
+    # .github/workflows/gitleaks.yml is NOT a redundant copy: it scans the whole
+    # history and cannot be bypassed, so it covers whoever never ran `lefthook
+    # install` or reached for --no-verify. But by the time it speaks the leak is
+    # real. Two controls, two moments, neither replaces the other.
+    #
+    # No glob — a secret is not a file type, and the one that matters will be in
+    # whatever nobody thought to list. `--staged` reads the index, so it sees
+    # exactly what is about to be committed rather than the working tree around it.
+    #
+    # Unlike govulncheck above, a missing binary FAILS. A scanner that quietly
+    # skips is worse than no scanner: it makes the commit look examined.
+    gitleaks:
+      run: |
+        if ! command -v gitleaks >/dev/null 2>&1; then
+          echo 'gitleaks is not installed (brew install gitleaks), and this hook will'
+          echo 'not pretend a commit was scanned when it was not. Install it, or use'
+          echo '--no-verify knowing CI scans the history anyway.'
+          exit 1
+        fi
+        gitleaks git --staged --no-banner
     web-lint:
       root: "web/"
       glob: "web/**/*.{js,ts,svelte}"

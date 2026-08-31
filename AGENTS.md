@@ -88,6 +88,16 @@ gofmt/vet/golangci-lint on staged Go files and eslint on staged files in web/, e
 design-system/ — the same ratchet policy as CI (only new issues fail the commit), so it
 won't block on the pre-existing backlog.
 
+**Secrets** are the one thing the hooks *prevent* rather than report: `gitleaks` (`brew
+install gitleaks`) scans the staged index on every commit and fails hard if the binary is
+missing, because a scanner that quietly skips makes a commit look examined. The
+`gitleaks` workflow scans the whole history on top, since `--no-verify` walks past the
+hook and a credential removed in a later commit is still leaked. A finding that survives
+`.gitleaks.toml` means **revoke the credential** — rewriting history does not un-leak
+anything. Suppressions in that file allowlist a *line shape*, never a path: gitleaks ORs
+`paths` with `regexes` and prunes the file before reading it, so a path entry switches
+the scanner off for that file entirely.
+
 **`go test ./...` compiles no `//go:build integration` file, and those files are not
 confined to `internal/platform/db`** — there are 187 of them across 20 packages, and `internal/api/handler`
 holds 78, which call unexported constructors like `newCVHandlers`. A changed signature

@@ -1,0 +1,68 @@
+name: gitleaks
+
+# Secret scanning over the HISTORY, not the working tree: a credential removed in a
+# later commit is still leaked, and the tree looks clean. Suppressions and the rule
+# for adding one live in .gitleaks.toml.
+#
+# NO `paths:` FILTER, DELIBERATELY. The verdict comes from the history rather than
+# from the diff, so filtering on changed paths would be meaningless — and it is the
+# secret nobody expected, in the file nobody listed, that this exists for.
+#
+# The pre-commit hook in lefthook.yml is the half of this that PREVENTS rather than
+# reports; `--no-verify` walks past it, and whoever never ran `lefthook install`
+# never had it. Which is why both exist.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # A shallow clone hides exactly the commit someone would want hidden.
+          # This is also what makes the assertion below meaningful.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        env:
+          # Pinned so a finding here reproduces on a laptop with the same version
+          # instead of being argued about. Bumped deliberately, like any other tool.
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # THE COMMIT COUNT IS ASSERTED, AND THAT IS NOT BELT-AND-BRACES. Given a
+      # repository it cannot read, gitleaks prints "0 commits scanned", says "no leaks
+      # found" and exits 0. A shallow clone, a missing fetch-depth or a detached
+      # checkout would each produce a green job that examined nothing — the same
+      # silent pass the scanner exists to prevent. Success is not evidence that the
+      # work happened; the count is.
+      - name: Scan history
+        run: |
+          set -o pipefail
+          gitleaks git --no-banner 2>&1 | tee /tmp/gitleaks.log
+          scanned=$(sed -n 's/.*[^0-9]\([0-9][0-9]*\) commits scanned.*/\1/p' /tmp/gitleaks.log | tail -1)
+          if [ -z "$scanned" ] || [ "$scanned" -lt 1 ]; then
+            echo "gitleaks reported no commits scanned — the scan was blind, not clean."
+            exit 1
+          fi
+          echo "Scanned $scanned commits."

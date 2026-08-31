@@ -1,0 +1,55 @@
+# Suppressions for the secret scanner, and the rule for adding one.
+#
+# EVERY ENTRY ALLOWLISTS A LINE SHAPE, NEVER A PATH. gitleaks combines a `paths` key
+# with `regexes` using OR and prunes the file before reading it, so a path entry does
+# not narrow a rule — it switches the scanner off for that file entirely, including for
+# the real credential someone pastes into it next year. `_test.go` is exactly the file
+# that invites a path entry and exactly the file where a live token is most likely to be
+# used as a "realistic" fixture.
+#
+# The ten findings on adoption were all argued individually and are listed below. None
+# was a live credential; the one that was ever real is a publishable browser token that
+# the code no longer carries at all. A finding that survives this file is a leak: it is
+# already in the history, in every clone and in the runner's cache, and the response is
+# to REVOKE the credential. Rewriting history does not un-leak anything.
+#
+# Note what neither this file nor the scanner reaches: a key pasted into an issue, a
+# chat or an environment store never passes through git.
+
+[extend]
+# Without this the custom rules below REPLACE the built-in rule set rather than adding
+# to it, which is a green scan that looks for almost nothing.
+useDefault = true
+
+[[allowlists]]
+description = "Chrome extension manifest keys are RSA *public* keys (SPKI, DER, base64). The extension pins its development id with one, which is what the id is derived from — publishing it is the mechanism, not a slip. A private key carries a different prefix (MIIEv/MIIJ), so this shape cannot cover one."
+regexTarget = "secret"
+regexes = ['''^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A''']
+
+[[allowlists]]
+description = "RFC 6455 §1.3 prints this exact Sec-WebSocket-Key on the page that defines the handshake. The WebSocket tests use it because a reader who knows the RFC recognises it."
+regexTarget = "secret"
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']
+
+[[allowlists]]
+description = "Source-adapter test fixtures: captured response bodies with the vendor's token field filled by an obvious placeholder. Listed one by one rather than by path — a fixture is where a real captured token would hide."
+regexTarget = "secret"
+regexes = [
+  # internal/ingest/sources — comeet, mts, solidjobs
+  '''^ABCDEF1234567890ABCDEF12$''',
+  '''^KEY-abc\.def-123_xyz$''',
+  '''^3aa5b098-aa6d-4f6c-950a-b92a81363cf8$''',
+]
+
+[[allowlists]]
+description = "Auth and mail test constants. Each is long enough to trip generic-api-key and says in its own text that it is not a credential."
+regexTarget = "secret"
+regexes = [
+  '''^test-secret-that-is-long-enough-0001$''',
+  '''^fh_live_abc123$''',
+]
+
+[[allowlists]]
+description = "logo.dev publishable key, history only. It was a `pk_` token — the kind designed to ship to a browser — and the code no longer carries it: company logos now go through our own logo.freehire.me proxy, which holds the credential server-side. Kept because the finding is in the history, where it stays."
+regexTarget = "secret"
+regexes = ['''^pk_fKgOEo0OT4KXvUshjPMGAQ$''']
