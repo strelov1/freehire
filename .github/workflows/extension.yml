@@ -125,7 +125,7 @@ jobs:
           # not the pinned dev key's id in wxt.config.ts — those are different ids by design.
           CHROME_WEBSTORE_EXTENSION_ID: ijfaechijopdlikalojadpojmpilplnj
         run: |
-          zip_path=$(ls .output/*.zip | head -n1)
+          zip_path=$(find .output -maxdepth 1 -name '*.zip' | sort | head -n1)
           npx --yes chrome-webstore-upload-cli@3 upload \
             --source "$zip_path" \
             --extension-id "$CHROME_WEBSTORE_EXTENSION_ID" \

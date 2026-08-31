@@ -104,6 +104,36 @@ jobs:
           path: coverage/*.out
           if-no-files-found: ignore
 
+  # The workflows themselves. Nothing has ever read them except GitHub, at the moment it
+  # runs one — so an unknown runner label, a mistyped `needs:` or a broken expression is
+  # discovered by a job failing, and a job that only runs on a tag or a schedule is
+  # discovered late. actionlint also runs shellcheck over every `run:` block, which is the
+  # half that found real things here: an unquoted `find` result passed to grep, and an `ls`
+  # parsed for a path in the extension's store-upload step.
+  #
+  # `go install` at a pinned version rather than a downloaded release: the Go module proxy
+  # verifies the checksum against the transparency log on its own, so the pin is the whole
+  # supply-chain story — no second digest to keep in step with the version.
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      # No path argument: actionlint finds .github/workflows itself, so a NEW workflow is
+      # covered the moment it exists rather than when someone remembers to list it.
+      - name: Lint the workflows
+        run: actionlint
+
   # Dead files, unused dependencies and unresolved binaries across the three JS packages.
   # Read knip.config.js for where the gate's line is drawn and why exports sit outside it.
   #
@@ -173,7 +203,7 @@ jobs:
             git status --porcelain -- internal/platform/db
             git --no-pager diff -- internal/platform/db
             echo
-            echo 'internal/platform/db is stale. Run `make sqlc` and commit the result.'
+            echo 'internal/platform/db is stale. Run "make sqlc" and commit the result.'
             exit 1
           fi
           echo 'Generated code matches internal/platform/db/queries.'
@@ -288,12 +318,11 @@ jobs:
       # catches a Tailwind entry that vanished entirely.
       - name: Assert Storybook emitted the primitives' utilities
         run: |
-          css=$(find storybook-static/assets -name '*.css')
-          if [ -z "$css" ]; then
+          if [ -z "$(find storybook-static/assets -name '*.css' -print -quit)" ]; then
             echo "No stylesheet in storybook-static/assets."
             exit 1
           fi
-          if ! grep -qF '.animate-pulse' $css; then
+          if ! grep -rqF '.animate-pulse' --include='*.css' storybook-static/assets; then
             echo "Storybook CSS carries no utility from design-system/src/*.svelte."
             echo "The preview lost its Tailwind entry or theme.css's @source scan."
             exit 1

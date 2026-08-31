@@ -1,15 +1,26 @@
 name: snyk
 
-# Go dependencies are already covered by govulncheck.yml (reachability-based,
-# no token needed) — scoped here to the JS lockfiles (web/, extension/,
-# design-system/) to avoid duplicate coverage and stay inside Snyk's free-tier
-# monthly test quota.
+# Go dependencies are already covered by govulncheck.yml (reachability-based, no token
+# needed) — scoped here to the JS lockfiles to avoid duplicate coverage and stay inside
+# Snyk's free-tier monthly test quota.
+#
+# FOUR LOCKFILES, NOT THREE. The repository root grew one when the repo-wide tooling
+# (knip, squawk) landed, and it was covered by nothing: this job named the three package
+# directories, and the paths filter below meant a change to the root lockfile did not even
+# start the job. Those are dev dependencies, but they run in CI and on every laptop, which
+# is the same trust boundary as anything else here.
 on:
   schedule:
     - cron: '41 6 * * *'
   pull_request:
     branches: [main]
-    paths: ['web/**', 'extension/**', 'design-system/**', '.github/workflows/snyk.yml']
+    paths:
+      - 'web/**'
+      - 'extension/**'
+      - 'design-system/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - '.github/workflows/snyk.yml'
   workflow_dispatch:
 
 permissions:
@@ -31,11 +42,23 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: |
+            pnpm-lock.yaml
             web/pnpm-lock.yaml
             design-system/pnpm-lock.yaml
 
       - name: Install Snyk CLI
         run: npm install -g snyk
+
+      # The root package. Its manifest carries no `workspaces` key, so a plain `snyk test`
+      # is right here and the --all-projects the other two need would reach into their
+      # directories and bill them twice.
+      - name: Install root tooling
+        run: pnpm install --frozen-lockfile
+
+      - name: Test root tooling dependencies
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test
 
       # design-system is a `link:`/`file:` dependency for web/extension and does
       # not install its own deps transitively — same trap as ci.yml and
