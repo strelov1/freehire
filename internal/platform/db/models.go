@@ -934,6 +934,25 @@ type ThreadReply struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type UsageDaily struct {
+	UserID    int64              `json:"user_id"`
+	Feature   string             `json:"feature"`
+	Day       pgtype.Date        `json:"day"`
+	Used      int64              `json:"used"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UsageLedger struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Feature   string             `json:"feature"`
+	Day       pgtype.Date        `json:"day"`
+	Kind      string             `json:"kind"`
+	Delta     int64              `json:"delta"`
+	Ref       pgtype.Text        `json:"ref"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	ID                         int64              `json:"id"`
 	Email                      string             `json:"email"`
@@ -967,6 +986,7 @@ type User struct {
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Language                   string             `json:"language"`
 	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
+	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 }
 
 type UserEmailCode struct {

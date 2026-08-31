@@ -1,9 +1,9 @@
 ## 1. Schema
 
-- [ ] 1.1 Migration: add `users.pro_until timestamptz NULL` (additive; no default, no backfill)
-- [ ] 1.2 Migration: create `usage_ledger` (user_id, feature, day date, ref, delta, kind, created_at) with a partial unique index on `(user_id, feature, ref)` for consumption entries, mirroring the debit-idempotency index `credit_ledger` uses
-- [ ] 1.3 Migration: create `usage_daily` (user_id, feature, day, used) — the materialised counter read on the hot path — with `(user_id, feature, day)` as the key
-- [ ] 1.4 Write the sqlc queries for the ledger and counter (ensure-row, select-for-update, insert-consumption, insert-release, delete-consumption, read-day, read-plan), then `make sqlc` and commit the regenerated output
+- [x] 1.1 Migration: add `users.pro_until timestamptz NULL` (additive; no default, no backfill)
+- [x] 1.2 Migration: create `usage_ledger` (user_id, feature, day date, ref, delta, kind, created_at) with a partial unique index on `(user_id, feature, ref)` for consumption entries, mirroring the debit-idempotency index `credit_ledger` uses
+- [x] 1.3 Migration: create `usage_daily` (user_id, feature, day, used) — the materialised counter read on the hot path — with `(user_id, feature, day)` as the key
+- [x] 1.4 Write the sqlc queries for the ledger and counter (ensure-row, select-for-update, insert-consumption, insert-release, delete-consumption, read-day, read-plan), then `make sqlc` and commit the regenerated output
 
 ## 2. The plan/allowance package
 

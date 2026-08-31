@@ -1,0 +1,26 @@
+-- pro_until is the whole of a user's plan: a timestamp in the future means the pro
+-- plan, NULL or a past timestamp means free. See the add-plan-limits change.
+--
+-- One nullable column rather than a subscriptions table, because everything the
+-- metering path needs to know is "is this account pro right now". The provider's own
+-- record — product, status, period, payment method — stays with the provider, which is
+-- its source of truth; duplicating it here would create a second one that can disagree.
+-- The table arrives with the change that has something to put in it.
+--
+-- This is what lets the billing integration be a separate change: the RevenueCat webhook
+-- and its reconciler write this column and nothing else, and a provider that is slow or
+-- unreachable can never delay a metered action, because the hot path reads a column
+-- rather than an API.
+--
+-- A timestamp rather than a boolean, and this matters more than it looks: a lapsed
+-- subscription needs no sweep to take effect and no cron to expire it. It stops being
+-- true by itself, at exactly the instant it should. The same property is what makes a
+-- hand-set value safe while the billing integration is still being built — forgetting to
+-- remove one costs nothing, because it expires.
+--
+-- Nullable with no backfill: every existing account is on the free plan, and NULL says
+-- that without writing 8 million rows to say it again.
+--
+-- Applied to a fresh volume by initdb after 0119; on an existing prod volume this
+-- statement must be run manually BEFORE deploying code that reads the column.
+ALTER TABLE users ADD COLUMN pro_until timestamp with time zone;
