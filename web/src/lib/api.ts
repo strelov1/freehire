@@ -668,6 +668,18 @@ export function createApi(
     );
   }
 
+  /** The salary bands for one category in one country, as the /roles landings read
+   *  them. Scoping by country drops the per-seniority breakdown the category-only
+   *  call returns — the endpoint answers with one row per (currency, period) for the
+   *  scope as a whole — so the rows carry no seniority and are not merged. */
+  async function insightsSalaryByCategoryInCountry(
+    category: string,
+    country: string,
+  ): Promise<InsightSalaryBand[]> {
+    const q = new URLSearchParams({ category, country });
+    return requestData<InsightSalaryBand[]>(`/api/v1/insights/salary?${q}`);
+  }
+
   /** Company hiring-signal leaderboard: companies ranked by 30-day open-job growth
    *  (`growth` ramping, `-growth` freezing) or `open` size. `minOpen` floors the
    *  current open-count to blunt ingest-artifact spikes. */
@@ -2087,6 +2099,7 @@ export function createApi(
     insightsRoles,
     insightsSkills,
     insightsSalaryByCategory,
+    insightsSalaryByCategoryInCountry,
     insightsCompanies,
     marketPulse,
     sitemapJobs,

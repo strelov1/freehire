@@ -1,3 +1,4 @@
+import { landingCategories } from '$lib/roleLandings';
 import { serverApi } from '$lib/server/api';
 import { JOB_SITEMAP_CHUNK, SITEMAP_CHUNK, sitemapIndexXml, xmlResponse } from '$lib/sitemap';
 import type { RequestHandler } from './$types';
@@ -17,6 +18,12 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
   ]);
 
   const locs = [`${origin}/sitemap-pages.xml`, `${origin}/sitemap-insights.xml`];
+  // One role sub-sitemap per category. The category list is a compile-time constant,
+  // so naming all of them costs no read here — each shard pays its own single facet
+  // call when a crawler actually follows it.
+  for (const { slug } of landingCategories()) {
+    locs.push(`${origin}/sitemap-roles.xml?category=${slug}`);
+  }
   // Both cursor lists already include the opening 0, so they are listed as they come.
   for (const offset of jobOffsets) {
     locs.push(`${origin}/sitemap-jobs.xml?offset=${offset}`);

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { SITEMAP_CHUNK, STATIC_PATHS, collectionPaths, blogPaths } from './sitemap';
+import {
+  SITEMAP_CHUNK,
+  STATIC_PATHS,
+  collectionPaths,
+  blogPaths,
+  roleLandingPaths,
+} from './sitemap';
 
 describe('sitemap static paths', () => {
   it('includes the collections hub and the for-companies page', () => {
@@ -39,6 +45,28 @@ describe('sitemap static paths', () => {
   // sitemap tells crawlers to index the address that no longer serves the page.
   it('drops the moved referrals URL', () => {
     expect(STATIC_PATHS).not.toContain('/referrals');
+  });
+});
+
+describe('roleLandingPaths', () => {
+  it('lists the category table and one page per country given', () => {
+    expect(roleLandingPaths('backend', ['germany', 'poland'])).toEqual([
+      '/roles/backend',
+      '/roles/backend/germany',
+      '/roles/backend/poland',
+    ]);
+  });
+
+  it('takes the countries already gated, so a thin pair is never listed', () => {
+    // The gate lives in publishedCountries; this builder is handed its output and
+    // adds nothing of its own, which is what keeps the sitemap and the route (404)
+    // reading off one rule instead of two.
+    expect(roleLandingPaths('backend', [])).toEqual(['/roles/backend']);
+  });
+
+  it('lists the hub itself among the static paths, not here', () => {
+    expect(STATIC_PATHS).toContain('/roles');
+    expect(roleLandingPaths('backend', ['germany'])).not.toContain('/roles');
   });
 });
 

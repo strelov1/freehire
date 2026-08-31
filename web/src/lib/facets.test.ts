@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { COLLECTIONS, AI_ARCHETYPE_VALUES, ROLE_TYPE_VALUES } from './generated/contracts';
-import { cityOption, collapseCities, countryLabel, FACETS } from './facets';
+import {
+  cityOption,
+  collapseCities,
+  countryFromSlug,
+  countryLabel,
+  countrySlug,
+  FACETS,
+  slugifiedCountries,
+} from './facets';
 
 const collectionOptions = () => FACETS.find((f) => f.param === 'collections')?.options ?? [];
 
@@ -124,5 +132,69 @@ describe('collapseCities', () => {
     ]);
 
     expect(options).toHaveLength(2);
+  });
+});
+
+describe('the country slug index', () => {
+  it('slugifies the English name, not the ISO code — the code is not what anyone searches', () => {
+    expect(countrySlug('de')).toBe('germany');
+    expect(countrySlug('us')).toBe('united-states');
+    expect(countrySlug('gb')).toBe('united-kingdom');
+  });
+
+  it('resolves a slug back to its ISO code', () => {
+    expect(countryFromSlug('germany')).toBe('de');
+    expect(countryFromSlug('united-states')).toBe('us');
+  });
+
+  it('strips diacritics rather than emitting them into a URL', () => {
+    // 'Åland Islands' and 'Côte d’Ivoire' both carry marks Intl returns verbatim.
+    expect(countrySlug('ax')).toBe('aland-islands');
+    expect(countrySlug('ci')).toMatch(/^[a-z0-9-]+$/);
+  });
+
+  it('never publishes a slug that is merely an ISO code', () => {
+    // countryLabel ECHOES the uppercased code when Intl has no name for it. A full-ICU
+    // Node resolves every code in the list, so nothing echoes here — but a small-icu
+    // build resolves few, and each miss would otherwise mint a URL out of a
+    // two-letter non-word. The invariant holds either way, so it is what we assert
+    // rather than the echo of any one code.
+    const codes = new Set(slugifiedCountries().map((c) => c.code));
+    for (const { slug } of slugifiedCountries()) {
+      expect(codes.has(slug)).toBe(false);
+    }
+  });
+
+  it('names no country Intl could not name', () => {
+    for (const { code } of slugifiedCountries()) {
+      expect(countryLabel(code)).not.toBe(code.toUpperCase());
+    }
+  });
+
+  it('is injective — no two countries may claim one slug', () => {
+    const slugs = slugifiedCountries().map((c) => c.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+  });
+
+  it('round-trips every country it publishes', () => {
+    for (const { code, slug } of slugifiedCountries()) {
+      expect(countryFromSlug(slug)).toBe(code);
+      expect(countrySlug(code)).toBe(slug);
+    }
+  });
+
+  it('emits URL-safe slugs only', () => {
+    // Asserted by the property rather than by a shape regex: a slug is URL-safe
+    // exactly when encoding it changes nothing, which is the thing that matters and
+    // not a pattern that happens to describe today's names. (It also keeps a
+    // character class out of this file — the design-system token check reads
+    // `-[a-z0-9]` inside a regex as a Tailwind arbitrary value and fails the commit.)
+    for (const { slug } of slugifiedCountries()) {
+      expect(encodeURIComponent(slug)).toBe(slug);
+      expect(slug).toBe(slug.toLowerCase());
+      expect(slug.startsWith('-')).toBe(false);
+      expect(slug.endsWith('-')).toBe(false);
+      expect(slug).not.toContain('--');
+    }
   });
 });

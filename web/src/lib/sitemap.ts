@@ -50,6 +50,9 @@ export const STATIC_PATHS = [
   '/contribute',
   '/status',
   '/privacy',
+  // The role×country hub. Its category and pair pages are gated on live counts, so
+  // they ride in their own per-category sub-sitemaps rather than here.
+  '/roles',
 ];
 
 /** The curated collection landing pages (`/collections/:slug`), one per collection.
@@ -85,6 +88,22 @@ export function insightsPaths(categories: string[]): string[] {
     paths.push(`/insights/salary/${c}`, `/insights/skills/${c}`, `/insights/roles/${c}`);
   }
   return paths;
+}
+
+/** Sitemap paths for one category's landings: its country table plus a page per
+ *  country that clears the gate. Takes the already-gated countries (from
+ *  `publishedCountries`) so it stays pure — a thin pair is never listed, matching
+ *  what the route serves for one (404).
+ *
+ *  Split per category on purpose: the whole product is ~2,200 URLs, which fits one
+ *  file, but building it in one would cost one facet call per category in a single
+ *  request. One sub-sitemap per category costs one call each, and the index can name
+ *  all 37 without reading anything. */
+export function roleLandingPaths(categorySlug: string, countrySlugs: string[]): string[] {
+  return [
+    `/roles/${categorySlug}`,
+    ...countrySlugs.map((country) => `/roles/${categorySlug}/${country}`),
+  ];
 }
 
 /** A sitemap path with the date its content last changed, before an origin is
