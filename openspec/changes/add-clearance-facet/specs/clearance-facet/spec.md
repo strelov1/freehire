@@ -1,0 +1,247 @@
+## ADDED Requirements
+
+### Requirement: A stated government clearance requirement is detected dict-only
+
+The system SHALL detect, from a posting's description alone, whether it states a
+government security-clearance requirement, and SHALL do so from a curated list of
+anchored phrases — never from an LLM, and never by guessing. A description that
+states no clearance requirement SHALL yield *unknown*, not a negative: the
+dictionary emits nothing for what it cannot resolve, the same discipline every
+other facet dictionary follows.
+
+The list SHALL cover the schemes the catalogue actually carries: the UK
+(`SC clearance`, `SC cleared`, `DV clearance`, `DV cleared`, `CTC clearance`,
+`BPSS`, `security vetting`, `developed vetting`), the US (`security clearance`,
+`secret clearance`, `top secret clearance`, `TS/SCI`, `SCI clearance`,
+`polygraph`, `public trust clearance`, `DoD clearance`), Australia
+(`baseline clearance`, `NV1`, `NV2`, `negative vetting`, `AGSVA`), and the
+scheme-neutral forms (`active clearance`, `current clearance`, `security-cleared`,
+`clearance required`, `must hold a clearance`).
+
+Bare short tokens SHALL NOT appear on the list. `SC`, `DV`, and `L` collide with
+ordinary words and unrelated initialisms, so each is listed only in a longer
+anchoring form. This is the same precision-over-recall trade `eligibility.go`
+already documents for the geography phrases.
+
+#### Scenario: A UK clearance requirement is detected
+
+- **WHEN** a description says "You must hold or be eligible for SC clearance"
+- **THEN** the posting is marked as requiring a clearance
+
+#### Scenario: A US clearance requirement is detected
+
+- **WHEN** a description says "Active TS/SCI with CI Polygraph required"
+- **THEN** the posting is marked as requiring a clearance
+
+#### Scenario: An Australian clearance requirement is detected
+
+- **WHEN** a description says "Must hold a current NV1 clearance"
+- **THEN** the posting is marked as requiring a clearance
+
+#### Scenario: A bare short token does not fire
+
+- **WHEN** a description says "We are an SC-registered charity" or "the DV team
+  owns deployment"
+- **THEN** the posting is NOT marked as requiring a clearance
+
+#### Scenario: Silence yields unknown, not a negative
+
+- **WHEN** a description mentions no clearance scheme at all
+- **THEN** the clearance signal is unknown — neither `true` nor `false`
+
+### Requirement: A labelled clearance field is detected as well as clearance prose
+
+The system SHALL additionally detect the labelled-field form ATS postings use to
+state the requirement as structured text rather than prose — a `clearance` label
+followed by a separator and a value, as in `Clearance: Secret`,
+`Clearance Level: Public Trust`, `Clearance Required: Yes`,
+`CLEARANCE TYPE: Polygraph`.
+
+A labelled field SHALL mark the posting only when its value names a clearance or
+asserts one is required. A label whose value denies the requirement
+(`Clearance Required: No`, `Clearance: None`, `Clearance: N/A`) SHALL NOT mark it.
+
+This rule exists because a phrase list alone misses this form: in the sampled
+`clearance` rows it accounted for roughly a fifth of all true positives.
+
+#### Scenario: A labelled field naming a clearance is detected
+
+- **WHEN** a description contains "Clearance: TS with SCI eligibility"
+- **THEN** the posting is marked as requiring a clearance
+
+#### Scenario: A labelled field asserting the requirement is detected
+
+- **WHEN** a description contains "CLEARANCE REQUIRED FOR START: Yes"
+- **THEN** the posting is marked as requiring a clearance
+
+#### Scenario: A labelled field denying the requirement does not fire
+
+- **WHEN** a description contains "Clearance Required: No" or "Clearance: None"
+- **THEN** the posting is NOT marked as requiring a clearance
+
+### Requirement: A denied clearance requirement cancels the signal
+
+The system SHALL NOT mark a posting as requiring a clearance when the description
+denies the requirement — `no security clearance required`,
+`security clearance is not required`, `this role does not require a clearance`,
+`no clearance needed`.
+
+A denial cancels the signal for the whole description rather than for one phrase.
+A posting that says "No security clearance is required for this role" while also
+naming a clearance elsewhere is telling the reader it will hire them, and marking
+it would hide from the searcher exactly the posting they were looking for. This
+is the failure mode with the highest cost in the whole feature: a false positive
+removes a job the candidate can actually get.
+
+#### Scenario: An explicit denial cancels the signal
+
+- **WHEN** a description says "No security clearance is required for this role"
+- **THEN** the posting is NOT marked as requiring a clearance
+
+#### Scenario: A denial outweighs an anchor elsewhere in the same description
+
+- **WHEN** a description mentions "security clearance" in a benefits list and
+  separately states "clearance is not required"
+- **THEN** the posting is NOT marked as requiring a clearance
+
+### Requirement: Unrelated senses of "clearance" do not fire
+
+The system SHALL NOT mark a posting on the strength of the word `clearance` in a
+sense unrelated to government vetting — `customs clearance`, `medical clearance`,
+`clearance sale`, `security clearance specialist` in the medical-billing sense.
+Only the anchored phrases and the labelled field fire; a bare `clearance` token
+never does.
+
+#### Scenario: Customs clearance does not fire
+
+- **WHEN** a description says "handle inbound/outbound customs clearance"
+- **THEN** the posting is NOT marked as requiring a clearance
+
+#### Scenario: Medical clearance does not fire
+
+- **WHEN** a description says "medical clearance is required before your start
+  date"
+- **THEN** the posting is NOT marked as requiring a clearance
+
+### Requirement: An obtainable clearance counts as required
+
+The system SHALL mark a posting that asks the candidate to be *able to obtain* a
+clearance (`must be able to obtain a security clearance`,
+`eligible for SC clearance`, `Clearance Required: Ability to Obtain Public Trust`)
+the same as one demanding an existing clearance.
+
+Eligibility for a clearance turns on nationality and residency history, so a
+candidate who cannot hold one cannot obtain one either. Serving these as
+unrestricted would leave them in exactly the lane the filter exists to clear.
+
+#### Scenario: An obtainable clearance is marked
+
+- **WHEN** a description says "Must be able to obtain and maintain a US Secret
+  clearance"
+- **THEN** the posting is marked as requiring a clearance
+
+### Requirement: The clearance signal is a stored, tri-state column derived on every write path
+
+The system SHALL store the signal in `jobs.requires_clearance`, a nullable
+boolean: `true` when the description states a requirement, `NULL` when it states
+nothing. It SHALL NOT write an explicit `false` — a denial produces the absence of
+a `true`, not an assertion, because the dictionary cannot distinguish "this
+posting says no clearance is needed" from "this posting is silent" reliably enough
+to serve the difference.
+
+The column SHALL be computed by `jobderive` and derived through the `Job` aggregate
+factory (`job.New`) on every write path — ingest, moderator authoring, and
+Telegram — so the three cannot diverge.
+
+#### Scenario: A clearance posting stores true
+
+- **WHEN** a posting whose description states a clearance requirement is written
+- **THEN** `jobs.requires_clearance` is `true`
+
+#### Scenario: A silent posting stores NULL
+
+- **WHEN** a posting whose description states no clearance requirement is written
+- **THEN** `jobs.requires_clearance` is `NULL`
+
+#### Scenario: The moderator path derives identically to ingest
+
+- **WHEN** a moderator-authored posting and a board-ingested posting carry the
+  same description
+- **THEN** they resolve the same `requires_clearance` value, because both
+  construct their `Job` through the aggregate factory
+
+### Requirement: The facet is served and filterable
+
+The public read model SHALL serve the signal as `requires_clearance`, omitted when
+unknown, sourced from the `jobs` column only.
+
+`GET /api/v1/jobs` SHALL accept an optional `requires_clearance` query parameter.
+`requires_clearance=false` SHALL return the postings that are NOT marked — both
+the explicitly-unmarked and the unknown — because a searcher asking to exclude
+clearance jobs wants everything the system does not know to require one.
+`requires_clearance=true` SHALL return only the marked postings, which serves the
+opposite audience: a cleared candidate searching for the work they are uniquely
+eligible for. Omitting the parameter SHALL behave exactly as today.
+
+The Meilisearch index SHALL declare a matching filterable attribute.
+
+#### Scenario: Excluding clearance jobs returns the unknowns too
+
+- **WHEN** a caller requests `GET /api/v1/jobs?requires_clearance=false`
+- **THEN** the results contain postings whose `requires_clearance` is `NULL` as
+  well as those explicitly not marked, and no posting marked `true`
+
+#### Scenario: Requesting only clearance jobs returns the marked ones
+
+- **WHEN** a caller requests `GET /api/v1/jobs?requires_clearance=true`
+- **THEN** every result is marked as requiring a clearance
+
+#### Scenario: An unknown facet is omitted from the wire shape
+
+- **WHEN** a posting with `requires_clearance = NULL` is served
+- **THEN** the response object carries no `requires_clearance` key
+
+#### Scenario: Omitting the filter changes nothing
+
+- **WHEN** a caller requests `GET /api/v1/jobs` with no `requires_clearance`
+  parameter
+- **THEN** the results include clearance and non-clearance postings alike
+
+### Requirement: The filterable attribute reaches the live index before the binary requesting it
+
+The Meilisearch settings patch declaring `requires_clearance` filterable SHALL be
+applied to the live index BEFORE the binary that requests the facet is deployed.
+
+A binary that requests a filterable attribute the live index has not declared
+hard-500s `/api/v1/jobs/facets` for every caller, signed in or not. This is a
+documented hazard of this codebase, not a hypothetical.
+
+#### Scenario: Settings precede the binary
+
+- **WHEN** the change is rolled out
+- **THEN** the index settings declare the attribute before the new binary serves
+  traffic, and `/api/v1/jobs/facets` never 500s during the rollout
+
+### Requirement: The existing catalogue is backfilled from a search-named candidate set
+
+The backfill SHALL re-derive only the postings a Meilisearch query names as
+candidates — the `clearance` token, plus the anchors that do not contain the word
+(`ts/sci`, `polygraph`, `bpss`, `vetting`, `agsva`) — rather than walking the whole
+catalogue.
+
+It SHALL be idempotent and resumable: a row whose derived value already matches is
+not written, so a re-run costs nothing and stopping it mid-way is free.
+
+A full catalogue pass SHALL NOT be used. It runs ~15 hours, and a `description`
+predicate over the whole table de-TOASTs 8M rows — a known production trap.
+
+#### Scenario: Only candidates are touched
+
+- **WHEN** the backfill runs
+- **THEN** it reads and updates only the search-named candidate rows, leaving the
+  rest of the catalogue unread
+
+#### Scenario: A re-run writes nothing
+
+- **WHEN** the backfill is run a second time with no intervening changes
+- **THEN** it writes no rows
