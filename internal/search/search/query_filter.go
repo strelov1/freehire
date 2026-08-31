@@ -32,8 +32,12 @@ var StringFacets = map[string]string{
 	"salary_period":   "enrichment.salary_period",
 	"skills":          "skills",
 	"is_tech":         "is_tech",
-	"role":            "roles",
-	"ai_archetype":    "ai_archetype",
+	// requires_clearance is a true-or-absent boolean (see jobview), so facetEq
+	// special-cases the "false" value rather than emitting an equality against a
+	// value the index never carries.
+	"requires_clearance": "requires_clearance",
+	"role":               "roles",
+	"ai_archetype":       "ai_archetype",
 	// Derived at index time like the two above, so it filters on the bare attribute.
 	// The vocabulary holds one value, which makes `role_type_exclude` the way to ask
 	// for postings with no management marker — NOT a positive individual-contributor
@@ -70,7 +74,27 @@ func facetEq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsEmpty(attr)
 	}
+	if param == RequiresClearanceParam {
+		return clearanceFragment(val)
+	}
 	return Eq(attr, val)
+}
+
+// RequiresClearanceParam is the facet whose stored value is true-or-absent: a
+// posting that states a government clearance requirement carries it, and every other
+// posting — the vast majority — carries no such attribute at all.
+const RequiresClearanceParam = "requires_clearance"
+
+// clearanceFragment builds the requires_clearance predicate. "false" cannot be an
+// equality: nothing in the index is ever written false, so `requires_clearance =
+// false` matches nothing and would silently empty a result set the caller expected to
+// be nearly the whole catalogue. Negating the positive is what actually answers
+// "everything not marked", including the documents that omit the attribute.
+func clearanceFragment(val string) string {
+	if val == "false" {
+		return "NOT " + EqBool(RequiresClearanceParam, true)
+	}
+	return EqBool(RequiresClearanceParam, true)
 }
 
 // facetNeq builds a facet's exclude fragment: an inequality, except the regions

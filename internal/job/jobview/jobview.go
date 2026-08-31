@@ -74,10 +74,19 @@ type Job struct {
 	// omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
 	// indexed as a filterable Meili facet; an unknown value is absent so it filters as
 	// empty. Derived from title + category (jobderive), never from the LLM.
-	IsTech    string  `json:"is_tech,omitempty"`
-	PostedAt  *string `json:"posted_at"`
-	CreatedAt *string `json:"created_at"`
-	UpdatedAt *string `json:"updated_at"`
+	IsTech string `json:"is_tech,omitempty"`
+	// RequiresClearance marks a posting that states a government security-clearance
+	// requirement (UK SC/DV, US Secret/TS-SCI, AU NV1). Deterministic, derived from
+	// the description (internal/dict/location), never from the LLM.
+	//
+	// A plain bool with omitempty rather than the tri-state IsTech renders as: the
+	// stored column only ever holds true or NULL, so the key is present exactly when
+	// a requirement was detected. There is no serialized false, because "we detected
+	// nothing" must not reach a reader as "this job needs no clearance".
+	RequiresClearance bool    `json:"requires_clearance,omitempty"`
+	PostedAt          *string `json:"posted_at"`
+	CreatedAt         *string `json:"created_at"`
+	UpdatedAt         *string `json:"updated_at"`
 	// LastSeenAt is when a re-crawl last confirmed this posting still live — see
 	// docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
 	// JobPosting.validThrough for an open job (seo.ts), since most sources carry
@@ -183,6 +192,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Cities:            cities,
 		Collections:       collections,
 		IsTech:            isTechFacet(f.IsTech),
+		RequiresClearance: f.RequiresClearance != nil && *f.RequiresClearance,
 		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:         rfc3339Ptr(f.CreatedAt),
 		UpdatedAt:         rfc3339Ptr(f.UpdatedAt),

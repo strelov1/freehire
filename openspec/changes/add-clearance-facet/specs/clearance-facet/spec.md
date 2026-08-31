@@ -270,3 +270,20 @@ predicate over the whole table de-TOASTs 8M rows — a known production trap.
 
 - **WHEN** the backfill is run a second time with no intervening changes
 - **THEN** it writes no rows
+
+### Requirement: The backfill is followed by a full index rebuild
+
+Backfilling the column SHALL be followed by a full Meilisearch rebuild, because the
+incremental push only sends documents whose `content_hash` moved and the new column
+is not part of that hash. Without the rebuild the facet is filterable but empty for
+every pre-existing posting, which reads as "no job requires a clearance" rather than
+as "the index has not caught up".
+
+This is the trap `is_tech` already fell into and it is documented in the codebase;
+the rebuild is a required step of this change, not an optimisation.
+
+#### Scenario: Backfilled rows reach the index
+
+- **WHEN** the backfill has marked the catalogue and a full rebuild has run
+- **THEN** filtering `requires_clearance=true` returns the marked pre-existing
+  postings, not only the ones ingested since the deploy

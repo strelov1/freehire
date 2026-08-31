@@ -36,14 +36,14 @@
 
 ## 3. Serving and filtering
 
-- [ ] 3.1 Serve `requires_clearance` from `internal/job/jobview`, omitted when
+- [x] 3.1 Serve `requires_clearance` from `internal/job/jobview`, omitted when
   unknown, test-first — mirroring how `is_tech` renders its tri-state.
-- [ ] 3.2 Add `requires_clearance` to the Meilisearch filterable set in
+- [x] 3.2 Add `requires_clearance` to the Meilisearch filterable set in
   `internal/search/search/client.go`.
-- [ ] 3.3 Map the query parameter in `internal/search/search/query_filter.go`,
+- [x] 3.3 Map the query parameter in `internal/search/search/query_filter.go`,
   test-first — including that `false` yields `IS NULL OR = false`, not a plain
   equality, so the unknowns are returned.
-- [ ] 3.4 Confirm an absent parameter changes no behaviour (spec scenario).
+- [x] 3.4 Confirm an absent parameter changes no behaviour (spec scenario).
 
 ## 4. Documentation and UI
 
@@ -74,3 +74,7 @@
 - [ ] 6.5 Deploy, then verify `/api/v1/jobs/facets` still answers 200 and
   `?requires_clearance=false` filters.
 - [ ] 6.6 Run the backfill and record the true marked-posting count.
+- [ ] 6.7 Run a full Meilisearch rebuild. The incremental push only sends documents
+  whose `content_hash` moved, and the new column is not in that hash — the trap
+  `is_tech` already fell into — so without this the facet is empty for every
+  pre-existing posting. Pause `freehire-reindexw.timer` first.

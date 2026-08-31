@@ -603,6 +603,14 @@ func facetSettings() *meilisearch.Settings {
 			// the facet hard-500s /api/v1/jobs/facets for every caller, so the settings
 			// patch goes out BEFORE the binary flips.
 			"role_type",
+			// requires_clearance is a jobs column served top-level, so it filters on the
+			// bare attribute like is_tech. It is written true-or-absent, never false: a
+			// posting with no stated requirement omits the attribute entirely, which is
+			// why the "exclude clearance jobs" filter negates the positive instead of
+			// testing for a false (see clearanceFragment in query_filter.go).
+			//
+			// The settings-before-binary warning above applies to this attribute too.
+			"requires_clearance",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",
