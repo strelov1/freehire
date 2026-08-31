@@ -229,6 +229,41 @@ Note that "is this a people-management role?" is **already a separate facet**:
 say what field the work is in, and the manager/IC distinction already has its own
 attribute.
 
+### Why the `management` bucket should stay as it is
+
+The obvious follow-up — re-route those 210,322 postings by domain — was costed and
+rejected. Three findings, in increasing order of importance.
+
+**There is no head to attack.** Across 800 sampled `management` titles, the word
+qualifying "Manager" takes **352 distinct values, 256 of which (73%) occur exactly
+once**. The most common is `engineering` at 2.2%, and `{"engineering manager",
+"management"}` is already an explicit, deliberate mapping. Everything below it is at
+or under 1%: partner, business, restaurant, construction, production, property, EHS,
+warehouse, logistics, guest experience.
+
+**Most of what could be routed needs categories we do not have.** Of the top thirty
+qualifiers, the ones with real volume — restaurant, construction, property, EHS,
+warehouse, care, guest experience — have no home in `vocab.CategoryValues`. Adding
+them is a decision about what catalogue this is, not a dictionary fix. What could go
+to an existing category (partner → sales, communications → marketing, logistics →
+operations, data → data_analytics) is roughly 5–6% of the bucket, about 12,000
+postings, at the cost of 15–20 hand-curated aliases — and `dictionaries.go` already
+argues why bare nouns like `content`, `growth` and `performance` cannot be trusted
+alone, since they name technical roles too.
+
+**The fall-through is load-bearing.** `{"manager", "management"}` is the terminal
+entry in `categoryTable` (`internal/dict/classify/dictionaries.go:792`), and
+`management` is a `NonTechCategories` member, so `is_tech` is false and the
+enrichment enqueue gate (`is_tech IS TRUE`) never sends those postings to the LLM.
+Narrow the fall-through and roughly 121,000 bare-"Manager" titles resolve to no
+category from the dictionary and get no LLM answer either — which is exactly
+`search.CategoryUnresolved` (`internal/search/search/document.go:156`), and
+`cmd/reindex`'s `splitJobs` **deletes** those from the index. They would leave the
+site's own search and the sitemap.
+
+The asymmetry decides it: the upside is a better facet for ~12,000 postings, the
+downside is ~121,000 postings falling out of the catalogue.
+
 ## Facet coverage, and which gaps are fixable
 
 | Facet | Whole catalogue | Tech categories | Non-tech categories |
