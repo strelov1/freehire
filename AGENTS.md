@@ -53,7 +53,7 @@ they are manual job intake rather than applications.
 
 Non-obvious:
 
-- `migrations/` — the source for **both** sqlc codegen and Postgres initdb. Never edit an applied migration; add a new file.
+- `migrations/` — the source for **both** sqlc codegen and Postgres initdb. Never edit an applied migration; add a new file. `pnpm check:sql` (squawk, via `scripts/check-migrations.mjs`) lints the ones a change ADDS — the applied history holds 1322 findings that stay, because rewriting an applied file is a worse hazard than any of them. Whether a file runs inside a transaction is a property of the FILE (the `migrate: no-transaction` marker), so the check runs two passes; `.squawk.toml` carries the argument. Suppress a rule with `-- squawk-ignore <rule-name>` on the line before the statement, with the reason beside it.
 - `sources/` — YAML board files, not Go. One file per ATS provider, plus `custom.yml` and `telegram.yml`.
 - `design-system/` — a separate pnpm package, sibling to `web/` and `extension/`, linked via
   pnpm's `link:../design-system` (`web/`) or npm's `file:../design-system` (`extension/`) — both

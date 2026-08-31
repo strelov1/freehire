@@ -104,6 +104,44 @@ jobs:
           path: coverage/*.out
           if-no-files-found: ignore
 
+  # Lints only the migrations this pull request ADDS. The applied history carries 1322
+  # findings and is never going to be fixed — "never edit an applied migration" is the
+  # rule this repository runs on, and rewriting one is a worse hazard than any finding.
+  # A migration file genuinely never changes after it lands, which makes this a far
+  # cleaner ratchet than the line-based one the Go lint uses: no baseline file to drift.
+  #
+  # Read .squawk.toml for why the invocation is split in two passes.
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # The script asks git which migrations are new since the merge base, so the
+          # base commit has to be reachable. A shallow clone would make every migration
+          # look either new or absent, and neither is a useful answer — which is why the
+          # script fails on an unresolvable base rather than reporting an empty list.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The step prints how many files it examined. On a branch with no migration that
+      # is zero, which is the honest answer — and visible, rather than a green tick over
+      # a check that found nothing to do.
+      - name: Lint new migrations
+        run: pnpm check:sql
+
   design-system:
     runs-on: ubuntu-latest
     defaults:

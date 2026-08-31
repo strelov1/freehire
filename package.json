@@ -1,5 +1,13 @@
 {
   "name": "freehire",
   "private": true,
-  "packageManager": "pnpm@11.7.0"
+  "description": "Repository root. The Go module is the product; web/, design-system/ and extension/ are their own packages with their own manifests. Only repo-wide tooling lives here.",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "check:sql": "node scripts/check-migrations.mjs"
+  },
+  "devDependencies": {
+    "squawk-cli": "^2.63.0"
+  }
 }

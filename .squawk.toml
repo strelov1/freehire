@@ -1,0 +1,42 @@
+# Migration linting. Two rules are excluded here and nothing else is; every other
+# finding is either a real hazard or gets a `-- squawk-ignore <rule>` line beside the
+# statement, where the argument sits next to the thing it argues about.
+#
+# WHAT RUNS THIS IS `scripts/check-migrations.mjs`, NOT A BARE `squawk migrations/*.sql`.
+# Two reasons, and both are facts about this repository rather than taste:
+#
+#   1. `assume_in_transaction` is not a property of the repository, it is a property of
+#      the FILE. The runner wraps each migration in a transaction unless the file's
+#      leading comment carries `migrate: no-transaction`
+#      (internal/platform/migrate/migrate.go), and 21 of 156 files do. Squawk has no
+#      per-file switch, so the invocation is split into two passes and the script decides
+#      which file goes in which. Setting the flag globally would be a lie in whichever
+#      direction it was set: `true` hides `prefer-robust-stmts` on exactly the files that
+#      can half-apply, and `false` demands `CREATE INDEX CONCURRENTLY` on files where it
+#      cannot run at all.
+#
+#   2. Ratchet. There are 1322 findings across the applied history and they are not going
+#      to be fixed — "never edit an applied migration" is the rule this repository runs
+#      on, and rewriting one is a worse hazard than any finding here. So the check reads
+#      only the files a change ADDS. That is unusually clean for a ratchet: unlike a line
+#      of Go, a migration file genuinely never changes after it lands, so there is no
+#      baseline file to drift and no blame-by-line to compute.
+
+# The runner sets `SET lock_timeout = '5s'` once per connection, session-level so it
+# covers the no-transaction files too, immediately after taking its advisory lock. The
+# rule wants the SET inside every migration; here that would be a second copy of a
+# setting that is already central — and a copy that can drift from it. See the comment on
+# `lockTimeout` in internal/platform/migrate/migrate.go, which records the 2026-07-30
+# incident it exists for: an ALTER queued behind the nightly pg_dump, with live reads
+# piling up behind the ALTER.
+#
+# The day the runner stops setting it, this exclusion is what let a migration through
+# without one.
+#
+# `require-statement-timeout` is excluded for the opposite reason — deliberately absent
+# rather than centrally present. lock_timeout bounds how long a migration WAITS for a
+# lock; a statement timeout would bound how long it may HOLD one, which would abort a
+# long index build partway. On a catalogue this size that is the common case, not the
+# edge, and an aborted CONCURRENTLY build leaves an INVALID index behind (migrations 0117
+# and 0118 are the repair pair for exactly that).
+excluded_rules = ["require-lock-timeout", "require-statement-timeout"]

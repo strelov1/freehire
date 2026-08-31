@@ -35,6 +35,18 @@ pre-commit:
           exit 0
         fi
         govulncheck ./... || echo "govulncheck reported findings above (non-blocking for now, see lefthook.yml)"
+    # Expand/contract for migrations, which was prose in AGENTS.md and read by nothing.
+    # It is here rather than only in CI because the mistakes it catches — a UNIQUE
+    # constraint that takes ACCESS EXCLUSIVE on a live table, a constraint added without
+    # NOT VALID — are cheap to fix while writing the migration and expensive once the
+    # file carries a version number someone else has applied.
+    #
+    # lefthook filters {staged_files} by the glob, so the script receives migrations and
+    # nothing else. Read .squawk.toml for why the invocation is split in two.
+    sql-migrations:
+      glob: "migrations/*.sql"
+      run: node scripts/check-migrations.mjs {staged_files}
+
     # THE ONLY HOOK HERE THAT PREVENTS SOMETHING RATHER THAN REPORTING IT.
     #
     # Everything else in this file is a convenience: it fails locally so CI does not
