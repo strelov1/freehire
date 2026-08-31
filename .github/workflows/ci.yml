@@ -140,6 +140,10 @@ jobs:
       - name: Install web dependencies
         run: pnpm --dir web install --frozen-lockfile
 
+      # npm, not pnpm — extension/ is the one JS package in this repository managed by npm.
+      - name: Install extension dependencies
+        run: npm --prefix extension ci
+
       - name: Check for dead code and unused dependencies
         run: pnpm check:dead
 

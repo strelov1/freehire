@@ -44,6 +44,14 @@ export default {
       ignoreDependencies: ['svelte-eslint-parser'],
     },
 
+    // WXT builds the extension from entrypoints/, so those are the roots — nothing imports
+    // them. The two config files are read by tooling rather than by code.
+    extension: {
+      entry: ['entrypoints/**/*.{ts,svelte,html}', 'wxt.config.ts', 'vitest.config.ts'],
+      project: ['entrypoints/**', 'lib/**'],
+      ignoreDependencies: ['svelte-eslint-parser'],
+    },
+
     web: {
       entry: [
         'src/routes/**/+*.{ts,js,svelte}',
