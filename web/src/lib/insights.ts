@@ -16,7 +16,7 @@ import { SENIORITY_LABELS, categoryLabel, titleCase } from './labels';
 export const MIN_CATEGORY_OPEN = 25;
 
 /** Seniority tokens in rank order. '' is the category-wide band. */
-export const SENIORITY_ORDER = [
+const SENIORITY_ORDER = [
   'intern',
   'junior',
   'middle',

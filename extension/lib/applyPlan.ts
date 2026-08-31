@@ -37,7 +37,7 @@ export interface PlanItem {
 }
 
 /** How far along the questions that gate submission are. */
-export interface RequiredProgress {
+interface RequiredProgress {
   answered: number;
   total: number;
   /** Rounded to whole percent — the panel shows a figure, not a measurement. */

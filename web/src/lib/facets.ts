@@ -49,7 +49,7 @@ export interface FacetOption {
   icon?: string;
 }
 
-export type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
+type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
 
 /** One facet's live selection, as FacetSection reads it: the included and excluded
  *  values (a value is in at most one set), plus the include-set match mode. */
@@ -162,7 +162,7 @@ const languageNames = (() => {
   }
 })();
 
-export function languageLabel(code: string): string {
+function languageLabel(code: string): string {
   if (!code) return code;
   try {
     return languageNames?.of(code) ?? code.toUpperCase();
@@ -175,7 +175,7 @@ export function languageLabel(code: string): string {
 // no display name, so title-case the slug for a readable label. Imperfect for
 // acronyms (group-ib → "Group Ib") but consistent with the other facets — a real
 // slug→name lookup would need a per-company fetch, which this facet forgoes.
-export function companyLabel(slug: string): string {
+function companyLabel(slug: string): string {
   return titleCase(slug.replace(/-/g, '_'));
 }
 

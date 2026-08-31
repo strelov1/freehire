@@ -2,7 +2,7 @@
 // httpOnly, so nothing here can read its value — only whether it is present.
 
 /** Name of the session cookie the API sets. */
-export const SESSION_COOKIE = 'hire_token';
+const SESSION_COOKIE = 'hire_token';
 
 /** Whether a request's raw `Cookie` header carries a session.
  *

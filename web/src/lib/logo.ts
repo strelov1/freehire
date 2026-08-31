@@ -5,7 +5,7 @@
 // OG card). No third-party token or attribution ships in the browser — the proxy
 // owns everything server-side. Resolves by company name, since that is all most
 // call sites carry (job rows, search, referrals).
-export const COMPANY_LOGO_BASE = 'https://logo.freehire.me';
+const COMPANY_LOGO_BASE = 'https://logo.freehire.me';
 
 /** The proxy logo URL for a company name, or null when there is no name. */
 export function companyLogoUrl(name: string): string | null {

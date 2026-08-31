@@ -56,7 +56,7 @@ function pad(n: number): string {
 /** The reader's own calendar date for an instant. Local accessors, deliberately: the
  *  UTC ones would file a late-evening event on the previous day for anyone east of
  *  Greenwich, and on the next one for anyone west of it. */
-export function dayKey(d: Date): string {
+function dayKey(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 

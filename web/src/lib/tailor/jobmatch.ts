@@ -6,7 +6,7 @@
 import type { CvJobMatch } from '$lib/cv';
 import type { LineItem, RequirementCheck } from '$lib/generated/contracts';
 
-export interface JobMatchRow {
+interface JobMatchRow {
   id: string;
   label: string;
   earned: number;

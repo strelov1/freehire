@@ -9,7 +9,7 @@ import { countryLabel } from './facets';
 import { WORK_MODE_VALUES, type WorkMode } from './generated/contracts';
 import { REGION_LABELS, WORK_MODE_LABELS } from './labels';
 
-export type ScopeIcon = 'globe' | WorkMode;
+type ScopeIcon = 'globe' | WorkMode;
 
 /** What the trigger draws: an overlapping icon cluster, then the head geography and
  *  its "+N" roll-up. `label` is the same summary in words — the icons carry meaning

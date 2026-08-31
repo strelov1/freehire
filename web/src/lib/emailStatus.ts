@@ -23,7 +23,7 @@ export const STATUS_LABELS: Record<EmailStatusSignal, string> = {
   other: '',
 };
 
-export const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
+const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
   acknowledgement: 'border-border text-muted-foreground',
   screening: 'border-blue-400/40 text-blue-600 dark:text-blue-400',
   interview_invitation: 'border-emerald-400/50 text-emerald-600 dark:text-emerald-400',

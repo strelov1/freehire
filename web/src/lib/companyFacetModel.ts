@@ -18,7 +18,7 @@ import { COMPANY_FACETS } from './facets';
  *  the backend forces every rating-sorted request onto its Postgres path, since
  *  rating isn't a Meili-sortable attribute yet. */
 export type CompanySortField = 'job_count' | 'rating';
-export const DEFAULT_COMPANY_SORT: CompanySortField = 'job_count';
+const DEFAULT_COMPANY_SORT: CompanySortField = 'job_count';
 
 export interface CompanyFilters {
   q: string;

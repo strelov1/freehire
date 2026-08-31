@@ -11,7 +11,7 @@ import type { ToolCall } from './tool-formatters';
  *  call with its arguments and, once it comes back, its result) while
  *  `streaming`; `errored` is set when the turn ends with an error. User messages
  *  carry only `text`. */
-export interface ChatMessage {
+interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   thinking: string;

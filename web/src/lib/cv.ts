@@ -103,12 +103,11 @@ export interface JdResolveInput {
   company?: string;
 }
 
-export const DEFAULT_TEMPLATE_ID = 'classic-ats';
-
 /** A CV template the user can pick in the gallery. `photo` marks the templates that print the
  *  profile headshot — the gallery prompts for an upload when there is none. Mirrors
  *  cv.TemplateInfo. */
 // The two-report comparison behind the tailoring ATS delta.
+/** @public */
 export type { Delta as AtsDelta, CategoryChange as AtsCategoryChange } from './generated/contracts';
 
 /** The tailoring ATS-delta response: what tailoring did to the CV's ATS readiness, measured on
@@ -154,8 +153,8 @@ export interface CvFont {
 /** A fresh, fully-populated (but empty) document so the form can bind every section
  *  without null-guards. The server still sanitizes on save, dropping the empties. */
 /** The half-inch-per-side page margins a fresh CV starts with (mirrors cv.DefaultMargins). */
-export const DEFAULT_MARGIN = 0.5;
-export function defaultMargins(): Margins {
+const DEFAULT_MARGIN = 0.5;
+function defaultMargins(): Margins {
   return { top: DEFAULT_MARGIN, right: DEFAULT_MARGIN, bottom: DEFAULT_MARGIN, left: DEFAULT_MARGIN };
 }
 
@@ -174,7 +173,7 @@ function toMargins(m?: Partial<Margins>): Margins {
  *  empty/zero, which is what tells the renderer to use the active template's own typography.
  *  Filling these in would send concrete values back on the next autosave and freeze whichever
  *  template happened to be selected into the document. */
-export function emptyStyle(): Style {
+function emptyStyle(): Style {
   return { font_family: '', font_size: 0, line_height: 0 };
 }
 

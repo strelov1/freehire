@@ -16,7 +16,7 @@ import { categoryLabel } from './labels';
 export type RailSection = 'SAVED' | 'ROLE' | 'PAY & BENEFITS' | 'REQUIREMENTS & ELIGIBILITY' | 'FILTERS';
 
 /** Display order of the specialization section headings. */
-export const CATEGORY_GROUP_ORDER = [
+const CATEGORY_GROUP_ORDER = [
   'Engineering',
   'Data & AI',
   'Quality & Security',
@@ -28,11 +28,11 @@ export const CATEGORY_GROUP_ORDER = [
   'Other',
 ] as const;
 
-export type CategoryGroup = (typeof CATEGORY_GROUP_ORDER)[number];
+type CategoryGroup = (typeof CATEGORY_GROUP_ORDER)[number];
 
 /** Each category → its section. Keyed by the full Category union: a missing key
  *  fails the type-check, keeping the grouping exhaustive as the vocabulary grows. */
-export const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
+const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   software_engineering: 'Engineering',
   backend: 'Engineering',
   frontend: 'Engineering',
@@ -73,7 +73,7 @@ export const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   other: 'Other',
 };
 
-export interface CategorySectionOption {
+interface CategorySectionOption {
   value: Category;
   label: string;
 }
@@ -103,7 +103,7 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
 
 export const RAIL_SECTIONS: RailSection[] = ['ROLE', 'PAY & BENEFITS', 'REQUIREMENTS & ELIGIBILITY'];
 
-export type RailKind =
+type RailKind =
   | 'facet'
   | 'category'
   | 'location'

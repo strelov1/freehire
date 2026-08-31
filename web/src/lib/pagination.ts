@@ -15,7 +15,7 @@ export const PAGE_SIZE = 20;
 
 /** How deep the search API will page: it refuses `offset + limit > SEARCH_WINDOW`
  *  with "pagination too deep" (internal/handler/search.go, maxSearchWindow). */
-export const SEARCH_WINDOW = 10000;
+const SEARCH_WINDOW = 10000;
 
 /** Last page the API will serve, and so the last one worth linking — a link past
  *  it walks a crawler (or a visitor) into a 400. */

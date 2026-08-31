@@ -41,9 +41,9 @@ export function requirementStatusMeta(status: string): { label: string; tone: To
 // The page consumes the match stream (server-sent events) and folds each event into this
 // state via reduceMatchEvent — pure and DOM-free so the accumulation is unit-tested.
 
-export type StageState = 'pending' | 'active' | 'done';
+type StageState = 'pending' | 'active' | 'done';
 
-export interface MatchStage {
+interface MatchStage {
   n: number;
   label: string;
   state: StageState;

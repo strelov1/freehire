@@ -4,7 +4,7 @@
 import type { CvAtsDelta } from '$lib/cv';
 import type { LineItem } from '$lib/generated/contracts';
 
-export interface AtsDeltaRow {
+interface AtsDeltaRow {
   id: string;
   label: string;
   base: number;

@@ -7,7 +7,7 @@
 import type { SkillPulsePoint } from './api';
 import { must } from './utils';
 
-export interface DetailChartPoint {
+interface DetailChartPoint {
   x: number;
   y: number;
   weekStart: string;

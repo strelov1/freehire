@@ -26,7 +26,7 @@ export function esc(s: string): string {
 }
 
 /** One or two uppercase initials from a name, for the logo fallback tile. */
-export function monogram(name: string): string {
+function monogram(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const first = words[0];
   if (!first) return '?';

@@ -39,7 +39,7 @@ export class StreamInterrupted extends Error {
 
 /** Ask the server to stop a session's running turn. Safe to call when nothing is
  *  running: the caller cannot know whether the turn it stopped watching has ended. */
-export async function cancelTurn(sessionId: string): Promise<void> {
+async function cancelTurn(sessionId: string): Promise<void> {
   try {
     await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
       method: 'POST',

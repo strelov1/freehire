@@ -6,8 +6,7 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "check:sql": "node scripts/check-migrations.mjs",
-    "check:dead": "pnpm --dir web exec svelte-kit sync && knip --include files,dependencies,unlisted,binaries,unresolved --no-config-hints",
-    "check:dead:exports": "pnpm --dir web exec svelte-kit sync && knip"
+    "check:dead": "pnpm --dir web exec svelte-kit sync && knip"
   },
   "devDependencies": {
     "knip": "^6.33.0",

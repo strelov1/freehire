@@ -18,7 +18,7 @@ type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'file']);
 
 /** The ordered list of fillable controls on the page. */
-export function collectFillable(doc: Document): Fillable[] {
+function collectFillable(doc: Document): Fillable[] {
   const all = Array.from(doc.querySelectorAll<Fillable>('input, select, textarea'));
   return all.filter((el) => {
     if (el.disabled) return false;
@@ -224,7 +224,7 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
  * A react-select renders its listbox only once opened, so this is empty for one
  * that is closed — the agent reaches for `combobox.open` in that case.
  */
-export function comboOptions(el: Element): string[] {
+function comboOptions(el: Element): string[] {
   return comboOptionNodes(el).map(collapseText).filter(Boolean);
 }
 
@@ -659,7 +659,7 @@ function startsWithOption(value: string, option: string): boolean {
 }
 
 /** Writes one control, dispatching native events. Returns false if unfillable. */
-export function fillField(el: Fillable, value: string): boolean {
+function fillField(el: Fillable, value: string): boolean {
   if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
     el.checked = value === 'true' || value === '1' || normalizeLabel(value) === 'yes';
     dispatchNative(el);

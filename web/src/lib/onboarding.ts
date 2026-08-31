@@ -50,7 +50,7 @@ export function selectionsToQuery(sel: OnboardingSelection): string {
 // first. The role/specialization is deliberately absent — it's the visitor's
 // primary intent and is never auto-dropped. Operates on the live filter state so
 // the affordance works for any narrow feed, not only a wizard-built one.
-export const RELAX_FACET_ORDER = ['skills', 'regions', 'seniority'] as const;
+const RELAX_FACET_ORDER = ['skills', 'regions', 'seniority'] as const;
 
 /** The single narrowest relaxable facet currently constraining the feed, or null
  *  if none is set. The empty-state relax action clears exactly this one. */

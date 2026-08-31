@@ -19,7 +19,7 @@ export interface DeckEntry {
   concerns: string[];
 }
 
-export interface JobDeck {
+interface JobDeck {
   heading?: string;
   entries: DeckEntry[];
 }

@@ -17,7 +17,7 @@ import {
  *  job-search filter, the /jobs URL that applies it. `flag` carries an ISO 3166-1
  *  alpha-2 code for the country facet, so the renderer shows a flag icon (with
  *  `text` as its accessible name) instead of the bare code. */
-export interface FacetValue {
+interface FacetValue {
   text: string;
   href?: string;
   flag?: string;
@@ -112,7 +112,7 @@ export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null 
  * reach or an onsite role's area). Null when regions is unknown (empty is
  * unknown, not global).
  */
-export function regionLabel(job: Pick<Job, 'regions'>): string | null {
+function regionLabel(job: Pick<Job, 'regions'>): string | null {
   if (!job.regions?.length) return null;
   return job.regions.map((r) => label(REGION_LABELS, r)).join(', ');
 }

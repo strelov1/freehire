@@ -16,7 +16,7 @@ export function slugify(s: string): string {
 }
 
 /** A group's URL segment. */
-export const groupSlug = (title: string) => slugify(title);
+const groupSlug = (title: string) => slugify(title);
 
 // An endpoint's URL segment within its group: the path (param names kept, so
 // `/jobs` and `/jobs/{slug}` don't collide) with any leading group-name segment
@@ -77,7 +77,3 @@ export function findEndpoint(gSlug: string, epSlug: string): { group: NavGroup; 
   const entry = group.endpoints.find((e) => e.slug === epSlug);
   return entry ? { group, entry } : null;
 }
-
-/** Every endpoint route, for prerender enumeration. */
-export const allEntries = () =>
-  NAV.flatMap((g) => g.endpoints.map((e) => ({ group: g.slug, endpoint: e.slug })));

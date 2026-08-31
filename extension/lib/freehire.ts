@@ -187,13 +187,13 @@ export function listSavedSlugs(token: string): Promise<string[]> {
 /** A cached AI fit analysis — only the fields the compact card reads. Never computes
  *  inline: this is a read of whatever the full-page analysis last cached, same
  *  contract as web's MatchSummary.svelte. */
-export interface MatchAnalysisSummary {
+interface MatchAnalysisSummary {
   overall_score: number;
   verdict: string;
   gaps: string[];
 }
 
-export interface MatchAnalysisCredits {
+interface MatchAnalysisCredits {
   remaining: number;
   resets_at: string;
 }

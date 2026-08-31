@@ -17,7 +17,7 @@ import { parseToolCall } from './wire';
 export const WS_SUBPROTOCOL_MARKER = 'freehire-jwt';
 
 /** The relay endpoint, joined as the extension end of this user's channel. */
-export function toolsWsUrl(): string {
+function toolsWsUrl(): string {
   return `${HIRE_ORIGIN.replace(/^http/, 'ws')}/api/v1/tools/ws?role=extension`;
 }
 

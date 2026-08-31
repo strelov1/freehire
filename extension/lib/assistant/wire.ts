@@ -7,7 +7,7 @@
 // read-only.
 
 /** Why a turn ended. Every turn ends with exactly one `result`. */
-export type StopReason = 'end_turn' | 'max_steps' | 'cancelled' | 'error' | (string & {});
+type StopReason = 'end_turn' | 'max_steps' | 'cancelled' | 'error' | (string & {});
 
 /** One streamed frame of a turn. */
 export type TurnEvent =

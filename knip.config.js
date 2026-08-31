@@ -5,19 +5,26 @@
 // A .js config rather than knip.json: knip validates the JSON schema strictly and rejects
 // `//` keys, so the arguments below would have had to live somewhere nobody reads them.
 //
-// THE GATE COVERS FILES, DEPENDENCIES AND BINARIES, NOT EXPORTS. That line is drawn by
-// signal, and both sides of it were measured. The gated categories produced one finding on
-// adoption and it was real: web declared its own copy of tailwind-variants, which only
-// design-system imports and which design-system already declares — two copies of one
-// library, free to drift, in a package that never used it.
+// THE GATE COVERS EVERYTHING KNIP REPORTS, INCLUDING EXPORTS, and it took a cleanup to get
+// there. The first run found 81 unused exports, which is the number that usually turns into
+// "report them, do not gate them". Working through them left 13, and every one was
+// deliberate rather than forgotten — so the argument moved out of this file and next to the
+// code, as a JSDoc `@public` tag with the reason beside it. That is the better home for it:
+// a config-level exemption is invisible from the line it excuses.
 //
-// Exports are a different shape here, so `pnpm check:dead:exports` reports them and nothing
-// gates them. Eighty-one, and the two large groups are arguments against gating rather than
-// a backlog: design-system/src/index.ts is a package's PUBLIC API, where an export with no
-// consumer yet is the normal state of a design system — and how many primitives have one is
-// already measured, deliberately, by check:adoption. The rest are mostly constants exported
-// out of habit and read only inside their own module. Worth removing in reviewed passes;
-// not worth a gate that would be argued with on every unrelated change.
+// The two shapes that earned a tag:
+//
+//   web/src/lib/types.ts, cv.ts and collections.ts re-export the generated contract under
+//   the app's own names. A name is carried there whether or not a screen reads it yet —
+//   that is what the facade is for, and a missing one is the bug it prevents.
+//
+//   stages.ts exports a compile-time assertion. Declaring it IS the check; `export` is only
+//   what stops the linter deleting it as an unused local.
+//
+// Everything else was a real finding. 50 exports were read only inside their own module and
+// simply lost the keyword; that in turn let eslint see three genuinely dead declarations it
+// could not see through an export, which is worth knowing — knip and no-unused-vars answer
+// different halves of one question, and neither is complete alone.
 
 export default {
   // Scripts invoked from the CI workflow and from this package's own scripts, which knip
@@ -47,7 +54,7 @@ export default {
     // WXT builds the extension from entrypoints/, so those are the roots — nothing imports
     // them. The two config files are read by tooling rather than by code.
     extension: {
-      entry: ['entrypoints/**/*.{ts,svelte,html}', 'wxt.config.ts', 'vitest.config.ts'],
+      entry: ['entrypoints/**/*.{ts,svelte,html}'],
       project: ['entrypoints/**', 'lib/**'],
       ignoreDependencies: ['svelte-eslint-parser'],
     },

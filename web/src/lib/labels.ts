@@ -24,7 +24,7 @@ export function titleCase(value: string): string {
 
 // Region code → display names, one row per vocab.RegionValues entry. `short`
 // is the compact UI label (filter pills, facet rows).
-export const REGIONS: { code: string; short: string }[] = [
+const REGIONS: { code: string; short: string }[] = [
   { code: 'global', short: 'Worldwide' },
   { code: 'north_america', short: 'North America' },
   { code: 'latam', short: 'LATAM' },

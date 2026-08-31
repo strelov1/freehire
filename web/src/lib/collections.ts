@@ -589,6 +589,7 @@ export function toQuery(params: Record<string, string | string[]>): string {
 // mirror could get wrong silently, which is why this stopped being hand-kept.
 export { COLLECTIONS } from './generated/contracts';
 import { COLLECTIONS as COMPANY_COLLECTIONS } from './generated/contracts';
+/** @public */
 export type { Collection, CollectionKind } from './generated/contracts';
 
 // A resolved collection: the display copy plus the fixed job-search facet params

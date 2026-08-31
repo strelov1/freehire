@@ -1,5 +1,5 @@
 /** Stable token the backend embeds in ErrListCap tool/HTTP errors. */
-export const BULLET_CAP_CODE = 'bullet_cap';
+const BULLET_CAP_CODE = 'bullet_cap';
 
 /**
  * Candidate-facing copy when a cv_edit was refused because a role is at the

@@ -12,19 +12,24 @@ import type {
   Analysis as MatchAnalysisContract,
   Education as ResumeEducation,
 } from './generated/contracts';
+/** @public — the app's vocabulary for the generated contract; a name is carried here
+ *  whether or not a screen reads it yet. */
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
 // The list-row projection of a job: the same names and derivations as Job, minus the posting
 // text and everything else a row does not draw.
 export type { Card as JobCard } from './generated/contracts';
 // Per-job profile match (how well a job's skills are covered by the caller's profile).
+/** @public */
 export type { JobMatch, AdjacentSkill } from './generated/contracts';
 // Hard-constraint blockers (years, education, certs, work auth, location) surfaced
 // beside skill coverage. BlockerCategory/BlockerSeverity are the enum aliases.
+/** @public */
 export type { Blocker, BlockerCategory, BlockerSeverity } from './generated/contracts';
 // The profile-match endpoint returns skill coverage plus the advisory blockers.
 export type JobMatchResult = JobMatch & { blockers: Blocker[] };
 // atscheck's Report is aliased ATSReport (a local Report — job reports — already exists);
 // its category/line-item shapes come along for the report view.
+/** @public */
 export type {
   Report as ATSReport,
   ScoreCategory as ATSCategory,
@@ -40,6 +45,7 @@ export interface ATSResponse {
 
 // The on-demand LLM job-match analysis wire shapes (five scored dimensions + the
 // ATS-style requirement match), generated from internal/matchanalysis.
+/** @public */
 export type {
   Analysis as MatchAnalysis,
   Dimension as MatchDimension,
@@ -282,7 +288,7 @@ export interface User {
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
  *  not crawl yet. The unit is the board — `source` (ATS) + `board` (company slug) — not a
  *  single vacancy; the ingest side later scrapes all its vacancies. */
-export type ContributionStatus = 'pending' | 'onboarded' | 'rejected' | 'review';
+type ContributionStatus = 'pending' | 'onboarded' | 'rejected' | 'review';
 
 export interface Contribution {
   id: number;
@@ -304,7 +310,7 @@ export interface Contribution {
  *  - `imported` imported, and the board behind it is now queued for onboarding
  *  - `review`   imported, but its careers site names no board we can crawl, so it went to triage
  *  - `queued`   nothing could read the page, so the link went to manual triage */
-export type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
+type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
 
 export interface ResolvedLink {
   public_slug: string | null;
@@ -316,9 +322,9 @@ export interface ResolvedLink {
 }
 
 /** Employee referrals. An offer is a member's moderated "I can refer into company X". */
-export type ReferralOfferStatus = 'pending' | 'approved' | 'rejected';
+type ReferralOfferStatus = 'pending' | 'approved' | 'rejected';
 export type ReferralRequestStatus = 'sent' | 'contacted' | 'declined';
-export type ReferralCvKind = 'original' | 'built';
+type ReferralCvKind = 'original' | 'built';
 
 export interface ReferralOffer {
   id: string;
@@ -569,7 +575,7 @@ export type NotificationKind =
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this
  *  app, no internal id. */
-export interface NotificationDigestJob {
+interface NotificationDigestJob {
   title: string;
   company: string;
   slug: string;
@@ -725,7 +731,7 @@ export interface MyJobCounts {
 /** The caller's application count at each stage of the vocabulary. Every stage is
  *  present, zero included, and the counts always sum to the application total —
  *  so a count of nothing is readable without being confused for a missing key. */
-export type PipelineStageCounts = Record<Stage, number>;
+type PipelineStageCounts = Record<Stage, number>;
 
 /** The application-pipeline snapshot for the Pipeline tab: the caller's total
  *  application count and the count at each stage. Grouping those stages into the
@@ -805,7 +811,7 @@ export type ProviderKind = 'ats' | 'aggregator' | 'company' | 'other';
 /** One provider's health on the public /status page: board counts, freshness, and
  *  the derived status. Sanitized — no error text or board identifiers are exposed.
  *  Timestamps are RFC3339 strings, or null when the provider has never run/succeeded. */
-export interface ProviderHealth {
+interface ProviderHealth {
   provider: string;
   kind: ProviderKind;
   status: HealthStatus;
@@ -844,7 +850,7 @@ export interface CreatedApiKey extends ApiKey {
   token: string;
 }
 
-export interface ConnectedIdentity {
+interface ConnectedIdentity {
   provider: string;
   linked_at: string;
   status: 'active' | 'revocation_pending';
@@ -890,20 +896,20 @@ export interface Board {
  *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
  *  RFC3339 strings or null. */
 /** A geographic reach: controlled regions and/or ISO country codes. Empty = anywhere. */
-export interface LocationGeoSet {
+interface LocationGeoSet {
   regions?: string[];
   countries?: string[];
 }
 
 /** The user's current single base: an ISO country code and a free-text city. */
-export interface LocationBase {
+interface LocationBase {
   country?: string;
   city?: string;
 }
 
 /** Willingness to relocate: an open flag plus acceptable destinations (open + empty
  *  targets = anywhere). */
-export interface LocationRelocation {
+interface LocationRelocation {
   open: boolean;
   regions?: string[];
   countries?: string[];
@@ -1024,6 +1030,7 @@ export interface ResumeProfile {
 }
 
 /** The read-only structured résumé parsed from the uploaded CV by the LLM. */
+/** @public */
 export type {
   Structured as ResumeStructured,
   Experience as ResumeExperience,
