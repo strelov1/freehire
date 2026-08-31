@@ -670,22 +670,13 @@ func csvColumns(data []byte, delim rune, colNames ...string) ([][]string, error)
 	return out, nil
 }
 
-// easternRootsSlugs is the eastern-roots membership file parsed to its slugs, for the test
-// that guards every hand list against the catalogue's slug rule. Exported to the package's
+// embeddedSlugList parses an embedded membership file to its slugs, for the test that
+// guards every hand list against the catalogue's slug rule. It exists for the package's
 // tests only, because the file is embedded and there is no other way to read it back.
-func easternRootsSlugs() []string {
-	return embeddedSlugList(easternRootsData)
-}
-
-// indianRootsSlugs is the same read-back for the indian-roots membership file.
-func indianRootsSlugs() []string {
-	return embeddedSlugList(indianRootsData)
-}
-
 func embeddedSlugList(data []byte) []string {
-	names, err := ParseSlugList(data)
+	slugs, err := ParseSlugList(data)
 	if err != nil {
 		return nil
 	}
-	return names
+	return slugs
 }

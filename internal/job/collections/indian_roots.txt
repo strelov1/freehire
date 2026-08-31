@@ -8,9 +8,6 @@
 # Sources: the Indian unicorn lists published by Failory and FounderPin (both
 # tracking the same Tracxn/Inc42 ecosystem count, ~130 unicorns as of Aug 2026),
 # Wikipedia's list of Indian IT companies, plus a hand seed for the diaspora strand.
-# There is no maintained open dataset for this — every GitHub "Indian startups"
-# repository is a fork of one 2015-2017 Kaggle funding CSV — so this is an embedded
-# hand list, like eastern-roots, rather than a pinned Dataset URL.
 #
 # Everything above the second header was verified present in the catalogue at
 # curation time; the tail is well-known companies we do not carry yet, kept so the
