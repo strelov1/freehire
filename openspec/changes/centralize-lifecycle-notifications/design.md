@@ -1,9 +1,9 @@
 ## Context
 
-Full narrative design (problem framing, the production-usage check that motivated
-the settings simplification, and every scoping decision) lives at
-[docs/superpowers/specs/2026-08-09-lifecycle-notification-centralization-design.md](../../../docs/superpowers/specs/2026-08-09-lifecycle-notification-centralization-design.md).
-This document restates it in the proposal/design/tasks structure.
+This document is the design: problem framing, the production-usage check that
+motivated the settings simplification, and every scoping decision. It used to
+point at a narrative companion under `docs/superpowers/specs/` that was never
+written, so the pointer promised a document that has never existed.
 
 Current state:
 - `internal/reminder` schedules a saved-job reminder at save time (`ScheduleOnSave`,

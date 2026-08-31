@@ -104,6 +104,23 @@ jobs:
           path: coverage/*.out
           if-no-files-found: ignore
 
+  # Every relative Markdown link, because this repository navigates by document and a
+  # rename breaks one silently. Needs no dependencies — git and node — so it is its own
+  # job rather than a step tacked onto one that installs a package tree.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check documentation links
+        run: node scripts/check-doc-links.mjs
+
   # The workflows themselves. Nothing has ever read them except GitHub, at the moment it
   # runs one — so an unknown runner label, a mistyped `needs:` or a broken expression is
   # discovered by a job failing, and a job that only runs on a tag or a schedule is

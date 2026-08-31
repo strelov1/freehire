@@ -8,7 +8,7 @@ today only feeds a passive board badge) or when a stage moves into `interview`
 single place deciding "given this application's stage and how long it's sat there,
 what should we tell the candidate, and through which channel" — see
 [GitHub #1540](https://github.com/strelov1/freehire/issues/1540). Full design in
-[docs/superpowers/specs/2026-08-09-lifecycle-notification-centralization-design.md](../../../docs/superpowers/specs/2026-08-09-lifecycle-notification-centralization-design.md).
+[design.md](design.md).
 
 Building this on the existing settings shape would also replicate a granularity
 nobody uses: a production check of `reminder_settings` found exactly one real user

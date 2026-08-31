@@ -80,6 +80,18 @@ pre-commit:
       glob: "migrations/*.sql"
       run: node scripts/check-migrations.mjs {staged_files}
 
+    # This repository navigates by document — AGENTS.md is a table of links into the
+    # blocks, each block links into its packages — and nothing has ever read those links.
+    # A rename breaks them silently, and a broken one is worse than a missing one: it
+    # sends the reader somewhere confidently.
+    #
+    # NO GLOB, THOUGH IT IS A CHECK ABOUT MARKDOWN. What breaks a link is renaming its
+    # TARGET, which is usually a .go or a .svelte file — a glob on *.md would miss exactly
+    # the commit that does the damage. A quarter of a second over the whole repository, so
+    # the precision is not worth the hole.
+    doc-links:
+      run: node scripts/check-doc-links.mjs
+
     # THE ONLY HOOK HERE THAT PREVENTS SOMETHING RATHER THAN REPORTING IT.
     #
     # Everything else in this file is a convenience: it fails locally so CI does not

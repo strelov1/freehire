@@ -5,8 +5,9 @@
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
-    "check:sql": "node scripts/check-migrations.mjs",
-    "check:dead": "pnpm --dir web exec svelte-kit sync && knip"
+    "check:dead": "pnpm --dir web exec svelte-kit sync && knip",
+    "check:links": "node scripts/check-doc-links.mjs",
+    "check:sql": "node scripts/check-migrations.mjs"
   },
   "devDependencies": {
     "knip": "^6.33.0",
