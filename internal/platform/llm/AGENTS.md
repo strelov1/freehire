@@ -4,7 +4,7 @@
 A thin provider-agnostic wrapper over langchaingo for OpenAI-compatible endpoints: JSON
 generation with fence-stripping and optional schema constraints, streaming, tool-calling
 chat, Langfuse tracing, and per-user spend attribution via gateway credentials and
-`x-litellm-tags` (credential.go:15). Callers keep their own prompts and typed-contract
+`x-bf-dim-<dimension>` headers (credential.go:19). Callers keep their own prompts and typed-contract
 parsing. Consumers: `cmd/server`, `cmd/enrich`, `cmd/tg-extract`, `cmd/classify-mail`, the
 backfills, and `internal/ai/enrich`, `matchanalysis`, `resumeextract`, `atscheck`,
 `mailclassify`, `mailrecall`, `telegram`, `autofillagent`, `assistant`, `cv`.

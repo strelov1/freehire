@@ -187,14 +187,15 @@ the ordinary tool-calling turn loop, not inside it:
   `STTModel` in `internal/platform/config` — unset means the feature is absent, not billed for
   by accident).
 - **`REALTIME_MODEL` must carry the provider prefix** (`openai/gpt-realtime-2.1`, not
-  the bare `gpt-realtime-2.1`), unlike every other model name in this file. The
-  litellm proxy's realtime WebRTC feature is lazy-loaded and does not resolve a
-  `model_name` alias the way the rest of the proxy does — `can_key_call_resolved_model`
-  accepts the alias, but the actual upstream call then fails with `litellm.BadRequestError:
-  LLM Provider NOT provided`. Confirmed live against the production proxy
-  (`root@204.168.137.149:/opt/litellm`) on 2026-08-10: a `model_name: gpt-realtime-2.1`
-  entry in `config.yaml` is harmless but unnecessary — what actually works is the
-  client passing the provider-prefixed string directly.
+  the bare `gpt-realtime-2.1`), unlike every other model name in this file. It has
+  outlived the gateway it was discovered on, which is the reason to keep both halves
+  written down. On the litellm proxy the realtime WebRTC feature was lazy-loaded and did
+  not resolve a `model_name` alias the way the rest of the proxy did —
+  `can_key_call_resolved_model` accepted the alias and the upstream call then failed with
+  `litellm.BadRequestError: LLM Provider NOT provided` (confirmed 2026-08-10). Production
+  moved to Bifrost on 2026-08-31, where the same prefixed string answers 200 and mints an
+  ephemeral key, and where nothing named `realtime` is a tier alias at all — audio is
+  entitled by model name. Either way the client passes the provider-prefixed string.
 
 **Interview debrief** is the rehearsal's mirror: the review of an interview that has
 already happened, minted from `POST /assistant/sessions?preset=debrief&job=<slug>`. It
