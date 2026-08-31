@@ -1,0 +1,205 @@
+# indian-roots collection membership (canonical company slugs, one per line).
+# Companies founded in India or by Indian founders, operating internationally —
+# the Indian counterpart of eastern_roots.txt. Three strands sit in one list because
+# "Indian roots" is one fact about the company: the IT-services majors, the domestic
+# product/startup ecosystem (incl. the unicorns), and the Indian-founder diaspora
+# companies headquartered abroad (Zscaler, Nutanix, Rubrik, Cohesity, Glean, ...).
+#
+# Sources: the Indian unicorn lists published by Failory and FounderPin (both
+# tracking the same Tracxn/Inc42 ecosystem count, ~130 unicorns as of Aug 2026),
+# Wikipedia's list of Indian IT companies, plus a hand seed for the diaspora strand.
+# There is no maintained open dataset for this — every GitHub "Indian startups"
+# repository is a fork of one 2015-2017 Kaggle funding CSV — so this is an embedded
+# hand list, like eastern-roots, rather than a pinned Dataset URL.
+#
+# Everything above the second header was verified present in the catalogue at
+# curation time; the tail is well-known companies we do not carry yet, kept so the
+# tag lands the day their board is ingested. Matched via normalize.CompanySlug at
+# import (cmd/import-collections); unmatched slugs are simply logged. Lines starting
+# with # are comments.
+#
+# Ambiguous single-word slugs are deliberately absent: `porter`, `locus` and `slice`
+# in our catalogue are the US companies of those names, not the Indian ones.
+3i-infotech
+aerospike
+apna
+aryaka
+atlan
+birlasoft
+browserstack
+cardekho
+cars24
+cashfree-payments
+coforge
+cohesity
+coinswitch
+cred
+cyient
+darwinbox
+dream-sports
+druva
+eclerx
+emergent
+exotel
+firstsource
+flipkart
+fractal-analytics
+freshworks
+glance
+glean
+groww
+hackerrank
+happiest-minds-technologies
+harness
+hcltech
+hexaware
+high-radius
+icertis
+infosys
+inmobi
+innovaccer
+jar
+juspay
+kellton
+kpit
+kreditbee
+l-t-technology-services
+lenskart-com
+ltimindtree
+mastek
+meesho
+mindtickle
+moengage
+moneyview
+mphasis
+nagarro
+navi
+netradyne
+newgen-software-technologies
+ninjacart
+nucleus-software-exports
+nutanix
+observe-ai
+oyo
+paytm
+persistent-systems
+phonepe
+postman
+quest-global
+razorpay
+rubrik
+signoz
+snapdeal
+sonata-software
+sprinklr
+swiggy
+tata-consultancy-services
+tech-mahindra
+thoughtspot
+uniphore
+upgrad
+whatfix
+wingify
+wipro
+wns-global-services
+xoriant
+yellow-ai
+yubi
+zenoti
+zensar
+zepto
+zeta
+zoho
+zscaler
+
+# --- Not in the catalogue yet (well-known; the tag lands when their board arrives) ---
+acko
+amagi
+ather-energy
+aye-finance
+bharatpe
+bigbasket
+blackbuck
+blusmart
+byjus
+capillary-technologies
+chargebee
+clevertap
+coindcx
+curefit
+dailyhunt
+dealshare
+dehaat
+delhivery
+dream11
+droom
+elasticrun
+entropik
+eruditus
+firstcry
+freshtohome
+games24x7
+globalbees
+gupshup
+hashedin
+hasura
+homelane
+incred
+infra-market
+instamojo
+interviewbit
+jumbotail
+jupiter-money
+khatabook
+kissflow
+knowlarity
+krutrim
+leadsquared
+licious
+livspace
+mamaearth
+mensa-brands
+microland
+mobikwik
+moglix
+mu-sigma
+nobroker
+nykaa
+ofbusiness
+ola-electric
+onecard
+oxyzo
+pepperfry
+perfios
+pharmeasy
+physicswallah
+pine-labs
+policybazaar
+practo
+purplle
+quikr
+ramco-systems
+rapido
+rebel-foods
+renew-power
+rivigo
+route-mobile
+sasken
+sharechat
+shiprocket
+tally-solutions
+tanla-platforms
+turtlemint
+udaan
+unacademy
+upstox
+urban-company
+vedantu
+vymo
+wakefit
+waycool
+xpressbees
+zerodha
+zetwerk
+zluri
+zomato

@@ -233,6 +233,13 @@ var All = []Collection{
 		Dataset:     &Dataset{Data: easternRootsData, Parse: names(ParseSlugList)},
 	},
 	{
+		Slug:        "indian-roots",
+		Title:       "Indian Roots",
+		Description: "Open roles at companies founded in India or by Indian founders — the IT-services majors, the domestic product ecosystem, and the globally headquartered companies their founders built abroad.",
+		Kind:        KindEditorial,
+		Dataset:     &Dataset{Data: indianRootsData, Parse: names(ParseSlugList)},
+	},
+	{
 		Slug:        "ai-native",
 		Title:       "AI-Native",
 		Description: "Open roles at AI-native companies building AI-first products and infrastructure — model and inference APIs, vector databases, and agent/dev tooling.",
@@ -381,6 +388,15 @@ var BigTechSlugs = []string{
 //
 //go:embed eastern_roots.txt
 var easternRootsData []byte
+
+// indianRootsData is the same shape for the indian-roots collection: the IT-services
+// majors, the domestic product ecosystem, and the Indian-founder companies
+// headquartered abroad. Embedded rather than fetched for the same reason, and here
+// there is no alternative — no maintained open dataset of Indian-founded companies
+// exists, only forks of one stale Kaggle funding CSV.
+//
+//go:embed indian_roots.txt
+var indianRootsData []byte
 
 // ParseSlugList parses a newline-delimited slug list (the embedded russian-roots
 // file): one entry per line, blank lines and #-comment lines skipped, surrounding
@@ -658,7 +674,16 @@ func csvColumns(data []byte, delim rune, colNames ...string) ([][]string, error)
 // that guards every hand list against the catalogue's slug rule. Exported to the package's
 // tests only, because the file is embedded and there is no other way to read it back.
 func easternRootsSlugs() []string {
-	names, err := ParseSlugList(easternRootsData)
+	return embeddedSlugList(easternRootsData)
+}
+
+// indianRootsSlugs is the same read-back for the indian-roots membership file.
+func indianRootsSlugs() []string {
+	return embeddedSlugList(indianRootsData)
+}
+
+func embeddedSlugList(data []byte) []string {
+	names, err := ParseSlugList(data)
 	if err != nil {
 		return nil
 	}

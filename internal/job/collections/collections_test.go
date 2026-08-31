@@ -538,6 +538,7 @@ func TestHandListSlugsAreCompanySlugStable(t *testing.T) {
 		"BigTechSlugs":   BigTechSlugs,
 		"AINativeSlugs":  AINativeSlugs,
 		"eastern_roots":  easternRootsSlugs(),
+		"indian_roots":   indianRootsSlugs(),
 	}
 	var checked int
 	for name, slugs := range lists {
