@@ -14,7 +14,7 @@ require (
 	github.com/bogdanfinn/fhttp v0.6.8
 	github.com/bogdanfinn/tls-client v1.15.1
 	github.com/fasthttp/websocket v1.5.12
-	github.com/getsentry/sentry-go v0.48.0
+	github.com/getsentry/sentry-go v0.49.0
 	github.com/getsentry/sentry-go/fiber v0.48.0
 	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/gofiber/contrib/websocket v1.3.4
