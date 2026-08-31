@@ -60,7 +60,7 @@
     "tailwindcss": "^4"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.31.0",
+    "@lucide/svelte": "^1.35.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.6.0",
     "tailwind-variants": "^3.3.1"
