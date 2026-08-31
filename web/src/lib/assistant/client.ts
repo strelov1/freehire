@@ -118,6 +118,26 @@ export function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): T
 
 /** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
  *  and frame decoding have a single implementation. */
+/** What to tell the candidate when a turn does not start.
+ *
+ *  A refused turn (402) already carries a sentence written for them — which feature ran
+ *  out and when it comes back — so it is passed through verbatim. Anything else is ours to
+ *  explain, and a bare status is all there is to say about it.
+ *
+ *  Reading the body cannot be allowed to replace one failure with another: a refusal whose
+ *  body is unreadable still has to surface as the refusal it is. */
+async function turnFailureMessage(res: Response, failure: string): Promise<string> {
+  if (res.status === 402) {
+    try {
+      const body = await res.json();
+      if (body && typeof body.error === 'string') return body.error;
+    } catch {
+      // fall through to the generic sentence below
+    }
+  }
+  return `${failure} (${res.status})`;
+}
+
 function streamTurn(
   sessionId: string,
   url: string,
@@ -136,7 +156,7 @@ function streamTurn(
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw new Error(`${failure} (${res.status})`);
+      throw new Error(await turnFailureMessage(res, failure));
     }
     if (!res.body) {
       throw new Error('the assistant returned no stream');

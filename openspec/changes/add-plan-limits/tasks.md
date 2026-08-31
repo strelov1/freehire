@@ -39,7 +39,7 @@
 - [x] 5.2 Re-point the 402 body (`creditsError` / `renderCreditsRefusal`) at the new refusal: feature, reset instant, upgrade destination
 - [x] 5.3 Assert the streaming fit endpoint and the assistant SSE issue 402 as a real status BEFORE the stream opens, not as a frame inside a 200
 - [x] 5.4 `GET /api/v1/jobs/:slug/fit` reports today's allowance (used/allowed/reset, or unlimited for pro) instead of the 30-day `quota` object
-- [ ] 5.5 Confirm a `cv`-scoped API key is still refused with 403 on every allowance-consuming endpoint
+- [x] 5.5 Confirm a `cv`-scoped API key is still refused with 403 on every allowance-consuming endpoint
 - [x] 5.6 `/me/usage` reports over the UTC day, matching the period the allowances reset on
 - [x] 5.7 Update `web/static/openapi.yaml` for every changed and removed endpoint, and check it still validates
 
@@ -53,15 +53,15 @@
 
 - [x] 7.1 Re-cast the credits page and `CreditsView.svelte` as today's usage per feature — used, allowed, reset — with no balance and no "credits"
 - [x] 7.2 Handle 402 on every metered surface: name the exhausted feature, the reset time, and the upgrade path
-- [ ] 7.3 Tailor preflight prompt states what starting a session costs and how many remain; with none left it says so instead of offering a confirm that would be refused
-- [ ] 7.4 Show the per-session turn ceiling as it is approached, and offer "continue" when it is reached
+- [x] 7.3 Tailor preflight prompt states what starting a session costs and how many remain; with none left it says so instead of offering a confirm that would be refused
+- [x] 7.4 Show the per-session turn ceiling as it is approached, and offer "continue" when it is reached
 - [x] 7.5 Remove every remaining "credits" string from the SPA copy
 
 ## 8. Configuration and ops
 
 - [x] 8.1 Remove `CREDITS_MONTHLY_GRANT`, `CREDITS_COST_MATCH`, `CREDITS_COST_TAILOR`, `CREDITS_CONTRIBUTION_REWARD` from config and from the deployed env
-- [ ] 8.2 Document the plan configuration and the enforcement switches where the other worker/ops knobs are documented
-- [ ] 8.3 Add an `internal/ai/plan/AGENTS.md` covering the two-bound rule, the `#n` ref convention, shadow mode, and why the package lives in the `ai` block
+- [x] 8.2 Document the plan configuration and the enforcement switches where the other worker/ops knobs are documented
+- [x] 8.3 Add an `internal/ai/plan/AGENTS.md` covering the two-bound rule, the `#n` ref convention, shadow mode, and why the package lives in the `ai` block
 
 ## 9. Shadow run and rollout
 

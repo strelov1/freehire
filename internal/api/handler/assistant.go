@@ -178,6 +178,10 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
 	api.Post("/assistant/sessions/:id/messages", mw.key, h.PostAssistantMessage)
 	api.Post("/assistant/sessions/:id/cancel", mw.key, h.CancelAssistantTurn)
+	// Buy this tailoring session another ceiling's worth of turns. Separate from starting
+	// a session because it is a distinct decision the candidate makes with what they know
+	// now — they have seen the work so far and are choosing to spend more of the day on it.
+	api.Post("/assistant/sessions/:id/extend", mw.key, h.PostAssistantExtend)
 	api.Post("/assistant/sessions/:id/opening", mw.key, h.PostAssistantOpening)
 	// Resume after a transport/model failure without appending another user message —
 	// re-sending the prompt would duplicate it in the model's context.

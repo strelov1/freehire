@@ -6,11 +6,12 @@
 // CvRefreshDialog.
 
 import { api } from './api';
-import type { JobMatchResult } from './types';
+import type { Allowance, JobMatchResult } from './types';
 
 let open = $state(false);
 let jobLabel = $state('');
 let match = $state.raw<JobMatchResult | null>(null);
+let allowance = $state.raw<Allowance | null>(null);
 let loading = $state(false);
 let resolver: ((value: boolean) => void) | null = null;
 
@@ -23,6 +24,12 @@ export const confirmTailorDialog = {
   },
   get match() {
     return match;
+  },
+  /** Where the candidate stands on today's tailoring sessions, or null when it could not
+   *  be read. The dialog says what confirming will cost before they commit — and when
+   *  there is nothing left, says so rather than offering a button that answers 402. */
+  get allowance() {
+    return allowance;
   },
   get loading() {
     return loading;
@@ -38,6 +45,7 @@ export const confirmTailorDialog = {
 export function askConfirmTailor(slug: string, label?: string): Promise<boolean> {
   jobLabel = label ?? '';
   match = null;
+  allowance = null;
   loading = true;
   open = true;
   api
@@ -51,6 +59,17 @@ export function askConfirmTailor(slug: string, label?: string): Promise<boolean>
     })
     .finally(() => {
       loading = false;
+    });
+  // Its own request and its own failure: what the plan allows is a separate question from
+  // how well the candidate fits, and a plan read that fails must not take the fit check
+  // down with it. The dialog simply says nothing about cost in that case.
+  api
+    .myPlan()
+    .then((p) => {
+      allowance = p.allowances.find((a) => a.feature === 'tailor') ?? null;
+    })
+    .catch(() => {
+      allowance = null;
     });
   return new Promise((resolve) => {
     resolver = resolve;

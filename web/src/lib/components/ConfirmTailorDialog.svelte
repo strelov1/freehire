@@ -7,6 +7,7 @@
   // candidate commits to tailoring their CV against it — always, not just when
   // something looks off, so the check is a habit rather than a surprise.
   import { Check, TriangleAlert } from '@lucide/svelte';
+  import { isSpent, remaining, resetsAtLabel } from '$lib/allowance';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '$lib/confirmTailorDialog.svelte';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
   import { ConfirmDialog } from '$lib/ui';
@@ -27,6 +28,16 @@
       : 'Tailor your CV for this role?',
   );
   const confirmLabel = $derived(hasGaps ? 'Tailor anyway' : 'Tailor my CV');
+
+  // What starting this session costs, said before the candidate commits. With nothing left
+  // the dialog offers no confirm at all: letting them press a button that answers 402 is a
+  // worse way to learn the same thing.
+  const allowance = $derived(confirmTailorDialog.allowance);
+  const spent = $derived(isSpent(allowance));
+  const left = $derived(remaining(allowance));
+  // With nothing left the button acknowledges rather than proceeds — settling false keeps
+  // the candidate where they are instead of navigating them into a 402 they can do nothing
+  // about. The dialog still opens: what it has to say is the reason.
 </script>
 
 <ConfirmDialog
@@ -37,8 +48,8 @@
     }
   }
   {title}
-  {confirmLabel}
-  onConfirm={() => settleConfirmTailorDialog(true)}
+  confirmLabel={spent ? 'Got it' : confirmLabel}
+  onConfirm={() => settleConfirmTailorDialog(!spent)}
 >
   {#if confirmTailorDialog.loading && !match}
     <p class="text-sm text-muted-foreground">Checking your fit for this role…</p>
@@ -93,6 +104,17 @@
   {:else}
     <p class="text-sm text-muted-foreground">
       We couldn't check your fit for this role — add a CV to your profile to see it next time.
+    </p>
+  {/if}
+
+  {#if spent}
+    <p class="mt-4 text-sm font-medium">You've used today's CV editing sessions.</p>
+    <p class="text-xs text-muted-foreground">
+      More at {resetsAtLabel(allowance)}. Sessions you've already started stay open.
+    </p>
+  {:else if left !== null}
+    <p class="mt-4 text-xs text-muted-foreground">
+      Starts one of today's CV editing sessions — {left} left.
     </p>
   {/if}
 </ConfirmDialog>

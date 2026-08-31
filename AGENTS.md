@@ -31,7 +31,7 @@ what it may reach for.
    search        Meili topology, the drain, saved searches, intent
 5. job           the posting: identity, facets, wire shape, dedup, ghost signal
 4. candidate     CV, structured extraction, experience bank, PII, matching
-3. ai            enrichment, embeddings, assistant, speech, credits
+3. ai            enrichment, embeddings, assistant, speech, plan limits
    identity      accounts, auth, profile
 2. dict          the facet dictionaries and normalisation under them
 1. platform      db, worker plumbing, outbox, cache, HTTP and LLM transport
@@ -161,6 +161,7 @@ Each is self-contained and can be read independently.
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/ai/assistant/AGENTS.md](internal/ai/assistant/AGENTS.md) |
 | **Speech to text** (dictation into the composer, the filename rule, spend bounds) | [internal/ai/speech/AGENTS.md](internal/ai/speech/AGENTS.md) |
 | **LLM spend attribution** (per-user gateway credential, feature tags, fail-open) | [internal/ai/llmkey/AGENTS.md](internal/ai/llmkey/AGENTS.md) |
+| **Plan limits** (the daily per-feature allowance, the two tailoring bounds, shadow mode) | [internal/ai/plan/AGENTS.md](internal/ai/plan/AGENTS.md) |
 | **`internal/identity`** — the block itself: what it is, what it may import | [internal/identity/AGENTS.md](internal/identity/AGENTS.md) |
 | **Accounts** (identity resolution, seizure rule, mailed codes) | [internal/identity/accounts/AGENTS.md](internal/identity/accounts/AGENTS.md) |
 | **Auth primitives** (JWT, API keys, cookie transport, middleware) | [internal/identity/auth/AGENTS.md](internal/identity/auth/AGENTS.md) |
@@ -216,7 +217,8 @@ Each is self-contained and can be read independently.
 - **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
 - **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
 - **In-app assistant:** a bounded tool-calling loop in-process (`internal/ai/assistant`), streamed over SSE, open to every signed-in user. Tools act as the authenticated caller — no credential is minted for an agent
-- **LLM spend attribution:** every model call made for a signed-in user goes out on that user's OWN gateway credential (`internal/ai/llmkey` — minted lazily on first use, never shown to them) and carries a `feature:` tag. Work that belongs to nobody — enrichment, Telegram, embeddings — keeps the service credential, and a test enforces that background entrypoints never resolve a user's. Attribution fails open: it can never refuse or fail a call. It measures and does not bound — a turn is still not debited against AI credits
+- **Plan limits:** every metered AI action draws on a per-feature, per-UTC-day allowance (`internal/ai/plan`). There is no currency and no balance: a plan differs in how MUCH of a feature it allows in a day, never in whether the feature exists. Tailoring carries two bounds (sessions per day, turns per session) because either alone leaves the hole this replaced. Enforcement is a per-feature switch that ships OFF — `PLAN_ENFORCE` turns it on one feature at a time after the shadow run has been read. Refusal is HTTP 402, and on a stream it must precede the stream
+- **LLM spend attribution:** every model call made for a signed-in user goes out on that user's OWN gateway credential (`internal/ai/llmkey` — minted lazily on first use, never shown to them) and carries a `feature:` tag. Work that belongs to nobody — enrichment, Telegram, embeddings — keeps the service credential, and a test enforces that background entrypoints never resolve a user's. Attribution fails open: it can never refuse or fail a call. It measures and does not bound — what BOUNDS a turn is the plan (`internal/ai/plan`)
 - **Experience provenance:** every banked achievement records whether the CANDIDATE asserted it (`cv_import`/`stated_in_chat`/`manual`) or the MODEL did (`agent_inferred`). Only the former may be written into a CV, and the check lives in the service path, not in a system prompt
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Default new surfaces to **CV**. Don't mass-rename the existing `resume`/`resumeextract` packages and columns — churn without value
