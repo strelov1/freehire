@@ -22,7 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
@@ -45,7 +45,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
+	plans := plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing())
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	resumeStore := resume.New(nil, resume.NewQueriesRepository(queries))
 	h := &cvHandlers{queries: queries, jobReader: queries,
@@ -56,11 +56,11 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		// refused. A fixture asserting otherwise tests nothing that ships.
 		editor: cvedit.NewEditor(cvedit.NewRepository(pool, queries),
 			bankGate{bank: bank}),
-		resume:  resumeStore,
-		seeder:  bankedSeeder{resume: resumeStore, bank: bank},
-		fit:     fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
-		credits: creditsStore,
-		match:   &matchHandlers{fit: fitanalysis.New(queries, creditsStore, matchanalysis.NewAnalyzer(nil))},
+		resume: resumeStore,
+		seeder: bankedSeeder{resume: resumeStore, bank: bank},
+		fit:    fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		plans:  plans,
+		match:  &matchHandlers{fit: fitanalysis.New(queries, plans, matchanalysis.NewAnalyzer(nil))},
 		// Same adapter Register wires: bootstrap must place the vacancy on the board.
 		jobs: trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, pool)},
 		// The tailoring bootstrap mints its conversation through the assistant's store,

@@ -19,7 +19,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
@@ -74,7 +73,6 @@ func TestTelegramContribution(t *testing.T) {
 
 	queries := db.New(pool)
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
-	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
 	h := &telegramHandlers{
 		queries:               queries,
 		frontendOrigin:        "https://freehire.test",
@@ -87,7 +85,6 @@ func TestTelegramContribution(t *testing.T) {
 			// No page client and no ingest registry: this test is about the bot's replies, so
 			// nothing is importable and every link takes the record-only path.
 			imports: linkimport.New(pool, queries, nil, pagesClient{}, nil, nil),
-			credits: creditsStore,
 		},
 	}
 
@@ -108,18 +105,18 @@ func TestTelegramContribution(t *testing.T) {
 			t.Fatalf("webhook status = %d, want 200", res.StatusCode)
 		}
 	}
-	// balance reads the credit_balances cache; it exists only once a reward (or grant) has
-	// landed, so a missing row reads as 0.
-	balance := func() int {
-		var remaining int
-		err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id=$1`, userID).Scan(&remaining)
-		if err != nil {
-			return 0
+	// contributions counts the rows this user has recorded. It replaces the balance the
+	// reward used to move: contributing earns nothing until add-invites pays it in days of
+	// Pro, so what there is to assert is that the board was taken, once.
+	contributions := func() int {
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM link_contributions WHERE submitted_by=$1`, userID).Scan(&n); err != nil {
+			t.Fatalf("count contributions: %v", err)
 		}
-		return remaining
+		return n
 	}
 
-	t.Run("the webhook ACKs fast, then records and rewards in the background", func(t *testing.T) {
+	t.Run("the webhook ACKs fast, then records in the background", func(t *testing.T) {
 		start := time.Now()
 		post(chatID, "found this: https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7")
 		// The webhook must return well before the reply is sent — that's the whole point of the
@@ -128,15 +125,10 @@ func TestTelegramContribution(t *testing.T) {
 			t.Errorf("webhook took %v to ACK, want fast (reply is async)", d)
 		}
 		// Nothing is importable in this test, so the page itself cannot be read — but the board
-		// behind it IS recognised, taken, and paid for, and the reply must say so.
+		// behind it IS recognised and taken, and the reply must say so.
 		reply := waitReply(t)
-		if !strings.Contains(reply, "blitzy") || !strings.Contains(reply, "AI credit") {
+		if !strings.Contains(reply, "blitzy") {
 			t.Errorf("reply = %q, want the accepted-board confirmation naming blitzy", reply)
-		}
-		// The reward is applied in the same background goroutine as the reply, so it has landed
-		// by the time we observe the reply: 20 monthly grant + 5 contribution reward.
-		if got := balance(); got != 25 {
-			t.Errorf("credit balance = %d, want 25 (20 grant + 5 reward)", got)
 		}
 		var board string
 		if err := pool.QueryRow(ctx, `SELECT board FROM link_contributions WHERE submitted_by=$1`, userID).Scan(&board); err != nil || board != "blitzy" {
@@ -144,14 +136,14 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("a second link on the same board earns no second reward", func(t *testing.T) {
+	t.Run("a second link on the same board records nothing further", func(t *testing.T) {
 		post(chatID, "https://jobs.ashbyhq.com/blitzy") // the board listing this time
 		waitReply(t)
-		if got := balance(); got != 25 {
-			t.Errorf("credit balance = %d, want still 25 (a repeat board credits nothing)", got)
+		if got := contributions(); got != 1 {
+			t.Errorf("contributions = %d, want still 1 (a repeat board records nothing)", got)
 		}
 		// The board is the unit: one live row holds its identity, so a repeat adds nothing.
-		// Paying for a board already queued would buy no coverage and invite farming one board
+		// Accepting a board already queued would buy no coverage and invite farming one board
 		// from several accounts.
 		var rows int
 		if err := pool.QueryRow(ctx,
@@ -189,16 +181,11 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("an unrecognized valid link is queued for review, no reward", func(t *testing.T) {
+	t.Run("an unrecognized valid link is queued for review", func(t *testing.T) {
 		post(chatID, "https://example.com/careers/1")
 		reply := waitReply(t)
-		if !strings.Contains(reply, "Not credited") {
-			t.Errorf("reply = %q, want a not-credited review message", reply)
-		}
-		// No reward: the review row earns nothing, so the balance is unchanged from the one
-		// earlier reward (25).
-		if got := balance(); got != 25 {
-			t.Errorf("credit balance = %d, want still 25 (review credits nothing)", got)
+		if !strings.Contains(reply, "check by hand") {
+			t.Errorf("reply = %q, want the by-hand review message", reply)
 		}
 		var status string
 		if err := pool.QueryRow(ctx, `SELECT status FROM link_contributions WHERE submitted_by=$1 AND source IS NULL`, userID).Scan(&status); err != nil || status != contribution.StatusReview {

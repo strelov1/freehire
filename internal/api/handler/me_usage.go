@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
+	"github.com/strelov1/freehire/internal/ai/plan"
 )
 
 // usageHandlers serves the caller's own AI spend, read from the gateway rather than from
@@ -38,8 +38,8 @@ func (h *usageHandlers) register(api fiber.Router, mw middleware) {
 //
 // It carries NO money, deliberately. The gateway's cost figure is a list price against a
 // mixed upstream pool: it is not what we pay, and it is certainly not what the caller
-// pays — their price is credits, reported by /me/credits over this same calendar. A second
-// number in dollars beside a points balance reads as a second currency for one thing, and
+// pays — what they spend is a plan allowance, reported by /me/plan over this same calendar.
+// A second number in dollars beside that would read as a second currency for one thing, and
 // one of the two would be fiction.
 type usageResponse struct {
 	Requests int       `json:"requests"`
@@ -67,12 +67,13 @@ func (h *usageHandlers) GetMyUsage(c *fiber.Ctx) error {
 
 // usage reads the gateway, or reports zeroes and says why in the log.
 //
-// The period is the calendar month credits already reset on, taken from that package so
-// the two cannot drift: a balance and a usage count on different months would both look
-// correct and disagree.
+// The period is the UTC day the plan allowances already reset on, taken from that package
+// so the two cannot drift: an allowance and a usage count over different periods would both
+// look correct and disagree. It narrowed from a month when the balance it used to follow
+// was withdrawn.
 func (h *usageHandlers) usage(c *fiber.Ctx, userID int64) usageResponse {
 	now := time.Now().UTC()
-	out := usageResponse{Period: credits.PeriodKey(now), ResetsAt: credits.ResetsAt(now)}
+	out := usageResponse{Period: plan.Day(now).Format(time.DateOnly), ResetsAt: plan.ResetsAt(now)}
 	if h.gateway == nil {
 		return out
 	}
@@ -82,7 +83,7 @@ func (h *usageHandlers) usage(c *fiber.Ctx, userID int64) usageResponse {
 	// the gateway refuses a stored key, which is rare, and the alternative — remembering
 	// retired ids so the read could sum them — would keep a growing list of dead
 	// credentials alive to make a usage counter slightly more complete.
-	act, err := h.gateway.Activity(c.Context(), h.keys.Stored(c.Context(), userID).ID, credits.PeriodStart(now), now)
+	act, err := h.gateway.Activity(c.Context(), h.keys.Stored(c.Context(), userID).ID, plan.Day(now), now)
 	if err != nil {
 		log.Printf("usage: read activity for user %d: %v", userID, err)
 		return out

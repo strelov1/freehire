@@ -200,6 +200,53 @@ type FeatureUsage struct {
 	Unlimited bool
 }
 
+// Standing is where one user stands on one feature today, with everything a surface needs
+// to say so: their plan, what they have used, what they are allowed, and when it resets.
+//
+// It exists separately from Usage because the two are asked in different places. A page
+// listing the plan wants every feature; a feature about to run wants only its own, and
+// making it read all of them would be a query per surface for data nobody displays.
+type Standing struct {
+	Tier      Tier
+	Feature   Feature
+	Used      int
+	Limit     int
+	Unlimited bool
+	ResetsAt  time.Time
+}
+
+// Exhausted reports whether this feature has nothing left today. An unlimited standing is
+// never exhausted — the fair-use guard behind it refuses at the point of use rather than
+// being reported as a ceiling somebody is approaching.
+func (s Standing) Exhausted() bool { return !s.Unlimited && s.Used >= s.Limit }
+
+// Standing reports where the caller stands on one feature today. It makes no model call
+// and consumes nothing, so a surface may ask before offering an action — the tailoring
+// prompt says what a session costs and how many remain before the candidate commits.
+func (s *Store) Standing(ctx context.Context, userID int64, f Feature) (Standing, error) {
+	now := s.now()
+
+	tier, err := s.Tier(ctx, userID)
+	if err != nil {
+		return Standing{}, err
+	}
+	used, err := s.q.GetUsageDay(ctx, db.GetUsageDayParams{
+		UserID: userID, Feature: string(f), Day: pgDay(Day(now)),
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Standing{}, err
+	}
+	allowance := s.cfg.Allowance(tier, f)
+	return Standing{
+		Tier:      tier,
+		Feature:   f,
+		Used:      int(used),
+		Limit:     allowance.Limit,
+		Unlimited: allowance.Unlimited,
+		ResetsAt:  ResetsAt(now),
+	}, nil
+}
+
 // Usage reports the caller's plan and where they stand on every metered feature today.
 // A feature they have not touched reports as untouched rather than being absent, so the
 // surface can list the whole plan without knowing which rows happen to exist.

@@ -1,14 +1,10 @@
 package handler
 
 import (
-	"context"
-	"log"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -20,20 +16,17 @@ import (
 // use cases in contribution.Service.
 type contributionHandlers struct {
 	contribution *contribution.Service
-	credits      *credits.Store
 	// intake is the shared look-import-record sequence /jobs/resolve is the HTTP door onto.
 	intake *intakeService
 }
 
-func newContributionHandlers(contribution *contribution.Service, credits *credits.Store, queries *db.Queries, imports *linkimport.Importer, postings sources.PostingURLResolver) *contributionHandlers {
+func newContributionHandlers(contribution *contribution.Service, queries *db.Queries, imports *linkimport.Importer, postings sources.PostingURLResolver) *contributionHandlers {
 	return &contributionHandlers{
 		contribution: contribution,
-		credits:      credits,
 		intake: &intakeService{
 			queries:      queries,
 			contribution: contribution,
 			imports:      imports,
-			credits:      credits,
 			postings:     postings,
 		},
 	}
@@ -75,18 +68,15 @@ func toContributionResponse(c contribution.Contribution) contributionResponse {
 	}
 }
 
-// rewardContribution grants the AI-credits contribution reward, idempotent by the contribution
-// id, for a novel board recorded via any surface (the HTTP submit or the Telegram webhook).
-// Best-effort: the contribution is already recorded, so a reward error (or a zero configured
-// reward) is logged, not surfaced.
-func rewardContribution(ctx context.Context, credits *credits.Store, userID, contributionID int64) {
-	if credits == nil {
-		return // credits unconfigured: the contribution is recorded, there is just nothing to pay
-	}
-	if _, err := credits.Reward(ctx, userID, strconv.FormatInt(contributionID, 10)); err != nil {
-		log.Printf("credits: contribution reward user=%d contribution=%d: %v", userID, contributionID, err)
-	}
-}
+// Contributing a board earns nothing at the moment. The reward used to be one AI credit,
+// and the currency it was paid in no longer exists — a daily allowance is not something a
+// one-off act can top up, and banking a day's worth of anything for later is the shape the
+// old balance had and the reason it was withdrawn.
+//
+// The reward returns in the add-invites change as days of Pro, which a one-off act CAN
+// grant. Until then a novel board is still recorded and still attributed; the submitter is
+// simply not paid for it. The idempotency rule that protected the old reward — at most one
+// per contribution id — carries over unchanged when it does.
 
 // ListMyContributions returns the caller's own contributions, newest first. Scoped to the
 // authenticated user, so it never reveals another user's.

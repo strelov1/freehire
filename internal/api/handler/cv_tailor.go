@@ -11,14 +11,17 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 type tailorCVRequest struct {
@@ -68,10 +71,17 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	// agent receives, so its Action strings ("do not claim X unless true") guard the
 	// tailored output against fabricating a credential/degree/authorization.
 	h.match.capServedAnalysis(c.Context(), userID, job, analysis)
-	// Gate on points before creating anything: an out-of-credits caller is a 402 and no
-	// tailored CV or session is minted. The debit itself lands after the CV exists (below).
-	if bal := h.match.fit.Balance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureTailor) {
-		return creditsError(c, *bal)
+	// Gate on the plan before creating anything: a caller starting a NEW tailoring session
+	// with none of today's allowance left gets a 402, and no CV, session or model call is
+	// made. This is a pre-check on the standing; the charge itself lands once the session
+	// exists (below), because only then is there a session id to charge it against.
+	//
+	// It applies only to a vacancy the caller has not tailored for yet. Returning to a
+	// session that already exists costs nothing, and refusing here would lock somebody out
+	// of work they have already paid for — the workspace is addressed by vacancy, so a
+	// reload arrives at exactly this line.
+	if refusal, refused := h.refuseNewTailoring(c, userID, job.ID); refused {
+		return refusal
 	}
 	// When the base CV is behind the latest résumé upload, refresh it from the seed before
 	// Tailor copies it into a new vacancy-bound row. Reload of an existing tailored copy
@@ -115,19 +125,28 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if sessionID == "" {
+	justStarted := sessionID == ""
+	if justStarted {
 		sessionID, err = h.startTailoringSession(c.Context(), userID, tailored.ID, job.ID)
 		if err != nil {
 			return err
 		}
 	}
-	// Charge the tailor cost only once the session is fully minted, so a mint failure never
-	// leaves the caller charged for an unusable session (a retry would mint a new CV id and
-	// charge again). Idempotent by the new CV id; resuming an existing CV (a different
-	// endpoint) never debits. The session already exists, so a debit error — including a
-	// rare insufficient-balance race the pre-check let through — is logged, not surfaced.
-	if _, err := h.credits.Debit(c.Context(), userID, credits.FeatureTailor, tailored.ID.String()); err != nil {
-		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
+	// Charge the session only once it is fully minted, so a mint failure never leaves the
+	// caller charged for an unusable session. The charge is keyed by the session id, which
+	// is also what the turn ceiling is counted from — the first charge is that session's
+	// first ceiling.
+	//
+	// Only a session this request created is charged. A reload reaches the existing one and
+	// pays nothing, which is the whole reason the workspace can be addressed by vacancy.
+	//
+	// The session already exists by this point, so a charge error — including the rare race
+	// the pre-check let through — is logged rather than surfaced: refusing here would take
+	// away a workspace that is already open and already usable.
+	if justStarted {
+		if _, err := h.plans.StartSession(c.Context(), userID, sessionID); err != nil {
+			log.Printf("plan: charging a tailoring session user=%d session=%s: %v", userID, sessionID, err)
+		}
 	}
 	// Place the vacancy on the Tracking Kanban. A bare bookmark is not enough — the
 	// board columns only show staged rows; saved-only lives under Activity → Saved.
@@ -144,6 +163,43 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 		TailorCVID: tailored.ID.String(), BaseCVID: base.ID.String(), Analysis: analysis, SessionID: sessionID,
 		ColdStartRunning: justCreated,
 	}})
+}
+
+// refuseNewTailoring answers the 402 when the caller has no tailoring allowance left AND
+// this vacancy would be a new session. It reports whether it refused.
+//
+// The order matters: the allowance is checked first because it is a cheap read, and the
+// "have they tailored this vacancy before" question is only asked of somebody who has run
+// out — for everybody else it is a query nobody needs.
+//
+// Every failure here lets the request through. A standing that cannot be read and a
+// tailored-CV lookup that errors are both bookkeeping problems, and refusing a candidate
+// because our accounting hiccuped is the worse outcome; the charge below is atomic and
+// remains the real ceiling.
+func (h *cvHandlers) refuseNewTailoring(c *fiber.Ctx, userID, jobID int64) (error, bool) {
+	if h.plans == nil {
+		return nil, false
+	}
+	st, err := h.plans.Standing(c.Context(), userID, plan.FeatureTailor)
+	if err != nil {
+		log.Printf("plan: tailoring standing for user %d: %v", userID, err)
+		return nil, false
+	}
+	if !st.Exhausted() {
+		return nil, false
+	}
+	if _, err := h.queries.GetTailoredCVForJob(c.Context(), db.GetTailoredCVForJobParams{
+		UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
+	}); err == nil {
+		return nil, false // already tailored for this vacancy: returning to it is free
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("cv: looking up an existing tailored CV for user %d job %d: %v", userID, jobID, err)
+		return nil, false
+	}
+	return refuse(c, plan.Decision{
+		Tier: st.Tier, Feature: st.Feature, Used: st.Used, Limit: st.Limit,
+		Unlimited: st.Unlimited, ResetsAt: st.ResetsAt,
+	}), true
 }
 
 // existingTailoringSession reports the conversation already bound to a tailored CV, or "" when

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -30,7 +29,6 @@ type intakeService struct {
 	queries      *db.Queries
 	contribution *contribution.Service
 	imports      *linkimport.Importer
-	credits      *credits.Store
 	// postings canonicalises the pasted link before the catalog lookup — see
 	// sources.PostingURLResolver. Zero value = the offline rewrite only.
 	postings sources.PostingURLResolver
@@ -50,11 +48,13 @@ type intakeOutcome struct {
 	// Board names the company board the link belongs to, when one was recognised. It is set
 	// even for outcomeQueued: failing to READ a page says nothing about whether we recognised
 	// the board behind it, and a surface that conflates the two tells a user we ignored a
-	// company we in fact just accepted (and paid them for).
+	// company we in fact just accepted.
 	Board string
-	// Rewarded reports that this intake earned the submitter AI credits — true only for the
-	// first submission of a board we do not yet crawl.
-	Rewarded bool
+	// NovelBoard reports that this intake was the first submission of a board we do not yet
+	// crawl — the case that used to earn AI credits, and that will earn days of Pro once
+	// add-invites lands. It still decides what the submitter is told, because "this is new
+	// to us" and "we already had this" are different answers regardless of what they pay.
+	NovelBoard bool
 }
 
 // Resolve runs the intake for one link and reports what became of it. An import failure is not
@@ -86,12 +86,12 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 		log.Printf("intake: import %s: %v", pageURL, err)
 	}
 
-	companySlug, rewarded, err := s.record(ctx, userID, pageURL, surface, intake)
+	companySlug, novel, err := s.record(ctx, userID, pageURL, surface, intake)
 	if err != nil {
 		return intakeOutcome{}, err
 	}
 
-	out := intakeOutcome{Board: intake.Board, CompanySlug: companySlug, Rewarded: rewarded}
+	out := intakeOutcome{Board: intake.Board, CompanySlug: companySlug, NovelBoard: novel}
 	switch {
 	case imported && res.Deduped:
 		// The catalog already carried this vacancy under a crawled source. Answering found HERE
@@ -148,11 +148,11 @@ func (s *intakeService) companyAlreadyCarried(ctx context.Context, res linkimpor
 // A tracked board is deliberately NOT recorded: it needs no onboarding. Every other recognised
 // board is, even when the vacancy itself imported fine, because reading one posting tells us
 // nothing about the other twenty on that board. A board someone already contributed is
-// recorded too — each row names its own submitter — but only the first earns credits.
+// recorded too — each row names its own submitter — but only the first counts as novel.
 //
 // None of the duplicate outcomes is an error the caller can act on: the link is known to us
 // either way, so they are swallowed rather than surfaced.
-func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surface string, intake contribution.Intake) (companySlug string, rewarded bool, err error) {
+func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surface string, intake contribution.Intake) (companySlug string, novel bool, err error) {
 	res, err := s.contribution.RecordIntake(ctx, contribution.SubmitInput{
 		SubmittedBy: userID,
 		URL:         pageURL,
@@ -160,11 +160,7 @@ func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surfa
 	}, intake)
 	switch {
 	case err == nil:
-		rewarded := res.Rewardable && res.Contribution.Status == contribution.StatusPending
-		if rewarded {
-			rewardContribution(ctx, s.credits, userID, res.Contribution.ID)
-		}
-		return "", rewarded, nil
+		return "", res.Rewardable && res.Contribution.Status == contribution.StatusPending, nil
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
 		_, slug, _ := s.contribution.CompanyForBoard(ctx, intake.Source, intake.Board)
 		return slug, false, nil
@@ -212,15 +208,15 @@ func renderIntakeOutcome(out intakeOutcome, frontendOrigin string, emphasize fun
 	}
 	// outcomeQueued. Failing to read the page says nothing about whether we recognised the
 	// board behind it, and answering only "couldn't read" would hide a contribution we just
-	// accepted — and paid for.
+	// accepted.
 	switch {
-	case out.Rewarded:
+	case out.NovelBoard:
 		return "🎉 We couldn't open that page, but " + emphasize(out.Board) +
-			" is a company we don't crawl yet — added to the queue. +1 AI credit!"
+			" is a company we don't crawl yet — added to the queue. Thank you!"
 	case out.Board != "":
 		return "👍 We couldn't open that page, but that company's board is already known to us — nothing to add."
 	default:
-		return "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet."
+		return "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs."
 	}
 }
 

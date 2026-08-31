@@ -19,7 +19,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
@@ -43,7 +43,7 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
+	plans := plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing())
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 
 	h := newCVHandlers(pool, queries, cv.NewStore(cv.NewQueriesRepository(queries)),
@@ -54,8 +54,8 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 		[]string{"freehire.test"},
 		resume.New(nil, resume.NewQueriesRepository(queries)),
 		headshot.New(nil, headshot.NewQueriesRepository(queries)),
-		creditsStore,
-		&matchHandlers{fit: fitanalysis.New(queries, creditsStore, matchanalysis.NewAnalyzer(nil))},
+		plans,
+		&matchHandlers{fit: fitanalysis.New(queries, plans, matchanalysis.NewAnalyzer(nil))},
 		bankGate{bank: bank},
 		nil, // tracking save unused — this fixture never bootstraps tailor
 		true,

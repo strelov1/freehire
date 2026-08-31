@@ -8,7 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
@@ -56,21 +56,21 @@ type matchHandlers struct {
 	bank candidateProfiler
 }
 
-func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, creditsStore *credits.Store) *matchHandlers {
+func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, plans *plan.Store) *matchHandlers {
 	return &matchHandlers{
 		queries:       queries,
 		userProfile:   userProfile,
 		resume:        resumeStore,
 		matchAnalysis: analyzer,
-		fit:           fitanalysis.New(queries, meterOrNil(creditsStore), analyzer),
+		fit:           fitanalysis.New(queries, meterOrNil(plans), analyzer),
 		bank:          newCandidateProfiler(queries),
 	}
 }
 
-// meterOrNil keeps a nil *credits.Store out of the service as a NON-nil interface holding a
+// meterOrNil keeps a nil *plan.Store out of the service as a NON-nil interface holding a
 // nil pointer, which would defeat fitanalysis's own nil-meter check and panic on the first
-// balance read. Only fixtures assemble without a ledger; production always has one.
-func meterOrNil(s *credits.Store) fitanalysis.Meter {
+// standing read. Only fixtures assemble without a meter; production always has one.
+func meterOrNil(s *plan.Store) fitanalysis.Meter {
 	if s == nil {
 		return nil
 	}
@@ -113,26 +113,15 @@ func (h *matchHandlers) callerLanguage(ctx context.Context, userID int64) string
 	return lang
 }
 
-// creditsError writes the 402 Payment Required body when a metered action can't be
-// afforded: a message plus the caller's remaining points and the date the monthly grant
-// resets, so the SPA can render an out-of-credits state.
-func creditsError(c *fiber.Ctx, bal credits.Balance) error {
-	return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
-		"error":     "You're out of AI credits for this month.",
-		"remaining": bal.Remaining,
-		"resets_at": bal.ResetsAt,
-	})
-}
-
-// renderCreditsRefusal turns fitanalysis's transport-agnostic refusal into the 402 body, and
-// reports whether err was one. Every fit route gates through fitanalysis.Authorize, so this is
-// the single place the refusal becomes a status.
-func renderCreditsRefusal(c *fiber.Ctx, err error) (error, bool) {
-	var refused *fitanalysis.InsufficientCreditsError
+// renderRefusal turns fitanalysis's transport-agnostic refusal into the 402 body, and
+// reports whether err was one. Every fit route gates through the service, so this is the
+// single place the refusal becomes a status.
+func renderRefusal(c *fiber.Ctx, err error) (error, bool) {
+	var refused *fitanalysis.RefusedError
 	if !errors.As(err, &refused) {
 		return nil, false
 	}
-	return creditsError(c, refused.Balance), true
+	return refuse(c, refused.Decision), true
 }
 
 // liveStamps assembles what a cached analysis is judged fresh against right now. cvUploadedAt
@@ -150,14 +139,14 @@ func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job
 // matchAnalysisResponse is the wire shape for the LLM fit analysis. HasCV is false when the
 // caller has no stored CV — the SPA then prompts an upload instead of an empty report.
 // Stale marks a cached analysis whose CV or job changed since (the SPA offers a
-// recompute); Analysis is nil when none is cached or the LLM is unconfigured. Credits is
-// set on reads (GET) so the SPA can show the points balance and pre-block a new-job
-// analysis; it is omitted on the compute responses.
+// recompute); Analysis is nil when none is cached or the LLM is unconfigured. Allowance is
+// set on reads (GET) so the SPA can show where the caller stands today and pre-block a
+// new-job analysis that would be refused; it is omitted on the compute responses.
 type matchAnalysisResponse struct {
-	HasCV    bool                    `json:"has_cv"`
-	Stale    bool                    `json:"stale"`
-	Analysis *matchanalysis.Analysis `json:"analysis"`
-	Credits  *credits.Balance        `json:"credits,omitempty"`
+	HasCV     bool                    `json:"has_cv"`
+	Stale     bool                    `json:"stale"`
+	Analysis  *matchanalysis.Analysis `json:"analysis"`
+	Allowance *allowanceView          `json:"allowance,omitempty"`
 }
 
 // GetMatchAnalysis serves the cached fit analysis for one of the caller's jobs, never calling
@@ -178,20 +167,33 @@ func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
-	bal := h.fit.Balance(c.Context(), userID)
+	allowance := h.allowanceView(c.Context(), userID)
 	analysis, stored, err := h.fit.Cached(c.Context(), userID, job.ID)
 	if err != nil {
 		return err
 	}
 	if analysis == nil {
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Credits: bal}})
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Allowance: allowance}})
 	}
 	// Recompute the hard-constraint ceiling from the current job/résumé/dictionary and
 	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
 	// change takes effect without marking the cache stale.
 	h.capServedAnalysis(c.Context(), userID, job, analysis)
 	stale := !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
-	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Credits: bal}})
+	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Allowance: allowance}})
+}
+
+// allowanceView reports where the caller stands on the fit-analysis allowance today, or nil
+// when it cannot be read. Best-effort by design: the standing is shown so the SPA can
+// pre-block an analysis that would be refused, and a hiccup reading it must degrade to
+// "unknown" rather than fail a read that has nothing to do with metering.
+func (h *matchHandlers) allowanceView(ctx context.Context, userID int64) *allowanceView {
+	st := h.fit.Standing(ctx, userID)
+	if st == nil {
+		return nil
+	}
+	v := viewStanding(*st)
+	return &v
 }
 
 // PostMatchAnalysis runs the three-stage fit prompt-chain over the caller's stored CV and the
@@ -223,7 +225,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// refusal are the service's; only the status code is ours.
 	reserved, err := h.fit.Reserve(c.Context(), userID, job.ID)
 	if err != nil {
-		if refusal, refused := renderCreditsRefusal(c, err); refused {
+		if refusal, refused := renderRefusal(c, err); refused {
 			return refusal
 		}
 		return err

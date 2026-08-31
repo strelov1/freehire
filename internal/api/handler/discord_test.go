@@ -391,7 +391,7 @@ func TestRenderIntakeOutcome(t *testing.T) {
 		// unchanged.
 		want string
 		// wantMarkdown is the output under discordEmphasize; empty means "identical to want" —
-		// true for every branch except outcomeQueued/Rewarded, the only one with an emphasis
+		// true for every branch except outcomeQueued with a novel board, the only one with an emphasis
 		// span.
 		wantMarkdown string
 	}{
@@ -431,20 +431,20 @@ func TestRenderIntakeOutcome(t *testing.T) {
 		},
 		{
 			name: "queued and rewarded",
-			out:  intakeOutcome{Status: outcomeQueued, Board: "Acme <Careers>", Rewarded: true},
-			want: "🎉 We couldn't open that page, but <b>Acme &lt;Careers&gt;</b> is a company we don't crawl yet — added to the queue. +1 AI credit!",
+			out:  intakeOutcome{Status: outcomeQueued, Board: "Acme <Careers>", NovelBoard: true},
+			want: "🎉 We couldn't open that page, but <b>Acme &lt;Careers&gt;</b> is a company we don't crawl yet — added to the queue. Thank you!",
 			wantMarkdown: "🎉 We couldn't open that page, but **Acme <Careers>** is a company we don't crawl yet — " +
-				"added to the queue. +1 AI credit!",
+				"added to the queue. Thank you!",
 		},
 		{
 			name: "queued but board already known",
-			out:  intakeOutcome{Status: outcomeQueued, Board: "Acme", Rewarded: false},
+			out:  intakeOutcome{Status: outcomeQueued, Board: "Acme", NovelBoard: false},
 			want: "👍 We couldn't open that page, but that company's board is already known to us — nothing to add.",
 		},
 		{
 			name: "queued with no board recognised",
 			out:  intakeOutcome{Status: outcomeQueued},
-			want: "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet.",
+			want: "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs.",
 		},
 	}
 	for _, tt := range tests {

@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
@@ -106,7 +106,7 @@ func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *re
 		userProfile: userprofile.New(ownedProfile()),
 		resume:      store, matchAnalysis: an,
 		fit: fitanalysis.New(queries,
-			credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}), an),
+			plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing()), an),
 	}
 }
 
@@ -306,7 +306,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, matchAnalysis: an,
 			fit: fitanalysis.New(queries,
-				credits.NewStore(queries, pool, credits.Config{MonthlyGrant: grant, CostMatch: 1, CostTailor: 3}), an),
+				plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureFit, grant)), an),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
@@ -374,30 +374,30 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		seedJob(t, "spend-1", "spend-1")
 		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(newModel())), 2)
 
-		// GET before compute: full grant remaining, nothing consumed.
+		// GET before compute: the whole day's allowance untouched.
 		greq := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/spend-1/fit", nil)
 		greq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 		gresp, _ := app.Test(greq)
 		var gbody struct {
 			Data struct {
-				Credits *credits.Balance `json:"credits"`
+				Allowance *allowanceView `json:"allowance"`
 			} `json:"data"`
 		}
 		decodeJSON(t, gresp, &gbody)
-		if gbody.Data.Credits == nil || gbody.Data.Credits.Remaining != 2 {
-			t.Fatalf("GET credits = %+v, want remaining=2", gbody.Data.Credits)
+		if gbody.Data.Allowance == nil || gbody.Data.Allowance.Used != 0 || gbody.Data.Allowance.Limit != 2 {
+			t.Fatalf("GET allowance = %+v, want 0 used of 2", gbody.Data.Allowance)
 		}
 
-		// First new job debits to 1.
+		// First new job consumes one.
 		if status, body := postFit(t, app, "spend-1", token); status != fiber.StatusOK || body.Data.Analysis == nil {
 			t.Fatalf("first analysis status=%d analysis=%v, want 200 + analysis", status, body.Data.Analysis)
 		}
-		var remaining int
-		_ = pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id=$1`, userID).Scan(&remaining)
-		if remaining != 1 {
-			t.Errorf("remaining after one match = %d, want 1", remaining)
+		var used int
+		_ = pool.QueryRow(ctx, `SELECT used FROM usage_daily WHERE user_id=$1 AND feature='match'`, userID).Scan(&used)
+		if used != 1 {
+			t.Errorf("used after one analysis = %d, want 1", used)
 		}
-		// Second new job debits to 0; a third is then out of credits (402).
+		// The second consumes the last one; a third has nothing left (402).
 		seedJob(t, "spend-2", "spend-2")
 		if status, _ := postFit(t, app, "spend-2", token); status != fiber.StatusOK {
 			t.Fatalf("second analysis status=%d, want 200", status)

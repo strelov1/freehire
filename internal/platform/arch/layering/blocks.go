@@ -53,7 +53,7 @@ var blocks = map[string][]string{
 		"skillvec", "skillvec/gen", "vocab", "wordmatch",
 	},
 	"ai": {
-		"aiarchetype", "assistant", "autofillagent", "browsertools", "credits", "embed",
+		"aiarchetype", "assistant", "autofillagent", "browsertools", "embed",
 		"enrich", "llmkey",
 		// plan holds the plan a user is on and the per-day allowance each metered feature
 		// draws from. It reads users.pro_until, which argues for identity — but identity

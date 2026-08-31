@@ -13,8 +13,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/ai/speech"
 	"github.com/strelov1/freehire/internal/api/handler"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
@@ -278,7 +278,7 @@ func main() {
 
 	// Credits metering config, loaded alongside the other optional dependencies rather
 	// than inline in the handler registration.
-	creditsConfig := credits.Config(config.LoadCredits())
+	planConfig := plan.ConfigFromEnv()
 
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
@@ -323,7 +323,7 @@ func main() {
 		DiscordPublicKey:     cfg.DiscordPublicKey,
 		DiscordGuildID:       cfg.DiscordGuildID,
 
-		Credits: creditsConfig,
+		Plan: planConfig,
 
 		AWSRegion:       cfg.AWSRegion,
 		NotifyEmailFrom: cfg.NotifyEmailFrom,

@@ -14,9 +14,9 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/browsertools"
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/ai/speech"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/api/realtime"
@@ -325,9 +325,9 @@ type Config struct {
 	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
 	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
 	MailboxDomain string
-	// Credits carries the AI-points economics (monthly grant + per-action costs) that
-	// gate the match and tailor features.
-	Credits credits.Config
+	// Plan carries what each plan allows per day, per feature, and whether a refusal is
+	// enforced yet. Every metered AI surface draws on it.
+	Plan plan.Config
 	// AWSRegion + NotifyEmailFrom enable the SES email channel for referral pings, reusing
 	// the notify worker's config. Both must be set; either empty leaves referral pings
 	// Telegram-only (email disabled). NotifyEmailFrom is the verified SES sender address.
@@ -439,12 +439,12 @@ func Register(app *fiber.App, cfg Config) {
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
 	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	structuredExtractor := resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
-	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
+	plans := plan.NewStore(queries, cfg.Pool, cfg.Plan)
 	// Imports fetch a user-supplied page, so they dial through ingestClient (built above,
 	// where the comment on it is). cfg.Search may be nil (no engine configured), which only
 	// skips the index push.
 	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
-	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer, postingURLs)
+	contributionsH := newContributionHandlers(contributionSvc, queries, importer, postingURLs)
 	// Prefill reuses the SAME importer (its Resolve half, which never writes) rather than
 	// a second parsing registry — see submissionHandlers.PrefillSubmission.
 	submissionsH := newSubmissionHandlers(queries, moderationSvc, importer)
@@ -452,8 +452,8 @@ func Register(app *fiber.App, cfg Config) {
 	// transport and rate limits — see the comment on ingestClient above) for its recognized-ATS
 	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
-	creditsH := newCreditsHandlers(creditsStore, queries)
-	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
+	planH := newPlanHandlers(plans, queries)
+	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
 	// services here rather than inside whichever feature happened to need one first.
@@ -477,7 +477,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Same repository the tracking surface uses: tailor bootstrap places the vacancy on
 	// the Kanban so a pursued role is not invisible under Activity → Saved alone.
 	trackingJobs := trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, cfg.Pool)}
-	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank}, trackingJobs, !cfg.CVEditAllowBulletTruncation)
+	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, !cfg.CVEditAllowBulletTruncation)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	discordH := newDiscordHandlers(queries, cfg.JWTSecret, cfg.DiscordBotToken, cfg.DiscordApplicationID, cfg.DiscordPublicKey, cfg.DiscordGuildID, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
@@ -714,7 +714,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw)
 
-	creditsH.register(api, mw)
+	planH.register(api, mw)
 	usageH.register(api, mw)
 
 	// API-key management and the auth surface (see authHandlers).

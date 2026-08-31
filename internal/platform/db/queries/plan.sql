@@ -33,6 +33,16 @@ WHERE user_id = sqlc.arg(user_id)
   AND day = sqlc.arg(day)
 FOR UPDATE;
 
+-- name: GetUsageDay :one
+-- Today's counter for one feature, read without a lock, for a surface that wants to say
+-- where the caller stands before offering an action. No rows means the feature has not
+-- been touched today, which the caller reports as untouched rather than as absent.
+SELECT used
+FROM usage_daily
+WHERE user_id = sqlc.arg(user_id)
+  AND feature = sqlc.arg(feature)::text
+  AND day = sqlc.arg(day);
+
 -- name: SetUsageDay :exec
 -- Persist the post-transaction counter. The row is guaranteed to exist (EnsureUsageDay
 -- ran first). Yesterday's rows are simply left behind rather than reset: a day that has
@@ -130,6 +140,19 @@ FROM usage_ledger
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2;
+
+-- name: ListTailoredCVLabelsBySessions :many
+-- Resolve tailoring-session ids to their vacancy's display labels for the usage history.
+--
+-- A tailoring charge names the SESSION, not the CV — that is what the turn ceiling is
+-- counted from — so the label has to come back through the binding on the CV row. Only a
+-- tailored copy whose vacancy still exists resolves; anything else simply does not come
+-- back, and the caller falls back to a generic label rather than inventing one.
+SELECT c.agent_session_id, j.title AS job_title, j.public_slug AS job_slug
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.user_id = sqlc.arg(user_id)
+  AND c.agent_session_id = ANY(sqlc.arg(session_ids)::text[]);
 
 -- name: DeleteUsageForUser :exec
 -- Erase one user's consumption ledger. Account deletion calls this alongside the counter

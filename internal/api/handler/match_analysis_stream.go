@@ -57,7 +57,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	if hasCV {
 		var err error
 		if reserved, err = h.fit.Reserve(c.Context(), userID, job.ID); err != nil {
-			if refusal, refused := renderCreditsRefusal(c, err); refused {
+			if refusal, refused := renderRefusal(c, err); refused {
 				return refusal
 			}
 			return err

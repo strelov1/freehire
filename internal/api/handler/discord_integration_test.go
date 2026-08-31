@@ -31,7 +31,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
 	"github.com/strelov1/freehire/internal/engage/discordbot"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
@@ -87,14 +86,12 @@ func TestDiscordContribution(t *testing.T) {
 
 	queries := db.New(pool)
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
-	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
 	intake := &intakeService{
 		queries:      queries,
 		contribution: contributionSvc,
 		// recruitee is a recognised ATS: a link on it imports for real, giving the "readable
 		// vacancy" scenarios a genuine PublicSlug to link to, unlike an unrecognised board.
 		imports: linkimport.New(pool, queries, nil, pagesClient{}, map[string]sources.Source{"recruitee": fakeRecruitee{}}, nil),
-		credits: creditsStore,
 	}
 
 	h := &discordHandlers{

@@ -25,7 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -124,7 +124,7 @@ func newCoordinatorHandlers(pool *pgxpool.Pool, queries *db.Queries, store *resu
 		resume:        store,
 		matchAnalysis: an,
 		fit: fitanalysis.New(queries,
-			credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}), an),
+			plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing()), an),
 	}
 }
 

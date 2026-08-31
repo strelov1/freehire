@@ -1,5 +1,5 @@
 // Package fitanalysis is the fit-analysis use cases: reading the cached analysis for a
-// (candidate, job), running the three-stage chain over it, the credit rule that decides
+// (candidate, job), running the three-stage chain over it, the allowance rule that decides
 // which runs are charged, and the coalescing that keeps two concurrent callers for one pair
 // from paying for two chains.
 //
@@ -16,7 +16,7 @@
 // internal/candidate/matchanalysis — this package orchestrates that domain, it does not
 // replace it. What stays with the caller is transport: resolving a slug to a job, binding
 // the candidate's gateway credential, framing SSE, and rendering the 402 that
-// InsufficientCreditsError describes.
+// RefusedError describes.
 package fitanalysis
 
 import (
@@ -30,7 +30,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -48,33 +48,33 @@ type Store interface {
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]db.ListUserJobAnalysesRow, error)
 }
 
-// Meter is the AI-points ledger as this package needs it. *credits.Store satisfies it.
+// Meter is the plan allowance as this package needs it. *plan.Store satisfies it.
 //
-// A nil Meter is a working no-op — balance unknown, nothing charged — so a caller assembled
-// without credits (a minimal test app) runs the chain rather than panicking. Production
-// always wires one.
+// A nil Meter is a working no-op — standing unknown, nothing consumed — so a caller
+// assembled without one (a minimal test app) runs the chain rather than panicking.
+// Production always wires one.
 type Meter interface {
-	Balance(ctx context.Context, userID int64) (credits.Balance, error)
-	Cost(f credits.Feature) int
-	Debit(ctx context.Context, userID int64, feature credits.Feature, ref string) (credits.Balance, error)
-	// Release voids a debit taken as a reservation for work that produced nothing.
-	Release(ctx context.Context, userID int64, feature credits.Feature, ref string) (credits.Balance, error)
+	Standing(ctx context.Context, userID int64, f plan.Feature) (plan.Standing, error)
+	Consume(ctx context.Context, userID int64, f plan.Feature, ref string) (plan.Decision, error)
+	// Release gives back an allowance reserved for work that produced nothing.
+	Release(ctx context.Context, userID int64, f plan.Feature, ref string) error
 }
 
-// InsufficientCreditsError refuses a run the candidate cannot afford. It carries the balance
-// because the refusal has to be renderable — the SPA shows what is left and when the monthly
-// grant resets — and carrying it here is what lets the decision live outside the transport
-// that formats it.
-type InsufficientCreditsError struct {
-	Balance credits.Balance
+// RefusedError refuses a run the candidate's plan does not allow right now. It carries the
+// decision because the refusal has to be renderable — the SPA shows what is left, when the
+// day resets, and where to upgrade — and carrying it here is what lets the decision live
+// outside the transport that formats it.
+type RefusedError struct {
+	Decision plan.Decision
 }
 
-func (e *InsufficientCreditsError) Error() string {
-	return fmt.Sprintf("fitanalysis: out of AI credits (%d remaining)", e.Balance.Remaining)
+func (e *RefusedError) Error() string {
+	return fmt.Sprintf("fitanalysis: today's fit-analysis allowance is spent (%d of %d used)",
+		e.Decision.Used, e.Decision.Limit)
 }
 
 // Request is one fit-analysis compute: who it is for, what it analyses, and whether this
-// caller owes a credit for it.
+// caller has already paid for it.
 type Request struct {
 	UserID int64
 	Job    db.Job
@@ -95,9 +95,9 @@ type Request struct {
 	CVUploadedAt *time.Time
 
 	// Reserved says THIS caller has already paid for the run (Reserve's answer), not the
-	// leader's. Two callers racing for one never-analysed job each reserve, and the debit is
-	// idempotent per (candidate, feature, job), so both collapse into a single ledger row —
-	// two tabs on the same job is neither a double charge nor a discount.
+	// leader's. Two callers racing for one never-analysed job each reserve, and consumption
+	// is idempotent per (candidate, feature, job), so both collapse into a single ledger row
+	// — two tabs on the same job is neither a double charge nor a discount.
 	//
 	// A run that produces nothing releases what it took, so a failed analysis still costs
 	// nothing.
@@ -112,17 +112,17 @@ type Request struct {
 // Service is the fit-analysis use cases.
 type Service struct {
 	store    Store
-	credits  Meter
+	meter    Meter
 	analyzer *matchanalysis.Analyzer
 	coalesce coordinator
 }
 
-// New builds the service over the analysis cache, the points ledger, and the analyzer whose
+// New builds the service over the analysis cache, the plan meter, and the analyzer whose
 // model identifies a cached row. The analyzer here is the UNBOUND one: it answers ModelID for
 // the stamps, while every actual compute runs under the per-candidate analyzer the caller
 // puts in Request.Analyzer.
 func New(store Store, meter Meter, analyzer *matchanalysis.Analyzer) *Service {
-	return &Service{store: store, credits: meter, analyzer: analyzer}
+	return &Service{store: store, meter: meter, analyzer: analyzer}
 }
 
 // ModelID is the model a cached row is stamped with and judged fresh against.
@@ -132,61 +132,62 @@ func (s *Service) ModelID() string { return s.analyzer.ModelID() }
 // leader/follower contract.
 func (s *Service) Claim(userID, jobID int64) *Claim { return s.coalesce.Claim(userID, jobID) }
 
-// Balance reports the candidate's current points, or nil on a DB error (logged), with no
-// meter wired, or on a nil service. Best-effort: a transient hiccup must neither block a
-// legitimate analysis nor refuse the caller — the atomic Debit remains the real ceiling, and
-// a caller assembled without a fit service (a fixture exercising an adjacent surface) reads
-// as "balance unknown" rather than panicking.
-func (s *Service) Balance(ctx context.Context, userID int64) *credits.Balance {
-	if s == nil || s.credits == nil {
+// Standing reports where the candidate stands on their fit-analysis allowance today, or nil
+// on a DB error (logged), with no meter wired, or on a nil service. Best-effort: a transient
+// hiccup must neither block a legitimate analysis nor refuse the caller — the atomic Consume
+// remains the real ceiling, and a caller assembled without a fit service (a fixture
+// exercising an adjacent surface) reads as "standing unknown" rather than panicking.
+func (s *Service) Standing(ctx context.Context, userID int64) *plan.Standing {
+	if s == nil || s.meter == nil {
 		return nil
 	}
-	bal, err := s.credits.Balance(ctx, userID)
+	st, err := s.meter.Standing(ctx, userID, plan.FeatureFit)
 	if err != nil {
-		log.Printf("credits: balance for user %d: %v", userID, err)
+		log.Printf("plan: standing for user %d: %v", userID, err)
 		return nil
 	}
-	return &bal
+	return &st
 }
 
-// Reserve decides whether this run is chargeable and, if it is, TAKES the credit before the
-// chain starts. The atomic debit is the gate.
+// Reserve decides whether this run is chargeable and, if it is, TAKES the allowance before
+// the chain starts. The atomic consumption is the gate.
 //
-// It used to check the balance and charge afterwards, which is a check-then-act: two
+// It used to check what was left and charge afterwards, which is a check-then-act: two
 // concurrent runs for two never-analysed jobs could both pass a check only one of them could
-// afford, and the loser's debit then failed silently — after its analysis had been computed,
-// cached and served. Debiting first makes the ledger's own row lock the arbiter, so the second
-// run is refused rather than given away.
+// afford, and the loser's charge then failed silently — after its analysis had been computed,
+// cached and served. Consuming first makes the counter's own row lock the arbiter, so the
+// second run is refused rather than given away.
 //
 // A run is chargeable only when it would be the candidate's FIRST analysis of that job, so a
-// recompute is always free and an analysis cached before credits shipped re-runs for nothing.
-// A run that cannot afford its credit is refused with InsufficientCreditsError, before the LLM
-// is touched and before a streaming caller opens its response — so the refusal can still be a
-// status rather than an event on a stream that already returned 200.
+// recompute is always free and an analysis cached before metering shipped re-runs for nothing.
+// A run the plan does not allow is refused with RefusedError, before the LLM is touched and
+// before a streaming caller opens its response — so the refusal can still be a status rather
+// than an event on a stream that already returned 200.
 //
-// Metering fails OPEN. An unreachable ledger logs and lets the run through unreserved, exactly
-// as the balance read always did: bookkeeping must never be able to refuse a legitimate
-// analysis, and an uncharged run is a smaller wrong than a candidate blocked by our accounting.
+// Metering fails OPEN. An unreachable counter logs and lets the run through unreserved,
+// exactly as the balance read always did: bookkeeping must never be able to refuse a
+// legitimate analysis, and an uncharged run is a smaller wrong than a candidate blocked by
+// our accounting.
 func (s *Service) Reserve(ctx context.Context, userID, jobID int64) (reserved bool, err error) {
 	isNew, err := s.isNew(ctx, userID, jobID)
 	if err != nil || !isNew {
 		return false, err
 	}
-	if s.credits == nil {
+	if s.meter == nil {
 		return false, nil
 	}
-	bal, err := s.credits.Debit(ctx, userID, credits.FeatureMatch, debitRef(jobID))
-	if errors.Is(err, credits.ErrInsufficient) {
-		return false, &InsufficientCreditsError{Balance: bal}
+	d, err := s.meter.Consume(ctx, userID, plan.FeatureFit, debitRef(jobID))
+	if errors.Is(err, plan.ErrRefused) {
+		return false, &RefusedError{Decision: d}
 	}
 	if err != nil {
-		log.Printf("credits: reserving a match for user %d job %d: %v", userID, jobID, err)
+		log.Printf("plan: reserving a fit analysis for user %d job %d: %v", userID, jobID, err)
 		return false, nil
 	}
-	// True even when the debit no-opped on an already-charged ref. isNew said there is no
-	// analysis for this job, so a charge standing against it has bought the candidate nothing
-	// — and releasing it if this run also fails is the right answer, not a refund of somebody
-	// else's work.
+	// True even when the consumption no-opped on an already-charged ref. isNew said there is
+	// no analysis for this job, so a charge standing against it has bought the candidate
+	// nothing — and releasing it if this run also fails is the right answer, not a refund of
+	// somebody else's work.
 	return true, nil
 }
 
@@ -415,7 +416,7 @@ func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploade
 // their point is not something to fail them a second time over. It is idempotent, so every
 // failure path may call it without first working out whether it owes one.
 func (s *Service) release(ctx context.Context, userID, jobID int64) {
-	if s.credits == nil {
+	if s.meter == nil {
 		return
 	}
 	// The cleanup has to survive the cancellation that caused it. A client that disconnects
@@ -424,9 +425,9 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	// they never received, in exactly the case this exists for.
 	detached := context.WithoutCancel(ctx)
 
-	// A credit buys HAVING the analysis, not the attempt that produced it. A later run that
-	// fails — a recompute, the autopilot's refresh — must not give back the credit an EARLIER
-	// run earned, so a release stops when an analysis exists for the pair.
+	// An allowance buys HAVING the analysis, not the attempt that produced it. A later run
+	// that fails — a recompute, the autopilot's refresh — must not give back what an EARLIER
+	// run paid, so a release stops when an analysis exists for the pair.
 	//
 	// A service with no store cannot answer that question and simply releases: it is the
 	// nil-degrades-rather-than-panics rule the reads already follow, and a tool runs inside an
@@ -445,8 +446,8 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	// the refund needs and leave the reservation standing.
 	write, cancel := context.WithTimeout(detached, releaseTimeout)
 	defer cancel()
-	if _, err := s.credits.Release(write, userID, credits.FeatureMatch, debitRef(jobID)); err != nil {
-		log.Printf("credits: releasing a match reservation for user %d job %d: %v", userID, jobID, err)
+	if err := s.meter.Release(write, userID, plan.FeatureFit, debitRef(jobID)); err != nil {
+		log.Printf("plan: releasing a fit-analysis reservation for user %d job %d: %v", userID, jobID, err)
 	}
 }
 

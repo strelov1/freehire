@@ -5,16 +5,8 @@ import (
 	"time"
 )
 
-// enforcing returns the default config with every feature's refusal switched on, which is
-// what the shadow run ends with.
-func enforcing() Config {
-	cfg := DefaultConfig()
-	for f, fc := range cfg.features {
-		fc.enforce = true
-		cfg.features[f] = fc
-	}
-	return cfg
-}
+// enforcing is the config the shadow run ends with: every feature refusing.
+func enforcing() Config { return DefaultConfig().Enforcing() }
 
 func TestDecideWithinAllowance(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)

@@ -70,5 +70,5 @@ func (h *matchHandlers) ListMyAnalyses(c *fiber.Ctx) error {
 	// job is the zero value: liveStamps only reads its content hash, and this listing fills
 	// that per row from the job each one joins.
 	items := buildAnalysisItems(rows, h.liveStamps(c.Context(), userID, db.Job{}, cvUploadedAt))
-	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"credits": h.fit.Balance(c.Context(), userID)}})
+	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"allowance": h.allowanceView(c.Context(), userID)}})
 }

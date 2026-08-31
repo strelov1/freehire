@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/ai/credits"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
@@ -31,13 +31,13 @@ import (
 // list, read, render, field-level patch, context, and the bootstrap that creates the
 // vacancy-bound copy — also accepts an API key (RequireAuthOrKey), so a CLI can run the
 // whole cycle rather than half of it. All routes are open to every signed-in user (the
-// beta gate was lifted when tailoring went public; AI credits meter the LLM spend). Every
+// beta gate was lifted when tailoring went public; the plan meters the LLM spend). Every
 // operation is owner-scoped — a foreign id is a 404, never a leak.
 
 // cvHandlers serves the CV builder + AI tailoring routes. The renderer is nil when no
 // typst binary is configured; the PDF endpoint then returns 501 while the rest of the
 // builder still works. match links the tailoring flow to the fit-analysis helpers
-// (blocker capping, credits balance) it reuses.
+// (blocker capping, plan standing) it reuses.
 type cvHandlers struct {
 	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
 	cvStore    *cv.Store
@@ -54,7 +54,7 @@ type cvHandlers struct {
 	// unconfigured bucket, like a member with no photo, means the placeholder.
 	photos  *headshot.Store
 	queries *db.Queries
-	credits *credits.Store
+	plans   *plan.Store
 	// fit reads the cached fit analysis the tailoring context and the CV-vs-job score
 	// ground on. Reads only, from this surface: the writes, the staleness rule and the
 	// metering are the same service's and belong to the match surface.
@@ -120,7 +120,7 @@ func (s trackingBoarder) EnsureOnBoard(ctx context.Context, userID, jobID int64)
 
 // refuseListCap is normally true (Commit refuses over-cap edits). Pass false only when
 // an operator has turned on CV_EDIT_ALLOW_BULLET_TRUNCATION.
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, refuseListCap bool) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, plans *plan.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, refuseListCap bool) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:           cvStore,
 		assistantSessions: assistantSessions,
@@ -145,7 +145,7 @@ func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, a
 		photos:         photoStore,
 		seeder:         bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
 		queries:        queries,
-		credits:        creditsStore,
+		plans:          plans,
 		fit:            match.fit,
 		match:          match,
 		jobs:           jobs,
@@ -168,7 +168,7 @@ func (h *cvHandlers) seedSource() cv.Seeder {
 }
 
 func (h *cvHandlers) register(api fiber.Router, mw middleware) {
-	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
+	// CV builder + AI tailoring: open to every signed-in user (the plan meters the LLM spend).
 	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
 	// binary is configured; the rest still works.
 	api.Get("/cv-templates", mw.cookie, h.ListCVTemplates)
@@ -193,7 +193,7 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
 	// Tailoring: the bootstrap takes a key as well as a cookie, so a CLI can start the cycle
 	// it was already able to drive (edit + context/get/render all accept a key). It creates a
-	// copy of the caller's own CV and debits their own credits — both of which a full-scope
+	// copy of the caller's own CV and spends their own plan allowance — both of which a full-scope
 	// key already does through the fit analysis and the assistant — and never calls the LLM.
 	api.Post("/me/cvs/tailor", mw.key, h.TailorCV)
 	api.Post("/me/cvs/:id/tailor-session", mw.cookie, h.StartTailorSession)

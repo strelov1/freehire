@@ -189,6 +189,30 @@ func (q *Queries) GetProUntil(ctx context.Context, id int64) (pgtype.Timestamptz
 	return pro_until, err
 }
 
+const getUsageDay = `-- name: GetUsageDay :one
+SELECT used
+FROM usage_daily
+WHERE user_id = $1
+  AND feature = $2::text
+  AND day = $3
+`
+
+type GetUsageDayParams struct {
+	UserID  int64       `json:"user_id"`
+	Feature string      `json:"feature"`
+	Day     pgtype.Date `json:"day"`
+}
+
+// Today's counter for one feature, read without a lock, for a surface that wants to say
+// where the caller stands before offering an action. No rows means the feature has not
+// been touched today, which the caller reports as untouched rather than as absent.
+func (q *Queries) GetUsageDay(ctx context.Context, arg GetUsageDayParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getUsageDay, arg.UserID, arg.Feature, arg.Day)
+	var used int64
+	err := row.Scan(&used)
+	return used, err
+}
+
 const getUsageDayForUpdate = `-- name: GetUsageDayForUpdate :one
 SELECT used
 FROM usage_daily
@@ -238,6 +262,51 @@ func (q *Queries) InsertConsumption(ctx context.Context, arg InsertConsumptionPa
 		arg.Ref,
 	)
 	return err
+}
+
+const listTailoredCVLabelsBySessions = `-- name: ListTailoredCVLabelsBySessions :many
+SELECT c.agent_session_id, j.title AS job_title, j.public_slug AS job_slug
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.user_id = $1
+  AND c.agent_session_id = ANY($2::text[])
+`
+
+type ListTailoredCVLabelsBySessionsParams struct {
+	UserID     int64    `json:"user_id"`
+	SessionIds []string `json:"session_ids"`
+}
+
+type ListTailoredCVLabelsBySessionsRow struct {
+	AgentSessionID pgtype.Text `json:"agent_session_id"`
+	JobTitle       string      `json:"job_title"`
+	JobSlug        string      `json:"job_slug"`
+}
+
+// Resolve tailoring-session ids to their vacancy's display labels for the usage history.
+//
+// A tailoring charge names the SESSION, not the CV — that is what the turn ceiling is
+// counted from — so the label has to come back through the binding on the CV row. Only a
+// tailored copy whose vacancy still exists resolves; anything else simply does not come
+// back, and the caller falls back to a generic label rather than inventing one.
+func (q *Queries) ListTailoredCVLabelsBySessions(ctx context.Context, arg ListTailoredCVLabelsBySessionsParams) ([]ListTailoredCVLabelsBySessionsRow, error) {
+	rows, err := q.db.Query(ctx, listTailoredCVLabelsBySessions, arg.UserID, arg.SessionIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTailoredCVLabelsBySessionsRow{}
+	for rows.Next() {
+		var i ListTailoredCVLabelsBySessionsRow
+		if err := rows.Scan(&i.AgentSessionID, &i.JobTitle, &i.JobSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUsageForDay = `-- name: ListUsageForDay :many

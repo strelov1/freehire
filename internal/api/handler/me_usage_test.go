@@ -14,6 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/llmkey"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
@@ -106,8 +107,9 @@ func TestUsageReportsWhatTheCallerDid(t *testing.T) {
 	}
 }
 
-// No money, ever. The gateway's figure is a list price on a mixed pool — not our cost and
-// not the caller's price, which is credits. Two currencies for one thing, one fictional.
+// No money, ever. The gateway's figure is a list price on a mixed pool — not our cost, and
+// not what the caller spends, which is a plan allowance. Two currencies for one thing, one
+// of them fictional.
 func TestUsageReportsNoMoney(t *testing.T) {
 	gw := activityGateway(t, map[string]activity{
 		"vk-7": {requests: 5, tokens: 10},
@@ -122,16 +124,17 @@ func TestUsageReportsNoMoney(t *testing.T) {
 	}
 }
 
-// The period must be the one credits already reset on, or a balance and a usage count sit
-// on different months and both look correct.
-func TestUsagePeriodMatchesTheCreditsCalendar(t *testing.T) {
+// The activity figure and the plan allowances must describe the same period, or a reader
+// comparing "what I used" against "what I have left" is comparing two calendars. It
+// narrowed from a month to a day when the monthly balance was withdrawn.
+func TestUsagePeriodMatchesThePlanCalendar(t *testing.T) {
 	gw := activityGateway(t, map[string]activity{})
 	app, token := usageApp(t, gw.URL, 7)
 
 	_, data := readUsage(t, app, token)
-	want := time.Now().UTC().Format("2006-01")
+	want := plan.Day(time.Now().UTC()).Format(time.DateOnly)
 	if data["period"] != want {
-		t.Errorf("period = %v, want the calendar month %q", data["period"], want)
+		t.Errorf("period = %v, want the UTC day %q the allowances reset on", data["period"], want)
 	}
 }
 

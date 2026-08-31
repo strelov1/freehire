@@ -1582,6 +1582,10 @@ type Querier interface {
 	GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
+	// Today's counter for one feature, read without a lock, for a surface that wants to say
+	// where the caller stands before offering an action. No rows means the feature has not
+	// been touched today, which the caller reports as untouched rather than as absent.
+	GetUsageDay(ctx context.Context, arg GetUsageDayParams) (int64, error)
 	// Lock today's counter for the consumption transaction. EnsureUsageDay guarantees the row
 	// exists, so this never returns no-rows on that path.
 	GetUsageDayForUpdate(ctx context.Context, arg GetUsageDayForUpdateParams) (int64, error)
@@ -2437,6 +2441,13 @@ type Querier interface {
 	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
 	// falls back to a generic label otherwise.
 	ListTailoredCVLabelsByIDs(ctx context.Context, ids []pgtype.UUID) ([]ListTailoredCVLabelsByIDsRow, error)
+	// Resolve tailoring-session ids to their vacancy's display labels for the usage history.
+	//
+	// A tailoring charge names the SESSION, not the CV — that is what the turn ceiling is
+	// counted from — so the label has to come back through the binding on the CV row. Only a
+	// tailored copy whose vacancy still exists resolves; anything else simply does not come
+	// back, and the caller falls back to a generic label rather than inventing one.
+	ListTailoredCVLabelsBySessions(ctx context.Context, arg ListTailoredCVLabelsBySessionsParams) ([]ListTailoredCVLabelsBySessionsRow, error)
 	// A user's TAILORED CVs (bound to a vacancy), newest edit first — the re-open list. Carries the
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
