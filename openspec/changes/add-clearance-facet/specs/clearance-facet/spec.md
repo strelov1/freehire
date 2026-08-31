@@ -79,6 +79,30 @@ This rule exists because a phrase list alone misses this form: in the sampled
 - **WHEN** a description contains "Clearance Required: No" or "Clearance: None"
 - **THEN** the posting is NOT marked as requiring a clearance
 
+### Requirement: The description is read as visible text, not as markup
+
+Descriptions are stored as HTML, so the system SHALL strip the markup before
+matching. Tags routinely land between a label and its value, and matching the raw
+markup reads how a posting is typeset rather than what it says.
+
+A phrase that is itself a field LABEL — immediately followed by a colon — SHALL
+assert nothing on its own; the label's value decides. Otherwise
+`Security Clearance: None/Not Required` marks itself, and the denial cannot rescue
+it, because stripping the markup puts the value on the next line and the
+sentence-scoped negation check stops at the line break.
+
+#### Scenario: Markup between a label and its denial
+
+- **WHEN** a description contains
+  `<p><b>Security Clearance: </b></p>None/Not Required`
+- **THEN** the posting is NOT marked as requiring a clearance
+
+#### Scenario: Markup between a label and its value
+
+- **WHEN** a description contains
+  `<p><b>Clearance Level Must Currently Possess:</b></p><p>Top Secret/SCI</p>`
+- **THEN** the posting IS marked as requiring a clearance
+
 ### Requirement: A denied clearance requirement cancels the signal
 
 The system SHALL NOT mark a posting as requiring a clearance when the description
@@ -86,23 +110,24 @@ denies the requirement — `no security clearance required`,
 `security clearance is not required`, `this role does not require a clearance`,
 `no clearance needed`.
 
-A denial cancels the signal for the whole description rather than for one phrase.
-A posting that says "No security clearance is required for this role" while also
-naming a clearance elsewhere is telling the reader it will hire them, and marking
-it would hide from the searcher exactly the posting they were looking for. This
-is the failure mode with the highest cost in the whole feature: a false positive
-removes a job the candidate can actually get.
+A denial cancels the sentence it sits in, not the whole description: an anchor
+asserted in a different sentence still marks the posting. Sentence scope is what
+`eligibility.go` already implements and it is enough here — a regex for the denial
+forms matched 0 of 923 sampled `clearance` rows, and 0 of the 269 that carried an
+anchor, so a description that both denies and asserts is not a shape the catalogue
+produces. Widening the scope to the whole description would trade a measured zero
+against the risk of one stray "not" suppressing a genuine requirement.
 
 #### Scenario: An explicit denial cancels the signal
 
 - **WHEN** a description says "No security clearance is required for this role"
 - **THEN** the posting is NOT marked as requiring a clearance
 
-#### Scenario: A denial outweighs an anchor elsewhere in the same description
+#### Scenario: A denial does not suppress an anchor in another sentence
 
-- **WHEN** a description mentions "security clearance" in a benefits list and
-  separately states "clearance is not required"
-- **THEN** the posting is NOT marked as requiring a clearance
+- **WHEN** a description says "No security clearance is required." and separately
+  says "You must hold an active TS/SCI clearance."
+- **THEN** the posting IS marked as requiring a clearance
 
 ### Requirement: Unrelated senses of "clearance" do not fire
 

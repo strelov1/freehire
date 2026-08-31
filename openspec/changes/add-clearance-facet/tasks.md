@@ -1,19 +1,19 @@
 ## 1. The dictionary
 
-- [ ] 1.1 Write the failing table test for the anchored-phrase matcher in
+- [x] 1.1 Write the failing table test for the anchored-phrase matcher in
   `internal/dict/location/clearance_test.go`, covering one case per spec scenario:
   UK/US/AU anchors fire, bare `SC`/`DV` do not, silence yields unknown.
-- [ ] 1.2 Implement `RequiresClearanceFromDescription` in
+- [x] 1.2 Implement `RequiresClearanceFromDescription` in
   `internal/dict/location/clearance.go` — the phrase list and word-boundary walk,
   reusing the unexported matcher primitives already in `eligibility.go`.
-- [ ] 1.3 Extend the test with the negation scenarios (`no security clearance
+- [x] 1.3 Extend the test with the negation scenarios (`no security clearance
   required`, a denial elsewhere in a description that also names a clearance), then
   wire the existing negation guard in so they pass.
-- [ ] 1.4 Extend the test with the unrelated-sense scenarios (`customs clearance`,
+- [x] 1.4 Extend the test with the unrelated-sense scenarios (`customs clearance`,
   `medical clearance`, `clearance sale`) and confirm they do not fire.
-- [ ] 1.5 Extend the test with the obtainable-clearance scenarios (`must be able
+- [x] 1.5 Extend the test with the obtainable-clearance scenarios (`must be able
   to obtain a security clearance`, `eligible for SC clearance`) and make them mark.
-- [ ] 1.6 Write the failing test for the labelled-field rule (`Clearance: Secret`,
+- [x] 1.6 Write the failing test for the labelled-field rule (`Clearance: Secret`,
   `CLEARANCE REQUIRED FOR START: Yes`, `Clearance Level: Public Trust` mark;
   `Clearance Required: No`, `Clearance: None`, `Clearance: N/A` do not), then
   implement it.

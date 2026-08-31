@@ -39,7 +39,11 @@ matches `"secret clearance"` and `"ts/sci"` but consumes them purely as a
   phrase list alone misses them: they were ~7% of the sampled `clearance` rows,
   roughly a fifth of all true positives.
 - Negation-aware: `"no security clearance required"` must NOT be marked as
-  requiring one — those postings are precisely the ones a searcher wants.
+  requiring one. This is cheap insurance rather than a measured need — a regex for
+  the denial forms matched **0 of 923** sampled `clearance` rows, and the earlier
+  "355 postings say no clearance is required" figure was another artefact of the
+  same AND-search (`no` is a stop word, so Meilisearch discards it). The guard is
+  free because `eligibility.go` already implements it; the facet just inherits it.
 - New public filter `GET /api/v1/jobs?requires_clearance=false`, a new
   Meilisearch filterable attribute, and one checkbox in the web filter panel.
 - Backfill of the existing catalogue, targeted rather than catalogue-wide.
