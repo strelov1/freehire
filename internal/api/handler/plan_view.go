@@ -23,30 +23,28 @@ type allowanceView struct {
 	ResetsAt  time.Time `json:"resets_at"`
 }
 
-func viewStanding(s plan.Standing) allowanceView {
+// view is the one place an allowance becomes wire shape. A Standing, a Decision and a
+// FeatureUsage all describe the same four facts, so they converge here rather than each
+// growing its own mapping that could disagree about the unlimited rule.
+func view(feature plan.Feature, used, limit int, unlimited bool, resetsAt time.Time) allowanceView {
 	v := allowanceView{
-		Feature:   string(s.Feature),
-		Used:      s.Used,
-		Unlimited: s.Unlimited,
-		ResetsAt:  s.ResetsAt,
+		Feature:   string(feature),
+		Used:      used,
+		Unlimited: unlimited,
+		ResetsAt:  resetsAt,
 	}
-	if !s.Unlimited {
-		v.Limit = s.Limit
+	if !unlimited {
+		v.Limit = limit
 	}
 	return v
 }
 
+func viewStanding(s plan.Standing) allowanceView {
+	return view(s.Feature, s.Used, s.Limit, s.Unlimited, s.ResetsAt)
+}
+
 func viewDecision(d plan.Decision) allowanceView {
-	v := allowanceView{
-		Feature:   string(d.Feature),
-		Used:      d.Used,
-		Unlimited: d.Unlimited,
-		ResetsAt:  d.ResetsAt,
-	}
-	if !d.Unlimited {
-		v.Limit = d.Limit
-	}
-	return v
+	return view(d.Feature, d.Used, d.Limit, d.Unlimited, d.ResetsAt)
 }
 
 // refusalMessage is what a refused caller is told. It names the feature that ran out rather

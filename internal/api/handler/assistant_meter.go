@@ -51,17 +51,12 @@ type turnCharge struct {
 // uncharged: bookkeeping must never be able to refuse a legitimate question, and an
 // uncharged turn is a smaller wrong than a candidate stopped by our accounting.
 func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (turnCharge, bool, error) {
-	if h.plans == nil {
+	turns, ok := h.sessionTurns(c, sess)
+	if !ok {
 		return turnCharge{}, false, nil
 	}
-	turns, err := h.queries.CountAssistantUserTurns(c.Context(), sess.ID)
-	if err != nil {
-		log.Printf("plan: counting turns for session %s: %v", sess.ID, err)
-		return turnCharge{}, false, nil
-	}
-
 	if sess.Preset == assistant.PresetTailor {
-		d, err := h.plans.AllowTurn(c.Context(), sess.UserID, sess.ID.String(), int(turns))
+		d, err := h.plans.AllowTurn(c.Context(), sess.UserID, sess.ID.String(), turns)
 		if err != nil {
 			log.Printf("plan: tailoring turn allowance for session %s: %v", sess.ID, err)
 			return turnCharge{}, false, nil
@@ -71,31 +66,16 @@ func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (tur
 		}
 		return turnCharge{}, true, refuse(c, tailorCeilingRefusal(d))
 	}
-
-	// The reference identifies WHICH turn, so a retry of an interrupted one is not charged
-	// again: a retry does not append a second user message, so it counts the same turn
-	// number the original charge was filed under and the consumption is idempotent.
-	ref := sess.ID.String() + "#turn-" + strconv.FormatInt(turns+1, 10)
-	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
-	switch {
-	case err == nil:
-		return turnCharge{feature: plan.FeatureAssistant, ref: ref}, false, nil
-	case isRefusal(err):
-		return turnCharge{}, true, refuse(c, d)
-	default:
-		log.Printf("plan: charging an assistant turn for user %d: %v", sess.UserID, err)
-		return turnCharge{}, false, nil
-	}
+	// The turn about to be recorded is the next one. Charging it under that number is what
+	// lets the retry below land on the same reference and consume nothing further.
+	return h.chargeTurn(c, sess, turns+1)
 }
 
 // meterRetry is meterTurn for a resumed turn: the user message already exists, so the turn
 // being paid for is the one already counted rather than the next one.
 func (h *assistantHandlers) meterRetry(c *fiber.Ctx, sess assistant.Session) (turnCharge, bool, error) {
-	if h.plans == nil {
-		return turnCharge{}, false, nil
-	}
-	turns, err := h.queries.CountAssistantUserTurns(c.Context(), sess.ID)
-	if err != nil || turns == 0 {
+	turns, ok := h.sessionTurns(c, sess)
+	if !ok || turns == 0 {
 		return turnCharge{}, false, nil
 	}
 	if sess.Preset == assistant.PresetTailor {
@@ -105,7 +85,29 @@ func (h *assistantHandlers) meterRetry(c *fiber.Ctx, sess assistant.Session) (tu
 		// ceiling admitted.
 		return turnCharge{}, false, nil
 	}
-	ref := sess.ID.String() + "#turn-" + strconv.FormatInt(turns, 10)
+	return h.chargeTurn(c, sess, turns)
+}
+
+// sessionTurns is how many turns the session has run, and whether metering can proceed at
+// all. A deployment with no meter and a count that cannot be read both answer false, and
+// the turn then runs uncharged — the fail-open rule above.
+func (h *assistantHandlers) sessionTurns(c *fiber.Ctx, sess assistant.Session) (int, bool) {
+	if h.plans == nil {
+		return 0, false
+	}
+	turns, err := h.queries.CountAssistantUserTurns(c.Context(), sess.ID)
+	if err != nil {
+		log.Printf("plan: counting turns for session %s: %v", sess.ID, err)
+		return 0, false
+	}
+	return int(turns), true
+}
+
+// chargeTurn takes one assistant allowance for turn number n of this session. The number
+// is what makes a retry idempotent: a resumed turn appends no second user message, so it
+// charges under the reference the original charge was filed with and takes nothing more.
+func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n int) (turnCharge, bool, error) {
+	ref := sess.ID.String() + "#turn-" + strconv.Itoa(n)
 	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
 	switch {
 	case err == nil:
@@ -113,7 +115,7 @@ func (h *assistantHandlers) meterRetry(c *fiber.Ctx, sess assistant.Session) (tu
 	case isRefusal(err):
 		return turnCharge{}, true, refuse(c, d)
 	default:
-		log.Printf("plan: charging an assistant retry for user %d: %v", sess.UserID, err)
+		log.Printf("plan: charging an assistant turn for user %d: %v", sess.UserID, err)
 		return turnCharge{}, false, nil
 	}
 }

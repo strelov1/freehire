@@ -124,32 +124,34 @@ func DefaultConfig() Config {
 	}
 }
 
-// Enforcing returns this configuration with every feature's refusal switched on — the
-// state the shadow run ends in, and the one a test asserting a refusal has to be in.
-//
-// It copies rather than mutating, because a Config holds a map and two callers sharing one
-// would otherwise switch enforcement on for each other.
-func (c Config) Enforcing() Config {
-	out := Config{features: make(map[Feature]featureConfig, len(c.features)), TailorTurnsPerSession: c.TailorTurnsPerSession}
+// with returns a copy of this configuration, having applied edit to each feature. Every
+// variation copies rather than mutating, because a Config holds a map and two callers
+// sharing one would otherwise reconfigure each other's.
+func (c Config) with(edit func(Feature, *featureConfig)) Config {
+	out := Config{
+		features:              make(map[Feature]featureConfig, len(c.features)),
+		TailorTurnsPerSession: c.TailorTurnsPerSession,
+	}
 	for f, fc := range c.features {
-		fc.enforce = true
+		edit(f, &fc)
 		out.features[f] = fc
 	}
 	return out
 }
 
+// Enforcing returns this configuration with every feature's refusal switched on — the
+// state the shadow run ends in, and the one a test asserting a refusal has to be in.
+func (c Config) Enforcing() Config {
+	return c.with(func(_ Feature, fc *featureConfig) { fc.enforce = true })
+}
+
 // WithFreeDaily returns this configuration with one feature's free allowance set to n.
-// Copies for the same reason Enforcing does: a Config holds a map, and mutating in place
-// would change it for everyone holding the same one.
 func (c Config) WithFreeDaily(f Feature, n int) Config {
-	out := Config{features: make(map[Feature]featureConfig, len(c.features)), TailorTurnsPerSession: c.TailorTurnsPerSession}
-	for k, fc := range c.features {
+	return c.with(func(k Feature, fc *featureConfig) {
 		if k == f {
 			fc.freeDaily = n
 		}
-		out.features[k] = fc
-	}
-	return out
+	})
 }
 
 // FreeDaily is the free plan's daily allowance for a feature. An unconfigured feature

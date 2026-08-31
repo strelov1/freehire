@@ -34,11 +34,6 @@ func NewStore(q *db.Queries, pool *pgxpool.Pool, cfg Config) *Store {
 	return &Store{q: q, pool: pool, cfg: cfg, now: func() time.Time { return time.Now().UTC() }}
 }
 
-// Config exposes the configuration this store meters against, for callers that need to
-// state a limit before attempting an action — the tailoring prompt says what a session
-// will cost before the user commits to one.
-func (s *Store) Config() Config { return s.cfg }
-
 // Tier resolves the caller's plan. It reads one column and makes no network call, so a
 // billing provider being slow or unreachable can never delay a metered action.
 func (s *Store) Tier(ctx context.Context, userID int64) (Tier, error) {
