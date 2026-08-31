@@ -1,6 +1,6 @@
 # internal/ai
 
-Model-backed features and the spend attribution around them: enrichment, embeddings, the in-app assistant, speech, credits. The LLM client itself is NOT here — it is transport, and lives in `platform`.
+Model-backed features, the spend attribution around them, and the plan that bounds them: enrichment, embeddings, the in-app assistant, speech, plan limits. The LLM client itself is NOT here — it is transport, and lives in `platform`.
 
 **Layer 3 of 8.**
 
@@ -16,4 +16,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`aiarchetype` `assistant` `autofillagent` `browsertools` `credits` `embed` `enrich` `llmkey` `speech`
+`aiarchetype` `assistant` `autofillagent` `browsertools` `embed` `enrich` `llmkey` `plan` `speech`

@@ -3,7 +3,7 @@
 ## Scope
 The crowdsourced "contribute a board" flow: a signed-in user pastes a job link from a
 supported multi-tenant ATS, and a company board we do not yet crawl is recorded and rewarded
-with AI credits. Distinct from `internal/ingest/submission` (the manual full-card moderation queue) —
+and, from `add-invites` onward, with days of Pro. Distinct from `internal/ingest/submission` (the manual full-card moderation queue) —
 contributions are URL-only, auto-validated, unmoderated.
 
 ## Always true

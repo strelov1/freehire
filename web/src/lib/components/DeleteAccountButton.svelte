@@ -118,6 +118,10 @@
     {/each}
   </ul>
   <p class="mt-3 text-sm text-muted-foreground">{s.discussionsNote}</p>
+  <!-- Deleting here erases OUR side. The subscription is held by the payment provider,
+       which never hears about this, so somebody who does not cancel there keeps paying
+       for an account that no longer exists. -->
+  <p class="mt-3 text-sm text-muted-foreground">{s.subscriptionNote}</p>
 
   <label class="mt-4 block text-sm font-medium" for="delete-account-confirm">
     {s.confirmPrefix} <span class="font-mono">{email}</span> {s.confirmSuffix}

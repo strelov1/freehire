@@ -2454,30 +2454,26 @@ data: {"type":"result","stop_reason":"completed"}
       },
       {
         method: 'GET',
-        path: '/me/credits/history',
+        path: '/me/plan/history',
         auth: 'cookie-or-key',
-        summary: 'Your AI-credit ledger, newest first.',
-        description: 'Each debit is labelled with what it bought — the job a match analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.',
-        query: [
-          { name: 'limit', type: 'integer', description: 'Page size.' },
-          { name: 'offset', type: 'integer', description: 'Page offset.' },
-        ],
-        curl: `curl "${BASE_URL}/me/credits/history" -H "Authorization: Bearer fhk_…"`,
-        responseExample: `{ "data": [ { "delta": -1, "reason": "match_analysis", "label": "Senior Backend Engineer at Acme", "created_at": "2026-07-28T09:00:00Z" } ] }`,
+        summary: 'What you spent your allowances on, newest first.',
+        description: 'Each entry is labelled with what it bought — the job an analysis was run on, the vacancy a CV editing session was opened for — rather than an opaque reference. A `release` entry is one that was given back because the work produced nothing.',
+        curl: `curl "${BASE_URL}/me/plan/history" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "feature": "match", "day": "2026-08-31", "kind": "consume", "label": "Job analysis", "subtitle": "Senior Backend Engineer at Acme", "created_at": "2026-08-31T09:00:00Z" } ] }`,
       },
       {
         method: 'GET',
         path: '/me/usage',
         auth: 'cookie-or-key',
-        summary: 'Your AI request activity this billing period.',
+        summary: 'Your AI request activity today.',
         description:
           'Counts and token usage, not cost — the gateway’s dollar figure is a ' +
-          'list price against a mixed upstream pool, not what you pay; your ' +
-          'price is credits, reported by `/me/credits`. Never fails for a reason ' +
-          'you could act on: no usage yet, or an unreachable gateway, both ' +
-          'answer 200 with zeroes.',
+          'list price against a mixed upstream pool, not what you pay; what you ' +
+          'spend is a plan allowance, reported by `/me/plan` over this same day. ' +
+          'Never fails for a reason you could act on: no usage yet, or an ' +
+          'unreachable gateway, both answer 200 with zeroes.',
         curl: `curl "${BASE_URL}/me/usage" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
-        responseExample: `{ "data": { "requests": 42, "failed": 1, "tokens": 118000, "period": "2026-08", "resets_at": "2026-09-01T00:00:00Z" } }`,
+        responseExample: `{ "data": { "requests": 42, "failed": 1, "tokens": 118000, "period": "2026-08-31", "resets_at": "2026-09-01T00:00:00Z" } }`,
       },
       {
         method: 'GET',

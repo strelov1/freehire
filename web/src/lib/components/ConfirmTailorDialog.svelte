@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   // The one mount point for confirmTailorDialog.svelte.ts's controller — see there
   // for why this needs to exist as a singleton at all. Sibling of CvRefreshDialog in
   // the root layout: fixed, self-gating, owns no layout space of its own.
@@ -35,11 +36,11 @@
   const allowance = $derived(confirmTailorDialog.allowance);
   const spent = $derived(isSpent(allowance));
   const left = $derived(remaining(allowance));
-  // With nothing left the button acknowledges rather than proceeds — settling false keeps
-  // the candidate where they are instead of navigating them into a 402 they can do nothing
-  // about. The dialog still opens: what it has to say is the reason.
 </script>
 
+<!-- With nothing left the confirm button acknowledges rather than proceeds: settling false
+     keeps the candidate where they are instead of navigating them into a 402 they can do
+     nothing about. The dialog still opens, because what it has to say is the reason. -->
 <ConfirmDialog
   bind:open={
     () => confirmTailorDialog.open,
@@ -112,6 +113,9 @@
     <p class="text-xs text-muted-foreground">
       More at {resetsAtLabel(allowance)}. Sessions you've already started stay open.
     </p>
+    <a href={resolve('/my/plan')} class="mt-1 text-xs font-medium underline underline-offset-4">
+      See your plan
+    </a>
   {:else if left !== null}
     <p class="mt-4 text-xs text-muted-foreground">
       Starts one of today's CV editing sessions — {left} left.

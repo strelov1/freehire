@@ -44,7 +44,7 @@
         <li>Your CV, its parsed profile, and every CV you built or tailored</li>
         <li>Your hosted mailbox, connected Gmail, and all stored messages</li>
         <li>Saved jobs, applications, reminders, and match analyses</li>
-        <li>AI credits, saved searches, filters, and API keys</li>
+        <li>Your plan and its usage history, saved searches, filters, and API keys</li>
         <li>Your anonymous community handle</li>
         <li>Your account and login credentials</li>
       </ul>

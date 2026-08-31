@@ -36,16 +36,42 @@ transaction. `store.go` is the transaction around it and nothing else.
   TAILORING feature, because spending another tailoring session is what the candidate has
   to do about it.
 
+- **A session holding no charge gets ONE ceiling, not zero.** Every conversation open on
+  the day this deploys predates the ledger, and treating "no charge" as "never paid for"
+  would 402 the next turn of every live one. It is still bounded: one ceiling's worth and
+  no more, with the charge taken where sessions are created — the place that can refuse
+  before anything exists.
+
+- **A pre-check asks `Refuses`, never `Exhausted`.** Exhausted says the allowance is spent;
+  Refuses says the allowance is spent AND this feature enforces. A pre-check built on the
+  first would hard-refuse while every other surface was still only counting, which is how a
+  feature ships enforcing that nobody meant to enforce.
+
 - **Shadow mode: enforcement is a switch, per feature, and it ships off.** With it off,
   `Consume` records and reports but never refuses — the shadow run answers "how many people
   would this have stopped, and where in their day?" against live traffic. `PLAN_ENFORCE`
   names the features whose refusal is on (`match,tailor` or `all`), so the run ends one
   feature at a time without a deploy.
 
-- **The fair-use guard ignores that switch.** Shadow protects people from ceilings nobody
-  has verified; the guard sits ~20× above human behaviour, so what reaches it is automation,
-  and what it protects is the gateway rather than a price. It logs when it fires — a guard
-  nobody sees fire gets blamed for an outage it did not cause.
+- **The fair-use guard belongs to the PRO plan and ignores the enforcement switch.** A free
+  account is already bounded by its daily allowance, so reaching the guard there would mean
+  the allowance was configured above it — a misconfiguration to fix, not a caller to accuse
+  of automation. Shadow protects people from ceilings nobody has verified; the guard sits
+  ~20× above human behaviour, so what reaches it is automation, and what it protects is the
+  gateway rather than a price. It logs when it fires — a guard nobody sees fire gets blamed
+  for an outage it did not cause.
+
+  The gateway's own per-key budget is the better home for it eventually (money is the honest
+  unit for infrastructure defence), and `internal/ai/llmkey` already mints one. It stays here
+  while the pool runs on free keys, which leaves that budget with nothing to calibrate
+  against — see the design's "Why the gateway's own budget does not replace this".
+
+- **A release RESTAMPS its row `kind='release'`** rather than deleting it or appending a
+  compensating one. `usage_ledger_consume_ref_uniq` is scoped to `kind='consume'`, so:
+  appending would leave the reference permanently spent and make the retry free forever;
+  deleting would free the reference but erase the fact that a reservation was taken;
+  restamping does both jobs, and the day's counter — which sums only live consumptions —
+  stays correct.
 
 - **A release gives back the day it took from, not the day it happens on**, and reads that
   day (`GetConsumptionDay`) BEFORE taking any lock. Both matter: a reservation taken at

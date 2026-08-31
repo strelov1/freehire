@@ -116,8 +116,6 @@ export function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): T
   );
 }
 
-/** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
- *  and frame decoding have a single implementation. */
 /** What to tell the candidate when a turn does not start.
  *
  *  A refused turn (402) already carries a sentence written for them — which feature ran
@@ -138,6 +136,8 @@ async function turnFailureMessage(res: Response, failure: string): Promise<strin
   return `${failure} (${res.status})`;
 }
 
+/** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
+ *  and frame decoding have a single implementation. */
 function streamTurn(
   sessionId: string,
   url: string,

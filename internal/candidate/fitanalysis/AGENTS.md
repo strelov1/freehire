@@ -3,7 +3,7 @@
 ## Scope
 
 `internal/candidate/fitanalysis` orchestrates the fit analysis: the per-`(candidate, job)` cache,
-the staleness stamp, the AI-credit rule, and the coalescing that stops two concurrent callers
+the staleness stamp, the plan-allowance rule, and the coalescing that stops two concurrent callers
 paying for two chains. The chain itself, the `Analysis` type and its sanitize ceilings stay in
 [`internal/candidate/matchanalysis`](../matchanalysis/AGENTS.md) — this package uses that domain,
 it does not replace it.
@@ -29,31 +29,31 @@ reachable only through a `*fiber.Ctx`.
 
 ## Always true
 
-- **The debit IS the gate.** `Reserve` takes the credit BEFORE the chain starts, so the ledger's
-  own row lock decides. It used to check a balance and charge afterwards, which is a
-  check-then-act: two concurrent runs for two never-analysed jobs both passed a balance only one
-  of them could afford, and the loser's debit then failed silently — after its analysis had been
-  computed, cached and served.
-- **A run that produces nothing gives the credit back.** `Run` and `Follow` release on every
-  failure path, from a defer, so a panic returns it too. Taking the credit up front is only
-  honest if a failed analysis still costs nothing.
-- **A released ref is chargeable again**, which is what makes a retry cost one credit rather
-  than none. `credits.Store.Release` DELETES the debit row instead of appending a compensating
-  one, and it has to: `credit_ledger_debit_ref_uniq` allows one debit per `(user, feature, ref)`,
-  so a compensating entry would leave the ref permanently spent.
+- **The consumption IS the gate.** `Reserve` takes the allowance BEFORE the chain starts, so
+  the counter's own row lock decides. It used to check what was left and charge afterwards,
+  which is a check-then-act: two concurrent runs for two never-analysed jobs both passed a
+  check only one of them could afford, and the loser's charge then failed silently — after its
+  analysis had been computed, cached and served.
+- **A run that produces nothing gives the allowance back.** `Run` and `Follow` release on every
+  failure path, from a defer, so a panic returns it too. Taking it up front is only honest if a
+  failed analysis still costs nothing.
+- **A released ref is chargeable again**, which is what makes a retry cost one rather than none.
+  `plan.Store.Release` RESTAMPS the row `kind='release'` instead of deleting it or appending a
+  compensating one: `usage_ledger_consume_ref_uniq` is scoped to `kind='consume'`, so restamping
+  frees the reference while keeping the fact that a reservation was taken.
 - **Only a FIRST analysis of a job is chargeable.** A recompute is always free, so an analysis
-  cached before credits shipped re-runs for nothing. `Request.Reserved` carries the answer.
+  cached before metering shipped re-runs for nothing. `Request.Reserved` carries the answer.
 - **Every caller reserves for ITSELF, leader or follower.** Two tabs on one never-analysed job
-  are neither a double charge nor a discount: the debit is idempotent per
+  are neither a double charge nor a discount: consumption is idempotent per
   `(candidate, feature, job)`, so both collapse into one ledger row.
-- **Metering fails OPEN.** An unreachable ledger logs and lets the run through unreserved.
+- **Metering fails OPEN.** An unreachable counter logs and lets the run through unreserved.
   Bookkeeping must never be able to refuse a legitimate analysis, and an uncharged run is a
   smaller wrong than a candidate blocked by our accounting.
 - **The autopilot's two halves never charge.** `Ensure` ignores `Reserved` rather than trusting
   it, so it reserves nothing and has nothing to release. Their spend is tracked only by the LLM attribution every call already carries.
 - **The gate runs before the LLM and before a stream's headers.** `Reserve` refuses with
-  `*InsufficientCreditsError`, carrying the balance — the caller renders the 402. An out-of-credits
-  request must never become an event on a stream that already returned 200.
+  `*RefusedError`, carrying the decision — the caller renders the 402. A refused request must
+  never become an event on a stream that already returned 200.
 - **The cache stores the UNCAPPED analysis.** The hard-constraint ceiling is recomputed and applied
   to the served copy by the caller, so a dictionary change takes effect with no cache invalidation.
 - **A leader MUST release its claim exactly once**, on every outcome including "LLM unconfigured",
@@ -93,9 +93,9 @@ wired harness has to fail soft. The tools guard their other collaborators for th
 
 - `Store` — the analysis cache. `*db.Queries` satisfies it. It trades generated row types
   deliberately, the same way `internal/ai/embed`'s ports do.
-- `Meter` — the AI-points ledger. `*credits.Store` satisfies it. **A nil `Meter` is a working
-  no-op** (balance unknown, nothing charged) so a fixture without a ledger still runs the chain.
-  Pass a nil *interface*, never a non-nil interface holding a nil `*credits.Store` — see
+- `Meter` — the plan allowance. `*plan.Store` satisfies it. **A nil `Meter` is a working
+  no-op** (standing unknown, nothing charged) so a fixture without one still runs the chain.
+  Pass a nil *interface*, never a non-nil interface holding a nil `*plan.Store` — see
   `meterOrNil` in the handler.
 - `Request.Analyzer` — the per-candidate bound analyzer. Bound by the CALLER, because minting a
   gateway credential is a network call that a streaming caller must make before its headers go out.

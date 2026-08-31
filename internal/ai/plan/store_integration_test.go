@@ -226,6 +226,38 @@ func TestReleaseIsSafeToCallBlind(t *testing.T) {
 	}
 }
 
+// A release must leave a trace. Deleting the row would free the reference and erase the
+// fact that a reservation was ever taken — exactly the hole an append-only ledger exists
+// to prevent, and the one thing nobody could reconstruct afterwards.
+func TestAReleaseIsRecordedNotErased(t *testing.T) {
+	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
+	s, pool := newStore(t, enforcing(), now)
+	ctx := context.Background()
+	user := insertUser(t, pool, "release-recorded@example.test")
+
+	if _, err := s.Consume(ctx, user, FeatureFit, "job-traced"); err != nil {
+		t.Fatalf("consumption: %v", err)
+	}
+	if err := s.Release(ctx, user, FeatureFit, "job-traced"); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	var kind string
+	if err := pool.QueryRow(ctx,
+		`SELECT kind FROM usage_ledger WHERE user_id=$1 AND feature=$2 AND ref=$3`,
+		user, string(FeatureFit), "job-traced").Scan(&kind); err != nil {
+		t.Fatalf("the released entry vanished from the ledger: %v", err)
+	}
+	if kind != "release" {
+		t.Errorf("the entry reads %q, want \"release\"", kind)
+	}
+	// And it no longer counts as a consumption, so the day's counter stays derivable from
+	// the ledger by summing only what was actually spent.
+	if got := countLedger(t, pool, user, FeatureFit); got != 0 {
+		t.Errorf("%d consumptions remain, want 0", got)
+	}
+}
+
 func TestConcurrentConsumptionsNeverOversell(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
 	s, pool := newStore(t, enforcing(), now)

@@ -207,6 +207,42 @@ timestamp the right shape here.
 new tables are additive and unread by the old binary, so reverting the deploy restores the
 previous behaviour with no data loss — the historical balances were never touched.
 
+### Why the gateway's own budget does not replace this
+
+Bifrost already meters: a virtual key carries `budgets: [{max_limit, reset_duration}]` and
+a request-rate limit, and `internal/ai/llmkey` already mints them. The obvious question is
+whether that makes this package redundant. It does not, and the reason is what each thing
+bounds.
+
+A gateway budget bounds MONEY. It answers "will we go broke", and it answers it better than
+counting actions ever could — the same two CV edits cost $0.50 or $15 depending on how deep
+they go. What it cannot express is what a candidate was PROMISED. "2 CV edits a day" is
+something a person can plan around; "$0.20 a day" on a free tier is a bank statement, not an
+offer. The gap between them is the 7.1 model calls one turn makes: the person presses once,
+and how many calls follow is the model's decision, not theirs.
+
+Five things a per-key budget cannot do at all, each of which this change relies on: split by
+feature (one key, one budget — splitting it needs four keys per user, which dismantles the
+per-user spend attribution the key exists for); bound the turns inside one tailoring session
+(the gateway has no idea sessions exist); leave a retry uncharged (a resumed turn is fresh
+calls, and they cost); give an allowance back when the work produced nothing (tokens are
+spent); and refuse BEFORE the stream opens — a gateway refusal arrives mid-call, inside a
+response that already returned 200.
+
+Shadow mode is the sixth: "count but do not refuse" is not expressible as a budget, and it
+is what lets this ship without breaking anybody.
+
+Two facts sharpen it. `LLMUserMaxBudget` is already implemented and deliberately unset, for
+this change's own reason — a ceiling chosen before the spend distribution is known is a
+guess (`internal/platform/config/config.go:115-119`). And dictation runs on the SERVICE
+credential (`cmd/server/main.go:223`), so a per-user budget does not see it at all.
+
+**Where the gateway IS the better answer: the fair-use guard.** It is infrastructure defence
+rather than product, so money is the honest unit and a mid-stream refusal is acceptable —
+what reaches it is automation. It stays here for now only because the pool runs on free and
+scavenged keys, which leaves `MaxBudget` with nothing to calibrate against; moving it is a
+change of its own, once there are real bills to read.
+
 ## Open Questions
 
 - **What does the fair-use guard cost when it fires?** The spec says operators are told and

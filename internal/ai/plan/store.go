@@ -168,14 +168,14 @@ func (s *Store) Release(ctx context.Context, userID int64, feature Feature, ref 
 	if err != nil {
 		return err
 	}
-	removed, err := q.DeleteConsumption(ctx, db.DeleteConsumptionParams{
+	released, err := q.ReleaseConsumption(ctx, db.ReleaseConsumptionParams{
 		UserID: userID, Feature: string(feature), Ref: ref,
 	})
 	if err != nil {
 		return err
 	}
-	if removed > 0 {
-		if used -= removed; used < 0 {
+	if released > 0 {
+		if used -= released; used < 0 {
 			used = 0
 		}
 		if err := q.SetUsageDay(ctx, db.SetUsageDayParams{
@@ -213,7 +213,22 @@ type Standing struct {
 // Exhausted reports whether this feature has nothing left today. An unlimited standing is
 // never exhausted — the fair-use guard behind it refuses at the point of use rather than
 // being reported as a ceiling somebody is approaching.
+//
+// It says nothing about whether a refusal would follow: with the feature's enforcement off
+// the action still runs, and only the shadow ledger records that it would not have. A
+// caller deciding whether to REFUSE must ask Refuses instead; this one is for a surface
+// deciding what to SAY.
 func (s Standing) Exhausted() bool { return !s.Unlimited && s.Used >= s.Limit }
+
+// Refuses reports whether an action would actually be turned away right now: the allowance
+// is spent AND this feature's enforcement is on.
+//
+// The distinction is the whole of shadow mode. A pre-check that refused on Exhausted alone
+// would hard-refuse while every other surface was still only counting — which is how a
+// feature ships enforcing that nobody meant to enforce.
+func (s *Store) Refuses(st Standing) bool {
+	return st.Exhausted() && s.cfg.Enforced(st.Feature)
+}
 
 // Standing reports where the caller stands on one feature today. It makes no model call
 // and consumes nothing, so a surface may ask before offering an action — the tailoring

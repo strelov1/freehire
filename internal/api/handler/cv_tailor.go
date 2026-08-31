@@ -80,8 +80,8 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	// session that already exists costs nothing, and refusing here would lock somebody out
 	// of work they have already paid for — the workspace is addressed by vacancy, so a
 	// reload arrives at exactly this line.
-	if refusal, refused := h.refuseNewTailoring(c, userID, job.ID); refused {
-		return refusal
+	if refused, err := h.refuseNewTailoring(c, userID, job.ID); refused {
+		return err
 	}
 	// When the base CV is behind the latest résumé upload, refresh it from the seed before
 	// Tailor copies it into a new vacancy-bound row. Reload of an existing tailored copy
@@ -165,8 +165,14 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	}})
 }
 
-// refuseNewTailoring answers the 402 when the caller has no tailoring allowance left AND
-// this vacancy would be a new session. It reports whether it refused.
+// refuseNewTailoring answers the 402 when the caller's tailoring allowance would actually
+// turn them away AND this vacancy would be a new session. It reports whether it refused,
+// and the error from writing that refusal.
+//
+// It asks Refuses rather than Exhausted, so the pre-check follows the same enforcement
+// switch every other surface does: with tailoring still in shadow the bootstrap runs and
+// the ledger simply records that it would not have. Refusing here on a spent allowance
+// alone would make one feature enforce while the rest were only counting.
 //
 // The order matters: the allowance is checked first because it is a cheap read, and the
 // "have they tailored this vacancy before" question is only asked of somebody who has run
@@ -176,30 +182,27 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 // tailored-CV lookup that errors are both bookkeeping problems, and refusing a candidate
 // because our accounting hiccuped is the worse outcome; the charge below is atomic and
 // remains the real ceiling.
-func (h *cvHandlers) refuseNewTailoring(c *fiber.Ctx, userID, jobID int64) (error, bool) {
+func (h *cvHandlers) refuseNewTailoring(c *fiber.Ctx, userID, jobID int64) (bool, error) {
 	if h.plans == nil {
-		return nil, false
+		return false, nil
 	}
 	st, err := h.plans.Standing(c.Context(), userID, plan.FeatureTailor)
 	if err != nil {
 		log.Printf("plan: tailoring standing for user %d: %v", userID, err)
-		return nil, false
+		return false, nil
 	}
-	if !st.Exhausted() {
-		return nil, false
+	if !h.plans.Refuses(st) {
+		return false, nil
 	}
 	if _, err := h.queries.GetTailoredCVForJob(c.Context(), db.GetTailoredCVForJobParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
 	}); err == nil {
-		return nil, false // already tailored for this vacancy: returning to it is free
+		return false, nil // already tailored for this vacancy: returning to it is free
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("cv: looking up an existing tailored CV for user %d job %d: %v", userID, jobID, err)
-		return nil, false
+		return false, nil
 	}
-	return refuse(c, plan.Decision{
-		Tier: st.Tier, Feature: st.Feature, Used: st.Used, Limit: st.Limit,
-		Unlimited: st.Unlimited, ResetsAt: st.ResetsAt,
-	}), true
+	return true, refuseStanding(c, st)
 }
 
 // existingTailoringSession reports the conversation already bound to a tailored CV, or "" when

@@ -116,15 +116,21 @@ func coordinatorJobSlug(prefix string, i int) string {
 // newCoordinatorHandlers builds the matchHandlers a coordinator test drives requests against —
 // model bound to a fresh Analyzer, everything else the fixed fixture StreamMatchAnalysis and
 // autopilotAnalysis.ensure both need.
+// coordinatorAllowance is deliberately far above the shipped daily figure. These tests
+// drive the same user through many analyses to reproduce a coalescing race, and the
+// allowance is not what they are about — with the real number they would stop being a race
+// test partway through and start being a 402 test.
+const coordinatorAllowance = 100
+
 func newCoordinatorHandlers(pool *pgxpool.Pool, queries *db.Queries, store *resume.Store, model llms.Model) *matchHandlers {
 	an := matchanalysis.NewAnalyzer(llm.NewWithModel(model))
+	cfg := plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureFit, coordinatorAllowance)
 	return &matchHandlers{
 		queries:       queries,
 		userProfile:   userprofile.New(ownedProfile()),
 		resume:        store,
 		matchAnalysis: an,
-		fit: fitanalysis.New(queries,
-			plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing()), an),
+		fit:           fitanalysis.New(queries, plan.NewStore(queries, pool, cfg), an),
 	}
 }
 
@@ -283,11 +289,11 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 	// per (user, feature, job), so this is one row, not zero (a free ride for a paying
 	// caller) or two (double-billed).
 	var debits int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit' AND feature='match'`, userID).Scan(&debits); err != nil {
-		t.Fatalf("count match debits: %v", err)
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM usage_ledger WHERE user_id=$1 AND kind='consume' AND feature='match'`, userID).Scan(&debits); err != nil {
+		t.Fatalf("count match charges: %v", err)
 	}
 	if debits != 1 {
-		t.Errorf("match debits = %d, want 1 — the follower is a genuinely new paying request and must still be charged once, not given a free ride because autopilotAnalysis.ensure led", debits)
+		t.Errorf("match charges = %d, want 1 — the follower is a genuinely new paying request and must still be charged once, not given a free ride because autopilotAnalysis.ensure led", debits)
 	}
 }
 
@@ -356,11 +362,11 @@ func TestMatchAnalysisCoordinatorStreamLeadsEnsureCachedAnalysisFollowsAndLeader
 	}
 
 	var debits int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit' AND feature='match'`, userID).Scan(&debits); err != nil {
-		t.Fatalf("count match debits: %v", err)
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM usage_ledger WHERE user_id=$1 AND kind='consume' AND feature='match'`, userID).Scan(&debits); err != nil {
+		t.Fatalf("count match charges: %v", err)
 	}
 	if debits != 1 {
-		t.Errorf("match debits = %d, want 1 — the leader is a genuinely new paying request and an unmetered follower joining must not suppress its charge", debits)
+		t.Errorf("match charges = %d, want 1 — the leader is a genuinely new paying request and an unmetered follower joining must not suppress its charge", debits)
 	}
 }
 

@@ -59,7 +59,7 @@ a 400 the caller cannot explain.
 
 ## What bounds the spend
 Transcription is billed per minute of audio, and a turn is not metered
-(`internal/ai/credits` is the seam and is not wired to it). Three things stand in for that,
+(`internal/ai/plan` meters it: one dictation allowance per accepted recording, returned when nothing usable comes back). Three things stand in for that,
 none of which depends on metering landing first:
 
 - a per-**caller** rate limit (`transcriptionsPerHour`), keyed on the user rather than

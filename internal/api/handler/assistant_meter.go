@@ -64,7 +64,15 @@ func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (tur
 		if d.Allowed {
 			return turnCharge{}, false, nil
 		}
-		return turnCharge{}, true, refuse(c, tailorCeilingRefusal(d))
+		// The refusal reports the tailoring STANDING, not the turn count. What the
+		// candidate has to act on is whether they can spend another of today's sessions to
+		// continue — and that answer, with its reset instant, only the standing carries.
+		st, err := h.plans.Standing(c.Context(), sess.UserID, plan.FeatureTailor)
+		if err != nil {
+			log.Printf("plan: tailoring standing for user %d: %v", sess.UserID, err)
+			return turnCharge{}, false, nil
+		}
+		return turnCharge{}, true, refuseSessionCeiling(c, sess.ID.String(), d, st)
 	}
 	// The turn about to be recorded is the next one. Charging it under that number is what
 	// lets the retry below land on the same reference and consume nothing further.
@@ -143,16 +151,22 @@ func (h *assistantHandlers) releaseTurn(sess assistant.Session, charge turnCharg
 	}
 }
 
-// tailorCeilingRefusal turns a turn-ceiling stop into the refusal shape the 402 renders.
-// It reports the TAILORING feature, not the assistant one, because what the candidate has
-// to do about it is spend another of today's tailoring sessions — naming the assistant
+// refuseSessionCeiling writes the 402 for a session that has run as far as it paid for.
+//
+// It names the TAILORING allowance rather than the assistant one, because spending another
+// of today's sessions is what the candidate does about it — pointing them at the assistant
 // allowance would send them to look at a number that is not the one stopping them.
-func tailorCeilingRefusal(d plan.TurnDecision) plan.Decision {
-	return plan.Decision{
-		Tier:      plan.TierFree,
-		Feature:   plan.FeatureTailor,
-		Used:      d.Turns,
-		Limit:     d.Ceiling,
-		Unlimited: d.Unlimited,
+//
+// The session and its turn ceiling ride along, so the workspace can say which conversation
+// stopped and offer to extend that one rather than guessing.
+func refuseSessionCeiling(c *fiber.Ctx, sessionID string, d plan.TurnDecision, st plan.Standing) error {
+	body := fiber.Map{
+		"error":     "This CV editing session has run as far as today's session covers.",
+		"allowance": viewStanding(st),
+		"session":   fiber.Map{"id": sessionID, "turns": d.Turns, "ceiling": d.Ceiling},
 	}
+	// Extending spends another of today's sessions, so it is only offered when there is one
+	// to spend. Offering it otherwise is a button that answers 402.
+	body["can_extend"] = !st.Exhausted()
+	return c.Status(fiber.StatusPaymentRequired).JSON(body)
 }

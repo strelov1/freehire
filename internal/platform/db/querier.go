@@ -848,18 +848,6 @@ type Querier interface {
 	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
 	// absent.
 	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
-	// Void a consumption taken as a RESERVATION for work that then produced nothing.
-	//
-	// It deletes rather than appending a compensating row, and the unique index forces that:
-	// at most one consumption may exist per (user, feature, ref), so a compensating entry
-	// would leave the ref permanently spent and the user's retry would find it already
-	// charged and never re-reserve. Deleting frees the ref.
-	//
-	// Returns the number of rows removed, so the caller gives the allowance back exactly when
-	// it really took one — a double release, or a release of something already voided,
-	// removes nothing and returns 0. That is what lets every failure path call this without
-	// first working out whether it owes one.
-	DeleteConsumption(ctx context.Context, arg DeleteConsumptionParams) (int64, error)
 	// Housekeeping: drop dead-lettered entries older than the cutoff.
 	//
 	// Note what this does NOT reap: entries whose job row is gone. For search_outbox that is
@@ -3294,6 +3282,24 @@ type Querier interface {
 	// carrying the OLD slug, so an updated row leaves the set. A re-run updates zero, and
 	// stopping mid-way costs nothing — the next run resumes with what is left.
 	RekeyCompanySlugChunk(ctx context.Context, arg RekeyCompanySlugChunkParams) (int64, error)
+	// Void a consumption taken as a RESERVATION for work that then produced nothing.
+	//
+	// It RESTAMPS the row rather than deleting it or adding a compensating entry, and the
+	// shape of the index is what makes that the right move. `usage_ledger_consume_ref_uniq` is
+	// scoped to kind='consume', so:
+	//
+	//   * appending a compensating row would leave the original standing, the ref permanently
+	//     spent, and the user's retry charged nothing — free work, forever;
+	//   * deleting the row frees the ref but erases the fact that a reservation was ever
+	//     taken, which is exactly the kind of hole an append-only ledger exists to prevent;
+	//   * restamping frees the ref AND keeps the row, so the history reads "charged, then
+	//     returned" and the day's counter — which sums only kind='consume' — is correct.
+	//
+	// Returns the number of rows restamped, so the caller gives the allowance back exactly
+	// when it really took one: a double release, or a release of something already voided,
+	// matches nothing and returns 0. That is what lets every failure path call this without
+	// first working out whether it owes one.
+	ReleaseConsumption(ctx context.Context, arg ReleaseConsumptionParams) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.

@@ -218,17 +218,18 @@ func TestTailorCVBootstrap(t *testing.T) {
 	if !got.Data.ColdStartRunning {
 		t.Errorf("cold_start_running = false, want true on a bootstrap that just created the CV")
 	}
-	// Creating the tailored CV debited the tailor cost (3) from the monthly grant (20).
-	var remaining int
-	_ = pool.QueryRow(context.Background(), `SELECT remaining FROM credit_balances WHERE user_id=$1`, user).Scan(&remaining)
-	if remaining != 17 {
-		t.Errorf("remaining after tailor = %d, want 17 (20 - 3)", remaining)
-	}
-	var debits int
+	// Creating the tailored CV consumed one of the day's tailoring sessions.
+	var used int
 	_ = pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit' AND feature='tailor'`, user).Scan(&debits)
-	if debits != 1 {
-		t.Errorf("tailor debit rows = %d, want 1", debits)
+		`SELECT used FROM usage_daily WHERE user_id=$1 AND feature='tailor' AND day=CURRENT_DATE`, user).Scan(&used)
+	if used != 1 {
+		t.Errorf("tailoring sessions used = %d, want 1", used)
+	}
+	var charges int
+	_ = pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM usage_ledger WHERE user_id=$1 AND kind='consume' AND feature='tailor'`, user).Scan(&charges)
+	if charges != 1 {
+		t.Errorf("tailoring charges = %d, want 1", charges)
 	}
 	assertVacancyOnKanban(t, pool, user, jobID)
 }
@@ -429,11 +430,13 @@ func TestTailorCVOutOfCredits(t *testing.T) {
 	seedAnalysis(t, h, user, jobID)
 	seedFreshResume(t, pool, user)
 
-	// Force the current-period balance to zero so the tailor pre-check fails.
-	period := time.Now().UTC().Format("2006-01")
+	// Spend today's whole tailoring allowance so the bootstrap pre-check refuses. The
+	// counter is what the pre-check reads; seeding it directly is the state a candidate
+	// who already opened today's sessions would be in.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO credit_balances (user_id, period, remaining) VALUES ($1, $2, 0)`, user, period); err != nil {
-		t.Fatalf("seed zero balance: %v", err)
+		`INSERT INTO usage_daily (user_id, feature, day, used) VALUES ($1, 'tailor', CURRENT_DATE, $2)`,
+		user, plan.DefaultConfig().FreeDaily(plan.FeatureTailor)); err != nil {
+		t.Fatalf("seed a spent allowance: %v", err)
 	}
 
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"})
@@ -747,15 +750,15 @@ func TestTailorCVBootstrapIsIdempotentPerVacancy(t *testing.T) {
 		t.Errorf("after two bootstraps: %d CVs and %d sessions, want one of each", cvs, sessions)
 	}
 
-	// And the debit happened once, not twice.
-	var debits int
+	// And the charge happened once, not twice.
+	var charges int
 	if err := pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM credit_ledger WHERE user_id = $1 AND kind = 'debit' AND feature = 'tailor'`,
-		user).Scan(&debits); err != nil {
-		t.Fatalf("count debits: %v", err)
+		`SELECT count(*) FROM usage_ledger WHERE user_id = $1 AND kind = 'consume' AND feature = 'tailor'`,
+		user).Scan(&charges); err != nil {
+		t.Fatalf("count charges: %v", err)
 	}
-	if debits != 1 {
-		t.Errorf("tailor debits = %d, want 1 — a reload is not a second purchase", debits)
+	if charges != 1 {
+		t.Errorf("tailoring charges = %d, want 1 — a reload is not a second purchase", charges)
 	}
 }
 

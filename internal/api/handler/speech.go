@@ -93,22 +93,32 @@ func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
 	// Charged before the audio goes upstream, and given back below if nothing usable comes
 	// out. The rate limiter above bounds how FAST a caller may ask; this bounds how much
 	// they may have in a day — and the two answer differently on purpose, 429 against 402,
 	// because one clears in seconds and the other clears tomorrow.
-	charge, refusal, refused := h.chargeTranscription(c)
+	charge, refused, err := h.chargeTranscription(c, userID)
 	if refused {
-		return refusal
+		return err
 	}
 
 	text, err := h.stt.Transcribe(c.Context(), audio, filename)
 	if err != nil {
-		h.releaseTranscription(c, charge)
+		h.releaseTranscription(c, userID, charge)
 		// Every failure from here is the gateway's: a refusal, a fault, an answer we
 		// could not read. The caller did nothing wrong and has no remedy, so it is a
 		// 502 rather than anything that blames them.
 		return fiber.NewError(fiber.StatusBadGateway, "transcription failed")
+	}
+	// Silence transcribes to nothing, and nothing is not what the candidate was charged
+	// for. The 200 stands — an empty result is a real answer, and the composer appends
+	// nothing — but the allowance goes back.
+	if strings.TrimSpace(text) == "" {
+		h.releaseTranscription(c, userID, charge)
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"text": text}})
 }
@@ -123,38 +133,37 @@ func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 //
 // Fails open, like every other meter on a request path: a counter that cannot be read logs
 // and lets the recording through uncharged.
-func (h *speechHandlers) chargeTranscription(c *fiber.Ctx) (ref string, refusal error, refused bool) {
+func (h *speechHandlers) chargeTranscription(c *fiber.Ctx, userID int64) (ref string, refused bool, err error) {
 	if h.plans == nil {
-		return "", nil, false
-	}
-	userID, err := requireUserID(c)
-	if err != nil {
-		return "", nil, false // the route's own gate already answered; nothing to meter
+		return "", false, nil
 	}
 	ref = uuid.NewString()
 	d, err := h.plans.Consume(c.Context(), userID, plan.FeatureDictation, ref)
 	switch {
 	case err == nil:
-		return ref, nil, false
+		return ref, false, nil
 	case isRefusal(err):
-		return "", refuse(c, d), true
+		return "", true, refuse(c, d)
 	default:
 		log.Printf("plan: charging a transcription for user %d: %v", userID, err)
-		return "", nil, false
+		return "", false, nil
 	}
 }
 
 // releaseTranscription gives the allowance back for a recording that produced nothing.
 // Safe to call blind: an empty reference releases nothing.
-func (h *speechHandlers) releaseTranscription(c *fiber.Ctx, ref string) {
+//
+// It runs on a DETACHED context, for the reason the assistant's release does: a client
+// that walks away mid-upload cancels the request context, and a release on that same
+// context could not open its own transaction — leaving the candidate charged for a
+// transcription they never received, in exactly the case this exists for.
+func (h *speechHandlers) releaseTranscription(_ *fiber.Ctx, userID int64, ref string) {
 	if h.plans == nil || ref == "" {
 		return
 	}
-	userID, err := requireUserID(c)
-	if err != nil {
-		return
-	}
-	if err := h.plans.Release(c.Context(), userID, plan.FeatureDictation, ref); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), turnReleaseTimeout)
+	defer cancel()
+	if err := h.plans.Release(ctx, userID, plan.FeatureDictation, ref); err != nil {
 		log.Printf("plan: releasing a transcription for user %d: %v", userID, err)
 	}
 }

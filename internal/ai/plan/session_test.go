@@ -45,12 +45,24 @@ func TestTurnCeilingGrowsWithEachExtension(t *testing.T) {
 	}
 }
 
-func TestASessionWithNoChargeRunsNoTurns(t *testing.T) {
+// A session holding no charge is one that predates this metering — every conversation
+// open on the day it deploys is in that state. It gets the ceiling its first charge would
+// have bought, so a live conversation is not stopped mid-way and asked to pay for work its
+// owner already started.
+func TestASessionWithNoChargeGetsOneCeiling(t *testing.T) {
 	cfg := enforcing()
-	// No ceiling bought means the session was never paid for. A turn in it must not run:
-	// otherwise a caller that skipped the bootstrap charge gets the workspace for free.
-	if cfg.decideTurn(TierFree, 0, 0).Allowed {
-		t.Fatal("a session that was never charged ran a turn")
+	per := cfg.TailorTurnsPerSession
+
+	d := cfg.decideTurn(TierFree, 0, per-1)
+	if !d.Allowed {
+		t.Fatal("a session that predates metering was stopped; every live conversation would be")
+	}
+	if d.Ceiling != per {
+		t.Errorf("Ceiling = %d, want %d — one ceiling's worth, not unbounded", d.Ceiling, per)
+	}
+	// Still bounded, though: a caller who skipped the bootstrap gets one ceiling and no more.
+	if cfg.decideTurn(TierFree, 0, per).Allowed {
+		t.Error("an uncharged session ran past the one ceiling it was given")
 	}
 }
 

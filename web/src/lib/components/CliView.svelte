@@ -72,7 +72,7 @@
 
   // Widening the catalogue, and the moderator queue behind it.
   const contribute = [
-    { cmd: 'contribute <url>', desc: "Hand freehire a job link; a board we don't track yet earns a credit." },
+    { cmd: 'contribute <url>', desc: "Hand freehire a job link; a board we don't track yet gets added and crawled." },
     { cmd: 'contributions', desc: "The boards you've contributed and their state." },
     { cmd: 'submissions', desc: 'Jobs you submitted; the review queue with pending/approve/reject (moderator).' },
     { cmd: 'jobs add | edit <slug>', desc: 'Create or edit a job posting (moderator).' },

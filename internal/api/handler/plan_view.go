@@ -50,11 +50,11 @@ func viewDecision(d plan.Decision) allowanceView {
 // refusalMessage is what a refused caller is told. It names the feature that ran out rather
 // than the account, because the two refusals mean opposite things to the person reading
 // them: one clears at midnight, the other means they are being throttled.
-func refusalMessage(d plan.Decision) string {
-	if d.FairUse {
+func refusalMessage(feature plan.Feature, fairUse bool) string {
+	if fairUse {
 		return "This account has hit an unusually high volume for today. It will reset tomorrow."
 	}
-	switch d.Feature {
+	switch feature {
 	case plan.FeatureTailor:
 		return "You've used today's CV edits."
 	case plan.FeatureFit:
@@ -76,15 +76,32 @@ func isRefusal(err error) bool { return errors.Is(err, plan.ErrRefused) }
 // refuse writes the 402 a spent allowance answers with: what ran out, where the caller
 // stands, when it resets, and where to upgrade.
 //
-// Upgrade is omitted for a fair-use refusal. Selling a bigger plan to somebody who already
-// pays, at the moment an infrastructure guard stopped them, reads as a shakedown.
+// Upgrade is omitted for a fair-use refusal, and for a caller who already pays. Selling a
+// bigger plan at the moment an infrastructure guard stopped somebody reads as a shakedown,
+// and there is nothing to sell a pro account anyway.
 func refuse(c *fiber.Ctx, d plan.Decision) error {
-	body := fiber.Map{
-		"error":     refusalMessage(d),
-		"allowance": viewDecision(d),
-	}
-	if !d.FairUse && d.Tier == plan.TierFree {
-		body["upgrade_url"] = "/pricing"
+	return write402(c, viewDecision(d), refusalMessage(d.Feature, d.FairUse), !d.FairUse && d.Tier == plan.TierFree)
+}
+
+// refuseStanding is refuse for a caller stopped by a PRE-CHECK, which holds a Standing
+// rather than the Decision a consumption returns. Same body and same rules: a pre-check's
+// refusal and the charge's own must be indistinguishable to whoever reads them.
+//
+// It exists so a caller does not have to assemble a Decision it never made — a fake one
+// filled in field by field is a lie that reads as fact at the next call site.
+func refuseStanding(c *fiber.Ctx, st plan.Standing) error {
+	return write402(c, viewStanding(st), refusalMessage(st.Feature, false), st.Tier == plan.TierFree)
+}
+
+// upgradePath is where a refused free caller is sent. It is the plan page rather than a
+// pricing page, because the plan page EXISTS: /pricing arrives with the change that has
+// something to sell, and a 402 that links to a 404 is worse than one that links nowhere.
+const upgradePath = "/my/plan"
+
+func write402(c *fiber.Ctx, allowance allowanceView, message string, offerUpgrade bool) error {
+	body := fiber.Map{"error": message, "allowance": allowance}
+	if offerUpgrade {
+		body["upgrade_url"] = upgradePath
 	}
 	return c.Status(fiber.StatusPaymentRequired).JSON(body)
 }

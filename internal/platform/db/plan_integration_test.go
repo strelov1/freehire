@@ -109,9 +109,9 @@ func TestConsumptionIsIdempotentByRef(t *testing.T) {
 	}
 }
 
-// TestReleaseFreesTheRefForARetry covers why a release deletes rather than compensating:
-// a compensating row would leave the ref spent forever, and the user's retry would find
-// it charged and never re-reserve.
+// TestReleaseFreesTheRefForARetry covers why a release RESTAMPS rather than compensating
+// or deleting: a compensating row would leave the ref spent forever and the retry would
+// find it charged, while deleting would erase the fact that a reservation was ever taken.
 func TestReleaseFreesTheRefForARetry(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -124,25 +124,40 @@ func TestReleaseFreesTheRefForARetry(t *testing.T) {
 	if err := q.InsertConsumption(ctx, charge); err != nil {
 		t.Fatalf("InsertConsumption: %v", err)
 	}
-	removed, err := q.DeleteConsumption(ctx, DeleteConsumptionParams{UserID: user, Feature: "match", Ref: "job-7"})
+	released, err := q.ReleaseConsumption(ctx, ReleaseConsumptionParams{UserID: user, Feature: "match", Ref: "job-7"})
 	if err != nil {
-		t.Fatalf("DeleteConsumption: %v", err)
+		t.Fatalf("ReleaseConsumption: %v", err)
 	}
-	if removed != 1 {
-		t.Fatalf("DeleteConsumption removed %d rows, want 1", removed)
+	if released != 1 {
+		t.Fatalf("ReleaseConsumption restamped %d rows, want 1", released)
 	}
 
-	// Releasing again removes nothing and reports so — this is what lets every failure
+	// Releasing again matches nothing and reports so — this is what lets every failure
 	// path call it without first establishing whether it owes one.
-	if removed, err = q.DeleteConsumption(ctx, DeleteConsumptionParams{UserID: user, Feature: "match", Ref: "job-7"}); err != nil {
-		t.Fatalf("second DeleteConsumption: %v", err)
+	if released, err = q.ReleaseConsumption(ctx, ReleaseConsumptionParams{UserID: user, Feature: "match", Ref: "job-7"}); err != nil {
+		t.Fatalf("second ReleaseConsumption: %v", err)
 	}
-	if removed != 0 {
-		t.Fatalf("a second release removed %d rows, want 0", removed)
+	if released != 0 {
+		t.Fatalf("a second release restamped %d rows, want 0", released)
 	}
 
 	if err := q.InsertConsumption(ctx, charge); err != nil {
 		t.Fatalf("the released ref could not be charged again: %v — a retry would be free forever", err)
+	}
+
+	// The released entry is still there, restamped rather than deleted: a ledger that
+	// forgets a reservation was taken cannot be reconstructed, which is the whole reason
+	// it is append-only. There are now two rows for this reference — one released, one
+	// live — and only the live one counts as a consumption.
+	var releases, consumes int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE kind='release'), count(*) FILTER (WHERE kind='consume')
+		 FROM usage_ledger WHERE user_id=$1 AND feature='match' AND ref='job-7'`,
+		user).Scan(&releases, &consumes); err != nil {
+		t.Fatalf("count ledger entries: %v", err)
+	}
+	if releases != 1 || consumes != 1 {
+		t.Errorf("ledger holds %d released and %d live entries, want 1 and 1", releases, consumes)
 	}
 }
 

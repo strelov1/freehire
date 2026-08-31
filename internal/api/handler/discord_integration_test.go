@@ -11,7 +11,7 @@
 // TestDiscordContribution/an_unlinked_identity's_.2Fcontribute_reaches_neither_intake_nor_the_reward_path
 // below. Because the account lookup runs synchronously, that branch answers immediately (an
 // ephemeral type-4 reply, not a deferred one) — the test asserts on the interaction response
-// itself, plus directly against link_contributions and credit_balances, that nothing was
+// itself, plus directly against link_contributions, that nothing was
 // written. Run with: go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -142,13 +142,16 @@ func TestDiscordContribution(t *testing.T) {
 		})
 	}
 
-	balance := func(uid int64) int {
-		var remaining int
-		err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id=$1`, uid).Scan(&remaining)
-		if err != nil {
-			return 0
+	// contributions counts what this user has had recorded. It replaces the balance the
+	// reward used to move: contributing earns nothing until add-invites pays it in days of
+	// Pro, so what there is to assert is that the board was taken, once.
+	contributions := func(uid int64) int {
+		var n int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM link_contributions WHERE submitted_by=$1`, uid).Scan(&n); err != nil {
+			t.Fatalf("count contributions: %v", err)
 		}
-		return remaining
+		return n
 	}
 
 	t.Run("a linked user's /contribute on a readable vacancy defers then follows up with a link to the posting", func(t *testing.T) {
@@ -160,17 +163,17 @@ func TestDiscordContribution(t *testing.T) {
 		if !strings.Contains(reply, "https://freehire.test/jobs/") {
 			t.Errorf("follow-up = %q, want a link to the imported posting", reply)
 		}
-		// The board is novel: this is also the first credited contribution.
-		if got := balance(userID); got != 25 {
-			t.Errorf("credit balance = %d, want 25 (20 grant + 5 reward)", got)
+		// The board is novel: this is also the first recorded contribution.
+		if got := contributions(userID); got != 1 {
+			t.Errorf("contributions = %d, want 1", got)
 		}
 	})
 
-	t.Run("a linked user's /contribute on a novel board records the contribution and awards credits", func(t *testing.T) {
+	t.Run("a linked user's /contribute on a novel board records the contribution", func(t *testing.T) {
 		contribute(t, linkedDiscordID, "https://newco2.recruitee.com/o/backend-eng")
 		waitFollowup(t)
-		if got := balance(userID); got != 30 {
-			t.Errorf("credit balance = %d, want 30 (25 + a second board's 5 reward)", got)
+		if got := contributions(userID); got != 2 {
+			t.Errorf("contributions = %d, want 2 (a second, distinct board)", got)
 		}
 		var rows int
 		if err := pool.QueryRow(ctx,
@@ -183,11 +186,11 @@ func TestDiscordContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("a second /contribute on an already-contributed board earns no double reward", func(t *testing.T) {
+	t.Run("a second /contribute on an already-contributed board records nothing further", func(t *testing.T) {
 		contribute(t, linkedDiscordID, "https://newco2.recruitee.com/o/another-role")
 		waitFollowup(t)
-		if got := balance(userID); got != 30 {
-			t.Errorf("credit balance = %d, want still 30 (repeat board credits nothing)", got)
+		if got := contributions(userID); got != 2 {
+			t.Errorf("contributions = %d, want still 2 (a repeat board records nothing)", got)
 		}
 		var rows int
 		if err := pool.QueryRow(ctx,
@@ -199,7 +202,7 @@ func TestDiscordContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("an unlinked identity's /contribute reaches neither intake nor the reward path", func(t *testing.T) {
+	t.Run("an unlinked identity's /contribute reaches the intake at all", func(t *testing.T) {
 		const unlinkedDiscordID int64 = 999999999999999999
 		const url = "https://newco3.recruitee.com/o/never-imported"
 		out := contribute(t, unlinkedDiscordID, url)
@@ -217,7 +220,7 @@ func TestDiscordContribution(t *testing.T) {
 			t.Errorf("reply = %q, want a link-your-account prompt", reply)
 		}
 		// The proof this is not just a wording check: no row was written for the link at all,
-		// and no user anywhere gained a credit from it — GetUserIDByDiscordID's ErrNoRows branch
+		// and nothing was recorded against any user — GetUserIDByDiscordID's ErrNoRows branch
 		// really does return before intakeService.Resolve is ever called.
 		var rows int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM link_contributions WHERE url=$1`, url).Scan(&rows); err != nil {
@@ -233,8 +236,8 @@ func TestDiscordContribution(t *testing.T) {
 		if jobs != 0 {
 			t.Errorf("jobs imported for the unlinked attempt = %d, want 0", jobs)
 		}
-		if got := balance(userID); got != 30 {
-			t.Errorf("the LINKED user's balance moved to %d off an UNLINKED attempt, want unchanged 30", got)
+		if got := contributions(userID); got != 2 {
+			t.Errorf("the LINKED user's contributions moved to %d off an UNLINKED attempt, want unchanged 2", got)
 		}
 	})
 

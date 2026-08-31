@@ -20,7 +20,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   auth primitives, user job operations, API key management and error rendering live in
   their own files.
 - Two couplings worth knowing: `cvHandlers` holds a `*matchHandlers` (it reuses the
-  blocker/credits helpers for tailoring), and `jobs_moderation.go` carries the
+  blocker/plan helpers for tailoring), and `jobs_moderation.go` carries the
   moderator-authored writes behind the `moderator` gate.
 - The `middleware` bundle (`handler.go`) carries the shared auth gates features mount
   behind: `optional` (attach caller, never reject), `key` (cookie or full-scope API key),
@@ -30,7 +30,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   after `key`/`cookie`). It also carries the two rate-limit pieces: `outboundFetch`
   (throttles endpoints that fetch a caller-supplied URL) and `throttler` (backs the
   per-route limiters features build in their own `register`).
-- Services shared across features (résumé store, profile, credits, CV store/renderer,
+- Services shared across features (résumé store, profile, plan, CV store/renderer,
   conversation store, match analyzer, contribution, moderation, the LLM spend resolver)
   are built once in `Register` and passed to each constructor; single-feature services are
   built inside the feature's constructor. **A constructor that builds a shared service is
@@ -100,9 +100,11 @@ Routes (all on `mw.key` — the session cookie, the session JWT the extension's
 connect flow minted, or a full-scope API key — and nothing else). Authentication
 is the whole gate: every signed-in user reaches the assistant. The gate is `key`
 rather than `cookie` because the extension's side panel holds conversations too
-and cannot send an httpOnly cookie across origins. **Nothing meters a turn** —
-the beta-tester gate that used to bound this spend is gone, and credit metering
-has not replaced it yet:
+and cannot send an httpOnly cookie across origins. **Every turn is metered** —
+it draws on the caller's plan before the stream opens, and a spent allowance is a
+402 rather than an event inside a 200 (`assistant_meter.go`). A tailoring turn is
+the exception: it draws on no assistant allowance, because its session carries
+its own two bounds:
 
 | Route | Does |
 |---|---|
@@ -113,6 +115,7 @@ has not replaced it yet:
 | `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events |
 | `POST /assistant/sessions/:id/retry` | resume after a failed turn without appending another user message (same SSE stream) |
 | `POST /assistant/sessions/:id/cancel` | stop a running turn (owner-scoped — see below) |
+| `POST /assistant/sessions/:id/extend` | buy a tailoring session another ceiling's worth of turns, out of the day's tailoring allowance; 409 on any other preset |
 | `POST /assistant/sessions/:id/opening` | the assistant speaks first in a rehearsal or debrief, under a server-side brief; an already-answered opening is a 409 |
 | `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential (per-caller limited) |
 | `POST /assistant/sessions/:id/voice-turns` | append a completed spoken turn to the transcript |
@@ -139,7 +142,7 @@ context, which meant a phone freezing a backgrounded tab threw away live work �
 tailoring run once lost its report after twenty-five committed CV edits. A write that fails now
 means only that this reader is not listening; the turn runs to its own end under the step cap
 and the model timeout, and its transcript is stored either way. The fit analysis always ignored
-the same signal, for the neighbouring reason: its run was paid for with an AI credit.
+the same signal, for the neighbouring reason: its run was paid for out of the day's allowance.
 
 Stopping a turn is therefore a request of its own — `POST /assistant/sessions/:id/cancel`,
 owner-scoped — because a dropped connection cannot be told apart from a deliberate Stop.

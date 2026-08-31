@@ -45,15 +45,21 @@ func (c Config) decideTurn(tier Tier, ceilingsBought, turnsSoFar int) TurnDecisi
 	}
 	d.Ceiling = ceilingsBought * c.TailorTurnsPerSession
 
+	// A session holding no charge predates this metering: every session open on the day it
+	// deploys was created before anything wrote a ledger row for one. Treating "no charge"
+	// as "never paid for" would 402 the next turn of every live conversation until its
+	// owner bought an extension for work they had already started.
+	//
+	// So an uncharged session is given the ceiling its first charge would have bought. It
+	// is still bounded — a caller who skips the bootstrap gets one ceiling's worth of turns
+	// and no more — and the charge is taken where sessions are created, which is the place
+	// that can refuse before anything exists.
+	if d.Ceiling == 0 {
+		d.Ceiling = c.TailorTurnsPerSession
+	}
+
 	if turnsSoFar < d.Ceiling {
 		d.Allowed = true
-		return d
-	}
-	// A session holding no charge at all was never paid for, and lets a caller that
-	// skipped the bootstrap have the workspace for nothing. That is a refusal even in
-	// shadow mode, because it is not a ceiling anybody has to verify — it is the absence
-	// of the purchase the session is supposed to stand on.
-	if ceilingsBought == 0 {
 		return d
 	}
 	if !c.Enforced(FeatureTailor) {
