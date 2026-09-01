@@ -130,13 +130,21 @@ func (n *TelegramNotifier) moreLine(more int, kind string) string {
 	return fmt.Sprintf("\n<a href=%q>+ %d more</a>", n.batchURL(kind), more)
 }
 
-// batchURL is where a batch sends the reader. Most kinds are about applications, so
-// the tracking board; job-closed has nothing left to track, so the saved list.
+// batchURL is where a batch sends the reader, per batchDestination.
 func (n *TelegramNotifier) batchURL(kind string) string {
+	path, _ := batchDestination(kind)
+	return n.origin + path
+}
+
+// batchDestination is the one place that decides where a batch of `kind` leads and
+// what the action is called. Most kinds are about applications, so the tracking
+// board; job-closed has nothing left to track, so the saved list. Both channels read
+// it, so the mail's button and the bot's tail can never point different ways.
+func batchDestination(kind string) (path, label string) {
 	if kind == KindJobClosed {
-		return n.origin + "/my/activity"
+		return "/my/activity", "Open your saved jobs"
 	}
-	return n.origin + "/my/tracking"
+	return "/my/tracking", "Open your tracking board"
 }
 
 // renderOne is the single-nudge body, kept per kind and unchanged, because a batch
@@ -282,14 +290,11 @@ func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, l
 	}
 }
 
-// batchCTA is where the batch sends the reader: the tracking board for the kinds
-// about applications, the saved list for job-closed, which has nothing left to
-// track.
+// batchCTA is the mail's single action, per batchDestination, tagged with an email
+// UTM source so the channel's traffic is attributable.
 func (n *EmailNotifier) batchCTA(kind string) (url, label string) {
-	if kind == KindJobClosed {
-		return n.origin + "/my/activity?utm_source=email", "Open your saved jobs"
-	}
-	return n.origin + "/my/tracking?utm_source=email", "Open your tracking board"
+	path, label := batchDestination(kind)
+	return n.origin + path + "?utm_source=email", label
 }
 
 // jobURL is the on-platform freehire job page, tagged with an email UTM source.

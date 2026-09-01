@@ -77,12 +77,18 @@ WITH claimable AS (
     ORDER BY n.created_at, n.id
     FOR UPDATE OF n SKIP LOCKED
     LIMIT sqlc.arg(batch_size)
+), claimed AS (
+    UPDATE application_nudges n
+    SET claimed_at = now()
+    FROM claimable c
+    WHERE n.id = c.id
+    RETURNING n.id, n.created_at
 )
-UPDATE application_nudges n
-SET claimed_at = now()
-FROM claimable c
-WHERE n.id = c.id
-RETURNING n.id;
+-- Sorted OUTSIDE the UPDATE. The CTE's ORDER BY only picks WHICH rows are claimed;
+-- an UPDATE ... RETURNING is not obliged to emit them in that order, and the engine
+-- groups the result into one message per (account, kind), listing the jobs in the
+-- order it receives them. Mirrors ClaimDueReminders.
+SELECT id FROM claimed ORDER BY created_at, id;
 
 -- name: GetNudgeForDelivery :one
 -- The re-check-before-send context for one nudge: the job display fields, the

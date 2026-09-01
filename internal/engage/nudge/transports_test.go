@@ -65,6 +65,48 @@ func TestEmailNotifier_JobClosedBatchLeadsToSavedJobs(t *testing.T) {
 	}
 }
 
+// interview-prep is about the application too, so its batch leads to the tracking
+// board — the third kind, and the one neither of the two above covers.
+func TestEmailNotifier_InterviewPrepBatchLeadsToTheTrackingBoard(t *testing.T) {
+	sender := &captureSender{}
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+
+	if err := n.Send(context.Background(), "email", "u@x.com", KindInterviewPrep, batchOf(KindInterviewPrep, 2)); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !strings.Contains(sender.subject, "2 interviews") {
+		t.Errorf("subject = %q, want the batch count", sender.subject)
+	}
+	if !strings.Contains(sender.html, "/my/tracking") {
+		t.Errorf("html = %q, want the tracking-board destination", sender.html)
+	}
+}
+
+func TestTelegramNotifier_InterviewPrepBatchHeadlinesTheCount(t *testing.T) {
+	n := NewTelegramNotifier(nil, "https://freehire.me")
+	got := n.render(KindInterviewPrep, batchOf(KindInterviewPrep, 2))
+
+	if !strings.Contains(got, "interviewing for <b>2</b> roles") {
+		t.Errorf("render = %q, want the interview-prep headline with a count", got)
+	}
+	if !strings.Contains(got, "jobs/job-0") {
+		t.Errorf("render = %q, want the jobs listed", got)
+	}
+}
+
+// The mail's button and the bot's tail read one rule, so they cannot point different
+// ways for the same kind.
+func TestBatchDestination_IsOneRuleForBothChannels(t *testing.T) {
+	for _, kind := range []string{KindFollowUp, KindInterviewPrep, KindJobClosed} {
+		path, _ := batchDestination(kind)
+		tg := NewTelegramNotifier(nil, "https://freehire.me").batchURL(kind)
+		mail, _ := NewEmailNotifier(&captureSender{}, "j@f.me", "https://freehire.me").batchCTA(kind)
+		if tg != "https://freehire.me"+path || !strings.HasPrefix(mail, "https://freehire.me"+path) {
+			t.Errorf("%s: telegram %q and email %q disagree with %q", kind, tg, mail, path)
+		}
+	}
+}
+
 // The two bounds are different numbers on purpose: the message itemizes
 // notify.ListLimit and counts the rest.
 func TestEmailNotifier_BatchOverTheListLimitCountsTheRest(t *testing.T) {

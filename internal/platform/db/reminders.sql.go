@@ -63,12 +63,14 @@ WITH claimable AS (
     ORDER BY r.fire_at, r.id
     FOR UPDATE OF r SKIP LOCKED
     LIMIT $2
+), claimed AS (
+    UPDATE job_reminders r
+    SET claimed_at = now()
+    FROM claimable c
+    WHERE r.id = c.id
+    RETURNING r.id, r.fire_at
 )
-UPDATE job_reminders r
-SET claimed_at = now()
-FROM claimable c
-WHERE r.id = c.id
-RETURNING r.id
+SELECT id FROM claimed ORDER BY fire_at, id
 `
 
 type ClaimDueRemindersParams struct {
@@ -81,6 +83,10 @@ type ClaimDueRemindersParams struct {
 // rows so a reminder fires at most once; the lease predicate reclaims rows whose
 // sender died (stale claimed_at), so no separate reaper is needed. Delivery happens
 // OUTSIDE this transaction, so no network call is held under a row lock.
+// Sorted OUTSIDE the UPDATE. The CTE's ORDER BY only picks WHICH rows are claimed;
+// an UPDATE ... RETURNING is not obliged to emit them in that order, and the engine
+// groups the result into one message per account, listing the jobs in the order it
+// receives them. Without this the list order is whatever the join produced.
 func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]int64, error) {
 	rows, err := q.db.Query(ctx, claimDueReminders, arg.LeaseSeconds, arg.BatchSize)
 	if err != nil {

@@ -72,10 +72,7 @@ func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest string, ms [
 // every retry re-fails.
 func (n *TelegramNotifier) render(ms []ReminderMessage) string {
 	if len(ms) == 1 {
-		m := ms[0]
-		return fmt.Sprintf(
-			"⏰ Reminder: you saved <b>%s</b> at <b>%s</b>.\nStill interested? <a href=%q>Open the job →</a>",
-			html.EscapeString(m.JobTitle), html.EscapeString(m.Company), n.jobURL(m))
+		return n.renderOne(ms[0])
 	}
 
 	// The list bound picks the candidates; the length cap decides how many of them
@@ -103,6 +100,15 @@ func (n *TelegramNotifier) render(ms []ReminderMessage) string {
 		b.WriteString(n.moreLine(omitted))
 	}
 	return b.String()
+}
+
+// renderOne is the single-reminder body, kept verbatim — link included, which
+// carries no UTM tag — because a batch of one must be indistinguishable from what
+// shipped before grouping.
+func (n *TelegramNotifier) renderOne(m ReminderMessage) string {
+	return fmt.Sprintf(
+		"⏰ Reminder: you saved <b>%s</b> at <b>%s</b>.\nStill interested? <a href=\"%s\">Open the job →</a>",
+		html.EscapeString(m.JobTitle), html.EscapeString(m.Company), n.jobBaseURL+"/jobs/"+m.Slug)
 }
 
 // jobLine renders one saved job as a bullet linking to its freehire page.
@@ -164,11 +170,20 @@ type emailData struct {
 	CTA    mailtpl.Link // the single action: one job opens the job, a batch opens the list
 }
 
-// emailTemplate renders the saved jobs as rows drawn by the shared partial, so they
-// look the same here as in a digest, logo and all; the sentence underneath only
-// says why the mail arrived. The list is a table rather than stacked divs because
-// Outlook collapses margins between block elements unpredictably.
-var emailTemplate = template.Must(mailtpl.Partials().New("reminder").Parse(`
+// oneTemplate is the single-reminder body, unchanged since before grouping: a batch
+// of one must be byte-identical to what shipped, so it keeps its own template rather
+// than becoming a list of length one.
+var oneTemplate = template.Must(mailtpl.Partials().New("reminder").Parse(`
+{{template "job-row" .}}
+<div style="height:18px;"></div>
+{{template "p" "You saved this job and haven’t applied yet."}}
+{{template "button" (mailLink .URL "Open the job and apply")}}`))
+
+// batchTemplate renders the saved jobs as rows drawn by the shared partial, so they
+// look the same here as in a digest, logo and all; the sentence underneath only says
+// why the mail arrived. The list is a table rather than stacked divs because Outlook
+// collapses margins between block elements unpredictably.
+var batchTemplate = template.Must(mailtpl.Partials().New("reminder-batch").Parse(`
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
   {{range $i, $job := .Jobs}}
   <tr><td class="m-row" style="padding:14px 0;{{if $i}}border-top:1px solid #e4e4e4;{{end}}">{{template "job-row" $job}}</td></tr>
@@ -184,62 +199,66 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, ms []Re
 	if len(ms) == 0 {
 		return nil
 	}
+	if len(ms) == 1 {
+		return n.sendOne(ctx, dest, ms[0])
+	}
+	return n.sendBatch(ctx, dest, ms)
+}
+
+// sendOne is the pre-grouping mail, kept verbatim.
+func (n *EmailNotifier) sendOne(ctx context.Context, dest string, m ReminderMessage) error {
+	url := n.jobURL(m)
+	var content bytes.Buffer
+	if err := oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
+		return err
+	}
+	htmlBody := n.layout.Render(mailtpl.Body{
+		Preheader: "A job you saved is still open",
+		Heading:   "Still interested?",
+		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped both fields in context
+		Footer:    "You’re getting this because you saved this job on freehire.",
+	})
+
+	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
+		m.JobTitle, m.Company, url)
+	subject := fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
+	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, textBody)
+}
+
+// sendBatch is the multi-reminder mail: the same job rows a digest draws, one
+// sentence saying why they arrived together, and one action.
+func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []ReminderMessage) error {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
 		rows = append(rows, mailtpl.NewJob(m.JobTitle, m.Company, "", n.jobURL(m)))
 	}
-
-	subject, heading, preheader, reason := n.copy(ms)
+	reason := "You saved these jobs and haven’t applied yet."
 
 	var content bytes.Buffer
-	if err := emailTemplate.Execute(&content, emailData{
-		Jobs: rows, More: more, Reason: reason, CTA: n.cta(ms),
+	if err := batchTemplate.Execute(&content, emailData{
+		Jobs: rows, More: more, Reason: reason,
+		CTA: mailtpl.Link{URL: n.savedURL(), Label: "Open your saved jobs"},
 	}); err != nil {
 		return err
 	}
 	htmlBody := n.layout.Render(mailtpl.Body{
-		Preheader: preheader,
-		Heading:   heading,
+		Preheader: fmt.Sprintf("%d jobs you saved are still open", len(ms)),
+		Heading:   fmt.Sprintf("%d saved jobs are still open", len(ms)),
 		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped every field in context
 		Footer:    "You’re getting this because you saved these jobs on freehire.",
 	})
 
-	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, n.renderText(shown, more, reason))
-}
-
-// copy is the wording for a batch: one saved job still reads as the single-job mail
-// it has always been, several become a count.
-func (n *EmailNotifier) copy(ms []ReminderMessage) (subject, heading, preheader, reason string) {
-	if len(ms) == 1 {
-		m := ms[0]
-		return fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company),
-			"Still interested?",
-			"A job you saved is still open",
-			"You saved this job and haven’t applied yet."
-	}
-	return fmt.Sprintf("Reminder: %d saved jobs", len(ms)),
-		fmt.Sprintf("%d saved jobs are still open", len(ms)),
-		fmt.Sprintf("%d jobs you saved are still open", len(ms)),
-		"You saved these jobs and haven’t applied yet."
-}
-
-// cta is the mail's single action. One saved job still opens that job, because that
-// is the whole errand; several have no one destination, so the action becomes the
-// saved-jobs list.
-func (n *EmailNotifier) cta(ms []ReminderMessage) mailtpl.Link {
-	if len(ms) == 1 {
-		return mailtpl.Link{URL: n.jobURL(ms[0]), Label: "Open the job and apply"}
-	}
-	return mailtpl.Link{URL: n.savedURL(), Label: "Open your saved jobs"}
+	subject := fmt.Sprintf("Reminder: %d saved jobs", len(ms))
+	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, n.renderBatchText(shown, more, reason))
 }
 
 // savedURL is the saved-jobs list, tagged with an email UTM source.
 func (n *EmailNotifier) savedURL() string { return n.jobBaseURL + "/my/activity?utm_source=email" }
 
-// renderText builds the plain-text alternative, mirroring the HTML body so
-// non-HTML clients (and spam scorers) see the same content.
-func (n *EmailNotifier) renderText(shown []ReminderMessage, more int, reason string) string {
+// renderBatchText builds the plain-text alternative for a batch, mirroring the HTML
+// body so non-HTML clients (and spam scorers) see the same content.
+func (n *EmailNotifier) renderBatchText(shown []ReminderMessage, more int, reason string) string {
 	var b strings.Builder
 	b.WriteString(reason + "\n\n")
 	for _, m := range shown {

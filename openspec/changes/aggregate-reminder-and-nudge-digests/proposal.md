@@ -28,7 +28,12 @@ noisy ones.
   `[]Message`), so a channel renders a list and not a single job.
 
 Out of scope: merging the three notification engines into one worker, and any change to
-`internal/engage/notify` (saved-search digests already batch).
+what `internal/engage/notify` DOES — saved-search digests already batch and their
+behaviour is untouched. What this change does take from `notify` is ownership of the two
+rules all three engines now share: the list bound (`ListLimit`, plus a generic `Listed`)
+and the `user_notifications.jobs` shape (`SnapshotJob`/`JobsSnapshot`). Both are
+behaviour-preserving refactors of code `notify` already had, made because a private copy
+per engine is a copy that drifts.
 
 ## Capabilities
 
@@ -51,8 +56,17 @@ Out of scope: merging the three notification engines into one worker, and any ch
   (one new read for `digest_time` + `users.timezone`).
 - `internal/engage/nudge` — `Runner.deliver`/`fire` (grouping by `(user, kind)`),
   `Notifier`/`Router` signature, transports.
+- `internal/engage/notify` — `ListLimit`'s companion `Listed`, and `SnapshotJob`/
+  `JobsSnapshot` for the shared `user_notifications.jobs` shape.
+- `internal/engage/telegramnotify` — `MaxMessageLen` and `UTF16Len` exported, since a
+  batch built anywhere can now overflow the limit only the digest used to risk.
+- `internal/engage/mailpreview` — a batch sample per new mail shape, and the golden HTML
+  the staleness test compares against.
 - `internal/platform/db/queries/reminders.sql` — one new query for the scheduling
-  context; regenerated via `make sqlc`.
+  context, and the claim query now sorts OUTSIDE its `UPDATE … RETURNING` (same in
+  `nudges.sql`), because grouping made the claim order load-bearing and an
+  `UPDATE … RETURNING` does not preserve its CTE's `ORDER BY`. Regenerated via
+  `make sqlc`.
 - No schema migration: `user_notifications.jobs` already exists (migration 0091).
 - `docs/agents/notifications.md` — the batching rule and the two bounds belong in the
   always-true list.

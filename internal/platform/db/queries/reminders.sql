@@ -85,12 +85,18 @@ WITH claimable AS (
     ORDER BY r.fire_at, r.id
     FOR UPDATE OF r SKIP LOCKED
     LIMIT sqlc.arg(batch_size)
+), claimed AS (
+    UPDATE job_reminders r
+    SET claimed_at = now()
+    FROM claimable c
+    WHERE r.id = c.id
+    RETURNING r.id, r.fire_at
 )
-UPDATE job_reminders r
-SET claimed_at = now()
-FROM claimable c
-WHERE r.id = c.id
-RETURNING r.id;
+-- Sorted OUTSIDE the UPDATE. The CTE's ORDER BY only picks WHICH rows are claimed;
+-- an UPDATE ... RETURNING is not obliged to emit them in that order, and the engine
+-- groups the result into one message per account, listing the jobs in the order it
+-- receives them. Without this the list order is whatever the join produced.
+SELECT id FROM claimed ORDER BY fire_at, id;
 
 -- name: GetReminderForDelivery :one
 -- The delivery context for one reminder: the job display fields, the channel set,

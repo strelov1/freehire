@@ -364,6 +364,111 @@ func TestRun_SingleJobGroupKeepsTheSlugRecord(t *testing.T) {
 	}
 }
 
+// job_reminders snapshots the channel set at schedule time (migration 0034), so two
+// reminders of one account can carry different sets. Merging them would send one over
+// the other's channels and stamp it delivered anyway.
+func TestRun_DifferentChannelSetsAreNotMerged(t *testing.T) {
+	both := ownedBy(2, 42, []string{"email", "telegram"}, "a@b.c")
+	both.TelegramChatID = pgtype.Int8{Int64: 555, Valid: true}
+	store := &fakeStore{
+		due: []int64{1, 2},
+		rows: map[int64]db.GetReminderForDeliveryRow{
+			1: ownedBy(1, 42, []string{"email"}, "a@b.c"),
+			2: both,
+		},
+	}
+	notifier := &fakeNotifier{}
+	run(t, store, notifier)
+
+	// One message for the email-only reminder, two for the one that also wants
+	// Telegram — three sends, and never a job in a message it did not belong to.
+	if len(notifier.sent) != 3 {
+		t.Fatalf("sent = %v, want the two channel sets kept apart", notifier.sent)
+	}
+	for i, group := range notifier.groups {
+		if len(group) != 1 {
+			t.Errorf("group %d carried %d jobs, want 1", i, len(group))
+		}
+	}
+}
+
+// The same account's reminders group even when their channel sets were stored in a
+// different order — the key is the SET, not the slice.
+func TestRun_ChannelOrderDoesNotSplitTheGroup(t *testing.T) {
+	second := ownedBy(2, 42, []string{"telegram", "email"}, "a@b.c")
+	second.TelegramChatID = pgtype.Int8{Int64: 555, Valid: true}
+	first := ownedBy(1, 42, []string{"email", "telegram"}, "a@b.c")
+	first.TelegramChatID = pgtype.Int8{Int64: 555, Valid: true}
+	store := &fakeStore{
+		due:  []int64{1, 2},
+		rows: map[int64]db.GetReminderForDeliveryRow{1: first, 2: second},
+	}
+	notifier := &fakeNotifier{}
+	run(t, store, notifier)
+
+	// One batch, delivered over both of its channels.
+	if len(notifier.groups) != 2 {
+		t.Fatalf("sent = %v, want one batch over two channels", notifier.sent)
+	}
+	for i, group := range notifier.groups {
+		if len(group) != 2 {
+			t.Errorf("group %d carried %d jobs, want both", i, len(group))
+		}
+	}
+}
+
+// Beyond SnapshotCap the excess is RELEASED, never stamped: a reminder marked
+// delivered while appearing in no message is gone for good.
+func TestRun_BatchOverflowIsReleasedNotDelivered(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SnapshotCap = 2
+	store := &fakeStore{
+		due: []int64{1, 2, 3, 4},
+		rows: map[int64]db.GetReminderForDeliveryRow{
+			1: ownedBy(1, 42, []string{"email"}, "a@b.c"),
+			2: ownedBy(2, 42, []string{"email"}, "a@b.c"),
+			3: ownedBy(3, 42, []string{"email"}, "a@b.c"),
+			4: ownedBy(4, 42, []string{"email"}, "a@b.c"),
+		},
+	}
+	notifier := &fakeNotifier{}
+	r := NewRunner(store, notifier, cfg)
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(notifier.groups) != 1 || len(notifier.groups[0]) != 2 {
+		t.Fatalf("groups = %v, want one message carrying the cap", notifier.groups)
+	}
+	if len(store.delivered) != 2 {
+		t.Errorf("delivered = %v, want only what the message carried", store.delivered)
+	}
+	if len(store.released) != 2 || len(store.failed) != 0 {
+		t.Errorf("released = %v failed = %v, want the overflow released and no attempt burnt", store.released, store.failed)
+	}
+	if stats.Deferred != 2 {
+		t.Errorf("stats.Deferred = %d, want the 2 overflow reminders counted", stats.Deferred)
+	}
+}
+
+// A hand-built Config with no SnapshotCap would make every batch full at zero
+// members: nothing delivered, nothing failed, forever.
+func TestNewRunner_ZeroSnapshotCapDoesNotStallDelivery(t *testing.T) {
+	store := &fakeStore{
+		due:  []int64{1},
+		rows: map[int64]db.GetReminderForDeliveryRow{1: ownedBy(1, 42, []string{"email"}, "a@b.c")},
+	}
+	notifier := &fakeNotifier{}
+	r := NewRunner(store, notifier, Config{LeaseSeconds: 600, ClaimBatch: 500, MaxAttempts: 5})
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.delivered) != 1 {
+		t.Errorf("delivered = %v, want the reminder delivered despite an unset SnapshotCap", store.delivered)
+	}
+}
+
 func TestRecipient_Push(t *testing.T) {
 	tests := []struct {
 		name          string

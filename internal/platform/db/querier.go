@@ -209,6 +209,10 @@ type Querier interface {
 	// once; the lease predicate reclaims rows whose sender died (stale claimed_at).
 	// Delivery happens OUTSIDE this transaction, so no network call is held under a
 	// row lock. Mirrors ClaimDueReminders.
+	// Sorted OUTSIDE the UPDATE. The CTE's ORDER BY only picks WHICH rows are claimed;
+	// an UPDATE ... RETURNING is not obliged to emit them in that order, and the engine
+	// groups the result into one message per (account, kind), listing the jobs in the
+	// order it receives them. Mirrors ClaimDueReminders.
 	ClaimDueNudges(ctx context.Context, arg ClaimDueNudgesParams) ([]int64, error)
 	// Tickets old enough for Expo to have an answer, oldest first. Read-only
 	// (this queue has no lease/claim bookkeeping — see DeletePushTickets):
@@ -220,6 +224,10 @@ type Querier interface {
 	// rows so a reminder fires at most once; the lease predicate reclaims rows whose
 	// sender died (stale claimed_at), so no separate reaper is needed. Delivery happens
 	// OUTSIDE this transaction, so no network call is held under a row lock.
+	// Sorted OUTSIDE the UPDATE. The CTE's ORDER BY only picks WHICH rows are claimed;
+	// an UPDATE ... RETURNING is not obliged to emit them in that order, and the engine
+	// groups the result into one message per account, listing the jobs in the order it
+	// receives them. Without this the list order is whatever the join produced.
 	ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]int64, error)
 	// Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
 	// returning the email fields the matcher/classifier need. FOR UPDATE OF o locks only

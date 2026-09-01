@@ -418,6 +418,58 @@ func TestDeliver_EachGroupRecordsItsOwnKindedNotification(t *testing.T) {
 	}
 }
 
+// Beyond SnapshotCap the excess is RELEASED, never stamped: a nudge marked delivered
+// while appearing in no message is gone for good.
+func TestDeliver_BatchOverflowIsReleasedNotDelivered(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SnapshotCap = 2
+	store := &fakeStore{
+		due: []int64{1, 2, 3},
+		rows: map[int64]db.GetNudgeForDeliveryRow{
+			1: groupRow(1, 42, KindFollowUp),
+			2: groupRow(2, 42, KindFollowUp),
+			3: groupRow(3, 42, KindFollowUp),
+		},
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, notifier, cfg)
+	r.now = func() time.Time { return fixedNow }
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.groups) != 1 || len(notifier.groups[0].msgs) != 2 {
+		t.Fatalf("groups = %v, want one message carrying the cap", notifier.groups)
+	}
+	if len(store.delivered) != 2 {
+		t.Errorf("delivered = %v, want only what the message carried", store.delivered)
+	}
+	if len(store.released) != 1 || len(store.failed) != 0 {
+		t.Errorf("released = %v failed = %v, want the overflow released and no attempt burnt", store.released, store.failed)
+	}
+	if stats.Deferred != 1 {
+		t.Errorf("stats.Deferred = %d, want the overflow nudge counted", stats.Deferred)
+	}
+}
+
+// A hand-built Config with no SnapshotCap would make every batch full at zero
+// members: nothing delivered, nothing failed, forever.
+func TestNew_ZeroSnapshotCapDoesNotStallDelivery(t *testing.T) {
+	store := &fakeStore{
+		due:  []int64{1},
+		rows: map[int64]db.GetNudgeForDeliveryRow{1: groupRow(1, 42, KindFollowUp)},
+	}
+	r := New(store, &fakeNotifier{}, Config{FollowUpWindowDays: 30, LeaseSeconds: 600, ClaimBatch: 500, MaxAttempts: 5})
+	r.now = func() time.Time { return fixedNow }
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.delivered) != 1 {
+		t.Errorf("delivered = %v, want the nudge delivered despite an unset SnapshotCap", store.delivered)
+	}
+}
+
 func TestDeliver_FollowUp_DeliversWhenStillSilent(t *testing.T) {
 	chat := int64(555)
 	store := &fakeStore{due: []int64{1}, row: deliveryRow(KindFollowUp, "applied", 25, true, true, []string{"telegram"}, &chat, "")}

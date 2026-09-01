@@ -4,11 +4,26 @@
 
 The saved-job reminder and lifecycle nudge engines SHALL deliver in groups rather than
 per item. A reminder group is every one of an account's due, still-actionable reminders
-in a worker pass. A nudge group is every one of an account's due, still-actionable
-nudges of the SAME kind in a worker pass; the kinds (`follow_up`, `interview_prep`,
-`job_closed`) SHALL NOT be merged into one message, because each carries a different
-call to action. A group of one SHALL be indistinguishable from today's single-item
-delivery.
+in a worker pass **that share a channel set** — a reminder's channels are snapshotted
+when it is scheduled, so an account that changed its rule between two saves has two
+genuinely different deliveries due and they SHALL NOT be merged. A nudge group is every
+one of an account's due, still-actionable nudges of the SAME kind in a worker pass; the
+kinds (`follow_up`, `interview_prep`, `job_closed`) SHALL NOT be merged into one message,
+because each carries a different call to action. A group of one SHALL be
+indistinguishable from today's single-item delivery.
+
+#### Scenario: Reminders with different channel sets are not merged
+
+- **WHEN** one account has two due reminders, one scheduled for email only and one for
+  email and Telegram
+- **THEN** each is delivered over its own channel set, and neither message lists the
+  other's job
+
+#### Scenario: Channel order does not split a group
+
+- **WHEN** two of an account's due reminders carry the same two channels in a different
+  stored order
+- **THEN** they are delivered as one message
 
 #### Scenario: Same-kind nudges are one message
 
@@ -46,6 +61,13 @@ first.
 
 - **WHEN** 4 reminders are delivered as one group
 - **THEN** the message lists all 4 and shows no "more" count
+
+#### Scenario: Beyond the carried bound the excess is released, not delivered
+
+- **WHEN** more of an account's items are due than the group may carry
+- **THEN** the excess is released back to the pending queue with no delivery attempt
+  recorded, so a later pass sends it as its own message
+- **AND** nothing is marked delivered that appeared in no message
 
 ### Requirement: Grouping applies to every channel
 

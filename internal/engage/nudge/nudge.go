@@ -211,7 +211,15 @@ type Runner struct {
 }
 
 // New builds a Runner.
+//
+// A non-positive SnapshotCap is corrected to the default rather than honoured: it
+// would make every batch full at zero members, so every claimed nudge is released
+// unsent while burning no attempt — a pass that logs no failure and delivers nothing,
+// forever. The other Config fields fail visibly when unset; this one does not.
 func New(store Store, notifier Notifier, cfg Config) *Runner {
+	if cfg.SnapshotCap <= 0 {
+		cfg.SnapshotCap = DefaultConfig().SnapshotCap
+	}
 	return &Runner{store: store, notifier: notifier, cfg: cfg, now: time.Now}
 }
 

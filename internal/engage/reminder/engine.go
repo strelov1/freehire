@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -122,13 +124,33 @@ type Stats struct {
 	Failed    int // reminders whose delivery errored
 }
 
-// batch is one account's due reminders in a pass. Channels, destinations and quiet
-// hours are properties of the ACCOUNT, so the first member's row answers for the
-// whole batch and only the messages accumulate.
+// batch is one account's due reminders in a pass that share a channel set.
+// Destinations and quiet hours are properties of the ACCOUNT, so the first
+// member's row answers for the whole batch and only the messages accumulate.
 type batch struct {
 	info db.GetReminderForDeliveryRow
 	ids  []int64
 	msgs []ReminderMessage
+}
+
+// batchKey is what makes two reminders one message: the same account AND the same
+// channel set. The channels are NOT an account property here — job_reminders
+// snapshots them at schedule time so a later settings edit never rewrites a pending
+// reminder (migration 0034) — so an account that changed channels between two saves
+// has two genuinely different deliveries due. Grouping on the account alone would
+// send one of them over the other's channels and stamp it delivered.
+type batchKey struct {
+	userID   int64
+	channels string
+}
+
+// channelKey canonicalizes a channel set for batchKey: sorted and joined, so
+// {email,telegram} and {telegram,email} are one group. Only the KEY is sorted — the
+// send still walks the first member's own slice, preserving its order.
+func channelKey(channels []string) string {
+	sorted := slices.Clone(channels)
+	slices.Sort(sorted)
+	return strings.Join(sorted, "\x00")
 }
 
 // Runner fires due reminders.
@@ -140,7 +162,15 @@ type Runner struct {
 }
 
 // NewRunner builds a firing Runner.
+//
+// A non-positive SnapshotCap is corrected to the default rather than honoured: it
+// would make every batch full at zero members, so every claimed reminder is released
+// unsent while burning no attempt — a pass that logs no failure and delivers nothing,
+// forever. The other Config fields fail visibly when unset; this one does not.
 func NewRunner(store Store, notifier Notifier, cfg Config) *Runner {
+	if cfg.SnapshotCap <= 0 {
+		cfg.SnapshotCap = DefaultConfig().SnapshotCap
+	}
 	return &Runner{store: store, notifier: notifier, cfg: cfg, now: time.Now}
 }
 
@@ -164,26 +194,27 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	return stats, nil
 }
 
-// collect turns the claimed ids into one batch per account, dropping the reminders
-// that must not be sent. Each is validated on its own — the checks are per reminder
-// — and only the survivors group, so a stale reminder is cancelled without taking
-// its neighbours' message with it.
+// collect turns the claimed ids into one batch per (account, channel set), dropping
+// the reminders that must not be sent. Each is validated on its own — the checks are
+// per reminder — and only the survivors group, so a stale reminder is cancelled
+// without taking its neighbours' message with it.
 //
 // Batches are returned in the order their first member was claimed, which
 // ClaimDueReminders orders by fire time, so the account that has waited longest is
 // served first and a pass is reproducible.
 func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batch {
-	byUser := make(map[int64]*batch, len(due))
+	byKey := make(map[batchKey]*batch, len(due))
 	var order []*batch
 	for _, id := range due {
 		info, ok := r.validate(ctx, id, stats)
 		if !ok {
 			continue
 		}
-		b := byUser[info.UserID]
+		key := batchKey{userID: info.UserID, channels: channelKey(info.Channels)}
+		b := byKey[key]
 		if b == nil {
 			b = &batch{info: info}
-			byUser[info.UserID] = b
+			byKey[key] = b
 			order = append(order, b)
 		}
 		if len(b.ids) >= r.cfg.SnapshotCap {
