@@ -29,7 +29,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/three": "^0.185.4",
     "@vite-pwa/sveltekit": "^1.1.0",
     "@vitest/coverage-v8": "^4.1.10",
