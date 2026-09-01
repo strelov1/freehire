@@ -3754,7 +3754,7 @@ export const SKILL_LABELS = {
   'zustand': 'Zustand',
 } as const;
 export type SkillLabels = typeof SKILL_LABELS;
-export const SKILL_DESCRIBED = ['dbt'];
+export const SKILL_DESCRIBED = ['accessibility', 'account-executive', 'agentic-ai', 'agile', 'ai', 'angular', 'ansible', 'authentication', 'aws', 'azure', 'azure-devops', 'bash', 'business-development', 'cad', 'ci-cd', 'cloud', 'cloud-native', 'confluence', 'containerization', 'cpp', 'crm', 'csharp', 'css', 'cybersecurity', 'data-analytics', 'data-engineering', 'data-governance', 'data-modeling', 'data-pipelines', 'data-quality', 'data-science', 'databricks', 'dbt', 'design-patterns', 'devops', 'distributed-systems', 'docker', 'dotnet', 'ecommerce', 'erp', 'etl', 'event-driven-architecture', 'financial-reporting', 'fintech', 'gcp', 'generative-ai', 'git', 'github', 'gitlab', 'go-to-market', 'html', 'iam', 'infrastructure-as-code', 'java', 'javascript', 'jenkins', 'jira', 'kafka', 'kubernetes', 'lead-generation', 'linux', 'llm', 'machine-learning', 'microservices', 'mysql', 'networking', 'nodejs', 'nosql', 'observability', 'oracle', 'performance-management', 'postgresql', 'powerbi', 'process-improvement', 'program-management', 'python', 'react', 'regulatory-compliance', 'rest', 'saas', 'salesforce', 'sap', 'scrum', 'sdlc', 'snowflake', 'solution-design', 'spark', 'spring', 'sql', 'sql-server', 'stakeholder-management', 'statistics', 'strategic-planning', 'tableau', 'terraform', 'test-automation', 'typescript', 'version-control'];
 export const ROLE_ALIASES = {
   'account_executive': ['account executive'],
   'account_manager': ['account manager'],

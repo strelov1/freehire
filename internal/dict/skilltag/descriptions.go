@@ -32,7 +32,7 @@ import (
 // When this reaches len(Canonicals()) it is deleted, and the coverage test becomes the
 // absolute rule the labels already carry: a canonical with no description fails the
 // build. One rule, not two that can disagree.
-const describedFloor = 1
+const describedFloor = 98
 
 //go:embed descriptions.tsv
 var descriptionsTSV string
