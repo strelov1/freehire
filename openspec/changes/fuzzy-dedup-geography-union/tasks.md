@@ -1,15 +1,17 @@
 ## 1. The closure query
 
-- [ ] 1.1 Write the whole-catalogue closure query `DuplicateClosureGeoAll` in
+- [x] 1.1 Write the whole-catalogue closure query `DuplicateClosureGeoAll` in
       `internal/platform/db/queries/jobs.sql`: recursive, seeded from open rows with
       `duplicate_of IS NULL` that own at least one open duplicate, returning
       `(owner_id, countries, regions, cities)` unioned over the closure's open members. Document
       in the comment why cycles are unreachable (the seed is nobody's duplicate) and what the
       depth bound is for. `make sqlc`.
-- [ ] 1.2 Add the by-id-set variant `DuplicateClosureGeoFor(owner_ids)` sharing the same recursive
-      body, for the drain wave and the single-row link import. Decide from `EXPLAIN` whether a
-      separate single-row query is warranted; prefer one query with a one-element argument.
-- [ ] 1.3 Integration test (`//go:build integration`, `internal/platform/db`): seed a
+- [x] 1.2 Add the by-id-set variant `DuplicateClosureGeoFor(owner_ids)` sharing the same recursive
+      body, for the drain wave and the single-row link import. RESOLVED: no separate single-row
+      query — link import passes a one-element slice, so the `:one` "always answers" contract the
+      old `RoleClusterGeo` needed is replaced by an empty result meaning "no widening". Two
+      queries replace three.
+- [x] 1.3 Integration test (`//go:build integration`, `internal/platform/db`): seed a
       role→fuzzy chain (`A --duplicate_of_role--> B --duplicate_of_fuzzy--> C`, three distinct
       cities) and assert `C`'s closure geography carries all three. Cover a plain role cluster
       (unchanged behaviour), a closed member (excluded), and a marker cycle (terminates, returns

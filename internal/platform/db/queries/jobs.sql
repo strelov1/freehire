@@ -622,6 +622,105 @@ WHERE o.closed_at IS NULL AND o.role_fingerprint IS NOT NULL AND o.role_fingerpr
 GROUP BY o.company_slug, o.role_fingerprint
 HAVING count(DISTINCT o.id) > 1;
 
+-- name: DuplicateClosureGeoAll :many
+-- The whole-catalogue geography union in one pass, keyed by the id of the row that OWNS each
+-- union — the searchable canonical row, widened with the geography of every OPEN row it
+-- represents. What a row represents is its DUPLICATE CLOSURE: the rows whose duplicate_of
+-- chain terminates at it, at any depth.
+--
+-- The closure, not a shared role_fingerprint, is the membership rule, because a fingerprint
+-- cannot express what two of the three dedup passes do. The exact role pass clusters BY
+-- fingerprint, so its members are inside their canon's closure and its behaviour is unchanged;
+-- but the fuzzy-description and aggregator passes only ever act on rows the exact pass left
+-- unclustered, whose fingerprints therefore DIFFER from their canon's by construction. Keyed
+-- by fingerprint, their members' cities left the index with them — issue #2225, where a
+-- posting open in Chestermere was readable by slug and absent from every search.
+--
+-- A chain (a role canon that a later pass suppressed) resolves to its ULTIMATE owner, so no
+-- member's geography is stranded on an unsearchable intermediate row.
+--
+-- Cycle safety is structural, not a guard. Each row has at most ONE duplicate_of, so the
+-- "points at" graph has out-degree <= 1; a cycle in such a graph consists entirely of rows
+-- with duplicate_of set, and every edge INTO a cycle member comes from another cycle member.
+-- Seeding only from rows that are nobody's duplicate (duplicate_of IS NULL) therefore makes a
+-- cycle unreachable rather than merely survivable. The depth bound is a backstop for a future
+-- caller that seeds differently — today's chains are at most role -> fuzzy on top of
+-- aggregator, three hops.
+--
+-- Only owners that represent at least one other open row are returned: a row representing
+-- nobody unions to its own geography, which MergeClusterGeography already treats as a no-op,
+-- and leaving it out is what keeps the rebuild's lookup map to the rows that need it. The
+-- LATERAL tags each member's countries/regions/cities into one unnested stream (no cartesian
+-- across the three arrays, no repeat self-join), and blanks are dropped by the FILTER.
+WITH RECURSIVE member AS (
+    SELECT o.id AS owner_id, o.id AS member_id, 0 AS depth
+    FROM jobs o
+    WHERE o.closed_at IS NULL
+      AND o.duplicate_of IS NULL
+      AND EXISTS (SELECT 1 FROM jobs c WHERE c.duplicate_of = o.id AND c.closed_at IS NULL)
+    UNION ALL
+    SELECT m.owner_id, c.id, m.depth + 1
+    FROM member m
+    JOIN jobs c ON c.duplicate_of = m.member_id
+    WHERE c.closed_at IS NULL AND m.depth < 8
+)
+SELECT
+    m.owner_id,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM member m
+JOIN jobs o ON o.id = m.member_id
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+GROUP BY m.owner_id;
+
+-- name: DuplicateClosureGeoFor :many
+-- The duplicate-closure geography union for a SPECIFIC set of owner ids, so an incremental
+-- index push can widen a whole wave's rows in one query instead of one call per job. Same
+-- recursive body as DuplicateClosureGeoAll — the walk, the open-rows-only scope and the depth
+-- bound are argued there and must not diverge here.
+--
+-- Two differences, both deliberate. The seed carries no EXISTS test: the caller named these
+-- rows, and a row representing nobody answers with its own geography — a self-union, and a
+-- documented no-op merge. That keeps the caller to one error branch instead of making it tell
+-- "this row owns nothing" apart from a failure. And the seed does not require duplicate_of IS
+-- NULL: a caller that asks about a suppressed row gets that row's own subtree rather than
+-- silence, which is the honest answer to the question it asked.
+--
+-- An id matching no open row simply yields no row for that id.
+WITH RECURSIVE member AS (
+    SELECT o.id AS owner_id, o.id AS member_id, 0 AS depth
+    FROM jobs o
+    WHERE o.id = ANY(sqlc.arg(owner_ids)::bigint[])
+      AND o.closed_at IS NULL
+    UNION ALL
+    SELECT m.owner_id, c.id, m.depth + 1
+    FROM member m
+    JOIN jobs c ON c.duplicate_of = m.member_id
+    WHERE c.closed_at IS NULL AND m.depth < 8
+)
+SELECT
+    m.owner_id,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM member m
+JOIN jobs o ON o.id = m.member_id
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+GROUP BY m.owner_id;
+
 -- name: CompaniesWithRoleClusters :many
 -- Company slugs whose role-duplicate markers may need recomputing: a company with an
 -- open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
