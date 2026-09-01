@@ -2743,6 +2743,20 @@ type Querier interface {
 	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
 	// yields 0, not NULL).
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// The most recent successful crawl per ingest provider, for the gauge that makes a
+	// provider which has stopped producing data visible as itself.
+	//
+	// Reads board_health rather than the jobs table on purpose. The catalogue-side form of
+	// the same question — max(last_seen_at) grouped by source over open jobs — measured 41s
+	// and 2.1M buffer reads on prod (2026-09-01), a parallel sequential scan of 8M rows. This
+	// file's header commits every query in it to never being why ingest waits, and the host
+	// is disk-bound, so a once-a-minute scan of that size is exactly the thing it forbids.
+	// The same measurement here reads 97k rows in 54ms.
+	//
+	// max() over a nullable column yields NULL for a provider whose every board has never
+	// succeeded; that NULL is carried through and rendered as an ABSENT sample, never as a
+	// zero — see cmd/queue-metrics/render.go.
+	ProviderIngestFreshness(ctx context.Context) ([]ProviderIngestFreshnessRow, error)
 	// One keyset page of rows the prune rule evaluates, ordered by id.
 	//
 	// Closed rows are included deliberately. Once ingest rejects a board's non-technical

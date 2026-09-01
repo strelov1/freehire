@@ -21,6 +21,7 @@ type metricsQueries interface {
 	SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMetricsRow, error)
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
+	ProviderIngestFreshness(context.Context) ([]db.ProviderIngestFreshnessRow, error)
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -50,6 +51,22 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		return snapshot{}, err
 	}
 
+	freshness, err := q.ProviderIngestFreshness(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("provider ingest freshness: %w", err)
+	}
+	providers := make([]providerFreshness, len(freshness))
+	for i, r := range freshness {
+		// An invalid Timestamptz is max() over a provider whose every board has never
+		// succeeded. It stays the zero time here and is dropped by render, because the
+		// alternative — a Unix zero — reads downstream as a provider overdue since 1970.
+		p := providerFreshness{name: r.Provider}
+		if r.LastSuccessAt.Valid {
+			p.lastSuccess = r.LastSuccessAt.Time
+		}
+		providers[i] = p
+	}
+
 	return snapshot{
 		queues: []queueMetrics{
 			{name: "search_outbox", depth: search.Depth, deadLetters: search.DeadLetters, oldestAgeSeconds: search.OldestAgeSeconds},
@@ -60,6 +77,7 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		failingBoards: boards.Failing,
 		cooledBoards:  boards.Cooled,
 		newestJob:     newestJob,
+		providers:     providers,
 	}, nil
 }
 

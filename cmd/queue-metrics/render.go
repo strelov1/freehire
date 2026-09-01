@@ -15,6 +15,14 @@ type queueMetrics struct {
 	oldestAgeSeconds float64
 }
 
+// providerFreshness is when one ingest provider's most recent board crawl succeeded.
+// lastSuccess is the zero time when no board of that provider has ever succeeded, which
+// render publishes as an absent sample rather than as a 1970 timestamp.
+type providerFreshness struct {
+	name        string
+	lastSuccess time.Time
+}
+
 // snapshot is everything one collection pass measured. newestJob is the zero time when
 // the catalogue holds no open job at all, which render treats as "publish nothing"
 // rather than as a 1970 timestamp.
@@ -24,6 +32,7 @@ type snapshot struct {
 	failingBoards int64
 	cooledBoards  int64
 	newestJob     time.Time
+	providers     []providerFreshness
 }
 
 // render turns a snapshot into the Prometheus text exposition format.
@@ -64,6 +73,26 @@ func render(s snapshot) string {
 	if !s.newestJob.IsZero() {
 		writeHeader(&b, "freehire_catalogue_newest_job_timestamp_seconds", "Unix time the newest open job was created.")
 		fmt.Fprintf(&b, "freehire_catalogue_newest_job_timestamp_seconds %d\n", s.newestJob.Unix())
+	}
+
+	// Per-provider freshness: the signal the catalogue-wide gauge above cannot give. That
+	// one stays young while any provider produces, so a provider that stopped is invisible
+	// in it — which is how a 13-day proxy outage went unnoticed until someone looked by
+	// hand. A provider with no measurement is omitted rather than zeroed, and the whole
+	// family is omitted when none has one, on the same reasoning as newestJob.
+	measured := make([]providerFreshness, 0, len(s.providers))
+	for _, p := range s.providers {
+		if !p.lastSuccess.IsZero() {
+			measured = append(measured, p)
+		}
+	}
+	if len(measured) > 0 {
+		writeHeader(&b, "freehire_provider_last_success_timestamp_seconds",
+			"Unix time an ingest provider's most recent board crawl succeeded.")
+		for _, p := range measured {
+			fmt.Fprintf(&b, "freehire_provider_last_success_timestamp_seconds{provider=%q} %d\n",
+				p.name, p.lastSuccess.Unix())
+		}
 	}
 
 	return b.String()

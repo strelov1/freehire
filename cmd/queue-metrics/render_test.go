@@ -162,3 +162,54 @@ func TestRenderGroupsEachFamilyUnderOneHelpAndType(t *testing.T) {
 		}
 	}
 }
+
+// The freehire-ops alert rule binds to this family by name and by the provider label, so
+// the exposition text is pinned the way the other families are: a rename must be a visible
+// edit here, not a silent break of an alert nobody notices until the next outage.
+func TestRenderProviderFreshness(t *testing.T) {
+	s := fullSnapshot()
+	s.providers = []providerFreshness{
+		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0)},
+		{name: "peopleforce", lastSuccess: time.Unix(1785700000, 0)},
+	}
+	got := render(s)
+	for _, want := range []string{
+		"# HELP freehire_provider_last_success_timestamp_seconds",
+		"# TYPE freehire_provider_last_success_timestamp_seconds gauge",
+		`freehire_provider_last_success_timestamp_seconds{provider="greenhouse"} 1786821000`,
+		`freehire_provider_last_success_timestamp_seconds{provider="peopleforce"} 1785700000`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
+		}
+	}
+}
+
+// A provider that has never succeeded must be ABSENT, not zero. An alert rule reads a
+// missing series as no-data and a 1970 timestamp as infinitely overdue; only the first is
+// what the measurement actually supports.
+func TestRenderOmitsProviderThatNeverSucceeded(t *testing.T) {
+	s := fullSnapshot()
+	s.providers = []providerFreshness{
+		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0)},
+		{name: "gulftalent"},
+	}
+	got := render(s)
+	if strings.Contains(got, `provider="gulftalent"`) {
+		t.Errorf("a provider with no successful crawl must publish no sample\ngot:\n%s", got)
+	}
+	if !strings.Contains(got, `provider="greenhouse"`) {
+		t.Error("the provider that did succeed must still publish")
+	}
+}
+
+// Every provider having never succeeded leaves the family with nothing to say; emitting a
+// bare HELP/TYPE pair with no samples would be a valid but pointless exposition, so the
+// family is omitted entirely — the same rule newestJob already follows.
+func TestRenderOmitsEmptyProviderFamily(t *testing.T) {
+	s := fullSnapshot()
+	s.providers = []providerFreshness{{name: "gulftalent"}, {name: "bayt"}}
+	if got := render(s); strings.Contains(got, "freehire_provider_last_success_timestamp_seconds") {
+		t.Errorf("family must be omitted when no provider has a measurement\ngot:\n%s", got)
+	}
+}

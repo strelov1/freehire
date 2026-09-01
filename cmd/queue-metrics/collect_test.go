@@ -20,6 +20,7 @@ type fakeQueries struct {
 	semantic  db.SemanticOutboxMetricsRow
 	boards    db.BoardHealthMetricsRow
 	newest    pgtype.Timestamptz
+	freshness []db.ProviderIngestFreshnessRow
 	newestErr error
 	searchErr error
 }
@@ -44,6 +45,10 @@ func (f fakeQueries) NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz
 	return f.newest, f.newestErr
 }
 
+func (f fakeQueries) ProviderIngestFreshness(context.Context) ([]db.ProviderIngestFreshnessRow, error) {
+	return f.freshness, nil
+}
+
 func populatedQueries() fakeQueries {
 	return fakeQueries{
 		search:   db.SearchOutboxMetricsRow{Depth: 3, DeadLetters: 2, OldestAgeSeconds: 21600.5},
@@ -51,6 +56,30 @@ func populatedQueries() fakeQueries {
 		semantic: db.SemanticOutboxMetricsRow{Depth: 0, DeadLetters: 0, OldestAgeSeconds: 0},
 		boards:   db.BoardHealthMetricsRow{Healthy: 74894, Failing: 7002, Cooled: 1882},
 		newest:   pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
+		freshness: []db.ProviderIngestFreshnessRow{
+			{Provider: "greenhouse", LastSuccessAt: pgtype.Timestamptz{Time: time.Unix(1786821000, 0), Valid: true}},
+			{Provider: "gulftalent", LastSuccessAt: pgtype.Timestamptz{}},
+		},
+	}
+}
+
+// A provider whose boards have never succeeded answers with a NULL max(), and that NULL
+// must survive collection as "no measurement" rather than collapsing to the zero instant
+// — render turns the two into an absent sample and a 1970 timestamp respectively, and
+// only one of those is honest.
+func TestCollectKeepsNeverSucceededProviderDistinctFromZero(t *testing.T) {
+	snap, err := collect(context.Background(), populatedQueries())
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if len(snap.providers) != 2 {
+		t.Fatalf("providers = %d, want 2", len(snap.providers))
+	}
+	if got := snap.providers[0]; got.name != "greenhouse" || !got.lastSuccess.Equal(time.Unix(1786821000, 0)) {
+		t.Errorf("first provider = %+v, want greenhouse at 1786821000", got)
+	}
+	if got := snap.providers[1]; got.name != "gulftalent" || !got.lastSuccess.IsZero() {
+		t.Errorf("second provider = %+v, want gulftalent with no measurement", got)
 	}
 }
 
