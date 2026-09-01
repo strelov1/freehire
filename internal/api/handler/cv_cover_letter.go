@@ -81,23 +81,24 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 
 	client := h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter))
 	letter, err := drafter.draft(c.Context(), client, userID, jobID, coverLetterBand(c))
-	switch {
-	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
+	if err != nil || letter == nil {
+		// Every failing path gives the charge back, so it is given back once here rather than
+		// in each branch — a candidate must never pay for a letter they did not get.
 		releaseLetterCharge(h.plans, userID, charge)
-		return fiber.NewError(fiber.StatusConflict,
-			"nothing in your experience bank is yours to cite yet: confirm an achievement first")
-	case err != nil:
-		releaseLetterCharge(h.plans, userID, charge)
-		// Handed to the shared mapper rather than flattened here. It already knows the states
-		// this path meets — fitanalysis.ErrNoAnalysis is a 409 saying "run the fit analysis
-		// first", and errors.go says outright that the status is decided there rather than at
-		// each call site. Flattening every failure into 502 turned that answer into a Bad
-		// Gateway on production, on the majority of vacancies, where no analysis is cached.
-		return err
-	case letter == nil:
-		// The LLM is unconfigured. Nothing was spent and nothing was written.
-		releaseLetterCharge(h.plans, userID, charge)
-		return fiber.NewError(fiber.StatusServiceUnavailable, "drafting is unavailable on this deployment")
+		switch {
+		case errors.Is(err, coverletter.ErrNoPublishableEvidence):
+			return fiber.NewError(fiber.StatusConflict, letterFailureMessage(err))
+		case err != nil:
+			// Handed to the shared mapper rather than flattened here. It already knows the
+			// states this path meets — fitanalysis.ErrNoAnalysis is a 409 saying "run the fit
+			// analysis first", and errors.go says outright that the status is decided there
+			// rather than at each call site. Flattening every failure into 502 turned that
+			// answer into a Bad Gateway on production, on the majority of vacancies.
+			return err
+		default:
+			// The LLM is unconfigured. Nothing was spent and nothing was written.
+			return fiber.NewError(fiber.StatusServiceUnavailable, letterFailureMessage(nil))
+		}
 	}
 	return c.JSON(fiber.Map{"data": coverLetterResponse{
 		Present: true,

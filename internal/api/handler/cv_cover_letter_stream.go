@@ -64,40 +64,50 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(context.Background(), letterStreamTimeout)
 		defer cancel()
 
-		// The first event goes out before any model call, which is the whole point: it is what
-		// keeps the proxy from closing a response that has said nothing for a minute.
-		stream.event("stage", letterStageEvent{Stage: coverletter.StageSelect})
-
+		// The chain's own first emit opens the stage before it makes any network call, so it
+		// IS the early first byte this endpoint exists for — nothing needs to be written ahead
+		// of it, and writing one would send `select` twice.
 		letter, err := drafter.draftStream(ctx, client, userID, jobID, band, func(stage string, done bool) {
 			stream.event("stage", letterStageEvent{Stage: stage, Done: done})
 		})
-		switch {
-		case errors.Is(err, coverletter.ErrNoPublishableEvidence):
-			releaseLetterCharge(h.plans, userID, charge)
-			stream.event("error", letterErrorEvent{
-				Error: "nothing in your experience bank is yours to cite yet: confirm an achievement first",
-			})
-		case err != nil:
-			releaseLetterCharge(h.plans, userID, charge)
-			log.Printf("coverletter: streaming for user %d job %d: %v", userID, jobID, err)
-			// The message is the mapper's, so a streamed failure reads the same as the one the
-			// POST path renders — an un-analysed vacancy says "run the fit analysis first"
-			// here too, rather than becoming a bare "something went wrong".
-			_, msg, _ := classify(err)
-			stream.event("error", letterErrorEvent{Error: msg})
-		case letter == nil:
-			releaseLetterCharge(h.plans, userID, charge)
-			stream.event("error", letterErrorEvent{Error: "drafting is unavailable on this deployment"})
-		default:
+		if err == nil && letter != nil {
 			stream.event("letter", coverLetterResponse{
 				Present: true,
 				Letter:  letter,
 				Cited:   citedAtomsOf(ctx, drafter.bank, userID, letter.Cited),
 				Model:   modelIDOf(client),
 			})
+			return
 		}
+
+		// Every failing path gives the charge back, so it is given back once here rather than
+		// in each branch — a candidate must never pay for a letter they did not get.
+		releaseLetterCharge(h.plans, userID, charge)
+		if err != nil && !errors.Is(err, coverletter.ErrNoPublishableEvidence) {
+			log.Printf("coverletter: streaming for user %d job %d: %v", userID, jobID, err)
+		}
+		stream.event("error", letterErrorEvent{Error: letterFailureMessage(err)})
 	}))
 	return nil
+}
+
+// letterFailureMessage is the sentence a failed draft renders. It reads the same on both
+// entry points because both call it: the STATUS a failure deserves differs between an
+// endpoint and a stream, but what went wrong does not, and an un-analysed vacancy must say
+// "run the fit analysis first" in either place rather than degrading to "something went
+// wrong" in one of them.
+//
+// A nil error means the chain produced no letter without failing — an unconfigured gateway.
+func letterFailureMessage(err error) string {
+	switch {
+	case err == nil:
+		return "drafting is unavailable on this deployment"
+	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
+		return "nothing in your experience bank is yours to cite yet: confirm an achievement first"
+	default:
+		_, msg, _ := classify(err)
+		return msg
+	}
 }
 
 // letterStageEvent reports one step of the chain opening or closing.
