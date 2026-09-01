@@ -70,7 +70,12 @@ var blocks = map[string][]string{
 		"auth/mobileauth", "auth/oauth", "auth/recentauth", "userprofile",
 	},
 	"candidate": {
-		"atscheck", "cv", "cvedit", "cvmatch", "cvsection", "experience",
+		"atscheck",
+		// coverletter drafts from the experience bank against a vacancy the caller supplies
+		// as a db.Job — the letter is about the candidate's evidence, so it sits here and
+		// not in job, which this block may not import.
+		"coverletter",
+		"cv", "cvedit", "cvmatch", "cvsection", "experience",
 		// fitanalysis orchestrates matchanalysis (cache, staleness, the credit rule,
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
