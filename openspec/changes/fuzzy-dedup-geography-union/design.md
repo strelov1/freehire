@@ -80,12 +80,22 @@ Walking upward from each duplicate to its terminal owner was the alternative. It
 but needs an explicit termination test per row and a real cycle guard, and it yields
 `member → owner` pairs that still have to be inverted. Downward is the simpler statement.
 
-### One recursive definition, three seeds
+### One recursive definition, two seeds
 
 The whole-catalogue rebuild, the drain wave and the single-row link import need the same closure
-over different seeds. They become three sqlc queries sharing one recursive body — differing only in
-whether the seed is "every owner", "owners in this id set" or "this one id". Keeping the body
-identical is what stops the three from drifting the way the three `RoleClusterGeo*` queries could.
+over different seeds — but the last two are the same seed with a different cardinality, so the
+link import passes a one-element slice and there is no third query. Two sqlc queries replace three
+`RoleClusterGeo*` ones.
+
+sqlc names whole statements, so the recursive body is a COPY in the second query rather than a
+shared one. Convention is the only thing holding them together, so the second query's comment
+names exactly what must stay identical — the recursive term and the seed's
+`closed_at IS NULL AND duplicate_of IS NULL` — and says what a divergence would look like in
+production: a canon that silently narrows every time the drain touches it.
+
+Dropping the third query also drops a contract. The old `RoleClusterGeo` was `:one` and "always
+answered" so callers had one error branch; the by-id-set query is `:many`, and an absent row is
+itself the answer "no widening".
 
 ### `/copies` resolves the anchor to its owner first
 
@@ -152,8 +162,21 @@ every marker the release step cleared is re-derived by the next dedup run.
 
 ## Open Questions
 
-- What depth bound? A role→fuzzy chain is 2 and aggregator→role→fuzzy is 3; the bound should leave
-  headroom without inviting an unbounded walk. Settle it when the query is written and state the
-  reasoning in the query comment.
-- Does `linkimport` still need a single-row closure query, or can it share the by-id-set one with a
-  single-element argument? Prefer sharing if the plan is the same; decide with `EXPLAIN`.
+Both questions this design opened are settled; kept here with their answers so the reasoning is
+not re-derived.
+
+- **What depth bound? — SETTLED: 8.** Today's chains reach three hops (aggregator → role →
+  fuzzy). Eight leaves headroom without inviting an unbounded walk, and it is a backstop rather
+  than the correctness argument: both queries seed from rows that are nobody's duplicate, which
+  makes a cycle unreachable outright.
+- **Does `linkimport` need its own single-row query? — SETTLED: no.** It passes a one-element
+  slice to the by-id-set query. The `:one` "always answers" contract the old `RoleClusterGeo`
+  needed disappears with it, because an absent row already means "no widening".
+
+Still open, and the next thing to resolve:
+
+- **Is the whole-catalogue recursive query fast enough?** Measured 2026-09-01, the planner's
+  estimates are useless here — it guesses 21M rows for a closure that really holds about 2.15M
+  (625 278 owners over 1 529 849 open duplicates), which pushes it into a sequential scan of
+  `jobs` and a sort of tens of millions of rows. The plain-`EXPLAIN` cost comes out ~8x the old
+  query's, but the old query's own real time is not yet known. Task 1.4 is the gate.

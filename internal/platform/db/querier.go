@@ -1033,16 +1033,24 @@ type Querier interface {
 	// by fingerprint, their members' cities left the index with them — issue #2225, where a
 	// posting open in Chestermere was readable by slug and absent from every search.
 	//
-	// A chain (a role canon that a later pass suppressed) resolves to its ULTIMATE owner, so no
-	// member's geography is stranded on an unsearchable intermediate row.
+	// A chain of OPEN rows (a role canon that a later pass suppressed) resolves to its ultimate
+	// owner, so no member's geography is stranded on an open intermediate row.
+	//
+	// A CLOSED intermediate cuts the walk, and that is deliberate: the traversal follows open rows
+	// only, so an open row behind a closed parent contributes to nobody. Such a row is invisible
+	// either way — it carries a marker, so it is out of the index, and so is the closed row it
+	// points at. Re-pointing it is the marker refresh's job, not this read's: the role recompute
+	// picks min(id) among a cluster's OPEN rows and the fuzzy pass releases a marker whose canon
+	// closed. Measured on prod 2026-09-01, 42 633 open duplicates sat behind a closed owner —
+	// which is the never-released fuzzy marker this change also fixes, not a gap here.
 	//
 	// Cycle safety is structural, not a guard. Each row has at most ONE duplicate_of, so the
 	// "points at" graph has out-degree <= 1; a cycle in such a graph consists entirely of rows
 	// with duplicate_of set, and every edge INTO a cycle member comes from another cycle member.
 	// Seeding only from rows that are nobody's duplicate (duplicate_of IS NULL) therefore makes a
-	// cycle unreachable rather than merely survivable. The depth bound is a backstop for a future
-	// caller that seeds differently — today's chains are at most role -> fuzzy on top of
-	// aggregator, three hops.
+	// cycle unreachable rather than merely survivable — which is why BOTH closure queries seed
+	// that way. The depth bound is a backstop for a future caller that seeds differently; today's
+	// chains are at most role -> fuzzy on top of aggregator, three hops.
 	//
 	// Only owners that represent at least one other open row are returned: a row representing
 	// nobody unions to its own geography, which MergeClusterGeography already treats as a no-op,
@@ -1051,18 +1059,22 @@ type Querier interface {
 	// across the three arrays, no repeat self-join), and blanks are dropped by the FILTER.
 	DuplicateClosureGeoAll(ctx context.Context) ([]DuplicateClosureGeoAllRow, error)
 	// The duplicate-closure geography union for a SPECIFIC set of owner ids, so an incremental
-	// index push can widen a whole wave's rows in one query instead of one call per job. Same
-	// recursive body as DuplicateClosureGeoAll — the walk, the open-rows-only scope and the depth
-	// bound are argued there and must not diverge here.
+	// index push can widen a whole wave's rows in one query instead of one call per job.
 	//
-	// Two differences, both deliberate. The seed carries no EXISTS test: the caller named these
-	// rows, and a row representing nobody answers with its own geography — a self-union, and a
-	// documented no-op merge. That keeps the caller to one error branch instead of making it tell
-	// "this row owns nothing" apart from a failure. And the seed does not require duplicate_of IS
-	// NULL: a caller that asks about a suppressed row gets that row's own subtree rather than
-	// silence, which is the honest answer to the question it asked.
+	// The recursive body below is a COPY of DuplicateClosureGeoAll's, not a shared one — sqlc
+	// names whole statements, so there is nowhere to put it once. The walk, the open-rows-only
+	// scope, the closed-intermediate behaviour and the depth bound are argued there. What must
+	// stay identical is the recursive term and the seed's `closed_at IS NULL AND duplicate_of IS
+	// NULL`: change either here alone and the wave's answer stops matching the rebuild's, which
+	// surfaces as a canon that silently narrows every time the drain touches it.
 	//
-	// An id matching no open row simply yields no row for that id.
+	// One deliberate difference: the seed carries no EXISTS test. The caller named these rows, and
+	// a row representing nobody answers with its own geography — a self-union, and a documented
+	// no-op merge. That keeps the caller to one error branch instead of making it tell "this row
+	// owns nothing" apart from a failure.
+	//
+	// An id matching no open canonical row simply yields no row for that id, which the caller
+	// reads as "no widening".
 	DuplicateClosureGeoFor(ctx context.Context, ownerIds []int64) ([]DuplicateClosureGeoForRow, error)
 	// The id range the owned-marker backfill walks, plus how many rows still need it. Exact count on
 	// purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong

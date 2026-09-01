@@ -239,6 +239,38 @@ func TestDuplicateClosureGeo_ClosedOwnerIsNotAnOwner(t *testing.T) {
 	}
 }
 
+func TestDuplicateClosureGeo_AClosedIntermediateCutsTheWalk(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// C --role--> B(CLOSED) --fuzzy--> A. The walk follows open rows only, so C contributes to
+	// nobody. That is the documented behaviour, not an oversight: C carries a marker and is out
+	// of the index anyway, and re-pointing it belongs to the marker refresh — the role recompute
+	// picks min(id) among a cluster's OPEN rows, and the fuzzy pass releases a marker whose canon
+	// closed. This test exists so the walk cannot start following closed rows unnoticed.
+	mustUpsert(t, q, closureRow("cut-a", "fp-cut-a", []string{"ca"}, []string{"north_america"}, []string{"Toronto"}))
+	mustUpsert(t, q, closureRow("cut-b", "fp-cut-b", []string{"ca"}, []string{"north_america"}, []string{"Belleville"}))
+	mustUpsert(t, q, closureRow("cut-c", "fp-cut-b", []string{"ca"}, []string{"north_america"}, []string{"Scarborough"}))
+
+	aID, _ := dupOf(t, pool, "cut-a")
+	bID, _ := dupOf(t, pool, "cut-b")
+	cID, _ := dupOf(t, pool, "cut-c")
+	markDuplicate(t, pool, cID, bID)
+	markFuzzy(t, q, testCompany, bID, aID)
+	closeJob(t, pool, bID)
+
+	rows, err := q.DuplicateClosureGeoAll(ctx)
+	if err != nil {
+		t.Fatalf("DuplicateClosureGeoAll: %v", err)
+	}
+	// A now represents no OPEN row at all, so it is absent rather than carrying Scarborough.
+	if got := closureOf(allClosures(rows), aID); got != nil {
+		t.Errorf("owner %d has only a closed member and must be absent; got cities %v", aID, got.Cities)
+	}
+}
+
 func TestDuplicateClosureGeo_CycleTerminates(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -262,6 +294,17 @@ func TestDuplicateClosureGeo_CycleTerminates(t *testing.T) {
 	all := allClosures(rows)
 	if closureOf(all, aID) != nil || closureOf(all, bID) != nil {
 		t.Errorf("a cycle has no searchable row and must yield no owner; got %d rows", len(rows))
+	}
+
+	// The wave query seeds the same way, so the structural argument covers it too — a caller
+	// that names a cycle member by id still gets nothing rather than a walk bounded only by
+	// the depth backstop. Asserted here because the two seeds are copies, not one shared body.
+	forRows, err := q.DuplicateClosureGeoFor(ctx, []int64{aID, bID})
+	if err != nil {
+		t.Fatalf("DuplicateClosureGeoFor must terminate on a marker cycle: %v", err)
+	}
+	if len(forRows) != 0 {
+		t.Errorf("cycle members are not canonical and must not seed the wave query; got %d rows", len(forRows))
 	}
 }
 

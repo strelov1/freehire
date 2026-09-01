@@ -62,8 +62,9 @@ already exists.
 
 ## Impact
 
-- **SQL** — `internal/platform/db/queries/jobs.sql`: three `RoleClusterGeo*` queries removed, three
-  closure queries added (whole-catalogue / by-id-set / single), `ListRoleClusterCopies` replaced,
+- **SQL** — `internal/platform/db/queries/jobs.sql`: three `RoleClusterGeo*` queries removed, two
+  closure queries added (whole-catalogue / by-id-set — the link import passes a one-element slice
+  rather than needing a third), `ListRoleClusterCopies` replaced,
   two fuzzy candidate queries and `MarkFuzzyDuplicatesForCompany` amended. `make sqlc` regenerates
   `internal/platform/db`.
 - **Workers** — `cmd/reindex` (`buildClusterGeoLookup`, `splitJobs`), `cmd/search-drain/indexer.go`.

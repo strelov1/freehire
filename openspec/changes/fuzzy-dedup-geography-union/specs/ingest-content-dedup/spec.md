@@ -18,9 +18,16 @@ SHALL resolve to its ultimate owner, so no member's geography is stranded on an 
 intermediate row.
 
 Traversal SHALL start from searchable rows (open, `duplicate_of IS NULL`) and walk toward
-their members, and SHALL be bounded in depth. A cycle among duplicate markers is therefore
-unreachable and cannot be traversed; the depth bound is the backstop, not the correctness
-argument.
+their members, and SHALL be bounded in depth. Every reader of the closure — the whole-catalogue
+one and the by-id-set one alike — SHALL seed this way. A cycle among duplicate markers is
+therefore unreachable and cannot be traversed; the depth bound is the backstop, not the
+correctness argument.
+
+The walk SHALL follow OPEN rows only, so a closed intermediate ends that branch: an open row
+behind a closed parent contributes to no owner. This is deliberate and costs nothing, because
+such a row carries a marker and is out of the index regardless, as is the closed row it points
+at. Re-pointing it belongs to the marker refresh — the role recompute chooses `min(id)` among a
+cluster's OPEN rows, and the fuzzy pass releases a marker whose canon closed.
 
 This binds every writer of the document, not only the full reindex. Because the incremental
 push is a field-level document update and the three geography facets are always present in
@@ -54,6 +61,13 @@ then the row's own geography and the merge is a no-op.
   canon is itself later suppressed onto a fuzzy canon in city A
 - **THEN** the fuzzy canon's `cities` facet carries A, B and C, and a search filtered by C
   returns it
+
+#### Scenario: A closed intermediate ends the branch
+
+- **WHEN** an open posting is marked `duplicate_of` a row that has since been CLOSED, and that
+  closed row is itself marked onto an open canonical posting
+- **THEN** the open posting's cities do not reach that canonical posting, and a canonical row
+  left with only closed members carries no widening at all
 
 #### Scenario: An incremental push does not narrow the canon
 

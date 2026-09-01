@@ -37,7 +37,10 @@
       union, and a writer that skips the union is caught (assert the merge happens on the
       incremental paths, not only the rebuild).
 - [ ] 2.6 Delete `RoleClusterGeo`, `RoleClusterGeoAll` and `RoleClusterGeoFor` from `jobs.sql`,
-      `make sqlc`, and confirm nothing else references them.
+      `make sqlc`, and confirm nothing else references them. Delete
+      `internal/platform/db/role_cluster_geo_integration_test.go` in the same step — its
+      `clusterRow` fixture is what `closureRow` currently duplicates, and leaving the file behind
+      turns a transitional copy into a permanent one.
 
 ## 3. The copies endpoint
 
