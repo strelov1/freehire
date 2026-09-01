@@ -292,7 +292,11 @@ func All(c HTTPClient) map[string]Source {
 		NewAvito(c),
 		NewRWB(c),
 		NewSber(c),
-		NewAlfaBank(c),
+		// Alfa-Bank's careers API serves a certificate issued by the Russian Trusted Root
+		// CA, which no standard trust store carries, so it fails the TLS handshake on the
+		// shared client. It gets its own client that trusts that one extra root — see
+		// NewRussianTrustedRootClient for why the scope is one adapter and not the fleet.
+		NewAlfaBank(NewRussianTrustedRootClient()),
 		NewLamoda(c),
 		NewKuper(c),
 		NewAviasales(c),
