@@ -694,37 +694,26 @@ var wordAliases = map[string]string{
 	"nagios":     "nagios",
 	"solarwinds": "solarwinds",
 	"citrix":     "citrix",
-	"kvm":        "kvm",
 	// networking
 	"vlans": "vlan",
 	"vxlan": "vxlan",
 	"sdn":   "sdn",
 	"sase":  "sase",
-	// security vendors, certifications and regulatory frameworks. A framework is the
-	// thing a security or compliance posting actually names, and each of these spellings
-	// is coined — unlike "soc" (system-on-chip / security operations centre / social)
-	// and "pci" (the bus), which are reachable only as phrases below.
+	// security vendors. The certifications and the regulatory frameworks that shipped
+	// here beside them have MOVED to the phrase lists and nonCorroboratingPhrases: each
+	// spelling is coined, so tagging was never the problem, but a strong match also
+	// vouches for every gated word in the same text — and "HIPAA training required"
+	// sits on most of a healthcare catalogue. See the compliance block below.
 	"crowdstrike": "crowdstrike",
 	"fortinet":    "fortinet",
 	"cyberark":    "cyberark",
 	"osint":       "osint",
-	"nist":        "nist",
-	"fedramp":     "fedramp",
-	"cmmc":        "cmmc",
-	"cissp":       "cissp",
-	"cism":        "cism",
-	"ccna":        "ccna",
-	"gdpr":        "gdpr",
-	"ccpa":        "ccpa",
-	"lgpd":        "lgpd",
-	"hipaa":       "hipaa",
-	"itar":        "itar",
-	"dfars":       "dfars",
-	// embedded, electronics and industrial automation
+	// embedded, electronics and industrial automation. "asic" (the Australian
+	// Securities and Investments Commission, on a large share of the AU finance
+	// postings SEEK brings in), "rtl" (right-to-left, in any i18n posting) and "cfd"
+	// (contract for difference) were strong here and are now phrase-routed.
 	"firmware": "firmware",
-	"asic":     "asic",
 	"cmos":     "cmos",
-	"rtl":      "rtl",
 	"uvm":      "uvm",
 	"hmi":      "hmi",
 	"modbus":   "modbus",
@@ -732,7 +721,6 @@ var wordAliases = map[string]string{
 	"simulink": "simulink",
 	// engineering analysis
 	"fea": "fea",
-	"cfd": "cfd",
 	// AEC / construction software
 	"bluebeam":     "bluebeam",
 	"microstation": "microstation",
@@ -746,6 +734,11 @@ var wordAliases = map[string]string{
 	// batch 4, gated half — declared here because ambiguousWords marks wordAliases
 	// keys, not canonicals. Each is a real product whose bare token is also ordinary
 	// English, so it tags only with a concrete technology beside it.
+	//
+	// "bedrock" and "ros" were here and are gone: each named a product the dictionary
+	// ALREADY carried under a different canonical ("aws bedrock" → aws-bedrock, "ros2"),
+	// so a posting matched both and the facet split its count between them. Gating does
+	// not help — a corroborated weak match still emits. The qualified forms cover them.
 	"bootstrap": "bootstrap",
 	"hibernate": "hibernate",
 	"unity":     "unity",
@@ -758,12 +751,10 @@ var wordAliases = map[string]string{
 	"bicep":     "bicep",
 	"athena":    "athena",
 	"aurora":    "aurora",
-	"bedrock":   "bedrock",
 	"parquet":   "parquet",
 	"loki":      "loki",
 	"prefect":   "prefect",
 	"flux":      "flux",
-	"ros":       "ros",
 }
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
@@ -877,7 +868,7 @@ var ambiguousWords = map[string]bool{
 	// a solar "eclipse", "cut me some slack", "zoom in on the detail", "the notion
 	// that", the yoga "asana", a "puppet" show, the "bicep" a trainer works, Athena
 	// and Aurora and Loki as names, "parquet flooring" on a construction posting, a
-	// school "prefect", welding "flux core", and "ros" inside deaccented Spanish.
+	// school "prefect" and welding "flux core".
 	// Every one of them is unmistakable next to a named technology and noise without
 	// one, which is precisely what the corroboration gate decides.
 	"bootstrap": true,
@@ -892,12 +883,10 @@ var ambiguousWords = map[string]bool{
 	"bicep":     true,
 	"athena":    true,
 	"aurora":    true,
-	"bedrock":   true,
 	"parquet":   true,
 	"loki":      true,
 	"prefect":   true,
 	"flux":      true,
-	"ros":       true,
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -1089,7 +1078,9 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"azure data factory", "azure-data-factory"},
 	{"sales cloud", "sales-cloud"},
 	{"salesforce marketing cloud", "salesforce-marketing-cloud"},
-	{"sap s4hana", "sap-s4hana"}, {"s/4hana", "sap-s4hana"},
+	// No {"sap s4hana"}: the bare "s4hana" alias declared with the mined batch below
+	// matches inside it, so the two-word form is dead weight.
+	{"s/4hana", "sap-s4hana"},
 	{"sap mm", "sap-mm"},
 	{"siemens nx", "siemens-nx"},
 	{"premiere pro", "premiere-pro"},
@@ -1203,15 +1194,36 @@ var engineeringPhraseAliases = []phraseAlias{
 	// name is the only safe route.
 	{"palo alto networks", "palo-alto-networks"},
 	{"juniper networks", "juniper"}, {"junos", "juniper"},
-	// Compliance frameworks whose acronym alone is another thing entirely: "PCI" is the
-	// bus, "SOC" is a system-on-chip or a security operations centre, "ISO" is the
-	// organisation (and a camera setting). The versioned spelling is unambiguous.
+	// Compliance frameworks and security certifications. The acronyms are coined, so
+	// tagging them was never the risk — VOUCHING was. A strong match lifts the
+	// corroboration gate off every weak word in the same text, and these appear in the
+	// prose of postings that are not technical at all: "HIPAA training required" is on
+	// most of a healthcare catalogue, ISO 9001 on most of a manufacturing one. As word
+	// aliases they turned a nurse's "pick up the slack" into `slack`. They are phrases
+	// now, and every canonical below is listed in nonCorroboratingPhrases.
+	//
+	// The privacy and trade-control regimes sit in the PROFESSIONAL list further down
+	// instead: a posting whose only match is HIPAA or GDPR is a compliance role, and
+	// HasEngineering must not read it as an engineering one.
+	{"nist", "nist"}, {"fedramp", "fedramp"}, {"cmmc", "cmmc"},
+	{"cissp", "cissp"}, {"cism", "cism"}, {"ccna", "ccna"},
+	// "PCI" alone is the bus, "SOC" a system-on-chip or a security operations centre,
+	// "ISO" the organisation (and a camera setting) — the versioned spelling is what
+	// disambiguates each of these.
 	{"pci dss", "pci-dss"},
 	{"soc2", "soc-2"},
 	{"iso 9001", "iso-9001"}, {"iso9001", "iso-9001"},
 	{"iso 13485", "iso-13485"},
 	{"iso 26262", "iso-26262"},
 	{"as9100", "as9100"},
+	// Silicon and simulation terms whose bare acronym belongs to another industry
+	// this catalogue carries in bulk: ASIC is the Australian Securities and Investments
+	// Commission, RTL is right-to-left text (and React Testing Library), CFD is a
+	// contract for difference, and KVM is the switch in an IT-support closet.
+	{"asic design", "asic"}, {"asic verification", "asic"}, {"asic development", "asic"},
+	{"rtl design", "rtl"}, {"rtl verification", "rtl"}, {"rtl coding", "rtl"},
+	{"computational fluid dynamics", "cfd"}, {"cfd simulation", "cfd"}, {"cfd analysis", "cfd"},
+	{"kvm hypervisor", "kvm"}, {"kvm virtualization", "kvm"}, {"kvm virtualisation", "kvm"},
 	// Industrial automation. "PLC" is the British company suffix — "… PLC" closes a
 	// legal entity name in a third of UK postings — so the controller returns only
 	// through what an engineer actually writes beside it. "CAN" as a bare token is
@@ -1405,6 +1417,12 @@ var professionalPhraseAliases = []phraseAlias{
 	// Unambiguous single-token vendor names, same shape as quickbooks/bamboohr above.
 	{"zoominfo", "zoominfo"}, {"salesloft", "salesloft"},
 	{"veeva", "veeva"}, {"yardi", "yardi"},
+	// Privacy and trade-control regimes. They belong to this list rather than the
+	// engineering one for the reason the list exists: a posting whose only match is
+	// HIPAA is a healthcare compliance role, and HasEngineering reads an unrecognised
+	// vocabulary as engineering. All are non-corroborating — see below.
+	{"hipaa", "hipaa"}, {"gdpr", "gdpr"}, {"ccpa", "ccpa"}, {"lgpd", "lgpd"},
+	{"itar", "itar"}, {"dfars", "dfars"},
 }
 
 // nonCorroboratingPhrases are the phrase canonicals that tag on their own but do NOT
@@ -1447,6 +1465,29 @@ var nonCorroboratingPhrases = map[string]bool{
 	"cnc":          true,
 	"soldering":    true,
 	"oscilloscope": true,
+	// batch 4 — compliance frameworks and certifications. Naming a regime is evidence
+	// that the posting is SUBJECT to it, never that whoever fills it is technical: a
+	// nurse's posting carries HIPAA, an injection-moulding plant's carries ISO 9001,
+	// and a defence administrator's carries ITAR. As strong matches they lifted the
+	// gate off the words beside them and tagged `slack` on a nursing post.
+	"nist":      true,
+	"fedramp":   true,
+	"cmmc":      true,
+	"cissp":     true,
+	"cism":      true,
+	"ccna":      true,
+	"pci-dss":   true,
+	"soc-2":     true,
+	"iso-9001":  true,
+	"iso-13485": true,
+	"iso-26262": true,
+	"as9100":    true,
+	"hipaa":     true,
+	"gdpr":      true,
+	"ccpa":      true,
+	"lgpd":      true,
+	"itar":      true,
+	"dfars":     true,
 }
 
 // nonEngineeringBareCanonicals are non-engineering disciplines whose canonical also has a

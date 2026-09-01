@@ -1269,7 +1269,7 @@ func TestParse_MinedBatch4(t *testing.T) {
 			[]string{"gdpr", "ccpa", "lgpd", "hipaa"}, nil},
 		{"industrial automation", "Controls engineer: Modbus and I2C links into the HMI.",
 			[]string{"modbus", "i2c", "hmi"}, nil},
-		{"silicon verification", "ASIC verification in UVM against the RTL, CMOS process.",
+		{"silicon verification", "ASIC verification in UVM, RTL design on a CMOS process.",
 			[]string{"asic", "uvm", "rtl", "cmos"}, nil},
 		{"aec software", "Estimator using Bluebeam, Navisworks and Procore.",
 			[]string{"bluebeam", "navisworks", "procore"}, nil},
@@ -1356,6 +1356,58 @@ func TestParse_MinedBatch4(t *testing.T) {
 		{"kms is kilometres", "Delivery driver covering 300 kms per shift.", nil, []string{"kms"}},
 		{"excel stays untagged", "Cashier: strong Excel and Microsoft Office skills.",
 			nil, []string{"excel", "microsoft-office"}},
+
+		// Witnesses the first cut of this batch shipped without. Each gated term needs
+		// both directions or the gate is untested in the one that matters.
+		{"eclipse the astronomy club", "Observatory guide: run the solar eclipse viewing evenings.",
+			nil, []string{"eclipse"}},
+		{"eclipse the ide", "Java developer working in Eclipse against a Maven build.",
+			[]string{"eclipse", "java"}, nil},
+		{"loki the given name", "Kennel assistant: Loki and Freya need walking twice daily.",
+			nil, []string{"loki"}},
+		{"loki the log store", "SRE stack: Grafana, Loki and Prometheus on Kubernetes.",
+			[]string{"loki", "grafana", "kubernetes"}, nil},
+		{"zoom the verb", "Photographer: zoom and focus by hand on a manual lens.", nil, []string{"zoom"}},
+		{"notion the noun", "Challenge the notion that retail cannot be premium.", nil, []string{"notion"}},
+		{"asana the tool", "Program manager tracking delivery in Asana beside our Python services.",
+			[]string{"asana", "python"}, nil},
+		{"prefect the orchestrator", "Data platform: Prefect flows loading into Snowflake.",
+			[]string{"prefect", "snowflake"}, nil},
+		{"flux the gitops tool", "Kubernetes platform with Flux for GitOps and Terraform for infra.",
+			[]string{"flux", "kubernetes", "terraform"}, nil},
+
+		// Compliance frameworks tag the posting they describe, and vouch for nobody.
+		// As strong word aliases they lifted the gate and tagged `slack` on a nurse.
+		{"hipaa does not corroborate", "Registered nurse. HIPAA training required. Pick up the slack on busy shifts.",
+			[]string{"hipaa"}, []string{"slack"}},
+		{"gdpr does not corroborate", "Care coordinator. GDPR duties, a flexible workday, and we value unity.",
+			[]string{"gdpr"}, []string{"unity", "workday"}},
+		{"iso 9001 does not corroborate", "Injection moulding supervisor under ISO 9001; sketch out the shift rota.",
+			[]string{"iso-9001"}, []string{"sketch"}},
+		{"security certifications still tag", "Security engineer: NIST 800-53, FedRAMP and CMMC; CISSP required.",
+			[]string{"nist", "fedramp", "cmmc", "cissp"}, nil},
+		{"hipaa alone is not engineering", "Medical records clerk handling HIPAA requests.",
+			[]string{"hipaa"}, nil},
+
+		// Acronyms that belong to another industry unless qualified.
+		{"asic the australian regulator", "Compliance officer: ASIC and AFSL reporting for our Sydney licence.",
+			nil, []string{"asic"}},
+		{"rtl the text direction", "Frontend i18n: RTL layouts for Arabic and Hebrew locales.",
+			nil, []string{"rtl"}},
+		{"cfd the trading product", "Trading desk: FX, CFD and equity derivatives for retail clients.",
+			nil, []string{"cfd"}},
+		{"cfd the simulation", "Thermal engineer running CFD simulation against MATLAB models.",
+			[]string{"cfd"}, nil},
+		{"kvm the closet switch", "IT support: rack the servers and use the KVM switch in the closet.",
+			nil, []string{"kvm"}},
+		{"kvm the hypervisor", "Linux virtualisation on the KVM hypervisor with Ansible.",
+			[]string{"kvm", "linux", "ansible"}, nil},
+
+		// Regressions for the two canonicals that were splitting a facet in two.
+		{"bedrock stays one canonical", "Deploy on AWS Bedrock behind Terraform.",
+			[]string{"aws-bedrock"}, []string{"bedrock"}},
+		{"ros stays one canonical", "Robotics engineer: ROS2 stack in C++.",
+			[]string{"ros2"}, []string{"ros"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

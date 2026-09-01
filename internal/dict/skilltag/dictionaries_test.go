@@ -214,8 +214,14 @@ func TestParse_SalesAndSupportVocab(t *testing.T) {
 //
 // It is easy to do because the tiers are independent: a batch can add a phrase whose
 // canonical already exists as a word alias written the other way. That is exactly how
-// "hugging-face" landed beside "huggingface". Folding the separators out is enough to
-// catch it, and cheap enough to run on every canonical in the vocabulary.
+// "hugging-face" landed beside "huggingface". Folding the separators out catches that
+// shape across every tier that declares a canonical.
+//
+// It does NOT catch the other shape, where one canonical is a QUALIFIED form of
+// another ("bedrock" beside the pre-existing "aws-bedrock"), because a substring rule
+// cannot tell that apart from the many legitimate pairs the vocabulary already carries
+// — sap/sap-hana, azure/azure-synapse, aws/aws-glue. Those need a witness test on the
+// term itself, which is why the mined batches carry one per entry.
 func TestNoNearDuplicateCanonicals(t *testing.T) {
 	fold := strings.NewReplacer("-", "", "_", "", ".", "")
 	seen := map[string]string{}
@@ -232,5 +238,13 @@ func TestNoNearDuplicateCanonicals(t *testing.T) {
 	}
 	for _, p := range phraseAliases {
 		check("phraseAliases "+p.alias, p.canonical)
+	}
+	for tier, acr := range map[string]map[string]string{"sharedAcronyms": sharedAcronyms, "resumeAcronyms": resumeAcronyms} {
+		for surface, c := range acr {
+			check(tier+"["+surface+"]", c)
+		}
+	}
+	for surface, ca := range categoryScopedAcronyms {
+		check("categoryScopedAcronyms["+surface+"]", ca.canonical)
 	}
 }

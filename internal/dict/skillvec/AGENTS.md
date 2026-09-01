@@ -35,11 +35,18 @@ before that reuse would read the new skill's weight at the old skill's slot.
 quietly ranking as absent — it has no position until the registry is regenerated.
 
 ## Dimensions
-`Dimensions` (1024) is wider than the dictionary (749) so growth needs no
-re-declaration. It is NOT free: Meilisearch stores the declared width whether or not
-the tail is occupied, and at catalogue scale each 256 dimensions costs roughly 2.5 GB
-of index. Changing it forces a full rebuild, and until that rebuild finishes the
-index rejects every document carrying the new width.
+`Dimensions` (1024) is wider than the dictionary (866 after the 2026-08 mining batch,
+up from 749) so growth needs no re-declaration. It is NOT free: Meilisearch stores the
+declared width whether or not the tail is occupied, and at catalogue scale each 256
+dimensions costs roughly 2.5 GB of index. Changing it forces a full rebuild, and until
+that rebuild finishes the index rejects every document carrying the new width.
+
+**Headroom is now 158 positions, and the registry never gives one back** — a retired
+skill keeps its slot by design (see the rule above). One more batch the size of the
+last one crosses the cap, so a mining run that expects to add a hundred canonicals
+should check `RegistrySize()` against `Dimensions` BEFORE curating, not after: crossing
+it is not a bigger diff, it is a full reindex with a window where the live index
+rejects writes.
 
 ## Why there are no rarity weights
 An earlier version weighted each skill by how rare it is in the catalogue, so that
