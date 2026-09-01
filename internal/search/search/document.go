@@ -179,25 +179,31 @@ func DescriptionMissing(j db.Job) bool {
 	return stripToPlainText(j.Description) == ""
 }
 
-// MergeClusterGeography widens a canonical document's geography facets with the union
-// across its role cluster's open rows, so a collapsed multi-city/multi-country role
-// stays findable by every city and country it is open in — not only the canon's own.
-// Each facet becomes the sorted, deduped union of the document's own values and the
-// cluster's; an empty cluster slice leaves that facet unchanged.
+// MergeClosureGeography widens a searchable document's geography facets with the union
+// across every OPEN row it represents — its duplicate closure — so a collapsed
+// multi-city/multi-country role stays findable by every city and country the rows it hides
+// are open in, not only its own. Each facet becomes the sorted, deduped union of the
+// document's own values and the closure's; an empty slice leaves that facet unchanged.
+//
+// Membership is the closure, NOT a shared role_fingerprint. Two of the three dedup passes
+// suppress rows whose fingerprints differ from their canon's by construction, so a
+// fingerprint key reached none of them and their cities left the index with them — issue
+// #2225.
 //
 // Every writer of a job document must call this, not only the full reindex. The push is a
 // field-level document update and these three facets are always present in the payload, so
-// a writer that skips the union does not merely fail to widen the canon — it replaces the
-// widened values with the canon's own. The reindex reads its cluster geography from the
-// whole-catalogue RoleClusterGeoAll; the per-row writers read theirs from RoleClusterGeo.
-func (d *JobDocument) MergeClusterGeography(countries, regions, cities []string) {
+// a writer that skips the union does not merely fail to widen the row — it replaces the
+// widened values with the row's own. The reindex reads its closure geography from the
+// whole-catalogue DuplicateClosureGeoAll; the per-wave writers read theirs from
+// DuplicateClosureGeoFor.
+func (d *JobDocument) MergeClosureGeography(countries, regions, cities []string) {
 	d.Countries = unionSorted(d.Countries, countries)
 	d.Regions = unionSorted(d.Regions, regions)
 	d.Cities = unionSorted(d.Cities, cities)
 }
 
 // unionSorted returns the sorted, deduped union of two facet slices. A nil result
-// stays nil (no cluster addition and no own values) so an untouched facet is omitted.
+// stays nil (no closure addition and no own values) so an untouched facet is omitted.
 func unionSorted(own, extra []string) []string {
 	if len(extra) == 0 {
 		return own

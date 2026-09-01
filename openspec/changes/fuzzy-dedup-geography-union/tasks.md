@@ -26,21 +26,25 @@
 
 ## 2. The index writers
 
-- [ ] 2.1 `cmd/reindex`: replace `buildClusterGeoLookup`'s `RoleClusterGeoAll` with the closure
+- [x] 2.1 `cmd/reindex`: replace `buildClusterGeoLookup`'s `RoleClusterGeoAll` with the closure
       query and rekey the map by owner id; `splitJobs` looks up by `j.ID`. Drop the fingerprint
       plumbing that only fed geography (leave the reality-signal cluster counts alone — they still
       key by fingerprint).
-- [ ] 2.2 `cmd/search-drain/indexer.go`: same swap, keyed by job id. The `askGeo` gate becomes "the
-      row owns at least one open duplicate"; keep its fail-open default, since skipping the merge
-      is destructive rather than conservative.
-- [ ] 2.3 `internal/ingest/linkimport`: same swap.
-- [ ] 2.4 Update `MergeClusterGeography`'s doc comment in `internal/search/search/document.go` to
+- [x] 2.2 `cmd/search-drain/indexer.go`: same swap, keyed by job id. The `askGeo` gate was to become
+      "the row owns at least one open duplicate", keeping its fail-open default. DONE differently:
+      the gate is GONE. There is no cheap "represents nobody" test to feed it, and wanting one was
+      the hazard — the gate had to default to asking anyway, because skipping the merge is
+      destructive rather than conservative. Asking for every job in the wave deletes the reasoning
+      instead of restating it; a row representing nobody answers with its own geography, so the
+      merge is a no-op. Same removal in `linkimport` (2.3).
+- [x] 2.3 `internal/ingest/linkimport`: same swap.
+- [x] 2.4 Update `MergeClusterGeography`'s doc comment in `internal/search/search/document.go` to
       name the duplicate closure instead of the role cluster, and rename it if the new name reads
       better at all three call sites.
-- [ ] 2.5 Unit tests for all three writers: a document built for an owner carries the closure's
+- [x] 2.5 Unit tests for all three writers: a document built for an owner carries the closure's
       union, and a writer that skips the union is caught (assert the merge happens on the
       incremental paths, not only the rebuild).
-- [ ] 2.6 Delete `RoleClusterGeo`, `RoleClusterGeoAll` and `RoleClusterGeoFor` from `jobs.sql`,
+- [x] 2.6 Delete `RoleClusterGeo`, `RoleClusterGeoAll` and `RoleClusterGeoFor` from `jobs.sql`,
       `make sqlc`, and confirm nothing else references them. Delete
       `internal/platform/db/role_cluster_geo_integration_test.go` in the same step — its
       `clusterRow` fixture is what `closureRow` currently duplicates, and leaving the file behind

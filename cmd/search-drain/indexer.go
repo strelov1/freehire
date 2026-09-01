@@ -22,10 +22,11 @@ type searchIndexer struct {
 	q      *db.Queries
 }
 
-// clusterKey identifies one role cluster. RoleClusterCountsFor/RoleClusterGeoFor match
-// their two input sets as a cross product (see those queries' doc comments), so the
-// caller keys results by the exact pair rather than trusting that every returned row
-// belongs to a job in this wave.
+// clusterKey identifies one role cluster, which is still how the job-reality counts are
+// grouped (geography moved to the duplicate closure, keyed by job id). RoleClusterCountsFor
+// matches its two input sets as a cross product (see that query's doc comment), so the caller
+// keys results by the exact pair rather than trusting that every returned row belongs to a job
+// in this wave.
 type clusterKey struct {
 	companySlug     string
 	roleFingerprint string
@@ -66,29 +67,24 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		}
 	}
 
-	// Only clusters with more than one open row need a geography union — a singleton's
-	// own geography is already what search.FromJob wrote, so RoleClusterGeo(For) on it is
-	// a documented no-op. Narrowing the second query to just those pairs mirrors the
-	// per-job askGeo gate this replaces.
-	geoSlugs := make([]string, 0, len(slugs))
-	geoPrints := make([]string, 0, len(prints))
-	for key, c := range counts {
-		if c.MassCount > 1 {
-			geoSlugs = append(geoSlugs, key.companySlug)
-			geoPrints = append(geoPrints, key.roleFingerprint)
-		}
+	// Geography is asked for EVERY job in the wave, keyed by id. There is no cheap
+	// pre-filter for "this row represents nobody" the way mass_count was for a singleton
+	// cluster — and wanting one was the hazard: the gate it fed had to default to asking,
+	// because skipping the merge is destructive (the push replaces the stored union) rather
+	// than conservative. Asking unconditionally deletes that reasoning. A row that
+	// represents nobody answers with its own geography, so merging it is a no-op.
+	geoIDs := make([]int64, 0, len(jobs))
+	for _, job := range jobs {
+		geoIDs = append(geoIDs, job.ID)
 	}
-	geo := map[clusterKey]db.RoleClusterGeoForRow{}
-	if len(geoSlugs) > 0 {
-		rows, err := ix.q.RoleClusterGeoFor(ctx, db.RoleClusterGeoForParams{
-			CompanySlugs:     geoSlugs,
-			RoleFingerprints: geoPrints,
-		})
+	geo := map[int64]db.DuplicateClosureGeoForRow{}
+	if len(geoIDs) > 0 {
+		rows, err := ix.q.DuplicateClosureGeoFor(ctx, geoIDs)
 		if err != nil {
-			log.Printf("search-drain: role-cluster geography for wave: %v", err)
+			log.Printf("search-drain: duplicate-closure geography for wave: %v", err)
 		} else {
 			for _, r := range rows {
-				geo[clusterKey{r.CompanySlug, r.RoleFingerprint.String}] = r
+				geo[r.OwnerID] = r
 			}
 		}
 	}
@@ -111,23 +107,15 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 			return fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}
 		repost, mass := int64(1), int64(1)
-		// askGeo defaults to true because a lookup miss (the counts query failed, or the
-		// job's cluster simply has no row) must not also suppress the geography merge
-		// below: skipping it is destructive (the push replaces the stored union), not
-		// conservative. Only a known singleton can safely skip.
-		askGeo := true
 		if job.RoleFingerprint.Valid && job.RoleFingerprint.String != "" {
 			if c, ok := counts[clusterKey{job.CompanySlug, job.RoleFingerprint.String}]; ok {
 				repost, mass = c.RepostCount, c.MassCount
-				askGeo = mass > 1
 			}
 		}
 		reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
 		doc.Reality = &reality
-		if askGeo && job.RoleFingerprint.Valid && job.RoleFingerprint.String != "" {
-			if g, ok := geo[clusterKey{job.CompanySlug, job.RoleFingerprint.String}]; ok {
-				doc.MergeClusterGeography(g.Countries, g.Regions, g.Cities)
-			}
+		if g, ok := geo[job.ID]; ok {
+			doc.MergeClosureGeography(g.Countries, g.Regions, g.Cities)
 		}
 		docs = append(docs, doc)
 	}

@@ -63,9 +63,14 @@ func startMeili(t *testing.T) (url, key string) {
 func seedJob(t *testing.T, pool *pgxpool.Pool, ext, title, companySlug, roleFingerprint string, cities []string, duplicateOf *int64) int64 {
 	t.Helper()
 	var id int64
+	// duplicate_of_role, not duplicate_of: migration 0115 derives duplicate_of from the three
+	// OWNED marker columns on every insert and update, so a fixture writing the derived column
+	// directly has it silently overwritten with NULL and seeds a canonical row instead of the
+	// repost it meant to. That is not hypothetical — this fixture did exactly that until the
+	// geography union started reading duplicate_of, and nothing failed.
 	err := pool.QueryRow(context.Background(),
 		`INSERT INTO jobs (source, external_id, url, title, company, company_slug, description,
-		                   public_slug, content_hash, role_fingerprint, cities, duplicate_of, enrichment, category)
+		                   public_slug, content_hash, role_fingerprint, cities, duplicate_of_role, enrichment, category)
 		 VALUES ('test', $1, 'http://example.test', $2, 'Acme', $3, 'Build things.',
 		         'job-' || $1, 'h-' || $1, $4, $5, $6, '{}', 'backend')
 		 RETURNING id`,
@@ -123,8 +128,10 @@ func TestIntegration_SearchDrainWorkerWidensCanonWithClusterGeography(t *testing
 		t.Fatalf("EnsureIndex: %v", err)
 	}
 
-	// The same role posted once per city: the canon and a repost pointing at it,
-	// sharing (company_slug, role_fingerprint) so RoleClusterGeo clusters them.
+	// The same role posted once per city: the canon and a repost POINTING AT IT. What makes
+	// them one group is the marker, not the shared fingerprint — the closure walks
+	// duplicate_of, so this would hold just as well if the repost's fingerprint differed,
+	// which is the case a fingerprint-keyed union could never see (issue #2225).
 	canonID := seedJob(t, pool, "canon", "Senior Backend Engineer", "acme", "fp-1", []string{"Berlin"}, nil)
 	repostID := seedJob(t, pool, "repost", "Senior Backend Engineer", "acme", "fp-1", []string{"Paris"}, &canonID)
 
@@ -166,14 +173,15 @@ func TestIntegration_SearchDrainWorkerWidensCanonWithClusterGeography(t *testing
 }
 
 // TestIntegration_SearchDrainWorkerBatchesRoleClusterLookupsWithoutCrossContamination
-// covers the fix for IndexBatch's per-job RoleClusterCount/RoleClusterGeo round trips
-// (batched into one RoleClusterCountsFor + one RoleClusterGeoFor call per wave, keyed by
-// the (company_slug, role_fingerprint) pair): two different companies sharing the exact
-// same role_fingerprint string, plus a singleton canon with no repost at all, all drain
-// in the SAME wave. If the batched lookup ever collapsed its results by role_fingerprint
-// alone (dropping company_slug from the key), acme's canon would be widened with
-// globex's city too; if a singleton's cluster key were looked up against the wrong
-// pair, its untouched geography would change.
+// covers IndexBatch's wave-scoped lookups: two different companies sharing the exact same
+// role_fingerprint string, plus a canon representing nobody, all draining in the SAME wave.
+//
+// The geography half of this can no longer go wrong the way it once could — the closure is
+// keyed by job id, and an id belongs to one company by construction, so cross-contamination
+// through a shared fingerprint is not expressible. What still keys by
+// (company_slug, role_fingerprint) is RoleClusterCountsFor, feeding the job-reality signal,
+// and that is what this now guards: drop company_slug from that key and acme's counts pick up
+// globex's rows. The geography assertions stay as the regression net for the id keying.
 func TestIntegration_SearchDrainWorkerBatchesRoleClusterLookupsWithoutCrossContamination(t *testing.T) {
 	ctx := context.Background()
 	meiliURL, key := startMeili(t)

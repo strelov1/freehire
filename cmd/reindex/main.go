@@ -110,9 +110,9 @@ func run() int {
 		log.Printf("reindex: build reality lookup: %v", err)
 		return 1
 	}
-	geo, err := buildClusterGeoLookup(ctx, q)
+	geo, err := buildClosureGeoLookup(ctx, q)
 	if err != nil {
-		log.Printf("reindex: build cluster geo lookup: %v", err)
+		log.Printf("reindex: build closure geo lookup: %v", err)
 		return 1
 	}
 
@@ -188,7 +188,7 @@ type rebuilder interface {
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo clusterGeoLookup, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -228,7 +228,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // used to also back an in-place semantic rehydration path that shared this loop and
 // differed only in the per-batch sink; that path is gone (see openspec/changes/
 // drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
-func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo clusterGeoLookup, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -272,11 +272,15 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 // to (1, 1) everywhere (used by tests that do not exercise clustering).
 type realityLookup func(companySlug, fingerprint string) (repost, mass int)
 
-// clusterGeoLookup returns the union of a role cluster's countries, regions, and cities
-// across its open rows, so the canon's search document can be widened beyond its own
-// geography. A miss (singleton cluster) yields nil slices — a no-op widening. A nil
-// lookup skips widening entirely (tests that do not exercise clustering).
-type clusterGeoLookup func(companySlug, fingerprint string) (countries, regions, cities []string)
+// closureGeoLookup returns the union of countries, regions, and cities across every open row
+// a searchable row REPRESENTS — its duplicate closure — so the row's search document can be
+// widened beyond its own geography. Keyed by job id, not by (company_slug, role_fingerprint):
+// the two dedup passes that suppress rows leave them with fingerprints their canon does not
+// share, so a fingerprint key could never reach them (issue #2225).
+//
+// A miss (the row represents nobody) yields nil slices — a no-op widening. A nil lookup skips
+// widening entirely (tests that do not exercise clustering).
+type closureGeoLookup func(ownerID int64) (countries, regions, cities []string)
 
 // companyBatchSize bounds how many companies one RecomputeRoleDuplicatesForCompanies /
 // SuppressAggregatorDuplicatesForCompanies call covers. Measured on prod (2026-08-06):
@@ -438,22 +442,22 @@ func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, erro
 	}, nil
 }
 
-// buildClusterGeoLookup precomputes the whole-catalogue role-cluster geography union once
-// (RoleClusterGeoAll returns only open multi-row clusters), so widening each canon during
-// the rebuild is a map read, not N queries. A singleton cluster is absent from the map and
-// resolves to nil slices — a no-op widening.
-func buildClusterGeoLookup(ctx context.Context, q *db.Queries) (clusterGeoLookup, error) {
-	rows, err := q.RoleClusterGeoAll(ctx)
+// buildClosureGeoLookup precomputes the whole-catalogue duplicate-closure geography union once
+// (DuplicateClosureGeoAll returns only rows that represent at least one other open row), so
+// widening each document during the rebuild is a map read, not N queries. A row representing
+// nobody is absent from the map and resolves to nil slices — a no-op widening.
+func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup, error) {
+	rows, err := q.DuplicateClosureGeoAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 	type geo struct{ countries, regions, cities []string }
-	m := make(map[string]geo, len(rows))
+	m := make(map[int64]geo, len(rows))
 	for _, r := range rows {
-		m[r.CompanySlug+"\x00"+r.RoleFingerprint.String] = geo{r.Countries, r.Regions, r.Cities}
+		m[r.OwnerID] = geo{r.Countries, r.Regions, r.Cities}
 	}
-	return func(cs, fp string) ([]string, []string, []string) {
-		g := m[cs+"\x00"+fp]
+	return func(ownerID int64) ([]string, []string, []string) {
+		g := m[ownerID]
 		return g.countries, g.regions, g.cities
 	}, nil
 }
@@ -463,7 +467,7 @@ func buildClusterGeoLookup(ctx context.Context, q *db.Queries) (clusterGeoLookup
 // reality signal, classified against `now` and its cluster counts); closed, private,
 // or category-unresolved jobs become deletions so they leave the index (the index
 // contains only open, non-private, categorized jobs — see the job-search spec).
-func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
+func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
@@ -490,11 +494,12 @@ func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now ti
 		}
 		reality := jobview.ClassifyReality(j, now, repost, mass)
 		doc.Reality = &reality
-		// Widen the canon's geography with its cluster's union, so a collapsed
-		// multi-country role stays findable by every country its reposts hold. A miss
-		// (singleton cluster or no lookup) leaves the canon's own geography untouched.
+		// Widen the row's geography with the union across its duplicate closure, so a
+		// collapsed multi-country role stays findable by every country the rows it hides
+		// are open in. A miss (the row represents nobody, or no lookup) leaves its own
+		// geography untouched.
 		if geo != nil {
-			doc.MergeClusterGeography(geo(j.CompanySlug, j.RoleFingerprint.String))
+			doc.MergeClosureGeography(geo(j.ID))
 		}
 		docs = append(docs, doc)
 	}

@@ -149,13 +149,13 @@ func TestDescriptionMissing(t *testing.T) {
 	}
 }
 
-func TestMergeClusterGeography_WidensCanonFacets(t *testing.T) {
+func TestMergeClosureGeography_WidensSearchableRowFacets(t *testing.T) {
 	doc := JobDocument{Job: jobview.Job{
 		Countries: []string{"de"},
 		Regions:   []string{"eu"},
 		Cities:    []string{"Düsseldorf"},
 	}}
-	doc.MergeClusterGeography(
+	doc.MergeClosureGeography(
 		[]string{"at", "de", "pl"},
 		[]string{"eu"},
 		[]string{"Kraków", "Wien", "Düsseldorf"},
@@ -171,12 +171,12 @@ func TestMergeClusterGeography_WidensCanonFacets(t *testing.T) {
 	}
 }
 
-func TestMergeClusterGeography_EmptyClusterLeavesFacetsUnchanged(t *testing.T) {
+func TestMergeClosureGeography_EmptyClosureLeavesFacetsUnchanged(t *testing.T) {
 	doc := JobDocument{Job: jobview.Job{
 		Countries: []string{"de"},
 		Cities:    []string{"Düsseldorf"},
 	}}
-	doc.MergeClusterGeography(nil, nil, nil)
+	doc.MergeClosureGeography(nil, nil, nil)
 	if got, want := doc.Countries, []string{"de"}; !slices.Equal(got, want) {
 		t.Errorf("countries = %v, want unchanged %v", got, want)
 	}

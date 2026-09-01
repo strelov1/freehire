@@ -305,16 +305,11 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	// The job-reality signal needs this role's cluster counts; a lookup failure degrades
 	// to a unique role (counts 1) rather than skipping the push.
 	repost, mass := int64(1), int64(1)
-	// askGeo defaults to true because a FAILED count must not also suppress the geography
-	// merge below: skipping it is destructive (the push replaces the stored union), not
-	// conservative. Only a known singleton can safely skip — its union is its own geography.
-	askGeo := true
 	if c, err := im.q.RoleClusterCount(ctx, db.RoleClusterCountParams{
 		CompanySlug:     saved.Job.CompanySlug,
 		RoleFingerprint: saved.Job.RoleFingerprint,
 	}); err == nil {
 		repost, mass = c.RepostCount, c.MassCount
-		askGeo = mass > 1
 	}
 	doc, err := search.FromJob(saved.Job)
 	if err != nil {
@@ -323,17 +318,17 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	}
 	reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
 	doc.Reality = &reality
-	// Widen the canon with its cluster's geography — the push is a field-level document
-	// update, so omitting this replaces the reindex's union with the canon's own narrow
-	// set. mass counts the cluster's open rows: at a known 1 there is nothing to widen with.
-	if askGeo {
-		if g, err := im.q.RoleClusterGeo(ctx, db.RoleClusterGeoParams{
-			CompanySlug:     saved.Job.CompanySlug,
-			RoleFingerprint: saved.Job.RoleFingerprint,
-		}); err != nil {
-			log.Printf("linkimport: role-cluster geography for job %d: %v", saved.Job.ID, err)
-		} else {
-			doc.MergeClusterGeography(g.Countries, g.Regions, g.Cities)
+	// Widen the row with the geography of everything it represents — the push is a
+	// field-level document update, so omitting this replaces the reindex's union with this
+	// row's own narrow set. Asked unconditionally: there is no cheap "represents nobody"
+	// test, and wanting one is what made the old gate default to asking anyway. The wave
+	// query takes a slice, so a single row is a one-element one; an empty result means no
+	// widening, which is exactly what a row representing nobody should get.
+	if rows, err := im.q.DuplicateClosureGeoFor(ctx, []int64{saved.Job.ID}); err != nil {
+		log.Printf("linkimport: duplicate-closure geography for job %d: %v", saved.Job.ID, err)
+	} else {
+		for _, g := range rows {
+			doc.MergeClosureGeography(g.Countries, g.Regions, g.Cities)
 		}
 	}
 	if err := im.idx.SubmitJobs(ctx, []search.JobDocument{doc}); err != nil {

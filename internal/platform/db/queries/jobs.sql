@@ -443,40 +443,6 @@ WHERE company_slug = sqlc.arg(company_slug)
   AND role_fingerprint = sqlc.arg(role_fingerprint)
   AND role_fingerprint <> '';
 
--- name: RoleClusterGeo :one
--- The geography union across ONE role cluster's open rows — the per-row counterpart of
--- the whole-catalogue RoleClusterGeoAll, as RoleClusterCount is to RoleClusterCountsAll.
--- The incremental index writers (ingest, link import, embed) ask it so their push widens
--- a collapsed canon instead of narrowing it: the push is a field-level document update
--- and the three geography facets are always present in the payload, so a writer that
--- omits the union replaces the reindex's widened values with the canon's own.
--- Same shape as RoleClusterGeoAll: only OPEN rows count, a LATERAL tags each row's
--- countries/regions/cities into one unnested stream, and blanks are dropped by the FILTER.
--- Unlike the whole-catalogue query it carries no HAVING, so it ALWAYS answers with exactly
--- one row: aggregating over no matching rows yields empty arrays, which
--- MergeClusterGeography already treats as "leave this facet alone". That keeps the three
--- callers to one error branch instead of making them tell pgx.ErrNoRows (a singleton) apart
--- from a real failure. A singleton therefore returns its own geography — a self-union, and
--- a no-op — but callers skip the query entirely when the cluster has at most one open row,
--- which RoleClusterCount's mass_count already told them. A NULL/empty fingerprint never
--- clusters.
-SELECT
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
-FROM jobs o
-LEFT JOIN LATERAL (
-    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
-    UNION ALL
-    SELECT 'r', e FROM unnest(o.regions) AS e
-    UNION ALL
-    SELECT 'y', e FROM unnest(o.cities) AS e
-) t ON true
-WHERE o.closed_at IS NULL
-  AND o.company_slug = sqlc.arg(company_slug)
-  AND o.role_fingerprint = sqlc.arg(role_fingerprint)
-  AND o.role_fingerprint <> '';
-
 -- name: CompanyHasOtherJobs :one
 -- Whether the catalog carries this company beyond the one posting named by (source,
 -- external_id) — asked right after an import, to answer "is this company new to us?".
@@ -592,35 +558,6 @@ FROM jobs
 WHERE role_fingerprint IS NOT NULL AND role_fingerprint <> ''
 GROUP BY company_slug, role_fingerprint
 HAVING COUNT(*) > 1;
-
--- name: RoleClusterGeoAll :many
--- The whole-catalogue role-cluster geography union in one pass, so the reindex can widen
--- each collapsed canon's countries/regions/cities with the union across its cluster's
--- OPEN rows (a canon in one country must still be findable by the countries of the reposts
--- it hides). Only OPEN multi-row clusters are returned — a singleton canon already carries
--- its own geography from search.FromJob, so it needs no widening (a lookup miss is the
--- no-op default). One scan of the open catalogue: a LATERAL tags each row's countries/
--- regions/cities into a single unnested stream (no cartesian across the three arrays, and
--- no repeat self-join of jobs), and the outer GROUP BY DISTINCT-aggregates per facet. LEFT
--- JOIN so a geo-less row still counts toward HAVING count(DISTINCT id) > 1 (the true cluster
--- size); blanks/NULLs are dropped by the FILTER. Mirrors RoleClusterCountsAll's single pass.
-SELECT
-    o.company_slug,
-    o.role_fingerprint,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
-FROM jobs o
-LEFT JOIN LATERAL (
-    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
-    UNION ALL
-    SELECT 'r', e FROM unnest(o.regions) AS e
-    UNION ALL
-    SELECT 'y', e FROM unnest(o.cities) AS e
-) t ON true
-WHERE o.closed_at IS NULL AND o.role_fingerprint IS NOT NULL AND o.role_fingerprint <> ''
-GROUP BY o.company_slug, o.role_fingerprint
-HAVING count(DISTINCT o.id) > 1;
 
 -- name: DuplicateClosureGeoAll :many
 -- The whole-catalogue geography union in one pass, keyed by the id of the row that OWNS each
@@ -1675,38 +1612,6 @@ FROM jobs j
 WHERE j.company_slug = ANY(sqlc.arg(company_slugs)::text[])
   AND j.role_fingerprint = ANY(sqlc.arg(role_fingerprints)::text[])
 GROUP BY j.company_slug, j.role_fingerprint;
-
--- name: RoleClusterGeoFor :many
--- Role-cluster geography unions for a SPECIFIC set of (company_slug, role_fingerprint)
--- pairs, so an incremental index push can widen a whole wave's canons in one query
--- instead of one RoleClusterGeo call per job — the geography counterpart of
--- RoleClusterCountsFor, mirrored the same way RoleClusterGeo mirrors RoleClusterCount.
---
--- Same cross-product-narrowed-by-caller shape as RoleClusterCountsFor, for the same
--- reason (a pair-wise join needs a two-argument unnest the analyzer cannot type). Only
--- OPEN rows count, matching RoleClusterGeo/RoleClusterGeoAll; the caller is expected to
--- ask only for clusters it already knows (via RoleClusterCountsFor's mass_count) have
--- more than one open row, since a singleton's self-union is a documented no-op there —
--- but this query carries no HAVING of its own, so a caller-supplied singleton pair
--- still resolves (to its own geography, the same no-op RoleClusterGeo returns for one).
-SELECT
-    o.company_slug,
-    o.role_fingerprint,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
-FROM jobs o
-LEFT JOIN LATERAL (
-    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
-    UNION ALL
-    SELECT 'r', e FROM unnest(o.regions) AS e
-    UNION ALL
-    SELECT 'y', e FROM unnest(o.cities) AS e
-) t ON true
-WHERE o.closed_at IS NULL
-  AND o.company_slug = ANY(sqlc.arg(company_slugs)::text[])
-  AND o.role_fingerprint = ANY(sqlc.arg(role_fingerprints)::text[])
-GROUP BY o.company_slug, o.role_fingerprint;
 
 -- name: CompaniesWithFuzzyDedupCandidates :many
 -- Company slugs worth running the fuzzy-description pass over: a company that still has more

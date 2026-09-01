@@ -117,17 +117,23 @@ func TestSplitJobs_BodylessJobsDeletedNotIndexed(t *testing.T) {
 	}
 }
 
-// A canonical row's document is widened with its role cluster's geography union, so a
-// collapsed multi-country role stays findable by every country its (hidden) reposts hold.
-func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
+// A canonical row's document is widened with the geography of every open row it REPRESENTS —
+// its duplicate closure — so a collapsed multi-country role stays findable by every country the
+// rows it hides are open in.
+//
+// The lookup is keyed by job id alone. That is the fix for issue #2225: keyed by
+// (company_slug, role_fingerprint) it could only ever see the exact role pass's clusters, and
+// the two passes that suppress rows with DIFFERING fingerprints contributed nothing. This
+// fixture therefore carries NO fingerprint, and the union still arrives.
+func TestSplitJobs_CanonGetsClosureGeoUnion(t *testing.T) {
 	canon := db.Job{
 		ID: 1, Title: "Senior Engineer", PublicSlug: "senior-engineer-acme-x",
-		CompanySlug: "acme", RoleFingerprint: pgtype.Text{String: "fp1", Valid: true},
-		Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
+		CompanySlug: "acme",
+		Countries:   []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
 		Category: "backend", Description: "<p>Build things.</p>",
 	}
-	geo := func(cs, fp string) ([]string, []string, []string) {
-		if cs == "acme" && fp == "fp1" {
+	geo := func(ownerID int64) ([]string, []string, []string) {
+		if ownerID == 1 {
 			return []string{"at", "de", "pl"}, []string{"eu"}, []string{"München", "Wien"}
 		}
 		return nil, nil, nil
@@ -141,10 +147,37 @@ func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
 		t.Fatalf("docs = %+v, want one canon", docs)
 	}
 	if got, want := docs[0].Countries, []string{"at", "de", "pl"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("countries = %v, want cluster union %v", got, want)
+		t.Errorf("countries = %v, want closure union %v", got, want)
 	}
 	if got, want := docs[0].Cities, []string{"München", "Wien"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("cities = %v, want cluster union %v", got, want)
+		t.Errorf("cities = %v, want closure union %v", got, want)
+	}
+}
+
+// A row the closure query left out (it represents nobody) keeps its own geography. The lookup
+// miss must be a no-op, never a narrowing: the push carries all three facets, so a writer that
+// treated "absent" as "empty" would REPLACE a widened canon with its own values.
+func TestSplitJobs_ClosureMissLeavesGeographyAlone(t *testing.T) {
+	solo := db.Job{
+		ID: 7, Title: "Solo Engineer", PublicSlug: "solo-engineer-acme-x",
+		CompanySlug: "acme",
+		Countries:   []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
+		Category: "backend", Description: "<p>Build things.</p>",
+	}
+	geo := func(int64) ([]string, []string, []string) { return nil, nil, nil }
+
+	docs, _, err := splitJobs([]db.Job{solo}, nil, geo, time.Now())
+	if err != nil {
+		t.Fatalf("splitJobs: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("docs = %+v, want one row", docs)
+	}
+	if got, want := docs[0].Countries, []string{"de"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("countries = %v, want its own %v", got, want)
+	}
+	if got, want := docs[0].Cities, []string{"München"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("cities = %v, want its own %v", got, want)
 	}
 }
 
