@@ -282,6 +282,44 @@ jobs:
           fi
           echo 'Generated code matches internal/platform/db/queries.'
 
+  # web/src/lib/generated is the same shape of gap the job above closes, and it was
+  # already open: contracts.ts had drifted 114 skill labels behind the dictionary,
+  # because a skill added to internal/dict never made anyone re-run the generator.
+  #
+  # That drift was invisible and nearly harmless — the SPA title-cases a label it cannot
+  # find, so a stale file rendered the same string anyway. skillDescriptions.ts has no
+  # such fallback: a description the file has not caught up with means no tooltip and no
+  # glossary page, which reads as the feature being broken rather than the file being
+  # old. One more generated file with a silent failure mode is what makes this a job.
+  #
+  # `go run ./cmd/gen-contracts` needs no toolchain of its own — tygo is a library here,
+  # not a binary — so unlike sqlc there is no version to pin in two places.
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Regenerate
+        run: go run ./cmd/gen-contracts
+
+      - name: Assert the generated contracts match the Go vocabularies
+        run: |
+          if [ -n "$(git status --porcelain -- web/src/lib/generated)" ]; then
+            git status --porcelain -- web/src/lib/generated
+            git --no-pager diff -- web/src/lib/generated
+            echo
+            echo 'web/src/lib/generated is stale. Run "make gen-contracts" and commit the result.'
+            exit 1
+          fi
+          echo 'Generated contracts match the Go vocabularies.'
+
   # Lints only the migrations this pull request ADDS. The applied history carries 1322
   # findings and is never going to be fixed — "never edit an applied migration" is the
   # rule this repository runs on, and rewriting one is a worse hazard than any finding.
