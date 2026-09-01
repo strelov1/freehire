@@ -39,8 +39,6 @@
   board: tonies
 - company: united games
   board: unitedgames
-- company: welevel
-  board: welevel
 - company: BIT Capital
   board: bitcap
 - company: Leadfeeder
@@ -123,8 +121,6 @@
   board: "hypatos-gmbh"
 - company: "INBRAIN Neuroelectronics"
   board: "inbrain-neuroelectronics"
-- company: "Integral"
-  board: "integral"
 - company: "KoRo"
   board: "koro-handels-gmbh"
 - company: "Kraftblock"
@@ -273,8 +269,6 @@
   board: get-e
 - company: holies
   board: holies
-- company: inplanet-gmbh
-  board: inplanet-gmbh
 - company: ireckonu
   board: ireckonu
 - company: iscc-system-gmbh
@@ -437,8 +431,6 @@
   board: eddyson
 - company: egetrans
   board: egetrans
-- company: egym
-  board: egym
 - company: eida-solutions
   board: eida-solutions
 - company: elawan-energy
@@ -537,8 +529,6 @@
   board: isolutions
 - company: iwgroup
   board: iwgroup
-- company: joliberlin
-  board: joliberlin
 - company: keelvar
   board: keelvar
 - company: kellerhals-carrard
@@ -757,8 +747,6 @@
   board: yohumanize
 - company: YPOG
   board: ypog-law
-- company: zellerfeld
-  board: zellerfeld
 - company: 360-services-gmbh
   board: 360-services-gmbh
 - company: 360volt-gmbh
@@ -1019,8 +1007,6 @@
   board: bryck
 - company: btc-echo-gmbh
   board: btc-echo-gmbh
-- company: bto-consultora-digital-sl
-  board: bto-consultora-digital-sl
 - company: buddyhealthcare
   board: buddyhealthcare
 - company: buerklin-gmbh-co-kg
@@ -1087,8 +1073,6 @@
   board: chargecloud-gmbh
 - company: checkmk-gmbh
   board: checkmk-gmbh
-- company: chesterton
-  board: chesterton
 - company: chp-gruppe
   board: chp-gruppe
 - company: cinemo
@@ -1237,8 +1221,6 @@
   board: dpa
 - company: dr-kittl-partner
   board: dr-kittl-partner
-- company: drc
-  board: drc
 - company: dresen-mall-gmbh
   board: dresen-mall-gmbh
 - company: driveblocks
@@ -1445,8 +1427,6 @@
   board: global-voices-ltd
 - company: globaldatanet
   board: globaldatanet
-- company: globus-ai
-  board: globus-ai
 - company: gluecklichegaeste
   board: gluecklichegaeste
 - company: glyphic
@@ -1469,8 +1449,6 @@
   board: graswald-gmbh
 - company: grayoak
   board: grayoak
-- company: greatstaff-gmbh
-  board: greatstaff-gmbh
 - company: gridx
   board: gridx
 - company: growingimaginationsgmbh
@@ -1667,8 +1645,6 @@
   board: jobrad-oesterreich-gmbh
 - company: joinpolitics
   board: joinpolitics
-- company: jotelulu
-  board: jotelulu
 - company: juna
   board: juna
 - company: jungmut
@@ -1947,8 +1923,6 @@
   board: pina
 - company: pino
   board: pino
-- company: plan-d
-  board: plan-d
 - company: playthehype-gmbh
   board: playthehype-gmbh
 - company: pleez
@@ -2263,8 +2237,6 @@
   board: tante-e
 - company: tantive
   board: tantive
-- company: taros
-  board: taros
 - company: team-gmbh
   board: team-gmbh
 - company: teamative
@@ -2311,8 +2283,6 @@
   board: thomassabo
 - company: tilta
   board: tilta
-- company: timechimp
-  board: timechimp
 - company: timify
   board: timify
 - company: tiny-technologies
@@ -2387,8 +2357,6 @@
   board: univention
 - company: unternehmertum
   board: unternehmertum
-- company: usercentrics-gmbh
-  board: usercentrics-gmbh
 - company: userlane
   board: userlane
 - company: uxcam
@@ -2429,8 +2397,6 @@
   board: villaviva
 - company: virtual-solution-ag
   board: virtual-solution-ag
-- company: vital-pms
-  board: vital-pms
 - company: Vivid Money
   board: vivid
 - company: vivira
@@ -3461,8 +3427,6 @@
   board: moving-adventures-medien-gmbh
 - company: mpc
   board: mpc
-- company: mrei
-  board: mrei
 - company: mro
   board: mro
 - company: msk
@@ -3581,8 +3545,6 @@
   board: nviso
 - company: nwb
   board: nwb
-- company: nyce
-  board: nyce
 - company: nymphis
   board: nymphis
 - company: nzym
@@ -3661,8 +3623,6 @@
   board: phm-racing-gmbh
 - company: phoenix
   board: phoenix
-- company: pitch
-  board: pitch
 - company: pjm
   board: pjm
 - company: planfox
@@ -3857,8 +3817,6 @@
   board: stoertebekker
 - company: storymachine
   board: storymachine
-- company: straight
-  board: straight
 - company: stwb
   board: stwb
 - company: sunny
@@ -4081,8 +4039,6 @@
   board: wetaca
 - company: wew
   board: wew
-- company: whe
-  board: whe
 - company: wietholt
   board: wietholt
 - company: wik
@@ -4099,10 +4055,6 @@
   board: wmu
 - company: wob
   board: wob
-- company: wos
-  board: wos
-- company: wow
-  board: wow
 - company: wvp
   board: wvp
 - company: xebia
@@ -4127,8 +4079,6 @@
   board: zartis
 - company: zattoo
   board: zattoo
-- company: zauberdergewuerze
-  board: zauberdergewuerze
 - company: zbf
   board: zbf
 - company: zeinpharma
@@ -4205,8 +4155,6 @@
   board: aciturri
 - company: Acura Fachklinik
   board: acura-aka
-- company: Acura Zahnärzte
-  board: acura-dental
 - company: Acura
   board: acura-hq
 - company: PiNCAMP
@@ -4359,8 +4307,6 @@
   board: arverio
 - company: ASB Regionalverband Bergisch Land
   board: asb-rv-bergisch-land
-- company: Ascensores Zener
-  board: ascensores-zener-grupo-armoniza
 - company: asellerate
   board: asellerate-gmbh
 - company: AssetMetrix
@@ -5271,8 +5217,6 @@
   board: evanium-healthcare
 - company: EVC Rheinland GmbH
   board: evc
-- company: Everlast Consulting
-  board: everlast-media-gmbh
 - company: EverReal
   board: everreal
 - company: Enforto
@@ -6083,8 +6027,6 @@
   board: kindersprachbruecke-jena-ev
 - company: Kinderwelt Hamburg
   board: kinderwelt-hamburg
-- company: KINGSTONE Real Estate
-  board: kingstone-re
 - company: Kirberg Catering
   board: kirberg
 - company: das kinderzimmer
@@ -6351,8 +6293,6 @@
   board: maybach-medical-group
 - company: Maytoni
   board: maytoni-gmbh
-- company: maz-Gruppe
-  board: maz-gruppe
 - company: MBG Group
   board: mbgglobal
 - company: McDreams Hotels
@@ -7139,8 +7079,6 @@
   board: schickler
 - company: Schiederwerk
   board: schiederwerk-gmbh
-- company: SCHIFFL IT Service
-  board: schiffl-gmbh-co-kg
 - company: Schiffmann Außenwerbung
   board: schiffmann
 - company: Schiffszimmerer-Genossenschaft
@@ -8007,22 +7945,12 @@
   board: speedgoat
 - company: "ZuriQ AG"
   board: zuriq
-- company: Aioneers
-  board: aioneers
 - company: Olmatic
   board: olmatic-gmbh
-- company: Audi F1 Project
-  board: audi-formula-racing-students
 - company: FCF Fox Corporate Finance GmbH
   board: fcf-fox-corporate-finance-gmbh
-- company: Nuwo
-  board: nuwo-gmbh
-- company: Ibec
-  board: ibec
 - company: Haebmau
   board: haebmau
-- company: Engel & Völkers
-  board: engelvoelkerspeople
 - company: helin-data
   board: helin-data
 - company: demicon
@@ -8079,8 +8007,6 @@
   board: arweave
 - company: Climedo Health
   board: climedo
-- company: Jobs bei
-  board: aquaty
 - company: Tidely
   board: tidely
 - company: Unframe AI
