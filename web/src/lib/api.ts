@@ -15,6 +15,7 @@ import type {
   CvAtsDelta,
   CvJobMatch,
   CvMeta,
+  CoverLetterView,
   CvRecord,
   CvTailoredItem,
   CvTemplate,
@@ -1845,6 +1846,22 @@ export function createApi(
   /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.
    *  Cookie-only and recomputed per request. 409 for a CV that is not a tailored copy; the
    *  response itself reports `available: false` when the comparison could not be made. */
+  /** The stored cover letter for the vacancy a tailored CV was written for. Never calls a
+   *  model and consumes no allowance: `present: false` means the pair was never drafted. */
+  async function getCoverLetter(id: string): Promise<CoverLetterView> {
+    return requestData<CoverLetterView>(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter`);
+  }
+
+  /** Write the cover letter and replace any draft already stored for this vacancy. Runs the
+   *  three-stage chain, so it spends one cover-letter allowance and can refuse with 402. */
+  async function draftCoverLetter(id: string, band?: 'short' | 'standard'): Promise<CoverLetterView> {
+    const q = band ? `?band=${band}` : '';
+    return requestData<CoverLetterView>(
+      `/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter${q}`,
+      jsonBody('POST', {}),
+    );
+  }
+
   /** The history of what changed this CV, newest first. Each entry names who made it and
    *  which parts of the document it touched — the addresses the preview underlines. */
   async function listCvRevisions(id: string): Promise<RevisionView[]> {
@@ -2261,6 +2278,8 @@ export function createApi(
     setCvSession,
     cvPdfUrl,
     listCvRevisions,
+    getCoverLetter,
+    draftCoverLetter,
     undoCvRevision,
     undoCvRevisionRun,
     resetCvFromResume,

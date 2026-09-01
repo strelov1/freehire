@@ -5,6 +5,7 @@
 
 import type {
   Delta as AtsDeltaWire,
+  Letter,
   Score as JobMatchScore,
   Document,
   Margins,
@@ -38,6 +39,16 @@ export interface CvMeta {
  *  re-fetches after every turn, rather than by parsing the conversation. Whether a run can be
  *  undone is no longer a flag here: the history feed carries its own edits, and undoing one is
  *  undoing them. */
+/** The cover-letter surface's read shape. `present: false` is a pair never drafted — an empty
+ *  state, not an error. `stale` reports that the model or the vacancy's language moved since;
+ *  the letter stays readable, because it may already have been sent. */
+export interface CoverLetterView {
+  present: boolean;
+  stale?: boolean;
+  letter?: Letter;
+  model?: string;
+}
+
 export interface CvRecord extends CvMeta {
   agent_session_id: string;
   document: Document;

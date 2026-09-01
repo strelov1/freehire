@@ -41,11 +41,11 @@
 
 ## 7. Workspace surface
 
-- [ ] 7.1 Add the Cover letter tab to the right panel of `web/src/routes/tailor/[slug]/`, rendering the stored draft, the empty state, and the in-flight state. No score or delta is rendered in this tab.
-- [ ] 7.2 Render the cited banked achievements alongside the letter, and a copy action for the body.
-- [ ] 7.3 Disable the draft action while a draft is in flight for that vacancy.
-- [ ] 7.4 Show a stale draft with its staleness indicated, still readable and still copyable.
-- [ ] 7.5 Confirm the tab collapses correctly into the existing mobile single-tab view.
+- [x] 7.1 Add the Cover letter tab to the right panel of `web/src/routes/tailor/[slug]/`, rendering the stored draft, the empty state, and the in-flight state. No score or delta is rendered in this tab.
+- [x] 7.2 Render the cited banked achievements alongside the letter, and a copy action for the body.
+- [x] 7.3 Disable the draft action while a draft is in flight for that vacancy.
+- [x] 7.4 Show a stale draft with its staleness indicated, still readable and still copyable.
+- [x] 7.5 Confirm the tab collapses correctly into the existing mobile single-tab view.
 
 ## 8. Documentation
 

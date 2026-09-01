@@ -25,11 +25,12 @@
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
   import JobMatch from './JobMatch.svelte';
+  import CoverLetter from './CoverLetter.svelte';
   import type { Analysis, AutopilotEntry, RevisionView } from '$lib/generated/contracts';
   import type { Job, MatchAnalysisResponse } from '$lib/types';
   import type { CvAtsDelta, CvJobMatch } from '$lib/cv';
 
-  type Tab = 'jd' | 'jobmatch' | 'score' | 'history';
+  type Tab = 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
 
   let {
     job,
@@ -50,6 +51,8 @@
     onUndoRevision,
     onUndoRevisionRun,
     onResetFromResume,
+    cvId,
+    atomClaims = {},
     resetBusy = false,
     resetError = '',
   }: {
@@ -88,11 +91,16 @@
     resetBusy?: boolean;
     /** Last reset failure message; cleared by the page on a new attempt. */
     resetError?: string;
+    /** The CV whose vacancy the Letter tab writes for. */
+    cvId: string;
+    /** Banked achievements by id, so a citation renders as its claim rather than as a uuid. */
+    atomClaims?: Record<string, string>;
   } = $props();
 
   const tabs: [Tab, string][] = [
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
+    ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];
@@ -238,6 +246,10 @@
         {/if}
         <RevisionHistory {revisions} onPreview={onPreviewRevision} onUndo={onUndoRevision} onUndoRun={onUndoRevisionRun} />
       </div>
+    {:else if tab === 'letter'}
+      <!-- An artefact, not a measurement: this tab carries no score and no delta, because there
+           is no baseline a letter could be read against. -->
+      <CoverLetter {cvId} {atomClaims} />
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}

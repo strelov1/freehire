@@ -121,7 +121,7 @@
 
   // The right context panel's tab, lifted here so the mobile tab bar can drive it (on desktop the
   // panel's own tab bar sets it via the same binding).
-  let artifactTab = $state<'jd' | 'jobmatch' | 'score' | 'history'>('jobmatch');
+  let artifactTab = $state<'jd' | 'jobmatch' | 'score' | 'letter' | 'history'>('jobmatch');
 
   // Mobile-only navigation: below lg the three columns collapse to one, so a single flat tab bar
   // picks which view fills the screen. At lg it's hidden and every column shows at once as before.
@@ -129,7 +129,7 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'experience' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'history';
+  type MobileView = 'chat' | 'editor' | 'experience' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
   const mobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
@@ -139,6 +139,7 @@
     ['preview', 'Preview'],
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
+    ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];
@@ -795,8 +796,9 @@
         onResetFromResume={resetFromResume}
         resetBusy={resetLocked}
         {resetError}
+        {cvId}
         bind:tab={artifactTab}
-        mobileVisible={mobileView === 'jd' || mobileView === 'jobmatch' || mobileView === 'score' || mobileView === 'history'}
+        mobileVisible={mobileView === 'jd' || mobileView === 'jobmatch' || mobileView === 'score' || mobileView === 'letter' || mobileView === 'history'}
       />
     </div>
   {/if}
