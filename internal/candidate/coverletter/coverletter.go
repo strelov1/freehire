@@ -8,6 +8,8 @@ package coverletter
 
 import (
 	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // Band is how long the letter should be. Two are offered rather than a free-form length,
@@ -49,6 +51,31 @@ func DefaultBounds() Bounds {
 	}
 }
 
+// OrDefault fills every unset or non-positive field from DefaultBounds, field by field.
+//
+// A zero-value check on the struct would not do: a caller that sets only MaxCited leaves the
+// ceilings at 0, and a ceiling of 0 clips every body to "" — an empty letter, persisted, with
+// nothing failing. A MaxCited of 0 is worse than it looks too: Sanitize stops at
+// `len(kept) == MaxCited`, which after the first append is never true, so the cap does not
+// merely default — it disappears. matchanalysis.SetBounds guards its own bounds the same way
+// and for the same reason.
+func (b Bounds) OrDefault() Bounds {
+	d := DefaultBounds()
+	if b.ShortCeiling < 1 {
+		b.ShortCeiling = d.ShortCeiling
+	}
+	if b.StandardCeiling < 1 {
+		b.StandardCeiling = d.StandardCeiling
+	}
+	if b.Floor < 1 {
+		b.Floor = d.Floor
+	}
+	if b.MaxCited < 1 {
+		b.MaxCited = d.MaxCited
+	}
+	return b
+}
+
 // ceiling is the bound for one band. An unrecognised band takes the standard ceiling: a
 // letter clipped a little long is a worse outcome than one clipped to nothing, and an
 // unknown band is a caller bug rather than a request for brevity.
@@ -79,7 +106,7 @@ type Letter struct {
 // result is coerced to empty because the column is NOT NULL and pgx sends a nil slice as SQL
 // NULL, which a DEFAULT does not cover — the same coercion experience.Sanitize makes.
 func (l *Letter) Sanitize(band Band, b Bounds, offered []uuid.UUID) {
-	l.Body = clip(l.Body, b.ceiling(band))
+	l.Body = llm.TruncateRunes(l.Body, b.ceiling(band))
 
 	// One set does both jobs: an id is kept only if it is still in `unused`, and taking it out
 	// on use is what makes a repeat a no-op. Tracking "allowed" and "already seen" separately
@@ -107,14 +134,4 @@ func (l *Letter) Sanitize(band Band, b Bounds, offered []uuid.UUID) {
 // checked against this before it replaces the draft it audited.
 func (l Letter) BelowFloor(b Bounds) bool {
 	return len([]rune(l.Body)) < b.Floor
-}
-
-// clip truncates to n runes, never bytes — a body cut mid-rune would reach the column as
-// invalid UTF-8.
-func clip(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n])
 }

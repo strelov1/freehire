@@ -145,13 +145,40 @@ func TestGatherReturnsEmptyNotNilForAnEmptyBank(t *testing.T) {
 	}
 }
 
-func TestGatherPassesTheRequirementSkillsThrough(t *testing.T) {
-	r := &fakeRetriever{byText: map[string][]experience.Match{}}
+// The spec assigns the letter one job: answer what the CV undersells. A genuine gap is a
+// requirement the candidate does not meet, so retrieving evidence for it can only surface
+// something adjacent that a drafting stage might then stretch into a claim.
+func TestGatherIgnoresGenuineGaps(t *testing.T) {
+	a := manualAtom("kafka pipeline")
+	r := &fakeRetriever{byText: map[string][]experience.Match{"Rust": {match(a, 3)}}, all: []experience.Atom{a}}
 
-	if _, err := Gather(context.Background(), r, 1, reqs("Kafka")); err != nil {
+	all := []matchanalysis.Requirement{{Text: "Rust", Status: "missing-gap"}}
+	if _, err := Gather(context.Background(), r, 1, all); err != nil {
 		t.Fatalf("Gather: %v", err)
 	}
-	if len(r.texts) == 0 || r.texts[0] != "Kafka" {
-		t.Errorf("retriever saw %v, want the requirement text", r.texts)
+	for _, seen := range r.texts {
+		if seen == "Rust" {
+			t.Error("retrieved evidence for a genuine gap; the letter must claim no experience with it")
+		}
+	}
+}
+
+func TestGatherRetrievesOnlyForWhatTheCVUndersells(t *testing.T) {
+	have, gap := manualAtom("kafka"), manualAtom("rust")
+	r := &fakeRetriever{byText: map[string][]experience.Match{
+		"Kafka": {match(have, 3)},
+		"Rust":  {match(gap, 3)},
+	}}
+
+	mixed := []matchanalysis.Requirement{
+		{Text: "Kafka", Status: "missing-have"},
+		{Text: "Rust", Status: "missing-gap"},
+	}
+	got, err := Gather(context.Background(), r, 1, mixed)
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != have.ID {
+		t.Errorf("got %v, want only the atom answering the missing-have requirement", got)
 	}
 }

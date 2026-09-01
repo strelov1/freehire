@@ -90,9 +90,7 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
-	if in.Bounds == (Bounds{}) {
-		in.Bounds = DefaultBounds()
-	}
+	in.Bounds = in.Bounds.OrDefault()
 
 	// The gate runs first, before anything is marshalled. Everything downstream — the prompt,
 	// the offered id set, the citation filter — is derived from this slice, so an inferred
@@ -113,8 +111,10 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	}
 	// A selection stage that names nothing leaves the drafting stage with no evidence, which
 	// is the empty-evidence case arriving one stage later. Fall back to what was offered
-	// rather than writing from nothing.
-	if len(selected) == 0 {
+	// rather than writing from nothing — but remember that nothing was CLAIMED, because the
+	// citation list must not report a fallback as evidence somebody chose.
+	claimed := len(selected) > 0
+	if !claimed {
 		selected = atoms
 	}
 
@@ -130,15 +130,31 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	if err != nil {
 		return nil, err
 	}
-	settle(&drafted, IDs(selected))
+	// Stage 1's selection is what the draft rests on until the audit says otherwise. When the
+	// selection was itself a fallback to everything offered, nothing has claimed to use any
+	// particular atom, and an empty list is the honest answer — listing five of thirty would
+	// assert support nobody gave.
+	drafted.Cited = nil
+	if claimed {
+		drafted.Cited = IDs(selected)
+	}
+	settle(&drafted, drafted.Cited)
 
-	audited, err := a.audit(ctx, in, drafted)
+	audited, err := a.audit(ctx, in, drafted, selected)
 	// The audit may improve the letter, never destroy it. An unparseable answer and one cut
 	// below the floor are the same failure with different shapes, and both keep the draft.
 	if err != nil || audited == nil {
 		return &drafted, nil
 	}
-	settle(audited, drafted.Cited)
+	// Citations follow the AUDITED letter. An atom whose sentence was cut is no longer
+	// evidence for anything the letter says, and showing it would claim support the letter
+	// lost — the mirror of the invented-id case Sanitize guards. An audit that named none did
+	// not say the letter cites nothing, so the draft's list stands.
+	cited := audited.Cited
+	if len(cited) == 0 {
+		cited = drafted.Cited
+	}
+	settle(audited, cited)
 	if audited.BelowFloor(in.Bounds) {
 		return &drafted, nil
 	}
@@ -190,19 +206,25 @@ func (a *Analyzer) write(ctx context.Context, in Input, atoms []experience.Atom,
 	if err != nil {
 		return Letter{}, fmt.Errorf("coverletter: draft: %w", err)
 	}
-	var out Letter
+	// Decoded into a type naming ONLY the key this stage asks for. Unmarshalling into Letter
+	// would let a model that emits junk under cited_atom_ids — a key this prompt never
+	// mentions — fail the whole draft, and the caller overwrites that field regardless.
+	var out struct {
+		Body string `json:"body"`
+	}
 	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &out); err != nil {
 		return Letter{}, fmt.Errorf("coverletter: parse draft: %w", err)
 	}
-	// Citations are the caller's to set, not this stage's: the letter cites what stage 1
-	// selected, and a model naming its own would be exactly the widening Sanitize undoes.
-	return out, nil
+	return Letter{Body: out.Body}, nil
 }
 
 // audit is stage 3: the skeptic. It returns nil when its answer cannot be used, which the
 // caller reads as "keep the draft".
-func (a *Analyzer) audit(ctx context.Context, in Input, drafted Letter) (*Letter, error) {
-	prompt := auditUserPrompt(drafted)
+func (a *Analyzer) audit(ctx context.Context, in Input, drafted Letter, atoms []experience.Atom) (*Letter, error) {
+	prompt, err := auditUserPrompt(drafted, atoms)
+	if err != nil {
+		return nil, err
+	}
 	raw, err := a.client.GenerateJSON(ctx, auditSystemPrompt(in.Band, in.Bounds), prompt)
 	if err != nil {
 		return nil, err

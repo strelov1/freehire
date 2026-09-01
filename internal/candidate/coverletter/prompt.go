@@ -94,8 +94,11 @@ func auditSystemPrompt(band Band, bounds Bounds) string {
 	var b strings.Builder
 	b.WriteString("You are a skeptical reviewer of a cover letter. Your job is to CUT. ")
 	b.WriteString("Return ONLY a JSON object.\n\n")
-	b.WriteString("Return exactly this key:\n")
-	b.WriteString("- \"body\": the letter after your cuts, as plain text.\n\n")
+	b.WriteString("Return exactly these keys:\n")
+	b.WriteString("- \"body\": the letter after your cuts, as plain text.\n")
+	b.WriteString("- \"cited_atom_ids\": the ids of the achievements the SURVIVING letter still rests on, ")
+	b.WriteString("copied verbatim from the list given to you. Omit an achievement whose sentence you cut — ")
+	b.WriteString("it is no longer evidence for anything the letter says.\n\n")
 	b.WriteString("Cut, in this order:\n")
 	b.WriteString("1. Any sentence claiming the candidate did something that the listed achievements do not support. ")
 	b.WriteString("This is the only cut you must make; make it without exception.\n")
@@ -109,8 +112,22 @@ func auditSystemPrompt(band Band, bounds Bounds) string {
 	return b.String()
 }
 
-func auditUserPrompt(drafted Letter) string {
-	return "LETTER:\n" + drafted.Body + "\n"
+// auditUserPrompt carries BOTH the letter and the achievements it is meant to be checked
+// against. Sending the letter alone would ask the skeptic to verify support against a list it
+// was never given, which makes the one cut it must always make unenforceable — the stage
+// would still shorten the letter and silently pass every invented claim.
+func auditUserPrompt(drafted Letter, atoms []experience.Atom) (string, error) {
+	blob, err := json.Marshal(atomsForPrompt(atoms))
+	if err != nil {
+		return "", fmt.Errorf("coverletter: marshal atoms: %w", err)
+	}
+	var b strings.Builder
+	b.WriteString("ACHIEVEMENTS THE LETTER MAY REST ON:\n")
+	b.Write(blob)
+	b.WriteString("\n\nLETTER:\n")
+	b.WriteString(drafted.Body)
+	b.WriteString("\n")
+	return b.String(), nil
 }
 
 // vacancyBlock is the posting as the model sees it: bounded, and the same clipped shape every

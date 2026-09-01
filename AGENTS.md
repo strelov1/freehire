@@ -175,6 +175,7 @@ Each is self-contained and can be read independently.
 | **Résumé identity** (one stored CV per user, contact-block layers) | [internal/candidate/resume/AGENTS.md](internal/candidate/resume/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/candidate/resumeextract/AGENTS.md](internal/candidate/resumeextract/AGENTS.md) |
 | **PII masking** (fail-closed CV→LLM redaction, reversible placeholders) | [internal/candidate/pii/AGENTS.md](internal/candidate/pii/AGENTS.md) |
+| **Cover letters** (three-stage chain, the provenance gate, the vacancy's language, the audit floor) | [internal/candidate/coverletter/AGENTS.md](internal/candidate/coverletter/AGENTS.md) |
 | **CV rendering** (templates, fonts, previews) | [internal/candidate/cv/AGENTS.md](internal/candidate/cv/AGENTS.md) |
 | **CV edits** (the only writer: path operations, revisions, undo, the evidence gate) | [internal/candidate/cvedit/AGENTS.md](internal/candidate/cvedit/AGENTS.md) |
 | **`internal/job`** — the block itself: what it is, what it may import | [internal/job/AGENTS.md](internal/job/AGENTS.md) |

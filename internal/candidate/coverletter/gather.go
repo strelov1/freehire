@@ -18,6 +18,21 @@ import (
 // filling the whole offered set on its own.
 const perRequirement = 4
 
+// answerable reports whether a requirement is one the letter should look for evidence
+// against. Only `missing-have` is: it names something the candidate meets but the CV leaves
+// implicit, which is precisely the job the letter does and the CV cannot.
+//
+// A `missing-gap` is filtered out rather than merely deprioritised. Retrieving against it can
+// only surface something adjacent, and adjacent evidence in front of a drafting stage is an
+// invitation to stretch it into a claim. `covered` and `synonym-only` are excluded too: the
+// CV already shows them, and a letter that restates the CV earns no place.
+//
+// The filter is here rather than left to the caller for the same reason the provenance gate
+// moved inside Draft — a rule a caller must remember to apply is a convention.
+func answerable(r matchanalysis.Requirement) bool {
+	return r.Status == matchanalysis.StatusMissingHave
+}
+
 // Retriever is the narrow slice of the experience bank this package needs: evidence for a
 // requirement, and the bank itself when there is no requirement to retrieve against.
 type Retriever interface {
@@ -43,7 +58,7 @@ func Gather(ctx context.Context, r Retriever, userID int64, reqs []matchanalysis
 	best := make(map[uuid.UUID]experience.Match)
 
 	for _, req := range reqs {
-		if req.Text == "" {
+		if req.Text == "" || !answerable(req) {
 			continue
 		}
 		matches, err := r.Retrieve(ctx, userID, experience.Query{Text: req.Text}, perRequirement)

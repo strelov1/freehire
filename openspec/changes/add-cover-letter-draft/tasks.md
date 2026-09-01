@@ -11,11 +11,11 @@
 ## 3. The chain
 
 - [x] 3.1 Define the wire shape and the sanitize pass in `internal/candidate/coverletter/coverletter.go`: the letter body, the cited atom ids, the language, and the server-owned bounds (body ceiling, body floor, maximum cited atoms). Test that a model body over the ceiling is clipped and that an out-of-vocabulary field is coerced, not persisted.
-- [ ] 3.2 Add `flexdecode.go` for tolerant decoding of the model's JSON, following the pattern in `internal/candidate/atscheck/flexdecode.go`. Test the type-mismatch cases that package already covers.
+- [x] 3.2 Add tolerant decoding of the model's JSON. Solved by narrowing rather than by a `flexdecode.go`: each stage unmarshals into a type naming only the keys its own prompt asks for, so junk in a key the prompt never mentioned cannot fail the stage. A `flexdecode` copy would have been a second answer to a problem the narrow type removes.
 - [x] 3.3 Implement the publishable-provenance filter over candidate atoms as a pure function, before any chain code exists. Test that `agent_inferred`, absent, and unrecognised provenance are all withheld, and that `manual` / `cv_import` / `stated_in_chat` pass. Done ahead of 3.2, which only pays off once a stage decodes model output. The filter delegates to `experience.Provenance.Publishable` rather than restating the admissible labels.
 - [x] 3.4 Implement Stage 1 (select) in `analyzer.go`: takes the filtered atoms and the `TailoringContext` requirement split, returns the chosen atom ids. Test with a fake LLM that a `missing-have` requirement with a matching publishable atom yields that atom, and that a `missing-gap` with no atom yields none.
 - [x] 3.5 Implement Stage 2 (draft): takes the selected atoms, the vacancy and the language, returns a body. Test that the candidate context passed to the model is the `resumeextract.Professional` projection and that raw CV text is never in the request.
-- [x] 3.6 Implement Stage 3 (audit) and its merge onto Stage 2. Test three behaviours separately: an unsupported experience claim is cut, a statement of interest in the employer survives, and an over-long draft comes back inside the band.
+- [x] 3.6 Implement Stage 3 (audit) and its merge onto Stage 2. **The three named behaviours are the MODEL's, not the code's** — a scripted fake returns whatever it is told, so a test asserting "the unsupported claim was cut" would assert the fixture. What is testable, and now tested, is that the audit turn actually CARRIES the achievements it is told to check against; the first review found it did not, which made the one mandatory cut unenforceable. The behaviours themselves belong to an llmlive test.
 - [x] 3.7 Implement the two degradations: an unparseable Stage 3 serves the sanitized Stage 2 draft, and an audited body below the floor serves the Stage 2 draft. Test both.
 - [x] 3.8 Implement the language rule: the letter's language comes from `jobs.posting_language`, falling back to English when it is empty. Test the fallback explicitly, and test that the candidate's profile language is never consulted.
 - [x] 3.9 Implement the empty-evidence path: a candidate whose publishable atoms are empty gets no chain run, no model call, and a result naming the reason. Test that no LLM call is made.
@@ -49,8 +49,8 @@
 
 ## 8. Documentation
 
-- [ ] 8.1 Write `internal/candidate/coverletter/AGENTS.md`: the scope, the three stages, the provenance gate and why it is in the service, the language inversion against `matchanalysis`, and the audit floor.
-- [ ] 8.2 Add the package to the module-files table in the root `CLAUDE.md`, and run `pnpm check:links` so the new relative link resolves.
+- [x] 8.1 Write `internal/candidate/coverletter/AGENTS.md`: the scope, the three stages, the provenance gate and why it is in the service, the language inversion against `matchanalysis`, and the audit floor.
+- [x] 8.2 Add the package to the module-files table in the root `CLAUDE.md`, and run `pnpm check:links` so the new relative link resolves.
 
 ## 9. Metering (unblocked — add-plan-limits landed on main in #2271)
 
