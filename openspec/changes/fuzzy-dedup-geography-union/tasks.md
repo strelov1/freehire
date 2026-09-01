@@ -114,6 +114,19 @@
       public catalogue figures (42 633 rows were stranded behind closed owners), the first
       release run is the slow one, and a rollback does NOT re-hide the freed rows because the
       old code cannot reconsider a fuzzy marker at all.
-- [ ] 5.4 After deploy, re-run the four URLs from issue #2225 and record the results: both affected
+- [x] 5.4 After deploy, re-run the four URLs from issue #2225 and record the results: both affected
       searches return `total: 1`, both controls stay `total: 1`. Comment on the issue with the
-      outcome.
+      outcome. DONE 2026-09-01 after the rebuild swapped (`indexed=1386024 skipped=0`):
+
+      | URL | before | after |
+      |---|---|---|
+      | COBS Bread, `cities=Chestermere` (affected) | 0 | **1** |
+      | COBS Bread, `cities=Okotoks` (control) | 1 | 1 |
+      | Intelcom, `cities=Scarborough` (affected) | 0 | **1** |
+      | Intelcom, `cities=Thunder Bay` (control) | 1 | **2** |
+
+      Thunder Bay went to 2: a second open posting in that closure was invisible before, so the
+      control improved rather than merely holding. `/copies` was verified earlier on the same
+      reproductions (2 locations -> 28 and 21), both asked FROM the suppressed posting. Prod
+      health: 0 responses in the 5xx range across 159 029 requests since deploy and 5 370 since
+      the swap. Both timers came back on their own (`ExecStopPost` restores the drain).
