@@ -22,9 +22,9 @@
 
 ## 4. The draft store
 
-- [ ] 4.1 Implement `store.go` and `repository.go`: owner-scoped read and upsert over the narrow port, with `WHERE user_id = $1` ownership so another user's draft reports missing rather than forbidden. Test the ownership boundary.
-- [ ] 4.2 Implement the staleness report: a stored draft whose `model` or `language` differs from the live value reads as stale, and stays readable. Test both stamps independently.
-- [ ] 4.3 Test that a second draft for the same pair replaces the first and that no history row survives.
+- [x] 4.1 Implement `store.go` and `repository.go`: owner-scoped read and upsert over the narrow port, with `WHERE user_id = $1` ownership so another user's draft reports missing rather than forbidden. Test the ownership boundary.
+- [x] 4.2 Implement the staleness report: a stored draft whose `model` or `language` differs from the live value reads as stale, and stays readable. Test both stamps independently.
+- [ ] 4.3 Test that a second draft for the same pair replaces the first and that no history row survives. Needs a real database — a fake Repository cannot exercise `ON CONFLICT` — so it lands as an integration test alongside 5.2.
 
 ## 5. HTTP endpoints
 
