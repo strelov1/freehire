@@ -32,6 +32,13 @@ func GenerateAPIKey() (token, hash, prefix string, err error) {
 // high-entropy random, so a single SHA-256 is sufficient and keeps the lookup an
 // indexed, constant-work probe — unlike a salted password hash, which a low-entropy
 // password needs but which would forbid an indexed lookup.
+//
+// CodeQL reads this as password hashing (go/weak-sensitive-data-hashing, high) and
+// the finding is dismissed, not silenced: nothing but a 32-byte crypto/rand token
+// reaches here — GenerateAPIKey above, or the Bearer header in middleware.go — and
+// passwords take an entirely separate path through bcrypt in password.go. Re-check
+// that the two paths are still separate before dismissing it again; the rule is
+// right about what it looks for, only wrong about what this argument is.
 func HashAPIKey(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
