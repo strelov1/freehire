@@ -127,6 +127,13 @@ markup and an assistive-technology hazard, and the surrounding card is a scannin
 surface rather than a reading one. Those chips SHALL still render the display label
 (next requirement); the definition is reached from the posting itself.
 
+Lifting the chips out of that `<a>` would restore the reveal on the surface where most
+readers meet a skill, and was considered. It is refused here because the card's link
+covers its whole body by design — that is what makes the row clickable — so moving the
+chips out means either shrinking the click target or overlaying it, on the busiest
+component in the product, for a reveal the posting one tap away already carries. A
+future change may revisit it; this one does not pay that risk for it.
+
 #### Scenario: A skill chip on a posting
 
 - **WHEN** a reader hovers, focuses or taps the reveal target on a described skill's chip
@@ -207,7 +214,26 @@ glossary page in a sitemap registered in the sitemap index, so the surface is
 discoverable without depending on a reveal that only opens on interaction.
 
 The sitemap SHALL list exactly the pages the route serves: a slug the route would 404
-MUST NOT appear in it.
+MUST NOT appear in it. **Every link the glossary publishes is held to the same rule** —
+the neighbouring-skills block links only to skills that have a page, because a block of
+404s on a page whose claim is that it is worth linking to is worse than no block.
+
+**The glossary is advertised only once there is a glossary.** The pages exist from the
+first entry — the chip's reveal links to one — but the footer link and the sitemap's
+index entry SHALL be withheld until enough skills carry a definition, because both
+promise a glossary and a handful of words is not one. The threshold is read from the
+same catalogue everything else reads, so coverage switches it on with no second deploy.
+
+#### Scenario: The glossary before the waves land
+
+- **WHEN** only a handful of skills are described
+- **THEN** `/skills` and each described skill's page still serve, and neither the footer
+  nor the sitemap index offers the glossary
+
+#### Scenario: A neighbour with no page of its own
+
+- **WHEN** a described skill's postings most often also name a skill no wave has reached
+- **THEN** that skill is absent from the neighbours block rather than linked
 
 #### Scenario: The index lists the glossary
 

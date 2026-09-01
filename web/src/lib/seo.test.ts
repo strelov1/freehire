@@ -8,6 +8,7 @@ import {
   companyPageTitle,
   companiesPageTitle,
   datasetJsonLd,
+  definedTermJsonLd,
   foreignContentLang,
   jobListItems,
   jobPostingJsonLd,
@@ -715,5 +716,26 @@ describe('companiesPageTitle', () => {
   it('falls back to the plain subject with no usable count', () => {
     expect(companiesPageTitle(undefined)).toBe('Companies hiring in tech · freehire');
     expect(companiesPageTitle(0)).toBe('Companies hiring in tech · freehire');
+  });
+});
+
+describe('definedTermJsonLd', () => {
+  // A glossary page defining a term is the textbook DefinedTerm case, and it is the
+  // one thing on the page a search engine cannot infer from the prose: that the
+  // heading names a term and the paragraph below it is that term's definition.
+  it('names the term, its definition and the set it belongs to', () => {
+    const ld = definedTermJsonLd(
+      { slug: 'dbt', label: 'dbt', description: 'A SQL transformation tool.' },
+      'https://freehire.me',
+    ) as Record<string, unknown>;
+
+    expect(ld['@type']).toBe('DefinedTerm');
+    expect(ld.name).toBe('dbt');
+    expect(ld.description).toBe('A SQL transformation tool.');
+    expect(ld['@id']).toBe('https://freehire.me/skills/dbt');
+    expect(ld.inDefinedTermSet).toMatchObject({
+      '@type': 'DefinedTermSet',
+      '@id': 'https://freehire.me/skills',
+    });
   });
 });

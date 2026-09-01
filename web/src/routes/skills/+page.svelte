@@ -11,7 +11,7 @@
   const canonical = $derived(`${origin}/skills`);
   const count = (n: number) => n.toLocaleString('en-US');
   const description = $derived(
-    `Plain-language definitions for the ${count(data.total)} skills freehire tags jobs with — what each one is, and who is hiring for it.`,
+    `Plain-language definitions for the ${count(data.total)} ${data.total === 1 ? 'skill' : 'skills'} freehire tags jobs with — what each one is, and who is hiring for it.`,
   );
 
   const jsonLd = $derived(
@@ -48,8 +48,9 @@
       <ul class="flex flex-wrap gap-x-4 gap-y-1">
         {#each group.skills as skill (skill.slug)}
           <li>
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- static glossary path, one segment from a dictionary slug -->
-            <a href="/skills/{skill.slug}" class="text-sm hover:underline">{skill.label}</a>
+            <a href={resolve('/skills/[slug]', { slug: skill.slug })} class="text-sm hover:underline"
+              >{skill.label}</a
+            >
           </li>
         {/each}
       </ul>

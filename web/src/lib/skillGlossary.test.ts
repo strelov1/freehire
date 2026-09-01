@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from './skillGlossary';
+import {
+  MIN_GLOSSARY_PUBLISHED,
+  MIN_SKILL_OPEN,
+  displayAliases,
+  isGlossaryPublished,
+  showsPostings,
+  topNeighbours,
+} from './skillGlossary';
 
 describe('displayAliases', () => {
   it('keeps the spellings a reader would not have guessed', () => {
@@ -48,22 +55,57 @@ describe('showsPostings', () => {
 
 describe('topNeighbours', () => {
   const distribution = { kubernetes: 900, docker: 700, terraform: 700, helm: 20 };
+  const allDescribed = () => true;
 
   it('ranks the skills that share postings with this one', () => {
-    expect(topNeighbours(distribution, 'kubernetes', 2)).toEqual(['docker', 'terraform']);
+    expect(topNeighbours(distribution, 'kubernetes', 2, allDescribed)).toEqual([
+      'docker',
+      'terraform',
+    ]);
   });
 
   // The skill is on every posting in its own facet, so it would top its own list.
   it('drops the skill itself', () => {
-    expect(topNeighbours(distribution, 'kubernetes', 10)).not.toContain('kubernetes');
+    expect(topNeighbours(distribution, 'kubernetes', 10, allDescribed)).not.toContain('kubernetes');
+  });
+
+  // Every neighbour is a link, and /skills/<slug> 404s on a skill with no entry. While
+  // coverage is thin an unfiltered list is a block of dead links on a page whose whole
+  // claim is that it is worth linking to.
+  it('drops neighbours that have no glossary page', () => {
+    const described = (slug: string) => slug === 'docker';
+    expect(topNeighbours(distribution, 'kubernetes', 10, described)).toEqual(['docker']);
+  });
+
+  // The limit counts what survives, so a thin patch of coverage does not silently
+  // shorten the block from eight to two.
+  it('fills the limit from what remains after filtering', () => {
+    const described = (slug: string) => slug !== 'docker';
+    expect(topNeighbours(distribution, 'kubernetes', 2, described)).toEqual([
+      'terraform',
+      'helm',
+    ]);
   });
 
   it('breaks ties by slug so the page does not reshuffle between renders', () => {
-    expect(topNeighbours({ b: 5, a: 5, c: 5 }, 'z', 2)).toEqual(['a', 'b']);
+    expect(topNeighbours({ b: 5, a: 5, c: 5 }, 'z', 2, allDescribed)).toEqual(['a', 'b']);
   });
 
   it('is empty when nothing else co-occurs', () => {
-    expect(topNeighbours({ kubernetes: 900 }, 'kubernetes', 5)).toEqual([]);
-    expect(topNeighbours({}, 'kubernetes', 5)).toEqual([]);
+    expect(topNeighbours({ kubernetes: 900 }, 'kubernetes', 5, allDescribed)).toEqual([]);
+    expect(topNeighbours({}, 'kubernetes', 5, allDescribed)).toEqual([]);
+  });
+});
+
+describe('isGlossaryPublished', () => {
+  // The pages exist from the first entry — the chip's reveal links to one, so they
+  // have to. What waits for coverage is ADVERTISING them: a footer link and a sitemap
+  // shard promising a glossary, delivering a handful of words. The waves land over
+  // weeks, and nothing about this needs a second deploy to switch on.
+  it('holds the footer link and the sitemap back until there is a glossary', () => {
+    expect(isGlossaryPublished(MIN_GLOSSARY_PUBLISHED)).toBe(true);
+    expect(isGlossaryPublished(MIN_GLOSSARY_PUBLISHED - 1)).toBe(false);
+    expect(isGlossaryPublished(1)).toBe(false);
+    expect(isGlossaryPublished(0)).toBe(false);
   });
 });

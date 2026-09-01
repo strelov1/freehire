@@ -20,23 +20,37 @@ export function showsPostings(openPostings: number): boolean {
   return openPostings >= MIN_SKILL_OPEN;
 }
 
-/** Cyrillic letters that are drawn like Latin ones. The dictionary accepts both
- *  spellings because postings are written both ways — `1c` carries a Latin and a
- *  Cyrillic `с` — but they render identically, so a page printing both looks broken.
+/** How many skills must carry a definition before the glossary is ADVERTISED — linked
+ *  from the footer and listed in the sitemap.
  *
- *  Only the letters that actually collide. A general confusables table is thousands of
- *  entries and would fold spellings that a reader can in fact tell apart. */
+ *  The pages themselves exist from the first entry, because the chip's reveal links to
+ *  one and a link to a page that does not exist is worse than no link. What waits is the
+ *  promise: a footer entry reading "Skills glossary" and a sitemap shard offering one,
+ *  both delivering a handful of words, describe something this is not yet. The waves
+ *  land over weeks and this flips itself when they do — no second deploy, no flag. */
+export const MIN_GLOSSARY_PUBLISHED = 25;
+
+export function isGlossaryPublished(describedSkills: number): boolean {
+  return describedSkills >= MIN_GLOSSARY_PUBLISHED;
+}
+
+/** Cyrillic letters drawn identically to a Latin one AT THIS CASE. The dictionary
+ *  accepts both spellings because postings are written both ways — `1c` carries a Latin
+ *  and a Cyrillic `с` — but they render the same, so a page printing both looks broken.
+ *
+ *  Lowercase only, because `fold` lowercases first. The uppercase pairs (В/B, К/K, М/M,
+ *  Н/H, Т/T) do NOT survive that: lowercase Cyrillic `в`, `к`, `м`, `н`, `т` look
+ *  nothing like `b`, `k`, `m`, `h`, `t`, and folding them would quietly merge two
+ *  spellings a reader can tell apart.
+ *
+ *  Deliberately not a general confusables table: that is thousands of entries and errs
+ *  the same wrong way, dropping distinct spellings to catch collisions nobody has. */
 const LOOKALIKES: Readonly<Record<string, string>> = {
   а: 'a',
-  в: 'b',
   е: 'e',
-  к: 'k',
-  м: 'm',
-  н: 'h',
   о: 'o',
   р: 'p',
   с: 'c',
-  т: 't',
   у: 'y',
   х: 'x',
 };
@@ -76,15 +90,22 @@ export function displayAliases(
  *  postings already filtered to it. The skill itself tops that distribution by
  *  construction — it is on every posting counted — so it is dropped.
  *
+ *  `isDescribed` drops the rest of the dead links. Every neighbour is rendered as a link
+ *  to /skills/<slug>, which 404s on a skill with no entry — so while coverage is thin an
+ *  unfiltered list is a block of broken links on a page whose entire claim is that it is
+ *  worth linking to. Filtering before the slice, not after, so a thin patch of coverage
+ *  shortens the block only when there is genuinely nothing left to put in it.
+ *
  *  Ties break on the slug: the page is server-rendered on every request, and two skills
  *  at the same count must not trade places between one render and the next. */
 export function topNeighbours(
   distribution: Readonly<Record<string, number>>,
   slug: string,
-  limit: number
+  limit: number,
+  isDescribed: (slug: string) => boolean
 ): string[] {
   return Object.entries(distribution)
-    .filter(([neighbour]) => neighbour !== slug)
+    .filter(([neighbour]) => neighbour !== slug && isDescribed(neighbour))
     .sort(([aSlug, aCount], [bSlug, bCount]) => bCount - aCount || aSlug.localeCompare(bSlug))
     .slice(0, limit)
     .map(([neighbour]) => neighbour);

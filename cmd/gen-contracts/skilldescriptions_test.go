@@ -14,7 +14,9 @@ import (
 func TestSharedContractsCarryNoDescriptionText(t *testing.T) {
 	shared := genVocab()
 	for slug, description := range skilltag.Descriptions() {
-		if strings.Contains(shared, description) {
+		// The ESCAPED form, which is how a leak would actually appear: a description
+		// carrying an apostrophe is emitted as `Google\'s` and a raw comparison misses it.
+		if strings.Contains(shared, quoteTS(description)) {
 			t.Errorf("contracts.ts carries the description of %q; it belongs in %s", slug, skillDescriptionsPath)
 		}
 	}

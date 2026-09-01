@@ -69,16 +69,16 @@
   // is unreachable on a phone — mouse and keyboard readers get the content and
   // touch readers get nothing at all. Tap toggles instead.
   //
-  // A mouse pointerdown is deliberately ignored: hover already opened it, and
-  // toggling here would close the tooltip the moment someone clicked a link
-  // inside it.
+  // Only touch. A mouse and a pen both hover, so hover has already opened the
+  // tooltip and toggling here would shut it under the pointer aiming at it —
+  // "not a mouse" would have caught the pen by accident.
   //
   // A tap inside the tooltip's OWN content is ignored for a sharper version of
   // the same reason. The content is a descendant of this wrapper, so it reaches
   // this handler — and closing there unmounts the link before the click that
   // follows the pointerdown can land on it, so the tap does nothing at all.
   function toggleOnTouch(e: PointerEvent) {
-    if (e.pointerType === 'mouse') return;
+    if (e.pointerType !== 'touch') return;
     if (contentEl?.contains(e.target as Node)) return;
     if (visible) hide();
     else show();
@@ -93,6 +93,14 @@
   // costs a line and does not depend on that ordering holding.
   function dismissOutside(e: PointerEvent) {
     if (!triggerEl?.contains(e.target as Node)) hide();
+  }
+
+  // Tab out of the trigger lands on whatever the content holds — it is next in DOM
+  // order and rendered while visible. A bare hide() ran first, removing that element
+  // mid-focus, so focus fell to <body> and focusin never re-opened: a keyboard reader
+  // could read the description and never reach the link inside it.
+  function hideOnFocusOut(e: FocusEvent) {
+    if (!triggerEl?.contains(e.relatedTarget as Node)) hide();
   }
 
   function hide() {
@@ -127,7 +135,7 @@
   onmouseenter={show}
   onmouseleave={scheduleHide}
   onfocusin={show}
-  onfocusout={hide}
+  onfocusout={hideOnFocusOut}
   onpointerdown={toggleOnTouch}
 >
   {@render children()}

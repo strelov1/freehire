@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SKILL_DESCRIBED } from './generated/contracts';
 import { skillDescription, loadSkillDescriptions, hasSkillDescription } from './skillDescriptions';
 
 // Synchronous on purpose, and the only part of the glossary that is. A chip decides
@@ -12,10 +13,17 @@ describe('hasSkillDescription', () => {
     expect(hasSkillDescription('')).toBe(false);
   });
 
-  it('agrees with the catalog it is a key list of', async () => {
+  // Both directions. The dangerous one is the reverse: a slug promising a definition
+  // the catalog does not hold draws a "?" that opens an empty reveal. The two are
+  // generated in one run so they cannot drift today — this is what would notice if the
+  // generator ever stopped emitting them together.
+  it('agrees with the catalog in both directions', async () => {
     const catalog = await loadSkillDescriptions();
     for (const slug of Object.keys(catalog)) {
       expect(hasSkillDescription(slug)).toBe(true);
+    }
+    for (const slug of SKILL_DESCRIBED) {
+      expect(catalog[slug]).toBeTruthy();
     }
   });
 });

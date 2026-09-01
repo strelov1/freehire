@@ -650,6 +650,31 @@ export function faqPageJsonLd(faqs: FaqItem[]): Record<string, unknown> {
   };
 }
 
+/** schema.org DefinedTerm for one skill's glossary page.
+ *
+ *  The one thing on that page a machine cannot infer from the prose: that the heading
+ *  names a term, that the paragraph under it is that term's definition, and that both
+ *  belong to one glossary rather than being an article that happens to mention a word.
+ *  `@id` is the page itself, so the term and the URL are the same entity. */
+export function definedTermJsonLd(
+  term: { slug: string; label: string; description: string },
+  origin: string,
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'DefinedTerm',
+    '@id': `${origin}/skills/${term.slug}`,
+    name: term.label,
+    description: term.description,
+    termCode: term.slug,
+    inDefinedTermSet: {
+      '@type': 'DefinedTermSet',
+      '@id': `${origin}/skills`,
+      name: 'freehire IT skills glossary',
+    },
+  };
+}
+
 /** schema.org WebAPI for the API reference — names the endpoint set as one entity
  *  and points at the OpenAPI document, so an assistant can fetch the machine-readable
  *  spec instead of scraping the prose it is rendered beside. */

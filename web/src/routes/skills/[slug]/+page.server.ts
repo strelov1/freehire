@@ -3,7 +3,7 @@ import { SKILL_ALIASES } from '$lib/generated/skillAliases';
 import { skillLabel } from '$lib/facets';
 import { serverApi } from '$lib/server/api';
 import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from '$lib/skillGlossary';
-import { skillDescription } from '$lib/skillDescriptions';
+import { hasSkillDescription, loadSkillDescriptions } from '$lib/skillDescriptions';
 import type { PageServerLoad } from './$types';
 
 // One skill's glossary entry: what it is, what else it is called, what it is named
@@ -27,14 +27,20 @@ const POSTINGS_SHOWN = 10;
 // vocabulary's type.
 const aliasTable: Readonly<Record<string, readonly string[]>> = SKILL_ALIASES;
 
-export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
+export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) => {
   const slug = params.slug.toLowerCase();
   // The lookup is case-insensitive but the URL is not: /skills/DBT would render and then
   // build its canonical and links from the raw param — a second URL for one page. Same
-  // 308 as the roles routes, for the same reason.
-  if (params.slug !== slug) redirect(308, `/skills/${slug}`);
+  // 308 as the roles routes, and it carries the query string for the same reason they
+  // do: a campaign parameter must survive the normalisation.
+  if (params.slug !== slug) redirect(308, `/skills/${slug}${url.search}`);
 
-  const description = await skillDescription(slug);
+  // The catalog itself, not the fail-soft `skillDescription`. That accessor answers ""
+  // for a fetch it could not make, which is right for a chip and wrong here: it would
+  // turn a broken build into a 404 and tell crawlers to drop every glossary page rather
+  // than showing that something is wrong.
+  const catalog = await loadSkillDescriptions();
+  const description = catalog[slug] ?? '';
   // No description means no page. An entry that says only the label is not a glossary
   // entry, and the sitemap lists exactly what this route serves.
   if (!description) error(404, 'Not found');
@@ -58,10 +64,15 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     label,
     description,
     aliases: displayAliases(aliasTable[slug] ?? [], slug, label),
-    neighbours: topNeighbours(counts.facets.skills ?? {}, slug, NEIGHBOUR_LIMIT).map((s) => ({
-      slug: s,
-      label: skillLabel(s),
-    })),
+    // Filtered to skills that HAVE a page: every neighbour is a link, and one to an
+    // undescribed skill is a 404 published from a page whose whole claim is that it is
+    // worth linking to. The block empties itself while coverage is thin.
+    neighbours: topNeighbours(
+      counts.facets.skills ?? {},
+      slug,
+      NEIGHBOUR_LIMIT,
+      hasSkillDescription
+    ).map((s) => ({ slug: s, label: skillLabel(s) })),
     total: counts.total,
     // The block, not the count: the count is stated either way, because "3 open
     // postings" is a fact. What the gate withholds is a list that would read as a

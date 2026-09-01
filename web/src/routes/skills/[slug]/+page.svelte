@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import JobRow from '$lib/components/JobRow.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
+  import { breadcrumbJsonLd, definedTermJsonLd, jsonLdScript } from '$lib/seo';
   import { Badge } from '$lib/ui';
   import type { PageData } from './$types';
 
@@ -23,6 +23,12 @@
 
   const jsonLd = $derived(
     jsonLdScript([
+      // The page's subject, said in a form a machine can read: this heading names a
+      // term, that paragraph defines it, and both belong to one glossary.
+      definedTermJsonLd(
+        { slug: data.slug, label: data.label, description: data.description },
+        origin,
+      ),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Skills', url: `${origin}/skills` },
@@ -79,8 +85,7 @@
       <ul class="flex flex-wrap gap-1.5">
         {#each data.neighbours as neighbour (neighbour.slug)}
           <li>
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- static glossary path, one segment from a dictionary slug -->
-            <a href="/skills/{neighbour.slug}">
+            <a href={resolve('/skills/[slug]', { slug: neighbour.slug })}>
               <Badge variant="secondary" class="transition hover:bg-accent">{neighbour.label}</Badge>
             </a>
           </li>

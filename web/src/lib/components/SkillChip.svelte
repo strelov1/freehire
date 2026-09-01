@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { Tooltip, badgeVariants } from '$lib/ui';
   import { filterHref } from '$lib/enrichment';
   import { skillLabel } from '$lib/facets';
@@ -42,25 +43,39 @@
     <!-- The tooltip's own max-w-xs is the width here; a narrower override would be an
          arbitrary value where a token exists. -->
     <Tooltip side="top">
+      <!-- The button is the 24px target WCAG 2.5.8 asks for and the ring inside it is
+           the 16px mark the chip can carry. They are separate elements because the
+           affordance exists FOR touch: sized to the ring, it would sit a finger's width
+           from the chip's own link and a near miss would navigate instead. -->
       <button
         type="button"
-        class="ml-1 inline-flex size-4 items-center justify-center rounded-full border border-current/30 text-xs leading-none opacity-70 transition hover:opacity-100"
-        aria-label="What is {label}?"
+        class="ml-0.5 inline-flex size-6 items-center justify-center opacity-70 transition hover:opacity-100"
+        aria-label="Show what {label} is"
       >
-        ?
+        <span
+          class="inline-flex size-4 items-center justify-center rounded-full border border-current/30 text-xs leading-none"
+        >
+          ?
+        </span>
       </button>
       {#snippet content()}
-        <!-- Nothing renders while the chunk is in flight: the reveal is already open by
-             then, and a spinner inside a tooltip is more motion than a sentence is
-             worth. `text` is empty when the fetch failed, and an empty reveal is the
-             right answer to that too. -->
-        {#await description then text}
+        <!-- The pending line is a placeholder rather than nothing: the reveal's box is
+             already open by the time this renders, so "nothing" is a visibly empty
+             popover. `text` is empty only when the chunk could not be fetched, and
+             saying so beats the same empty box standing there for good. -->
+        {#await description}
+          <span class="block h-3 w-40 animate-pulse rounded bg-muted"></span>
+        {:then text}
           {#if text}
             <span class="block text-left">{text}</span>
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- static glossary path, one segment from a dictionary slug -->
-            <a href="/skills/{slug}" class="mt-1 block text-left font-medium underline">
+            <a
+              href={resolve('/skills/[slug]', { slug })}
+              class="mt-1 block text-left font-medium underline"
+            >
               What is {label}? →
             </a>
+          {:else}
+            <span class="block text-left">Definition unavailable right now.</span>
           {/if}
         {/await}
       {/snippet}

@@ -171,6 +171,39 @@ describe('Tooltip', () => {
 
       expect(queryByRole('tooltip')).not.toBeNull();
     });
+
+    // A pen hovers, so hover already opened the tooltip — and then pressing the trigger
+    // would toggle it shut under the very pointer that is aiming at it.
+    it('ignores a pen pointerdown, because a pen hovers', async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await fireEvent.mouseEnter(wrapper);
+      await fireEvent.pointerDown(wrapper, { pointerType: 'pen' });
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+    });
+  });
+
+  // The content is next in DOM order, so Tab out of the trigger lands on the link
+  // inside it. A bare focusout hid the tooltip first, removing the link mid-focus —
+  // a keyboard reader could read the description and never reach where it points.
+  it('stays open while focus moves into its own content', async () => {
+    const { wrapper, queryByRole } = setup();
+
+    await fireEvent.focusIn(wrapper);
+    const tooltip = must(queryByRole('tooltip'));
+    await fireEvent.focusOut(wrapper, { relatedTarget: tooltip });
+
+    expect(queryByRole('tooltip')).not.toBeNull();
+  });
+
+  it('closes when focus leaves for something outside it', async () => {
+    const { wrapper, queryByRole } = setup();
+
+    await fireEvent.focusIn(wrapper);
+    await fireEvent.focusOut(wrapper, { relatedTarget: document.body });
+
+    expect(queryByRole('tooltip')).toBeNull();
   });
 
   it('nests inside the wrapper so the pointer can travel onto it', async () => {
