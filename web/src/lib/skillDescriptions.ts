@@ -6,26 +6,13 @@
  *  The prose is imported dynamically and never re-exported eagerly. The catalog is a
  *  sentence per skill against a word per skill in `contracts.ts`, which every page loads
  *  — so reaching it through `import()` is what keeps a reader who never opens a
- *  definition from downloading one. That is the only reason the two readers here are
- *  async; the third, `hasSkillDescription`, is not, and says below why. */
-
-import { SKILL_DESCRIBED } from './generated/contracts';
+ *  definition from downloading one. That is the only reason anything here is async.
+ *
+ *  There is no "is this described?" reader any more. Every canonical carries an entry,
+ *  so that question has one answer and asking it was a cost the waves imposed, not the
+ *  vocabulary. */
 
 type SkillDescriptions = Readonly<Record<string, string>>;
-
-/** Which skills have an entry, from the eagerly loaded contracts module.
- *
- *  The one synchronous thing here, and it has to be: a chip decides whether to draw its
- *  "what is this?" affordance as it renders, and an affordance that appears a moment
- *  late — or appears on a skill with nothing behind it — is worse than none. Slugs are a
- *  fraction of the weight of the sentences they key, which is what makes this affordable
- *  eagerly when the prose is not. */
-const described = new Set<string>(SKILL_DESCRIBED);
-
-/** Whether this canonical skill has a glossary entry. Synchronous; see `described`. */
-export function hasSkillDescription(slug: string): boolean {
-  return described.has(slug);
-}
 
 /** The in-flight or settled fetch, memoised. The PROMISE is memoised rather than its
  *  value: a job card renders a row of chips at once, and memoising after the await would

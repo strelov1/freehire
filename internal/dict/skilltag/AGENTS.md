@@ -28,23 +28,23 @@ through `Parse`.
 
 ### The description dictionary
 
-- A TSV, not a Go map: the vocabulary is 863 canonicals and each value is a sentence,
-  so one unquoted line per skill is what a reviewer can actually read a wave of.
-  `internal/dict/location` ships `cities1000.tsv` the same way. **The file itself holds
-  far fewer rows than that** — see the ratchet below.
+- A TSV, not a Go map: 863 rows, one per canonical, each value a sentence — one
+  unquoted line per skill is what a reviewer can actually read a wave of.
+  `internal/dict/location` ships `cities1000.tsv` the same way.
 - **The loader is strict** where location's is tolerant — a malformed row fails the
   build rather than being skipped. That file is GeoNames' output; this one is ours, so a
   bad row is a mistake in this repository.
 - `cmd/gen-skill-descriptions` drafts a wave with an LLM and **prints** it. A human edits
   and commits. Nothing is generated at request time, and no serving path imports an LLM
   client.
-- Coverage is a **ratchet**: `describedFloor` records how many canonicals are described
-  and only ever rises. When it reaches the whole vocabulary it is deleted and the test
-  becomes the absolute rule the labels carry — a canonical with no description fails the
-  build.
-- An undescribed skill reads as `""` everywhere, exactly like a slug that is not a skill.
-  Surfaces render a described skill differently from an undescribed one, so the absence
-  has to be testable and never a placeholder.
+- **Coverage is total, and a test says so**: a canonical with no description fails the
+  build, the same absolute rule the labels carry. It got there behind a ratchet — a
+  `describedFloor` that only ever rose — because 863 reviewed sentences in one pull
+  request is a review nobody performs. The ratchet is gone; adding a skill now means
+  adding its description in the same commit.
+- `Description` still answers `""` for a slug that is not a canonical — the surfaces
+  that render it must not print a placeholder — but no canonical reaches that path any
+  more, which is why the chip's reveal is unconditional.
 
 ## Convention
 

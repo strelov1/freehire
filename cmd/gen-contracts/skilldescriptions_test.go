@@ -26,22 +26,6 @@ func TestSharedContractsCarryNoDescriptionText(t *testing.T) {
 	}
 }
 
-// The slug list, unlike the prose, IS eager — and has to be. A chip's "what is this?"
-// affordance may not appear on a skill that has no definition behind it, and that
-// decision is made while the chip renders, before any lazy chunk could arrive. Slugs are
-// a fraction of the weight of the sentences they key.
-func TestSharedContractsCarryTheDescribedSlugs(t *testing.T) {
-	shared := genVocab()
-	if !strings.Contains(shared, "export const SKILL_DESCRIBED = [") {
-		t.Fatal("contracts.ts is missing SKILL_DESCRIBED")
-	}
-	for slug := range skilltag.Descriptions() {
-		if !strings.Contains(shared, quoteTS(slug)) {
-			t.Errorf("SKILL_DESCRIBED is missing %q", slug)
-		}
-	}
-}
-
 func TestGenSkillDescriptionsEmitsEveryDescribedSkill(t *testing.T) {
 	got := genSkillDescriptions()
 

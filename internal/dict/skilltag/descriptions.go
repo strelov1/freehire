@@ -24,16 +24,6 @@ import (
 // whose value is a sentence: one unquoted line per skill is what a reviewer can actually
 // read a wave of. internal/dict/location ships its largest dictionary the same way.
 
-// describedFloor is how many canonicals carry a description today. It is a ratchet: a
-// wave raises it, and nothing may lower it. Coverage cannot be "all of them" yet — the
-// whole vocabulary reviewed in one pull request is a review nobody performs — so the
-// rule that CAN hold from day one is that coverage never goes backwards.
-//
-// When this reaches len(Canonicals()) it is deleted, and the coverage test becomes the
-// absolute rule the labels already carry: a canonical with no description fails the
-// build. One rule, not two that can disagree.
-const describedFloor = 487
-
 //go:embed descriptions.tsv
 var descriptionsTSV string
 

@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MIN_GLOSSARY_PUBLISHED,
   MIN_SKILL_OPEN,
   displayAliases,
-  isGlossaryPublished,
   showsPostings,
   topNeighbours,
 } from './skillGlossary';
@@ -94,18 +92,5 @@ describe('topNeighbours', () => {
   it('is empty when nothing else co-occurs', () => {
     expect(topNeighbours({ kubernetes: 900 }, 'kubernetes', 5, allDescribed)).toEqual([]);
     expect(topNeighbours({}, 'kubernetes', 5, allDescribed)).toEqual([]);
-  });
-});
-
-describe('isGlossaryPublished', () => {
-  // The pages exist from the first entry — the chip's reveal links to one, so they
-  // have to. What waits for coverage is ADVERTISING them: a footer link and a sitemap
-  // shard promising a glossary, delivering a handful of words. The waves land over
-  // weeks, and nothing about this needs a second deploy to switch on.
-  it('holds the footer link and the sitemap back until there is a glossary', () => {
-    expect(isGlossaryPublished(MIN_GLOSSARY_PUBLISHED)).toBe(true);
-    expect(isGlossaryPublished(MIN_GLOSSARY_PUBLISHED - 1)).toBe(false);
-    expect(isGlossaryPublished(1)).toBe(false);
-    expect(isGlossaryPublished(0)).toBe(false);
   });
 });

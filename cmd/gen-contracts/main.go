@@ -401,9 +401,6 @@ func genVocab() string {
 	// invent a prettifier. Generated from the skilltag dictionary that owns the canonical
 	// set, so one spelling serves them all and a new skill cannot arrive unlabelled.
 	b.WriteString(emitMap("SkillLabels", "SKILL_LABELS", skilltag.Labels()))
-	// Which skills have a glossary entry — the slugs only. See skilldescriptions.go for
-	// why the sentences do not come with them, and why this list nonetheless has to.
-	b.WriteString(emitDescribedSkills(skilltag.Descriptions()))
 	// Role slug→shorthand-aliases for the picker's search: the same curated terms
 	// used to tag titles, so typing "swe"/"sre"/"devrel" finds the role.
 	b.WriteString(emitMapOfSlices("RoleAliases", "ROLE_ALIASES", roleAliases()))

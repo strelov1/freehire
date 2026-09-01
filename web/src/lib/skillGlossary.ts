@@ -20,20 +20,6 @@ export function showsPostings(openPostings: number): boolean {
   return openPostings >= MIN_SKILL_OPEN;
 }
 
-/** How many skills must carry a definition before the glossary is ADVERTISED — linked
- *  from the footer and listed in the sitemap.
- *
- *  The pages themselves exist from the first entry, because the chip's reveal links to
- *  one and a link to a page that does not exist is worse than no link. What waits is the
- *  promise: a footer entry reading "Skills glossary" and a sitemap shard offering one,
- *  both delivering a handful of words, describe something this is not yet. The waves
- *  land over weeks and this flips itself when they do — no second deploy, no flag. */
-export const MIN_GLOSSARY_PUBLISHED = 25;
-
-export function isGlossaryPublished(describedSkills: number): boolean {
-  return describedSkills >= MIN_GLOSSARY_PUBLISHED;
-}
-
 /** Cyrillic letters drawn identically to a Latin one AT THIS CASE. The dictionary
  *  accepts both spellings because postings are written both ways — `1c` carries a Latin
  *  and a Cyrillic `с` — but they render the same, so a page printing both looks broken.

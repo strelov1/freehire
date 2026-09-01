@@ -91,24 +91,17 @@ func TestLoadDescriptionsParsesRowsAndSkipsComments(t *testing.T) {
 	}
 }
 
-// The ratchet. Descriptions land in waves ordered by how often a skill appears in the
-// catalogue, so this cannot be "every canonical has one" until the last wave — but it
-// can refuse to go backwards, which is the failure that would otherwise be silent.
-func TestDescriptionCoverageDoesNotRegress(t *testing.T) {
-	described, total := len(Descriptions()), len(Canonicals())
-	if described < describedFloor {
-		t.Errorf("%d canonicals are described, below the recorded floor of %d — raise the "+
-			"coverage or restore what was removed, but do not lower the floor",
-			described, describedFloor)
+// The endgame the ratchet was built to reach. describedFloor is gone: coverage is the
+// whole vocabulary, so the rule the labels already carry applies here too — a canonical
+// with no description fails the build, full stop. A floor beside this would be a second
+// answer to the same question, and the two could disagree.
+func TestEveryCanonicalIsDescribed(t *testing.T) {
+	described := Descriptions()
+	for _, canonical := range Canonicals() {
+		if described[canonical] == "" {
+			t.Errorf("%q has no description", canonical)
+		}
 	}
-	// The endgame, as a property of the build rather than a line in a task list. The
-	// floor exists only because the vocabulary cannot be reviewed in one pass; once it
-	// has been, two rules for the same thing would coexist and could disagree.
-	if describedFloor >= total {
-		t.Errorf("every canonical is described — delete describedFloor and assert the "+
-			"absolute rule instead: %d described, %d canonicals", described, total)
-	}
-	t.Logf("described %d of %d canonicals (floor %d)", described, total, describedFloor)
 }
 
 // Descriptions returns a copy: a caller that mutates the map it is handed must not be

@@ -3,12 +3,6 @@
   import { popularCollectionLinks } from '$lib/collections';
   import { reopen } from '$lib/consent.svelte';
   import { ProviderIcon } from '$lib/ui';
-  import { SKILL_DESCRIBED } from '$lib/generated/contracts';
-  import { isGlossaryPublished } from '$lib/skillGlossary';
-
-  // Read from the eager slug list, which every page already carries — the prose lives
-  // in its own chunk and a footer has no business fetching it.
-  const glossaryPublished = isGlossaryPublished(SKILL_DESCRIBED.length);
 
   // Grouped navigation over existing routes only — kept deliberately small so the
   // footer stays uncluttered. Internal links go through resolve() (base-path safe),
@@ -23,11 +17,8 @@
         { label: 'Jobs by role', href: resolve('/roles') },
         // The glossary's only link from the app — the chip's reveal opens on
         // interaction and the sitemap is for crawlers, so this is the one path a
-        // reader browsing the site can follow to it. Withheld until there is a
-        // glossary to follow it to; see isGlossaryPublished.
-        ...(glossaryPublished
-          ? [{ label: 'Skills glossary', href: resolve('/skills') }]
-          : []),
+        // reader browsing the site can follow to it.
+        { label: 'Skills glossary', href: resolve('/skills') },
         { label: 'Recruiters', href: resolve('/recruiters') },
       ],
     },

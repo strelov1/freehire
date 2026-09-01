@@ -496,3 +496,379 @@ preact	Preact is a JavaScript library used for building user interfaces and web 
 sinatra	Sinatra is a Ruby web application library used to create websites and web services. It is designed to help developers build simple back-end applications with less code than larger frameworks.
 actix	Actix is a Rust framework used for building web applications and asynchronous systems based on the actor model.
 presto	Presto is a distributed SQL query engine used for running fast, interactive analytical queries against large data sets from various sources.
+analytics	Analytics is the systematic examination of data to identify patterns, trends, and correlations. It is used to transform raw information into actionable insights that support business decisions and operational improvements.
+api	API is a software interface that allows different applications to communicate with each other and exchange data.
+data-warehousing	Data Warehousing is the process of collecting and managing data from various sources into a single central repository to support business intelligence and analysis.
+github-actions	GitHub Actions is an automation platform that allows developers to build, test, and deploy code directly from their GitHub repositories.
+gdpr	GDPR is a European Union regulation that establishes data protection and privacy rights for individuals and sets obligations for organizations that process personal data. It standardizes data protection laws across EU member states and governs how personal data can be collected, used, and shared.
+firewall	Firewall is a network security system that monitors and controls incoming and outgoing traffic based on predetermined security rules. It acts as a barrier between a trusted internal network and untrusted external networks.
+autocad	AutoCAD is a commercial computer-aided design (CAD) software application used for creating 2D and 3D drawings and models.
+hipaa	HIPAA is a United States federal law that sets national standards for the protection of sensitive patient health information and ensures data privacy and security.
+pmp	PMP is a professional certification that validates an individual's competence in leading and directing project teams and delivering project results. It is used to demonstrate expertise in project management methodologies, processes, and best practices.
+elt	ELT is a data integration process that extracts raw data from source systems and loads it into a target data warehouse before transforming it for analysis. It is used to organize and prepare data for business intelligence and reporting by leveraging the processing power of the storage system.
+itil	ITIL is a framework for IT service management that aligns IT services with business needs. It provides standardized practices for planning, delivering, and maintaining IT services.
+devsecops	DevSecOps is a methodology that integrates security practices into the DevOps pipeline to automate security testing at every stage of the software development lifecycle.
+prometheus	Prometheus is an open-source monitoring and alerting toolkit that collects and stores metrics as time-series data to track the performance of systems and applications.
+candidate-experience	Candidate Experience is a human resources concept describing a job seeker's feelings and attitudes toward a company's recruitment and hiring process. It is used by organizations to evaluate and improve how they attract, interview, and communicate with potential employees.
+redis	Redis is an in-memory data structure store used as a database, cache, and message broker. It stores data in memory to provide high-speed access for applications.
+unit-testing	Unit Testing is a software testing technique where individual components of a program are tested in isolation to verify that each functions correctly.
+vendor-management	Vendor Management is a business process that involves overseeing relationships and contracts with third-party suppliers of goods and services. It is used to ensure that vendors meet performance standards, comply with regulations, and provide value to the organization.
+claude-code	Claude Code is an AI programming assistant that helps developers write, debug, and understand code through natural language interactions.
+mlops	MLOps is a methodology that combines machine learning, DevOps, and data engineering to automate the development and deployment of machine learning models. It is used to manage the end-to-end lifecycle of machine learning systems in production.
+cissp	CISSP is an information security certification that validates an IT professional's expertise in designing, implementing, and managing a cybersecurity program.
+dns	DNS is a hierarchical naming system that translates human-readable domain names into numerical IP addresses that computers use to identify each other on networks. It enables users to access websites and internet services using memorable names instead of complex numerical addresses.
+openai	OpenAI is an artificial intelligence research organization that develops and offers APIs for generative models used in natural language processing, image creation, and software development.
+nist	NIST is a set of cybersecurity standards and frameworks developed by the National Institute of Standards and Technology. Organizations use these guidelines to manage security risks and ensure regulatory compliance.
+acceptance-criteria	Acceptance Criteria is a set of conditions that a software feature must satisfy to be accepted by a user or stakeholder.
+pipeline-management	Pipeline Management is a DevOps practice that involves overseeing the automated movement of code or data through a sequence of steps, such as building, testing, and deployment.
+unix	Unix is an operating system that manages computer hardware and software resources, commonly serving as the foundation for servers, workstations, and mobile devices.
+lambda	Lambda is a serverless computing service that runs code in response to events and automatically manages the computing resources required by that code.
+rag	RAG is an artificial intelligence technique that retrieves data from external sources to feed into a generative model. It helps ensure the model provides accurate, up-to-date answers based on specific documents rather than just its training data.
+ai-enablement	Ai Enablement is a strategic process that integrates artificial intelligence capabilities into an organization's existing operations and workflows. It focuses on deploying the necessary infrastructure, data resources, and training to effectively implement and use AI technologies.
+graphql	GraphQL is a query language for APIs that allows clients to request exactly the data they need in a single request. It enables applications to define the structure of the required data and retrieve multiple resources at once.
+api-design	Api Design is the process of creating the specifications and architectural plans that allow different software systems or components to communicate and exchange data effectively.
+photoshop	Photoshop is a graphics editing software used to create, modify, and enhance digital images and visual content.
+active-directory	Active Directory is a Microsoft directory service used for managing user identities, security, and access permissions within a computer network.
+chatgpt	ChatGPT is an artificial intelligence chatbot that generates human-like text responses to user prompts.
+bigquery	BigQuery is a cloud-based data warehouse used for storing and analyzing large amounts of data using SQL. It is a serverless service that allows users to perform big data analytics without managing the underlying infrastructure.
+network-security	Network Security is a set of policies and practices designed to prevent unauthorized access to, misuse of, or denial of a computer network and its data. It involves using hardware and software technologies to secure the infrastructure during data transmission.
+google-analytics	Google Analytics is a web analytics service that tracks and reports website traffic. It is used to monitor user behavior and measure the effectiveness of marketing efforts.
+iso-27001	ISO 27001 is an international standard for information security management systems that provides a framework for managing organizational data security risks.
+nlp	NLP is a branch of artificial intelligence that enables computers to understand, interpret, and generate human language.
+succession-planning	Succession Planning is a business strategy used to identify and develop internal employees to fill key leadership or technical roles when current staff members leave or retire.
+sales-enablement	Sales Enablement is a strategic process that provides sales teams with the content, tools, and knowledge necessary to engage buyers and close deals successfully.
+tensorflow	TensorFlow is an open-source machine learning library used for building and training deep learning models. It enables developers to construct data flow graphs for numerical computation and artificial intelligence applications.
+siem	SIEM is a security technology that aggregates and analyzes log data from across an IT infrastructure to identify potential threats and ensure compliance.
+requirements-gathering	Requirements Gathering is a project management process used to identify, document, and prioritize the specific needs and constraints of a software system.
+xml	XML is a markup language that defines a set of rules for encoding documents in a format that is both human-readable and machine-readable, used primarily for storing and transporting data.
+data-ingestion	Data Ingestion is a process that moves data from various source systems into a centralized storage repository for analysis or processing.
+financial-modeling	Financial Modeling is a quantitative analysis technique that creates a mathematical representation of a company's financial operations. It is used to forecast future performance and evaluate the impact of business decisions or economic events.
+developer-experience	Developer Experience is a discipline concerned with optimizing the workflows, tools, and interfaces that software developers use to build and deploy applications.
+github-copilot	GitHub Copilot is an artificial intelligence code completion tool that suggests whole lines or functions to developers directly within their code editor.
+demand-generation	Demand Generation is a marketing strategy that focuses on creating awareness and interest in a company's products or services to drive long-term revenue growth.
+looker	Looker is a business intelligence platform used to visualize, analyze, and share data across an organization.
+embedded-systems	Embedded Systems are specialized computing systems that perform dedicated functions within larger mechanical or electrical devices, like the computers in cars that control engines or the controllers in appliances.
+ab-testing	A/B Testing is a user experience research method used to compare two versions of a webpage or app to determine which one performs better based on a specific metric.
+revit	Revit is a building information modeling software used to create 3D models, generate 2D drawings, and document building projects for architecture, engineering, and construction.
+lakehouse	Lakehouse is a data architecture that combines the low-cost storage of data lakes with the data management and performance capabilities of data warehouses. This approach enables organizations to run business intelligence and machine learning workloads directly on raw data.
+accounts-payable	Accounts Payable is an accounting module used to track and manage money that a company owes to its vendors and suppliers.
+vector-databases	Vector Databases are data storage systems designed to index and query vector embeddings to enable fast similarity search and retrieval.
+jest	Jest is a JavaScript testing framework used to create and run automated tests that ensure code functions correctly.
+elasticsearch	Elasticsearch is a search and analytics engine used for storing, searching, and analyzing large volumes of data in near real-time.
+data-lake	Data Lake is a storage repository that holds large amounts of raw data in its native format. It is used for running big data analytics, machine learning, and real-time processing.
+vpn	VPN is a network technology that creates a secure connection over a public network, allowing users to send and receive data as if their device were directly connected to a private network.
+selenium	Selenium is an open-source framework used for automating web browsers to test web applications. It allows developers to write scripts in various programming languages that simulate user actions, enabling the verification of software functionality across different browsers.
+talent-management	Talent Management is an HR software module or business process used to recruit, develop, and retain employees.
+rds	RDS is a cloud service that provides and manages relational databases. It automates database administration tasks like provisioning, patching, and backups so users do not have to manage the underlying infrastructure.
+ecs	ECS is a cloud service that allows users to run, manage, and scale containerized applications on a cluster.
+ec2	EC2 is a cloud service provided by Amazon Web Services that offers scalable computing capacity. It allows users to launch and manage virtual servers to run applications.
+fine-tuning	Fine Tuning is a machine learning technique used to adapt a pre-trained model for a specific task by further training it on a specialized dataset.
+vault	Vault is a secret management tool used to securely store and control access to sensitive information such as passwords, tokens, certificates, and encryption keys.
+proof-of-concept	Proof of Concept is a preliminary project or demonstration used to verify that an idea is technically feasible and viable for full-scale development.
+pandas	pandas is a Python library used for data manipulation and analysis. It provides data structures and tools for handling structured data tables and time series.
+general-ledger	General Ledger is a core accounting module or database that records and summarizes all financial transactions and account balances for an organization.
+openshift	OpenShift is a cloud application platform based on Kubernetes that helps developers build, deploy, and manage containerized applications.
+google-ads	Google Ads is an online advertising platform used to create and manage ad campaigns that appear in Google search results and across its network of partner sites.
+embedded-software	Embedded Software is computer code written specifically to control hardware devices and machinery. It is used to run the dedicated functions of electronic systems found in cars, appliances, and industrial tools.
+wan	WAN is a network that connects computers and other devices across large geographical areas, such as between cities, countries, or continents.
+ethernet	Ethernet is a family of wired computer networking technologies used for local area networks. It defines how data is transmitted between devices over physical cables.
+itar	ITAR is a United States regulation that controls the export of defense-related articles and services. It requires organizations to implement strict data security and access controls to ensure restricted technical data is not shared with foreign nationals.
+customer-retention	Customer Retention is a business strategy focused on encouraging existing clients to continue purchasing or using a company's products and services rather than switching to competitors.
+zoom	Zoom is a video conferencing platform used for virtual meetings, webinars, and real-time collaboration through chat and screen sharing.
+canva	Canva is a graphic design platform used to create visual content such as social media graphics, presentations, and documents using templates and a drag-and-drop interface.
+user-research	User Research is a systematic process of gathering insights about user behaviors, needs, and motivations through observation and feedback techniques. It is used by product teams to inform design decisions and ensure that solutions effectively address real user problems.
+rbac	RBAC is an access control method that restricts system access to authorized users based on their roles within an organization.
+sso	SSO is an authentication method that allows a user to access multiple applications with a single set of login credentials. It permits users to log in once to gain entry to various connected systems without re-entering their password.
+service-desk	Service Desk is an organizational unit that serves as the primary point of contact between a service provider and its users. It is used to manage incidents, service requests, and communication regarding IT support.
+cism	CISM is a professional certification that validates a candidate's ability to manage and govern an enterprise's information security program.
+1c	1C is a business software platform used for enterprise resource planning, accounting, and automation of business processes.
+wireframing	Wireframing is a design technique used to create a basic visual guide representing the skeletal framework of a website or application. It focuses on layout and functionality to plan the structure of an interface before adding visual design elements.
+ccpa	CCPA is a data privacy law that provides California residents with the right to access, delete, and opt-out of the sale of their personal information held by businesses.
+langgraph	LangGraph is a library for building stateful applications powered by large language models. It uses graph structures to define and manage the flow of logic and memory within the application.
+junit	JUnit is a unit testing framework for the Java programming language that allows developers to write and run automated tests. It is used to verify that specific sections of code perform as expected.
+embeddings	Embeddings are a machine learning technique that converts data into numerical vectors representing its underlying meaning. They are used to allow computers to understand relationships and similarities between different pieces of content.
+help-desk	Help Desk is an information technology support service or software platform intended to assist users by troubleshooting problems and answering questions related to computer systems.
+perl	Perl is a high-level, general-purpose, interpreted programming language originally developed for text processing. It is widely used for system administration, web development, and network programming.
+secrets-management	Secrets Management is a security practice that involves the secure storage, transmission, and management of sensitive credentials such as passwords, API keys, and digital certificates.
+azure-data-factory	Azure Data Factory is a cloud-based data integration service used to create, schedule, and manage data pipelines that move and transform data between various sources and destinations.
+anomaly-detection	Anomaly Detection is a data analysis technique used to identify patterns in data that do not conform to expected behavior.
+contract-negotiation	Contract Negotiation is a business process used to discuss and finalize the terms, conditions, and scope of an agreement between two parties.
+microsoft-fabric	Microsoft Fabric is a unified data analytics platform that combines data engineering, data integration, and business intelligence into a single software-as-a-service product. It is used to collect, process, and visualize data for business insights.
+cypress	Cypress is a JavaScript end-to-end testing framework used for automating web application tests directly in the browser.
+dhcp	DHCP is a network management protocol that automates the assignment of IP addresses and other communication parameters to devices connecting to a network.
+gis	GIS is a system designed to capture, store, and analyze spatial or geographic data. It is used to visualize information on maps and solve complex problems involving location.
+owasp	OWASP is a non-profit foundation that provides tools, guides, and standards to help organizations develop and maintain secure applications.
+workflow-orchestration	Workflow Orchestration is the automated coordination and management of tasks across different systems to complete complex processes.
+sqs	SQS is a fully managed message queuing service used to decouple and connect distributed software components. It allows applications to send, store, and receive messages to facilitate asynchronous communication between microservices.
+copywriting	Copywriting is a writing discipline focused on creating persuasive text for advertising and marketing materials. It is used to prompt readers to take a specific action, such as buying a product or clicking a link.
+opentelemetry	OpenTelemetry is an open-source observability framework used to generate, collect, and export telemetry data, such as traces, metrics, and logs, to monitoring platforms.
+vpc	VPC is a cloud computing service that provides a logically isolated virtual network within a public cloud environment.
+power-platform	Power Platform is a suite of low-code development tools from Microsoft that enables users to build applications, automate workflows, and analyze data without writing extensive code.
+argocd	Argo CD is a GitOps continuous delivery tool that automates the deployment of applications to Kubernetes clusters and ensures that the cluster state matches the configurations defined in a Git repository.
+flask	Flask is a micro web framework written in Python that is used to build web applications and APIs.
+power-automate	Power Automate is a cloud-based workflow automation service that enables users to create automated processes and tasks between different applications and services.
+typography	Typography is a design discipline that involves the arrangement of type to make written text legible, readable, and visually appealing.
+time-series	Time Series is a sequence of data points indexed in time order, used for tracking and analyzing trends, patterns, or variations over specific intervals.
+feature-engineering	Feature Engineering is a machine learning process used to create, transform, or select variables from raw data to improve the performance of predictive models.
+aks	AKS is a cloud service that provides managed Kubernetes orchestration for deploying, scaling, and managing containerized applications on Microsoft Azure.
+cli	CLI is a command-line interface that allows users to interact with software and operating systems by typing text commands instead of using graphical elements.
+ccna	CCNA is an associate-level networking certification that validates the ability to install, configure, and troubleshoot routed and switched networks.
+solidworks	SolidWorks is a computer-aided design software used to create 3D models and technical drawings of mechanical parts and assemblies.
+wordpress	WordPress is an open-source content management system used to create and manage websites and blogs.
+paid-social	Paid Social is a digital advertising strategy that involves paying to display sponsored content on social media platforms to reach specific audiences. It is used to target users based on demographics, interests, or online behavior to increase visibility or drive engagement.
+transformers	Transformers is a neural network architecture designed to process sequential data by tracking relationships between individual elements. It is commonly used in artificial intelligence for tasks like language translation and text generation.
+tls	TLS is a cryptographic protocol that provides secure communication over a computer network by encrypting data. It is commonly used to protect the privacy and integrity of data exchanged between web browsers and servers.
+apex	Apex is an object-oriented programming language used to develop business logic and backend processes within the Salesforce platform.
+oscilloscope	Oscilloscope is an electronic test instrument used to visualize voltage changes over time as a waveform to analyze and troubleshoot electronic circuits.
+microsoft-copilot	Microsoft Copilot is an artificial intelligence assistant that integrates with Microsoft 365 applications to generate text, analyze data, and automate tasks.
+plsql	PL/SQL is a procedural language extension for the Oracle Database. It allows developers to integrate SQL data manipulation with procedural programming constructs like loops and conditions.
+intune	Intune is a cloud-based service for mobile device management and mobile application management that allows organizations to secure and control employee devices and applications.
+jwt	JWT is an open standard that defines a compact, self-contained token for securely transmitting information between parties. It is primarily used for authentication and authorization in web applications to verify user identity.
+jquery	jQuery is a JavaScript library that simplifies tasks like HTML document traversal, event handling, and animation. It is used to make web development faster and easier by allowing developers to write less code.
+vlan	VLAN is a logical subdivision of a physical local area network that groups devices into separate virtual networks to isolate traffic and enhance security.
+fpga	FPGA is a type of integrated circuit that can be programmed after manufacturing to perform specific digital logic functions. It is used for hardware prototyping and accelerating specialized computing tasks like signal processing or cryptography.
+flux	Flux is a GitOps toolkit for Kubernetes that synchronizes the state of clusters with configuration stored in a Git repository.
+saml	SAML is an open standard protocol used to exchange authentication and authorization data between an identity provider and a service provider. It enables single sign-on by allowing users to access multiple applications with one set of login credentials.
+model-evaluation	Model Evaluation is a phase in the machine learning workflow used to assess the accuracy and performance of a model using various metrics.
+sonarqube	SonarQube is an open-source platform for continuous code quality inspection that automatically detects bugs, code smells, and security vulnerabilities in source code.
+bgp	BGP is a standardized gateway protocol used to exchange routing information between different networks on the internet. It allows data to find the most efficient path across independent networks, such as those belonging to internet service providers.
+zendesk	Zendesk is a customer service software platform used to manage support tickets and track customer inquiries across multiple communication channels.
+metadata-management	Metadata Management is an administrative practice that involves organizing, storing, and maintaining information about data assets to help organizations locate and understand their data.
+pci-dss	PCI DSS is a set of security standards intended to ensure that organizations process, store, and transmit credit card information securely. It is used to protect cardholder data and prevent fraud.
+model-deployment	Model Deployment is the process of integrating a trained machine learning model into a production environment to make predictions available to users or applications.
+rdbms	RDBMS is a type of database management system that stores data in a structured format using tables with rows and columns. It is used to organize data and establish relationships between different data points.
+edi	EDI is a technology standard that enables the computer-to-computer exchange of business documents in a standardized electronic format. It allows organizations to transmit transaction data, such as purchase orders and invoices, automatically between different systems.
+okta	Okta is a cloud-based identity and access management platform that allows organizations to secure user authentication and manage access to their applications.
+bluebeam	Bluebeam is a PDF markup and collaboration software used to create, edit, and manage project documents, specifically within the architecture, engineering, and construction industries.
+flink	Flink is a distributed stream processing framework used for real-time data analytics and event-driven applications.
+sast	SAST is a security testing methodology that analyzes source code for vulnerabilities and weaknesses without executing the program.
+cdk	CDK is an open-source software development framework that allows developers to define cloud infrastructure resources using familiar programming languages.
+wcag	WCAG is a technical standard that provides guidelines for making web content accessible to people with disabilities.
+visual-studio	Visual Studio is an integrated development environment used by developers to build computer programs, web applications, and mobile apps.
+tailwind	Tailwind is a CSS framework used for building user interfaces by applying pre-defined utility classes directly to HTML elements. It allows developers to create custom designs without writing custom CSS code.
+webhooks	Webhooks are an HTTP callback mechanism that allows one application to send real-time data to another application immediately after a specific event occurs.
+conversational-ai	Conversational AI is a branch of artificial intelligence that enables computers to understand, process, and respond to human language naturally through text or voice.
+dlp	DLP is a security solution that detects and prevents sensitive data from being sent outside an organization or accessed by unauthorized users.
+verilog	Verilog is a hardware description language used to model electronic systems. It defines the logical structure and behavior of digital circuits.
+interaction-design	Interaction Design is a design discipline that focuses on creating the structure, behavior, and interactive elements of digital products. It is used to define how users engage with software interfaces through logical flows and functional feedback.
+procore	Procore is a cloud-based construction management software used to oversee project planning, financials, and documentation throughout the building lifecycle.
+rtos	RTOS is an operating system designed to process data and complete tasks within strict time constraints. It is used in embedded systems, such as automotive controls and medical devices, where timing predictability is critical.
+power-query	Power Query is a data connectivity and preparation tool integrated into Excel and Power BI used to extract, clean, and transform data from various sources.
+openapi	OpenAPI is a specification that defines a standard format for describing RESTful APIs. It documents the available endpoints, parameters, and data models to allow developers and tools to understand how to interact with a web service.
+azure-ad	Azure AD is a cloud-based identity and access management service that enables users to sign in and access internal and external resources.
+sns	SNS is a fully managed cloud messaging service used for sending messages and notifications between applications and to end users.
+fortinet	Fortinet is a cybersecurity company that provides network security appliances and software, such as firewalls and secure wide-area networking solutions, to protect IT infrastructure.
+cryptocurrency	Cryptocurrency is a digital currency that uses cryptography for security and operates on decentralized networks, allowing for peer-to-peer transactions without a central authority.
+signal-processing	Signal Processing is an engineering discipline that analyzes, modifies, and synthesizes analog or digital signals such as sound, images, and sensor readings. It is used to filter noise, compress data, and extract meaningful information from raw inputs.
+pki	PKI is a security framework that issues and manages digital certificates to authenticate identities and secure communications across networks.
+llamaindex	LlamaIndex is a data framework designed to connect private data sources to large language models. It enables developers to build applications that can query and reason over custom data using LLMs.
+pcie	PCIe is a high-speed expansion bus standard used to connect internal computer components, such as graphics cards and solid-state drives, to the motherboard.
+linkedin-sales-navigator	Linkedin Sales Navigator is a sales platform used to find, understand, and connect with potential buyers and decision-makers on LinkedIn.
+puppet	Puppet is a configuration management tool used to automate the setup and maintenance of IT infrastructure and software.
+information-architecture	Information Architecture is a structural design discipline that organizes and labels website, app, or intranet content to help users find information and complete tasks.
+user-flows	User Flows are diagrams that illustrate the step-by-step path a user takes through a website or application to complete a specific task.
+aws-bedrock	AWS Bedrock is a cloud service that provides access to foundation models from various AI providers via an API for building generative AI applications.
+bootstrap	Bootstrap is a free front-end framework used for creating responsive and mobile-first websites. It provides pre-designed templates for typography, forms, buttons, and other interface components using HTML and CSS.
+dast	DAST is a security testing methodology that analyzes a running application from the outside to identify vulnerabilities and security flaws.
+lifecycle-marketing	Lifecycle Marketing is a strategy for managing customer relationships that delivers targeted content based on where a person is in the buying journey. It is used to move potential customers from awareness to purchase and retain them as loyal clients.
+community-management	Community Management is a business practice that involves building, maintaining, and engaging a group of users or customers to foster relationships and facilitate communication around a brand or product.
+intrusion-detection	Intrusion Detection is a security process that monitors network traffic and system activities to identify unauthorized access or malicious behavior and alerts administrators to potential threats.
+master-data-management	Master Data Management is a data governance discipline that ensures an organization's critical data is consistent, accurate, and controlled across all its systems.
+pytest	pytest is a testing framework for the Python programming language used to write and run test scripts to verify that code functions correctly.
+flutter	Flutter is an open-source UI software development kit used to build natively compiled applications for mobile, web, and desktop from a single codebase.
+legal-research	Legal Research is a process of identifying and retrieving laws, regulations, and judicial precedents to support legal decision-making.
+soa	SOA is a software architectural style that structures applications as a collection of loosely coupled services. It is used to allow different software components to communicate with one another over a network.
+threat-hunting	Threat Hunting is a proactive cybersecurity practice used to search for and identify malicious actors or threats that evade automated security defenses.
+sketch	Sketch is a vector graphics editor used for designing user interfaces, websites, and mobile applications.
+cuda	CUDA is a parallel computing platform and application programming interface model that allows developers to use NVIDIA graphics processing units for general-purpose computing.
+n8n	n8n is a workflow automation platform used to connect applications and services to automate tasks and data transfers.
+dimensional-modeling	Dimensional Modeling is a database design technique used in data warehousing to structure data into facts and dimensions for efficient query performance and reporting.
+waf	WAF is a security system that monitors and filters incoming web traffic to block malicious attacks against web applications.
+embedded-linux	Embedded Linux is a customized version of the Linux operating system designed for embedded computer systems rather than general-purpose computers. It is used to control the functions of specific hardware devices, such as smart appliances, industrial machines, and automotive systems.
+mainframe	Mainframe is a high-performance computer system used by large organizations to process large volumes of data and run critical business applications.
+nginx	Nginx is an open-source web server that also functions as a reverse proxy and load balancer. It is used to serve web content and direct network traffic to backend servers.
+kibana	Kibana is a data visualization and dashboarding tool that allows users to view and interact with data stored in Elasticsearch. It is used to create charts, graphs, and maps to analyze and monitor metrics and logs.
+azure-functions	Azure Functions is a serverless cloud service used for running code in response to events without the need to manage infrastructure. It allows developers to execute small pieces of code triggered by actions such as HTTP requests, timers, or database updates.
+influencer-marketing	Influencer Marketing is a promotional strategy that involves partnering with individuals who have a dedicated social media following to promote a brand's products or services.
+quickbooks	QuickBooks is accounting software designed for small and medium-sized businesses to track income and expenses, manage payroll, and generate financial reports.
+motion-graphics	Motion Graphics is a digital animation technique that brings static design elements to life, and is used to create dynamic visual content for websites, applications, and video productions.
+jvm	JVM is a virtual machine that enables computers to run Java programs and other compatible languages by converting Java bytecode into machine-specific instructions.
+semantic-search	Semantic Search is an information retrieval technique that uses artificial intelligence to understand the intent and contextual meaning of search terms rather than relying solely on keyword matching.
+azure-synapse	Azure Synapse is a cloud analytics service that enables data integration, enterprise data warehousing, and big data analytics.
+ldap	LDAP is a protocol used to access and manage directory information services over a network. It enables applications to authenticate users and query contact information from a central server.
+pcb	Pcb is a printed circuit board that mechanically supports and electrically connects electronic components using conductive copper traces.
+sd-wan	SD-WAN is a networking technology that uses software to control the connectivity, management, and services between data centers and remote branches. It is used to connect enterprise networks over large geographic distances while decoupling the control plane from the underlying hardware.
+uart	UART is a hardware component used for asynchronous serial communication that converts parallel data into serial data to facilitate the transmission of information between computers and peripheral devices.
+multithreading	Multithreading is a programming technique that allows a single process to execute multiple threads concurrently to perform several tasks simultaneously.
+lidar	LiDAR is a remote sensing technology that uses laser pulses to measure distances and generate three-dimensional models of physical environments.
+cold-outreach	Cold Outreach is a sales and marketing strategy used to initiate contact with potential customers or clients who have not previously expressed interest in a product or service.
+tomcat	Tomcat is an open-source web server and servlet container used to execute Java servlets and serve Java web applications.
+microstation	Microstation is a computer-aided design (CAD) software used for creating 2D and 3D drawings and models for infrastructure and architectural projects.
+crewai	CrewAI is an open-source framework for orchestrating multi-agent AI systems. It is used to coordinate teams of autonomous AI agents that collaborate to accomplish complex tasks.
+certified-scrummaster	Certified ScrumMaster is a professional certification that validates a person's understanding of the Scrum framework and their ability to serve as a team facilitator in an Agile environment.
+linkedin-recruiter	LinkedIn Recruiter is a recruiting platform that allows hiring professionals to search for candidates, manage applicant pipelines, and send messages within the LinkedIn network.
+qlik	Qlik is a business intelligence platform used for data visualization and analytics to help users create interactive dashboards and discover insights within their data.
+veeva	Veeva is a cloud-based software platform tailored for the life sciences industry that provides specialized tools for customer relationship management, clinical data, and regulatory content.
+primavera-p6	Primavera P6 is an enterprise project management software used for planning, scheduling, and controlling complex projects. It allows users to manage resources, costs, and timelines across large-scale initiatives.
+svn	SVN is a centralized version control system that tracks and manages changes to files and directories over time.
+motion-design	Motion Design is a graphic design discipline that uses animation and visual effects to create the illusion of movement in digital media, such as user interfaces, videos, and websites.
+iis	IIS is a web server for the Windows operating system that hosts websites and applications.
+monday-com	Monday.com is a cloud-based project management platform and work operating system used for tracking tasks, managing workflows, and collaborating on team projects.
+eclipse	Eclipse is an integrated development environment (IDE) used for writing, debugging, and running Java applications and other programming languages through plugins.
+iso-13485	Iso 13485 is an international standard for quality management systems used by organizations involved in the design, production, and installation of medical devices.
+reverse-engineering	Reverse Engineering is a technical process that involves analyzing a software application, hardware device, or system to understand its internal design and functionality. It is used to recover lost source code, identify security vulnerabilities, or create compatible systems without access to the original blueprints.
+fhir	FHIR is a standard for exchanging healthcare information that enables different electronic health record systems to communicate and share data.
+ajax	AJAX is a set of web development techniques that allows web applications to send and receive data from a server asynchronously. This enables web pages to update content dynamically without requiring a full page reload.
+sensor-fusion	Sensor Fusion is a software technique that integrates data from multiple distinct sensors, such as cameras and radar, to produce a more accurate and reliable understanding of the environment than any single sensor could provide. It is used in robotics, autonomous vehicles, and navigation systems to combine disparate inputs into a unified signal for processing.
+npm	Npm is a package manager for the JavaScript programming language that allows developers to install, share, and manage code libraries.
+arcgis	ArcGIS is a geographic information system software used for creating maps, analyzing spatial data, and managing geographic information.
+palo-alto-networks	Palo Alto Networks is a cybersecurity company that provides network security products and services, such as firewalls and cloud security tools, to protect organizations from cyber threats.
+microcontrollers	Microcontrollers are small integrated circuits designed to control specific functions in electronic devices and embedded systems.
+mpls	MPLS is a data routing technique used in telecommunications networks that directs data traffic based on short path labels rather than long network addresses.
+causal-inference	Causal Inference is a statistical method used to determine cause-and-effect relationships between variables, distinguishing them from mere correlations.
+wireshark	Wireshark is a network protocol analyzer that captures and examines network traffic to help users troubleshoot connection issues and investigate security problems.
+objective-c	Objective-C is an object-oriented programming language used primarily for building applications for Apple's macOS and iOS operating systems. It adds object-oriented features to the C programming language.
+recommendation-systems	Recommendation Systems are information filtering systems that predict a user's preferences to suggest relevant items like products or content.
+sales-cloud	Sales Cloud is a customer relationship management (CRM) platform provided by Salesforce that organizations use to manage sales processes, track customer interactions, and automate sales-related tasks.
+cnc	CNC is a manufacturing automation technology where pre-programmed computer software controls machine tools to cut and shape materials.
+vllm	vLLM is an open-source library designed for serving and optimizing the performance of Large Language Models (LLMs) through efficient memory management.
+sentry	Sentry is an application monitoring platform that helps developers identify, diagnose, and resolve software crashes and performance issues.
+uvm	UVM is a standard verification methodology used to ensure digital hardware designs function correctly by providing a structured framework for creating testbenches.
+hmi	HMI is a user interface technology that allows operators to control machinery and monitor production processes in an industrial environment.
+ansys	Ansys is an engineering simulation software used to predict how product designs will behave under various physical conditions.
+aws-glue	Aws Glue is a serverless data integration service used to extract, transform, and load data for analytics and storage.
+ipsec	IPsec is a suite of protocols used to secure Internet Protocol communications by authenticating and encrypting data packets.
+appium	Appium is an open-source test automation framework used for testing native, mobile web, and hybrid applications across iOS, Android, and Windows platforms.
+cmdb	CMDB is a database used in IT service management to store information about an organization's hardware and software assets and the relationships between them.
+ssrs	SSRS is a server-based reporting platform used to create, manage, and deliver paginated reports from various data sources.
+loki	Loki is a log aggregation system that collects and stores logs from applications and infrastructure. It uses a label-based indexing model to efficiently query and visualize log data.
+qos	QoS is a set of networking technologies that manage data traffic by prioritizing specific types of packets to ensure performance for critical applications.
+defi	DeFi is a collection of financial services built on blockchain technology that operates without centralized intermediaries like banks. It is used to enable peer-to-peer transactions such as lending, borrowing, and trading through smart contracts.
+distributed-training	Distributed Training is a machine learning technique that splits the workload of training a model across multiple processors or computers. It is used to speed up the training process for large-scale deep learning models.
+technical-seo	Technical SEO is a set of practices used to optimize a website's infrastructure so that search engines can crawl, render, and index its content effectively.
+sase	Sase is a network architecture framework that combines wide-area networking capabilities with comprehensive security functions, such as firewalls and zero-trust access, delivered directly from the cloud. It enables organizations to provide secure and efficient access to applications and data for users regardless of their location.
+rtl	RTL is a design abstraction used in digital circuit engineering to model the flow of data between hardware registers and the logical operations performed on that data.
+sftp	SFTP is a network protocol used for securely transferring and managing files over a network. It uses encryption to ensure that data remains private and protected during transmission.
+simulink	Simulink is a graphical block diagram environment for modeling, simulating, and analyzing multidomain dynamic systems and embedded systems.
+vhdl	VHDL is a hardware description language used to model the behavior and structure of digital electronic systems. It is commonly employed in the design of field-programmable gate arrays and application-specific integrated circuits.
+parquet	Parquet is a columnar storage file format designed to provide efficient data compression and encoding for large data sets.
+sccm	SCCM is a systems management software tool that allows administrators to deploy software, manage updates, and control security settings across a network of computers.
+container-security	Container Security is a set of practices and tools used to protect containerized applications and infrastructure from vulnerabilities and threats. It is employed to secure the software supply chain, images, and runtime environments throughout the application lifecycle.
+neo4j	Neo4j is a graph database that stores data as nodes connected by relationships instead of in tables. It is used to manage and query highly connected data structures found in social networks, recommendation engines, and fraud detection systems.
+dfars	Dfars is a set of cybersecurity regulations that requires Department of Defense contractors to implement specific security controls to safeguard sensitive government information.
+labview	LabVIEW is a visual programming language and development environment used for building applications that automate test systems, control hardware, and analyze measurement data.
+as9100	AS9100 is a quality management standard that defines requirements for aerospace, space, and defense organizations to ensure product safety and reliability.
+cmmc	CMMC is a cybersecurity certification framework used by the U.S. Department of Defense to verify that contractors protect sensitive government information.
+quantization	Quantization is a machine learning optimization technique that reduces the precision of numbers used to represent model parameters, resulting in smaller file sizes and faster inference speeds.
+salesforce-marketing-cloud	Salesforce Marketing Cloud is a digital marketing platform used for managing customer journeys and delivering advertising campaigns across channels such as email, mobile, social media, and web.
+adobe-analytics	Adobe Analytics is a web analytics platform that enables organizations to collect, analyze, and report on customer interaction data across websites and mobile applications.
+airtable	Airtable is a cloud-based platform that combines a spreadsheet interface with a relational database. It is used for organizing data, managing projects, and building custom business applications.
+smart-contracts	Smart Contracts are self-executing programs stored on a blockchain that automatically enforce and execute the terms of an agreement when specific conditions are met.
+nessus	Nessus is a vulnerability scanner that inspects computer systems and networks to detect security weaknesses.
+successfactors	SuccessFactors is a cloud-based human capital management suite used to handle core human resources functions such as payroll, talent management, and employee data.
+jtag	JTAG is a standard hardware interface used for testing and debugging printed circuit boards and embedded systems. It allows engineers to verify connections, program microcontrollers, and inspect the internal state of a chip.
+asic	Asic is a type of integrated circuit customized for a specific use case rather than intended for general-purpose computing, often optimized for tasks like cryptocurrency mining or signal processing.
+triton	Triton is an inference server designed to deploy and scale artificial intelligence models in production environments.
+eventbridge	EventBridge is a serverless event bus service that connects applications together using events generated from software, integrated Software-as-a-Service applications, and AWS services.
+talend	Talend is a data integration platform that provides tools for connecting, extracting, transforming, and loading data between different systems and applications.
+testng	TestNG is a testing framework for the Java programming language used to automate and organize test cases, supporting features like data-driven testing and parallel execution.
+lwc	LWC is a programming framework used to build user interfaces and web components on the Salesforce platform using standard HTML and JavaScript.
+iso-26262	Iso 26262 is a functional safety standard for the automotive industry. It defines requirements to prevent hazards caused by the malfunction of electrical and electronic systems in road vehicles.
+klaviyo	Klaviyo is a marketing automation platform that allows businesses to manage email and SMS marketing campaigns and analyze customer data.
+xcode	Xcode is an integrated development environment used to create software for macOS, iOS, iPadOS, watchOS, and tvOS. It includes tools for coding, testing, and debugging applications.
+api-documentation	Api Documentation is technical documentation that describes the functions, endpoints, and requirements of an Application Programming Interface (API) for developers.
+smartrecruiters	SmartRecruiters is a cloud-based recruiting platform that helps companies manage their hiring process by tracking applicants, posting jobs, and coordinating interviews.
+jsp	JSP is a server-side technology used for creating dynamic web content that allows developers to embed Java code within HTML documents.
+zustand	Zustand is a state management library for React that provides a simple and scalable API to manage global application state.
+metabase	Metabase is an open-source business intelligence tool that allows users to query data from databases and create interactive dashboards and visualizations.
+people-analytics	People Analytics is a data-driven business practice that uses statistical analysis to improve decision-making regarding recruitment, retention, and employee performance.
+adobe-xd	Adobe XD is a vector-based user experience design tool used for creating and prototyping user interfaces for websites and mobile applications. It allows designers to build wireframes, interactive mockups, and share designs for collaboration.
+dataverse	Dataverse is a Microsoft cloud data platform that securely stores and manages data for use within business applications.
+teradata	Teradata is a relational database management system used for storing and analyzing large volumes of data, commonly employed in data warehousing environments.
+requirements-elicitation	Requirements Elicitation is a process in software engineering focused on gathering the needs and constraints of stakeholders. It is used to clearly define what a system must do to satisfy business goals and user expectations.
+wpf	WPF is a graphical user interface framework used to create desktop applications for the Windows operating system.
+plc	Plc is an industrial computer used to control manufacturing processes and assembly lines. It processes input data from sensors to control machinery based on programmed instructions like ladder logic.
+matplotlib	Matplotlib is a plotting library for the Python programming language used to create static, animated, and interactive visualizations from data.
+windchill	Windchill is a product lifecycle management software that organizations use to manage product data and processes throughout the product's lifecycle from design through manufacturing and service.
+vxlan	VXLAN is a network virtualization protocol that extends Layer 2 networks over a Layer 3 infrastructure. It is used to increase data center scalability by encapsulating Ethernet frames within UDP packets.
+webflow	Webflow is a visual web development platform that allows users to design, build, and launch websites without writing code.
+gainsight	Gainsight is a customer success platform that helps businesses reduce churn and increase revenue by managing customer relationships and analyzing product usage data.
+osint	Osint is an intelligence methodology that involves collecting and analyzing information from publicly available sources to support security investigations or decision-making.
+soldering	Soldering is a fabrication technique that uses a low-melting-point metal alloy to join electronic components to a printed circuit board. It is used to establish secure electrical and mechanical connections in hardware assembly.
+uikit	Uikit is a modular front-end framework used for creating responsive and accessible web interfaces. It provides a collection of HTML, CSS, and JavaScript components to structure and style web pages.
+vitest	Vitest is a unit testing framework for JavaScript and TypeScript projects used to verify that code functions as expected.
+mailchimp	Mailchimp is an email marketing platform that allows businesses to manage mailing lists and create, send, and track email campaigns.
+soapui	SoapUI is an open-source testing tool used for validating web services and application programming interfaces (APIs). It supports functional, security, and load testing for protocols such as SOAP and REST.
+tiktok-ads	TikTok Ads is an advertising platform that enables businesses to create, manage, and display promotional content to users within the TikTok social media application.
+rlhf	RLHF is a machine learning technique that uses human feedback to train a reward model which guides an artificial intelligence agent. It is used to align AI models with human intent by incorporating human evaluations into the training process.
+pagerduty	PagerDuty is an incident management platform that aggregates alerts from monitoring tools to notify on-call staff of system issues. It is used by IT teams to track incidents from detection to resolution.
+protobuf	Protobuf is a data serialization protocol used to efficiently encode structured data for transmission between different systems or storage. It allows developers to define data structures in a simple interface definition language and generates source code for various programming languages.
+linkedin-ads	LinkedIn Ads is an advertising platform that enables businesses to create and display sponsored content to users of the LinkedIn social network. It is used to target professional audiences based on job titles, industries, and skills for marketing purposes.
+contract-drafting	Contract drafting is a legal process involving the creation of written documents that define the terms and conditions of an agreement between parties.
+milvus	Milvus is an open-source vector database designed to store, index, and manage massive embedding vectors generated by machine learning models. It is used to power similarity search and artificial intelligence applications across large-scale unstructured data.
+screaming-frog	Screaming Frog is a desktop application that crawls websites to collect data for technical SEO audits, such as broken links and missing metadata.
+qdrant	Qdrant is a vector database used for storing, indexing, and searching vector embeddings to enable similarity search and retrieval in artificial intelligence applications.
+sap-hana	SAP HANA is an in-memory database and application platform that allows businesses to process transactions and analyze data in real time.
+spss	SPSS is a statistical software package used for analyzing data and managing survey information. It provides tools for data mining, text analytics, and statistical modeling.
+activemq	ActiveMQ is an open-source message broker that enables communication between different applications or services by transmitting messages.
+professional-scrum-master	Professional Scrum Master is a certification that validates a professional's knowledge of the Scrum framework and their ability to fulfill the Scrum Master role.
+talent-sourcing	Talent Sourcing is a recruitment process focused on actively identifying and attracting potential candidates to fill job vacancies. It is used to build a pipeline of qualified talent by locating individuals who are not necessarily applying through standard channels.
+bamboohr	BambooHR is a cloud-based human resources information system used to manage employee data, payroll, benefits, and hiring processes.
+generative-engine-optimization	Generative Engine Optimization is a digital marketing practice that involves tailoring web content to be cited as a source within the AI-generated responses provided by modern search engines.
+logstash	Logstash is a server-side data processing pipeline that ingests data from multiple sources, transforms it, and sends it to a stash such as Elasticsearch.
+after-effects	After Effects is a digital visual effects and motion graphics software application used for creating animations and modifying video content in post-production.
+nagios	Nagios is an open-source IT infrastructure monitoring system that tracks the health of servers, networks, and applications. It notifies administrators of failures or operational issues.
+sysml	SysML is a general-purpose modeling language used in systems engineering to design, analyze, and verify complex systems.
+link-building	Link Building is a search engine optimization technique used to acquire hyperlinks from other websites to a specific page, thereby improving its visibility and ranking in search results.
+solidity	Solidity is a programming language used for writing smart contracts that execute on blockchain platforms like Ethereum.
+webgl	WebGL is a JavaScript API that renders interactive 2D and 3D graphics within any compatible web browser without the use of plug-ins.
+contentful	Contentful is a headless content management system that enables users to create, manage, and distribute content to websites, mobile apps, and other digital platforms via APIs.
+sprout-social	Sprout Social is a cloud-based social media management platform used by businesses to publish content, monitor online conversations, and analyze performance across multiple social networks.
+ticket-resolution	Ticket Resolution is a support process that involves investigating, fixing, and closing a user's reported issue or request. It is used by IT and help desk teams to manage the lifecycle of a support ticket from start to finish.
+seaborn	Seaborn is a Python data visualization library used for creating statistical graphics and drawing informative charts from datasets.
+nmap	Nmap is a network scanner used to discover devices on a computer network and identify the services and operating systems they run.
+influxdb	InfluxDB is a time-series database used for collecting, storing, and querying time-stamped data such as application metrics and IoT sensor readings.
+sap-mm	SAP MM is an ERP module that handles material management and inventory operations. It manages the procurement of goods and services and tracks stock levels.
+snowpark	Snowpark is a developer framework that enables users to write data processing code in languages such as Python, Java, and Scala directly within the Snowflake cloud data platform.
+ionic	Ionic is an open-source software development kit that allows developers to build cross-platform mobile applications using web technologies like HTML, CSS, and JavaScript.
+gd-t	Gd T is a symbolic language used on engineering drawings to define the allowable limits of variation in a part's geometry.
+thrift	Thrift is an interface definition language and binary communication protocol used to develop scalable cross-language services. It allows different programming languages to communicate with each other by generating code from a common definition of data types and service interfaces.
+mobx	MobX is a state management library for JavaScript that uses functional reactive programming to automatically track changes in application data and update the user interface.
+remix	Remix is a full-stack web framework used to build React applications with server-side rendering, nested routing, and efficient data loading.
+ollama	Ollama is an open-source tool that allows users to run large language models locally on their own hardware.
+can-bus	Can Bus is a vehicle bus standard that enables electronic control units and devices to communicate with each other without requiring a host computer.
+yolo	YOLO is an object detection algorithm that processes images in real-time to identify and locate objects within a single pass.
+creo	Creo is a family of 3D computer-aided design (CAD) software used for product design, engineering, and manufacturing. It enables users to create detailed 3D models, simulate product behavior, and generate technical drawings.
+renewal-management	Renewal Management is a business process or software module that tracks the expiration of licenses and contracts to ensure timely renewals and prevent service interruptions.
+timescaledb	TimescaleDB is an open-source time-series database built on PostgreSQL used for storing and querying time-stamped data.
+xamarin	Xamarin is a cross-platform mobile application development framework that enables developers to use C# and .NET to build native apps for Android, iOS, and Windows from a single codebase.
+cordova	Cordova is a mobile application development framework that allows developers to build mobile applications using standard web technologies like HTML, CSS, and JavaScript.
+micronaut	Micronaut is a Java-based software framework used to build microservices and serverless applications with a focus on low memory consumption and fast startup times.
+fortran	Fortran is a programming language used for scientific computing and numerical analysis. It is commonly utilized for complex mathematical simulations and calculations in physics and engineering.
+cockroachdb	CockroachDB is a distributed SQL database that automatically scales and replicates data across multiple nodes. It is used to build resilient applications that require high availability and strong data consistency.
+churn-prevention	Churn Prevention is a set of strategies used by businesses to stop customers from canceling subscriptions or discontinuing services.
+containerd	Containerd is a container runtime that manages the execution and lifecycle of containers on a host system. It handles the transfer and storage of container images, manages their execution and supervision, and provides low-level interfaces for storage and networking.
+developer-advocacy	Developer Advocacy is a professional role that bridges the gap between a company's technical teams and the external developer community. It is used to build relationships, create educational resources, and gather feedback to help developers successfully use the company's products.
+customer-io	Customer.io is a marketing automation platform used to send automated emails, SMS, and push notifications based on user behavior.
+haskell	Haskell is a purely functional programming language used for teaching, research, and developing applications where strong type safety and mathematical correctness are required.
+testify	Testify is a testing toolkit for the Go programming language that provides a set of assertion methods and mocking utilities to help developers write unit tests.
+apollo-io	Apollo Io is a data intelligence and sales engagement platform used to find, verify, and contact business leads. It combines a large database of professional contacts with tools for managing outbound email and calling campaigns.
+erlang	Erlang is a general-purpose, concurrent programming language used for building scalable, fault-tolerant systems. It is commonly employed in telecommunications, banking, and instant messaging to ensure high availability.
+wasm	WebAssembly is a binary instruction format that enables high-performance applications to run in web browsers by allowing code written in languages like C++ and Rust to execute at near-native speed.
+zeplin	Zeplin is a design handoff tool that allows designers to share user interface designs with developers by providing them with generated code snippets, style guides, and assets.
+concur	Concur is a travel and expense management software used by businesses to track employee spending, process reimbursements, and manage corporate travel bookings.
+technical-screening	Technical screening is an evaluation method used during the hiring process to verify a candidate's technical skills and subject matter expertise. It serves to assess whether an applicant possesses the necessary practical abilities to perform a specific job role.
+docs-as-code	Docs as Code is a methodology that treats technical documentation as software, writing content in text files and managing it with the same tools used for code. This practice allows teams to version control, review, and deploy documentation using standard software development workflows.
+koa	Koa is a web framework for Node.js used to build web applications and APIs.
+protopie	ProtoPie is a prototyping tool used to create interactive, high-fidelity models of mobile and web applications without writing code.
+structured-authoring	Structured Authoring is a content creation methodology that enforces a consistent format using tags and defined rules, allowing information to be reused across multiple documents and output formats.
+madcap-flare	MadCap Flare is a help authoring tool used to create, manage, and publish technical documentation across multiple output formats.
+couchdb	CouchDB is a NoSQL database that stores data in JSON documents and utilizes a REST architecture. It is used for applications that require reliable data replication and offline synchronization capabilities.
+customer-health-score	Customer Health Score is a metric used to quantify the stability and strength of a customer relationship by analyzing usage patterns and engagement to predict the likelihood of renewal.
+pinot	Pinot is a real-time distributed analytics database designed for low-latency queries on large-scale datasets.
+mitre-attack	MITRE ATT&CK is a knowledge base and framework that details cyber adversary tactics and techniques. It is used by cybersecurity professionals to understand, detect, and mitigate threats.
+rhino	Rhino is a 3D modeling software used for creating and editing complex curves, surfaces, and solids. It is utilized in industries such as architecture, industrial design, and engineering to produce detailed 3D designs.
+gorilla	Gorilla is a toolkit of libraries for the Go programming language used to develop web applications and services. It helps developers manage URL routing, secure sessions, and websocket connections.
+sentence-transformers	Sentence Transformers is a Python framework that produces embeddings for text and images. It is used to measure semantic similarity for tasks like semantic search, clustering, and information retrieval.
+mdm	MDM is an acronym postings use two ways: master data management, the practice of keeping one authoritative copy of core business records such as customers and products, and mobile device management, administering and securing the phones and laptops a company issues.
+evm	EVM is an acronym postings use two ways: the Ethereum Virtual Machine, the runtime that executes smart contracts on Ethereum and the chains compatible with it, and earned value management, a project-control technique that measures progress by comparing work completed against budget and schedule.

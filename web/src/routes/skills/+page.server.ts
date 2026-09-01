@@ -1,6 +1,5 @@
 import { skillLabel } from '$lib/facets';
 import { loadSkillDescriptions } from '$lib/skillDescriptions';
-import { isGlossaryPublished } from '$lib/skillGlossary';
 import type { PageServerLoad } from './$types';
 
 // The glossary index: every skill that has an entry, grouped by the first character of
@@ -30,7 +29,6 @@ export const load: PageServerLoad = async ({ setHeaders }) => {
 
   return {
     total: slugs.length,
-    published: isGlossaryPublished(slugs.length),
     groups: [...groups.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([letter, skills]) => ({

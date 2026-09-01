@@ -2,14 +2,8 @@ import { error, redirect } from '@sveltejs/kit';
 import { SKILL_ALIASES } from '$lib/generated/skillAliases';
 import { skillLabel } from '$lib/facets';
 import { serverApi } from '$lib/server/api';
-import {
-  MIN_SKILL_OPEN,
-  displayAliases,
-  isGlossaryPublished,
-  showsPostings,
-  topNeighbours,
-} from '$lib/skillGlossary';
-import { hasSkillDescription, loadSkillDescriptions } from '$lib/skillDescriptions';
+import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from '$lib/skillGlossary';
+import { loadSkillDescriptions } from '$lib/skillDescriptions';
 import type { PageServerLoad } from './$types';
 
 // One skill's glossary entry: what it is, what else it is called, what it is named
@@ -69,18 +63,15 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
     slug,
     label,
     description,
-    // Indexable only once the glossary is one — the same threshold the footer link
-    // and the sitemap shard already read.
-    published: isGlossaryPublished(Object.keys(catalog).length),
     aliases: displayAliases(aliasTable[slug] ?? [], slug, label),
-    // Filtered to skills that HAVE a page: every neighbour is a link, and one to an
-    // undescribed skill is a 404 published from a page whose whole claim is that it is
-    // worth linking to. The block empties itself while coverage is thin.
+    // Filtered against the catalogue, not against the dictionary: a facet value left
+    // behind by a skill the dictionary no longer emits would otherwise be published as
+    // a link to a 404, from the page whose whole claim is that it is worth linking to.
     neighbours: topNeighbours(
       counts.facets.skills ?? {},
       slug,
       NEIGHBOUR_LIMIT,
-      hasSkillDescription
+      (s) => catalog[s] !== undefined
     ).map((s) => ({ slug: s, label: skillLabel(s) })),
     total: counts.total,
     // The block, not the count: the count is stated either way, because "3 open
