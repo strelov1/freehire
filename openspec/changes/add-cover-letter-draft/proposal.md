@@ -34,9 +34,9 @@ tailoring context it reads are already computed and cached by the time the candi
 - **Three entry points share one chain**: `POST /me/cvs/:id/cover-letter` runs it, `GET` serves the
   stored draft and never calls a model, and an assistant tool `cover_letter_draft` calls the same
   code so the chat path cannot drift from the button path.
-- **The draft consumes a daily allowance** once `plan-limits` lands. Until then the endpoint is
-  unmetered, and the allowance is wired in as a follow-up — this change does not implement the
-  meter.
+- **The draft consumes a daily allowance.** `plan-limits` landed on main in #2271 while this
+  change was being built, so the meter is no longer deferred: drafting adds one value to
+  `internal/ai/plan`'s metered-feature vocabulary and reserves against it on the write path only.
 
 Out of scope for this change: filling the letter into a live apply form via the extension,
 exporting it as a file, revision history, and tone/voice settings. Each is a seam, not a feature
@@ -92,5 +92,6 @@ nothing about how attribution works.
 
 **Depends on**
 
-`add-plan-limits` for the daily allowance and the 402 body. That change is at 0/45 tasks, so the
-metering task here is explicitly sequenced last and may ship separately.
+`add-plan-limits` for the daily allowance and the 402 body. It landed on main in #2271 during this
+change's implementation, so `internal/ai/plan` is available and the metering task is no longer
+sequenced behind another change — it gains one `plan.Feature` value and reserves on the write path.

@@ -52,7 +52,7 @@
 - [ ] 8.1 Write `internal/candidate/coverletter/AGENTS.md`: the scope, the three stages, the provenance gate and why it is in the service, the language inversion against `matchanalysis`, and the audit floor.
 - [ ] 8.2 Add the package to the module-files table in the root `CLAUDE.md`, and run `pnpm check:links` so the new relative link resolves.
 
-## 9. Metering (sequenced last — depends on add-plan-limits)
+## 9. Metering (unblocked — add-plan-limits landed on main in #2271)
 
-- [ ] 9.1 Once `add-plan-limits` has landed its allowance surface, widen the metered-feature vocabulary to admit the cover letter and reserve an allowance on the POST path only. The GET path stays free, since it calls no model.
+- [ ] 9.1 Add a cover-letter value to `internal/ai/plan`'s `Feature` vocabulary and `AllFeatures`, give it a free-daily and pro-fair-use figure, and reserve against it on the POST path only. The GET path stays free, since it calls no model.
 - [ ] 9.2 Test that an exhausted allowance refuses the POST with a 402 naming the feature and the reset instant, and that the same account can still read its stored draft.
