@@ -99,12 +99,21 @@
 
 ## 5. Verification and rollout
 
-- [ ] 5.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`,
-      then the full `go test -tags=integration ./...` since behaviour changed.
-- [ ] 5.2 `pnpm check:sql` is a no-op here (no migration added) — confirm, and confirm
-      `golangci-lint run` reports nothing new.
-- [ ] 5.3 Write the rollout runbook into the change: stop `freehire-reindexw.timer`,
-      `REINDEX_DEDUP_ONLY=1`, full `make reindex`, restart the timer.
+- [x] 5.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`,
+      then the full `go test -tags=integration ./...` since behaviour changed. DONE 2026-09-01:
+      gofmt silent, both vets clean, 175 packages green untagged, 183 green tagged, exit 0.
+- [x] 5.2 `pnpm check:sql` is a no-op here (no migration added) — confirm, and confirm
+      `golangci-lint run` reports nothing new. CONFIRMED: the diff touches no file under
+      `migrations/`, so squawk has nothing to lint. `golangci-lint run --build-tags=integration
+      --new-from-rev=origin/main` reports 3 findings, all in `me_credits_*` files this branch
+      never touched — they read as "new" only because origin/main has moved ahead of the branch
+      point. Nothing new in the 19 files this change owns.
+- [x] 5.3 Write the rollout runbook into the change: stop `freehire-reindexw.timer`,
+      `REINDEX_DEDUP_ONLY=1`, full `make reindex`, restart the timer. DONE — see design.md's
+      Migration Plan, now carrying the measured expectations: the marker release will move
+      public catalogue figures (42 633 rows were stranded behind closed owners), the first
+      release run is the slow one, and a rollback does NOT re-hide the freed rows because the
+      old code cannot reconsider a fuzzy marker at all.
 - [ ] 5.4 After deploy, re-run the four URLs from issue #2225 and record the results: both affected
       searches return `total: 1`, both controls stay `total: 1`. Comment on the issue with the
       outcome.

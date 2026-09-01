@@ -168,15 +168,31 @@ through a rebuild or a drain push:
 1. Deploy.
 2. `systemctl stop freehire-reindexw.timer` — a scheduled rebuild colliding with the manual one
    queues behind it in Meilisearch's serial task queue and looks like a hang.
-3. `REINDEX_DEDUP_ONLY=1` — releases stale fuzzy markers and queues the freed rows. No Meilisearch
-   client, so `search-drain` need not be paused.
+3. `REINDEX_DEDUP_ONLY=1` — releases stale fuzzy markers and queues the freed rows. No
+   Meilisearch client, so `search-drain` need not be paused, and it is what drains the queue.
+
+   **Expect a visible jump in the catalogue count.** 42 633 open duplicates were sitting behind
+   a closed owner on 2026-09-01 (out of 1 529 849 open duplicates, 406 348 of them fuzzy-marked).
+   Every one whose cluster has genuinely dissolved becomes canonical here and re-enters search.
+   That is the bug being fixed, not a regression, but it will move public figures and should be
+   said out loud rather than discovered.
+
+   This step is also the slow one on first run: the pass now re-decides rows it used to skip, so
+   it loads descriptions for buckets that were previously invisible to it. Run it on its own and
+   let it finish before step 4.
 4. Full `make reindex` — the only thing that rewrites the geography of every existing document.
+   Note both this query and the one it replaces exceed 20 minutes at full catalogue (measured
+   above); budget for the rebuild the way you already do, not for a fast one.
 5. Re-verify the four URLs from issue #2225: the two affected searches must return `total: 1`, the
-   two controls must stay `total: 1`.
+   two controls must stay `total: 1`. Check `/jobs/:slug/copies` on both reproductions too — it
+   should now list every city, which is what the issue asked for by name.
 6. Restart the timer.
 
-Rollback is a redeploy of the previous binary plus a full reindex; no data is destroyed, since
-every marker the release step cleared is re-derived by the next dedup run.
+Rollback is a redeploy of the previous binary plus a full reindex. No data is destroyed: markers
+are derived state, and the next dedup run re-computes whatever the release cleared. The one
+asymmetry worth knowing is that rolling back does NOT re-hide the rows freed in step 3 — the old
+code cannot re-mark them, because being unable to reconsider a fuzzy marker is the defect. They
+simply stay visible, which is the safe direction.
 
 ## Open Questions
 
