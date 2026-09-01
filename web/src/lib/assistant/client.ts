@@ -116,24 +116,71 @@ export function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): T
   );
 }
 
-/** What to tell the candidate when a turn does not start.
+/** A turn the plan would not allow.
  *
- *  A refused turn (402) already carries a sentence written for them — which feature ran
- *  out and when it comes back — so it is passed through verbatim. Anything else is ours to
- *  explain, and a bare status is all there is to say about it.
+ *  It carries what the server sent rather than only a sentence, because the two refusals a
+ *  candidate can meet have different remedies: a spent daily allowance means come back
+ *  tomorrow, while a session that reached its turn ceiling can be continued right now by
+ *  spending another of the day's sessions. `canExtend` is which one this is. */
+export class TurnRefused extends Error {
+  readonly sessionId: string;
+  readonly canExtend: boolean;
+  readonly turns: number;
+  readonly ceiling: number;
+
+  constructor(
+    message: string,
+    sessionId: string,
+    canExtend: boolean,
+    turns: number,
+    ceiling: number,
+  ) {
+    super(message);
+    this.name = 'TurnRefused';
+    this.sessionId = sessionId;
+    this.canExtend = canExtend;
+    this.turns = turns;
+    this.ceiling = ceiling;
+  }
+}
+
+/** What to throw when a turn does not start.
+ *
+ *  A refused turn (402) already carries a sentence written for the candidate — which
+ *  feature ran out and when it comes back — so that is passed through verbatim, along with
+ *  whether this particular refusal can be lifted by extending the session.
  *
  *  Reading the body cannot be allowed to replace one failure with another: a refusal whose
  *  body is unreadable still has to surface as the refusal it is. */
-async function turnFailureMessage(res: Response, failure: string): Promise<string> {
-  if (res.status === 402) {
-    try {
-      const body = await res.json();
-      if (body && typeof body.error === 'string') return body.error;
-    } catch {
-      // fall through to the generic sentence below
-    }
+async function turnFailure(res: Response, sessionId: string, failure: string): Promise<Error> {
+  if (res.status !== 402) {
+    return new Error(`${failure} (${res.status})`);
   }
-  return `${failure} (${res.status})`;
+  try {
+    const body = await res.json();
+    const session = body?.session ?? {};
+    return new TurnRefused(
+      typeof body?.error === 'string' ? body.error : `${failure} (402)`,
+      sessionId,
+      body?.can_extend === true,
+      typeof session.turns === 'number' ? session.turns : 0,
+      typeof session.ceiling === 'number' ? session.ceiling : 0,
+    );
+  } catch {
+    return new TurnRefused(`${failure} (402)`, sessionId, false, 0, 0);
+  }
+}
+
+/** Buy this tailoring session another ceiling's worth of turns, out of the day's tailoring
+ *  allowance. Rejects with a TurnRefused when there is none left to spend. */
+export async function extendSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/extend`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw await turnFailure(res, sessionId, 'could not continue this session');
+  }
 }
 
 /** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
@@ -156,7 +203,7 @@ function streamTurn(
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw new Error(await turnFailureMessage(res, failure));
+      throw await turnFailure(res, sessionId, failure);
     }
     if (!res.body) {
       throw new Error('the assistant returned no stream');
