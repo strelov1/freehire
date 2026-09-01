@@ -71,9 +71,12 @@ func (d letterDrafter) draft(
 	if err != nil {
 		return nil, err
 	}
-	// Produces an analysis when none is cached, as the assistant's interview_context tool and
-	// the autopilot's run plan already do, and is not charged for it: a candidate who asks for
-	// a letter on a vacancy they never analysed gets one.
+	// REQUIRES a cached analysis; it does not produce one. Producing is Ensure's, and Ensure
+	// takes the coalescing Request the autopilot assembles — a letter has no business
+	// assembling that, and no business paying for an analysis the candidate did not ask for.
+	// An absent analysis therefore surfaces as ErrNoAnalysis, which the shared error mapper
+	// renders as "run the fit analysis first": a state the candidate can act on in the same
+	// workspace, one tab over.
 	tailoring, err := d.fit.TailoringContext(ctx, userID, job)
 	if err != nil {
 		return nil, err

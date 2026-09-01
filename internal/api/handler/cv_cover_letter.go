@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -89,8 +88,12 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 			"nothing in your experience bank is yours to cite yet: confirm an achievement first")
 	case err != nil:
 		releaseLetterCharge(h.plans, userID, charge)
-		log.Printf("coverletter: drafting for user %d job %d: %v", userID, jobID, err)
-		return fiber.NewError(fiber.StatusBadGateway, "the letter could not be drafted")
+		// Handed to the shared mapper rather than flattened here. It already knows the states
+		// this path meets — fitanalysis.ErrNoAnalysis is a 409 saying "run the fit analysis
+		// first", and errors.go says outright that the status is decided there rather than at
+		// each call site. Flattening every failure into 502 turned that answer into a Bad
+		// Gateway on production, on the majority of vacancies, where no analysis is cached.
+		return err
 	case letter == nil:
 		// The LLM is unconfigured. Nothing was spent and nothing was written.
 		releaseLetterCharge(h.plans, userID, charge)

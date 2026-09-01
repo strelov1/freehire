@@ -423,3 +423,33 @@ func TestCoverLetter_ExhaustedAllowanceRefusesTheWriteButNotTheRead(t *testing.T
 		t.Errorf("read after refusal = (%d, %+v), want the stored letter served", status, got)
 	}
 }
+
+// Shipped wrong once and reached production: the endpoint flattened every chain failure into a
+// 502, so the commonest state of all — a vacancy the candidate has not analysed yet — arrived
+// as a Bad Gateway instead of the 409 the shared error mapper already had an answer for.
+func TestCoverLetter_WithoutAnAnalysisSaysToRunOneRatherThanFailing(t *testing.T) {
+	pool := startPostgres(t)
+	f := newCoverLetterFixture(t, pool)
+
+	// No seedAnalysis here: this is a vacancy nobody has analysed, which on production is most
+	// of them.
+	model := chainFor(uuid.New(), "NEVER")
+	f.h.letter.chain = coverletter.NewAnalyzer(llm.NewWithModel(model))
+	f.h.llm = llmBinding{client: llm.NewWithModel(model)}
+
+	resp := doCV(t, f.app, fiber.MethodPost, "/api/v1/me/cvs/"+f.tailored.ID.String()+"/cover-letter", f.token, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("status = %d, want 409 — an un-analysed vacancy is a state the candidate can fix, not a gateway fault", resp.StatusCode)
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	if !strings.Contains(body.Error, "fit analysis") {
+		t.Errorf("error = %q, want it to name the fit analysis so the candidate knows what to do", body.Error)
+	}
+	if model.calls != 0 {
+		t.Errorf("model called %d times, want 0", model.calls)
+	}
+}

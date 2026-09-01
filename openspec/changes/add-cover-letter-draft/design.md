@@ -104,12 +104,22 @@ This inverts `matchanalysis`' rule deliberately, and the draft carries a languag
 reason the fit analysis does — so a candidate whose profile language changes does not silently keep
 a letter aimed at the wrong reader.
 
-### The fit analysis is required, and drafting will produce one if absent
+### A cached fit analysis is a precondition, and drafting does NOT produce one
 
-The chain reads `TailoringContext`, which needs an analysis. `fitanalysis.Required` already produces
-one when absent and is already used this way by the assistant's `interview_context` tool and the
-autopilot's run plan, neither of which is charged for it. The letter uses the same call, so a
-candidate who asks for a letter on a vacancy they have not analysed gets one rather than an error.
+The chain reads `TailoringContext`, which needs an analysis. This paragraph originally claimed
+`fitanalysis.Required` produces one when absent; **it does not** — it reads the cache and returns
+`ErrNoAnalysis`. Producing is `Ensure`'s, and `Ensure` takes the coalescing `Request` the autopilot
+assembles.
+
+Requiring rather than producing is also the right rule, not merely the available one. An analysis
+is its own metered action; drafting a letter must not quietly run and pay for one the candidate
+did not ask for. So an absent analysis surfaces as `ErrNoAnalysis`, which `errors.go` already
+renders as a 409 saying "run the fit analysis first" — a state the candidate fixes one tab over in
+the same workspace.
+
+This shipped wrong and reached production: the endpoint flattened every chain failure into a 502,
+so the commonest state of all arrived as a gateway fault with no hint of what to do. The handler
+now hands unknown failures to the shared mapper, which is what `errors.go` says to do.
 
 ### Storage
 
