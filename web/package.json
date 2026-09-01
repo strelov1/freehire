@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "@sentry/sveltekit": "^10.70.0",
+    "@sentry/sveltekit": "^10.72.0",
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
     "freehire-design-system": "link:../design-system",
