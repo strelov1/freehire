@@ -1245,3 +1245,127 @@ func TestParse_MarketingSeparatorInsensitive(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_MinedBatch4 witnesses the LLM-mined batch 4 vocabulary: the industrial,
+// electronics, enterprise-SaaS and compliance terms the enrichment signal named most
+// and the dictionary did not resolve. Each group probes the routing decision that was
+// made for it, and every rejected token is probed in the false context it was rejected
+// for — a negative case here is what stops a later batch from re-adding it.
+func TestParse_MinedBatch4(t *testing.T) {
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		// Strong aliases: a coined product name or acronym tags on its own.
+		{"jvm server stack", "Java shop running Spring Boot on JBoss, JDBC and JMS.",
+			[]string{"java", "spring", "jboss", "jdbc", "jms"}, nil},
+		{"apple toolchain", "iOS engineer: UIKit in Xcode, no SwiftUI legacy.",
+			[]string{"uikit", "xcode"}, nil},
+		{"security vendors", "SOC analyst: CrowdStrike, Fortinet and CyberArk; CISSP preferred.",
+			[]string{"crowdstrike", "fortinet", "cyberark", "cissp"}, nil},
+		{"regulatory frameworks", "Privacy engineer covering GDPR, CCPA and LGPD; HIPAA a plus.",
+			[]string{"gdpr", "ccpa", "lgpd", "hipaa"}, nil},
+		{"industrial automation", "Controls engineer: Modbus and I2C links into the HMI.",
+			[]string{"modbus", "i2c", "hmi"}, nil},
+		{"silicon verification", "ASIC verification in UVM against the RTL, CMOS process.",
+			[]string{"asic", "uvm", "rtl", "cmos"}, nil},
+		{"aec software", "Estimator using Bluebeam, Navisworks and Procore.",
+			[]string{"bluebeam", "navisworks", "procore"}, nil},
+
+		// Gated: the product token is also ordinary English, so it needs a concrete
+		// technology beside it. Each is probed in the false context it collides with.
+		{"bootstrap a startup", "You will bootstrap the retail team from scratch.", nil, []string{"bootstrap"}},
+		{"bootstrap the framework", "Frontend work in JavaScript with Bootstrap and SCSS.",
+			[]string{"bootstrap", "scss", "javascript"}, nil},
+		{"hibernate the laptop", "Set the store laptop to hibernate overnight.", nil, []string{"hibernate"}},
+		{"hibernate the orm", "Java backend on Hibernate over PostgreSQL.",
+			[]string{"hibernate", "java", "postgresql"}, nil},
+		{"unity the value", "We value unity, teamwork and a positive attitude.", nil, []string{"unity"}},
+		{"unity the engine", "Game developer: Unity and C# for mobile titles.",
+			[]string{"unity", "csharp"}, nil},
+		{"slack the noun", "Warehouse lead. Pick up the slack during peak season.", nil, []string{"slack"}},
+		{"workplace tools corroborated", "Platform engineer on Kubernetes; we run on Slack, Notion and Zoom.",
+			[]string{"slack", "notion", "zoom", "kubernetes"}, nil},
+		{"asana the pose", "Yoga instructor: sequence each asana for mixed-ability classes.", nil, []string{"asana"}},
+		{"bicep the muscle", "Personal trainer: bicep and triceps programming for members.", nil, []string{"bicep"}},
+		{"bicep the azure dsl", "Azure infrastructure as code in Bicep and Terraform.",
+			[]string{"bicep", "azure", "terraform"}, nil},
+		{"puppet the show", "Children's entertainer running puppet shows at weekends.", nil, []string{"puppet"}},
+		{"puppet the config tool", "Linux SRE: Puppet and Ansible across the fleet.",
+			[]string{"puppet", "ansible", "linux"}, nil},
+		{"parquet the flooring", "Fitter laying parquet flooring in period properties.", nil, []string{"parquet"}},
+		{"parquet the format", "Data engineer: Parquet on S3 read through Spark.",
+			[]string{"parquet", "spark"}, nil},
+		{"aws services as names", "Report to Athena and Aurora, our duty managers.", nil, []string{"athena", "aurora"}},
+		{"aws services corroborated", "AWS data stack: Athena over AWS Glue, Aurora for OLTP, Terraform managed.",
+			[]string{"athena", "aurora", "aws-glue", "terraform"}, nil},
+		{"flux the welding consumable", "Welder: flux core wire, MIG and TIG on structural steel.", nil, []string{"flux"}},
+		{"prefect the school role", "Pastoral lead overseeing the prefect system and house points.", nil, []string{"prefect"}},
+
+		// Phrase-only: the bare token is a place, a person, another language's everyday
+		// word, or a different acronym entirely, so only the qualified form resolves.
+		{"plc the company suffix", "Reporting into Barclays PLC group finance.", nil, []string{"plc"}},
+		{"plc the controller", "Maintenance technician doing PLC programming and ladder logic.",
+			[]string{"plc"}, nil},
+		{"palo alto the city", "Hybrid role based in Palo Alto, three days on site.",
+			nil, []string{"palo-alto-networks"}},
+		{"palo alto the vendor", "Network security on Palo Alto Networks firewalls.",
+			[]string{"palo-alto-networks"}, nil},
+		{"primavera the season", "Campanha de primavera para a loja de moda.", nil, []string{"primavera-p6"}},
+		{"primavera the scheduler", "Planner running Primavera P6 on a rail programme.",
+			[]string{"primavera-p6"}, nil},
+		{"maximo the superlative", "Aprovecha el maximo rendimiento del equipo comercial.", nil, []string{"maximo"}},
+		{"maximo the cmms", "Reliability engineer administering IBM Maximo work orders.",
+			[]string{"maximo"}, nil},
+		{"pcb the pollutant", "Environmental consultant: PCB and asbestos remediation surveys.",
+			nil, []string{"pcb"}},
+		{"pcb the board", "Hardware engineer owning PCB design and bring-up.", []string{"pcb"}, nil},
+		{"claude the given name", "You will report to Claude, our regional director.", nil, []string{"claude"}},
+		{"claude the model", "AI engineer building on the Claude API and Hugging Face models.",
+			[]string{"claude", "hugging-face"}, nil},
+		{"copilot the aviator", "First officer and copilot duties on short-haul routes.",
+			nil, []string{"github-copilot", "microsoft-copilot"}},
+		{"copilot the assistant", "Engineers here use GitHub Copilot daily.", []string{"github-copilot"}, nil},
+		{"workday the ordinary noun", "Enjoy a flexible workday and an early Friday finish.",
+			nil, []string{"workday"}},
+		{"workday the hcm suite", "HR systems analyst supporting Workday HCM and ADP Payroll.",
+			[]string{"workday", "adp"}, nil},
+		{"concur the verb", "We concur that customer focus comes first.", nil, []string{"concur"}},
+		{"concur the expense tool", "Finance assistant processing claims in SAP Concur.",
+			[]string{"concur"}, nil},
+
+		// Shop-floor craft tags itself but must not vouch for the gated design words
+		// beside it — the failure that made `cnc` a phrase rather than a word alias.
+		{"cnc tags without corroborating", "CNC operator: read wireframes and 2D drawings before fabrication.",
+			[]string{"cnc"}, []string{"wireframing"}},
+		{"soldering tags without corroborating", "Assembler: soldering and oscilloscope checks; sketch out the rework.",
+			[]string{"soldering", "oscilloscope"}, []string{"sketch"}},
+
+		// Withheld entirely — each was mined above the floor and rejected. A tag here
+		// would be the regression these cases exist to catch.
+		{"informatica is portuguese for it", "Tecnico de informatica para suporte em loja.", nil, []string{"informatica"}},
+		{"soar is sales prose", "Watch your commission soar in our high-growth team.", nil, []string{"soar"}},
+		{"node is anatomy", "Oncology nurse: lymph node assessment and patient education.", nil, []string{"nodejs"}},
+		{"mfa is a fine arts degree", "Studio lead, MFA in graphic design preferred.", nil, []string{"mfa"}},
+		{"kms is kilometres", "Delivery driver covering 300 kms per shift.", nil, []string{"kms"}},
+		{"excel stays untagged", "Cashier: strong Excel and Microsoft Office skills.",
+			nil, []string{"excel", "microsoft-office"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !slices.Contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if slices.Contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}

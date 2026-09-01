@@ -640,6 +640,130 @@ var wordAliases = map[string]string{
 	"maven":            "maven",
 	"genai":            "generative-ai",
 	"expressjs":        "express",
+
+	// LLM-mined batch 4 — jobs.enrichment->skills, freq >= 500 (2026-08 run: 2660
+	// distinct values, 692 already resolved). The gap this batch closes is not another
+	// web framework. It is the vocabulary of the NON-web technical catalogue the crawl
+	// has grown into: industrial automation, electronics and test equipment, enterprise
+	// vendor software, and the compliance frameworks a technical posting names.
+	//
+	// Everything here is a product name or a coined acronym with no ordinary reading.
+	// Three groups are deliberately NOT here:
+	//   - Office and business vocabulary (excel 68k, powerpoint 22k, customer_service
+	//     150k). skilltag is tech-only and the catalogue is two-thirds non-IT, so the
+	//     head of the mined list is correct to miss.
+	//   - Tokens whose bare form is an ordinary English word (bootstrap, hibernate,
+	//     unity, eclipse, slack, zoom, notion, asana, puppet, bicep, athena, aurora,
+	//     bedrock, parquet, loki, prefect, flux, ros) — those are gated in
+	//     ambiguousWords below.
+	//   - Tokens whose bare form is a place, a person, or another language's everyday
+	//     word: informatica (PT/ES "IT"), primavera ("spring"), maximo ("máximo"),
+	//     palo alto, juniper, apollo, intercom, greenhouse, glue, soar, ray, node, mfa
+	//     ("Master of Fine Arts"), kms ("kilometres" in a driving posting), spi
+	//     (PMI's Schedule Performance Index). Each returns only through a qualifying
+	//     phrase, or not at all.
+
+	// jvm / .net server ecosystem
+	"springboot": "spring",
+	"jboss":      "jboss",
+	"weblogic":   "weblogic",
+	"jsp":        "jsp",
+	"jms":        "jms",
+	"jdbc":       "jdbc",
+	"jcl":        "jcl",
+	"xslt":       "xslt",
+	"wpf":        "wpf",
+	"iis":        "iis",
+	// apple / frontend build
+	"uikit":      "uikit",
+	"xcode":      "xcode",
+	"scss":       "scss",
+	"npm":        "npm",
+	"websocket":  "websockets",
+	"websockets": "websockets",
+	// data platforms and pipelines
+	"teradata":    "teradata",
+	"talend":      "talend",
+	"mulesoft":    "mulesoft",
+	"streamlit":   "streamlit",
+	"dataverse":   "dataverse",
+	"onedrive":    "onedrive",
+	"eventbridge": "eventbridge",
+	// devops / observability / virtualisation
+	"teamcity":   "teamcity",
+	"nagios":     "nagios",
+	"solarwinds": "solarwinds",
+	"citrix":     "citrix",
+	"kvm":        "kvm",
+	// networking
+	"vlans": "vlan",
+	"vxlan": "vxlan",
+	"sdn":   "sdn",
+	"sase":  "sase",
+	// security vendors, certifications and regulatory frameworks. A framework is the
+	// thing a security or compliance posting actually names, and each of these spellings
+	// is coined — unlike "soc" (system-on-chip / security operations centre / social)
+	// and "pci" (the bus), which are reachable only as phrases below.
+	"crowdstrike": "crowdstrike",
+	"fortinet":    "fortinet",
+	"cyberark":    "cyberark",
+	"osint":       "osint",
+	"nist":        "nist",
+	"fedramp":     "fedramp",
+	"cmmc":        "cmmc",
+	"cissp":       "cissp",
+	"cism":        "cism",
+	"ccna":        "ccna",
+	"gdpr":        "gdpr",
+	"ccpa":        "ccpa",
+	"lgpd":        "lgpd",
+	"hipaa":       "hipaa",
+	"itar":        "itar",
+	"dfars":       "dfars",
+	// embedded, electronics and industrial automation
+	"firmware": "firmware",
+	"asic":     "asic",
+	"cmos":     "cmos",
+	"rtl":      "rtl",
+	"uvm":      "uvm",
+	"hmi":      "hmi",
+	"modbus":   "modbus",
+	"i2c":      "i2c",
+	"simulink": "simulink",
+	// engineering analysis
+	"fea": "fea",
+	"cfd": "cfd",
+	// AEC / construction software
+	"bluebeam":     "bluebeam",
+	"microstation": "microstation",
+	"navisworks":   "navisworks",
+	"procore":      "procore",
+	// engineering-side vendor SaaS
+	"trello":    "trello",
+	"atlassian": "atlassian",
+	"testrail":  "testrail",
+
+	// batch 4, gated half — declared here because ambiguousWords marks wordAliases
+	// keys, not canonicals. Each is a real product whose bare token is also ordinary
+	// English, so it tags only with a concrete technology beside it.
+	"bootstrap": "bootstrap",
+	"hibernate": "hibernate",
+	"unity":     "unity",
+	"eclipse":   "eclipse",
+	"slack":     "slack",
+	"zoom":      "zoom",
+	"notion":    "notion",
+	"asana":     "asana",
+	"puppet":    "puppet",
+	"bicep":     "bicep",
+	"athena":    "athena",
+	"aurora":    "aurora",
+	"bedrock":   "bedrock",
+	"parquet":   "parquet",
+	"loki":      "loki",
+	"prefect":   "prefect",
+	"flux":      "flux",
+	"ros":       "ros",
 }
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
@@ -747,6 +871,33 @@ var ambiguousWords = map[string]bool{
 	"canva":         true,
 	"lottie":        true,
 	"wireframes":    true,
+	// batch 4 — products whose bare token is ordinary English, a mythological name or
+	// a body part, in exactly the postings this dictionary runs over: a startup that
+	// "bootstraps" itself, a laptop that "hibernates", a culture blurb about "unity",
+	// a solar "eclipse", "cut me some slack", "zoom in on the detail", "the notion
+	// that", the yoga "asana", a "puppet" show, the "bicep" a trainer works, Athena
+	// and Aurora and Loki as names, "parquet flooring" on a construction posting, a
+	// school "prefect", welding "flux core", and "ros" inside deaccented Spanish.
+	// Every one of them is unmistakable next to a named technology and noise without
+	// one, which is precisely what the corroboration gate decides.
+	"bootstrap": true,
+	"hibernate": true,
+	"unity":     true,
+	"eclipse":   true,
+	"slack":     true,
+	"zoom":      true,
+	"notion":    true,
+	"asana":     true,
+	"puppet":    true,
+	"bicep":     true,
+	"athena":    true,
+	"aurora":    true,
+	"bedrock":   true,
+	"parquet":   true,
+	"loki":      true,
+	"prefect":   true,
+	"flux":      true,
+	"ros":       true,
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -1031,6 +1182,67 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"autodesk inventor", "autodesk-inventor"},
 	{"ptc creo", "creo"}, {"creo parametric", "creo"},
 	{"cadence virtuoso", "cadence-virtuoso"},
+
+	// LLM-mined batch 4 — the phrase half. Every term here was mined as a bare token
+	// too, and every one is routed through a phrase instead because the bare form has
+	// a reading this catalogue carries in bulk.
+	// .net server stack — the word pass cannot see a dotted or two-word product name.
+	{".net core", "dotnet"}, {"asp.net core", "dotnet"},
+	{"entity framework", "dotnet"},
+	// AWS/Azure/SAP services named after ordinary words. "glue" is adhesive on a
+	// manufacturing posting, "synapse" is neuroscience on a clinical one, and bare
+	// "hana" is a given name — the vendor prefix is what makes them products.
+	{"aws glue", "aws-glue"},
+	{"azure synapse", "azure-synapse"}, {"synapse analytics", "azure-synapse"},
+	{"sap hana", "sap-hana"}, {"s/4hana", "sap-hana"}, {"s4hana", "sap-hana"},
+	// Network security vendors named after places and plants. "Palo Alto" is the city
+	// in every Bay Area address block and "juniper" is a shrub; the qualified product
+	// name is the only safe route.
+	{"palo alto networks", "palo-alto-networks"},
+	{"juniper networks", "juniper"}, {"junos", "juniper"},
+	// Compliance frameworks whose acronym alone is another thing entirely: "PCI" is the
+	// bus, "SOC" is a system-on-chip or a security operations centre, "ISO" is the
+	// organisation (and a camera setting). The versioned spelling is unambiguous.
+	{"pci dss", "pci-dss"},
+	{"soc 2", "soc-2"}, {"soc2", "soc-2"},
+	{"iso 9001", "iso-9001"},
+	{"iso 13485", "iso-13485"},
+	{"iso 26262", "iso-26262"},
+	{"as9100", "as9100"},
+	// Industrial automation. "PLC" is the British company suffix — "… PLC" closes a
+	// legal entity name in a third of UK postings — so the controller returns only
+	// through what an engineer actually writes beside it. "CAN" as a bare token is
+	// hopeless for the obvious reason.
+	{"plc programming", "plc"}, {"ladder logic", "plc"}, {"allen bradley", "plc"},
+	{"can bus", "can-bus"},
+	// "PCB" is also polychlorinated biphenyl, which this catalogue meets on every
+	// environmental-remediation posting.
+	{"pcb design", "pcb"}, {"pcb layout", "pcb"},
+	{"gd&t", "gd-t"}, {"geometric dimensioning and tolerancing", "gd-t"},
+	// Shop-floor vocabulary. These ARE the skill on a machinist, technician or
+	// assembler posting, so they must tag on their own — but they are declared as
+	// phrases and listed in nonCorroboratingPhrases so they never vouch for the gated
+	// design and software words beside them. A CNC operator who "reads wireframes and
+	// 2D drawings" is not doing UX, and as a strong word alias `cnc` said he was.
+	{"cnc", "cnc"},
+	{"soldering", "soldering"},
+	{"oscilloscope", "oscilloscope"}, {"oscilloscopes", "oscilloscope"},
+	// Engineering software named after an animal, a season, a superlative and two
+	// letters: rhino, primavera (PT/ES "spring"), maximo ("máximo"), nx.
+	{"siemens nx", "siemens-nx"},
+	{"rhino 3d", "rhino"}, {"rhinoceros 3d", "rhino"},
+	{"primavera p6", "primavera-p6"},
+	{"ibm maximo", "maximo"},
+	{"lean six sigma", "six-sigma"},
+	// AI tooling. The model names are all ordinary nouns or given names — Claude,
+	// Gemini, Copilot (an aviator) — so each is reachable only as a qualified product.
+	{"hugging face", "hugging-face"}, {"huggingface", "hugging-face"},
+	{"fine-tuning", "fine-tuning"}, {"fine tuning", "fine-tuning"},
+	{"large language models", "llm"}, {"large language model", "llm"},
+	{"github copilot", "github-copilot"},
+	{"microsoft copilot", "microsoft-copilot"}, {"copilot studio", "microsoft-copilot"},
+	{"google gemini", "gemini"}, {"gemini api", "gemini"},
+	{"claude code", "claude"}, {"anthropic claude", "claude"}, {"claude api", "claude"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role
@@ -1166,6 +1378,26 @@ var professionalPhraseAliases = []phraseAlias{
 	{"gtm strategy", "go-to-market"}, {"gtm motion", "go-to-market"},
 	{"gtm plan", "go-to-market"}, {"gtm execution", "go-to-market"},
 	{"gtm container", "google-tag-manager"},
+
+	// LLM-mined batch 4 — the business-software half. These sit here rather than with
+	// the engineering vocabulary for the reason the list exists: a board that only ever
+	// posts recruiters, AEs and payroll admins names Workday and Gong all day, and
+	// HasEngineering must not read that as a technical board.
+	//
+	// Each is phrase-routed because the vendor took an ordinary word: a "flexible
+	// workday", "I concur", a "gong", the god Apollo, the building "intercom", a
+	// "greenhouse". Bare "adp" is three letters, so it carries its product suffix too.
+	{"workday hcm", "workday"}, {"workday financials", "workday"},
+	{"workday adaptive", "workday"}, {"workday integrations", "workday"},
+	{"sap concur", "concur"},
+	{"adp workforce now", "adp"}, {"adp payroll", "adp"},
+	{"apollo.io", "apollo-io"},
+	{"gong.io", "gong"},
+	{"linkedin sales navigator", "linkedin-sales-navigator"},
+	{"sales navigator", "linkedin-sales-navigator"},
+	// Unambiguous single-token vendor names, same shape as quickbooks/bamboohr above.
+	{"zoominfo", "zoominfo"}, {"salesloft", "salesloft"},
+	{"veeva", "veeva"}, {"yardi", "yardi"},
 }
 
 // nonCorroboratingPhrases are the phrase canonicals that tag on their own but do NOT
@@ -1200,6 +1432,14 @@ var nonCorroboratingPhrases = map[string]bool{
 	"help-desk":            true,
 	"service-desk":         true,
 	"ticket-resolution":    true,
+	// batch 4 — shop-floor craft. Same doctrine, opposite direction: the term is real
+	// and specific, but the posting carrying it is a machinist's, not an engineer's,
+	// and the design vocabulary (wireframes, sketch, prototyping) is ordinary prose
+	// there. Tagging the craft is right; letting it lift the gate is how a CNC
+	// operator came back tagged with wireframing.
+	"cnc":          true,
+	"soldering":    true,
+	"oscilloscope": true,
 }
 
 // nonEngineeringBareCanonicals are non-engineering disciplines whose canonical also has a
