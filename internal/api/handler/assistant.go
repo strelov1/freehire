@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -68,6 +69,17 @@ type assistantHandlers struct {
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
 	// agent cannot drift from what the profile page shows.
 	profile *profileHandlers
+	// letters, letterChain and letterBank serve cover_letter_draft. They are the SAME store
+	// and the same chain the HTTP endpoint uses, which is what stops the chat path and the
+	// button path from drifting into two different letters for one pair. Nil-safe.
+	letters     *coverletter.Store
+	letterChain *coverletter.Analyzer
+	letterBank  coverletter.Retriever
+	// letterProfile composes the contact-free candidate projection the letter is written
+	// from. It is the bank layered over the structured resume - the same composition the fit
+	// chain reads, and deliberately NOT reviewableResume's file-only structure: a letter
+	// speaks for the candidate, where the ATS report judges their document.
+	letterProfile candidateProfiler
 	// experience backs the bank tools, which every preset offers.
 	experience experienceBankTools
 	// screeningAnswers backs screening_answers_set, which every preset offers for the

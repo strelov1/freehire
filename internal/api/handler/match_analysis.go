@@ -376,21 +376,31 @@ func (h *matchHandlers) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bo
 // extracted, or stale) — the fit chain then produces no analysis (the raw CV is never sent as
 // a fallback). Best-effort: a read error degrades to the zero value.
 func (h *matchHandlers) candidateProfile(c *fiber.Ctx, userID int64) resumeextract.Professional {
+	return candidateProfileFrom(c.Context(), h.resume, h.candidateBank(), userID)
+}
+
+// candidateProfileFrom composes the contact-free projection the model-facing surfaces read:
+// the experience bank, layered over what the structured résumé still owns (education,
+// languages, the summary, the years estimate).
+//
+// It takes a context.Context rather than a *fiber.Ctx because three callers need it and one of
+// them — the assistant's cover_letter_draft tool — runs from a detached SSE-writer goroutine
+// with no request in scope at all. A rule written where one caller happens to reach it is a
+// rule the others never meet; fitanalysis's own AGENTS.md records that same lesson.
+func candidateProfileFrom(ctx context.Context, resumeStore *resume.Store, bank candidateProfiler, userID int64) resumeextract.Professional {
 	// The structured résumé still owns education, languages, the summary and the years
 	// estimate, and is read best-effort: a stale or absent structure now costs those
 	// sections, not the whole analysis.
 	var st resumeextract.Structured
-	if h.resume.Enabled() {
-		if stored, ok, err := h.resume.Structured(c.Context(), userID); err == nil && ok {
+	if resumeStore != nil && resumeStore.Enabled() {
+		if stored, ok, err := resumeStore.Structured(ctx, userID); err == nil && ok {
 			st = stored
 		}
 	}
-
-	bank := h.candidateBank()
 	if bank == nil {
 		return resumeextract.Professional{}
 	}
-	profile, err := bank.Professional(c.Context(), userID, st)
+	profile, err := bank.Professional(ctx, userID, st)
 	if err != nil {
 		log.Printf("candidate profile: user %d: %v", userID, err)
 		return resumeextract.Professional{}

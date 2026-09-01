@@ -86,6 +86,9 @@ type cvHandlers struct {
 	letters     *coverletter.Store
 	letterChain *coverletter.Analyzer
 	bank        coverletter.Retriever
+	// letterProfile composes the contact-free candidate projection a letter is written from:
+	// the bank over the structured resume, the same composition the fit chain reads.
+	letterProfile candidateProfiler
 	// llm binds a model call to the caller's own gateway credential, tagged by feature.
 	llm llmBinding
 }

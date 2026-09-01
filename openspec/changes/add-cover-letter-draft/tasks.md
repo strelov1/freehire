@@ -36,8 +36,8 @@
 
 ## 6. Assistant tool
 
-- [ ] 6.1 Add the `cover_letter_draft` tool to the assistant's registry, calling the same chain and the same store as the endpoint. Test that it acts as the session's authenticated owner.
-- [ ] 6.2 Test that the tool path applies the provenance gate identically to the endpoint path — the same fixture, both entry points, the same withheld atoms.
+- [x] 6.1 Add the `cover_letter_draft` tool to the assistant's registry, calling the same chain and the same store as the endpoint. Test that it acts as the session's authenticated owner.
+- [x] 6.2 Test that the tool path applies the provenance gate identically to the endpoint path — the same fixture, both entry points, the same withheld atoms.
 
 ## 7. Workspace surface
 

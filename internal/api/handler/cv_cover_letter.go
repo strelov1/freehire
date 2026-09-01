@@ -86,10 +86,12 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	candidate, ok := reviewableResume(h.resume, c, userID)
-	if !ok {
-		return fiber.NewError(fiber.StatusConflict, "upload a CV first: a letter is written from your own experience")
-	}
+	// The BANK layered over the structured resume, not reviewableResume's file-only
+	// structure. That distinction is the one match_analysis.go records beside its own reader:
+	// the ATS report judges the document, so it reads the file; a letter speaks for the
+	// candidate, so it reads what the candidate has. A letter built from the file alone would
+	// also be unable to cite an achievement banked from chat.
+	candidate := candidateProfileFrom(c.Context(), h.resume, h.letterProfile, userID)
 
 	// The stored draft's own timestamp identifies this attempt. A retry of the same request
 	// computes the same reference and takes nothing more; a redraft happens after a successful

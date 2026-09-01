@@ -68,6 +68,7 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchI
 		h.cvJobMatchTool(cvID, jobID),
 		h.cvEvidenceFidelityTool(),
 		h.cvPageCountTool(cvID),
+		h.coverLetterDraftTool(jobID),
 	}
 }
 

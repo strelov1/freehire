@@ -485,6 +485,7 @@ func Register(app *fiber.App, cfg Config) {
 	cvH.letters = coverletter.NewStore(coverletter.NewQueriesRepository(queries))
 	cvH.letterChain = coverletter.NewAnalyzer(cfg.LLM)
 	cvH.bank = bank
+	cvH.letterProfile = bank
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	discordH := newDiscordHandlers(queries, cfg.JWTSecret, cfg.DiscordBotToken, cfg.DiscordApplicationID, cfg.DiscordPublicKey, cfg.DiscordGuildID, cfg.FrontendOrigin, contributionsH.intake)
@@ -562,6 +563,13 @@ func Register(app *fiber.App, cfg Config) {
 	if cfg.Realtime != nil {
 		assistantH.realtime = cfg.Realtime
 	}
+	// cover_letter_draft shares the endpoint's store and chain, so the chat path and the
+	// button path cannot drift into two different letters for one pair.
+	assistantH.letters = cvH.letters
+	assistantH.letterChain = cvH.letterChain
+	assistantH.letterBank = bank
+	assistantH.letterProfile = bank
+
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the
