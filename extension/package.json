@@ -28,7 +28,7 @@
     "eslint-plugin-oxlint": "^1.77.0",
     "eslint-plugin-svelte": "^3.22.0",
     "globals": "^17.8.0",
-    "happy-dom": "^20.11.6",
+    "happy-dom": "^20.11.15",
     "oxlint": "^1.77.0",
     "svelte-check": "^4.7.3",
     "svelte-eslint-parser": "^1.8.0",
