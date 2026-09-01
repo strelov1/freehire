@@ -17,7 +17,14 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
     api.sitemapJobBoundaries(JOB_SITEMAP_CHUNK),
   ]);
 
-  const locs = [`${origin}/sitemap-pages.xml`, `${origin}/sitemap-insights.xml`];
+  // The skills glossary is one file rather than a shard per letter: it is under a
+  // thousand URLs and enumerating it reads nothing, so there is nothing to shard away
+  // from — unlike the role landings below, where each shard pays its own facet call.
+  const locs = [
+    `${origin}/sitemap-pages.xml`,
+    `${origin}/sitemap-insights.xml`,
+    `${origin}/sitemap-skills.xml`,
+  ];
   // One role sub-sitemap per category. The category list is a compile-time constant,
   // so naming all of them costs no read here — each shard pays its own single facet
   // call when a crawler actually follows it.

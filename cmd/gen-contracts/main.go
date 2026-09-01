@@ -58,7 +58,10 @@ func run() error {
 	if err := os.WriteFile(outputPath, []byte(b.String()), 0o644); err != nil {
 		return err
 	}
-	return os.WriteFile(skillDescriptionsPath, []byte(genSkillDescriptions()), 0o644)
+	if err := os.WriteFile(skillDescriptionsPath, []byte(genSkillDescriptions()), 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(skillAliasesPath, []byte(genSkillAliases()), 0o644)
 }
 
 // genStructs runs tygo for Enrichment then Job (Job references Enrichment, so

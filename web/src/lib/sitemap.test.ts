@@ -5,6 +5,7 @@ import {
   collectionPaths,
   blogPaths,
   roleLandingPaths,
+  skillGlossaryPaths,
 } from './sitemap';
 
 describe('sitemap static paths', () => {
@@ -115,5 +116,22 @@ describe('SITEMAP_CHUNK', () => {
   it('stays well under the sitemap protocol cap', () => {
     expect(SITEMAP_CHUNK).toBe(10000);
     expect(SITEMAP_CHUNK).toBeLessThanOrEqual(50000 / 4);
+  });
+});
+
+describe('skillGlossaryPaths', () => {
+  it('lists the index and one page per described skill', () => {
+    expect(skillGlossaryPaths(['dbt', 'kubernetes'])).toEqual([
+      '/skills',
+      '/skills/dbt',
+      '/skills/kubernetes',
+    ]);
+  });
+
+  // The route 404s on a skill with no description, so listing every canonical would
+  // point a crawler at pages that do not exist. It takes the described set for exactly
+  // that reason — the caller reads it from the same catalog the route does.
+  it('lists nothing but the index when nothing is described', () => {
+    expect(skillGlossaryPaths([])).toEqual(['/skills']);
   });
 });

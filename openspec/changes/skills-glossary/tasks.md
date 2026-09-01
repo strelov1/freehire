@@ -42,10 +42,10 @@
 
 ## 4. The SPA seam
 
-- [ ] 4.1 Emit `web/src/lib/generated/skillDescriptions.ts` from `cmd/gen-contracts`
+- [x] 4.1 Emit `web/src/lib/generated/skillDescriptions.ts` from `cmd/gen-contracts`
       (its own file, not `contracts.ts`), with a test asserting the shared contracts
       module carries no description text.
-- [ ] 4.2 Add the lazy accessor in `web/src/lib/`: `skillDescription(slug)` backed by a
+- [x] 4.2 Add the lazy accessor in `web/src/lib/`: `skillDescription(slug)` backed by a
       memoised `await import(...)`, returning "" when absent.
 
 ## 5. Coverage endgame
@@ -57,33 +57,33 @@
 
 ## 6. The reveal
 
-- [ ] 6.1 Add touch activation to `design-system/src/tooltip.svelte`: a coarse-pointer
+- [x] 6.1 Add touch activation to `design-system/src/tooltip.svelte`: a coarse-pointer
       `pointerdown` toggles, an outside `pointerdown` dismisses; hover, focus and Escape
       unchanged. Extend `tooltip.test.ts` for the new path and to prove the old ones did
       not move.
-- [ ] 6.2 Add a `SkillChip` component in `web/src/lib/components/`: the chip as it renders
+- [x] 6.2 Add a `SkillChip` component in `web/src/lib/components/`: the chip as it renders
       today, wrapped in the tooltip only when a description exists, with the description
       and a "What is X? →" link to `/skills/<slug>`. No affordance when undescribed.
-- [ ] 6.3 Use it in `JobView.svelte` and `JobRow.svelte`, fixing the raw-slug render
+- [x] 6.3 Use it in `JobView.svelte` and `JobRow.svelte`, fixing the raw-slug render
       (`{skill}` → `skillLabel(skill)`) in the same edit.
 
 ## 7. The glossary pages
 
-- [ ] 7.1 Add `web/src/lib/skillGlossary.ts`: pure helpers — described-slug lookup, the
+- [x] 7.1 Add `web/src/lib/skillGlossary.ts`: pure helpers — described-slug lookup, the
       `MIN_SKILL_OPEN = 25` postings gate, and neighbour selection — unit-tested without
       fetch or Svelte, following `roleLandings.ts`.
-- [ ] 7.2 Add `displayAliases(slug)` to the same module: the accepted spellings minus the
+- [x] 7.2 Add `displayAliases(slug)` to the same module: the accepted spellings minus the
       slug and the label, and minus any spelling that differs from another only by an
       invisible codepoint (`1c` carries a Latin and a Cyrillic `с`). Empty for 64% of the
       vocabulary — the block renders only when it is not.
-- [ ] 7.3 Add the `/skills/<slug>` route: 404 for an undescribed slug; otherwise label,
+- [x] 7.3 Add the `/skills/<slug>` route: 404 for an undescribed slug; otherwise label,
       description, the live posting count linking to the filter, neighbours, the aliases
       block when 7.2 yields any, and the postings block behind the gate. Server-rendered,
       with page metadata.
-- [ ] 7.4 Add the `/skills` index listing every described skill, grouped alphabetically.
-- [ ] 7.5 Add `sitemap-skills.xml` listing exactly the slugs the route serves, and
+- [x] 7.4 Add the `/skills` index listing every described skill, grouped alphabetically.
+- [x] 7.5 Add `sitemap-skills.xml` listing exactly the slugs the route serves, and
       register it in the sitemap index.
-- [ ] 7.6 Add the glossary to the internal-linking surfaces that already list the
+- [x] 7.6 Add the glossary to the internal-linking surfaces that already list the
       product's pages (`sitemap-pages.xml` and wherever `/roles` is linked from).
 
 ## 8. Ship

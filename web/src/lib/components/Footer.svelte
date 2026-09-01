@@ -15,6 +15,10 @@
         { label: 'Companies', href: resolve('/companies') },
         { label: 'Collections', href: resolve('/collections') },
         { label: 'Jobs by role', href: resolve('/roles') },
+        // The glossary's only link from the app. The chip's reveal opens on
+        // interaction and the sitemap is for crawlers; this is the one path a reader
+        // browsing the site can follow to it.
+        { label: 'Skills glossary', href: resolve('/skills') },
         { label: 'Recruiters', href: resolve('/recruiters') },
       ],
     },

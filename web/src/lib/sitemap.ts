@@ -106,6 +106,20 @@ export function roleLandingPaths(categorySlug: string, countrySlugs: string[]): 
   ];
 }
 
+/** Sitemap paths for the skill glossary: the index plus one page per skill that has a
+ *  description.
+ *
+ *  It takes the described slugs rather than the whole canonical vocabulary because the
+ *  route 404s on a skill with no entry — listing all of them would point a crawler at
+ *  pages that do not exist, and a sitemap full of 404s is worse than a short one. The
+ *  caller reads the set from the same catalog the route does, so the two cannot drift.
+ *
+ *  One file, unlike the role landings: the whole glossary is under a thousand URLs and
+ *  costs no read at all to enumerate, so there is nothing to shard away from. */
+export function skillGlossaryPaths(describedSlugs: readonly string[]): string[] {
+  return ['/skills', ...describedSlugs.map((slug) => `/skills/${slug}`)];
+}
+
 /** A sitemap path with the date its content last changed, before an origin is
  *  prefixed. `lastmod` is undefined when there is no honest date to state — a
  *  guessed one is worse than none, since a crawler that learns the dates are
