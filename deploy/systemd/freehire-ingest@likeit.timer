@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest likeit
+[Timer]
+OnCalendar=*:18:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

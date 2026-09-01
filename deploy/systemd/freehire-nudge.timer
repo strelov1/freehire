@@ -1,0 +1,11 @@
+[Unit]
+Description=timer: freehire-nudge
+[Timer]
+# Every 30 min: MATCH+DELIVER over live state (like notify), not pre-scheduled
+# rows like remind, so a shorter interval keeps 'gone silent'/'entered
+# interview'/'listing closed' noticed same-day without hammering the DB.
+OnCalendar=*:0/30
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target

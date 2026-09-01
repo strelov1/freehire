@@ -1,0 +1,11 @@
+[Unit]
+Description=timer: freehire-classify-mail
+[Timer]
+# Every 5 minutes: an idle run is nearly free (an empty-queue enqueue + claim, then
+# exit — an LLM call only fires when there are unclassified emails), so a tight cadence
+# keeps newly-synced mail sorted within minutes.
+OnCalendar=*:0/5:00
+Persistent=true
+RandomizedDelaySec=30
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=freehire worker: Adzuna full-description capture (adzuna_description_outbox)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Low and cautious on purpose: this is the one worker in the fleet that issues requests
+# to a third party's own website rather than a documented API, and the feasibility spike
+# never exercised sustained traffic from this host — see internal/sources/AGENTS.md
+# (adzunadesc). ADZUNA_DESCRIPTION_MAX_PER_RUN bounds how much of a run gets spent
+# finding out the hard way if that's wrong.
+CPUWeight=10
+IOWeight=10
+ExecStart=/opt/freehire/src/hire-current/hydrate-adzuna-description

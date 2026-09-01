@@ -1,0 +1,31 @@
+[Unit]
+Description=freehire web (%i)
+After=network.target freehire-api@%i.service
+[Service]
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-%i/web
+EnvironmentFile=/opt/freehire/env/hire-web.env
+EnvironmentFile=/opt/freehire/env/web-%i.env
+# cluster.js forks WEB_CLUSTER_WORKERS copies of the adapter-node server behind one
+# listening socket. `node build/index.js` was a single process, and Node is
+# single-threaded, so the SSR tier used one of this box's sixteen cores however
+# loaded it got: measured ceiling ~130 req/s against a 204 req/s peak on
+# 2026-08-14, which is what kept filling the accept queue below. Four workers hold
+# ~250 req/s; eight measured worse at 200 (they compete with ingest, Meili and
+# Postgres for the same cores, and each worker's ~370 MB comes out of the page
+# cache Meili lives on). See freehire/web/cluster.js and perf/k6 PROFILE=saturation.
+#
+# ORDER OF OPERATIONS: web/cluster.js must already exist in the built colour before
+# this unit starts. A colour built from a commit without it will fail to start.
+Environment=WEB_CLUSTER_WORKERS=4
+ExecStart=/usr/bin/node cluster.js
+# Interactive traffic must outweigh the batch worker pool: cgroup weights sum across
+# siblings, so ten ingest units at CPUWeight=40 add up to 400 and starve a
+# default-weight service. 2026-07-31: the SSR accept queue filled and nginx timed
+# out connecting while node itself was healthy.
+CPUWeight=500
+IOWeight=500
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=multi-user.target

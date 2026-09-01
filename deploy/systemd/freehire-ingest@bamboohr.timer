@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest bamboohr
+[Timer]
+OnCalendar=*-*-* 01/3:17:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

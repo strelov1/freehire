@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest aijobs
+[Timer]
+OnCalendar=*:03:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

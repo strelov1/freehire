@@ -1,0 +1,11 @@
+[Unit]
+Description=freehire worker: telegram crawl
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+ExecStart=/opt/freehire/src/hire-current/tg-ingest

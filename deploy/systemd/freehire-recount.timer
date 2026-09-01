@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-recount
+[Timer]
+OnCalendar=*-*-* 00/6:45:00
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=timer: freehire-onboard-contributions daily
+[Timer]
+# 21:17 UTC = 18:17 in Sao Paulo, where whoever reviews the pull request is.
+# Off the hour, so the run does not queue behind every other daily job.
+OnCalendar=*-*-* 21:17:00
+# Persistent because a missed day is real work left undone — the queue only grows,
+# and the next run picks up whatever the skipped one would have taken. Unlike the
+# sampling timers here, replaying a missed window publishes nothing misleading.
+Persistent=true
+[Install]
+WantedBy=timers.target

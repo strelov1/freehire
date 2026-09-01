@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest talenthr
+[Timer]
+OnCalendar=*:41:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

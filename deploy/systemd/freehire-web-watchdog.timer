@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire web accept-queue watchdog every 15s
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+Persistent=false
+[Install]
+WantedBy=timers.target

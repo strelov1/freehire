@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire site + memory alert every 2 min
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Persistent=true
+[Install]
+WantedBy=timers.target

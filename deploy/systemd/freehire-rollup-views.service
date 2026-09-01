@@ -1,0 +1,19 @@
+[Unit]
+Description=freehire worker: daily nginx-log view-count rollup
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+# nginx access logs are mode 640 www-data:adm; the freehire user needs the adm
+# group to read them. The worker reads the logs off the request path and applies
+# per-(day, job) view counts into jobs.view_count + job_daily_views.
+SupplementaryGroups=adm
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+# Daily mode processes the uncompressed rotated file (access.log.1 = yesterday,
+# kept uncompressed for a day by logrotate delaycompress). The content-signature
+# cursor skips already-applied files. One-shot --backfill (over the .gz history) is
+# run by hand, not on the timer.
+ExecStart=/opt/freehire/src/hire-current/rollup-views

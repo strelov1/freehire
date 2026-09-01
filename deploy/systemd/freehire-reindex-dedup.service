@@ -1,0 +1,32 @@
+[Unit]
+Description=freehire worker: duplicate-marker refresh (dedup + facet reindex)
+After=network.target postgresql.service meilisearch.service
+# Never alongside the plain reindex: same binary, same live index, and Meilisearch runs
+# ONE serial task queue — the second rebuild just queues behind the first and reads as a
+# hang.
+Conflicts=freehire-reindexw.service
+
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# The only difference from freehire-reindexw: this invocation ALSO refreshes the three
+# duplicate markers (role clusters, aggregator suppression, fuzzy collapse) before the
+# rebuild. Those passes were part of every reindex until 2026-08-16, by which point
+# aggregator suppression alone measured ~23h and the reindex had not completed once in
+# three days — it was cancelled mid-dedup and never reached the rebuild it exists for.
+Environment=REINDEX_DEDUP=1
+CPUWeight=40
+IOWeight=40
+# Same drain pause as freehire-reindexw, and for the same reason: this run ends in a
+# rebuild that swaps the live index, and a concurrent search-drain push re-merges the
+# WHOLE index against it. ExecStopPost restores the timer on failure too.
+ExecStartPre=+/usr/bin/systemctl stop freehire-search-drain.timer
+ExecStart=/opt/freehire/src/hire-current/reindex
+ExecStopPost=+/usr/bin/systemctl start freehire-search-drain.timer
+# Deliberately larger than freehire-reindexw's 4h, because the dedup passes are what
+# make this run long — and deliberately NOT unbounded: search-drain is paused for the
+# whole run (see the 2026-08-15 incident in freehire-reindexw.service), so a run that
+# never stops takes incremental indexing down with it.
+TimeoutStartSec=8h

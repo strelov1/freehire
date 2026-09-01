@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest whatjobs-ph
+[Timer]
+OnCalendar=*:16:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

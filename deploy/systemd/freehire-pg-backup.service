@@ -1,0 +1,39 @@
+[Unit]
+Description=freehire: nightly PostgreSQL backup (hire+mail -> local + Hetzner S3)
+After=network-online.target postgresql.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+
+# Pause the INGEST fleet for the duration, and only ingest.
+#
+# NOT freehire:pause:all. That key also stops cmd/migrate, which exits 0 with
+# "paused, skipping this run" — release.sh reads that as success and flips the colour
+# onto an unmigrated schema. That is the 2026-08-19 outage, 7 minutes of SQLSTATE
+# 42703 on every job read. A nightly window that silently breaks any deploy landing
+# inside it is a worse trade than the I/O it saves. The key names the BINARY, so
+# pause:ingest covers all ~140 ingest timers and nothing else.
+#
+# EX is a safety net, not the mechanism: ExecStopPost clears the key on success AND
+# on failure (+ runs even when the main process is killed), but a stateful
+# stop/start pair is exactly what the 2026-08-15 reindexw incident left dangling for
+# six hours. The TTL bounds that to one window.
+ExecStartPre=/usr/bin/redis-cli SET freehire:pause:ingest 1 EX 7200
+ExecStart=/opt/freehire/bin/pg-backup.sh
+ExecStopPost=/usr/bin/redis-cli DEL freehire:pause:ingest
+
+# UNTHROTTLED since 2026-08-20. The previous Nice=10 + idle-class I/O, together with
+# the script's own nice -n 19 / ionice -c 3, measured 5.4 MB/s and stretched the run
+# past 75 minutes. Slowness was not protection: on 2026-08-20 the dump overlapped
+# autovacuum on a 96 GB jobs table and half of all requests 500ed for 40 minutes.
+# Going slowly only widened the overlap. Finish fast, with ingest out of the way.
+#
+# The cgroup weights stay BELOW web/api (system-freehire-web.slice runs
+# CPUWeight/IOWeight=800) but leave the floor of 20 that made this unit lose every
+# contest: at 100 it is an equal of unweighted system work and still yields to the
+# site. That split is the 2026-08-05 accept-queue incident's lesson, kept.
+CPUWeight=100
+IOWeight=100
+
+[Install]
+WantedBy=multi-user.target

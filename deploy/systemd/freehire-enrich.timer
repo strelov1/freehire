@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-enrich
+[Timer]
+OnCalendar=*:30:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=timer: freehire-remind
+[Timer]
+# Every 15 min — a saved-job reminder is a "come back later" nudge, so a
+# "tomorrow" reminder firing within a quarter-hour of its deadline is plenty
+# precise, and the due-scan is cheap (indexed, bounded batch).
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=freehire notify (saved-search digests)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# The digest sender's own credentials, kept out of the shared .env every other worker
+# reads. Present on host-2 since 2026-07-25 and missing from this file until now, so a
+# re-provision from git would have started notify without them.
+EnvironmentFile=/opt/freehire/.env.notify
+CPUWeight=40
+ExecStart=/opt/freehire/src/hire-current/notify

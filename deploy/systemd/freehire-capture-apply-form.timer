@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-capture-apply-form
+[Timer]
+OnCalendar=*-*-* *:35:00
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

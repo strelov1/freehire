@@ -1,0 +1,21 @@
+[Unit]
+Description=timer: freehire-reindexw
+
+[Timer]
+# Every 6h, offset to 03:15 — NOT every 3h, and NOT on the :15 that collides with
+# freehire-reindex-dedup.timer's 06:30 (that unit rebuilds the whole index itself).
+#
+# Why 6h: a full facet rebuild is ~1.47M documents and measured 2h23m-2h30m per run
+# (2026-08-17: 18:40->21:10, 21:40->00:03). On the old 3h slot that left ~30 min of
+# free Meilisearch per cycle, and reindexw's ExecStartPre stops the search-drain timer
+# for the duration — so search_outbox drained only 17% of the day and the
+# pipeline-search-backlog alert fired continuously from 19:35 onward with a 22k backlog.
+# Meilisearch runs ONE serial task queue, so a rebuild in flight starves every
+# incremental drain batch: 200 docs took 31s under contention vs 2.6s free.
+# 6h leaves ~3.5h of clear queue between runs. Revisit if a run ever exceeds ~4h.
+OnCalendar=*-*-* 03/6:15:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

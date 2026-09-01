@@ -1,0 +1,12 @@
+[Unit]
+Description=freehire ingest workday shard %i/6
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+TimeoutStartSec=3000
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest /opt/freehire/src/hire-current/sources/workday.yml --shard=%i/6

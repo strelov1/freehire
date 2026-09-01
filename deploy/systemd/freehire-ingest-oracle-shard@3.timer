@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest oracle shard 3/4
+[Timer]
+OnCalendar=*-*-* 02/4:15:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

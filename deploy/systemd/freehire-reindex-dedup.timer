@@ -1,0 +1,25 @@
+[Unit]
+Description=timer: freehire-reindex-dedup
+
+[Timer]
+# DAILY. It was weekly, which meant a duplicate the ingest-time coverage gate could not
+# catch stayed visible for up to 7 days; the pass costs 9m38s CPU / ~1h55m wall, so
+# running it every night is affordable and cuts that window to one day.
+#
+# The 06:30 slot is what makes this safe and it is load-bearing: it clears the 03:00 UTC
+# pg_dump (ACCESS SHARE on every table for its whole ~77-minute run) and the 04:15
+# rollup-facets / 04:45 rollup-company / 05:15 reindex-companies chain, and it finishes
+# around 08:25 — before the 09:15 freehire-reindexw firing, which shares Meilisearch's
+# single task queue and would otherwise STOP this run mid-rebuild (Conflicts= in the
+# service, and it cuts both ways).
+#
+# NO Persistent=true. It was here while this ran weekly, where skipping a whole week was
+# worth a catch-up; daily it is a hazard, and on 2026-08-17 it fired one the moment the
+# unit was reloaded — 13:17 on a weekday, which killed a freehire-reindexw that was an
+# hour into its run. A missed nightly pass is simply tomorrow's pass; a catch-up at an
+# arbitrary hour lands on the every-3h reindexw cadence this slot exists to dodge.
+OnCalendar=*-*-* 06:30:00
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

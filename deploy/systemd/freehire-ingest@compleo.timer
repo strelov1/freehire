@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest compleo
+[Timer]
+OnCalendar=*:24:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

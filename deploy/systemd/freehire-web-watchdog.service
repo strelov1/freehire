@@ -1,0 +1,10 @@
+[Unit]
+Description=freehire: web accept-queue watchdog (auto-restart on a wedged SSR process)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+# Runs as root: needs `systemctl restart freehire-web@<color>` and reads
+# TELEGRAM_BOT_TOKEN + SITE_ALERT_CHAT_ID from /opt/freehire/.env (0600).
+ExecStart=/opt/freehire/bin/web-watchdog.sh
+Nice=0

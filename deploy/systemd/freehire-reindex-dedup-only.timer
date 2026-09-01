@@ -1,0 +1,32 @@
+[Unit]
+Description=timer: freehire-reindex-dedup-only
+
+[Timer]
+# Six times a day, OUTSIDE the 03:00-10:00 UTC block this host's other cron jobs already
+# own: freehire-pg-backup (03:00, ~77min), freehire-rollup-facets (04:15),
+# freehire-rollup-company (04:45), freehire-reindex-companies (05:15), and
+# freehire-reindex-dedup itself (06:30, ~3.5h end to end, finishing ~08:25). That last one
+# already refreshes the SAME three markers this timer refreshes, so skipping this slot
+# costs nothing — the daily run covers it.
+#
+# Outside that block, firing every 3h (01:30, 10:30, 13:30, 16:30, 19:30, 22:30) is what
+# actually shrinks the window: REINDEX_DEDUP=1 alone only refreshes markers once a day, so
+# a repost could sit undeduped in search for up to a day (freehire#2045 — a Fivetran
+# repost caught right in that window). The 3h spacing is a target, not a guarantee: the
+# first real daytime run took 2h15m under normal concurrent load (see the service's
+# TimeoutStartSec comment) against an 86min quiet-hours measurement, so some firings will
+# land while the prior run is still active. That is a silent no-op, not a stack or a
+# failure — Type=oneshot only starts a new instance if the unit isn't already active — and
+# it self-throttles to roughly run-time-plus-next-slot rather than a fixed 3h, which is
+# still a large improvement over the once-a-day floor this timer exists to beat.
+#
+# Persistent=true is safe here in a way it is explicitly NOT for
+# freehire-reindex-dedup.timer (see that file's comment on the 2026-08-17 13:17 incident):
+# this unit Conflicts= only with its own daily sibling, never with freehire-reindexw, so a
+# missed firing catching up at an arbitrary hour cannot kill an in-progress rebuild.
+OnCalendar=*-*-* 01,10,13,16,19,22:30:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

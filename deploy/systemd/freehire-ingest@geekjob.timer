@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest geekjob
+[Timer]
+OnCalendar=*:01:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-auth-cleanup every 5 min
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+[Install]
+WantedBy=timers.target

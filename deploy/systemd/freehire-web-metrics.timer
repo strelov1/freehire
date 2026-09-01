@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire web-tier metrics every 15s
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=15s
+Persistent=false
+[Install]
+WantedBy=timers.target

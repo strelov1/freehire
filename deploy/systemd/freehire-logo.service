@@ -1,0 +1,23 @@
+[Unit]
+Description=freehire logo proxy (logo.freehire.me)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=freehire
+EnvironmentFile=/opt/freehire/.env
+ExecStart=/opt/freehire/bin/logo-proxy
+Restart=always
+RestartSec=2
+# The cache is the service's whole state and is expensive to refill (see
+# logo-cache-backup.sh), so it lives outside the swappable src tree.
+StateDirectory=freehire-logo
+ReadWritePaths=/var/cache/freehire-logo
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

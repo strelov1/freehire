@@ -1,0 +1,18 @@
+[Unit]
+Description=timer: freehire-reindex-companies
+
+[Timer]
+# 12:30 sits in the gap between reindexw runs (03:15/09:15/15:15/21:15, ~2.5h each),
+# with ~45 min of margin after the 09:15 one finishes.
+#
+# Why not 05:15, where this used to be: the service's ExecCondition
+# (skip-if-reindexing.sh) skips the cycle whenever reindexw is mid-flight, and on the old
+# 3h reindexw slot that was 83% of the day — 05:15 landed inside a run every single time.
+# Result: the companies index went 14+ days without a single rebuild, silently, because a
+# skip is reported as success. Keep this firing inside a reindexw gap.
+OnCalendar=*-*-* 12:30:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

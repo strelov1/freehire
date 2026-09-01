@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest gem
+[Timer]
+OnCalendar=*:42:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

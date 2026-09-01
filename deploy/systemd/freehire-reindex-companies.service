@@ -1,0 +1,15 @@
+[Unit]
+Description=freehire worker: companies search reindex
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Lower weights than the API: the companies index is small (~195k description-less
+# docs) so this finishes fast, but it should still yield to live traffic. It shares
+# Meilisearch's single task queue with the jobs reindex — do NOT overlap the two
+# (the timer below sits off the every-3h reindexw cadence).
+CPUWeight=40
+IOWeight=40
+ExecStart=/opt/freehire/src/hire-current/reindex-companies

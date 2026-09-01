@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly logo-cache mirror
+
+[Timer]
+# 03:30 UTC — after pg-backup at 03:00, so the two do not contend for upload bandwidth.
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

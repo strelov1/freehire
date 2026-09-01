@@ -1,0 +1,12 @@
+[Unit]
+Description=timer: freehire-hydrate-adzuna-description every 30 min
+[Timer]
+# Queue-driven, so an empty queue costs nothing (fast exit) — this is the cadence, not a
+# rate limit. The real throttle is ADZUNA_DESCRIPTION_MAX_PER_RUN/CONCURRENCY (env), kept
+# conservative until a live run shows Adzuna tolerating the pace (see the .service file).
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target

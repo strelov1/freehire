@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest paylocity shard 24/24
+[Timer]
+OnCalendar=*-*-* 23:25:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

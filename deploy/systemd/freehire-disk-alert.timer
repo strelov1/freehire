@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire disk-space alert every 15 min
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+[Install]
+WantedBy=timers.target

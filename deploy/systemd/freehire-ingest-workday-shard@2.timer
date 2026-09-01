@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest workday shard 2/6
+[Timer]
+OnCalendar=*-*-* 01/6:40:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

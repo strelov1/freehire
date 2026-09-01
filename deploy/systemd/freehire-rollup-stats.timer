@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-rollup-stats
+[Timer]
+OnCalendar=*-*-* 00/3:20:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

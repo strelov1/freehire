@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest echojobs
+[Timer]
+OnCalendar=*:33:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

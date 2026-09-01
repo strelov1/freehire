@@ -1,0 +1,10 @@
+[Unit]
+Description=freehire: disk-space alert (root fs, Telegram at >=85%)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+# Runs as root: reads TELEGRAM_BOT_TOKEN + DISK_ALERT_CHAT_ID from /opt/freehire/.env (0600).
+ExecStart=/opt/freehire/bin/disk-alert.sh
+Nice=15
+IOSchedulingClass=idle

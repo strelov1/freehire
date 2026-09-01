@@ -1,0 +1,24 @@
+[Unit]
+# freehire PII detection endpoint (openai/privacy-filter, ONNX q4 on CPU). The API and the
+# résumé-extract path call it over localhost to de-identify CV text BEFORE it reaches the LLM
+# gateway. Single instance (no blue/green): it is stateless and holds the loaded model in RAM,
+# and the API fails closed if it is down, so a brief restart just pauses fit analysis.
+Description=freehire PII detection (privacy-filter)
+After=network.target
+
+[Service]
+User=freehire
+# Stable path (not blue/green) so the unit survives an API colour swap. The venv and the
+# model weights live outside the swappable src tree (see freehire-pii-filter env), so a code
+# deploy never rebuilds them.
+WorkingDirectory=/opt/freehire/src/hire-current/services/pii-filter
+EnvironmentFile=/opt/freehire/env/pii-filter.env
+ExecStart=/opt/freehire/pii-filter/venv/bin/python server.py
+Restart=on-failure
+RestartSec=2
+# Light hardening; the service is stateless (loads the model, serves detections).
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

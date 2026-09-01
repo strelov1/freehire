@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: Product Hunt heads-up campaign, once, Monday 17 August 14:00 UTC
+[Timer]
+OnCalendar=2026-08-17 14:00:00 UTC
+Persistent=true
+AccuracySec=1min
+[Install]
+WantedBy=timers.target

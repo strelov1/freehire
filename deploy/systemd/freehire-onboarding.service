@@ -1,0 +1,12 @@
+[Unit]
+Description=freehire worker: founder signup email sequence (welcome / no-alert / open-source)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+EnvironmentFile=/opt/freehire/.env.notify
+CPUWeight=10
+IOWeight=10
+ExecStart=/opt/freehire/src/hire-current/onboarding

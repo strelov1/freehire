@@ -1,0 +1,42 @@
+[Unit]
+Description=freehire worker: incremental facet-search index drain (search_outbox)
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Lower than the other light workers (40/40): this one runs continuously — one push
+# every ~90-100s, all day (a live-index push on this catalogue costs that regardless
+# of batch size, see freehire#1596) — so even success-path operation keeps a steady
+# background IO/CPU draw. 2026-08-06: at 40/40 it coincided with ~90 nginx 504s/hour
+# (freehire-web accept-queue starvation, see AGENTS.md in internal/searchdrain) even
+# though the worker itself never failed. Dropped to 10/10 live via
+# `systemctl set-property --runtime` before this file was updated to match.
+CPUWeight=10
+IOWeight=10
+# There is deliberately NO reindex guard here any more, and the reason is worth reading
+# before adding one back.
+#
+# This file used to carry
+#     ExecStartPre=/bin/sh -c '! systemctl is-active --quiet freehire-reindexw.service'
+# meaning "skip this tick if a reindex is running". It never once did that. `systemctl
+# is-active --quiet` exits 0 only for the literal state `active`, and a Type=oneshot
+# service is **`activating`** for its entire run — exit 3 — which the `!` flips to
+# success. Measured on host-2 on 2026-08-15 with a reindex mid-run: guard exits 0, i.e.
+# "run anyway", every time. It was dead code that read like protection, and it was never
+# deployed to host-2 either, so nothing depended on it.
+#
+# What actually keeps the two apart is freehire-reindexw.service, which stops this
+# unit's TIMER on start and restarts it on stop. That is stateful and it is what failed
+# on 2026-08-15 — a run that never finished never restored the timer and the live index
+# silently stopped updating for six hours — so reindexw now carries TimeoutStartSec=4h,
+# which bounds the worst case rather than leaving it open-ended.
+#
+# If you do want a guard here, note that a CORRECT one (matching `activating` too) is a
+# behaviour change, not a bug fix: it would idle the drain for the whole of every
+# reindex, including the hours those runs spend purely in Postgres dedup passes touching
+# no Meili at all. That is the staleness this pipeline exists to catch, so weigh it
+# against the contention it prevents. The cheap mechanism already in place is the weight
+# split — 10/10 here against reindex's 40/40.
+ExecStart=/opt/freehire/src/hire-current/search-drain

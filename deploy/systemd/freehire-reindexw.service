@@ -1,0 +1,42 @@
+[Unit]
+Description=freehire worker: facet reindex
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+# hire-current, not hire-blue: the release symlink is what survives a colour swap.
+# This file said hire-blue until 2026-08-15 while the DEPLOYED unit had already been
+# hand-edited to hire-current — deploying this file as it stood would have pointed the
+# reindex at whichever colour happened to be blue.
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+# search-drain pushes to the same live Meili index this rebuild swaps into; running both
+# at once is exactly the concurrent-push contention internal/searchdrain/AGENTS.md warns
+# about (each push re-merges the WHOLE index). Pause the drain TIMER (not the service —
+# an in-flight batch is left to finish naturally, not killed mid-push) before this
+# starts, and always resume it after, success or failure alike (+ExecStopPost still runs
+# on failure, unlike a plain "run after" step) — added after the 2026-08-06 incident
+# where search-drain was left off manually and forgotten.
+#
+# These two lines were added directly on host-2 and never committed back; this file
+# lacked them entirely until 2026-08-15.
+ExecStartPre=+/usr/bin/systemctl stop freehire-search-drain.timer
+ExecStart=/opt/freehire/src/hire-current/reindex
+ExecStopPost=+/usr/bin/systemctl start freehire-search-drain.timer
+# THE 2026-08-15 INCIDENT, and why this line exists.
+#
+# ExecStopPost only runs when the service STOPS. Type=oneshot defaults TimeoutStartSec
+# to *infinity*, so a run that never finishes never stops, never restores the drain
+# timer, and the live index silently stops being updated — for six hours, that day,
+# while Postgres ingested normally and nothing alerted. The stop/start pair above is
+# stateful, and an unbounded run is the state it cannot leave.
+#
+# Four hours is well above a healthy full rebuild and bounds the blast radius: a killed
+# run loses its work (the swap is atomic — a partial rebuild lands nothing) and the next
+# timer starts over, which is bad but recoverable, whereas an indefinitely stalled run
+# takes the whole search index down with it and stays there. If this fires routinely,
+# the answer is NOT a larger number: it means the dedup passes have outgrown the 3-hour
+# timer period, which the pipeline dashboard now makes visible.
+TimeoutStartSec=4h

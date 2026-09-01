@@ -1,0 +1,40 @@
+[Unit]
+Description=freehire worker: duplicate-marker refresh only (no rebuild)
+# Only postgresql — unlike freehire-reindex-dedup.service, this invocation never opens a
+# Meilisearch client at all (REINDEX_DEDUP_ONLY short-circuits cmd/reindex before that),
+# so it needs no meilisearch.service ordering and no Conflicts= against freehire-reindexw:
+# there is nothing here for a concurrent rebuild to contend with.
+After=network.target postgresql.service
+# Never alongside the full marker+rebuild invocation: both write jobs.duplicate_of per
+# company in short transactions (safe to interleave, no table lock), but running both at
+# once is pure wasted CPU/IO for zero freshness gain, and the timer schedule already
+# keeps them apart — this is a backstop, not the thing making that true.
+Conflicts=freehire-reindex-dedup.service
+
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# The only env difference from the plain freehire-reindexw invocation: REINDEX_DEDUP_ONLY
+# runs the three duplicate-marker passes (role clusters, aggregator suppression, fuzzy
+# collapse) and exits — see internal/config/reindex.go (Reindex.DedupOnly) and AGENTS.md.
+# It exists so the markers can refresh on a tighter cadence than freehire-reindex-dedup's
+# daily marker+rebuild round trip: the plain freehire-reindexw rebuild already runs every
+# 3h on its own schedule and picks up whatever markers are current at that moment, so
+# refreshing the markers alone is enough — freehire#2045.
+Environment=REINDEX_DEDUP_ONLY=1
+CPUWeight=40
+IOWeight=40
+ExecStart=/opt/freehire/src/hire-current/reindex
+# The 2026-08-16 quiet-hours measurement (freehire-reindex-dedup.service, same three
+# passes) was 18min role clusters + 23min aggregator suppression + 45min fuzzy collapse
+# ~= 86min end to end. The first real daytime run of THIS unit (2026-08-17, under normal
+# concurrent ingest/similar-backfill/autovacuum load) took 2h15m wall clock for the same
+# three passes despite only 7m50s of actual CPU time — CPUWeight=40/IOWeight=40
+# deliberately yields to that traffic, so wall time under load is not the quiet-hours
+# number. 4h keeps that a ~45min margin instead of the ~45min DEFICIT a 3h cap would have
+# left on that run — not unbounded, see the 2026-08-15 incident writeup in
+# freehire-reindexw.service for why an indefinite TimeoutStartSec is the wrong default for
+# a Type=oneshot unit.
+TimeoutStartSec=4h

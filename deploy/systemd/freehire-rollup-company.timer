@@ -1,0 +1,10 @@
+[Unit]
+Description=timer: freehire-rollup-company
+[Timer]
+# Daily — per-company hiring velocity moves slowly. 04:45 UTC sits after the 03:00
+# pg-backup and the 04:15 rollup-facets, and off the every-3h rollup-stats cadence.
+OnCalendar=*-*-* 04:45:00
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

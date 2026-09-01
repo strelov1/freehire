@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest eightfold shard 1/4
+[Timer]
+OnCalendar=*-*-* 00/4:50:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=freehire worker: pipeline queue-depth metrics for Prometheus
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Lowest weights on the host. This worker exists to observe the pipeline, so it must
+# never be the reason a member of that pipeline waits: it is read-only, takes no locks,
+# and a run that loses a scheduling race simply reports one minute later. It does pay
+# for a full count over enrichment_outbox and semantic_outbox (~1M and ~780k rows),
+# which is why the cost is pinned to once per minute here rather than left to a
+# Prometheus scrape interval that lives in another repository.
+CPUWeight=10
+IOWeight=10
+# No ExecStartPre guard against reindex, unlike freehire-search-drain: this worker does
+# not write to Meilisearch and does not compete for the resource a swap-rebuild needs.
+# Skipping it during a reindex would blind the dashboard for exactly the hours when the
+# pipeline is most worth watching — which is the incident this whole change came from.
+ExecStart=/opt/freehire/src/hire-current/queue-metrics

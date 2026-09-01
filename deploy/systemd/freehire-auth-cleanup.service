@@ -1,0 +1,11 @@
+[Unit]
+Description=freehire worker: delete expired v2 auth attempts, exchange codes, and recent-auth proofs
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=10
+IOWeight=10
+ExecStart=/opt/freehire/src/hire-current/auth-cleanup

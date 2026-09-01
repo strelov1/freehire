@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-tg-ingest
+[Timer]
+OnCalendar=*:40:00
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target

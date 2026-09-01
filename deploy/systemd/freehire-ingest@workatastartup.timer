@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest workatastartup
+[Timer]
+OnCalendar=*:15:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

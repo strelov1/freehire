@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest join shard 1/5
+[Timer]
+OnCalendar=*-*-* 00/5:20:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

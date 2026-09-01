@@ -1,0 +1,20 @@
+[Unit]
+Description=freehire API (%i)
+After=network.target postgresql.service meilisearch.service
+[Service]
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-%i
+EnvironmentFile=/opt/freehire/.env
+EnvironmentFile=/opt/freehire/env/hire-api.env
+EnvironmentFile=/opt/freehire/env/api-%i.env
+ExecStart=/opt/freehire/src/hire-%i/hire-api
+# Interactive traffic must outweigh the batch worker pool: cgroup weights sum across
+# siblings, so ten ingest units at CPUWeight=40 add up to 400 and starve a
+# default-weight service. 2026-07-31: the SSR accept queue filled and nginx timed
+# out connecting while node itself was healthy.
+CPUWeight=500
+IOWeight=500
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=multi-user.target

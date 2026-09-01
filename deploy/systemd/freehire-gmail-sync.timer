@@ -1,0 +1,9 @@
+[Unit]
+Description=timer: freehire-gmail-sync
+[Timer]
+# Every 15 minutes: pull new recruiting mail; cmd/classify-mail (*/5) then sorts it.
+OnCalendar=*:0/15:00
+Persistent=true
+RandomizedDelaySec=60
+[Install]
+WantedBy=timers.target

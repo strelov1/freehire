@@ -1,0 +1,14 @@
+[Unit]
+Description=timer: freehire-search-drain every 2 min
+[Timer]
+# Frequent and monotonic (not a wall-clock slot): search_outbox is fed continuously
+# by every ingest crawl, so freshness tracks how often this drains, not a fixed time
+# of day. Each run is a no-op fast exit when the queue is empty, so 2 min costs
+# nothing idle. See freehire#1594 (the incident this replaces: cmd/ingest used to
+# push straight to Meilisearch once per crawl across ~169 independent processes,
+# saturating host disk IO — this collapses that into few, fat, awaited pushes).
+OnBootSec=1min
+OnUnitActiveSec=2min
+Persistent=true
+[Install]
+WantedBy=timers.target

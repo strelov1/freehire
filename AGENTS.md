@@ -67,6 +67,10 @@ Non-obvious:
   unlike the rest of the JS in this repo. See [extension/AGENTS.md](extension/AGENTS.md).
 - `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc`. The pre-commit hook and the `sqlc` CI job regenerate and diff, so a query edited without regenerating no longer ships the old Go with every check green. Both use `make sqlc`, which holds the only version pin — a second pin would be a second answer, and the drift between them would look exactly like stale code.
 - `services/pii-filter` — a standalone service, not a Go package.
+- `deploy/` — the production host's systemd units and operator scripts, recorded because the
+  machine was the only copy of them. **Nothing there deploys itself**: `release.sh` flips the
+  app and never touches a unit, so an edit is only half done until it is copied to the host.
+  `./deploy/check-drift.sh` reports what has moved apart. See [deploy/AGENTS.md](deploy/AGENTS.md).
 
 ## Commands
 
@@ -146,6 +150,7 @@ Each is self-contained and can be read independently.
 | **`internal/platform`** — the block itself: what it is, what it may import | [internal/platform/AGENTS.md](internal/platform/AGENTS.md) |
 | **SQL layer** (sqlc, queries, migrations) | [internal/platform/db/AGENTS.md](internal/platform/db/AGENTS.md) |
 | **Cron worker plumbing** (Main/Bootstrap, exit codes, heartbeat, corruption-tolerant scans) | [internal/platform/worker/AGENTS.md](internal/platform/worker/AGENTS.md) |
+| **Host configuration** (systemd units and timers, operator scripts, the two-file env split) | [deploy/AGENTS.md](deploy/AGENTS.md) |
 | **LLM client** (provider-agnostic wrapper, schema cache, streaming, attribution tags) | [internal/platform/llm/AGENTS.md](internal/platform/llm/AGENTS.md) |
 | **Sentry error tracking** (backend, workers, frontend — env-gated) | [internal/platform/observability/AGENTS.md](internal/platform/observability/AGENTS.md) |
 | **`internal/dict`** — the block itself: what it is, what it may import | [internal/dict/AGENTS.md](internal/dict/AGENTS.md) |

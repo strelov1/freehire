@@ -1,0 +1,24 @@
+[Unit]
+Description=freehire worker: capture ATS application forms
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Measured on prod 2026-08-02, first timer-driven run: 2490 captures in 361s at
+# concurrency 4 = 6.9/s, with 10 transient failures and none abandoned. (An earlier
+# 1.54/s reading was contaminated — it raced a manual drain for the same queue rows.)
+#
+# Concurrency came down from 4 to 2 after that run returned 136 rate-limit 429s from
+# Ashby; the drain is not in a hurry and a blocked crawl would cost far more.
+# 8000 per run is therefore ~20 minutes, leaving two thirds of an hourly window spare, so
+# a slow platform cannot make a run overrun its own schedule. The initial ~224k backlog
+# drains in a bit over a day; after that a run finishes in seconds, because only newly
+# ingested postings are ever queued.
+Environment=APPLY_FORM_MAX_PER_RUN=8000
+Environment=APPLY_FORM_CONCURRENCY=2
+Environment=APPLY_FORM_BATCH_SIZE=100
+CPUWeight=40
+IOWeight=40
+ExecStart=/opt/freehire/src/hire-current/capture-apply-form

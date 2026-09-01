@@ -43,6 +43,15 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 - **An unconfigured channel is a soft-skip, not a failure.** `Router.Send` returns
   `ErrChannelNotConfigured` (e.g. email while SES is unset) and the engine skips it. Don't
   promote that to a delivery error — it would fail every run in environments without SES.
+  **In production this makes a missing credential silent, and it has already cost a
+  channel.** The mail credentials live in their own env file
+  (`/opt/freehire/.env.notify`, not the `/opt/freehire/.env` every worker reads); the
+  `remind` and `nudge` units did not load it, so email reminders soft-skipped from the day
+  they shipped until 2026-09-01 while every run exited 0 with `failed=0`. 244 of them piled
+  up across 43 people. The health signal for these workers is therefore **`soft_skips` in
+  the run log, not the exit code**: a steady non-zero count against `delivered=0` is a dead
+  channel, not an absence of recipients. See [deploy/AGENTS.md](../../deploy/AGENTS.md) for
+  which units must read both files.
 - **A blocked Telegram bot unlinks the chat; it does not fail the delivery.** Every 403 the
   Bot API answers a send with means the chat is permanently closed (blocked, deactivated,
   bot removed), and no retry reaches it. `telegramnotify.ErrChatUnreachable` carries that up;

@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest reed
+[Timer]
+OnCalendar=*-*-* 00/6:04:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

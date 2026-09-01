@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest speedrun
+[Timer]
+OnCalendar=*:57:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

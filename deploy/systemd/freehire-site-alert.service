@@ -1,0 +1,10 @@
+[Unit]
+Description=freehire: site + memory + load alert (freehire.me/health, RAM, CPU load, Telegram)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+# Runs as root: reads TELEGRAM_BOT_TOKEN + SITE_ALERT_CHAT_ID from /opt/freehire/.env (0600).
+ExecStart=/opt/freehire/bin/site-alert.sh
+Nice=15
+IOSchedulingClass=idle

@@ -1,0 +1,6 @@
+[Unit]
+Description=Mirror the freehire logo cache to object storage
+
+[Service]
+Type=oneshot
+ExecStart=/opt/freehire/bin/logo-cache-backup.sh

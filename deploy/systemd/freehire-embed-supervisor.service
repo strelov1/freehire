@@ -1,0 +1,9 @@
+[Unit]
+Description=freehire semantic embed supervisor (keeps embed worker draining, cleans up at end)
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash /opt/freehire/embed-supervisor.sh
+Restart=on-failure
+RestartSec=15
+[Install]
+WantedBy=multi-user.target

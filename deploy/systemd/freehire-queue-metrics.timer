@@ -1,0 +1,15 @@
+[Unit]
+Description=timer: freehire-queue-metrics every minute
+[Timer]
+# Monotonic, not a wall-clock slot: this samples a level that moves continuously, so
+# what matters is the gap between samples, not the time of day. One minute is the
+# resolution the alert rules assume — rule 7 pages when the last run is more than 10
+# minutes old, which is ten missed ticks and therefore a real outage rather than one
+# slow run. Raising this interval means revisiting that threshold.
+OnBootSec=2min
+OnUnitActiveSec=1min
+# Deliberately NOT Persistent=true. A missed window is a gap in a graph, and replaying
+# one on boot would publish a measurement stamped now for a pipeline state that is
+# already gone.
+[Install]
+WantedBy=timers.target

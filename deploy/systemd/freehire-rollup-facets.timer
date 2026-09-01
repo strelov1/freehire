@@ -1,0 +1,10 @@
+[Unit]
+Description=timer: freehire-rollup-facets
+[Timer]
+# Daily — /open facet distributions move slowly. 04:15 UTC sits after the 03:00
+# pg-backup and off the every-3h rollup-stats/reindex cadence.
+OnCalendar=*-*-* 04:15:00
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

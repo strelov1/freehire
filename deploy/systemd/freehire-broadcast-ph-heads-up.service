@@ -1,0 +1,14 @@
+[Unit]
+Description=freehire one-off campaign: Product Hunt heads-up (26 August launch)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+EnvironmentFile=/opt/freehire/.env.notify
+CPUWeight=10
+IOWeight=10
+# -max above the audience size so the whole list goes in one pass; the ledger makes
+# a repeat harmless, but a second pass would need a second schedule to exist.
+ExecStart=/opt/freehire/src/hire-current/broadcast -campaign ph-heads-up -max 900

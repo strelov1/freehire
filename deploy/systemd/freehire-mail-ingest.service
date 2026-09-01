@@ -1,0 +1,20 @@
+[Unit]
+Description=freehire worker: hosted-mailbox inbound (SES -> SQS -> hire.emails)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+# Long-lived: it long-polls SQS and blocks until SIGTERM. Restart if it dies or
+# on an SQS/transient failure; the queue redelivers un-acked messages.
+Restart=always
+RestartSec=5
+ExecStart=/opt/freehire/src/hire-current/mail-ingest
+
+[Install]
+WantedBy=multi-user.target

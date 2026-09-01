@@ -1,0 +1,11 @@
+[Unit]
+Description=timer: freehire-cal-sync
+[Timer]
+# Hourly. A calendar changes far less often than a mailbox fills, and the window is
+# +/-90 days on every run, so a missed hour costs nothing — the next run sees the same
+# meetings. Offset from the top of the hour so it does not start alongside gmail-sync.
+OnCalendar=*:20:00
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target

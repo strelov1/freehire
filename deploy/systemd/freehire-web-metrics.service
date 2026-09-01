@@ -1,0 +1,13 @@
+[Unit]
+Description=freehire: web-tier metrics (accept queue + nginx response rates) for the node_exporter textfile collector
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+# Runs as root to read /var/log/nginx/access.log (0640 www-data:adm) and to
+# write into the textfile directory. Low weights: this is observability, and it
+# must never be the reason the thing it observes is short of IO.
+ExecStart=/opt/freehire/bin/web-metrics.sh
+CPUWeight=20
+IOWeight=20
+Nice=10
