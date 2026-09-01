@@ -521,25 +521,64 @@ requeued AS (
 )
 SELECT count(*)::bigint FROM updated;
 
--- name: ListRoleClusterCopies :many
--- The open postings sharing a role cluster (company_slug + role_fingerprint) with the
--- anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
--- its own location and apply URL, so a seeker picks their city; the anchor itself is
--- included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
--- clusters with no one and returns nothing.
+-- name: ListJobCopies :many
+-- The open postings the anchor's OWNER represents — the "N openings across cities" list for a
+-- collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
+-- the owner itself is included (it is one of the openings). Ordered by location.
 --
--- AND NOT j.is_private excludes the jd-tailor-intake private-job path: without it, a
--- private job that coincidentally shares its cluster key with a public one would surface
--- (slug, location, url) to anyone browsing that PUBLIC job's copies — a listing leak, not
--- merely "you'd need the direct link", which is what never indexing/listing it is for.
+-- Membership is the DUPLICATE CLOSURE, not a shared role_fingerprint, and it is deliberately
+-- the same closure DuplicateClosureGeoAll unions geography over. The two must not disagree: a
+-- posting whose city the canon claims in search but whose row this list omits is a location a
+-- candidate can filter to and then not reach. Grouping by fingerprint could only ever see the
+-- exact role pass's clusters, so a fuzzy-suppressed per-city variant — the very thing issue
+-- #2225 reported — was never listed.
+--
+-- The anchor MAY itself be suppressed: a hidden posting stays readable by slug, which is how
+-- #2225 was reported, so the walk resolves the anchor UP to its ultimate owner first and lists
+-- that owner's closure. Answering with the anchor's own subtree would hand back the fragment
+-- its marker happens to point at.
+--
+-- Cycle safety is NOT structural here, unlike the closure geography queries: those seed from
+-- rows that are nobody's duplicate, which makes a cycle unreachable, but this one is handed an
+-- arbitrary id. The depth bound on the upward walk is therefore load-bearing — an anchor inside
+-- a marker cycle simply resolves to no owner and lists nothing.
+--
+-- The upward walk does not test closed_at. An anchor pointing at a closed parent still resolves
+-- through it to the open owner, so the closed row costs the group nothing; the final filter is
+-- what keeps closed rows out of the OUTPUT. That makes this list broader than search in one
+-- direction only — it can show an open posting search does not — which is the safe direction:
+-- listing a posting a candidate can apply to is never a leak, and hiding one is the complaint.
+--
+-- AND NOT j.is_private excludes the jd-tailor-intake private-job path: without it, a private
+-- job inside the same closure would surface (slug, location, url) to anyone browsing that
+-- PUBLIC job's copies — a listing leak, not merely "you'd need the direct link", which is what
+-- never indexing/listing it is for.
+WITH RECURSIVE up AS (
+    SELECT a.id, a.duplicate_of, 0 AS depth
+    FROM jobs a
+    WHERE a.id = sqlc.arg(job_id)
+    UNION ALL
+    SELECT p.id, p.duplicate_of, u.depth + 1
+    FROM up u
+    JOIN jobs p ON p.id = u.duplicate_of
+    WHERE u.depth < 8
+),
+owner AS (
+    SELECT id FROM up WHERE duplicate_of IS NULL LIMIT 1
+),
+member AS (
+    SELECT o.id AS member_id, 0 AS depth FROM owner o
+    UNION ALL
+    SELECT c.id, m.depth + 1
+    FROM member m
+    JOIN jobs c ON c.duplicate_of = m.member_id
+    WHERE c.closed_at IS NULL AND m.depth < 8
+)
 SELECT j.public_slug, j.location, j.url, j.posted_at,
     COUNT(*) OVER()::bigint AS total
-FROM jobs j
-JOIN jobs anchor ON anchor.id = sqlc.arg(job_id)
-WHERE j.company_slug = anchor.company_slug
-  AND j.role_fingerprint = anchor.role_fingerprint
-  AND anchor.role_fingerprint <> ''
-  AND j.closed_at IS NULL
+FROM member m
+JOIN jobs j ON j.id = m.member_id
+WHERE j.closed_at IS NULL
   AND NOT j.is_private
 ORDER BY j.location, j.id
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);

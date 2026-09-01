@@ -16,8 +16,8 @@ const (
 	maxCopiesLimit     = 200
 )
 
-// jobCopy is one posting in a role cluster — a single city's opening under a collapsed
-// role. Each keeps its own location and apply URL so a seeker picks their city.
+// jobCopy is one posting a collapsed job represents — a single city's opening. Each keeps
+// its own location and apply URL so a seeker picks their city.
 type jobCopy struct {
 	PublicSlug string     `json:"public_slug"`
 	Location   string     `json:"location"`
@@ -25,10 +25,15 @@ type jobCopy struct {
 	PostedAt   *time.Time `json:"posted_at"`
 }
 
-// JobCopies lists the open postings sharing the role cluster of the job addressed by
-// :slug — the per-city openings folded under one canonical card by the content-dedup
-// collapse. Public (unauthenticated) like the other job reads; the anchor itself is
-// included (it is one of the openings). Response: {"data": [copy...]}.
+// JobCopies lists the open postings represented by the job addressed by :slug — the per-city
+// openings folded under one canonical card by the content-dedup collapse. Public
+// (unauthenticated) like the other job reads.
+//
+// Membership is the duplicate closure, the same one the search document's geography union is
+// built from, so a city a candidate can filter to is a city they can reach. The addressed job
+// may itself be a suppressed posting (those stay readable by slug); the query resolves it to
+// its owner and lists that owner's whole group rather than a fragment. Response:
+// {"data": [copy...]}.
 func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
 	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
@@ -37,7 +42,7 @@ func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
 	}
 
 	limit, offset := pageParamsBounded(c, defaultCopiesLimit, maxCopiesLimit)
-	rows, err := h.queries.ListRoleClusterCopies(c.Context(), db.ListRoleClusterCopiesParams{
+	rows, err := h.queries.ListJobCopies(c.Context(), db.ListJobCopiesParams{
 		JobID:     id,
 		RowLimit:  int32(limit),
 		RowOffset: int32(offset),
@@ -56,7 +61,7 @@ func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
 		copies[i] = cp
 	}
 
-	// total is the whole cluster's open size (COUNT(*) OVER, pre-LIMIT), so the client's
+	// total is the whole closure's open size (COUNT(*) OVER, pre-LIMIT), so the client's
 	// "N openings" header stays accurate even when the list is a capped page.
 	var total int64
 	if len(rows) > 0 {

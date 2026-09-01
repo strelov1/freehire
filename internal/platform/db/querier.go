@@ -2264,6 +2264,38 @@ type Querier interface {
 	// Bounded to a recency window on closed_at for the same first-deploy reason as
 	// the other two candidate scans.
 	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]ListJobClosedCandidatesRow, error)
+	// The open postings the anchor's OWNER represents — the "N openings across cities" list for a
+	// collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
+	// the owner itself is included (it is one of the openings). Ordered by location.
+	//
+	// Membership is the DUPLICATE CLOSURE, not a shared role_fingerprint, and it is deliberately
+	// the same closure DuplicateClosureGeoAll unions geography over. The two must not disagree: a
+	// posting whose city the canon claims in search but whose row this list omits is a location a
+	// candidate can filter to and then not reach. Grouping by fingerprint could only ever see the
+	// exact role pass's clusters, so a fuzzy-suppressed per-city variant — the very thing issue
+	// #2225 reported — was never listed.
+	//
+	// The anchor MAY itself be suppressed: a hidden posting stays readable by slug, which is how
+	// #2225 was reported, so the walk resolves the anchor UP to its ultimate owner first and lists
+	// that owner's closure. Answering with the anchor's own subtree would hand back the fragment
+	// its marker happens to point at.
+	//
+	// Cycle safety is NOT structural here, unlike the closure geography queries: those seed from
+	// rows that are nobody's duplicate, which makes a cycle unreachable, but this one is handed an
+	// arbitrary id. The depth bound on the upward walk is therefore load-bearing — an anchor inside
+	// a marker cycle simply resolves to no owner and lists nothing.
+	//
+	// The upward walk does not test closed_at. An anchor pointing at a closed parent still resolves
+	// through it to the open owner, so the closed row costs the group nothing; the final filter is
+	// what keeps closed rows out of the OUTPUT. That makes this list broader than search in one
+	// direction only — it can show an open posting search does not — which is the safe direction:
+	// listing a posting a candidate can apply to is never a leak, and hiding one is the complaint.
+	//
+	// AND NOT j.is_private excludes the jd-tailor-intake private-job path: without it, a private
+	// job inside the same closure would surface (slug, location, url) to anyone browsing that
+	// PUBLIC job's copies — a listing leak, not merely "you'd need the direct link", which is what
+	// never indexing/listing it is for.
+	ListJobCopies(ctx context.Context, arg ListJobCopiesParams) ([]ListJobCopiesRow, error)
 	// The emails linked to one of the caller's applications, newest first, for the
 	// application detail page.
 	ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([]ListJobEmailsRow, error)
@@ -2399,17 +2431,6 @@ type Querier interface {
 	// first, with the report count and the distinct reasons given so a moderator
 	// can triage without opening each report individually.
 	ListReportedCompanyFeedback(ctx context.Context) ([]ListReportedCompanyFeedbackRow, error)
-	// The open postings sharing a role cluster (company_slug + role_fingerprint) with the
-	// anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
-	// its own location and apply URL, so a seeker picks their city; the anchor itself is
-	// included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
-	// clusters with no one and returns nothing.
-	//
-	// AND NOT j.is_private excludes the jd-tailor-intake private-job path: without it, a
-	// private job that coincidentally shares its cluster key with a public one would surface
-	// (slug, location, url) to anyone browsing that PUBLIC job's copies — a listing leak, not
-	// merely "you'd need the direct link", which is what never indexing/listing it is for.
-	ListRoleClusterCopies(ctx context.Context, arg ListRoleClusterCopiesParams) ([]ListRoleClusterCopiesRow, error)
 	// Every public_slug the user has saved (bookmarked). Used by the SPA to render
 	// the save toggle as filled on already-saved cards in the browse list and search
 	// results, without authenticating the public job-read path — the saved set is

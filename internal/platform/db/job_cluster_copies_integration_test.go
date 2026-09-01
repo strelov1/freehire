@@ -1,8 +1,13 @@
 //go:build integration
 
-// Integration test for ListRoleClusterCopies: the "openings across cities" list a
-// collapsed job exposes — every open posting sharing the anchor's role cluster
-// (company_slug + role_fingerprint), each with its own location, ordered by location.
+// Integration test for ListJobCopies: the "openings across cities" list a collapsed job
+// exposes — every open posting the anchor's OWNER represents, each with its own location,
+// ordered by location.
+//
+// Membership is the duplicate closure, not a shared role_fingerprint, and it must be the same
+// closure the geography union uses. A posting whose city the canon claims in search but whose
+// row this list omits is a location a candidate can filter to and then not reach — which is
+// half of what issue #2225 reported.
 // Run with: go test -tags=integration ./internal/platform/db/
 package db
 
@@ -21,105 +26,198 @@ func setLocation(t *testing.T, pool *pgxpool.Pool, ext, loc string) {
 	}
 }
 
-func TestListRoleClusterCopies_ReturnsOpenClusterByLocation(t *testing.T) {
+// copiesOf is the call under test, spelled once so the tests read as assertions.
+func copiesOf(t *testing.T, q *Queries, anchorID int64) []ListJobCopiesRow {
+	t.Helper()
+	rows, err := q.ListJobCopies(context.Background(),
+		ListJobCopiesParams{JobID: anchorID, RowLimit: 100, RowOffset: 0})
+	if err != nil {
+		t.Fatalf("ListJobCopies(%d): %v", anchorID, err)
+	}
+	return rows
+}
+
+func TestListJobCopies_ReturnsTheOwnersOpenClosureByLocation(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
-	ctx := context.Background()
 	truncate(t, pool)
 
 	const fp = "role-dup"
 	cities := map[string]string{"acme:1": "Moscow", "acme:2": "Kazan", "acme:3": "Perm"}
 	for ext, city := range cities {
-		if _, err := q.UpsertJob(ctx, withFingerprint(ext, "Staff Engineer", fp)); err != nil {
-			t.Fatalf("upsert %s: %v", ext, err)
-		}
+		mustUpsert(t, q, withFingerprint(ext, "Staff Engineer", fp))
 		setLocation(t, pool, ext, city)
 	}
-	// An unrelated role and a closed cluster member must not appear.
-	if _, err := q.UpsertJob(ctx, withFingerprint("acme:other", "Designer", "role-xyz")); err != nil {
-		t.Fatalf("upsert other: %v", err)
-	}
-	if _, err := q.UpsertJob(ctx, withFingerprint("acme:closed", "Staff Engineer", fp)); err != nil {
-		t.Fatalf("upsert closed: %v", err)
-	}
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE external_id = $1", "acme:closed"); err != nil {
-		t.Fatalf("close: %v", err)
-	}
+	// An unrelated role and a closed member must not appear.
+	mustUpsert(t, q, withFingerprint("acme:other", "Designer", "role-xyz"))
+	mustUpsert(t, q, withFingerprint("acme:closed", "Staff Engineer", fp))
 
 	anchorID, _ := dupOf(t, pool, "acme:1")
-	copies, err := q.ListRoleClusterCopies(ctx, ListRoleClusterCopiesParams{JobID: anchorID, RowLimit: 100, RowOffset: 0})
-	if err != nil {
-		t.Fatalf("ListRoleClusterCopies: %v", err)
+	for _, ext := range []string{"acme:2", "acme:3", "acme:closed"} {
+		id, _ := dupOf(t, pool, ext)
+		markDuplicate(t, pool, id, anchorID)
 	}
+	closedID, _ := dupOf(t, pool, "acme:closed")
+	closeJob(t, pool, closedID)
 
-	// The three open cluster members, ordered by location (Kazan, Moscow, Perm), each
-	// with its own location — the anchor itself included, the closed member excluded.
+	copies := copiesOf(t, q, anchorID)
+	// The three open members, ordered by location (Kazan, Moscow, Perm), each with its own
+	// location — the anchor itself included, the closed member excluded.
 	if len(copies) != 3 {
-		t.Fatalf("got %d copies, want 3 (open cluster members)", len(copies))
+		t.Fatalf("got %d copies, want 3 (open closure members)", len(copies))
 	}
 	if copies[0].Total != 3 {
-		t.Errorf("total = %d, want 3 (whole open cluster, pre-limit)", copies[0].Total)
+		t.Errorf("total = %d, want 3 (whole open closure, pre-limit)", copies[0].Total)
 	}
-	wantOrder := []string{"Kazan", "Moscow", "Perm"}
-	for i, want := range wantOrder {
+	for i, want := range []string{"Kazan", "Moscow", "Perm"} {
 		if copies[i].Location != want {
 			t.Errorf("copies[%d].Location = %q, want %q (ordered by location)", i, copies[i].Location, want)
 		}
 	}
+}
 
-	// An empty-fingerprint anchor clusters with no one → no copies.
-	if _, err := q.UpsertJob(ctx, withFingerprint("acme:nofp", "Untagged", "")); err != nil {
-		t.Fatalf("upsert nofp: %v", err)
+// The case a role-fingerprint grouping could not express, and the one issue #2225 asked for
+// by name: "expose all locations through its copies endpoint". A fuzzy-suppressed posting has
+// a DIFFERENT fingerprint from its canon by construction — that is why the exact pass left it
+// for the fuzzy pass — so grouping by fingerprint listed the canon alone.
+func TestListJobCopies_IncludesAFuzzySuppressedPosting(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	mustUpsert(t, q, withFingerprint("cobs:calgary", "Sales Assistant", "fp-calgary"))
+	mustUpsert(t, q, withFingerprint("cobs:chestermere", "Sales Assistant", "fp-chestermere"))
+	setLocation(t, pool, "cobs:calgary", "Calgary")
+	setLocation(t, pool, "cobs:chestermere", "Chestermere")
+
+	canonID, _ := dupOf(t, pool, "cobs:calgary")
+	hiddenID, _ := dupOf(t, pool, "cobs:chestermere")
+	markFuzzy(t, q, testCompany, hiddenID, canonID)
+
+	copies := copiesOf(t, q, canonID)
+	if len(copies) != 2 {
+		t.Fatalf("got %d copies, want 2 — the fuzzy-suppressed posting must be listed", len(copies))
 	}
-	nofpID, _ := dupOf(t, pool, "acme:nofp")
-	empty, err := q.ListRoleClusterCopies(ctx, ListRoleClusterCopiesParams{JobID: nofpID, RowLimit: 100, RowOffset: 0})
-	if err != nil {
-		t.Fatalf("ListRoleClusterCopies (nofp): %v", err)
+	for i, want := range []string{"Calgary", "Chestermere"} {
+		if copies[i].Location != want {
+			t.Errorf("copies[%d].Location = %q, want %q", i, copies[i].Location, want)
+		}
 	}
-	if len(empty) != 0 {
-		t.Errorf("empty-fp anchor returned %d copies, want 0", len(empty))
+}
+
+// A candidate can arrive on a SUPPRESSED posting by direct link — it stays readable by slug,
+// which is exactly how issue #2225 was reported. Asking for its copies must answer with the
+// whole group it belongs to, not with the fragment its own marker points at.
+func TestListJobCopies_FromASuppressedPostingResolvesToItsOwner(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	// C --role--> B --fuzzy--> A, all open: a two-hop chain, so resolving only one hop up
+	// would answer with B's fragment instead of A's whole group.
+	mustUpsert(t, q, withFingerprint("chain:a", "Operations Coordinator", "fp-a"))
+	mustUpsert(t, q, withFingerprint("chain:b", "Operations Coordinator", "fp-b"))
+	mustUpsert(t, q, withFingerprint("chain:c", "Operations Coordinator", "fp-b"))
+	setLocation(t, pool, "chain:a", "Toronto")
+	setLocation(t, pool, "chain:b", "Belleville")
+	setLocation(t, pool, "chain:c", "Scarborough")
+
+	aID, _ := dupOf(t, pool, "chain:a")
+	bID, _ := dupOf(t, pool, "chain:b")
+	cID, _ := dupOf(t, pool, "chain:c")
+	markDuplicate(t, pool, cID, bID)
+	markFuzzy(t, q, testCompany, bID, aID)
+
+	for _, anchor := range []struct {
+		name string
+		id   int64
+	}{{"the owner", aID}, {"a one-hop member", bID}, {"a two-hop member", cID}} {
+		t.Run(anchor.name, func(t *testing.T) {
+			copies := copiesOf(t, q, anchor.id)
+			if len(copies) != 3 {
+				t.Fatalf("got %d copies, want the owner's whole closure (3)", len(copies))
+			}
+			for i, want := range []string{"Belleville", "Scarborough", "Toronto"} {
+				if copies[i].Location != want {
+					t.Errorf("copies[%d].Location = %q, want %q", i, copies[i].Location, want)
+				}
+			}
+		})
+	}
+}
+
+// A row that represents nobody answers with itself. The detail page gates its "other
+// locations" tab on a total above one, so one row reads as "no other locations" there — the
+// same outcome the old fingerprint grouping produced by returning nothing, with a simpler rule.
+func TestListJobCopies_ARowRepresentingNobodyReturnsItself(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	mustUpsert(t, q, withFingerprint("acme:solo", "Untagged", ""))
+	setLocation(t, pool, "acme:solo", "Lisbon")
+
+	soloID, _ := dupOf(t, pool, "acme:solo")
+	copies := copiesOf(t, q, soloID)
+	if len(copies) != 1 || copies[0].Location != "Lisbon" {
+		t.Fatalf("copies = %+v, want just the row itself", copies)
+	}
+	if copies[0].Total != 1 {
+		t.Errorf("total = %d, want 1", copies[0].Total)
+	}
+}
+
+// An anchor inside a marker cycle has no owner to resolve to. Unlike the closure geography
+// queries — whose seed is rows that are nobody's duplicate, which makes a cycle unreachable —
+// this one is HANDED an arbitrary id, so the depth bound is what has to stop the upward walk.
+func TestListJobCopies_AMarkerCycleTerminates(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	mustUpsert(t, q, withFingerprint("loop:a", "Staff Engineer", "fp-loop-a"))
+	mustUpsert(t, q, withFingerprint("loop:b", "Staff Engineer", "fp-loop-b"))
+	aID, _ := dupOf(t, pool, "loop:a")
+	bID, _ := dupOf(t, pool, "loop:b")
+	markFuzzy(t, q, testCompany, aID, bID)
+	markFuzzy(t, q, testCompany, bID, aID)
+
+	if copies := copiesOf(t, q, aID); len(copies) != 0 {
+		t.Errorf("a cycle resolves to no owner and must list nothing; got %d copies", len(copies))
 	}
 }
 
 // A private job (jd-tailor-intake: a pasted JD or an unrecognized-URL scrape) must never
-// surface in a PUBLIC job's copies list, even when it coincidentally shares a role cluster
-// (company_slug + role_fingerprint) with one — that would hand the private job's slug and
-// location/url to anyone browsing an unrelated public posting, defeating the point of never
-// listing or indexing it.
-func TestListRoleClusterCopies_ExcludesPrivateJobs(t *testing.T) {
+// surface in a PUBLIC job's copies list, even when it is inside the same closure — that would
+// hand the private job's slug and location/url to anyone browsing an unrelated public posting,
+// defeating the point of never listing or indexing it.
+func TestListJobCopies_ExcludesPrivateJobs(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
 	truncate(t, pool)
 
 	const fp = "role-priv"
-	if _, err := q.UpsertJob(ctx, withFingerprint("acme:pub", "Staff Engineer", fp)); err != nil {
-		t.Fatalf("upsert public: %v", err)
-	}
-	if _, err := q.UpsertJob(ctx, withFingerprint("acme:priv", "Staff Engineer", fp)); err != nil {
-		t.Fatalf("upsert private: %v", err)
-	}
+	mustUpsert(t, q, withFingerprint("acme:pub", "Staff Engineer", fp))
+	mustUpsert(t, q, withFingerprint("acme:priv", "Staff Engineer", fp))
 	if _, err := pool.Exec(ctx, "UPDATE jobs SET is_private = true WHERE external_id = $1", "acme:priv"); err != nil {
 		t.Fatalf("mark private: %v", err)
 	}
 
 	anchorID, _ := dupOf(t, pool, "acme:pub")
-	copies, err := q.ListRoleClusterCopies(ctx, ListRoleClusterCopiesParams{JobID: anchorID, RowLimit: 100, RowOffset: 0})
-	if err != nil {
-		t.Fatalf("ListRoleClusterCopies: %v", err)
-	}
-	if len(copies) != 1 || copies[0].PublicSlug == "" {
+	privID, _ := dupOf(t, pool, "acme:priv")
+	markDuplicate(t, pool, privID, anchorID)
+
+	copies := copiesOf(t, q, anchorID)
+	if len(copies) != 1 {
 		t.Fatalf("copies = %+v, want only the public job", copies)
 	}
-	for _, c := range copies {
-		if c.PublicSlug != "" {
-			var isPrivate bool
-			if err := pool.QueryRow(ctx, "SELECT is_private FROM jobs WHERE public_slug = $1", c.PublicSlug).Scan(&isPrivate); err != nil {
-				t.Fatalf("read %s: %v", c.PublicSlug, err)
-			}
-			if isPrivate {
-				t.Errorf("copies included a private job (%s)", c.PublicSlug)
-			}
-		}
+	var isPrivate bool
+	if err := pool.QueryRow(ctx,
+		"SELECT is_private FROM jobs WHERE public_slug = $1", copies[0].PublicSlug).Scan(&isPrivate); err != nil {
+		t.Fatalf("read %s: %v", copies[0].PublicSlug, err)
+	}
+	if isPrivate {
+		t.Errorf("copies included a private job (%s)", copies[0].PublicSlug)
 	}
 }

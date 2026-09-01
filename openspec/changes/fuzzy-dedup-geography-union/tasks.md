@@ -52,15 +52,22 @@
 
 ## 3. The copies endpoint
 
-- [ ] 3.1 Replace `ListRoleClusterCopies` with a closure-based query: resolve the addressed slug to
+- [x] 3.1 Replace `ListRoleClusterCopies` with a closure-based query: resolve the addressed slug to
       its ultimate owner, then list that owner's closure's open, non-private members ordered by
       location, with `COUNT(*) OVER()` pre-LIMIT as today.
-- [ ] 3.2 Integration test: copies of a fuzzy canon include the fuzzy-suppressed posting; copies
+- [x] 3.2 Integration test: copies of a fuzzy canon include the fuzzy-suppressed posting; copies
       requested from a SUPPRESSED posting return its owner's whole closure including the owner; a
       closed member and unrelated roles stay excluded; an out-of-range offset is an empty page.
-- [ ] 3.3 Confirm `internal/api/handler/copies.go`'s response shape is unchanged (`public_slug`,
+- [x] 3.3 Confirm `internal/api/handler/copies.go`'s response shape is unchanged (`public_slug`,
       `location`, `apply_url`, `posted_at`, `meta.total`) so `web/` needs no diff, and that
-      `JobRelated.svelte`'s `copiesTotal > 1` gate still reads correctly.
+      `JobRelated.svelte`'s `copiesTotal > 1` gate still reads correctly. CONFIRMED: shape
+      untouched, no `web/` diff, and `openapi.yaml` does not describe this endpoint so there is
+      nothing to update there. One edge shifts: a row representing nobody now answers with itself
+      (`total: 1`) where an empty-fingerprint anchor used to answer with nothing (`total: 0`). The
+      tab gate is `> 1`, so it stays hidden either way; only the standalone
+      `/jobs/:slug/copies` page reads differently, and "1 openings" listing the job itself beats
+      "0 openings" listing nothing. Pagination still goes through `pageParamsBounded`, which
+      `TestOffsetIsParsedOnlyByTheSharedHelper` pins.
 
 ## 4. Releasing stale fuzzy markers
 
