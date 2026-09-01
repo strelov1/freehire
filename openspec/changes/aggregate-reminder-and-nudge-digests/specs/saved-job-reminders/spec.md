@@ -1,0 +1,101 @@
+## MODIFIED Requirements
+
+### Requirement: Scheduling a reminder on save
+
+When a user saves a job, the system SHALL schedule at most one pending reminder for
+that `(user, job)` pair, using the fixed account default delay. A reminder is
+scheduled only when the shared `notification-settings` rule is enabled for that
+user. Reminders SHALL only be scheduled for jobs that are saved and not yet applied.
+
+The scheduled fire time SHALL be rounded forward from the default delay to the
+account's daily notification hour, so that reminders scheduled on the same day for
+the same account become due in the same worker pass and can be delivered as one
+message. The notification hour is `notification_settings.digest_time` interpreted in
+the account's timezone; an account with no configured digest time SHALL use 09:00,
+and an account with no configured timezone SHALL be treated as UTC. Rounding SHALL
+only move the fire time forward, never earlier than the default delay.
+
+#### Scenario: Save schedules at the fixed default delay, rounded to the notification hour
+
+- **WHEN** a user with notifications enabled and no configured digest time saves a job
+- **THEN** a pending reminder is created whose fire time is the first 09:00 in the
+  account's timezone at or after the fixed default delay from the save
+
+#### Scenario: Two saves on the same day become due together
+
+- **WHEN** the same user saves two jobs several hours apart on one day
+- **THEN** both pending reminders carry the same fire time
+
+#### Scenario: Configured digest time is the rounding target
+
+- **WHEN** a user whose digest time is 18:00 and whose timezone is `Europe/Berlin`
+  saves a job
+- **THEN** the reminder's fire time is the first 18:00 Berlin time at or after the
+  fixed default delay from the save
+
+#### Scenario: Notifications disabled means no reminder
+
+- **WHEN** a user with notifications disabled saves a job
+- **THEN** no reminder is created
+
+### Requirement: One-shot delivery
+
+A reminder SHALL fire exactly once at or after its scheduled fire time and then be marked
+delivered. Due reminders SHALL be delivered grouped by user: all of one account's due,
+still-actionable reminders in a pass form one batch, and that batch SHALL be sent as a
+single message over each channel in the rule's channel set for which the user has a
+usable destination, reusing the existing notification delivery engine. Delivery SHALL be
+idempotent under worker retries: a reminder already marked delivered is never sent again.
+If the account's local time falls inside its configured quiet-hours window when its
+reminders become due, delivery of that account's whole batch SHALL be deferred to a later
+worker pass rather than sent or dropped.
+
+#### Scenario: Due reminders for one user arrive as one message
+
+- **WHEN** the reminder worker runs and three of one account's reminders are due
+- **THEN** the user receives exactly one reminder message per configured channel with a
+  usable destination, listing all three jobs
+- **AND** all three reminders are marked delivered
+
+#### Scenario: Due reminder is delivered once
+
+- **WHEN** the reminder worker runs after a reminder's fire time has passed
+- **THEN** the user receives one reminder message per configured channel with a usable
+  destination
+- **AND** the reminder is marked delivered
+
+#### Scenario: Reminders for different users are not merged
+
+- **WHEN** the worker runs and two different accounts each have due reminders
+- **THEN** each account receives its own message and neither message lists the other
+  account's jobs
+
+#### Scenario: Worker re-run does not resend
+
+- **WHEN** the worker runs again after a reminder was already delivered
+- **THEN** no additional message is sent for that reminder
+
+#### Scenario: Channel has no destination
+
+- **WHEN** a reminder's rule includes `telegram` but the user has not linked Telegram
+- **THEN** that channel is skipped without failing the reminder, and remaining channels
+  still deliver
+
+#### Scenario: Not yet due
+
+- **WHEN** the worker runs before a reminder's fire time
+- **THEN** the reminder is left pending and nothing is sent
+
+#### Scenario: Due reminder deferred during quiet hours
+
+- **WHEN** a reminder becomes due while the account's local time is inside
+  its configured quiet-hours window
+- **THEN** delivery is deferred (the claim is released, not marked
+  delivered or failed) and retried on a later pass
+
+#### Scenario: A cancelled reminder leaves the batch
+
+- **WHEN** one of an account's due reminders is no longer actionable (its job closed,
+  or the user applied or unsaved) while the others still are
+- **THEN** that reminder is cancelled and excluded from the message, and the remaining
+  reminders are still delivered as one message
