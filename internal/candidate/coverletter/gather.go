@@ -1,9 +1,11 @@
 package coverletter
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/google/uuid"
 
@@ -38,8 +40,7 @@ type Retriever interface {
 //
 // Gather does NOT apply that gate. Draft does, so that a caller cannot skip it.
 func Gather(ctx context.Context, r Retriever, userID int64, reqs []matchanalysis.Requirement) ([]experience.Atom, error) {
-	best := make(map[uuid.UUID]float64)
-	byID := make(map[uuid.UUID]experience.Atom)
+	best := make(map[uuid.UUID]experience.Match)
 
 	for _, req := range reqs {
 		if req.Text == "" {
@@ -50,14 +51,13 @@ func Gather(ctx context.Context, r Retriever, userID int64, reqs []matchanalysis
 			return nil, fmt.Errorf("coverletter: retrieve evidence: %w", err)
 		}
 		for _, m := range matches {
-			if score, seen := best[m.Atom.ID]; !seen || m.Score > score {
-				best[m.Atom.ID] = m.Score
+			if prev, seen := best[m.Atom.ID]; !seen || m.Score > prev.Score {
+				best[m.Atom.ID] = m
 			}
-			byID[m.Atom.ID] = m.Atom
 		}
 	}
 
-	if len(byID) == 0 {
+	if len(best) == 0 {
 		atoms, err := r.ListAtoms(ctx, userID)
 		if err != nil {
 			return nil, fmt.Errorf("coverletter: read bank: %w", err)
@@ -68,18 +68,19 @@ func Gather(ctx context.Context, r Retriever, userID int64, reqs []matchanalysis
 		return atoms, nil
 	}
 
-	out := make([]experience.Atom, 0, len(byID))
-	for _, a := range byID {
-		out = append(out, a)
-	}
+	ranked := slices.Collect(maps.Values(best))
 	// Sorted by score, then by id so the order is stable for a given bank — an unstable order
 	// would make two drafts of the same letter differ for no reason a reader could see.
-	sort.Slice(out, func(i, j int) bool {
-		si, sj := best[out[i].ID], best[out[j].ID]
-		if si != sj {
-			return si > sj
+	slices.SortFunc(ranked, func(x, y experience.Match) int {
+		if c := cmp.Compare(y.Score, x.Score); c != 0 {
+			return c
 		}
-		return out[i].ID.String() < out[j].ID.String()
+		return cmp.Compare(x.Atom.ID.String(), y.Atom.ID.String())
 	})
+
+	out := make([]experience.Atom, 0, len(ranked))
+	for _, m := range ranked {
+		out = append(out, m.Atom)
+	}
 	return out, nil
 }

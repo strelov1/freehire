@@ -81,21 +81,20 @@ type Letter struct {
 func (l *Letter) Sanitize(band Band, b Bounds, offered []uuid.UUID) {
 	l.Body = clip(l.Body, b.ceiling(band))
 
-	allowed := make(map[uuid.UUID]struct{}, len(offered))
+	// One set does both jobs: an id is kept only if it is still in `unused`, and taking it out
+	// on use is what makes a repeat a no-op. Tracking "allowed" and "already seen" separately
+	// would be two structures agreeing about the same thing.
+	unused := make(map[uuid.UUID]struct{}, len(offered))
 	for _, id := range offered {
-		allowed[id] = struct{}{}
+		unused[id] = struct{}{}
 	}
 
-	kept := make([]uuid.UUID, 0, len(l.Cited))
-	seen := make(map[uuid.UUID]struct{}, len(l.Cited))
+	kept := make([]uuid.UUID, 0, min(len(l.Cited), b.MaxCited))
 	for _, id := range l.Cited {
-		if _, ok := allowed[id]; !ok {
+		if _, ok := unused[id]; !ok {
 			continue
 		}
-		if _, dup := seen[id]; dup {
-			continue
-		}
-		seen[id] = struct{}{}
+		delete(unused, id)
 		kept = append(kept, id)
 		if len(kept) == b.MaxCited {
 			break

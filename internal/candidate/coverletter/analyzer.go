@@ -118,12 +118,19 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 		selected = atoms
 	}
 
+	// settle stamps a stage's output and bounds it. Both stages go through it, so the audited
+	// letter cannot end up held to looser limits than the draft it replaced.
+	settle := func(l *Letter, cited []uuid.UUID) {
+		l.Language = language
+		l.Cited = cited
+		l.Sanitize(in.Band, in.Bounds, offered)
+	}
+
 	drafted, err := a.write(ctx, in, selected, language)
 	if err != nil {
 		return nil, err
 	}
-	drafted.Language = language
-	drafted.Sanitize(in.Band, in.Bounds, offered)
+	settle(&drafted, IDs(selected))
 
 	audited, err := a.audit(ctx, in, drafted)
 	// The audit may improve the letter, never destroy it. An unparseable answer and one cut
@@ -131,9 +138,7 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	if err != nil || audited == nil {
 		return &drafted, nil
 	}
-	audited.Language = language
-	audited.Cited = drafted.Cited
-	audited.Sanitize(in.Band, in.Bounds, offered)
+	settle(audited, drafted.Cited)
 	if audited.BelowFloor(in.Bounds) {
 		return &drafted, nil
 	}
@@ -189,7 +194,8 @@ func (a *Analyzer) write(ctx context.Context, in Input, atoms []experience.Atom,
 	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &out); err != nil {
 		return Letter{}, fmt.Errorf("coverletter: parse draft: %w", err)
 	}
-	out.Cited = IDs(atoms)
+	// Citations are the caller's to set, not this stage's: the letter cites what stage 1
+	// selected, and a model naming its own would be exactly the widening Sanitize undoes.
 	return out, nil
 }
 
