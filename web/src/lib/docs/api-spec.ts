@@ -428,7 +428,7 @@ export const GROUPS: Group[] = [
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }`,
       },
@@ -1235,7 +1235,7 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
       "stale": false
     }
   ],
-  "meta": { "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" } }
+  "meta": { "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" } }
 }`,
       },
       {
@@ -1247,15 +1247,17 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'Which plan you are on and, for every metered AI feature, how much of today you ' +
           'have used against what the day allows. Every plan offers every feature; what ' +
           'differs is the daily amount, and it resets at `resets_at`. A pro caller reads as ' +
-          '`unlimited` rather than as a number. Never runs the LLM.',
+          '`unlimited` rather than as a number. `enforced` says whether that ceiling turns ' +
+          'anybody away yet — while it is `false` a spent allowance is counted and the ' +
+          'action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM.',
         curl: `curl "${BASE_URL}/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
     "plan": "free",
     "resets_at": "2026-09-01T00:00:00Z",
     "allowances": [
-      { "feature": "tailor", "used": 1, "limit": 2, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" },
-      { "feature": "match", "used": 0, "limit": 3, "unlimited": false, "resets_at": "2026-09-01T00:00:00Z" }
+      { "feature": "tailor", "used": 1, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" },
+      { "feature": "match", "used": 0, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
     ]
   }
 }`,

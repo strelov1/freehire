@@ -165,8 +165,10 @@ func refuseSessionCeiling(c *fiber.Ctx, sessionID string, d plan.TurnDecision, s
 		"allowance": viewStanding(st),
 		"session":   fiber.Map{"id": sessionID, "turns": d.Turns, "ceiling": d.Ceiling},
 	}
-	// Extending spends another of today's sessions, so it is only offered when there is one
-	// to spend. Offering it otherwise is a button that answers 402.
-	body["can_extend"] = !st.Exhausted()
+	// Extending spends another of today's sessions, so it is only offered when spending one
+	// would actually go through. Offering it otherwise is a button that answers 402 — and
+	// asking Exhausted instead would withhold the offer while the allowance is only being
+	// counted, which is a refusal shadow mode exists to prevent.
+	body["can_extend"] = !st.Refuses()
 	return c.Status(fiber.StatusPaymentRequired).JSON(body)
 }

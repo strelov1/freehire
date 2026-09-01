@@ -125,6 +125,15 @@ session's allowance to continue in the same session.
 - **THEN** one tailoring session allowance is consumed and the session's ceiling is
   extended by one ceiling's worth of turns
 
+#### Scenario: Continuing a session that predates the metering
+
+- **WHEN** a session created before this metering shipped — one holding no consumption at
+  all, and therefore running under the one ceiling it is granted implicitly — reaches that
+  ceiling and its owner elects to continue
+- **THEN** one tailoring session allowance is consumed AND the session's ceiling is
+  extended by one ceiling's worth of turns, exactly as for a session that was charged when
+  it started; the allowance MUST NOT be consumed for a ceiling the session already had
+
 #### Scenario: Session count alone does not bound depth
 
 - **WHEN** a user opens two tailoring sessions in a day and runs many turns in each
@@ -203,6 +212,34 @@ between the two is resolvable in favour of the ledger.
 - **WHEN** an allowance is returned after failed work
 - **THEN** the ledger shows both the consumption and its release rather than showing
   neither
+
+### Requirement: Enforcement is a per-feature switch that ships off
+
+The system SHALL carry a per-feature enforcement switch, defaulting to OFF, and SHALL NOT
+turn a caller away for a feature whose switch is off. With the switch off a spent allowance
+SHALL still be counted and reported, so the shadow run can answer how many callers a ceiling
+would have stopped against live traffic before anybody is refused on a number nobody has
+verified. The switch SHALL be settable per feature without a deploy.
+
+The enforcement state SHALL travel with every allowance the API returns, and NO surface —
+server-side pre-check, SPA or extension — may hide, disable or refuse an action on
+"consumed has reached allowed" alone. The fair-use guard is the one exception: it protects
+the gateway rather than a price, and is not subject to the switch.
+
+#### Scenario: A spent allowance under a switched-off feature still runs
+
+- **WHEN** a free-plan user has consumed today's whole allowance for a feature whose
+  enforcement is off, and takes that action again
+- **THEN** the action runs, the consumption is recorded, and the record marks that a live
+  ceiling would have refused it
+
+#### Scenario: A client cannot pre-block what the server would allow
+
+- **WHEN** a surface renders an action whose allowance is consumed but whose enforcement is
+  off
+- **THEN** the action remains available and is not presented as refused — a client-side
+  block would both refuse a caller the server would serve and withhold from the shadow
+  measurement the very requests it exists to count
 
 ### Requirement: A refusal is HTTP 402 and says what to do next
 

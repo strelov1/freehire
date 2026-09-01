@@ -55,7 +55,7 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	}
 	out := planResponse{Plan: string(tier), ResetsAt: resets, Allowances: make([]allowanceView, 0, len(usage))}
 	for _, u := range usage {
-		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, resets))
+		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, u.Enforced, resets))
 	}
 	return c.JSON(fiber.Map{"data": out})
 }

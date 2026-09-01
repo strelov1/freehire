@@ -18,14 +18,20 @@ transaction. `store.go` is the transaction around it and nothing else.
   turns and one ran 54 — and that account opened two sessions, well inside any daily count,
   while consuming $25 of model calls. Either bound alone leaves the hole this replaced.
 
-- **The turn ceiling is stored nowhere of its own.** It is the count of charges the session
-  holds, written as `<session_id>#1`, `#2`, … (`sessionRef`). That falls out of the
-  idempotency key rather than fighting it: a bare session id could only ever be charged
-  once, which is right for starting a session and wrong for extending one. Two simultaneous
-  "continue" clicks attempt the same next reference, the index admits one, and the second
-  reads as already charged — the race costs one allowance, not two, with no lock of its own.
-  **The `#` terminator is load-bearing**: without it the count for `sess-1` sweeps up
-  `sess-12`'s charges.
+- **The turn ceiling is stored nowhere of its own.** It is the HIGHEST slot number the
+  session's live charges reach, written as `<session_id>#1`, `#2`, … (`sessionRef`). That
+  falls out of the idempotency key rather than fighting it: a bare session id could only
+  ever be charged once, which is right for starting a session and wrong for extending one.
+  Two simultaneous "continue" clicks attempt the same next reference, they serialise on
+  today's counter row, and the second reads as already charged — the race costs one
+  allowance, not two, with no lock of its own. **The `#` terminator is load-bearing**:
+  without it the scan for `sess-1` sweeps up `sess-12`'s charges.
+
+  **The slot, not the row count.** They differ in the two cases that matter, and both cost
+  a candidate a session for nothing. A release voids a row without un-selling the slot, so
+  a count would walk the ceiling backwards under a session that already paid. And a session
+  granted its first ceiling implicitly (below) holds no row at all, so a count would sell
+  its first extension slot 1 — landing it on exactly the ceiling it already had.
 
 - **A turn is the unit charged, not the model call.** One turn averaged 7.1 calls, and that
   number is invisible to whoever asked the question. Charging per call would make two
@@ -36,16 +42,26 @@ transaction. `store.go` is the transaction around it and nothing else.
   TAILORING feature, because spending another tailoring session is what the candidate has
   to do about it.
 
-- **A session holding no charge gets ONE ceiling, not zero.** Every conversation open on
-  the day this deploys predates the ledger, and treating "no charge" as "never paid for"
+- **A session holding no charge gets SLOT 1 implicitly, not zero.** Every conversation open
+  on the day this deploys predates the ledger, and treating "no charge" as "never paid for"
   would 402 the next turn of every live one. It is still bounded: one ceiling's worth and
   no more, with the charge taken where sessions are created — the place that can refuse
-  before anything exists.
+  before anything exists. Granting it as a SLOT rather than as a bare ceiling is what makes
+  the first extension buy slot 2 and therefore buy something; `ceilingsHeld` is the one
+  place the grant happens, so the turn rule and the extension price cannot disagree.
 
 - **A pre-check asks `Refuses`, never `Exhausted`.** Exhausted says the allowance is spent;
   Refuses says the allowance is spent AND this feature enforces. A pre-check built on the
   first would hard-refuse while every other surface was still only counting, which is how a
   feature ships enforcing that nobody meant to enforce.
+
+  **This binds the SPA too, which is why `enforced` is on the wire.** Every allowance the
+  API returns carries it, and `refuses()` in `web/src/lib/allowance.ts` (and its twin in
+  `extension/lib/freehire.ts`) is the only thing a surface may hide or disable an action on.
+  A client that blocks on `used >= limit` alone is a wall the server does not have — and it
+  suppresses exactly the requests the shadow run is counting, so the numbers the enforcement
+  decision rests on come back understated. `Refuses` is a method on the Standing rather than
+  on the Store for the same reason: the flag and the rule travel together.
 
 - **Shadow mode: enforcement is a switch, per feature, and it ships off.** With it off,
   `Consume` records and reports but never refuses — the shadow run answers "how many people

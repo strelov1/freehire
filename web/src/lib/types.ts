@@ -55,14 +55,18 @@ export type {
 
 /** Where the caller stands on one metered feature today. Usage against a limit, never a
  *  balance: `used` is what they have spent since midnight UTC, `limit` what the day allows
- *  (absent when `unlimited`), and `resets_at` the ISO instant it starts over. A new-job
- *  analysis is blocked when `used` has reached `limit`; a recompute of an already-analysed
- *  job is always free. */
+ *  (absent when `unlimited`), and `resets_at` the ISO instant it starts over. A recompute of
+ *  an already-analysed job is always free.
+ *
+ *  `enforced` says whether the ceiling turns anybody away yet. It is false through the
+ *  shadow run, when the server counts a spent allowance and lets the action through anyway,
+ *  so nothing here may block on `used >= limit` alone — see `refuses` in $lib/allowance. */
 export interface Allowance {
   feature: string;
   used: number;
   limit?: number;
   unlimited: boolean;
+  enforced: boolean;
   resets_at: string;
 }
 

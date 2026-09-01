@@ -8,7 +8,7 @@
   // candidate commits to tailoring their CV against it — always, not just when
   // something looks off, so the check is a habit rather than a surprise.
   import { Check, TriangleAlert } from '@lucide/svelte';
-  import { isSpent, remaining, resetsAtLabel } from '$lib/allowance';
+  import { refuses, remaining, resetsAtLabel } from '$lib/allowance';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '$lib/confirmTailorDialog.svelte';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
   import { ConfirmDialog } from '$lib/ui';
@@ -30,17 +30,22 @@
   );
   const confirmLabel = $derived(hasGaps ? 'Tailor anyway' : 'Tailor my CV');
 
-  // What starting this session costs, said before the candidate commits. With nothing left
-  // the dialog offers no confirm at all: letting them press a button that answers 402 is a
-  // worse way to learn the same thing.
+  // What starting this session costs, said before the candidate commits. When the server
+  // would really turn them away the dialog offers no confirm at all: letting them press a
+  // button that answers 402 is a worse way to learn the same thing.
+  //
+  // `refused`, not `isSpent`. Through the shadow run the allowance reads as spent while the
+  // server still starts the session, and blocking on the count alone would build a wall the
+  // server does not have — and hide from the measurement exactly the sessions it is there
+  // to count.
   const allowance = $derived(confirmTailorDialog.allowance);
-  const spent = $derived(isSpent(allowance));
+  const refused = $derived(refuses(allowance));
   const left = $derived(remaining(allowance));
 </script>
 
-<!-- With nothing left the confirm button acknowledges rather than proceeds: settling false
-     keeps the candidate where they are instead of navigating them into a 402 they can do
-     nothing about. The dialog still opens, because what it has to say is the reason. -->
+<!-- Facing a real refusal the confirm button acknowledges rather than proceeds: settling
+     false keeps the candidate where they are instead of navigating them into a 402 they can
+     do nothing about. The dialog still opens, because what it has to say is the reason. -->
 <ConfirmDialog
   bind:open={
     () => confirmTailorDialog.open,
@@ -49,8 +54,8 @@
     }
   }
   {title}
-  confirmLabel={spent ? 'Got it' : confirmLabel}
-  onConfirm={() => settleConfirmTailorDialog(!spent)}
+  confirmLabel={refused ? 'Got it' : confirmLabel}
+  onConfirm={() => settleConfirmTailorDialog(!refused)}
 >
   {#if confirmTailorDialog.loading && !match}
     <p class="text-sm text-muted-foreground">Checking your fit for this role…</p>
@@ -108,7 +113,7 @@
     </p>
   {/if}
 
-  {#if spent}
+  {#if refused}
     <p class="mt-4 text-sm font-medium">You've used today's CV editing sessions.</p>
     <p class="text-xs text-muted-foreground">
       More at {resetsAtLabel(allowance)}. Sessions you've already started stay open.
@@ -116,7 +121,10 @@
     <a href={resolve('/my/plan')} class="mt-1 text-xs font-medium underline underline-offset-4">
       See your plan
     </a>
-  {:else if left !== null}
+    <!-- Zero left without a refusal is the shadow run: the count is spent, the session
+         still starts. Saying "0 left" beside a button that works would be the one sentence
+         on this dialog the candidate could prove wrong, so it says nothing instead. -->
+  {:else if left}
     <p class="mt-4 text-xs text-muted-foreground">
       Starts one of today's CV editing sessions — {left} left.
     </p>

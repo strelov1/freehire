@@ -191,7 +191,7 @@ func (h *cvHandlers) refuseNewTailoring(c *fiber.Ctx, userID, jobID int64) (bool
 		log.Printf("plan: tailoring standing for user %d: %v", userID, err)
 		return false, nil
 	}
-	if !h.plans.Refuses(st) {
+	if !st.Refuses() {
 		return false, nil
 	}
 	if _, err := h.queries.GetTailoredCVForJob(c.Context(), db.GetTailoredCVForJobParams{

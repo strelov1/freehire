@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { ArrowRight, FileText, SquarePen } from '@lucide/svelte';
-  import { isSpent, remaining, resetsAtLabel } from '$lib/allowance';
+  import { refuses, remaining, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -41,10 +41,14 @@
 
   const analysis = $derived(data?.analysis ?? null);
   const topGap = $derived(analysis?.gaps?.[0] ?? null);
-  // A new (never-analysed) job can't be analysed once today's allowance is spent; a
+  // A new (never-analysed) job can't be analysed once today's allowance would REFUSE one; a
   // recompute of an already-analysed job stays free, so this only gates the fresh CTA.
+  //
+  // `refuses`, not `isSpent`: through the shadow run the count reads as spent while the
+  // server still runs the analysis, and hiding the CTA on the count alone would refuse
+  // somebody the server was about to serve.
   const allowance = $derived(data?.allowance ?? null);
-  const allowanceSpent = $derived(isSpent(allowance));
+  const allowanceRefused = $derived(refuses(allowance));
 
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
@@ -92,7 +96,7 @@
         View full analysis <ArrowRight class="size-3.5 transition-transform group-hover:translate-x-0.5" />
       </span>
     </a>
-  {:else if allowanceSpent}
+  {:else if allowanceRefused}
     <p class="text-sm text-muted-foreground">You've used today's job analyses. More at {resetsAtLabel(allowance)}.</p>
   {:else}
     <p class="text-sm text-muted-foreground">How your CV reads against this role — fit, gaps, and ATS flags.</p>
@@ -108,8 +112,10 @@
     </Button>
     <!-- The line under the button says what happens next: for a signed-in viewer that's
          what today still allows, for a guest that it runs on a CV they haven't given us
-         yet. A guest has no allowance to report, so the two never both apply. -->
-    {#if allowance && !allowance.unlimited}
+         yet. A guest has no allowance to report, so the two never both apply.
+         Nothing left and no refusal is the shadow run — the analysis still goes, so it
+         says nothing rather than "0 left" beside a button that works. -->
+    {#if remaining(allowance)}
       <p class="text-xs text-muted-foreground">
         {remaining(allowance)} of today's job analyses left
       </p>

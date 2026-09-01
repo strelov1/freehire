@@ -15,22 +15,30 @@ import (
 // Limit is omitted for an unlimited caller rather than sent as a number. A pro plan has no
 // user-facing ceiling, and sending the fair-use guard as "limit" would present an
 // infrastructure defence as the thing they bought.
+//
+// Enforced is on the wire because the SPA pre-blocks actions a spent allowance would refuse
+// — the tailoring dialog, the fit CTA — and a client that cannot tell a live ceiling from a
+// shadow one refuses what the server would have allowed. That is not only a wall nobody
+// meant to build: it suppresses exactly the requests the shadow run is counting, so the
+// numbers the enforcement decision rests on would come back understated.
 type allowanceView struct {
 	Feature   string    `json:"feature"`
 	Used      int       `json:"used"`
 	Limit     int       `json:"limit,omitempty"`
 	Unlimited bool      `json:"unlimited"`
+	Enforced  bool      `json:"enforced"`
 	ResetsAt  time.Time `json:"resets_at"`
 }
 
 // view is the one place an allowance becomes wire shape. A Standing, a Decision and a
-// FeatureUsage all describe the same four facts, so they converge here rather than each
-// growing its own mapping that could disagree about the unlimited rule.
-func view(feature plan.Feature, used, limit int, unlimited bool, resetsAt time.Time) allowanceView {
+// FeatureUsage all describe the same facts, so they converge here rather than each growing
+// its own mapping that could disagree about the unlimited rule or the enforcement flag.
+func view(feature plan.Feature, used, limit int, unlimited, enforced bool, resetsAt time.Time) allowanceView {
 	v := allowanceView{
 		Feature:   string(feature),
 		Used:      used,
 		Unlimited: unlimited,
+		Enforced:  enforced,
 		ResetsAt:  resetsAt,
 	}
 	if !unlimited {
@@ -40,11 +48,11 @@ func view(feature plan.Feature, used, limit int, unlimited bool, resetsAt time.T
 }
 
 func viewStanding(s plan.Standing) allowanceView {
-	return view(s.Feature, s.Used, s.Limit, s.Unlimited, s.ResetsAt)
+	return view(s.Feature, s.Used, s.Limit, s.Unlimited, s.Enforced, s.ResetsAt)
 }
 
 func viewDecision(d plan.Decision) allowanceView {
-	return view(d.Feature, d.Used, d.Limit, d.Unlimited, d.ResetsAt)
+	return view(d.Feature, d.Used, d.Limit, d.Unlimited, d.Enforced, d.ResetsAt)
 }
 
 // refusalMessage is what a refused caller is told. It names the feature that ran out rather

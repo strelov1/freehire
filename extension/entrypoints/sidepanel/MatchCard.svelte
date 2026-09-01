@@ -3,6 +3,8 @@
   import { Button, Card, ConfirmDialog, CountryFlag } from 'freehire-design-system';
   import { getToken, HIRE_ORIGIN } from '../../lib/auth';
   import {
+    allowanceRefuses,
+    allowanceRemaining,
     companyLogoUrl,
     getMatchAnalysis,
     partitionBlockers,
@@ -111,11 +113,15 @@
   });
   let analysis = $derived(analysisData?.analysis ?? null);
   let topGap = $derived(analysis?.gaps?.[0] ?? null);
-  let credits = $derived(analysisData?.credits ?? null);
-  let creditsSpent = $derived(!!credits && credits.remaining <= 0);
+  // What today allows, not a balance. `allowanceRefuses`, not "is it spent": through the
+  // shadow run the count reads as spent while the server still runs the analysis, and
+  // blocking on the count alone would refuse what the server was about to serve.
+  let allowance = $derived(analysisData?.allowance ?? null);
+  let allowanceRefused = $derived(allowanceRefuses(allowance));
+  let analysesLeft = $derived(allowanceRemaining(allowance));
   let analysisTone = $derived(analysis ? scoreTone(analysis.overall_score) : 'good');
 
-  // Pre-flight confirmation before spending an AI credit: the deterministic
+  // Pre-flight confirmation before spending one of today's analyses: the deterministic
   // (no-LLM) skill/requirement check the card already has data for, shown one
   // more time as an explicit "are you sure" — see AGENTS.md for why this
   // gate exists. Always shown, even for a full match, just with different copy.
@@ -188,10 +194,12 @@
           {/if}
           <span class="analysis-link">View full analysis →</span>
         </a>
-      {:else if creditsSpent}
+      {:else if allowanceRefused}
         <p class="hint">
-          You're out of AI credits for this month. They renew
-          {credits ? new Date(credits.resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'next month'}.
+          You've used today's job analyses. More at
+          {allowance
+            ? new Date(allowance.resets_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+            : 'midnight UTC'}.
         </p>
       {:else}
         <p class="hint">How your CV reads against this role — fit, gaps, and ATS flags.</p>
@@ -199,8 +207,10 @@
           Tailor my CV
           <SquarePen class="icon-sm" />
         </Button>
-        {#if credits}
-          <p class="hint credits">{credits.remaining} AI credits left this month</p>
+        <!-- Nothing left and no refusal is the shadow run — the analysis still goes, so it
+             says nothing rather than "0 left" beside a button that works. -->
+        {#if analysesLeft}
+          <p class="hint allowance">{analysesLeft} of today's job analyses left</p>
         {/if}
       {/if}
     </div>
@@ -446,7 +456,7 @@
     font-size: 13px;
     color: var(--muted-foreground);
   }
-  .hint.credits {
+  .hint.allowance {
     font-size: 12px;
     margin-top: -2px;
   }

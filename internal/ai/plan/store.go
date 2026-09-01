@@ -193,6 +193,7 @@ type FeatureUsage struct {
 	Used      int
 	Limit     int
 	Unlimited bool
+	Enforced  bool
 }
 
 // Standing is where one user stands on one feature today, with everything a surface needs
@@ -208,6 +209,12 @@ type Standing struct {
 	Limit     int
 	Unlimited bool
 	ResetsAt  time.Time
+
+	// Enforced says whether this feature's ceiling turns anybody away yet. It is part of
+	// the standing rather than something a caller looks up separately, because a caller
+	// holding one without the other is exactly how a surface comes to refuse on Exhausted
+	// alone.
+	Enforced bool
 }
 
 // Exhausted reports whether this feature has nothing left today. An unlimited standing is
@@ -226,9 +233,11 @@ func (s Standing) Exhausted() bool { return !s.Unlimited && s.Used >= s.Limit }
 // The distinction is the whole of shadow mode. A pre-check that refused on Exhausted alone
 // would hard-refuse while every other surface was still only counting — which is how a
 // feature ships enforcing that nobody meant to enforce.
-func (s *Store) Refuses(st Standing) bool {
-	return st.Exhausted() && s.cfg.Enforced(st.Feature)
-}
+//
+// It is a method on the standing rather than on the store so that every holder of one can
+// ask it, including the SPA: the wire shape carries Enforced for the same reason, and the
+// two answers cannot drift because they are the same expression.
+func (s Standing) Refuses() bool { return s.Exhausted() && s.Enforced }
 
 // Standing reports where the caller stands on one feature today. It makes no model call
 // and consumes nothing, so a surface may ask before offering an action — the tailoring
@@ -254,6 +263,7 @@ func (s *Store) Standing(ctx context.Context, userID int64, f Feature) (Standing
 		Limit:     allowance.Limit,
 		Unlimited: allowance.Unlimited,
 		ResetsAt:  ResetsAt(now),
+		Enforced:  s.cfg.Enforced(f),
 	}, nil
 }
 
@@ -286,6 +296,7 @@ func (s *Store) Usage(ctx context.Context, userID int64) (Tier, []FeatureUsage, 
 			Used:      used[f],
 			Limit:     allowance.Limit,
 			Unlimited: allowance.Unlimited,
+			Enforced:  s.cfg.Enforced(f),
 		})
 	}
 	return tier, out, ResetsAt(now), nil

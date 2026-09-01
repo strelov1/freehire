@@ -29,6 +29,13 @@ type Decision struct {
 	// sold against, and the guard is an infrastructure defence a paying user should never
 	// be shown as a ceiling on what they bought.
 	FairUse bool
+
+	// Enforced says whether this feature's ceiling actually turns anybody away yet. It
+	// travels with the decision because the clients that pre-block an action need it: a
+	// surface that hides a button on a spent allowance while enforcement is off refuses
+	// somebody the server would have let through, and biases the shadow measurement by
+	// suppressing exactly the requests it is meant to count.
+	Enforced bool
 }
 
 // decide is the whole rule, as a pure function of the plan, the feature, what the day
@@ -41,6 +48,7 @@ func (c Config) decide(tier Tier, f Feature, used int, alreadyCharged bool, now 
 		Feature:  f,
 		Used:     used,
 		ResetsAt: ResetsAt(now),
+		Enforced: c.Enforced(f),
 	}
 	allowance := c.Allowance(tier, f)
 	d.Limit, d.Unlimited = allowance.Limit, allowance.Unlimited

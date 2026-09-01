@@ -193,15 +193,37 @@ interface MatchAnalysisSummary {
   gaps: string[];
 }
 
-interface MatchAnalysisCredits {
-  remaining: number;
+/** Where the caller stands on today's fit-analysis allowance. Usage against a limit, never
+ *  a balance — the points currency it replaced is gone.
+ *
+ *  `enforced` says whether the ceiling turns anybody away yet. It is false through the
+ *  shadow run, when the server counts a spent allowance and runs the analysis anyway, so
+ *  nothing may block on `used >= limit` alone. */
+export interface MatchAnalysisAllowance {
+  used: number;
+  limit?: number;
+  unlimited: boolean;
+  enforced: boolean;
   resets_at: string;
 }
 
 export interface MatchAnalysisResponse {
   has_cv: boolean;
   analysis: MatchAnalysisSummary | null;
-  credits: MatchAnalysisCredits | null;
+  allowance: MatchAnalysisAllowance | null;
+}
+
+/** Whether the server would actually refuse a fresh analysis right now. An unlimited
+ *  allowance never refuses here — the fair-use guard behind it answers at the point of use
+ *  rather than being a ceiling anybody is shown approaching. */
+export function allowanceRefuses(a: MatchAnalysisAllowance | null | undefined): boolean {
+  return !!a && !a.unlimited && a.used >= (a.limit ?? 0) && a.enforced;
+}
+
+/** How many of today's analyses are left, or null when unlimited or unknown. */
+export function allowanceRemaining(a: MatchAnalysisAllowance | null | undefined): number | null {
+  if (!a || a.unlimited) return null;
+  return Math.max(0, (a.limit ?? 0) - a.used);
 }
 
 export function getMatchAnalysis(slug: string, token: string): Promise<MatchAnalysisResponse> {

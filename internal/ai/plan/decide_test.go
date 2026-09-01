@@ -74,6 +74,43 @@ func TestDecideShadowRecordsButNeverRefuses(t *testing.T) {
 	if d.Charge != 1 {
 		t.Errorf("Charge = %d, want 1 — shadow mode still records consumption, or the counter describes nothing", d.Charge)
 	}
+	if d.Enforced {
+		t.Error("a shadow decision reports itself enforced; the clients that pre-block read this flag, and one that reads true refuses what the server just allowed")
+	}
+}
+
+// Enforcement travels with the decision because every surface that pre-blocks needs it. A
+// client that can only see used-against-limit hides a button on a spent allowance the
+// server would still honour — a wall nobody meant to build, and one that suppresses the
+// very requests the shadow run is counting.
+func TestDecisionCarriesWhetherTheCeilingIsLive(t *testing.T) {
+	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
+	d := enforcing().decide(TierFree, FeatureFit, 0, false, now)
+
+	if !d.Enforced {
+		t.Error("an enforcing configuration produced a decision that says it is not enforced")
+	}
+}
+
+// Standing.Refuses is the same rule, asked by whoever holds a standing rather than by the
+// store — including the SPA, which receives the flag on the wire.
+func TestStandingRefusesOnlyWhenTheCeilingIsLive(t *testing.T) {
+	spent := Standing{Feature: FeatureFit, Used: 3, Limit: 3}
+
+	if !spent.Exhausted() {
+		t.Fatal("a standing at its limit does not report itself exhausted")
+	}
+	if spent.Refuses() {
+		t.Error("a spent allowance refuses while enforcement is off; that is the shadow run refusing people")
+	}
+	spent.Enforced = true
+	if !spent.Refuses() {
+		t.Error("a spent allowance does not refuse with enforcement on")
+	}
+	unlimited := Standing{Feature: FeatureFit, Used: 500, Unlimited: true, Enforced: true}
+	if unlimited.Refuses() {
+		t.Error("an unlimited standing refuses; the fair-use guard belongs at the point of use, not here")
+	}
 }
 
 func TestDecideProHasNoPlanCeiling(t *testing.T) {
