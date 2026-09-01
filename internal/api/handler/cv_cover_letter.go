@@ -45,14 +45,14 @@ func (h *cvHandlers) GetCVCoverLetter(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"data": coverLetterResponse{}})
 	}
 	// Staleness is measured against the vacancy's language, not the caller's profile — the
-	// employer reads this letter. Reading the job costs one row we have already loaded.
+	// employer reads this letter.
 	job, err := h.jobReader.GetJob(c.Context(), jobID)
 	if err != nil {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": coverLetterResponse{
 		Present: true,
-		Stale:   stored.Stale(h.letterModelID(), job.PostingLanguage),
+		Stale:   stored.Stale(modelIDOf(h.llm.client), job.PostingLanguage),
 		Letter:  &stored.Letter,
 		Model:   stored.Model,
 	}})
@@ -60,38 +60,18 @@ func (h *cvHandlers) GetCVCoverLetter(c *fiber.Ctx) error {
 
 // DraftCVCoverLetter runs the three-stage chain and replaces the stored draft.
 //
-// The allowance is taken BEFORE the chain runs and released when the chain produces nothing
-// usable, so a failed gateway does not cost the candidate a draft. The model calls go out on
-// the candidate's own gateway credential under the cover-letter tag.
+// The allowance is taken BEFORE the chain and released when the chain produces nothing usable,
+// so a failed gateway does not cost the candidate a draft. The model calls go out on the
+// candidate's own gateway credential under the cover-letter tag.
 func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
-	if h.letters == nil || h.bank == nil {
+	drafter := h.letterDrafter()
+	if !drafter.ready() {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "cover letters are not enabled on this deployment")
 	}
 	userID, jobID, err := h.coverLetterTarget(c)
 	if err != nil {
 		return err
 	}
-	job, err := h.jobReader.GetJob(c.Context(), jobID)
-	if err != nil {
-		return err
-	}
-	// Required produces an analysis when none is cached, exactly as the assistant's
-	// interview_context tool and the autopilot's run plan do, and is not charged for it. A
-	// candidate who asks for a letter on a vacancy they never analysed gets one.
-	tailoring, err := h.fit.TailoringContext(c.Context(), userID, job)
-	if err != nil {
-		return err
-	}
-	atoms, err := coverletter.Gather(c.Context(), h.bank, userID, tailoring.MissingHave)
-	if err != nil {
-		return err
-	}
-	// The BANK layered over the structured resume, not reviewableResume's file-only
-	// structure. That distinction is the one match_analysis.go records beside its own reader:
-	// the ATS report judges the document, so it reads the file; a letter speaks for the
-	// candidate, so it reads what the candidate has. A letter built from the file alone would
-	// also be unable to cite an achievement banked from chat.
-	candidate := candidateProfileFrom(c.Context(), h.resume, h.letterProfile, userID)
 
 	// The stored draft's own timestamp identifies this attempt. A retry of the same request
 	// computes the same reference and takes nothing more; a redraft happens after a successful
@@ -105,20 +85,13 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 	if stored != nil {
 		attempt = stored.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
-
 	charge, refused, err := h.chargeCoverLetter(c, userID, jobID, attempt)
 	if refused || err != nil {
 		return err
 	}
 
-	analyzer := h.letterChain.As(h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter)))
-	letter, err := analyzer.Draft(c.Context(), coverletter.Input{
-		Context:         tailoring,
-		Candidate:       candidate,
-		Atoms:           atoms,
-		Band:            coverLetterBand(c),
-		PostingLanguage: job.PostingLanguage,
-	})
+	client := h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter))
+	letter, err := drafter.draft(c.Context(), client, userID, jobID, coverLetterBand(c))
 	switch {
 	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
 		h.releaseCoverLetter(c, userID, charge)
@@ -133,15 +106,19 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 		h.releaseCoverLetter(c, userID, charge)
 		return fiber.NewError(fiber.StatusServiceUnavailable, "drafting is unavailable on this deployment")
 	}
-
-	if err := h.letters.Save(c.Context(), userID, jobID, *letter, h.letterModelID()); err != nil {
-		return err
-	}
 	return c.JSON(fiber.Map{"data": coverLetterResponse{
 		Present: true,
 		Letter:  letter,
-		Model:   h.letterModelID(),
+		Model:   modelIDOf(client),
 	}})
+}
+
+// letterDrafter assembles the shared drafting path from this surface's dependencies.
+func (h *cvHandlers) letterDrafter() letterDrafter {
+	return letterDrafter{
+		jobs: h.jobReader, fit: h.fit, bank: h.bank, profile: h.letterProfile,
+		resume: h.resume, chain: h.letterChain, letters: h.letters,
+	}
 }
 
 // coverLetterTarget resolves the caller and the vacancy their CV is bound to. A base CV has no
@@ -179,12 +156,8 @@ func coverLetterBand(c *fiber.Ctx) coverletter.Band {
 	return coverletter.BandStandard
 }
 
-// chargeCoverLetter takes one allowance for drafting against this vacancy.
-//
-// The reference is per (job, attempt-of-the-stored-draft) rather than per job alone: a redraft
-// is a second set of model calls and must cost a second allowance, while a retried request for
-// the same attempt must not. A deployment with no meter charges nothing and runs, the
-// fail-open rule the assistant's metering already follows.
+// chargeCoverLetter takes one allowance for drafting against this vacancy. A deployment with
+// no meter charges nothing and runs — the fail-open rule the assistant's metering follows.
 func (h *cvHandlers) chargeCoverLetter(c *fiber.Ctx, userID, jobID int64, attempt string) (string, bool, error) {
 	if h.plans == nil {
 		return "", false, nil
@@ -208,16 +181,6 @@ func (h *cvHandlers) chargeCoverLetter(c *fiber.Ctx, userID, jobID int64, attemp
 // is on (user_id, feature, ref) for a consume, so this string is what makes a retry idempotent.
 func coverLetterRef(jobID int64, attempt string) string {
 	return "cover-letter#" + strconv.FormatInt(jobID, 10) + "#" + attempt
-}
-
-// letterModelID names the model a draft is stamped with. Empty on a deployment with no
-// gateway, which Stale then reads as "matches", because a letter cannot be stale against a
-// model that does not exist.
-func (h *cvHandlers) letterModelID() string {
-	if h.llm.client == nil {
-		return ""
-	}
-	return h.llm.client.ModelID()
 }
 
 // releaseCoverLetter gives back what a draft took when it produced nothing the candidate can

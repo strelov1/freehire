@@ -21,22 +21,25 @@ func TestToolBandReadsShortAndDefaultsOtherwise(t *testing.T) {
 	}
 }
 
-// Both entry points must apply the provenance gate identically. They do so by construction —
-// neither filters atoms itself, both hand the unfiltered bank to Draft, and Draft is the only
-// place the gate lives. This test pins that construction: if either path ever starts
-// pre-filtering, the two could drift and only one would fail closed.
-func TestBothEntryPointsDelegateTheGateToDraft(t *testing.T) {
+// Both entry points must build a letter from the same material. They do so by construction:
+// neither assembles the chain's input itself, both go through letterDrafter, and the
+// provenance gate lives inside Draft below it. This test pins that construction - if either
+// path grows its own call to the chain, the two can drift and only one would fail closed.
+func TestBothEntryPointsGoThroughTheSharedDrafter(t *testing.T) {
 	for _, path := range []string{
 		"internal/api/handler/cv_cover_letter.go",
 		"internal/api/handler/assistant_cover_letter_tool.go",
 	} {
 		src := readSourceFile(t, path)
-		if containsAny(src, "coverletter.Publishable", "Publishable(") {
+		if containsAny(src, "Publishable(") {
 			t.Errorf("%s filters atoms itself; the gate belongs to Draft alone, so that a caller "+
 				"cannot apply a weaker one", path)
 		}
-		if !containsAny(src, "Atoms:") {
-			t.Errorf("%s does not hand its atoms to Draft", path)
+		if containsAny(src, "coverletter.Input{", "coverletter.Gather(") {
+			t.Errorf("%s assembles the chain's input itself instead of going through letterDrafter", path)
+		}
+		if !containsAny(src, "drafter.draft(") {
+			t.Errorf("%s does not go through the shared drafter", path)
 		}
 	}
 }

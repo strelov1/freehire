@@ -58,8 +58,23 @@ func TestCoverLetterRefSeparatesJobsAndAttempts(t *testing.T) {
 
 // An unconfigured deployment must not be reported as a letter written by a nameless model:
 // Stale compares this against the stored stamp, and "" == "" reads as "matches".
-func TestLetterModelIDIsEmptyWithoutAGateway(t *testing.T) {
-	if got := (&cvHandlers{}).letterModelID(); got != "" {
+func TestModelIDOfIsEmptyWithoutAGateway(t *testing.T) {
+	if got := modelIDOf(nil); got != "" {
 		t.Errorf("model = %q, want empty when no gateway is configured", got)
+	}
+}
+
+// A drafter missing any dependency must refuse in its caller's own vocabulary rather than
+// panic inside it - on the tool's path that panic lands in a detached goroutine where no
+// error path is listening.
+func TestLetterDrafterIsNotReadyWhenAnythingIsMissing(t *testing.T) {
+	if (letterDrafter{}).ready() {
+		t.Error("an empty drafter reports ready")
+	}
+	if (&cvHandlers{}).letterDrafter().ready() {
+		t.Error("an unwired cvHandlers reports a ready drafter")
+	}
+	if (&assistantHandlers{}).letterDrafter().ready() {
+		t.Error("an unwired assistantHandlers reports a ready drafter")
 	}
 }

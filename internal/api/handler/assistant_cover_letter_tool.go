@@ -15,10 +15,9 @@ import (
 // coverLetterDraftTool lets a tailoring session write the cover letter the vacancy's own
 // application form asks for.
 //
-// It runs the SAME chain, the same provenance gate and the same bounds as
-// POST /me/cvs/:id/cover-letter, and stores under the same key — so the chat path and the
-// button path cannot drift into producing different letters for one pair. What differs is only
-// how the request arrives.
+// It runs the SAME letterDrafter as POST /me/cvs/:id/cover-letter and stores under the same
+// key, so the chat path and the button path cannot drift into producing different letters for
+// one pair. What differs is only how the request arrives and how a refusal is phrased.
 //
 // The vacancy is closed over rather than taken as an argument, like every other tool in a
 // tailoring session: the model has no way to address a different vacancy, not even by guessing
@@ -48,38 +47,19 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				return nil, err
 			}
 			// A tool error is a sentence the model can act on; a nil dereference here is a
-			// panic inside the SSE writer's goroutine, where Registry.Call's error path
-			// cannot reach it. Same guard, same reason as cv_context's.
-			if h.jobs == nil || h.letters == nil || h.letterBank == nil || h.letterProfile == nil {
+			// panic inside the SSE writer's goroutine, where Registry.Call's error path cannot
+			// reach it. Same guard, same reason as cv_context's.
+			drafter := h.letterDrafter()
+			if !drafter.ready() {
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
-			job, err := h.jobs.GetJob(ctx, jobID)
-			if err != nil {
-				return nil, err
-			}
-			tailoring, err := h.fit.TailoringContext(ctx, userID, job)
-			if err != nil {
-				return nil, err
-			}
-			atoms, err := coverletter.Gather(ctx, h.letterBank, userID, tailoring.MissingHave)
-			if err != nil {
-				return nil, err
-			}
-			candidate := candidateProfileFrom(ctx, h.resumeStore(), h.letterProfile, userID)
 
 			charge, err := h.chargeToolCoverLetter(ctx, userID, jobID)
 			if err != nil {
 				return nil, err
 			}
-
-			analyzer := h.letterChain.As(userLLM(ctx, h.keys, h.llm, userID, llm.Feature(tagCoverLetter)))
-			letter, err := analyzer.Draft(ctx, coverletter.Input{
-				Context:         tailoring,
-				Candidate:       candidate,
-				Atoms:           atoms,
-				Band:            toolBand(in.Band),
-				PostingLanguage: job.PostingLanguage,
-			})
+			client := userLLM(ctx, h.keys, h.llm, userID, llm.Feature(tagCoverLetter))
+			letter, err := drafter.draft(ctx, client, userID, jobID, toolBand(in.Band))
 			switch {
 			case errors.Is(err, coverletter.ErrNoPublishableEvidence):
 				h.releaseToolCoverLetter(ctx, userID, charge)
@@ -92,12 +72,16 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				h.releaseToolCoverLetter(ctx, userID, charge)
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
-
-			if err := h.letters.Save(ctx, userID, jobID, *letter, h.letterModel()); err != nil {
-				return nil, err
-			}
 			return letter, nil
 		},
+	}
+}
+
+// letterDrafter assembles the shared drafting path from this surface's dependencies.
+func (h *assistantHandlers) letterDrafter() letterDrafter {
+	return letterDrafter{
+		jobs: h.jobs, fit: h.fit, bank: h.letterBank, profile: h.letterProfile,
+		resume: h.resumeStore(), chain: h.letterChain, letters: h.letters,
 	}
 }
 
@@ -117,9 +101,6 @@ func toolBand(s string) coverletter.Band {
 // deliberately: the turn pays for the conversation, this pays for three further model calls
 // the conversation triggered. Metering it as a turn alone would price a letter written in chat
 // at a fraction of the identical letter written from the button.
-//
-// The reference is per (job, turn-of-this-session) so a retried tool call inside one turn
-// takes nothing more, while a second request in a later turn pays again.
 func (h *assistantHandlers) chargeToolCoverLetter(ctx context.Context, userID, jobID int64) (string, error) {
 	if h.plans == nil {
 		return "", nil
@@ -150,19 +131,11 @@ func (h *assistantHandlers) releaseToolCoverLetter(ctx context.Context, userID i
 	_ = h.plans.Release(ctx, userID, plan.FeatureCoverLetter, ref)
 }
 
-// resumeStore is the structured-resume half of the candidate projection. Nil-safe: the
+// resumeStore is the structured-résumé half of the candidate projection. Nil-safe: the
 // composition degrades to the bank alone, which is what a candidate with no uploaded file has.
 func (h *assistantHandlers) resumeStore() *resume.Store {
 	if h.resume == nil {
 		return nil
 	}
 	return h.resume.resume
-}
-
-// letterModel names the model a draft is stamped with, empty when no gateway is configured.
-func (h *assistantHandlers) letterModel() string {
-	if h.llm == nil {
-		return ""
-	}
-	return h.llm.ModelID()
 }
