@@ -221,7 +221,7 @@ func TestTailorCVBootstrap(t *testing.T) {
 	// Creating the tailored CV consumed one of the day's tailoring sessions.
 	var used int
 	_ = pool.QueryRow(context.Background(),
-		`SELECT used FROM usage_daily WHERE user_id=$1 AND feature='tailor' AND day=CURRENT_DATE`, user).Scan(&used)
+		`SELECT used FROM usage_daily WHERE user_id=$1 AND feature='tailor' AND day=(now() AT TIME ZONE 'utc')::date`, user).Scan(&used)
 	if used != 1 {
 		t.Errorf("tailoring sessions used = %d, want 1", used)
 	}

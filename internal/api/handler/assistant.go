@@ -657,6 +657,11 @@ func (h *assistantHandlers) streamSSE(
 	slot, waiter, err := h.turns.claim(sess.ID, cancel)
 	if err != nil {
 		cancel()
+		// The charge was taken before the headers, which is the only place a refusal can
+		// still be a status — but this turn never reaches the runner, so it owes the
+		// allowance back. A 409 that also costs a message is the accounting refusing work
+		// it declined to do.
+		h.releaseTurn(turnSess, charge)
 		return fiber.NewError(fiber.StatusConflict, err.Error())
 	}
 
@@ -702,9 +707,13 @@ func (h *assistantHandlers) streamSSE(
 			slot, err = waiter.enter(waitCtx, cancel)
 			giveUp()
 			if err != nil {
-				// The wait is over and this turn never started. Every stream owes its client
-				// one terminal event; without it the client waits for a turn that is not
-				// coming.
+				// The wait is over and this turn never started, so it gives back what it
+				// took — a queued message that timed out behind another turn has produced
+				// nothing, and that is exactly what the reservation exists to undo.
+				h.releaseTurn(turnSess, charge)
+
+				// Every stream owes its client one terminal event; without it the client
+				// waits for a turn that is not coming.
 				stream.event(string(assistant.EventResult),
 					assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopCancelled})
 				return

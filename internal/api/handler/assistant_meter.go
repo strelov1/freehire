@@ -114,10 +114,18 @@ func (h *assistantHandlers) sessionTurns(c *fiber.Ctx, sess assistant.Session) (
 // chargeTurn takes one assistant allowance for turn number n of this session. The number
 // is what makes a retry idempotent: a resumed turn appends no second user message, so it
 // charges under the reference the original charge was filed with and takes nothing more.
+//
+// A charge handle comes back ONLY when this request really took an allowance. Consume also
+// answers yes for a reference already paid for, and handing back a handle then would arm a
+// release over somebody else's charge — a turn refused the session's slot computes the
+// reference of the turn QUEUED ahead of it, because that one has not appended its message
+// yet, and would refund a turn that is still going to run.
 func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n int) (turnCharge, bool, error) {
 	ref := sess.ID.String() + "#turn-" + strconv.Itoa(n)
 	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
 	switch {
+	case err == nil && d.Charge == 0:
+		return turnCharge{}, false, nil // already paid for — this request owes nothing back
 	case err == nil:
 		return turnCharge{feature: plan.FeatureAssistant, ref: ref}, false, nil
 	case isRefusal(err):

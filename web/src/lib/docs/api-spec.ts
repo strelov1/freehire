@@ -1536,6 +1536,30 @@ data: {"type":"result","stop_reason":"completed"}
       },
       {
         method: 'POST',
+        path: '/assistant/sessions/{id}/extend',
+        auth: 'cookie-or-key',
+        summary: 'Buy a CV editing session another ceiling’s worth of turns.',
+        description:
+          'A CV editing session is bounded by a turn ceiling as well as by the daily session ' +
+          'allowance, and a turn past the ceiling is a `402` naming the session. This spends ' +
+          'another of the day’s CV editing sessions to raise it (no body), and is idempotent ' +
+          'under a double click — two calls in flight buy one ceiling, not two. `409` on any ' +
+          'preset other than a CV editing session: a chat is bounded by the daily assistant ' +
+          'allowance, and a day cannot be topped up. `402` when there is no session left to ' +
+          'spend, with the same body every refusal carries.',
+        pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.' }],
+        curl: `curl -X POST "${BASE_URL}/assistant/sessions/<id>/extend" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "turns": 15,
+    "ceiling": 30,
+    "unlimited": false,
+    "allowance": { "feature": "tailor", "used": 2, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+  }
+}`,
+      },
+      {
+        method: 'POST',
         path: '/assistant/sessions/{id}/voice-token',
         auth: 'cookie-or-key',
         summary: 'Mint a short-lived credential for a hands-free voice call.',
@@ -1615,7 +1639,7 @@ data: {"type":"result","stop_reason":"completed"}
         summary: 'Parse a job URL into a draft submission for review before posting.',
         description:
           'Uses the same ATS-recognition registry as `/jobs/resolve`, but ' +
-          'writes nothing — no job, no submission, no credit. An unrecognized ' +
+          'writes nothing — no job, no submission, no allowance spent. An unrecognized ' +
           'URL returns an empty object rather than an error. Rate-limited ' +
           '(shares the outbound-fetch budget).',
         body: [{ name: 'url', type: 'string', required: true, description: 'The job posting URL to parse.' }],
@@ -2424,10 +2448,10 @@ data: {"type":"result","stop_reason":"completed"}
     ],
   },
   {
-    title: 'Account, credits & extension',
+    title: 'Account, plan & extension',
     intro:
       'The rest of the account surface: the password, deleting the account, the ' +
-      'AI-credit ledger, and the two endpoints the browser extension runs on. ' +
+      'plan and what it allows today, and the two endpoints the browser extension runs on. ' +
       'Password and deletion are session-only — an API key must not be able to ' +
       'change or destroy the credential it would outlive.',
     endpoints: [
@@ -2520,7 +2544,7 @@ data: {"type":"result","stop_reason":"completed"}
           'The same deterministic skill coverage as `GET /jobs/{slug}/match`, but ' +
           'for a page that need not be in the catalogue — this is what lets the ' +
           'extension show a match on any job page. A caller with no profile is a 404. ' +
-          'No LLM, no credits.',
+          'No LLM, and it draws on no allowance.',
         body: [
           { name: 'title', type: 'string', required: true, description: 'The posting title.' },
           { name: 'text', type: 'string', required: true, description: 'The scraped posting text.' },

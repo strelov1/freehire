@@ -53,11 +53,15 @@ func postTurn(t *testing.T, app *fiber.App, sessionID, token, text string) (int,
 }
 
 // usedToday reads the day's counter for a feature, or 0 when nothing was charged.
+//
+// The day is spelled in UTC rather than as CURRENT_DATE, which is the DATABASE's date: the
+// counter is keyed by the UTC day, so a server on any other zone would look up a row the
+// code never wrote — a failure that only appears for a few hours around midnight.
 func usedToday(t *testing.T, pool *pgxpool.Pool, userID int64, feature plan.Feature) int {
 	t.Helper()
 	var n int
 	err := pool.QueryRow(context.Background(),
-		`SELECT used FROM usage_daily WHERE user_id=$1 AND feature=$2 AND day=CURRENT_DATE`,
+		`SELECT used FROM usage_daily WHERE user_id=$1 AND feature=$2 AND day=(now() AT TIME ZONE 'utc')::date`,
 		userID, string(feature)).Scan(&n)
 	if err != nil {
 		return 0
@@ -172,6 +176,62 @@ func TestAFailedTurnGivesItsAllowanceBack(t *testing.T) {
 	// shortly after the response is complete.
 	waitFor(t, func() bool { return usedToday(t, pool, userID, plan.FeatureAssistant) == 0 },
 		"the failed turn kept its charge; a model fault is ours, not the candidate's")
+}
+
+// A turn is charged BEFORE the headers go out, which is the only place a refusal can still
+// be a status — but that is also before the session's slot is claimed, and a session already
+// running a turn with another queued behind it refuses the next one with a 409.
+//
+// That turn never reaches the runner, so it owes its allowance back. Without the release a
+// candidate whose second tab was a moment too eager pays for a message the server declined
+// to run, and nothing anywhere gives it back.
+func TestATurnRefusedTheSessionSlotGivesItsAllowanceBack(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	model := newDisconnectModel(t)
+	defer model.letGo()
+	cfg := plan.DefaultConfig().Enforcing()
+	app := meteredAssistantApp(t, pool, iss, model, cfg)
+
+	userID, token := assistantUser(t, pool, iss, "turn-queue-full@example.test", true)
+	sessionID := createSession(t, app, token)
+	addr := serveOnSocket(t, app)
+
+	// One turn running, held inside the model.
+	running := startTurnInBackground(t, addr, sessionID, token)
+	select {
+	case <-model.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the first turn never started")
+	}
+
+	// One queued behind it. Both of these are turns that will really run, so both keep
+	// their charge.
+	queued := dialTurn(t, addr, sessionID, token)
+	defer func() { _ = queued.Close() }()
+	awaitEvent(t, queued, "event: queued")
+	charged := usedToday(t, pool, userID, plan.FeatureAssistant)
+
+	// The third is refused the slot: one waiter is a courtesy, a queue a client can grow is
+	// a way to hold the process open.
+	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+sessionID+"/messages", token,
+		map[string]string{"text": "and another thing"})
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("third message: status %d, want 409", resp.StatusCode)
+	}
+
+	// The release runs on a detached context, so it lands shortly after the 409.
+	// Nothing moves: the refused turn took no allowance of its own (Consume found the
+	// reference already paid for by the turn queued ahead of it), so it has none to give
+	// back — and it must not give back that one's.
+	time.Sleep(2 * time.Second)
+	if got := usedToday(t, pool, userID, plan.FeatureAssistant); got != charged {
+		t.Errorf("the 409 moved the counter from %d to %d; it neither pays for a turn the server declined to run nor refunds the turn still waiting to", charged, got)
+	}
+
+	model.letGo()
+	<-running
 }
 
 func TestARetriedTurnIsNotChargedTwice(t *testing.T) {
