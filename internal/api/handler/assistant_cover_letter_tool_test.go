@@ -44,15 +44,42 @@ func TestBothEntryPointsGoThroughTheSharedDrafter(t *testing.T) {
 	}
 }
 
-// Both paths charge the same feature. Metering a chat-written letter as a turn alone would
-// price it at a fraction of the identical letter written from the button.
-func TestBothEntryPointsChargeTheCoverLetterFeature(t *testing.T) {
+// Both paths charge through the same helper and on the same attempt stamp. The tool once used
+// a constant reference, which made every redraft from chat free forever while the endpoint
+// charged for each — the two diverging on the one axis they were built to share.
+func TestBothEntryPointsChargeThroughTheSameHelper(t *testing.T) {
 	for _, path := range []string{
 		"internal/api/handler/cv_cover_letter.go",
 		"internal/api/handler/assistant_cover_letter_tool.go",
 	} {
-		if src := readSourceFile(t, path); !containsAny(src, "plan.FeatureCoverLetter") {
-			t.Errorf("%s does not charge the cover-letter allowance", path)
+		src := readSourceFile(t, path)
+		if !containsAny(src, "chargeLetter(") {
+			t.Errorf("%s does not charge through the shared helper", path)
+		}
+		if !containsAny(src, "letterAttempt(") {
+			t.Errorf("%s does not derive its reference from the shared attempt stamp", path)
+		}
+		if containsAny(src, `coverLetterRef(`) {
+			t.Errorf("%s builds its own ledger reference; that belongs to chargeLetter alone", path)
+		}
+	}
+}
+
+// Both releases must be detached from the request. A client that disconnects mid-draft cancels
+// the context, the chain fails with it, and a release on that same context could not open its
+// transaction — leaving the candidate charged for a letter they never got, in exactly the case
+// the release exists for.
+func TestNeitherEntryPointReleasesOnTheRequestContext(t *testing.T) {
+	for _, path := range []string{
+		"internal/api/handler/cv_cover_letter.go",
+		"internal/api/handler/assistant_cover_letter_tool.go",
+	} {
+		src := readSourceFile(t, path)
+		if containsAny(src, "plans.Release(") {
+			t.Errorf("%s releases inline; use releaseLetterCharge, which detaches from the request", path)
+		}
+		if !containsAny(src, "releaseLetterCharge(") {
+			t.Errorf("%s never releases a charge", path)
 		}
 	}
 }

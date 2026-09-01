@@ -3,12 +3,9 @@ package handler
 import (
 	"errors"
 	"log"
-	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
@@ -21,7 +18,10 @@ type coverLetterResponse struct {
 	Present bool                `json:"present"`
 	Stale   bool                `json:"stale,omitempty"`
 	Letter  *coverletter.Letter `json:"letter,omitempty"`
-	Model   string              `json:"model,omitempty"`
+	// Cited is the letter's evidence with the claims already resolved, so the surface never
+	// has to look an id up — and so it cannot forget to.
+	Cited []citedAtom `json:"cited,omitempty"`
+	Model string      `json:"model,omitempty"`
 }
 
 // GetCVCoverLetter serves the stored cover letter for the vacancy a tailored CV was written
@@ -54,6 +54,7 @@ func (h *cvHandlers) GetCVCoverLetter(c *fiber.Ctx) error {
 		Present: true,
 		Stale:   stored.Stale(modelIDOf(h.llm.client), job.PostingLanguage),
 		Letter:  &stored.Letter,
+		Cited:   citedAtomsOf(c.Context(), h.letterBank, userID, stored.Cited),
 		Model:   stored.Model,
 	}})
 }
@@ -73,42 +74,32 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 		return err
 	}
 
-	// The stored draft's own timestamp identifies this attempt. A retry of the same request
-	// computes the same reference and takes nothing more; a redraft happens after a successful
-	// save moved that timestamp, so it computes a new one and pays again — which is right,
-	// because a redraft is a second set of model calls.
-	stored, err := h.letters.Get(c.Context(), userID, jobID)
-	if err != nil {
-		return err
-	}
-	attempt := "first"
-	if stored != nil {
-		attempt = stored.UpdatedAt.UTC().Format(time.RFC3339Nano)
-	}
-	charge, refused, err := h.chargeCoverLetter(c, userID, jobID, attempt)
-	if refused || err != nil {
-		return err
+	attempt := letterAttempt(c.Context(), h.letters, userID, jobID)
+	charge, refused, decision := chargeLetter(c.Context(), h.plans, userID, jobID, attempt)
+	if refused {
+		return refuse(c, decision)
 	}
 
 	client := h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter))
 	letter, err := drafter.draft(c.Context(), client, userID, jobID, coverLetterBand(c))
 	switch {
 	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
-		h.releaseCoverLetter(c, userID, charge)
+		releaseLetterCharge(h.plans, userID, charge)
 		return fiber.NewError(fiber.StatusConflict,
 			"nothing in your experience bank is yours to cite yet: confirm an achievement first")
 	case err != nil:
-		h.releaseCoverLetter(c, userID, charge)
+		releaseLetterCharge(h.plans, userID, charge)
 		log.Printf("coverletter: drafting for user %d job %d: %v", userID, jobID, err)
 		return fiber.NewError(fiber.StatusBadGateway, "the letter could not be drafted")
 	case letter == nil:
 		// The LLM is unconfigured. Nothing was spent and nothing was written.
-		h.releaseCoverLetter(c, userID, charge)
+		releaseLetterCharge(h.plans, userID, charge)
 		return fiber.NewError(fiber.StatusServiceUnavailable, "drafting is unavailable on this deployment")
 	}
 	return c.JSON(fiber.Map{"data": coverLetterResponse{
 		Present: true,
 		Letter:  letter,
+		Cited:   citedAtomsOf(c.Context(), h.letterBank, userID, letter.Cited),
 		Model:   modelIDOf(client),
 	}})
 }
@@ -116,7 +107,7 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 // letterDrafter assembles the shared drafting path from this surface's dependencies.
 func (h *cvHandlers) letterDrafter() letterDrafter {
 	return letterDrafter{
-		jobs: h.jobReader, fit: h.fit, bank: h.bank, profile: h.letterProfile,
+		jobs: h.jobReader, fit: h.fit, bank: h.letterBank,
 		resume: h.resume, chain: h.letterChain, letters: h.letters,
 	}
 }
@@ -154,42 +145,4 @@ func coverLetterBand(c *fiber.Ctx) coverletter.Band {
 		return coverletter.BandShort
 	}
 	return coverletter.BandStandard
-}
-
-// chargeCoverLetter takes one allowance for drafting against this vacancy. A deployment with
-// no meter charges nothing and runs — the fail-open rule the assistant's metering follows.
-func (h *cvHandlers) chargeCoverLetter(c *fiber.Ctx, userID, jobID int64, attempt string) (string, bool, error) {
-	if h.plans == nil {
-		return "", false, nil
-	}
-	ref := coverLetterRef(jobID, attempt)
-	d, err := h.plans.Consume(c.Context(), userID, plan.FeatureCoverLetter, ref)
-	switch {
-	case err == nil && d.Charge == 0:
-		return "", false, nil // already paid for under this reference
-	case err == nil:
-		return ref, false, nil
-	case isRefusal(err):
-		return "", true, refuse(c, d)
-	default:
-		log.Printf("plan: charging a cover letter for user %d: %v", userID, err)
-		return "", false, nil
-	}
-}
-
-// coverLetterRef names one drafting attempt in the usage ledger. The ledger's uniqueness index
-// is on (user_id, feature, ref) for a consume, so this string is what makes a retry idempotent.
-func coverLetterRef(jobID int64, attempt string) string {
-	return "cover-letter#" + strconv.FormatInt(jobID, 10) + "#" + attempt
-}
-
-// releaseCoverLetter gives back what a draft took when it produced nothing the candidate can
-// use. Safe to call blind: an empty reference releases nothing.
-func (h *cvHandlers) releaseCoverLetter(c *fiber.Ctx, userID int64, ref string) {
-	if h.plans == nil || ref == "" {
-		return
-	}
-	if err := h.plans.Release(c.Context(), userID, plan.FeatureCoverLetter, ref); err != nil {
-		log.Printf("plan: releasing a cover letter for user %d: %v", userID, err)
-	}
 }

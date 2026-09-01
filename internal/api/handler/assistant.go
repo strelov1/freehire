@@ -74,12 +74,10 @@ type assistantHandlers struct {
 	// button path from drifting into two different letters for one pair. Nil-safe.
 	letters     *coverletter.Store
 	letterChain *coverletter.Analyzer
-	letterBank  coverletter.Retriever
-	// letterProfile composes the contact-free candidate projection the letter is written
-	// from. It is the bank layered over the structured resume - the same composition the fit
-	// chain reads, and deliberately NOT reviewableResume's file-only structure: a letter
-	// speaks for the candidate, where the ATS report judges their document.
-	letterProfile candidateProfiler
+	// letterBank is the experience bank under the two narrow interfaces a letter needs of it.
+	// It is deliberately NOT reviewableResume's file-only structure: a letter speaks for the
+	// candidate, where the ATS report judges their document.
+	letterBank letterBankPort
 	// experience backs the bank tools, which every preset offers.
 	experience experienceBankTools
 	// screeningAnswers backs screening_answers_set, which every preset offers for the

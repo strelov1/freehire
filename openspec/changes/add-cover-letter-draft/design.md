@@ -173,10 +173,14 @@ does not capture `maxlength` at all.** The keys stored per field are `id`, `type
 
 Widening the capture to record `maxlength` belongs to `apply-form-capture`, not here, and it would
 only pay off after a re-capture of the whole queue. So the bands are set as a product decision and
-stated as one: **short ≈ 900 characters, standard ≈ 1,800**, the range a recruiter-facing letter
-occupies in practice. They live in the same process-wide bounds mechanism the fit analysis uses
-(`SetBounds` loaded from environment in `cmd/server`), so correcting them later is configuration
-rather than a release.
+stated as one: **short ≈ 900 runes, standard ≈ 1,800**, the range a recruiter-facing letter
+occupies in practice.
+
+They are `DefaultBounds()`, filled in field by field by `Bounds.OrDefault()`. There is
+deliberately **no** environment knob and no `SetBounds` equivalent: `matchanalysis` has one
+because operators tune its ceilings against live output, and nobody has yet needed to tune a
+letter's length without shipping. Changing a band is a release, and the seam for a knob is the
+`Bounds` field on `Input`, which the chain already honours.
 
 ## Open Questions
 

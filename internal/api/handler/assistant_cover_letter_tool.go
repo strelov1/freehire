@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -54,22 +53,26 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
 
-			charge, err := h.chargeToolCoverLetter(ctx, userID, jobID)
-			if err != nil {
-				return nil, err
+			attempt := letterAttempt(ctx, h.letters, userID, jobID)
+			charge, refused, _ := chargeLetter(ctx, h.plans, userID, jobID, attempt)
+			if refused {
+				// A refusal reaches the model as a sentence it can relay, not as a 402: the
+				// turn itself was already paid for and must still end with an answer.
+				return nil, errors.New("the candidate has used today's cover-letter allowance; " +
+					"tell them it resets tomorrow, or that Pro lifts the limit")
 			}
 			client := userLLM(ctx, h.keys, h.llm, userID, llm.Feature(tagCoverLetter))
 			letter, err := drafter.draft(ctx, client, userID, jobID, toolBand(in.Band))
 			switch {
 			case errors.Is(err, coverletter.ErrNoPublishableEvidence):
-				h.releaseToolCoverLetter(ctx, userID, charge)
+				releaseLetterCharge(h.plans, userID, charge)
 				return nil, errors.New("nothing in the candidate's experience bank is theirs to cite yet: " +
 					"ask them to confirm an achievement, then try again")
 			case err != nil:
-				h.releaseToolCoverLetter(ctx, userID, charge)
+				releaseLetterCharge(h.plans, userID, charge)
 				return nil, err
 			case letter == nil:
-				h.releaseToolCoverLetter(ctx, userID, charge)
+				releaseLetterCharge(h.plans, userID, charge)
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
 			return letter, nil
@@ -80,7 +83,7 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 // letterDrafter assembles the shared drafting path from this surface's dependencies.
 func (h *assistantHandlers) letterDrafter() letterDrafter {
 	return letterDrafter{
-		jobs: h.jobs, fit: h.fit, bank: h.letterBank, profile: h.letterProfile,
+		jobs: h.jobs, fit: h.fit, bank: h.letterBank,
 		resume: h.resumeStore(), chain: h.letterChain, letters: h.letters,
 	}
 }
@@ -95,41 +98,10 @@ func toolBand(s string) coverletter.Band {
 	return coverletter.BandStandard
 }
 
-// chargeToolCoverLetter takes one cover-letter allowance for a draft requested from the chat.
-//
-// A turn already charges FeatureAssistant, and this charges FeatureCoverLetter on top,
-// deliberately: the turn pays for the conversation, this pays for three further model calls
-// the conversation triggered. Metering it as a turn alone would price a letter written in chat
-// at a fraction of the identical letter written from the button.
-func (h *assistantHandlers) chargeToolCoverLetter(ctx context.Context, userID, jobID int64) (string, error) {
-	if h.plans == nil {
-		return "", nil
-	}
-	ref := coverLetterRef(jobID, "tool")
-	d, err := h.plans.Consume(ctx, userID, plan.FeatureCoverLetter, ref)
-	switch {
-	case err == nil && d.Charge == 0:
-		return "", nil // already paid for under this reference
-	case err == nil:
-		return ref, nil
-	case isRefusal(err):
-		// A refusal reaches the model as a sentence it can relay, not as a 402: the turn
-		// itself was already paid for and must still end with an answer.
-		return "", errors.New("the candidate has used today's cover-letter allowance; " +
-			"tell them it resets tomorrow, or that Pro lifts the limit")
-	default:
-		// Fail open, as every other meter here does: an unreadable ledger must not withhold
-		// work the candidate is entitled to.
-		return "", nil
-	}
-}
-
-func (h *assistantHandlers) releaseToolCoverLetter(ctx context.Context, userID int64, ref string) {
-	if h.plans == nil || ref == "" {
-		return
-	}
-	_ = h.plans.Release(ctx, userID, plan.FeatureCoverLetter, ref)
-}
+// The chat path charges FeatureCoverLetter on top of the turn's own FeatureAssistant,
+// deliberately: the turn pays for the conversation, the letter pays for the three further
+// model calls the conversation triggered. Metering it as a turn alone would price a letter
+// written in chat at a fraction of the identical letter written from the button.
 
 // resumeStore is the structured-résumé half of the candidate projection. Nil-safe: the
 // composition degrades to the bank alone, which is what a candidate with no uploaded file has.

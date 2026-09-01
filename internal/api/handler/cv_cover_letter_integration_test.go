@@ -57,9 +57,8 @@ func newCoverLetterFixture(t *testing.T, pool *pgxpool.Pool) coverLetterFixture 
 		letters: letters,
 		// A nil chain is the unconfigured-LLM deployment: Draft returns (nil, nil), which is
 		// exactly the "produced nothing" path the release rule is about.
-		letterChain:   coverletter.NewAnalyzer(nil),
-		bank:          bank,
-		letterProfile: bank,
+		letterChain: coverletter.NewAnalyzer(nil),
+		letterBank:  bank,
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{

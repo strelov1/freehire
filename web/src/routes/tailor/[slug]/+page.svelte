@@ -139,7 +139,7 @@
     ['preview', 'Preview'],
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
-    ['letter', 'Letter'],
+    ['letter', 'Cover letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];

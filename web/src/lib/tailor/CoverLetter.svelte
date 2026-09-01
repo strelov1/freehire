@@ -14,11 +14,7 @@
   import { api } from '$lib/api';
   import type { CoverLetterView } from '$lib/cv';
 
-  let {
-    cvId,
-    /** The banked achievements, so a citation can be shown as its claim rather than as a uuid. */
-    atomClaims = {},
-  }: { cvId: string; atomClaims?: Record<string, string> } = $props();
+  let { cvId }: { cvId: string } = $props();
 
   // $state.raw: the view is replaced wholesale on every load and never mutated in place, so the
   // deep proxy would cost without buying anything.
@@ -30,7 +26,10 @@
   let band = $state<'short' | 'standard'>('standard');
 
   const letter = $derived(view?.letter ?? null);
-  const cited = $derived(letter?.cited_atom_ids ?? []);
+  // Resolved by the server, claim included. An optional lookup table threaded from the page
+  // is what shipped first, and nothing ever passed it — every citation rendered a placeholder
+  // while types, tests and linters stayed green.
+  const cited = $derived(view?.cited ?? []);
 
   async function load() {
     loading = true;
@@ -154,9 +153,15 @@
           <ul class="mt-1.5 space-y-1">
             <!-- Keyed on the atom id: it is unique by construction, where the claim text is not
                  and a duplicate key takes the whole block down. -->
-            {#each cited as id (id)}
+            {#each cited as atom (atom.id)}
               <li class="text-xs leading-snug text-muted-foreground">
-                — {atomClaims[id] ?? 'A banked achievement'}
+                {#if atom.claim}
+                  — {atom.claim}
+                {:else}
+                  <!-- The owner deleted this evidence after the letter was written. The letter
+                       as sent still said what it said, so the citation stays and says so. -->
+                  <span class="italic">— an achievement no longer in your bank</span>
+                {/if}
               </li>
             {/each}
           </ul>

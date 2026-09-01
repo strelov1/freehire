@@ -1843,9 +1843,6 @@ export function createApi(
     return requestData<CvRecord>(`/api/v1/me/cvs/${id}`);
   }
 
-  /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.
-   *  Cookie-only and recomputed per request. 409 for a CV that is not a tailored copy; the
-   *  response itself reports `available: false` when the comparison could not be made. */
   /** The stored cover letter for the vacancy a tailored CV was written for. Never calls a
    *  model and consumes no allowance: `present: false` means the pair was never drafted. */
   async function getCoverLetter(id: string): Promise<CoverLetterView> {
@@ -1862,6 +1859,9 @@ export function createApi(
     );
   }
 
+  /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.
+   *  Cookie-only and recomputed per request. 409 for a CV that is not a tailored copy; the
+   *  response itself reports `available: false` when the comparison could not be made. */
   /** The history of what changed this CV, newest first. Each entry names who made it and
    *  which parts of the document it touched — the addresses the preview underlines. */
   async function listCvRevisions(id: string): Promise<RevisionView[]> {

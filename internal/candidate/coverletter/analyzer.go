@@ -141,9 +141,17 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	settle(&drafted, drafted.Cited)
 
 	audited, err := a.audit(ctx, in, drafted, selected)
-	// The audit may improve the letter, never destroy it. An unparseable answer and one cut
-	// below the floor are the same failure with different shapes, and both keep the draft.
-	if err != nil || audited == nil {
+	// A gateway failure is NOT the degradation this stage is allowed. An answer that arrives
+	// and cannot be read leaves the draft standing — a third stage may improve a letter and
+	// never destroy it — but an answer that never arrived means the skeptic did not run, and
+	// the skeptic is the only thing cutting unsupported claims. Storing an un-audited letter
+	// as though it had been audited is the one outcome this feature cannot afford, so the
+	// whole draft fails and nothing is written.
+	if err != nil {
+		return nil, err
+	}
+	// Unparseable, or emptied: keep the draft.
+	if audited == nil {
 		return &drafted, nil
 	}
 	// Citations follow the AUDITED letter. An atom whose sentence was cut is no longer
@@ -227,8 +235,10 @@ func (a *Analyzer) audit(ctx context.Context, in Input, drafted Letter, atoms []
 	}
 	raw, err := a.client.GenerateJSON(ctx, auditSystemPrompt(in.Band, in.Bounds), prompt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("coverletter: audit: %w", err)
 	}
+	// (nil, nil) is the "keep the draft" answer, reserved for output that arrived and could
+	// not be used. It must never stand in for output that never arrived.
 	var out Letter
 	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &out); err != nil {
 		return nil, nil

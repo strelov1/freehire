@@ -52,7 +52,6 @@
     onUndoRevisionRun,
     onResetFromResume,
     cvId,
-    atomClaims = {},
     resetBusy = false,
     resetError = '',
   }: {
@@ -93,14 +92,12 @@
     resetError?: string;
     /** The CV whose vacancy the Letter tab writes for. */
     cvId: string;
-    /** Banked achievements by id, so a citation renders as its claim rather than as a uuid. */
-    atomClaims?: Record<string, string>;
   } = $props();
 
   const tabs: [Tab, string][] = [
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
-    ['letter', 'Letter'],
+    ['letter', 'Cover letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];
@@ -249,7 +246,7 @@
     {:else if tab === 'letter'}
       <!-- An artefact, not a measurement: this tab carries no score and no delta, because there
            is no baseline a letter could be read against. -->
-      <CoverLetter {cvId} {atomClaims} />
+      <CoverLetter {cvId} />
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}

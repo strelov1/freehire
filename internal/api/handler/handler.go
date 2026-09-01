@@ -484,8 +484,7 @@ func Register(app *fiber.App, cfg Config) {
 	// arguments and 78 integration tests call it, so three more would edit all of them.
 	cvH.letters = coverletter.NewStore(coverletter.NewQueriesRepository(queries))
 	cvH.letterChain = coverletter.NewAnalyzer(cfg.LLM)
-	cvH.bank = bank
-	cvH.letterProfile = bank
+	cvH.letterBank = bank
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	discordH := newDiscordHandlers(queries, cfg.JWTSecret, cfg.DiscordBotToken, cfg.DiscordApplicationID, cfg.DiscordPublicKey, cfg.DiscordGuildID, cfg.FrontendOrigin, contributionsH.intake)
@@ -568,7 +567,6 @@ func Register(app *fiber.App, cfg Config) {
 	assistantH.letters = cvH.letters
 	assistantH.letterChain = cvH.letterChain
 	assistantH.letterBank = bank
-	assistantH.letterProfile = bank
 
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}

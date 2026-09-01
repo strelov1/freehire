@@ -85,10 +85,10 @@ type cvHandlers struct {
 	// All three are nil-safe: a fixture that never asks for a letter needs none of them.
 	letters     *coverletter.Store
 	letterChain *coverletter.Analyzer
-	bank        coverletter.Retriever
-	// letterProfile composes the contact-free candidate projection a letter is written from:
-	// the bank over the structured resume, the same composition the fit chain reads.
-	letterProfile candidateProfiler
+	// letterBank is the experience bank, under the two narrow interfaces a letter needs of it:
+	// Retriever to gather evidence, candidateProfiler to compose the projection. One object,
+	// held once - it arrived as `bank` and `letterProfile` and read as two dependencies.
+	letterBank letterBankPort
 	// llm binds a model call to the caller's own gateway credential, tagged by feature.
 	llm llmBinding
 }
@@ -218,6 +218,12 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Patch("/me/cvs/:id", mw.key, h.PatchCV)
 	api.Put("/me/cvs/:id/session", mw.key, h.SetCVSession)
 	api.Get("/me/cvs/:id/tailor-context", mw.key, h.TailorContext)
+	// Reading a letter takes a key like every other tailoring read: it calls no model and
+	// spends nothing, so a scripted client may have it. Writing one is cookie-only because it
+	// spends a daily allowance, and an allowance a key could drain is one the account holder
+	// never agreed to spend. The assistant tool reaches the same write over a key-bearing
+	// session, which is not a hole: a session is the account holder's own, and its turn is
+	// metered before this one is.
 	api.Get("/me/cvs/:id/cover-letter", mw.key, h.GetCVCoverLetter)
 	api.Post("/me/cvs/:id/cover-letter", mw.cookie, h.DraftCVCoverLetter)
 	// The history of what changed the CV, and the two ways to undo an entry: on its own, or
