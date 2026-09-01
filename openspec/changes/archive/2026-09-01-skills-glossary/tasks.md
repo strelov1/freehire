@@ -36,9 +36,10 @@
 
 ## 3. Wave 1 — the first 100 descriptions
 
-- [ ] 3.1 Run the generator for the 100 most common skills, review and edit every
+- [x] 3.1 Run the generator for the 100 most common skills (95 drafted, 5 written by
+      hand after gateway failures), review and edit every
       sentence, and commit them to `descriptions.tsv`.
-- [ ] 3.2 Raise `describedFloor` to match and confirm the coverage test passes.
+- [x] 3.2 Raise `describedFloor` to match and confirm the coverage test passes.
 
 ## 4. The SPA seam
 
@@ -50,9 +51,11 @@
 
 ## 5. Coverage endgame
 
-- [ ] 5.1 Wave 2 — descriptions 101–300, reviewed and merged, floor raised.
-- [ ] 5.2 Wave 3 — the tail, reviewed and merged, floor raised.
-- [ ] 5.3 Delete `describedFloor` and replace the coverage test with the absolute rule:
+- [x] 5.1 Wave 2 — 389 more (the run drafted 761; half opened "It is a…" and went back
+      through the corrected prompt rather than being rewritten by hand), floor 487.
+- [x] 5.2 Wave 3 — the tail: 374 drafted, zero subjectless openings, plus `mdm` and
+      `evm` written by hand because the dictionary cannot disambiguate either acronym.
+- [x] 5.3 Delete `describedFloor` and replace the coverage test with the absolute rule:
       a canonical with no description fails the build, mirroring the label rule.
 
 ## 6. The reveal
@@ -88,7 +91,7 @@
 
 ## 8. Ship
 
-- [ ] 8.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`.
-- [ ] 8.2 `pnpm check:links`, `pnpm check:dead`, and the web/design-system lint and tests.
-- [ ] 8.3 Regenerate contracts (`make` target / `go run ./cmd/gen-contracts`) and confirm
+- [x] 8.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`.
+- [x] 8.2 `pnpm check:links`, `pnpm check:dead`, and the web/design-system lint and tests.
+- [x] 8.3 Regenerate contracts (`make` target / `go run ./cmd/gen-contracts`) and confirm
       the committed generated files are current.
