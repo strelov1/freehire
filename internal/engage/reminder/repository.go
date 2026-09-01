@@ -73,6 +73,24 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 	}, nil
 }
 
+// GetScheduleContext reads the account's notification hour and timezone. A NULL in
+// either column, and a timezone name this build's tzdata cannot resolve, are left
+// as nil for the service to read as unconfigured — a stale or misspelled zone name
+// must not stop a save from scheduling anything.
+func (r *QueriesRepository) GetScheduleContext(ctx context.Context, userID int64) (ScheduleContext, error) {
+	row, err := r.q.GetReminderScheduleContext(ctx, userID)
+	if err != nil {
+		return ScheduleContext{}, err
+	}
+	sc := ScheduleContext{NotificationHour: pgconv.DurationPtr(row.DigestTime)}
+	if row.Timezone.Valid {
+		if loc, err := time.LoadLocation(row.Timezone.String); err == nil {
+			sc.Location = loc
+		}
+	}
+	return sc, nil
+}
+
 // UpsertReminder schedules or replaces the pending reminder for a (user, job).
 func (r *QueriesRepository) UpsertReminder(ctx context.Context, userID, jobID int64, fireAt time.Time, channels []string) error {
 	_, err := r.q.UpsertJobReminder(ctx, db.UpsertJobReminderParams{

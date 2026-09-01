@@ -1581,6 +1581,14 @@ type Querier interface {
 	// cancel-and-skip a reminder whose job has since closed or is no longer
 	// saved-but-unapplied, closing the race between a cancel and the fire.
 	GetReminderForDelivery(ctx context.Context, id int64) (GetReminderForDeliveryRow, error)
+	// The two halves of "when should this account hear from us": the daily
+	// notification hour (notification_settings.digest_time) and the timezone to read
+	// it in (users.timezone). Both are optional and both are read here rather than
+	// from GetNotificationSettings, which knows nothing about the user row — one
+	// statement so the hour and the zone can never come from different reads and
+	// disagree. The row always exists for a real user; a NULL in either column is the
+	// unconfigured state the caller resolves to its own defaults.
+	GetReminderScheduleContext(ctx context.Context, id int64) (GetReminderScheduleContextRow, error)
 	// Load a single report by id for the review path, with the reporter's email and the
 	// reported job's slug and title — the decision notice needs them, and joining here spares
 	// the decision path a second round trip. The resolve/dismiss flow guards the status in the

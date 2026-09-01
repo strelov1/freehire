@@ -197,6 +197,33 @@ func (q *Queries) GetReminderForDelivery(ctx context.Context, id int64) (GetRemi
 	return i, err
 }
 
+const getReminderScheduleContext = `-- name: GetReminderScheduleContext :one
+SELECT ns.digest_time AS digest_time,
+       u.timezone     AS timezone
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = $1
+`
+
+type GetReminderScheduleContextRow struct {
+	DigestTime pgtype.Time `json:"digest_time"`
+	Timezone   pgtype.Text `json:"timezone"`
+}
+
+// The two halves of "when should this account hear from us": the daily
+// notification hour (notification_settings.digest_time) and the timezone to read
+// it in (users.timezone). Both are optional and both are read here rather than
+// from GetNotificationSettings, which knows nothing about the user row — one
+// statement so the hour and the zone can never come from different reads and
+// disagree. The row always exists for a real user; a NULL in either column is the
+// unconfigured state the caller resolves to its own defaults.
+func (q *Queries) GetReminderScheduleContext(ctx context.Context, id int64) (GetReminderScheduleContextRow, error) {
+	row := q.db.QueryRow(ctx, getReminderScheduleContext, id)
+	var i GetReminderScheduleContextRow
+	err := row.Scan(&i.DigestTime, &i.Timezone)
+	return i, err
+}
+
 const markReminderDelivered = `-- name: MarkReminderDelivered :execrows
 UPDATE job_reminders
 SET status = 'delivered', delivered_at = now()

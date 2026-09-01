@@ -1,9 +1,9 @@
 ## 1. Reminder scheduling — bucket the fire time
 
-- [ ] 1.1 Add a `GetReminderScheduleContext` query to `internal/platform/db/queries/reminders.sql` returning the account's `notification_settings.digest_time` and `users.timezone` in one read; run `make sqlc`
-- [ ] 1.2 Extend `reminder.Repository` and `QueriesRepository` with a `GetScheduleContext(ctx, userID)` returning the notification hour and IANA timezone, defaulting to 09:00 and UTC when either is unset
-- [ ] 1.3 Round `Service.fireAt` forward to the first notification hour at or after `now + DefaultDelayDays` in the account's timezone, and wire `ScheduleOnSave` to it
-- [ ] 1.4 Cover the rounding with unit tests: default 09:00/UTC, a configured `digest_time` in a non-UTC zone, two saves hours apart on one day landing on the same fire time, and rounding never moving the fire time earlier than the delay
+- [x] 1.1 Add a `GetReminderScheduleContext` query to `internal/platform/db/queries/reminders.sql` returning the account's `notification_settings.digest_time` and `users.timezone` in one read; run `make sqlc`
+- [x] 1.2 Extend `reminder.Repository` and `QueriesRepository` with a `GetScheduleContext(ctx, userID)` returning the notification hour and IANA timezone, defaulting to 09:00 and UTC when either is unset
+- [x] 1.3 Round `Service.fireAt` forward to the first notification hour at or after `now + DefaultDelayDays` in the account's timezone, and wire `ScheduleOnSave` to it
+- [x] 1.4 Cover the rounding with unit tests: default 09:00/UTC, a configured `digest_time` in a non-UTC zone, two saves hours apart on one day landing on the same fire time, and rounding never moving the fire time earlier than the delay
 
 ## 2. Reminder delivery — group by user
 

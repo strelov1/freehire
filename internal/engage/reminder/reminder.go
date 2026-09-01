@@ -22,6 +22,12 @@ import (
 // usage check found no account other than the developer's had ever touched it).
 const DefaultDelayDays = 3
 
+// DefaultNotificationHour is the local time of day a reminder fires for an account
+// that has never chosen one. Reminders are rounded forward to this hour so that
+// everything saved on one day becomes due in a single worker pass and goes out as
+// one message — see the aggregate-reminder-and-nudge-digests change.
+const DefaultNotificationHour = 9 * time.Hour
+
 // Sentinel errors mapped to HTTP statuses by the handler.
 var (
 	// ErrInvalidChannel is an unsupported delivery channel (mapped to 400).
@@ -51,11 +57,39 @@ type Settings struct {
 	QuietHoursEnd   *time.Duration
 }
 
+// ScheduleContext is when an account wants to hear from us: the daily notification
+// hour and the timezone that hour is read in. Both are optional, and a nil is the
+// unconfigured state rather than a zero — midnight is a choosable hour, so it
+// cannot double as "never chose one".
+type ScheduleContext struct {
+	NotificationHour *time.Duration
+	Location         *time.Location
+}
+
+// hour is the configured notification hour, or the default when unset.
+func (c ScheduleContext) hour() time.Duration {
+	if c.NotificationHour == nil {
+		return DefaultNotificationHour
+	}
+	return *c.NotificationHour
+}
+
+// location is the account's timezone, or UTC when unset — the same fallback
+// internal/application/deliverywindow applies to quiet hours, so the two timing
+// rules agree about who has no timezone.
+func (c ScheduleContext) location() *time.Location {
+	if c.Location == nil {
+		return time.UTC
+	}
+	return c.Location
+}
+
 // Repository is the persistence contract. The adapter maps the generated db rows;
 // GetSettings returns the default (not an error) when no row exists.
 type Repository interface {
 	GetSettings(ctx context.Context, userID int64) (Settings, error)
 	UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error)
+	GetScheduleContext(ctx context.Context, userID int64) (ScheduleContext, error)
 	UpsertReminder(ctx context.Context, userID, jobID int64, fireAt time.Time, channels []string) error
 	CancelReminder(ctx context.Context, userID, jobID int64) error
 }
@@ -120,7 +154,11 @@ func (s *Service) ScheduleOnSave(ctx context.Context, userID, jobID int64) error
 	if len(channels) == 0 {
 		channels = []string{notify.ChannelEmail}
 	}
-	return s.repo.UpsertReminder(ctx, userID, jobID, s.fireAt(DefaultDelayDays), channels)
+	fireAt, err := s.fireAt(ctx, userID, DefaultDelayDays)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpsertReminder(ctx, userID, jobID, fireAt, channels)
 }
 
 // Cancel drops the pending reminder for a (user, job), idempotently — the eager
@@ -129,7 +167,35 @@ func (s *Service) Cancel(ctx context.Context, userID, jobID int64) error {
 	return s.repo.CancelReminder(ctx, userID, jobID)
 }
 
-// fireAt is the deadline `delayDays` out from now.
-func (s *Service) fireAt(delayDays int) time.Time {
-	return s.now().Add(time.Duration(delayDays) * 24 * time.Hour)
+// fireAt is the deadline `delayDays` out from now, rounded forward to the
+// account's notification hour. The rounding is what makes a day's saves arrive as
+// one message: two reminders scheduled hours apart land on the same instant, so
+// one worker pass claims both and the engine groups them.
+func (s *Service) fireAt(ctx context.Context, userID int64, delayDays int) (time.Time, error) {
+	deadline := s.now().Add(time.Duration(delayDays) * 24 * time.Hour)
+	sc, err := s.repo.GetScheduleContext(ctx, userID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return nextNotificationHour(deadline, sc.hour(), sc.location()), nil
+}
+
+// nextNotificationHour is the first wall-clock occurrence of `hour` in `loc` at or
+// after `after` — never earlier, so rounding cannot pull a reminder in ahead of its
+// delay.
+//
+// Built by naming the hour to time.Date rather than by adding `hour` to local
+// midnight: on the two days a year the offset moves, midnight+18h is 17:00 or
+// 19:00, and the account asked for 18:00 on its own clock.
+func nextNotificationHour(after time.Time, hour time.Duration, loc *time.Location) time.Time {
+	y, mo, d := after.In(loc).Date()
+	h := int(hour / time.Hour)
+	m := int(hour % time.Hour / time.Minute)
+	sec := int(hour % time.Minute / time.Second)
+
+	candidate := time.Date(y, mo, d, h, m, sec, 0, loc)
+	if candidate.Before(after) {
+		candidate = time.Date(y, mo, d+1, h, m, sec, 0, loc)
+	}
+	return candidate
 }

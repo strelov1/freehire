@@ -32,6 +32,11 @@ func (r *stubReminderRepo) UpsertSettings(_ context.Context, _ int64, s reminder
 	r.settings = s
 	return s, nil
 }
+func (r *stubReminderRepo) GetScheduleContext(context.Context, int64) (reminder.ScheduleContext, error) {
+	// The unconfigured account: the service resolves it to its own defaults, and
+	// these tests assert that a save schedules at all, not when.
+	return reminder.ScheduleContext{}, nil
+}
 func (r *stubReminderRepo) UpsertReminder(context.Context, int64, int64, time.Time, []string) error {
 	r.upserts++
 	return nil
