@@ -81,12 +81,34 @@ func LanguageOf(postingLanguage string) string {
 	return "en"
 }
 
-// Draft runs select → draft → audit and returns the audited letter.
+// Stage names a step of the chain, as a progress reader sees it.
+const (
+	StageSelect = "select"
+	StageDraft  = "draft"
+	StageAudit  = "audit"
+)
+
+// Emit reports a stage starting or finishing.
+//
+// It exists because the chain takes minutes. Three model calls in series, each bounded only by
+// the client's own per-call timeout, is far past what a proxy will hold a silent response open
+// for — this shipped without it and every draft came back as a 504 from the edge while the
+// server was still working. A reader that sees the first stage immediately is a reader whose
+// connection stays alive, which is the same reason the fit chain streams.
+type Emit func(stage string, done bool)
+
+// Draft runs the chain and returns the audited letter, reporting no progress. A thin wrapper
+// over DraftStream, mirroring matchanalysis.Analyze over AnalyzeStream.
+func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
+	return a.DraftStream(ctx, in, func(string, bool) {})
+}
+
+// DraftStream runs select → draft → audit, calling emit as each stage opens and closes.
 //
 // Returns (nil, nil) when the LLM is unconfigured. Returns ErrNoPublishableEvidence when the
 // gate leaves nothing to write from. Any gateway failure is returned as an error with no
 // letter, so a caller can never overwrite a stored draft with an empty one.
-func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
+func (a *Analyzer) DraftStream(ctx context.Context, in Input, emit Emit) (*Letter, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
@@ -105,10 +127,12 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	offered := IDs(atoms)
 	language := LanguageOf(in.PostingLanguage)
 
+	emit(StageSelect, false)
 	selected, err := a.selectEvidence(ctx, in, atoms)
 	if err != nil {
 		return nil, err
 	}
+	emit(StageSelect, true)
 	// A selection stage that names nothing leaves the drafting stage with no evidence, which
 	// is the empty-evidence case arriving one stage later. Fall back to what was offered
 	// rather than writing from nothing — but remember that nothing was CLAIMED, because the
@@ -126,10 +150,12 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 		l.Sanitize(in.Band, in.Bounds, offered)
 	}
 
+	emit(StageDraft, false)
 	drafted, err := a.write(ctx, in, selected, language)
 	if err != nil {
 		return nil, err
 	}
+	emit(StageDraft, true)
 	// Stage 1's selection is what the draft rests on until the audit says otherwise. When the
 	// selection was itself a fallback to everything offered, nothing has claimed to use any
 	// particular atom, and an empty list is the honest answer — listing five of thirty would
@@ -140,7 +166,9 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	}
 	settle(&drafted, drafted.Cited)
 
+	emit(StageAudit, false)
 	audited, err := a.audit(ctx, in, drafted, selected)
+	emit(StageAudit, true)
 	// A gateway failure is NOT the degradation this stage is allowed. An answer that arrives
 	// and cannot be read leaves the draft standing — a third stage may improve a letter and
 	// never destroy it — but an answer that never arrived means the skeptic did not run, and

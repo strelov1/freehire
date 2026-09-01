@@ -67,6 +67,15 @@ func (d letterDrafter) ready() bool {
 func (d letterDrafter) draft(
 	ctx context.Context, client *llm.Client, userID, jobID int64, band coverletter.Band,
 ) (*coverletter.Letter, error) {
+	return d.draftStream(ctx, client, userID, jobID, band, func(string, bool) {})
+}
+
+// draftStream is draft with progress. The streaming endpoint needs it because the chain takes
+// minutes and a silent response is one a proxy closes at sixty seconds; every other caller
+// takes the no-op above.
+func (d letterDrafter) draftStream(
+	ctx context.Context, client *llm.Client, userID, jobID int64, band coverletter.Band, emit coverletter.Emit,
+) (*coverletter.Letter, error) {
 	job, err := d.jobs.GetJob(ctx, jobID)
 	if err != nil {
 		return nil, err
@@ -93,13 +102,13 @@ func (d letterDrafter) draft(
 
 	// The atoms go in UNFILTERED: the provenance gate lives inside Draft so that no caller can
 	// apply a weaker one, or forget to apply it at all.
-	letter, err := d.chain.As(client).Draft(ctx, coverletter.Input{
+	letter, err := d.chain.As(client).DraftStream(ctx, coverletter.Input{
 		Context:         tailoring,
 		Candidate:       candidate,
 		Atoms:           atoms,
 		Band:            band,
 		PostingLanguage: job.PostingLanguage,
-	})
+	}, emit)
 	if err != nil || letter == nil {
 		return nil, err
 	}

@@ -24,6 +24,15 @@
   let error = $state('');
   let copied = $state(false);
   let band = $state<'short' | 'standard'>('standard');
+  // Which step the chain is on — the progress that keeps a minutes-long wait legible instead
+  // of looking hung.
+  let stage = $state('');
+
+  const stageLabels: Record<string, string> = {
+    select: 'Choosing your evidence',
+    draft: 'Writing',
+    audit: 'Cutting what it cannot support',
+  };
 
   const letter = $derived(view?.letter ?? null);
   // Resolved by the server, claim included. An optional lookup table threaded from the page
@@ -43,19 +52,47 @@
     }
   }
 
-  async function draft() {
+  // Drafting runs over SSE, not a plain POST. The chain is three model calls in series and
+  // takes minutes; a proxy closes a silent response at sixty seconds, which is what shipped
+  // first and reached every candidate as a 504 while the server was still working. The
+  // stream's first event arrives before any model call, which is what keeps it open.
+  function draft() {
     // Guarded here as well as by the disabled attribute: a second run would spend a second
     // allowance and race the first one's write.
     if (drafting) return;
     drafting = true;
     error = '';
-    try {
-      view = await api.draftCoverLetter(cvId, band);
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'The letter could not be drafted.';
-    } finally {
-      drafting = false;
-    }
+    stage = 'select';
+
+    const url = `/api/v1/me/cvs/${encodeURIComponent(cvId)}/cover-letter/stream?band=${band}`;
+    const source = new EventSource(url, { withCredentials: true });
+
+    source.addEventListener('stage', (e) => {
+      const d = JSON.parse(e.data) as { stage: string; done: boolean };
+      if (!d.done) stage = d.stage;
+    });
+    source.addEventListener('letter', (e) => {
+      view = JSON.parse(e.data) as CoverLetterView;
+      finish(source);
+    });
+    source.addEventListener('error', (e) => {
+      // Two different failures arrive on this name: our own `error` event, which carries a
+      // sentence, and EventSource's transport failure, which carries no data at all. The
+      // second one cannot say the letter was lost — the chain runs on a detached context and
+      // stores what it finishes — so it says to come back rather than to try again, which
+      // would spend a second allowance on work that may already be done.
+      const data = (e as MessageEvent).data;
+      error = data
+        ? ((JSON.parse(data) as { error: string }).error ?? 'The letter could not be drafted.')
+        : 'The connection dropped while writing. Your letter may still have been saved — reopen this tab to check.';
+      finish(source);
+    });
+  }
+
+  function finish(source: EventSource) {
+    source.close();
+    drafting = false;
+    stage = '';
   }
 
   async function copy() {
@@ -88,12 +125,12 @@
       <button
         type="button"
         disabled={drafting}
-        onclick={() => void draft()}
+        onclick={draft}
         class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
         {#if drafting}
           <Loader2 class="size-3.5 animate-spin" aria-hidden="true" />
-          Writing…
+          {stageLabels[stage] ?? 'Writing'}…
         {:else}
           <FileText class="size-3.5" aria-hidden="true" />
           {letter ? 'Write again' : 'Write the letter'}

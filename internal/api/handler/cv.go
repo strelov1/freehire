@@ -223,6 +223,11 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// metered before this one is.
 	api.Get("/me/cvs/:id/cover-letter", mw.key, h.GetCVCoverLetter)
 	api.Post("/me/cvs/:id/cover-letter", mw.cookie, h.DraftCVCoverLetter)
+	// The streaming twin of that POST, and what the workspace actually calls. The chain is
+	// three model calls in series and takes minutes; a proxy closes a silent response at
+	// sixty seconds, so the one-shot POST reached production only as a 504. The POST stays
+	// for scripted callers whose own timeout they control.
+	api.Get("/me/cvs/:id/cover-letter/stream", mw.cookie, h.StreamCVCoverLetter)
 	// The history of what changed the CV, and the two ways to undo an entry: on its own, or
 	// as the run it belonged to. Cookie-only for the same reason as every other mutation —
 	// the browser is where the candidate is watching this happen, and the tailoring agent
