@@ -271,6 +271,17 @@ type CompanyVote struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CoverLetter struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	Body         string             `json:"body"`
+	CitedAtomIds []pgtype.UUID      `json:"cited_atom_ids"`
+	Language     string             `json:"language"`
+	Model        string             `json:"model"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CreditBalance struct {
 	UserID    int64              `json:"user_id"`
 	Period    string             `json:"period"`

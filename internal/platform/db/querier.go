@@ -1343,6 +1343,13 @@ type Querier interface {
 	//
 	// No rows means nothing was charged under this reference, and the release is a no-op.
 	GetConsumptionDay(ctx context.Context, arg GetConsumptionDayParams) (pgtype.Date, error)
+	// The caller's current cover letter for one vacancy, with the two staleness stamps it was
+	// written against: model and language. No row means the pair was never drafted, and the
+	// handler reports that without calling a model. The handler compares both stamps against
+	// the live model and the vacancy's posting_language to decide the stale flag — note the
+	// language stamp is checked against the VACANCY, not the caller's profile, unlike
+	// GetUserJobAnalysis.
+	GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (GetCoverLetterRow, error)
 	// The caller's linked Discord account (link-status endpoint + delivery resolution).
 	GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
@@ -4063,6 +4070,16 @@ type Querier interface {
 	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.
 	// Toggle-to-clear is handled by DeleteCompanyVote, chosen by the domain layer.
 	UpsertCompanyVote(ctx context.Context, arg UpsertCompanyVoteParams) error
+	// Create-or-replace the current letter for a (user, job). The composite PRIMARY KEY makes
+	// it idempotent: drafting again overwrites the body, the cited atoms and both stamps.
+	// There is one row per pair and no history — see the migration for why a letter does not
+	// earn cvedit's revisions.
+	//
+	// created_at is NOT re-bumped on conflict, so it records when this pair was FIRST drafted;
+	// updated_at moves every time. Nothing meters on created_at today, but a letter that
+	// re-ages itself on every redraft would silently break any future rule that did — the same
+	// trap the fit-analysis quota documents on its own upsert.
+	UpsertCoverLetter(ctx context.Context, arg UpsertCoverLetterParams) error
 	// Link (or relink) a user's Discord account, captured from the inbound /link command. One
 	// row per user; relinking from a different Discord account overwrites the discord_id.
 	UpsertDiscordLink(ctx context.Context, arg UpsertDiscordLinkParams) error

@@ -5,8 +5,8 @@
 
 ## 2. Storage
 
-- [ ] 2.1 Write `migrations/0120_cover_letters.sql`: one row per `(user_id, job_id)` as the primary key, with `body`, `cited_atom_ids`, `language`, `model`, `created_at`, `updated_at`. Cascade on user and job delete. Run `pnpm check:sql`.
-- [ ] 2.2 Add the upsert and the owner-scoped read to `internal/platform/db/queries/`, run `make sqlc`, and commit the regenerated code in the same commit as the query.
+- [x] 2.1 Write `migrations/0120_cover_letters.sql`: one row per `(user_id, job_id)` as the primary key, with `body`, `cited_atom_ids`, `language`, `model`, `created_at`, `updated_at`. Cascade on user and job delete. Run `pnpm check:sql`.
+- [x] 2.2 Add the upsert and the owner-scoped read to `internal/platform/db/queries/`, run `make sqlc`, and commit the regenerated code in the same commit as the query.
 
 ## 3. The chain
 
