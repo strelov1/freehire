@@ -3,6 +3,7 @@ package skilltag
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/dict/vocab"
@@ -203,5 +204,33 @@ func TestParse_SalesAndSupportVocab(t *testing.T) {
 				t.Fatalf("Parse(%q) = %v, want %v", c.in, got, c.want)
 			}
 		})
+	}
+}
+
+// TestNoNearDuplicateCanonicals guards the one failure a growing dictionary makes
+// silently: the same facet value declared twice under different separators. Nothing
+// errors when it happens — a posting simply comes back carrying BOTH spellings, the
+// facet splits its count between them, and a filter on either shows half the jobs.
+//
+// It is easy to do because the tiers are independent: a batch can add a phrase whose
+// canonical already exists as a word alias written the other way. That is exactly how
+// "hugging-face" landed beside "huggingface". Folding the separators out is enough to
+// catch it, and cheap enough to run on every canonical in the vocabulary.
+func TestNoNearDuplicateCanonicals(t *testing.T) {
+	fold := strings.NewReplacer("-", "", "_", "", ".", "")
+	seen := map[string]string{}
+	check := func(where, canonical string) {
+		key := fold.Replace(canonical)
+		if prev, ok := seen[key]; ok && prev != canonical {
+			t.Errorf("%s: canonical %q duplicates %q — they differ only by separators, so a posting matching both splits the facet", where, canonical, prev)
+			return
+		}
+		seen[key] = canonical
+	}
+	for alias, c := range wordAliases {
+		check("wordAliases["+alias+"]", c)
+	}
+	for _, p := range phraseAliases {
+		check("phraseAliases "+p.alias, p.canonical)
 	}
 }

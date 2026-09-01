@@ -1194,7 +1194,10 @@ var engineeringPhraseAliases = []phraseAlias{
 	// "hana" is a given name — the vendor prefix is what makes them products.
 	{"aws glue", "aws-glue"},
 	{"azure synapse", "azure-synapse"}, {"synapse analytics", "azure-synapse"},
-	{"sap hana", "sap-hana"}, {"s/4hana", "sap-hana"}, {"s4hana", "sap-hana"},
+	// HANA is the database and S/4HANA the ERP suite on top of it, so they are two
+	// canonicals rather than one. The qualified spellings of S/4HANA are declared with
+	// the other SAP products above; only the unseparated form was missing.
+	{"sap hana", "sap-hana"}, {"s4hana", "sap-s4hana"},
 	// Network security vendors named after places and plants. "Palo Alto" is the city
 	// in every Bay Area address block and "juniper" is a shrub; the qualified product
 	// name is the only safe route.
@@ -1204,8 +1207,8 @@ var engineeringPhraseAliases = []phraseAlias{
 	// bus, "SOC" is a system-on-chip or a security operations centre, "ISO" is the
 	// organisation (and a camera setting). The versioned spelling is unambiguous.
 	{"pci dss", "pci-dss"},
-	{"soc 2", "soc-2"}, {"soc2", "soc-2"},
-	{"iso 9001", "iso-9001"},
+	{"soc2", "soc-2"},
+	{"iso 9001", "iso-9001"}, {"iso9001", "iso-9001"},
 	{"iso 13485", "iso-13485"},
 	{"iso 26262", "iso-26262"},
 	{"as9100", "as9100"},
@@ -1228,21 +1231,25 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"soldering", "soldering"},
 	{"oscilloscope", "oscilloscope"}, {"oscilloscopes", "oscilloscope"},
 	// Engineering software named after an animal, a season, a superlative and two
-	// letters: rhino, primavera (PT/ES "spring"), maximo ("máximo"), nx.
-	{"siemens nx", "siemens-nx"},
+	// letters: rhino, primavera (PT/ES "spring"), maximo ("máximo"). Siemens NX is
+	// already declared with the other vendor products above.
 	{"rhino 3d", "rhino"}, {"rhinoceros 3d", "rhino"},
 	{"primavera p6", "primavera-p6"},
 	{"ibm maximo", "maximo"},
 	{"lean six sigma", "six-sigma"},
 	// AI tooling. The model names are all ordinary nouns or given names — Claude,
 	// Gemini, Copilot (an aviator) — so each is reachable only as a qualified product.
-	{"hugging face", "hugging-face"}, {"huggingface", "hugging-face"},
-	{"fine-tuning", "fine-tuning"}, {"fine tuning", "fine-tuning"},
+	// The unseparated "huggingface" is already a word alias, so only the spaced form
+	// needs a phrase, and it resolves to that same canonical: one facet value, not two.
+	// "claude" is the model and "claude-code" the CLI, declared with the other vendor
+	// products above — different things, so the phrases here deliberately skip it.
+	{"hugging face", "huggingface"},
+	{"fine tuning", "fine-tuning"},
 	{"large language models", "llm"}, {"large language model", "llm"},
 	{"github copilot", "github-copilot"},
 	{"microsoft copilot", "microsoft-copilot"}, {"copilot studio", "microsoft-copilot"},
 	{"google gemini", "gemini"}, {"gemini api", "gemini"},
-	{"claude code", "claude"}, {"anthropic claude", "claude"}, {"claude api", "claude"},
+	{"anthropic claude", "claude"}, {"claude api", "claude"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role
