@@ -14,9 +14,9 @@
   } from '$lib/facets';
   import { formatSalary } from '$lib/enrichment';
   import { companyLogoUrl } from '$lib/logo';
-  import { Badge, EntityLogo } from '$lib/ui';
+  import { EntityLogo } from '$lib/ui';
   import JobDescription from './JobDescription.svelte';
-  import SkillIcon from './SkillIcon.svelte';
+  import SkillChip from './SkillChip.svelte';
 
   let {
     title,
@@ -116,10 +116,10 @@
     <ul class="flex flex-wrap gap-1.5 border-t border-border pt-4">
       {#each skills as skill (skill)}
         <li>
-          <Badge variant="brand" class="gap-1">
-            <SkillIcon slug={skill} />
-            {skill}
-          </Badge>
+          <!-- Unlinked: this is a preview of a posting, and a filter link would navigate
+               out of the thing being previewed. The label and the definition still come
+               from the dictionary. -->
+          <SkillChip slug={skill} linked={false} />
         </li>
       {/each}
     </ul>

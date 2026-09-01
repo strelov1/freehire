@@ -245,6 +245,11 @@ export function dynamicLabel(param: string, value: string): string {
   if (param === 'company_slug') return companyLabel(value);
   if (param === 'source') return sourceLabel(value);
   if (param === 'role') return roleLabel(value);
+  // Skills have no static option list, so every surface naming a SELECTED skill — the
+  // filter summary chips above all — arrives here. Without this it fell through to the
+  // raw slug, and one skill was spelled two ways on one screen: "ci-cd" in the summary,
+  // "CI/CD" in the panel beside it.
+  if (param === 'skills') return skillLabel(value);
   return value;
 }
 

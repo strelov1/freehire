@@ -2,7 +2,13 @@ import { error, redirect } from '@sveltejs/kit';
 import { SKILL_ALIASES } from '$lib/generated/skillAliases';
 import { skillLabel } from '$lib/facets';
 import { serverApi } from '$lib/server/api';
-import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from '$lib/skillGlossary';
+import {
+  MIN_SKILL_OPEN,
+  displayAliases,
+  isGlossaryPublished,
+  showsPostings,
+  topNeighbours,
+} from '$lib/skillGlossary';
 import { hasSkillDescription, loadSkillDescriptions } from '$lib/skillDescriptions';
 import type { PageServerLoad } from './$types';
 
@@ -63,6 +69,9 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
     slug,
     label,
     description,
+    // Indexable only once the glossary is one — the same threshold the footer link
+    // and the sitemap shard already read.
+    published: isGlossaryPublished(Object.keys(catalog).length),
     aliases: displayAliases(aliasTable[slug] ?? [], slug, label),
     // Filtered to skills that HAVE a page: every neighbour is a link, and one to an
     // undescribed skill is a 404 published from a page whose whole claim is that it is

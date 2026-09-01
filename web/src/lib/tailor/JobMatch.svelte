@@ -10,6 +10,7 @@
   import ScoreCategoryRow from './ScoreCategoryRow.svelte';
   import type { CvJobMatch } from '$lib/cv';
   import SkillIcon from '../components/SkillIcon.svelte';
+  import { skillLabel } from '$lib/facets';
 
   let { data }: { data: CvJobMatch | null | undefined } = $props();
 
@@ -72,7 +73,7 @@
             <li
               class="flex items-center gap-1 rounded border border-warning/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-warning-strong"
             >
-              <SkillIcon slug={skill} />{skill}
+              <SkillIcon slug={skill} />{skillLabel(skill)}
             </li>
           {/each}
         </ul>

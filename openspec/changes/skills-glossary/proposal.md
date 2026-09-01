@@ -64,8 +64,8 @@ request-time model call.
   exposing each canonical's aliases, which the glossary page renders and the generator
   prompts with.
 - `cmd/gen-skill-descriptions` — new run-once worker (needs `LLM_BASE_URL` /
-  `LLM_API_KEY` / `LLM_MODEL`, and `DATABASE_URL` to order the vocabulary by catalogue
-  frequency).
+  `LLM_API_KEY` / `LLM_MODEL` only). Catalogue frequency comes from the public facets
+  endpoint over HTTP, so it opens no database — see design.md.
 - `cmd/gen-contracts` — emits one more generated file.
 - `web/` — new `/skills` and `/skills/<slug>` routes, `sitemap-skills.xml` and its entry
   in the sitemap index, the skill chip on `JobView`/`JobRow`, and the generated

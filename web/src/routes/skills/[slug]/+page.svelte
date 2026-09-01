@@ -38,7 +38,12 @@
   );
 </script>
 
-<Seo title={`What is ${data.label}? · freehire`} description={metaDescription} {canonical} />
+<Seo
+  title={`What is ${data.label}? · freehire`}
+  description={metaDescription}
+  {canonical}
+  robots={data.published ? undefined : 'noindex, follow'}
+/>
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD from jsonLdScript, which escapes `<` -->
   {@html jsonLd}

@@ -86,7 +86,11 @@ func run() error {
 func printDrafts(ctx context.Context, d drafter, batch []string, demand map[string]int, concurrency int, out io.Writer) error {
 	drafts := make([]string, len(batch))
 
-	g, ctx := errgroup.WithContext(ctx)
+	// A plain group, not WithContext: nothing here fails the group. A skill the model
+	// refuses is counted and skipped, so cancelling the others on the first refusal is
+	// the opposite of what this wants — a wave is dozens of independent calls and losing
+	// the ones that worked would mean paying for them twice.
+	var g errgroup.Group
 	g.SetLimit(max(concurrency, 1))
 	var mu sync.Mutex
 	var failed int
@@ -109,28 +113,22 @@ func printDrafts(ctx context.Context, d drafter, batch []string, demand map[stri
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
+	_ = g.Wait() // no goroutine returns an error; failures are counted above
 
-	// Nothing is emitted when every draft failed: a file of comments and no rows is a
-	// diff that looks like work and carries none.
-	if failed < len(batch) {
-		for i, line := range drafts {
-			if line == "" {
-				continue
-			}
-			// The count rides along as a comment so the reviewer can see what they are
-			// vouching for: a sentence about a skill on 9,000 postings deserves more of
-			// their attention than one on three.
-			//
-			// A write failure is fatal rather than counted. The whole output of this run
-			// is one wave meant to be redirected into a file, and half a wave on a closed
-			// pipe is worse than none: it looks like a complete batch.
-			if _, err := fmt.Fprintf(out, "# %s — %d open postings\n%s\t%s\n",
-				batch[i], demand[batch[i]], batch[i], line); err != nil {
-				return fmt.Errorf("writing drafts: %w", err)
-			}
+	for i, line := range drafts {
+		if line == "" {
+			continue
+		}
+		// The count rides along as a comment so the reviewer can see what they are
+		// vouching for: a sentence about a skill on 9,000 postings deserves more of
+		// their attention than one on three.
+		//
+		// A write failure is fatal rather than counted. The whole output of this run
+		// is one wave meant to be redirected into a file, and half a wave on a closed
+		// pipe is worse than none: it looks like a complete batch.
+		if _, err := fmt.Fprintf(out, "# %s — %d open postings\n%s\t%s\n",
+			batch[i], demand[batch[i]], batch[i], line); err != nil {
+			return fmt.Errorf("writing drafts: %w", err)
 		}
 	}
 	if failed == len(batch) {

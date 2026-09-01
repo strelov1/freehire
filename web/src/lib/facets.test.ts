@@ -6,6 +6,7 @@ import {
   countryFromSlug,
   countryLabel,
   countrySlug,
+  dynamicLabel,
   FACETS,
   slugifiedCountries,
 } from './facets';
@@ -196,5 +197,21 @@ describe('the country slug index', () => {
       expect(slug.endsWith('-')).toBe(false);
       expect(slug).not.toContain('--');
     }
+  });
+});
+
+describe('dynamicLabel', () => {
+  // The skills facet has no static option list, so every surface that names a selected
+  // skill — the filter summary chips above all — falls through to here. Without a
+  // branch it printed the raw slug, so one skill was spelled two ways on one screen:
+  // "ci-cd" in the summary, "CI/CD" in the panel beside it.
+  it('labels a skill the way the rest of the product does', () => {
+    expect(dynamicLabel('skills', 'ci-cd')).toBe('CI/CD');
+    expect(dynamicLabel('skills', 'nodejs')).toBe('Node.js');
+    expect(dynamicLabel('skills', 'data-engineering')).toBe('Data Engineering');
+  });
+
+  it('still passes through a facet with no label map of its own', () => {
+    expect(dynamicLabel('some_other_facet', 'raw-value')).toBe('raw-value');
   });
 });

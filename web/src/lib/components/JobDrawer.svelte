@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { Badge, Button, cn, EntityLogo } from '$lib/ui';
+  import { Button, cn, EntityLogo } from '$lib/ui';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen } from '@lucide/svelte';
   import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { groupedStages, humanizeStage, offersDebrief } from '$lib/stages';
@@ -21,7 +21,7 @@
   import { statusLabel, stageImplication } from '$lib/emailStatus';
   import { eventLabel, eventTone } from '$lib/events';
   import StatusChip from '$lib/components/StatusChip.svelte';
-  import SkillIcon from './SkillIcon.svelte';
+  import SkillChip from './SkillChip.svelte';
   import { avatarInitials, avatarColor } from '$lib/avatar';
   import type {
     Job,
@@ -681,11 +681,10 @@
             <div class="flex flex-col gap-2 border-t border-border pt-5">
               <p class={sectionLabel}>Skills</p>
               <div class="flex flex-wrap gap-1.5">
+                <!-- Unlinked: the drawer is a reading surface over a posting, and a
+                     filter link would navigate out of it. -->
                 {#each posting.skills as skill (skill)}
-                  <Badge variant="brand" class="gap-1">
-                    <SkillIcon slug={skill} />
-                    {skill}
-                  </Badge>
+                  <SkillChip slug={skill} linked={false} />
                 {/each}
               </div>
             </div>

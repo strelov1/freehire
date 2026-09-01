@@ -87,10 +87,12 @@
   // The touch half of "dismissible": there is no pointer to move away, so the
   // next tap elsewhere is what closes it.
   //
-  // The `contains` guard is what stops the opening tap from also being the
-  // closing one. Svelte attaches this listener after the current event finishes,
-  // so the tap that opened the tooltip should never reach it — but the guard
-  // costs a line and does not depend on that ordering holding.
+  // The `contains` guard carries two things. It stops the opening tap from also
+  // being the closing one (Svelte attaches this listener after the current event
+  // finishes, so that should not happen anyway — the guard costs a line and does
+  // not depend on that ordering holding). And because the floating content is a
+  // DESCENDANT of triggerEl, it is also what keeps a tap on a link inside the
+  // tooltip from dismissing the tooltip out from under the click that follows.
   function dismissOutside(e: PointerEvent) {
     if (!triggerEl?.contains(e.target as Node)) hide();
   }

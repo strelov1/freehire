@@ -24,7 +24,16 @@
   );
 </script>
 
-<Seo title="IT Skills Glossary · freehire" {description} {canonical} />
+<!-- Not indexable until the glossary is one. The footer link and the sitemap shard are
+     already withheld below the same threshold; without this a crawler that finds the
+     page some other way indexes a list of a handful of words as the product's glossary,
+     and that first impression outlives the fix. -->
+<Seo
+  title="IT Skills Glossary · freehire"
+  {description}
+  {canonical}
+  robots={data.published ? undefined : 'noindex, follow'}
+/>
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD from jsonLdScript, which escapes `<` -->
   {@html jsonLd}

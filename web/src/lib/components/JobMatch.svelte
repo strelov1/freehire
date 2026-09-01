@@ -21,6 +21,7 @@
   import { Button } from '$lib/ui';
   import MatchSummary from './MatchSummary.svelte';
   import SkillIcon from './SkillIcon.svelte';
+  import { skillLabel } from '$lib/facets';
 
   // The job is server-rendered; only this personal signal hydrates client-side.
   let { job }: { job: Job } = $props();
@@ -247,7 +248,7 @@
        answer, and the row now carries two. -->
   <div class="flex flex-wrap items-center gap-1.5">
     <span class="flex items-center gap-1 text-xs font-medium text-foreground">
-      <SkillIcon slug={skill} />{skill}
+      <SkillIcon slug={skill} />{skillLabel(skill)}
     </span>
     <button
       type="button"
@@ -314,7 +315,7 @@
         <div class="flex flex-nowrap gap-1.5 overflow-hidden">
           {#each teaserSkills as skill (skill)}
             <span class={`${teaser.missing.has(skill) ? missChip : haveChip} whitespace-nowrap`}>
-              <SkillIcon slug={skill} />{skill}
+              <SkillIcon slug={skill} />{skillLabel(skill)}
             </span>
           {/each}
         </div>
@@ -369,7 +370,7 @@
           <span class="size-1.5 rounded-full bg-brand"></span>You have
         </span>
         <div class="flex flex-wrap gap-1.5">
-          {#each view.matched as skill (skill)}<span class={haveChip}><SkillIcon slug={skill} />{skill}</span>{/each}
+          {#each view.matched as skill (skill)}<span class={haveChip}><SkillIcon slug={skill} />{skillLabel(skill)}</span>{/each}
         </div>
       </div>
     {/if}
@@ -389,7 +390,7 @@
               disabled={pending}
               onclick={() => toggleClaimRow(a.name)}
             >
-              <SkillIcon slug={a.name} />{a.name} <span class="opacity-70">· you have {a.via}</span>
+              <SkillIcon slug={a.name} />{skillLabel(a.name)} <span class="opacity-70">· you have {a.via}</span>
             </button>
           {/each}
         </div>
@@ -414,7 +415,7 @@
               disabled={pending}
               onclick={() => toggleClaimRow(skill)}
             >
-              <SkillIcon slug={skill} />{skill}
+              <SkillIcon slug={skill} />{skillLabel(skill)}
             </button>
           {/each}
         </div>

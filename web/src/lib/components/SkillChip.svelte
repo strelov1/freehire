@@ -8,17 +8,21 @@
 
   // A skill chip that can say what the skill IS.
   //
-  // The chip stays a link to the postings filtered to that skill — that is what someone
-  // clicking "Go" on a posting wants, and it is the behaviour this replaces. The
-  // definition gets its own small target beside the label rather than sharing the chip's:
-  // a tap on a link navigates, so a touch reader given only the chip would reach the
-  // filter and never the glossary.
+  // Hover or focus anywhere on the chip opens the definition, which is what the reveal
+  // is for. Touch cannot share that: the chip is a link, and a tap on a link navigates,
+  // so the "?" beside the label is the tap target — without it a touch reader would
+  // reach the filter and never the glossary.
+  //
+  // `linked` exists because two callers show a posting's skills inside something that is
+  // already a surface of its own (the preview card, the drawer). Turning their chips into
+  // links would navigate out of the thing being previewed; they want the definition and
+  // the dictionary's spelling, not a new destination.
   //
   // This file has no component test: web/ runs vitest in plain Node with no DOM. Its two
   // decisions live in tested pure modules — skillDescriptions.test.ts for what is
   // described and what the text is, tooltip.test.ts for how the reveal behaves.
 
-  let { slug }: { slug: string } = $props();
+  let { slug, linked = true }: { slug: string; linked?: boolean } = $props();
 
   const label = $derived(skillLabel(slug));
 
@@ -31,18 +35,31 @@
   // a $derived that is never read is a chunk never fetched. That is the whole point of
   // the split, and it is why this is not simply awaited up front.
   const description = $derived(skillDescription(slug));
+
+  // A tap on the LABEL must not also toggle the reveal. The tooltip's toggle listens on
+  // its wrapper, which now encloses the whole chip so that hovering anywhere on it
+  // works — and that wrapper is an ancestor of this link. Stopping the touch pointerdown
+  // here keeps the two gestures apart: tap the label to filter, tap the "?" to read.
+  function keepTapOnTheLink(e: PointerEvent) {
+    if (e.pointerType === 'touch') e.stopPropagation();
+  }
 </script>
 
-<span class={badgeVariants({ variant: 'brand' })}>
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-  <a href={filterHref('skills', slug)} class="inline-flex items-center gap-1 transition hover:opacity-80">
-    <SkillIcon {slug} />
-    {label}
-  </a>
-  {#if described}
-    <!-- The tooltip's own max-w-xs is the width here; a narrower override would be an
-         arbitrary value where a token exists. -->
-    <Tooltip side="top">
+{#snippet chip()}
+  <span class={badgeVariants({ variant: 'brand' })}>
+    {#if linked}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
+      <a href={filterHref('skills', slug)} class="inline-flex items-center gap-1 transition hover:opacity-80" onpointerdown={keepTapOnTheLink}>
+        <SkillIcon {slug} />
+        {label}
+      </a>
+    {:else}
+      <span class="inline-flex items-center gap-1">
+        <SkillIcon {slug} />
+        {label}
+      </span>
+    {/if}
+    {#if described}
       <!-- The button is the 24px target WCAG 2.5.8 asks for and the ring inside it is
            the 16px mark the chip can carry. They are separate elements because the
            affordance exists FOR touch: sized to the ring, it would sit a finger's width
@@ -58,27 +75,38 @@
           ?
         </span>
       </button>
-      {#snippet content()}
-        <!-- The pending line is a placeholder rather than nothing: the reveal's box is
-             already open by the time this renders, so "nothing" is a visibly empty
-             popover. `text` is empty only when the chunk could not be fetched, and
-             saying so beats the same empty box standing there for good. -->
-        {#await description}
-          <span class="block h-3 w-40 animate-pulse rounded bg-muted"></span>
-        {:then text}
-          {#if text}
-            <span class="block text-left">{text}</span>
-            <a
-              href={resolve('/skills/[slug]', { slug })}
-              class="mt-1 block text-left font-medium underline"
-            >
-              What is {label}? →
-            </a>
-          {:else}
-            <span class="block text-left">Definition unavailable right now.</span>
-          {/if}
-        {/await}
-      {/snippet}
-    </Tooltip>
-  {/if}
-</span>
+    {/if}
+  </span>
+{/snippet}
+
+{#if described}
+  <!-- The tooltip's own max-w-xs is the width here; a narrower override would be an
+       arbitrary value where a token exists. It encloses the WHOLE chip so hovering the
+       label — the obvious gesture — opens the definition, not only the "?". -->
+  <Tooltip side="top">
+    {@render chip()}
+    {#snippet content()}
+      <!-- The pending line is a placeholder rather than nothing: the reveal's box is
+           already open by the time this renders, so "nothing" is a visibly empty
+           popover. `text` is empty only when the chunk could not be fetched, and
+           saying so beats the same empty box standing there for good. -->
+      {#await description}
+        <span class="block h-3 w-40 animate-pulse rounded bg-muted"></span>
+      {:then text}
+        {#if text}
+          <span class="block text-left">{text}</span>
+          <a
+            href={resolve('/skills/[slug]', { slug })}
+            class="mt-1 block text-left font-medium underline"
+          >
+            What is {label}? →
+          </a>
+        {:else}
+          <span class="block text-left">Definition unavailable right now.</span>
+        {/if}
+      {/await}
+    {/snippet}
+  </Tooltip>
+{:else}
+  {@render chip()}
+{/if}

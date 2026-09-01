@@ -63,8 +63,8 @@ the floor constant removed, so one rule remains rather than two that can disagre
 
 A worker SHALL exist that reads the canonical vocabulary, orders it by catalogue
 frequency, prompts an LLM with each skill's slug, display label and the spellings the
-parser accepts for it, and prints a Go source map for a human to review and commit. The
-worker SHALL be run by hand, per wave.
+parser accepts for it, and prints rows in the dictionary's own format for a human to
+review and commit. The worker SHALL be run by hand, per wave.
 
 The worker's output SHALL NOT be written into the shipping dictionary automatically, and
 no serving path SHALL depend on the worker or on an LLM client.
@@ -72,8 +72,8 @@ no serving path SHALL depend on the worker or on an LLM client.
 #### Scenario: A wave is generated
 
 - **WHEN** an operator runs the worker bounded to the next wave
-- **THEN** it prints Go map entries for the undescribed skills in that wave and writes
-  nothing into `descriptions.go`
+- **THEN** it prints dictionary rows for the undescribed skills in that wave and writes
+  nothing into `descriptions.tsv`
 
 #### Scenario: The serving path has no model dependency
 
@@ -113,8 +113,15 @@ The chip's own activation SHALL keep its existing destination — the postings f
 that skill. Because that makes the chip a link, and a tap on a link navigates, the
 reveal SHALL have its OWN activation target inside the chip rather than sharing the
 chip's: a touch reader given only the chip would reach the filter and never the
-definition. The reveal SHALL carry a link to the skill's glossary page, so the longer
-read is one deliberate click away rather than in the path of the common one.
+definition. **That separate target is for TAP only** — hover and focus SHALL open the
+reveal from anywhere on the chip, because reaching for a 24px mark is not the gesture a
+pointer reader makes and the issue asks for hover on the chip. The reveal SHALL carry a
+link to the skill's glossary page, so the longer read is one deliberate click away
+rather than in the path of the common one.
+
+A chip rendered inside a surface that is itself a view of the posting — a preview card,
+a drawer — MAY omit the filter link while keeping the label and the reveal: navigating
+to a filtered list from inside a preview leaves the thing being previewed.
 
 An undescribed skill SHALL render as a plain chip, with no empty reveal and no
 affordance suggesting one. Whether a skill is described MUST therefore be answerable as
@@ -155,16 +162,36 @@ future change may revisit it; this one does not pay that risk for it.
 - **WHEN** a chip renders a canonical no wave has described
 - **THEN** no reveal affordance is shown and the chip behaves exactly as it does today
 
-### Requirement: A job's skill chips read as words, not as slugs
+### Requirement: A skill reads as words, not as a slug, on every surface that names one
 
-A posting's skill chips SHALL render the canonical's display label. Rendering the raw
-slug spells the same skill two ways on one screen — "ci-cd" on the posting and "CI/CD"
-in the filter panel beside it.
+**Every** surface that renders a canonical skill SHALL render its display label:
+the posting, the feed card, the preview, the drawer, the CV match delta and its
+tailoring dialogs, and the filter summary. Rendering the raw slug spells the same skill
+two ways on one screen — "ci-cd" on the posting and "CI/CD" in the filter panel beside
+it — which is the drift `facet-display-labels` exists to prevent.
+
+The skills facet carries no static option list, so the shared dynamic-label resolver
+MUST route it to the skill label rather than falling through to the raw value; that
+fall-through is what made the filter summary disagree with the panel above it.
+
+The candidate's own experience bank is NOT covered: those strings are what the candidate
+wrote, not values from this vocabulary, and title-casing them would edit their words.
 
 #### Scenario: A punctuated skill on a job page
 
 - **WHEN** a posting tagged `ci-cd` renders its skills
 - **THEN** the chip reads "CI/CD"
+
+#### Scenario: The same skill in the filter summary and the panel
+
+- **WHEN** a reader selects the `ci-cd` facet and sees it both as a summary chip and as
+  a panel option
+- **THEN** both read "CI/CD"
+
+#### Scenario: A missing skill in the CV match delta
+
+- **WHEN** the match delta names a skill the candidate lacks
+- **THEN** it reads as the label, not as the slug
 
 ### Requirement: Every described skill has a glossary page
 
@@ -223,6 +250,11 @@ first entry — the chip's reveal links to one — but the footer link and the s
 index entry SHALL be withheld until enough skills carry a definition, because both
 promise a glossary and a handful of words is not one. The threshold is read from the
 same catalogue everything else reads, so coverage switches it on with no second deploy.
+
+Below that threshold the glossary pages SHALL also decline indexing (`noindex, follow`).
+Withholding the sitemap only stops one route in; a crawler that arrives another way
+would otherwise index a list of a handful of words as the product's glossary, and that
+first impression outlives the fix.
 
 #### Scenario: The glossary before the waves land
 

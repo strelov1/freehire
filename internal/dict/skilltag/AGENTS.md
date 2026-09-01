@@ -28,9 +28,10 @@ through `Parse`.
 
 ### The description dictionary
 
-- A TSV, not a Go map: 863 entries whose value is a sentence, so one unquoted line per
-  skill is what a reviewer can actually read a wave of. `internal/dict/location` ships
-  `cities1000.tsv` the same way.
+- A TSV, not a Go map: the vocabulary is 863 canonicals and each value is a sentence,
+  so one unquoted line per skill is what a reviewer can actually read a wave of.
+  `internal/dict/location` ships `cities1000.tsv` the same way. **The file itself holds
+  far fewer rows than that** — see the ratchet below.
 - **The loader is strict** where location's is tolerant — a malformed row fails the
   build rather than being skipped. That file is GeoNames' output; this one is ours, so a
   bad row is a mistake in this repository.
