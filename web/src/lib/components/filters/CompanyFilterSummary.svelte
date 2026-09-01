@@ -17,6 +17,7 @@
     COMPANY_FACETS.map((def) => ({
       label: def.label,
       chips: store.facet(def.param).include.map((v) => ({
+        key: `${def.param}:${v}`,
         text: valueLabel(def, v),
         exclude: false,
         remove: () => store.remove(def.param, v),

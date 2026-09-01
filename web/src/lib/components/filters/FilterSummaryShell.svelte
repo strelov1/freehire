@@ -1,5 +1,11 @@
 <script module lang="ts">
   export interface SummaryChip {
+    /** Identity for the keyed `{#each}`, unique by construction — `param:value` for a
+     *  facet value, a literal for the one-off chips (Search, Salary, Visa…). NOT the
+     *  label: two different values can share one, and since the skills facet started
+     *  labelling from the dictionary, `nextjs` and `next.js` both read "Next.js" — a
+     *  duplicate key, which Svelte answers by tearing down the whole block. */
+    key: string;
     text: string;
     /** Excluded value — rendered in the destructive (struck-through) style. */
     exclude: boolean;
@@ -100,7 +106,7 @@
           </button>
         </div>
         <div class="flex flex-wrap gap-1.5">
-          {#each g.chips as c (c.text)}
+          {#each g.chips as c (c.key)}
             <span
               class={[
                 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',

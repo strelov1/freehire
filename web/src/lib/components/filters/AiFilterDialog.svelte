@@ -18,8 +18,10 @@
   // user is not told about is indistinguishable from a value that WAS applied.
   let { store, onclose }: { store: FilterStore; onclose: () => void } = $props();
 
-  /** One previewed value. `exclude` draws it struck through, as the sidebar does. */
-  type PreviewChip = { text: string; exclude: boolean };
+  /** One previewed value. `exclude` draws it struck through, as the sidebar does; `key`
+   *  is its identity in the keyed `{#each}` — `param:value`, never the label, which two
+   *  values of one facet can share (see SummaryChip.key). */
+  type PreviewChip = { key: string; text: string; exclude: boolean };
   type PreviewGroup = { label: string; chips: PreviewChip[] };
 
   let text = $state('');
@@ -45,19 +47,20 @@
     const push = (heading: string, chips: PreviewChip[]) => {
       if (chips.length) groups.push({ label: heading, chips });
     };
-    const one = (heading: string, text: string) => push(heading, [{ text, exclude: false }]);
+    const one = (heading: string, text: string) => push(heading, [{ key: heading, text, exclude: false }]);
 
     for (const def of FACETS) {
       // Included wins over excluded, the rule filtersFromInterpretation applies when the
-      // same values become a filter. The server drops the overlap before it gets here,
-      // but the chips are keyed by text and a duplicate key does not merely look odd in
-      // Svelte — it breaks the whole each block. Cheap insurance on a rendered value.
+      // same values become a filter. The server drops the overlap before it gets here;
+      // repeating the filter keeps one value from being drawn twice, and — since the
+      // chips key on `param:value` — from keying the same chip twice, which does not
+      // merely look odd in Svelte but breaks the whole each block.
       const included = result.facets?.[def.param] ?? [];
       push(def.label, [
-        ...included.map((v) => ({ text: label(def.param, v), exclude: false })),
+        ...included.map((v) => ({ key: `${def.param}:${v}`, text: label(def.param, v), exclude: false })),
         ...(result.exclude?.[def.param] ?? [])
           .filter((v) => !included.includes(v))
-          .map((v) => ({ text: label(def.param, v), exclude: true })),
+          .map((v) => ({ key: `${def.param}:${v}`, text: label(def.param, v), exclude: true })),
       ]);
     }
     // The bounds use the SHARED labels, not wording of our own: the preview promises to
@@ -172,7 +175,7 @@
               <div>
                 <p class="text-xs font-medium text-muted-foreground">{group.label}</p>
                 <div class="mt-1 flex flex-wrap gap-1.5">
-                  {#each group.chips as chip (chip.text)}
+                  {#each group.chips as chip (chip.key)}
                     <span
                       class="rounded-lg px-2 py-1 text-xs {chip.exclude
                         ? 'bg-destructive/10 text-destructive line-through'
