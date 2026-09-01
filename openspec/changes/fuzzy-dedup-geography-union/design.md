@@ -122,11 +122,29 @@ Reversal must belong to the fuzzy pass itself: the other two passes write differ
 
 ## Risks / Trade-offs
 
-- **The whole-catalogue recursive closure is slower than one grouped scan, against ~1.4M open
-  rows.** → Measure `EXPLAIN ANALYZE` on a prod-sized dataset before rollout and record the number
-  in the change. The seed narrows to rows that actually own duplicates, which is far smaller than
-  the current query's group set, so the expectation is neutral-to-faster; but a dedup pass here
-  once ran 23h against a 12h unit timeout, so this is measured, not assumed.
+- **The whole-catalogue recursive closure could be slower than one grouped scan.** → MEASURED on
+  prod 2026-09-01, `EXPLAIN (ANALYZE, TIMING OFF)`, both queries over an identical id slice:
+
+  | open rows in slice | `RoleClusterGeoAll` | `DuplicateClosureGeoAll` | new is faster by |
+  |---|---|---|---|
+  | 235 001 | 16.6 s | 3.7 s | 4.5x |
+  | 1 000 002 | 226.1 s | 91.6 s | 2.5x |
+  | 4 716 328 (whole catalogue) | >20 min, cancelled | >20 min, cancelled | — |
+
+  The risk is retired: the replacement is faster at both measurable scales. The seed reaches only
+  rows that actually own an open duplicate (625 278 of 4 716 328), where the old query scanned
+  every open fingerprinted row and sorted three unnested values for each.
+
+  Two things to carry forward rather than celebrate. **The margin narrows with scale** (4.5x →
+  2.5x); both queries are superlinear, and the new one steepens faster, so the advantage at full
+  catalogue is smaller than the small-slice number suggests. And **the whole-catalogue run
+  exceeded 20 minutes for BOTH** — the query the rebuild runs today is already that expensive,
+  which was not known before this measurement and is not something this change introduces.
+
+  Planner cost estimates were useless throughout and should not be trusted for this shape: plain
+  `EXPLAIN` put the new query at ~8x the old one's cost, the exact opposite of the measurement.
+  For a recursive CTE the planner guesses the closure size (it predicted 21M rows for a closure
+  really holding about 2.15M) and everything downstream inherits the error.
 - **A larger fuzzy candidate set loads more descriptions per company.** → Descriptions are still
   only fetched for buckets that survive the size filter, and the cap is unchanged. Bucket
   membership grows by the rows the pass previously hid from itself — bounded by what it merged.
@@ -173,10 +191,5 @@ not re-derived.
   slice to the by-id-set query. The `:one` "always answers" contract the old `RoleClusterGeo`
   needed disappears with it, because an absent row already means "no widening".
 
-Still open, and the next thing to resolve:
-
-- **Is the whole-catalogue recursive query fast enough?** Measured 2026-09-01, the planner's
-  estimates are useless here — it guesses 21M rows for a closure that really holds about 2.15M
-  (625 278 owners over 1 529 849 open duplicates), which pushes it into a sequential scan of
-  `jobs` and a sort of tens of millions of rows. The plain-`EXPLAIN` cost comes out ~8x the old
-  query's, but the old query's own real time is not yet known. Task 1.4 is the gate.
+- **Is the whole-catalogue recursive query fast enough? — SETTLED: yes, it is FASTER than the
+  query it replaces.** See the measurement below.

@@ -16,9 +16,13 @@
       cities) and assert `C`'s closure geography carries all three. Cover a plain role cluster
       (unchanged behaviour), a closed member (excluded), and a marker cycle (terminates, returns
       nothing).
-- [ ] 1.4 Measure: `EXPLAIN ANALYZE` the whole-catalogue query against a prod-sized dataset and
+- [x] 1.4 Measure: `EXPLAIN ANALYZE` the whole-catalogue query against a prod-sized dataset and
       record the timing in `design.md` next to the risk it answers. If it is materially slower
-      than `RoleClusterGeoAll`, stop and revisit before continuing.
+      than `RoleClusterGeoAll`, stop and revisit before continuing. DONE 2026-09-01: the gate
+      passes — 4.5x faster on a 235k-row slice, 2.5x on a 1M-row one. The whole catalogue
+      cancelled at 20 min for BOTH queries, so the comparison had to be made on identical slices;
+      that the query the rebuild runs TODAY is already >20 min is a finding in its own right.
+      Planner cost estimates pointed the opposite way and were discarded — see design.md.
 
 ## 2. The index writers
 
