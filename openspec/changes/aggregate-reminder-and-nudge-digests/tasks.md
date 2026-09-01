@@ -23,19 +23,19 @@
 
 ## 4. Nudge delivery — group by (user, kind)
 
-- [ ] 4.1 Change `nudge.Notifier`/`Router` to take a kind plus `[]Message`, and update the compile-time assertions
-- [ ] 4.2 Add `SnapshotCap` (default 200) to `nudge.Config`
-- [ ] 4.3 Split `Runner.fire` the same way as the reminder engine and group survivors by `(user_id, kind)` oldest-due first in `Runner.deliver`
-- [ ] 4.4 Record one in-app notification per group, keeping the existing `nudge_<kind>` kind string
-- [ ] 4.5 Cover with tests: four same-kind nudges is one `Send`, two kinds is two `Send`s, and each kind's record keeps its own `nudge_<kind>` value
+- [x] 4.1 Change `nudge.Notifier`/`Router` to take a kind plus `[]Message`, and update the compile-time assertions
+- [x] 4.2 Add `SnapshotCap` (default 200) to `nudge.Config`
+- [x] 4.3 Split `Runner.fire` the same way as the reminder engine and group survivors by `(user_id, kind)` oldest-due first in `Runner.deliver`
+- [x] 4.4 Record one in-app notification per group, keeping the existing `nudge_<kind>` kind string
+- [x] 4.5 Cover with tests: four same-kind nudges is one `Send`, two kinds is two `Send`s, and each kind's record keeps its own `nudge_<kind>` value
 
 ## 5. Nudge transports — render a list
 
-- [ ] 5.1 Render email, Telegram and push for a group, per kind, with the same list bound and tail as the reminder transports
-- [ ] 5.2 Cover each transport and kind with a group-of-one and a group-over-the-limit test
+- [x] 5.1 Render email, Telegram and push for a group, per kind, with the same list bound and tail as the reminder transports
+- [x] 5.2 Cover each transport and kind with a group-of-one and a group-over-the-limit test
 
 ## 6. Wire-up and documentation
 
-- [ ] 6.1 Update `cmd/remind` and `cmd/nudge` for the new notifier signatures and config fields
-- [ ] 6.2 Record the batching rule in `docs/agents/notifications.md`: what forms a group, why nudge kinds stay apart, the two bounds, and that the group is the retry unit
-- [ ] 6.3 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and `go vet -tags=integration ./...`; run the integration-tagged tests for `internal/engage/...`
+- [x] 6.1 Update `cmd/remind` and `cmd/nudge` for the new notifier signatures and config fields
+- [x] 6.2 Record the batching rule in `docs/agents/notifications.md`: what forms a group, why nudge kinds stay apart, the two bounds, and that the group is the retry unit
+- [x] 6.3 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and `go vet -tags=integration ./...`; run the integration-tagged tests for `internal/engage/...`

@@ -91,6 +91,7 @@ var renderers = []func(string) (Sample, error){
 	savedJobReminderSample,
 	savedJobReminderBatchSample,
 	followUpNudgeSample,
+	followUpNudgeBatchSample,
 	jobClosedNudgeSample,
 	referralRequestSample,
 	reportRemovedSample,
@@ -242,12 +243,26 @@ func savedJobReminderBatchSample(baseURL string) (Sample, error) {
 func followUpNudgeSample(baseURL string) (Sample, error) {
 	return sample("nudge-follow-up", "Tracking / Nudge: follow up", func(c *capture) error {
 		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.Message{
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindFollowUp, []nudge.Message{{
 				Kind:       nudge.KindFollowUp,
 				JobTitle:   "Staff Engineer, Platform",
 				Company:    "Speechify",
 				Slug:       "staff-engineer-platform-speechify",
 				DaysSilent: 12,
+			}})
+	})
+}
+
+// followUpNudgeBatchSample is the shape a pass with several quiet applications
+// produces, and the one worth looking at: the single-nudge mail above is now the
+// special case.
+func followUpNudgeBatchSample(baseURL string) (Sample, error) {
+	return sample("nudge-follow-up-batch", "Tracking / Nudge: follow up (batch)", func(c *capture) error {
+		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindFollowUp, []nudge.Message{
+				{Kind: nudge.KindFollowUp, JobTitle: "Staff Engineer, Platform", Company: "Speechify", Slug: "staff-engineer-platform-speechify", DaysSilent: 12},
+				{Kind: nudge.KindFollowUp, JobTitle: "Backend Engineer", Company: "Monzo", Slug: "backend-engineer-monzo", DaysSilent: 24},
+				{Kind: nudge.KindFollowUp, JobTitle: "Infrastructure Engineer", Company: "Grafana Labs", Slug: "infrastructure-engineer-grafana-labs", DaysSilent: 31},
 			})
 	})
 }
@@ -255,12 +270,12 @@ func followUpNudgeSample(baseURL string) (Sample, error) {
 func jobClosedNudgeSample(baseURL string) (Sample, error) {
 	return sample("nudge-job-closed", "Tracking / Nudge: job closed", func(c *capture) error {
 		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.Message{
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindJobClosed, []nudge.Message{{
 				Kind:     nudge.KindJobClosed,
 				JobTitle: "Go Developer — Payments",
 				Company:  "Avenga",
 				Slug:     "go-developer-payments-avenga",
-			})
+			}})
 	})
 }
 

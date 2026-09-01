@@ -80,30 +80,19 @@ func renderDigest(d Digest) (title, body, slug string) {
 // notification-center row — the same three fields DigestJob exposes on the
 // wire, no internal id, no salary (the notification-history "which jobs were
 // these" screen names them; it isn't a second digest render).
-type digestJobSnapshot struct {
-	Title   string `json:"title"`
-	Company string `json:"company"`
-	Slug    string `json:"slug"`
-}
-
 // digestJobsSnapshot marshals a digest's matched jobs for the notification
 // center's `jobs` column, but only when there's more than one — a single-job
-// digest already has its job identified via public_slug, and every other
-// notification kind never sets this column at all. nil (encodes to SQL NULL)
-// for a single-job (or, degenerately, zero-job) digest.
+// digest already has its job identified via public_slug. nil (encodes to SQL NULL)
+// for a single-job (or, degenerately, zero-job) digest. The shape itself is
+// SnapshotJob, shared with the reminder and nudge engines, which write the same
+// column for the same page.
 func digestJobsSnapshot(d Digest) json.RawMessage {
 	if d.Total <= 1 {
 		return nil
 	}
-	jobs := make([]digestJobSnapshot, len(d.Jobs))
+	jobs := make([]SnapshotJob, len(d.Jobs))
 	for i, j := range d.Jobs {
-		jobs[i] = digestJobSnapshot{Title: j.Title, Company: j.Company, Slug: j.Slug}
+		jobs[i] = SnapshotJob{Title: j.Title, Company: j.Company, Slug: j.Slug}
 	}
-	raw, err := json.Marshal(jobs)
-	if err != nil {
-		// Every field is a plain string; Marshal only fails on unsupported types
-		// (channels, funcs, cyclic refs), none of which digestJobSnapshot has.
-		panic(fmt.Sprintf("notify: marshal digest jobs snapshot: %v", err))
-	}
-	return raw
+	return JobsSnapshot(jobs)
 }

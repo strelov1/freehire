@@ -88,7 +88,7 @@ func TestBuildDigest_TotalMatchesWhatItCarries(t *testing.T) {
 func TestDigestJobsSnapshot_CarriesEveryRecordedJob(t *testing.T) {
 	raw := digestJobsSnapshot(digestOf(67))
 
-	var jobs []digestJobSnapshot
+	var jobs []SnapshotJob
 	if err := json.Unmarshal(raw, &jobs); err != nil {
 		t.Fatalf("snapshot did not unmarshal: %v", err)
 	}

@@ -58,10 +58,15 @@ type Message struct {
 	DaysSilent int
 }
 
-// Notifier delivers a nudge over a channel to a destination. The engine depends
-// only on this, so a new channel is a new implementation, not a change here.
+// Notifier delivers one account's due nudges OF ONE KIND over a channel to a
+// destination, as a single message. The engine depends only on this, so a new
+// channel is a new implementation, not a change here.
+//
+// The kind travels beside the slice rather than being read off the first message,
+// because it is a property of the group: every member shares it, and the renderer
+// switches on it before it looks at any job.
 type Notifier interface {
-	Send(ctx context.Context, channel, dest string, m Message) error
+	Send(ctx context.Context, channel, dest, kind string, ms []Message) error
 }
 
 // ErrChannelNotConfigured is returned by Router.Send for a channel with no
@@ -84,12 +89,12 @@ type Router map[string]Notifier
 var _ Notifier = (Router)(nil)
 
 // Send routes to the registered notifier, or ErrChannelNotConfigured when none is.
-func (r Router) Send(ctx context.Context, channel, dest string, m Message) error {
+func (r Router) Send(ctx context.Context, channel, dest, kind string, ms []Message) error {
 	n, ok := r[channel]
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrChannelNotConfigured, channel)
 	}
-	return n.Send(ctx, channel, dest, m)
+	return n.Send(ctx, channel, dest, kind, ms)
 }
 
 // Compile-time proof that the generated *db.Queries satisfies the engine's Store.
@@ -142,6 +147,13 @@ type Config struct {
 	ClaimBatch int32
 	// MaxAttempts dead-letters a nudge after this many failed deliveries.
 	MaxAttempts int32
+	// SnapshotCap bounds how many nudges one message carries — which is how many
+	// the in-app record holds. It is NOT the message listing bound (that is
+	// notify.ListLimit): a message is short because a long list reads badly, while
+	// the record is long because it is the page the message links to. The excess is
+	// released back to the pending queue rather than stamped delivered into a
+	// message it never appeared in.
+	SnapshotCap int
 }
 
 // DefaultConfig is the production tuning, mirroring internal/engage/reminder and
@@ -154,17 +166,39 @@ func DefaultConfig() Config {
 		LeaseSeconds:            600,
 		ClaimBatch:              500,
 		MaxAttempts:             5,
+		SnapshotCap:             200,
 	}
 }
 
-// Stats is the per-pass summary logged by the worker.
+// Stats is the per-pass summary logged by the worker. Every counter except
+// Messages counts NUDGES, not deliveries, so the numbers stay comparable across
+// the change that made one message carry many.
 type Stats struct {
 	Matched   int // newly recorded nudge candidates
 	Delivered int // nudges sent
+	Messages  int // channel messages sent (one per account per kind per pass)
 	Cancelled int // nudges cancelled at fire (condition no longer holds)
 	SoftSkips int // nudges with no deliverable channel this pass
-	Deferred  int // nudges held back by the account's quiet-hours window
+	Deferred  int // nudges held back by quiet hours or by a full message
 	Failed    int // nudges whose delivery errored
+}
+
+// batch is one account's due nudges OF ONE KIND in a pass. Channels, destinations
+// and quiet hours are properties of the ACCOUNT and the kind is shared by
+// construction, so the first member's row answers for the whole batch and only the
+// messages accumulate.
+type batch struct {
+	info db.GetNudgeForDeliveryRow
+	ids  []int64
+	msgs []Message
+}
+
+// batchKey is what makes two nudges one message: the same account AND the same
+// kind. Merging the kinds would put "your application went quiet" and "prepare for
+// your interview" in one mail, which are different errands with different actions.
+type batchKey struct {
+	userID int64
+	kind   string
 }
 
 // Runner executes MATCH+DELIVER passes.
@@ -191,8 +225,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	if err := r.deliver(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("deliver: %w", err)
 	}
-	log.Printf("nudge: matched=%d delivered=%d cancelled=%d soft_skips=%d deferred=%d failed=%d",
-		stats.Matched, stats.Delivered, stats.Cancelled, stats.SoftSkips, stats.Deferred, stats.Failed)
+	log.Printf("nudge: matched=%d delivered=%d messages=%d cancelled=%d soft_skips=%d deferred=%d failed=%d",
+		stats.Matched, stats.Delivered, stats.Messages, stats.Cancelled, stats.SoftSkips, stats.Deferred, stats.Failed)
 	return stats, nil
 }
 
@@ -295,68 +329,124 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	if err != nil {
 		return fmt.Errorf("claim: %w", err)
 	}
-	for _, id := range due {
-		r.fire(ctx, id, stats)
+	for _, b := range r.collect(ctx, due, stats) {
+		r.deliverBatch(ctx, b, stats)
 	}
 	return nil
 }
 
-// fire re-checks one claimed nudge's triggering condition and delivers or cancels
-// it. The re-check is what lets MATCH re-run freely without ever sending a nudge
-// whose reason has since gone away.
-func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
+// collect turns the claimed ids into one batch per (account, kind), dropping the
+// nudges that must not be sent. Each is re-checked on its own — the trigger is per
+// nudge — and only the survivors group, so a lapsed nudge is cancelled without
+// taking its neighbours' message with it.
+//
+// Batches are returned in the order their first member was claimed, which
+// ClaimDueNudges orders by creation time, so the nudge that has waited longest is
+// served first and a pass is reproducible.
+func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batch {
+	byKey := make(map[batchKey]*batch, len(due))
+	var order []*batch
+	for _, id := range due {
+		info, ok := r.validate(ctx, id, stats)
+		if !ok {
+			continue
+		}
+		key := batchKey{userID: info.UserID, kind: info.Kind}
+		b := byKey[key]
+		if b == nil {
+			b = &batch{info: info}
+			byKey[key] = b
+			order = append(order, b)
+		}
+		if len(b.ids) >= r.cfg.SnapshotCap {
+			// The message is full. Release rather than stamp: a nudge marked
+			// delivered while appearing in no message is gone for good.
+			r.release(ctx, id)
+			stats.Deferred++
+			continue
+		}
+		b.ids = append(b.ids, id)
+		b.msgs = append(b.msgs, r.message(info))
+	}
+	return order
+}
+
+// validate re-checks one claimed nudge's triggering condition immediately before it
+// joins a batch, and holds it back inside the account's quiet hours. The re-check is
+// what lets MATCH re-run freely without ever sending a nudge whose reason has since
+// gone away. It reports whether the nudge is deliverable this pass.
+func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetNudgeForDeliveryRow, bool) {
 	info, err := r.store.GetNudgeForDelivery(ctx, id)
 	if err != nil {
 		log.Printf("nudge: load %d for delivery: %v", id, err)
 		r.release(ctx, id)
-		return
+		return info, false
 	}
 	if !r.actionable(info) {
 		if _, err := r.store.CancelNudgeAtFire(ctx, id); err != nil {
 			log.Printf("nudge: cancel-at-fire %d: %v", id, err)
 			r.release(ctx, id)
-			return
+			return info, false
 		}
 		stats.Cancelled++
-		return
+		return info, false
 	}
 	if deliverywindow.InQuietHours(r.now(), info.Timezone.String, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
 		// A transient time-of-day condition, not a lapsed trigger: release (not
 		// cancel) so the nudge fires once quiet hours end.
 		r.release(ctx, id)
 		stats.Deferred++
-		return
+		return info, false
 	}
+	return info, true
+}
 
+// message projects one delivery row into the display shape a channel renders.
+func (r *Runner) message(info db.GetNudgeForDeliveryRow) Message {
 	msg := Message{Kind: info.Kind, JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, URL: info.URL}
 	if info.Kind == KindFollowUp && info.LastActivityAt.Valid {
 		msg.DaysSilent = silence.Days(r.now(), info.LastActivityAt.Time)
 	}
-	delivered, failedErr := r.deliverChannels(ctx, info, msg)
+	return msg
+}
+
+// deliverBatch sends one (account, kind) batch as a single message per channel and
+// finalizes every ledger row in it. The batch is the unit: one send outcome decides
+// all of its nudges, because a partial result would need a second delivery ledger
+// to describe and nothing reads one.
+func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
+	delivered, failedErr := r.deliverChannels(ctx, b.info, b.msgs)
 
 	switch {
 	case delivered:
 		if failedErr != nil {
-			log.Printf("nudge: %d delivered with a co-channel error: %v", id, failedErr)
+			log.Printf("nudge: user %d %s delivered with a co-channel error: %v", b.info.UserID, b.info.Kind, failedErr)
 		}
-		if _, err := r.store.MarkNudgeDelivered(ctx, id); err != nil {
-			log.Printf("nudge: mark delivered %d: %v", id, err)
+		for _, id := range b.ids {
+			if _, err := r.store.MarkNudgeDelivered(ctx, id); err != nil {
+				log.Printf("nudge: mark delivered %d: %v", id, err)
+			}
 		}
-		r.recordNotification(ctx, id, info, msg)
-		stats.Delivered++
+		r.recordNotification(ctx, b)
+		stats.Delivered += len(b.ids)
+		stats.Messages++
 	case failedErr != nil:
-		log.Printf("nudge: deliver %d: %v", id, failedErr)
-		if err := r.store.RecordNudgeDeliveryFailure(ctx, db.RecordNudgeDeliveryFailureParams{
-			ID:          id,
-			LastError:   failedErr.Error(),
-			MaxAttempts: r.cfg.MaxAttempts,
-		}); err != nil {
-			log.Printf("nudge: record failure %d: %v", id, err)
+		log.Printf("nudge: deliver %s batch for user %d: %v", b.info.Kind, b.info.UserID, failedErr)
+		for _, id := range b.ids {
+			if err := r.store.RecordNudgeDeliveryFailure(ctx, db.RecordNudgeDeliveryFailureParams{
+				ID:          id,
+				LastError:   failedErr.Error(),
+				MaxAttempts: r.cfg.MaxAttempts,
+			}); err != nil {
+				log.Printf("nudge: record failure %d: %v", id, err)
+			}
 		}
-		stats.Failed++
+		stats.Failed += len(b.ids)
 	default:
-		r.release(ctx, id)
-		stats.SoftSkips++
+		for _, id := range b.ids {
+			r.release(ctx, id)
+		}
+		stats.SoftSkips += len(b.ids)
 	}
 }
 
@@ -402,13 +492,13 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 // channel with no destination or no notifier is a soft-skip, not an error). One
 // successful channel makes the nudge delivered — a co-channel outage just misses
 // that channel for this one-shot nudge.
-func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msg Message) (delivered bool, failedErr error) {
+func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msgs []Message) (delivered bool, failedErr error) {
 	for _, ch := range info.Channels {
 		dest, ok := recipient(ch, info)
 		if !ok {
 			continue
 		}
-		err := r.notifier.Send(ctx, ch, dest, msg)
+		err := r.notifier.Send(ctx, ch, dest, info.Kind, msgs)
 		if errors.Is(err, ErrChannelNotConfigured) {
 			continue
 		}
@@ -467,24 +557,32 @@ func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
 	return "", false
 }
 
-// recordNotification writes the in-app notification-center row for a delivered
-// nudge, reusing renderNudge's title/body — the same copy the push channel
-// already shows — so the in-app record never drifts from it. A nudge always
-// concerns exactly one job, so PublicSlug is always populated. A failure here
-// must not fail the delivery: the nudge was already sent and marked delivered;
-// losing the in-app record is a degraded read-side feature, not a reason to
-// treat the delivery as failed — the same posture this func's caller already
+// recordNotification writes the one in-app notification-center row for a delivered
+// batch, reusing renderNudgeBatch's title/body — the same copy the push channel
+// shows — so the in-app record never drifts from it. A batch of one keeps the shape
+// nudges have always recorded, a public slug the notification links straight to; a
+// batch of several has no single job to point at, so it carries the job list and the
+// notification center renders its own page.
+//
+// A failure here must not fail the delivery: the batch was already sent and marked
+// delivered; losing the in-app record is a degraded read-side feature, not a reason
+// to treat the delivery as failed — the same posture this func's caller already
 // takes toward MarkNudgeDelivered's own failure, just above.
-func (r *Runner) recordNotification(ctx context.Context, id int64, info db.GetNudgeForDeliveryRow, msg Message) {
-	title, body := renderNudge(msg)
-	if _, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
-		UserID:     info.UserID,
-		Kind:       "nudge_" + msg.Kind,
-		Title:      title,
-		Body:       body,
-		PublicSlug: pgtype.Text{String: msg.Slug, Valid: true},
-	}); err != nil {
-		log.Printf("nudge: record notification %d: %v", id, err)
+func (r *Runner) recordNotification(ctx context.Context, b *batch) {
+	title, body := renderNudgeBatch(b.info.Kind, b.msgs)
+	arg := db.RecordNotificationParams{
+		UserID: b.info.UserID,
+		Kind:   "nudge_" + b.info.Kind,
+		Title:  title,
+		Body:   body,
+	}
+	if len(b.msgs) == 1 {
+		arg.PublicSlug = pgtype.Text{String: b.msgs[0].Slug, Valid: true}
+	} else {
+		arg.Jobs = jobsSnapshot(b.msgs)
+	}
+	if _, err := r.store.RecordNotification(ctx, arg); err != nil {
+		log.Printf("nudge: record notification for user %d (%s): %v", b.info.UserID, b.info.Kind, err)
 	}
 }
 

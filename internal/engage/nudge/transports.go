@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
 
@@ -24,6 +25,18 @@ var (
 	_ Notifier = (*TelegramNotifier)(nil)
 	_ Notifier = (*EmailNotifier)(nil)
 )
+
+// listed splits a batch into the nudges a message itemizes and how many it only
+// counts. The bound is notify.ListLimit, shared with the subscription digest and
+// the reminder engine so no two channels disagree about how long a list may be; the
+// batch itself is bounded separately and much higher by Config.SnapshotCap, because
+// the message is short for readability while the record behind it is long by design.
+func listed(ms []Message) (shown []Message, more int) {
+	if len(ms) <= notify.ListLimit {
+		return ms, 0
+	}
+	return ms[:notify.ListLimit:notify.ListLimit], len(ms) - notify.ListLimit
+}
 
 // TelegramNotifier delivers a nudge as a Telegram HTML message, reusing the
 // telegramnotify Bot API client. Every link stays on-platform: the tracking board
@@ -47,19 +60,98 @@ func NewTelegramNotifier(client *telegramnotify.Client, origin string) *Telegram
 // A 403 is translated to ErrRecipientGone, this engine's vocabulary for a chat
 // permanently closed to us, so the runner unlinks it instead of retrying a send
 // that cannot land. Same translation the digest and reminder notifiers do.
-func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest string, m Message) error {
+func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
+	if len(ms) == 0 {
+		return nil
+	}
 	chatID, err := strconv.ParseInt(dest, 10, 64)
 	if err != nil {
 		return fmt.Errorf("nudge: invalid telegram chat id %q: %w", dest, err)
 	}
-	err = n.client.SendMessage(ctx, chatID, n.render(m))
+	err = n.client.SendMessage(ctx, chatID, n.render(kind, ms))
 	if errors.Is(err, telegramnotify.ErrChatUnreachable) {
 		return fmt.Errorf("%w: %w", ErrRecipientGone, err)
 	}
 	return err
 }
 
-func (n *TelegramNotifier) render(m Message) string {
+// render builds the HTML body: one nudge keeps the sentence it has always been,
+// several become a headline and a list bounded twice — by notify.ListLimit for
+// readability, and by Telegram's own MaxMessageLen, because an oversized body is
+// rejected deterministically and every retry re-fails.
+func (n *TelegramNotifier) render(kind string, ms []Message) string {
+	if len(ms) == 1 {
+		return n.renderOne(ms[0])
+	}
+
+	var b strings.Builder
+	b.WriteString(n.batchHeadline(kind, len(ms)) + "\n\n")
+
+	tailReserve := telegramnotify.UTF16Len(n.moreLine(len(ms), kind))
+	used := telegramnotify.UTF16Len(b.String())
+	fitted := 0
+	shown, _ := listed(ms)
+	for _, m := range shown {
+		line := n.jobLine(m)
+		lineLen := telegramnotify.UTF16Len(line)
+		if used+lineLen+tailReserve > telegramnotify.MaxMessageLen {
+			break
+		}
+		b.WriteString(line)
+		used += lineLen
+		fitted++
+	}
+	if omitted := len(ms) - fitted; omitted > 0 {
+		b.WriteString(n.moreLine(omitted, kind))
+	}
+	return b.String()
+}
+
+// batchHeadline is the one line that says what this batch is about. It is escaped
+// nowhere because it holds no source data — only a count.
+func (n *TelegramNotifier) batchHeadline(kind string, count int) string {
+	switch kind {
+	case KindFollowUp:
+		return fmt.Sprintf("👋 <b>%d</b> of your applications have gone quiet. Worth a follow-up?", count)
+	case KindInterviewPrep:
+		return fmt.Sprintf("🎯 You're interviewing for <b>%d</b> roles. Ready to rehearse?", count)
+	case KindJobClosed:
+		return fmt.Sprintf("📪 <b>%d</b> jobs you were tracking were closed.", count)
+	default:
+		return fmt.Sprintf("<b>%d</b> updates on jobs you are tracking.", count)
+	}
+}
+
+// jobLine renders one nudged job as a bullet linking to its freehire page.
+func (n *TelegramNotifier) jobLine(m Message) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "• <a href=%q>%s</a>", n.origin+"/jobs/"+m.Slug, html.EscapeString(m.JobTitle))
+	if m.Company != "" {
+		fmt.Fprintf(&b, " — %s", html.EscapeString(m.Company))
+	}
+	b.WriteByte('\n')
+	return b.String()
+}
+
+// moreLine is the overflow tail, or "" when nothing is omitted. It leads where the
+// batch's own call to action leads.
+func (n *TelegramNotifier) moreLine(more int, kind string) string {
+	if more <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n<a href=%q>+ %d more</a>", n.batchURL(kind), more)
+}
+
+// batchURL is where a batch sends the reader. Most kinds are about applications, so
+// the tracking board; job-closed has nothing left to track, so the saved list.
+func (n *TelegramNotifier) batchURL(kind string) string {
+	if kind == KindJobClosed {
+		return n.origin + "/my/activity"
+	}
+	return n.origin + "/my/tracking"
+}
+
+func (n *TelegramNotifier) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug
 	switch m.Kind {
@@ -96,10 +188,124 @@ func NewEmailNotifier(sender emailnotify.Sender, from, origin string) *EmailNoti
 	return &EmailNotifier{sender: sender, from: emailnotify.From(senderName, from), origin: base, layout: mailtpl.New(base)}
 }
 
-// Send renders the nudge and delivers it to the address in dest.
-func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, m Message) error {
-	subject, htmlBody, textBody := n.render(m)
+// Send renders the batch as one mail and delivers it to the address in dest.
+func (n *EmailNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
+	if len(ms) == 0 {
+		return nil
+	}
+	var subject, htmlBody, textBody string
+	if len(ms) == 1 {
+		subject, htmlBody, textBody = n.render(ms[0])
+	} else {
+		subject, htmlBody, textBody = n.renderBatch(kind, ms)
+	}
 	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, textBody)
+}
+
+// batchBody is what the batch template renders from. Jobs carries the source data,
+// escaped in context by html/template.
+type batchBody struct {
+	Jobs   []mailtpl.Job
+	More   int
+	Lead   string
+	URL    string
+	CTA    string
+	Reason string
+}
+
+// batchTemplate is the list body every kind's batch shares: the jobs, the one
+// sentence saying what happened to them, and a single call to action. The kinds
+// differ in copy, not in layout, so one template serves all three — unlike the
+// single-nudge blocks above, whose lead sentences sit inside the markup.
+var batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  {{range $i, $job := .Jobs}}
+  <tr><td class="m-row" style="padding:14px 0;{{if $i}}border-top:1px solid #e4e4e4;{{end}}">{{template "job-row" $job}}</td></tr>
+  {{end}}
+</table>
+<div style="height:18px;"></div>
+{{template "p" .Lead}}
+{{if gt .More 0}}{{template "muted" (printf "+ %d more not listed here." .More)}}{{end}}
+{{template "button" (mailLink .URL .CTA)}}`))
+
+// renderBatch builds the multi-nudge mail for one kind.
+func (n *EmailNotifier) renderBatch(kind string, ms []Message) (subject, htmlBody, textBody string) {
+	shown, more := listed(ms)
+	rows := make([]mailtpl.Job, 0, len(shown))
+	for _, m := range shown {
+		rows = append(rows, mailtpl.NewJob(m.JobTitle, m.Company, "", n.jobURL(m)))
+	}
+
+	subject, head, pre, lead := n.batchCopy(kind, len(ms))
+	url, cta := n.batchCTA(kind)
+
+	var content bytes.Buffer
+	// The template is a trusted constant and the data is escaped in context, so this
+	// fails only on a template bug — caught by the golden previews.
+	_ = batchTemplate.Execute(&content, batchBody{Jobs: rows, More: more, Lead: lead, URL: url, CTA: cta})
+
+	htmlBody = n.layout.Render(mailtpl.Body{
+		Preheader: pre,
+		Heading:   head,
+		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above
+		Footer:    "You’re getting this because you are tracking these applications on freehire.",
+	})
+
+	var b strings.Builder
+	b.WriteString(lead + "\n\n")
+	for _, m := range shown {
+		b.WriteString("- " + m.JobTitle)
+		if m.Company != "" {
+			b.WriteString(" — " + m.Company)
+		}
+		b.WriteString("\n  " + n.jobURL(m) + "\n")
+	}
+	if more > 0 {
+		fmt.Fprintf(&b, "\n+ %d more\n", more)
+	}
+	fmt.Fprintf(&b, "\n%s: %s\n", cta, url)
+	return subject, htmlBody, b.String()
+}
+
+// batchCopy is the per-kind wording for a batch of `count` nudges.
+func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, lead string) {
+	switch kind {
+	case KindFollowUp:
+		return fmt.Sprintf("Time to follow up on %d applications", count),
+			"Worth a follow-up?",
+			fmt.Sprintf("%d applications have gone quiet", count),
+			fmt.Sprintf("Nothing has moved on %d of your applications.", count)
+	case KindInterviewPrep:
+		return fmt.Sprintf("Prepare for %d interviews", count),
+			"Ready to rehearse?",
+			fmt.Sprintf("%d interviews are coming up", count),
+			"Your interviews are coming up. A rehearsal beats a re-read."
+	case KindJobClosed:
+		return fmt.Sprintf("Closed: %d jobs you were tracking", count),
+			fmt.Sprintf("%d jobs were closed", count),
+			fmt.Sprintf("%d jobs you were tracking have closed", count),
+			"These listings were closed. They are off the board, so they are fewer things to wait on."
+	default:
+		return fmt.Sprintf("%d updates on jobs you are tracking", count),
+			"An update on your applications",
+			"An update on jobs you are tracking",
+			fmt.Sprintf("%d jobs you are tracking were updated.", count)
+	}
+}
+
+// batchCTA is where the batch sends the reader: the tracking board for the kinds
+// about applications, the saved list for job-closed, which has nothing left to
+// track.
+func (n *EmailNotifier) batchCTA(kind string) (url, label string) {
+	if kind == KindJobClosed {
+		return n.origin + "/my/activity?utm_source=email", "Open your saved jobs"
+	}
+	return n.origin + "/my/tracking?utm_source=email", "Open your tracking board"
+}
+
+// jobURL is the on-platform freehire job page, tagged with an email UTM source.
+func (n *EmailNotifier) jobURL(m Message) string {
+	return n.origin + "/jobs/" + m.Slug + "?utm_source=email"
 }
 
 // nudgeBody is what the body templates render from. Job carries the source data,

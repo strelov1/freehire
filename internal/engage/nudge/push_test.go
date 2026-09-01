@@ -43,7 +43,7 @@ func TestPushNotifier_FollowUp_RendersTitleBodyAndSlug(t *testing.T) {
 	n := NewPushNotifier(lister, transport)
 
 	msg := Message{Kind: KindFollowUp, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", DaysSilent: 12}
-	if err := n.Send(context.Background(), "push", "42", msg); err != nil {
+	if err := n.Send(context.Background(), "push", "42", msg.Kind, []Message{msg}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +74,7 @@ func TestPushNotifier_InterviewPrep_RendersTitleBodyAndSlug(t *testing.T) {
 	n := NewPushNotifier(lister, transport)
 
 	msg := Message{Kind: KindInterviewPrep, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
-	if err := n.Send(context.Background(), "push", "42", msg); err != nil {
+	if err := n.Send(context.Background(), "push", "42", msg.Kind, []Message{msg}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -102,7 +102,7 @@ func TestPushNotifier_JobClosed_RendersTitleBodyAndSlug(t *testing.T) {
 	n := NewPushNotifier(lister, transport)
 
 	msg := Message{Kind: KindJobClosed, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
-	if err := n.Send(context.Background(), "push", "42", msg); err != nil {
+	if err := n.Send(context.Background(), "push", "42", msg.Kind, []Message{msg}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,7 +130,7 @@ func TestPushNotifier_FansOutToEveryDevice(t *testing.T) {
 	n := NewPushNotifier(lister, transport)
 
 	msg := Message{Kind: KindJobClosed, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
-	if err := n.Send(context.Background(), "push", "42", msg); err != nil {
+	if err := n.Send(context.Background(), "push", "42", msg.Kind, []Message{msg}); err != nil {
 		t.Fatal(err)
 	}
 	if len(transport.sent) != 2 {
@@ -143,7 +143,7 @@ func TestPushNotifier_InvalidDestReturnsError(t *testing.T) {
 	transport := &fakePushTransport{}
 	n := NewPushNotifier(lister, transport)
 
-	err := n.Send(context.Background(), "push", "not-a-user-id", Message{Kind: KindJobClosed})
+	err := n.Send(context.Background(), "push", "not-a-user-id", KindJobClosed, []Message{{Kind: KindJobClosed}})
 	if err == nil {
 		t.Fatal("want error for a non-numeric dest")
 	}
@@ -154,7 +154,7 @@ func TestPushNotifier_NoDeviceReturnsError(t *testing.T) {
 	transport := &fakePushTransport{}
 	n := NewPushNotifier(lister, transport)
 
-	err := n.Send(context.Background(), "push", "42", Message{Kind: KindJobClosed})
+	err := n.Send(context.Background(), "push", "42", KindJobClosed, []Message{{Kind: KindJobClosed}})
 	if err == nil {
 		t.Fatal("want error when the user has no registered device")
 	}

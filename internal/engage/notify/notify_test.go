@@ -964,7 +964,7 @@ func TestDeliver_DigestRecordsEveryMatchedJob(t *testing.T) {
 		t.Errorf("Listed = %d, want %d", len(d.Listed()), ListLimit)
 	}
 
-	var recorded []digestJobSnapshot
+	var recorded []SnapshotJob
 	if err := json.Unmarshal(store.recordedNotifications[0].Jobs, &recorded); err != nil {
 		t.Fatalf("snapshot did not unmarshal: %v", err)
 	}

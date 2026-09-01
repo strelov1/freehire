@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -81,28 +82,12 @@ func renderReminder(m ReminderMessage) (title, body string) {
 	return "⏰ Reminder", fmt.Sprintf("You saved %s at %s — still interested?", m.JobTitle, m.Company)
 }
 
-// jobSnapshot is the {title, company, slug} shape user_notifications.jobs holds.
-// It matches internal/engage/notify's, because one page renders both.
-type jobSnapshot struct {
-	Title   string `json:"title"`
-	Company string `json:"company"`
-	Slug    string `json:"slug"`
-}
-
-// jobsSnapshot is the job list a multi-job batch records for its notification's
-// own page. It applies no bound of its own — the batch was capped at
-// Config.SnapshotCap before it was ever sent, so what was delivered and what the
-// record holds cannot disagree.
+// jobsSnapshot is the job list a multi-job batch records for its notification's own
+// page, in the shape notify owns because one page renders every engine's rows.
 func jobsSnapshot(ms []ReminderMessage) json.RawMessage {
-	jobs := make([]jobSnapshot, len(ms))
+	jobs := make([]notify.SnapshotJob, len(ms))
 	for i, m := range ms {
-		jobs[i] = jobSnapshot{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
+		jobs[i] = notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
 	}
-	raw, err := json.Marshal(jobs)
-	if err != nil {
-		// Every field is a plain string; Marshal only fails on unsupported types
-		// (channels, funcs, cyclic refs), none of which jobSnapshot has.
-		panic(fmt.Sprintf("reminder: marshal jobs snapshot: %v", err))
-	}
-	return raw
+	return notify.JobsSnapshot(jobs)
 }

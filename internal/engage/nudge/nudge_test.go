@@ -3,6 +3,7 @@ package nudge
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,6 +28,9 @@ type fakeStore struct {
 
 	due []int64
 	row db.GetNudgeForDeliveryRow
+	// rows serves a distinct delivery context per claimed id, for the tests that
+	// put several nudges in one pass. When nil every id gets `row`.
+	rows map[int64]db.GetNudgeForDeliveryRow
 
 	delivered []int64
 	cancelled []int64
@@ -62,7 +66,10 @@ func (s *fakeStore) TrackJob(_ context.Context, arg db.TrackJobParams) (db.Track
 func (s *fakeStore) ClaimDueNudges(context.Context, db.ClaimDueNudgesParams) ([]int64, error) {
 	return s.due, nil
 }
-func (s *fakeStore) GetNudgeForDelivery(context.Context, int64) (db.GetNudgeForDeliveryRow, error) {
+func (s *fakeStore) GetNudgeForDelivery(_ context.Context, id int64) (db.GetNudgeForDeliveryRow, error) {
+	if s.rows != nil {
+		return s.rows[id], nil
+	}
 	return s.row, nil
 }
 func (s *fakeStore) MarkNudgeDelivered(_ context.Context, id int64) (int64, error) {
@@ -95,13 +102,21 @@ func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificat
 
 type fakeNotifier struct {
 	sent []string // "channel:dest"
-	err  error
+	// groups records the kind and message list of each send, so a test can assert
+	// what a delivery carried and not only that it happened.
+	groups []sentGroup
+	err    error
 	// errByChannel fails only the named channels, so a test can model one channel
 	// dying while another lands — which a blanket err cannot express.
 	errByChannel map[string]error
 }
 
-func (n *fakeNotifier) Send(_ context.Context, channel, dest string, _ Message) error {
+type sentGroup struct {
+	kind string
+	msgs []Message
+}
+
+func (n *fakeNotifier) Send(_ context.Context, channel, dest, kind string, ms []Message) error {
 	if err, ok := n.errByChannel[channel]; ok {
 		return err
 	}
@@ -109,6 +124,7 @@ func (n *fakeNotifier) Send(_ context.Context, channel, dest string, _ Message) 
 		return n.err
 	}
 	n.sent = append(n.sent, channel+":"+dest)
+	n.groups = append(n.groups, sentGroup{kind: kind, msgs: ms})
 	return nil
 }
 
@@ -283,6 +299,123 @@ func deliveryRow(kind string, stage string, daysSilent int, notificationsEnabled
 		row.TelegramChatID = pgtype.Int8{Int64: *chatID, Valid: true}
 	}
 	return row
+}
+
+// groupRow is deliveryRow's multi-nudge variant: a deliverable row of `kind` for
+// `userID`, naming its own job, so a test can put several nudges in one pass.
+func groupRow(id, userID int64, kind string) db.GetNudgeForDeliveryRow {
+	row := deliveryRow(kind, stageFor(kind), 25, true, true, []string{"email"}, nil, "a@b.c")
+	row.ID, row.UserID, row.JobID = id, userID, id
+	row.Title = "Job " + strconv.FormatInt(id, 10)
+	row.PublicSlug = "job-" + strconv.FormatInt(id, 10)
+	return row
+}
+
+// stageFor is the stage each kind's actionable() check needs to pass.
+func stageFor(kind string) string {
+	if kind == KindInterviewPrep {
+		return "interview"
+	}
+	return "applied"
+}
+
+// Five silent applications used to be five emails in one 30-minute pass.
+func TestDeliver_GroupsOneAccountsSameKindNudgesIntoOneSend(t *testing.T) {
+	store := &fakeStore{
+		due: []int64{1, 2, 3, 4},
+		rows: map[int64]db.GetNudgeForDeliveryRow{
+			1: groupRow(1, 42, KindFollowUp),
+			2: groupRow(2, 42, KindFollowUp),
+			3: groupRow(3, 42, KindFollowUp),
+			4: groupRow(4, 42, KindFollowUp),
+		},
+	}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.groups) != 1 {
+		t.Fatalf("groups = %v, want one message for one account and one kind", notifier.groups)
+	}
+	if got := notifier.groups[0]; got.kind != KindFollowUp || len(got.msgs) != 4 {
+		t.Errorf("group = (%q, %d jobs), want (follow_up, 4)", got.kind, len(got.msgs))
+	}
+	if len(store.delivered) != 4 || stats.Delivered != 4 {
+		t.Errorf("delivered = %v (stats %d), want all four stamped", store.delivered, stats.Delivered)
+	}
+}
+
+// The kinds are different conversations and must not share a message.
+func TestDeliver_DifferentKindsStayInSeparateSends(t *testing.T) {
+	store := &fakeStore{
+		due: []int64{1, 2, 3},
+		rows: map[int64]db.GetNudgeForDeliveryRow{
+			1: groupRow(1, 42, KindFollowUp),
+			2: groupRow(2, 42, KindFollowUp),
+			3: groupRow(3, 42, KindInterviewPrep),
+		},
+	}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.groups) != 2 {
+		t.Fatalf("groups = %v, want one message per kind", notifier.groups)
+	}
+	byKind := map[string]int{}
+	for _, g := range notifier.groups {
+		byKind[g.kind] = len(g.msgs)
+	}
+	if byKind[KindFollowUp] != 2 || byKind[KindInterviewPrep] != 1 {
+		t.Errorf("group sizes = %v, want follow_up=2 interview_prep=1", byKind)
+	}
+}
+
+// Each group records its own notification, keeping the per-kind vocabulary the
+// notification center already filters on.
+func TestDeliver_EachGroupRecordsItsOwnKindedNotification(t *testing.T) {
+	store := &fakeStore{
+		due: []int64{1, 2, 3},
+		rows: map[int64]db.GetNudgeForDeliveryRow{
+			1: groupRow(1, 42, KindFollowUp),
+			2: groupRow(2, 42, KindFollowUp),
+			3: groupRow(3, 42, KindInterviewPrep),
+		},
+	}
+	r := newRunner(store, &fakeNotifier{})
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedNotifications) != 2 {
+		t.Fatalf("recorded = %v, want one notification per group", store.recordedNotifications)
+	}
+	byKind := map[string]db.RecordNotificationParams{}
+	for _, rec := range store.recordedNotifications {
+		byKind[rec.Kind] = rec
+	}
+	multi, ok := byKind["nudge_"+KindFollowUp]
+	if !ok {
+		t.Fatalf("kinds recorded = %v, want a nudge_follow_up row", byKind)
+	}
+	if multi.PublicSlug.Valid {
+		t.Errorf("PublicSlug = %+v, want unset for a two-job group", multi.PublicSlug)
+	}
+	if len(multi.Jobs) == 0 {
+		t.Errorf("Jobs is empty, want the group's job list")
+	}
+	single, ok := byKind["nudge_"+KindInterviewPrep]
+	if !ok {
+		t.Fatalf("kinds recorded = %v, want a nudge_interview_prep row", byKind)
+	}
+	if !single.PublicSlug.Valid || single.PublicSlug.String != "job-3" {
+		t.Errorf("PublicSlug = %+v, want the single job's slug", single.PublicSlug)
+	}
 }
 
 func TestDeliver_FollowUp_DeliversWhenStillSilent(t *testing.T) {
