@@ -1849,14 +1849,16 @@ export function createApi(
     return requestData<CoverLetterView>(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter`);
   }
 
-  /** Write the cover letter and replace any draft already stored for this vacancy. Runs the
-   *  three-stage chain, so it spends one cover-letter allowance and can refuse with 402. */
-  async function draftCoverLetter(id: string, band?: 'short' | 'standard'): Promise<CoverLetterView> {
-    const q = band ? `?band=${band}` : '';
-    return requestData<CoverLetterView>(
-      `/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter${q}`,
-      jsonBody('POST', {}),
-    );
+  /** Open the streaming draft. Returns the raw Response so the caller can read the body as it
+   *  arrives AND see the status: a 402 for an exhausted allowance, a 409 for a vacancy with no
+   *  fit analysis. EventSource would hide both behind a bare connection error, and could not
+   *  POST — which this must be, because drafting spends an allowance and writes storage. */
+  async function openCoverLetterStream(id: string, band: 'short' | 'standard'): Promise<Response> {
+    return fetch(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter/stream?band=${band}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { accept: 'text/event-stream' },
+    });
   }
 
   /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.
@@ -2279,7 +2281,7 @@ export function createApi(
     cvPdfUrl,
     listCvRevisions,
     getCoverLetter,
-    draftCoverLetter,
+    openCoverLetterStream,
     undoCvRevision,
     undoCvRevisionRun,
     resetCvFromResume,

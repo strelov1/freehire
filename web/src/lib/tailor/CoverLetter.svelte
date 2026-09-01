@@ -52,47 +52,87 @@
     }
   }
 
-  // Drafting runs over SSE, not a plain POST. The chain is three model calls in series and
-  // takes minutes; a proxy closes a silent response at sixty seconds, which is what shipped
-  // first and reached every candidate as a 504 while the server was still working. The
-  // stream's first event arrives before any model call, which is what keeps it open.
-  function draft() {
+  // Drafting streams, because the chain is three model calls in series and takes minutes; a
+  // proxy closes a silent response at sixty seconds, which is what shipped first and reached
+  // every candidate as a 504 while the server was still working.
+  //
+  // Read with fetch rather than EventSource. EventSource can only GET — and drafting spends an
+  // allowance and writes storage, so it must not be a GET — and it hides the status code,
+  // which is how a 402 first reached this tab disguised as a dropped connection.
+  let controller: AbortController | null = null;
+
+  async function draft() {
     // Guarded here as well as by the disabled attribute: a second run would spend a second
     // allowance and race the first one's write.
     if (drafting) return;
     drafting = true;
     error = '';
     stage = 'select';
+    controller = new AbortController();
 
-    const url = `/api/v1/me/cvs/${encodeURIComponent(cvId)}/cover-letter/stream?band=${band}`;
-    const source = new EventSource(url, { withCredentials: true });
-
-    source.addEventListener('stage', (e) => {
-      const d = JSON.parse(e.data) as { stage: string; done: boolean };
-      if (!d.done) stage = d.stage;
-    });
-    source.addEventListener('letter', (e) => {
-      view = JSON.parse(e.data) as CoverLetterView;
-      finish(source);
-    });
-    source.addEventListener('error', (e) => {
-      // Two different failures arrive on this name: our own `error` event, which carries a
-      // sentence, and EventSource's transport failure, which carries no data at all. The
-      // second one cannot say the letter was lost — the chain runs on a detached context and
-      // stores what it finishes — so it says to come back rather than to try again, which
-      // would spend a second allowance on work that may already be done.
-      const data = (e as MessageEvent).data;
-      error = data
-        ? ((JSON.parse(data) as { error: string }).error ?? 'The letter could not be drafted.')
-        : 'The connection dropped while writing. Your letter may still have been saved — reopen this tab to check.';
-      finish(source);
-    });
+    try {
+      const res = await api.openCoverLetterStream(cvId, band);
+      if (!res.ok || !res.body) {
+        // A refusal answers before the stream opens, so its status and sentence are both
+        // readable here: an exhausted allowance says so, rather than looking like a drop.
+        const body = await res.json().catch(() => null);
+        error = body?.error ?? 'The letter could not be drafted.';
+        return;
+      }
+      await readStream(res.body);
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+      // The chain runs detached on the server and stores what it finishes, so a dropped
+      // connection is not a lost letter. Saying "try again" would spend a second allowance on
+      // work that may already be done.
+      error = 'The connection dropped while writing. Your letter may still have been saved — reopen this tab to check.';
+    } finally {
+      drafting = false;
+      stage = '';
+      controller = null;
+    }
   }
 
-  function finish(source: EventSource) {
-    source.close();
-    drafting = false;
-    stage = '';
+  // Parses the SSE framing by hand: named events separated by blank lines. A malformed frame
+  // is skipped rather than thrown, because an uncaught parse here would leave the button
+  // spinning forever on a stream that has already ended.
+  async function readStream(body: ReadableStream<Uint8Array>) {
+    // Decoded by hand rather than through TextDecoderStream: the DOM types disagree about
+    // whether that pair accepts Uint8Array or BufferSource, and a decoder with { stream: true }
+    // does the same job without the cast.
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      // The await-in-loop the linter warns about is the point: the next chunk does not exist
+      // until this one is consumed, so there is nothing to parallelise.
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) handleFrame(frame);
+    }
+  }
+
+  function handleFrame(frame: string) {
+    const name = /^event: (.+)$/m.exec(frame)?.[1];
+    const raw = /^data: (.+)$/m.exec(frame)?.[1];
+    if (!name || !raw) return; // a keepalive comment, or a frame we do not know
+    let data: unknown;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (name === 'stage') {
+      const d = data as { stage: string; done: boolean };
+      if (!d.done) stage = d.stage;
+    } else if (name === 'letter') {
+      view = data as CoverLetterView;
+    } else if (name === 'stream_error') {
+      error = (data as { error: string }).error;
+    }
   }
 
   async function copy() {
@@ -107,6 +147,11 @@
     void cvId;
     void load();
   });
+
+  // Aborts a draft still streaming when the tab unmounts, so the reader does not outlive the
+  // component. The server side is unaffected: the chain runs on a detached context and stores
+  // what it finishes, which is what the candidate's allowance already paid for.
+  $effect(() => () => controller?.abort());
 </script>
 
 <div class="p-4">
@@ -125,7 +170,7 @@
       <button
         type="button"
         disabled={drafting}
-        onclick={draft}
+        onclick={() => void draft()}
         class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
         {#if drafting}

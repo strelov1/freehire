@@ -7,10 +7,13 @@ import (
 	"log"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -27,8 +30,8 @@ const letterStreamTimeout = 6 * time.Minute
 // streams for exactly this reason, and a letter is the same shape of work.
 //
 // Events: `stage` as each step opens and closes, then either `letter` with the finished draft
-// and its resolved evidence, or `error` with a sentence to render. The stream always closes
-// with one or the other, so a reader never has to guess.
+// and its resolved evidence, or `stream_error` with a sentence to render. The stream always
+// closes with one or the other, so a reader never has to guess.
 func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 	drafter := h.letterDrafter()
 	if !drafter.ready() {
@@ -48,14 +51,28 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 	}
 
 	// Everything the writer needs is captured here: the fiber ctx is released the moment this
-	// handler returns, so reading it inside the stream would race a recycled request.
+	// handler returns, so reading it inside the stream would race a recycled request. conn
+	// carries the write deadline sseStream needs; the hub is cloned because the writer
+	// outlives the request that owns its scope.
 	band := coverLetterBand(c)
 	client := h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter))
 	conn := c.Context().Conn()
+	var hub *sentry.Hub
+	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
+		hub = reqHub.Clone()
+	}
 
 	sseHeaders(c)
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		stream := newSSEStream(w, conn, sseWriteTimeout)
+
+		// Stage events fire only at the boundaries between model calls, so between one stage
+		// closing and the next opening the socket is silent for a whole call — measured at up
+		// to the client's 90s per-call timeout, against a 60s proxy. The first byte alone does
+		// not save the stream; the heartbeat is what carries it across each silent stage. Both
+		// SSE endpoints share the interval for that reason.
+		stopHeartbeat := stream.keepalive(sseKeepalive)
+		defer stopHeartbeat()
 
 		// A background context on purpose, the same rule the fit stream states: the request
 		// ctx is gone by now, and a client that navigates away must not abort a chain their
@@ -64,13 +81,23 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(context.Background(), letterStreamTimeout)
 		defer cancel()
 
-		// The chain's own first emit opens the stage before it makes any network call, so it
-		// IS the early first byte this endpoint exists for — nothing needs to be written ahead
-		// of it, and writing one would send `select` twice.
+		// Released from a defer so a panic anywhere in the chain still gives the allowance
+		// back. Disarmed on success — a stored letter is what the candidate paid for.
+		release := true
+		defer func() {
+			if release {
+				releaseLetterCharge(h.plans, userID, charge)
+			}
+		}()
+
+		// The chain's own first emit opens a stage before it makes any network call, so it IS
+		// the early first byte this endpoint exists for — nothing needs to be written ahead of
+		// it, and writing one would send `select` twice.
 		letter, err := drafter.draftStream(ctx, client, userID, jobID, band, func(stage string, done bool) {
 			stream.event("stage", letterStageEvent{Stage: stage, Done: done})
 		})
 		if err == nil && letter != nil {
+			release = false
 			stream.event("letter", coverLetterResponse{
 				Present: true,
 				Letter:  letter,
@@ -80,13 +107,13 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 			return
 		}
 
-		// Every failing path gives the charge back, so it is given back once here rather than
-		// in each branch — a candidate must never pay for a letter they did not get.
-		releaseLetterCharge(h.plans, userID, charge)
 		if err != nil && !errors.Is(err, coverletter.ErrNoPublishableEvidence) {
 			log.Printf("coverletter: streaming for user %d job %d: %v", userID, jobID, err)
+			// RenderError never sees a fault raised inside the writer, so without this the
+			// only trace of a streamed failure is that log line.
+			reportStreamFault(hub, err)
 		}
-		stream.event("error", letterErrorEvent{Error: letterFailureMessage(err)})
+		stream.event("stream_error", letterErrorEvent{Error: letterFailureMessage(err)})
 	}))
 	return nil
 }
@@ -104,9 +131,13 @@ func letterFailureMessage(err error) string {
 		return "drafting is unavailable on this deployment"
 	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
 		return "nothing in your experience bank is yours to cite yet: confirm an achievement first"
+	case errors.Is(err, fitanalysis.ErrNoAnalysis):
+		return "run the fit analysis first"
 	default:
-		_, msg, _ := classify(err)
-		return msg
+		// Deliberately NOT classify()'s message: for anything it does not recognise that is
+		// the bare "internal server error", which tells a candidate staring at a letter
+		// nothing at all. The status stays the mapper's; the sentence is this feature's.
+		return "the letter could not be drafted"
 	}
 }
 
@@ -119,6 +150,10 @@ type letterStageEvent struct {
 // letterErrorEvent carries a sentence the surface renders. It rides inside a 200 because the
 // status was written before the first model call — which is why the stream must always close
 // with either this or a letter, and never with silence.
+//
+// The event is named `stream_error`, never `error`: `error` is EventSource's own reserved
+// connection-error event, and a server event sharing that name leaves the client sniffing for
+// a data payload to tell a dropped socket from a refusal.
 type letterErrorEvent struct {
 	Error string `json:"error"`
 }
