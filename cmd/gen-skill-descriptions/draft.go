@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -58,23 +59,65 @@ func draft(ctx context.Context, d drafter, s skill) (string, error) {
 		fmt.Fprintf(&b, "spellings that resolve to it: %s\n", strings.Join(s.aliases, ", "))
 	}
 
-	raw, err := d.GenerateJSON(ctx, draftSystem, b.String())
+	// A schema when one can be built, and the call still goes out without it if not: the
+	// schema forecloses the shape drift wave 1 met, and failing the whole wave because a
+	// schema could not be derived would be a worse trade than sending the prompt bare.
+	var opts []llm.GenOption
+	if schema, err := requestSchema(); err == nil {
+		opts = append(opts, llm.WithSchema(schemaName, schema))
+	} else {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	raw, err := d.GenerateJSON(ctx, draftSystem, b.String(), opts...)
 	if err != nil {
 		return "", fmt.Errorf("drafting %s: %w", s.canonical, err)
 	}
 
-	var answer struct {
-		Description string `json:"description"`
-	}
-	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
-		return "", fmt.Errorf("drafting %s: decoding %q: %w", s.canonical, raw, err)
+	description, err := describedIn(raw)
+	if err != nil {
+		return "", fmt.Errorf("drafting %s: %w", s.canonical, err)
 	}
 	// The dictionary is one row per skill, so a wrapped answer would break the file it
 	// is destined for. Collapsing beats rejecting: a model putting a sentence on two
 	// lines is not a reason to lose the sentence.
-	line := strings.Join(strings.Fields(answer.Description), " ")
+	line := strings.Join(strings.Fields(description), " ")
 	if line == "" {
 		return "", fmt.Errorf("drafting %s: model returned no description in %q", s.canonical, raw)
 	}
 	return line, nil
+}
+
+// describedIn pulls the description out of the model's answer, tolerating one layer of
+// gateway envelope.
+//
+// The wave-1 run met exactly that: a gateway returned
+// `{"answer": "{\"description\": \"…\"}"}` — the model's object, correct in itself,
+// handed back as a STRING under the gateway's own key. WithSchema is the first line
+// against it, and internal/platform/llm/AGENTS.md is explicit that it is not a proof:
+// a gateway that stops honouring a schema still answers 200.
+//
+// One layer, not any number. A wrapper around a wrapper is a shape this has never seen,
+// and unwrapping until something parses would turn an unknown response into a plausible
+// sentence — the operator should get an error they can read instead.
+func describedIn(raw string) (string, error) {
+	var answer answerShape
+	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
+		return "", fmt.Errorf("decoding %q: %w", raw, err)
+	}
+	if answer.Description != "" {
+		return answer.Description, nil
+	}
+
+	// No description at the top level: the object may be one string-valued field deep.
+	var envelope map[string]string
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil || len(envelope) != 1 {
+		return "", nil // not an envelope shape; the caller reports the empty answer
+	}
+	for _, inner := range envelope {
+		if err := json.Unmarshal([]byte(inner), &answer); err != nil {
+			return "", nil
+		}
+	}
+	return answer.Description, nil
 }

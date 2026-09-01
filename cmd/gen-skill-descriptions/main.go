@@ -44,6 +44,9 @@ func main() {
 	}
 }
 
+// draftTimeout bounds one model call. See the note where it is applied.
+const draftTimeout = 4 * time.Minute
+
 func run() error {
 	limit := flag.Int("limit", 100, "how many skills to draft; 0 for every undescribed one")
 	concurrency := flag.Int("concurrency", 4, "how many model calls to keep in flight")
@@ -59,6 +62,11 @@ func run() error {
 		return fmt.Errorf("llm client: %w", err)
 	}
 	defer flush()
+	// The shared 90s default sits inside this model's latency spread: the wave-1 run lost
+	// three of a hundred drafts to it, each one a paid call thrown away. Nothing is
+	// waiting on this worker — it is run by hand and its output is read tomorrow — so it
+	// can afford to wait where a request path could not.
+	client = client.WithTimeout(draftTimeout)
 
 	ctx := context.Background()
 	demand, err := fetchSkillDemand(ctx, *apiURL)

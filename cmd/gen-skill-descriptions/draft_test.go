@@ -50,6 +50,33 @@ func TestDraftCollapsesAnAnswerIntoOneRow(t *testing.T) {
 	}
 }
 
+// Production hands this back: the gateway wraps the model's JSON in a string under its
+// own key, so the object arrives one level deeper than it was asked for. A schema is the
+// first line against that and not a proof — AGENTS.md is explicit that a gateway which
+// stops honouring one still answers 200 — so the decoder unwraps it too.
+func TestDraftUnwrapsADoubleEncodedAnswer(t *testing.T) {
+	d := &fakeDrafter{reply: `{"answer":"{\"description\": \"A container orchestrator.\"}"}`}
+
+	got, err := draft(context.Background(), d, skill{canonical: "kubernetes", label: "Kubernetes"})
+	if err != nil {
+		t.Fatalf("draft: %v", err)
+	}
+	if got != "A container orchestrator." {
+		t.Errorf("draft = %q, want the description from inside the envelope", got)
+	}
+}
+
+// One level, not any number. A wrapper around a wrapper is a gateway doing something
+// this has not seen, and guessing deeper would turn an unknown shape into a plausible
+// sentence rather than an error the operator can read.
+func TestDraftDoesNotChaseNestedEnvelopesForever(t *testing.T) {
+	d := &fakeDrafter{reply: `{"a":"{\"b\": \"{\\\"description\\\": \\\"Too deep.\\\"}\"}"}`}
+
+	if _, err := draft(context.Background(), d, skill{canonical: "kubernetes", label: "Kubernetes"}); err == nil {
+		t.Error("draft = nil error, want one")
+	}
+}
+
 func TestDraftRejectsAnUnusableAnswer(t *testing.T) {
 	tests := []struct {
 		name  string
