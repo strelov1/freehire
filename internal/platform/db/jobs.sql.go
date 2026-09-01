@@ -474,9 +474,14 @@ func (q *Queries) CompaniesWithAggregatorPostings(ctx context.Context, aggregato
 const companiesWithFuzzyDedupCandidates = `-- name: CompaniesWithFuzzyDedupCandidates :many
 SELECT company_slug
 FROM jobs
-WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
+WHERE closed_at IS NULL AND company_slug <> ''
+  AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
 GROUP BY company_slug
 HAVING COUNT(*) > 1
+UNION
+SELECT DISTINCT company_slug
+FROM jobs
+WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of_fuzzy IS NOT NULL
 `
 
 // Company slugs worth running the fuzzy-description pass over: a company that still has more
@@ -487,6 +492,14 @@ HAVING COUNT(*) > 1
 // fall into 20 126 same-title buckets spanning up to four different employers.
 // The pass then processes these ONE COMPANY AT A TIME, like the other duplicate passes, so it
 // never holds a lock wide enough to stall a concurrent ingest crawl.
+//
+// The predicate names the OWNED columns of the exact passes, not the derived duplicate_of. Those
+// are not the same set: duplicate_of also carries this pass's OWN marker, so filtering it made
+// the pass blind to its own output and every marker permanent. And the worklist is a UNION,
+// because a company can need a RELEASE without needing a collapse — its second candidate may
+// have closed since. A collapse-only worklist never visits it again, which is how 42 633 open
+// duplicates (prod, 2026-09-01) came to sit behind a closed owner with no pass that would ever
+// let them go. This mirrors CompaniesWithRoleClusters, which unions the same two reasons.
 func (q *Queries) CompaniesWithFuzzyDedupCandidates(ctx context.Context) ([]string, error) {
 	rows, err := q.db.Query(ctx, companiesWithFuzzyDedupCandidates)
 	if err != nil {
@@ -1054,7 +1067,8 @@ func (q *Queries) FindOpenJobByURL(ctx context.Context, url string) (string, err
 const fuzzyDedupCandidateTitlesForCompany = `-- name: FuzzyDedupCandidateTitlesForCompany :many
 SELECT id, title
 FROM jobs
-WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL
+WHERE company_slug = $1 AND closed_at IS NULL
+  AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
 ORDER BY id
 `
 
@@ -1069,6 +1083,11 @@ type FuzzyDedupCandidateTitlesForCompanyRow struct {
 // survive the size filter via GetJobDescriptionsByIDs. Normalizing here in SQL instead would
 // duplicate that logic in a second language and let the two drift apart; titles are cheap to
 // ship, descriptions are not.
+//
+// "Canonical" here means NOT CLAIMED BY AN EXACT PASS, which is why the predicate names their
+// two owned columns rather than the derived duplicate_of. A row carrying this pass's OWN marker
+// is offered again on purpose: it is the only way the pass can ever re-decide it, and without
+// that a marker survives its canon closing, the descriptions diverging, and every later run.
 func (q *Queries) FuzzyDedupCandidateTitlesForCompany(ctx context.Context, company string) ([]FuzzyDedupCandidateTitlesForCompanyRow, error) {
 	rows, err := q.db.Query(ctx, fuzzyDedupCandidateTitlesForCompany, company)
 	if err != nil {
@@ -2337,26 +2356,36 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 }
 
 const markFuzzyDuplicatesForCompany = `-- name: MarkFuzzyDuplicatesForCompany :one
-WITH assign AS (
-    SELECT unnest($1::bigint[]) AS id,
-           unnest($2::bigint[]) AS canon_id
+WITH candidate AS (
+    SELECT unnest($1::bigint[]) AS id
+),
+assign AS (
+    SELECT unnest($2::bigint[]) AS id,
+           unnest($3::bigint[]) AS canon_id
+),
+target AS (
+    -- LEFT JOIN is what turns "considered but not clustered" into NULL. Mirrors the CASE in
+    -- RecomputeRoleDuplicatesForCompanies, which is how the role pass releases its own.
+    SELECT c.id, a.canon_id AS new_dup
+    FROM candidate c
+    LEFT JOIN assign a ON a.id = c.id
 ),
 before AS (
     -- Every CTE of one statement reads the same snapshot, so this is the derived marker as it
     -- stood BEFORE the update below — which is what makes the status transition readable
     -- without a second statement and the race between them.
     SELECT j.id, j.duplicate_of AS was_duplicate_of
-    FROM jobs j JOIN assign a ON a.id = j.id
+    FROM jobs j JOIN target t ON t.id = j.id
 ),
 updated AS (
     UPDATE jobs j
-    SET duplicate_of_fuzzy = m.canon_id,
+    SET duplicate_of_fuzzy = m.new_dup,
         updated_at         = now()
-    FROM assign m
+    FROM target m
     WHERE j.id = m.id
-      AND j.company_slug = $3
+      AND j.company_slug = $4
       AND j.closed_at IS NULL
-      AND j.duplicate_of_fuzzy IS DISTINCT FROM m.canon_id
+      AND j.duplicate_of_fuzzy IS DISTINCT FROM m.new_dup
     RETURNING j.id,
               j.duplicate_of AS now_duplicate_of,
               COALESCE(j.posted_at, j.created_at) AS eff_posted_at
@@ -2379,18 +2408,39 @@ SELECT count(*)::bigint FROM flipped
 `
 
 type MarkFuzzyDuplicatesForCompanyParams struct {
-	Ids     []int64 `json:"ids"`
-	Canons  []int64 `json:"canons"`
-	Company string  `json:"company"`
+	Candidates []int64 `json:"candidates"`
+	Ids        []int64 `json:"ids"`
+	Canons     []int64 `json:"canons"`
+	Company    string  `json:"company"`
 }
 
-// Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
-// one company's whole assignment lands in a single statement rather than a round trip per row.
-// Scoped to the company and to still-canonical open rows, so a row the exact pass claimed in the
-// meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
-// recompute reverses everything here by recomputing duplicate_of from scratch.
+// Write one company's whole fuzzy verdict in a single statement rather than a round trip per
+// row: `candidates` is every row the pass CONSIDERED, and (ids, canons) are the ones it
+// clustered. A candidate with no assignment gets NULL — that is the release, and it is the only
+// mechanism there is.
+//
+// It has to be, and the comment this replaces said otherwise for a year. Migrations 0114/0115
+// moved the marker into duplicate_of_fuzzy and left duplicate_of to a trigger deriving it from
+// the three owned columns, so the role recompute — which writes duplicate_of_role — can no
+// longer reach this one, and the COALESCE keeps surfacing it. Nothing else releases a fuzzy
+// marker. Measured on prod 2026-09-01: 42 633 open duplicates behind a closed owner, invisible
+// in search, with no pass that would ever let them go.
+//
+// `candidates` is deliberately NOT "every open row of the company". It is what the pass looked
+// at, which excludes the buckets it refuses to judge (over the size cap). A cap is a cost
+// heuristic, not a verdict, so releasing what it skipped would silently un-collapse the largest
+// groups in the catalogue. A row in a bucket too SMALL to cluster is a different thing — the
+// pass did judge it, and the answer was "no cluster".
+//
+// Scoped to the company and to open rows, so a row the exact pass claimed in the meantime is
+// left alone. The IS DISTINCT FROM guard makes a re-run free.
 func (q *Queries) MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error) {
-	row := q.db.QueryRow(ctx, markFuzzyDuplicatesForCompany, arg.Ids, arg.Canons, arg.Company)
+	row := q.db.QueryRow(ctx, markFuzzyDuplicatesForCompany,
+		arg.Candidates,
+		arg.Ids,
+		arg.Canons,
+		arg.Company,
+	)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err

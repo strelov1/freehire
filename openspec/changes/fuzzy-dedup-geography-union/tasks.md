@@ -71,24 +71,31 @@
 
 ## 4. Releasing stale fuzzy markers
 
-- [ ] 4.1 Change `CompaniesWithFuzzyDedupCandidates` and `FuzzyDedupCandidateTitlesForCompany` from
+- [x] 4.1 Change `CompaniesWithFuzzyDedupCandidates` and `FuzzyDedupCandidateTitlesForCompany` from
       `duplicate_of IS NULL` to "not claimed by an exact pass"
       (`duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL`), so already-fuzzy-marked
       rows are re-decided.
-- [ ] 4.2 Teach `MarkFuzzyDuplicatesForCompany` to clear: take the full candidate id set alongside
+- [x] 4.2 Teach `MarkFuzzyDuplicatesForCompany` to clear: take the full candidate id set alongside
       the assignment and write NULL for a candidate absent from the assignment, mirroring
       `RecomputeRoleDuplicatesForCompanies`'s `CASE`. Keep the `IS DISTINCT FROM` guard and the
       existing `search_outbox` / `search_delete_outbox` transition bookkeeping.
-- [ ] 4.3 Pass the candidate set through `collapseFuzzyDuplicatesForCompany` in
+- [x] 4.3 Pass the candidate set through `collapseFuzzyDuplicatesForCompany` in
       `cmd/reindex/fuzzy.go`.
-- [ ] 4.4 Invert `TestFuzzyDedup_CandidateTitlesSkipAlreadyMarkedRows` in
+- [x] 4.4 Invert `TestFuzzyDedup_CandidateTitlesSkipAlreadyMarkedRows` in
       `internal/platform/db/fuzzy_dedup_integration_test.go` — an already-marked row IS a
-      candidate now — and rename it to say so.
-- [ ] 4.5 Integration tests for release: a marker clears when its canon closes and the row
+      candidate now — and rename it to say so. CORRECTED: nothing to invert. That test marks
+      `duplicate_of_role`, so it always described an EXACT-pass claim, which the new predicate
+      still excludes; it was green before and after. The task assumed a blocker that was not
+      there. Renamed to `..._SkipRowsClaimedByAnExactPass` to say what it actually pins, and a
+      NEW test (`..._OfferRowsThisPassMarked`) covers the case that really changed.
+- [x] 4.5 Integration tests for release: a marker clears when its canon closes and the row
       re-enters `search_outbox`; a marker clears when the descriptions diverge below the
       threshold; a second run with no changes writes nothing (idempotence).
-- [ ] 4.6 Rewrite the two false comments in `jobs.sql` (near lines 1630 and 1735) that claim the
-      standard recompute reverses the fuzzy pass.
+- [x] 4.6 Rewrite the two false comments in `jobs.sql` (near lines 1630 and 1735) that claim the
+      standard recompute reverses the fuzzy pass. CORRECTED: only ONE was false — the marker
+      query's, now rewritten. The backfill comment checks out: the role recompute's `CASE` can
+      write NULL, which frees the row, and the fuzzy pass re-decides it later in the same
+      `refreshDuplicateMarkers` call. Verified rather than assumed, and left alone.
 
 ## 5. Verification and rollout
 

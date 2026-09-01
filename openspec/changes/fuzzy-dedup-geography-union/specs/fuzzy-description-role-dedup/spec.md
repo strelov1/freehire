@@ -20,6 +20,17 @@ A row whose marker is cleared SHALL re-enter the live search index through the s
 duplicate→canonical transition bookkeeping that already re-queues a released role or
 aggregator duplicate.
 
+Release SHALL apply only to rows the pass actually REACHED A VERDICT ON. A row it declines to
+judge keeps whatever marker it holds. The two cases must not be confused:
+
+- A bucket the pass skips on COST — one past its size cap — is not judged. The cap exists
+  because a handful of generic-title-by-location buckets carry most of the pairwise work; it is
+  a compute decision, and releasing its members would un-collapse the largest groups in the
+  catalogue on that basis.
+- A row that cannot cluster — alone in its bucket, or with a title that normalizes to nothing —
+  IS judged, and the verdict is "no cluster". This is the case that frees a marker after its
+  canon closes, because the survivor is then alone in its bucket.
+
 Running after the exact pass remains a cost optimization and a merge-quality rule: it keeps
 the fuzzy pass off rows already claimed deterministically. It is no longer what makes the
 end state correct.
@@ -52,6 +63,13 @@ end state correct.
 - **WHEN** a fuzzy-marked posting's description is rewritten so its similarity to its canon
   falls below the threshold, and the fuzzy pass runs again
 - **THEN** the posting's `duplicate_of_fuzzy` is cleared
+
+#### Scenario: An oversized bucket keeps its markers
+
+- **WHEN** a company+title bucket exceeds the pass's size cap, so the pass loads no descriptions
+  for it
+- **THEN** the markers its members carry are left untouched, rather than released as if the pass
+  had found no cluster
 
 #### Scenario: An already-marked row is still considered
 

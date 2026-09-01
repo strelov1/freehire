@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/job/jobhash"
@@ -102,48 +103,70 @@ func TestClusterBucket_SingletonIsNoop(t *testing.T) {
 // Bucketing reuses jobhash.RoleKey, the same normalization the rest of the codebase groups roles
 // by, so a city suffix or a parenthesised qualifier lands in the bucket it belongs to.
 func TestBucketByRole_GroupsOnNormalizedTitle(t *testing.T) {
-	got := bucketByRole([]db.FuzzyDedupCandidateTitlesForCompanyRow{
+	judged, comparable := bucketByRole([]db.FuzzyDedupCandidateTitlesForCompanyRow{
 		{ID: 1, Title: "Senior Fullstack Engineer"},
 		{ID: 2, Title: "senior fullstack engineer - Kraków"},
 		{ID: 3, Title: "Data Specialist"},
 	})
 
-	// One bucket survives: the two fullstack rows. "Data Specialist" is a singleton with nothing
-	// to compare against, so it is dropped by the same filter that drops oversized buckets.
-	if len(got) != 1 {
-		t.Fatalf("got %d buckets, want 1: %v", len(got), got)
+	// One bucket is worth comparing: the two fullstack rows.
+	if len(comparable) != 1 {
+		t.Fatalf("got %d comparable buckets, want 1: %v", len(comparable), comparable)
 	}
-	for key, ids := range got {
+	for key, ids := range comparable {
 		if !reflect.DeepEqual(ids, []int64{1, 2}) {
 			t.Errorf("bucket %q = %v, want [1 2] (the city suffix normalizes onto the base role)", key, ids)
 		}
 	}
+
+	// All three are JUDGED. "Data Specialist" has nobody to compare against, and that is a
+	// verdict — "no cluster" — not a refusal: it is what releases a marker whose canon closed.
+	if got := sortedIDs(judged); !reflect.DeepEqual(got, []int64{1, 2, 3}) {
+		t.Errorf("judged = %v, want [1 2 3] — a singleton is decided, not skipped", got)
+	}
 }
 
-// Only buckets worth comparing survive: a singleton has nothing to merge with, and a bucket past
-// the cap is generic-title-by-location, which must not collapse and would cost 92% of the run.
-func TestBucketByRole_DropsSingletonsAndOversizedBuckets(t *testing.T) {
+// The two ways a row leaves the comparison, which must NOT be confused: a singleton is judged
+// (nothing to merge with), while a bucket past the cap is skipped on cost — it is
+// generic-title-by-location, which must not collapse and would cost 92% of the run. Releasing
+// the latter would un-collapse the largest groups in the catalogue over a compute decision.
+func TestBucketByRole_JudgesSingletonsButRefusesOversizedBuckets(t *testing.T) {
 	rows := []db.FuzzyDedupCandidateTitlesForCompanyRow{{ID: 1, Title: "Solo Role"}}
 	for i := 0; i < fuzzyMaxBucket+1; i++ {
 		rows = append(rows, db.FuzzyDedupCandidateTitlesForCompanyRow{ID: int64(100 + i), Title: "Customer Service Associate"})
 	}
 
-	got := bucketByRole(rows)
+	judged, comparable := bucketByRole(rows)
 
-	if len(got) != 0 {
-		t.Errorf("got %d buckets, want 0 (singleton dropped, oversized bucket skipped): %v", len(got), got)
+	if len(comparable) != 0 {
+		t.Errorf("got %d comparable buckets, want 0: %v", len(comparable), comparable)
+	}
+	if got := sortedIDs(judged); !reflect.DeepEqual(got, []int64{1}) {
+		t.Errorf("judged = %v, want only the singleton [1] — the oversized bucket keeps its markers", got)
 	}
 }
 
 // A title that normalizes to nothing is not a bucket key — every blank title would otherwise
-// group together and merge unrelated postings.
+// group together and merge unrelated postings. It is still JUDGED: it cannot cluster with
+// anyone, so a marker it carries must be released rather than left forever.
 func TestBucketByRole_IgnoresTitlesThatNormalizeToNothing(t *testing.T) {
-	got := bucketByRole([]db.FuzzyDedupCandidateTitlesForCompanyRow{
+	judged, comparable := bucketByRole([]db.FuzzyDedupCandidateTitlesForCompanyRow{
 		{ID: 1, Title: "   "},
 		{ID: 2, Title: "!!!"},
 	})
 
-	if len(got) != 0 {
-		t.Errorf("got %v, want no buckets for unnormalizable titles", got)
+	if len(comparable) != 0 {
+		t.Errorf("got %v, want no comparable buckets for unnormalizable titles", comparable)
 	}
+	if got := sortedIDs(judged); !reflect.DeepEqual(got, []int64{1, 2}) {
+		t.Errorf("judged = %v, want [1 2] — unbucketable rows cannot cluster, which is a verdict", got)
+	}
+}
+
+// sortedIDs makes the judged set comparable: it is built by iterating a map, so its order is
+// not stable across runs.
+func sortedIDs(ids []int64) []int64 {
+	out := append([]int64(nil), ids...)
+	slices.Sort(out)
+	return out
 }

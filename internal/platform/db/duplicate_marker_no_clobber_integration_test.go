@@ -25,8 +25,11 @@ func markFuzzy(t *testing.T, q *Queries, company string, id, canon int64) int64 
 	t.Helper()
 	n, err := q.MarkFuzzyDuplicatesForCompany(context.Background(), MarkFuzzyDuplicatesForCompanyParams{
 		Company: company,
-		Ids:     []int64{id},
-		Canons:  []int64{canon},
+		// Candidates is the set the pass CONSIDERED; a candidate with no assignment is
+		// released. Here the one row considered is the one being assigned.
+		Candidates: []int64{id},
+		Ids:        []int64{id},
+		Canons:     []int64{canon},
 	})
 	if err != nil {
 		t.Fatalf("mark fuzzy %d -> %d: %v", id, canon, err)

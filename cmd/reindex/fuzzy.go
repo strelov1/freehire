@@ -54,26 +54,31 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 	if err != nil {
 		return 0, err
 	}
-	buckets := bucketByRole(titles)
-	if len(buckets) == 0 {
+	judged, comparable := bucketByRole(titles)
+	if len(judged) == 0 {
 		return 0, nil
 	}
 
+	// Descriptions are loaded only for the buckets worth COMPARING. The rest of `judged` is
+	// rows that cannot cluster (a bucket of one, a title that normalizes to nothing), and the
+	// verdict on those is "no cluster" without reading a byte of body.
 	var ids []int64
-	for _, bucketIDs := range buckets {
+	for _, bucketIDs := range comparable {
 		ids = append(ids, bucketIDs...)
 	}
-	descriptions, err := q.GetJobDescriptionsByIDs(ctx, ids)
-	if err != nil {
-		return 0, err
-	}
-	signatures := make(map[int64]map[string]struct{}, len(descriptions))
-	for _, row := range descriptions {
-		signatures[row.ID] = jobhash.DescriptionSignature(row.Description)
+	signatures := make(map[int64]map[string]struct{}, len(ids))
+	if len(ids) > 0 {
+		descriptions, err := q.GetJobDescriptionsByIDs(ctx, ids)
+		if err != nil {
+			return 0, err
+		}
+		for _, row := range descriptions {
+			signatures[row.ID] = jobhash.DescriptionSignature(row.Description)
+		}
 	}
 
 	var moveIDs, canons []int64
-	for _, bucketIDs := range buckets {
+	for _, bucketIDs := range comparable {
 		postings := make([]fuzzyPosting, 0, len(bucketIDs))
 		for _, id := range bucketIDs {
 			postings = append(postings, fuzzyPosting{ID: id, Signature: signatures[id]})
@@ -83,13 +88,14 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 			canons = append(canons, canon)
 		}
 	}
-	if len(moveIDs) == 0 {
-		return 0, nil
-	}
+	// Sent even when nothing clustered: `judged` carries the RELEASES. A run that collapses
+	// nothing still has to clear the markers whose clusters have since dissolved, which is the
+	// only thing that ever frees a row this pass hid.
 	return q.MarkFuzzyDuplicatesForCompany(ctx, db.MarkFuzzyDuplicatesForCompanyParams{
-		Ids:     moveIDs,
-		Canons:  canons,
-		Company: company,
+		Candidates: judged,
+		Ids:        moveIDs,
+		Canons:     canons,
+		Company:    company,
 	})
 }
 
@@ -99,29 +105,49 @@ type fuzzyPosting struct {
 	Signature map[string]struct{}
 }
 
-// bucketByRole groups one company's open canonical postings by normalized title, keeping only the
-// buckets worth comparing: more than one member, and no more than fuzzyMaxBucket of them.
+// bucketByRole groups one company's open unclaimed postings by normalized title and splits them
+// into the two sets the marker write needs.
+//
+//   - judged: every row this pass reaches a verdict on. A row here with no assignment is
+//     RELEASED, so the set has to be exactly what the pass is willing to decide.
+//   - comparable: the buckets worth loading descriptions for — more than one member, and no
+//     more than fuzzyMaxBucket of them.
+//
+// The difference between them is the difference between "no cluster" and "not judged", and
+// getting it wrong is destructive in one direction. A bucket OVER the cap is not judged: the cap
+// is a cost heuristic (eleven buckets on prod hold 92% of all pairwise work), so treating its
+// members as unclustered would un-collapse the largest groups in the catalogue on a decision
+// about compute. A bucket UNDER two, or a title that normalizes to nothing, IS judged — such a
+// row cannot cluster with anyone, and saying so is what frees a marker whose canon has closed.
 //
 // The key comes from jobhash.RoleKey, the same normalization the rest of the codebase groups roles
 // by, so a per-city variant lands on its base role here exactly as it does elsewhere. Deriving it
 // in Go rather than in SQL keeps one definition — a second copy in the query would drift.
 //
-// A title that normalizes to nothing yields no key and is dropped, per RoleKey's contract: every
-// blank title would otherwise share one bucket and merge unrelated postings.
-func bucketByRole(rows []db.FuzzyDedupCandidateTitlesForCompanyRow) map[string][]int64 {
+// A title that normalizes to nothing yields no key, per RoleKey's contract: every blank title
+// would otherwise share one bucket and merge unrelated postings.
+func bucketByRole(rows []db.FuzzyDedupCandidateTitlesForCompanyRow) (judged []int64, comparable map[string][]int64) {
 	buckets := make(map[string][]int64)
 	for _, row := range rows {
 		// The company is fixed for the whole call, so it adds nothing to the key here.
-		if key := jobhash.RoleKey("", row.Title); key != "" {
-			buckets[key] = append(buckets[key], row.ID)
+		key := jobhash.RoleKey("", row.Title)
+		if key == "" {
+			judged = append(judged, row.ID)
+			continue
 		}
+		buckets[key] = append(buckets[key], row.ID)
 	}
+	comparable = make(map[string][]int64, len(buckets))
 	for key, ids := range buckets {
-		if len(ids) < 2 || len(ids) > fuzzyMaxBucket {
-			delete(buckets, key)
+		if len(ids) > fuzzyMaxBucket {
+			continue // not judged: skipped on cost, so its members keep whatever marker they hold
+		}
+		judged = append(judged, ids...)
+		if len(ids) > 1 {
+			comparable[key] = ids
 		}
 	}
-	return buckets
+	return judged, comparable
 }
 
 // clusterBucket assigns near-identical postings in one bucket to a canonical id, returning only

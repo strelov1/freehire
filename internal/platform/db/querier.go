@@ -502,6 +502,14 @@ type Querier interface {
 	// fall into 20 126 same-title buckets spanning up to four different employers.
 	// The pass then processes these ONE COMPANY AT A TIME, like the other duplicate passes, so it
 	// never holds a lock wide enough to stall a concurrent ingest crawl.
+	//
+	// The predicate names the OWNED columns of the exact passes, not the derived duplicate_of. Those
+	// are not the same set: duplicate_of also carries this pass's OWN marker, so filtering it made
+	// the pass blind to its own output and every marker permanent. And the worklist is a UNION,
+	// because a company can need a RELEASE without needing a collapse — its second candidate may
+	// have closed since. A collapse-only worklist never visits it again, which is how 42 633 open
+	// duplicates (prod, 2026-09-01) came to sit behind a closed owner with no pass that would ever
+	// let them go. This mirrors CompaniesWithRoleClusters, which unions the same two reasons.
 	CompaniesWithFuzzyDedupCandidates(ctx context.Context) ([]string, error)
 	// Company slugs whose role-duplicate markers may need recomputing: a company with an
 	// open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
@@ -1291,6 +1299,11 @@ type Querier interface {
 	// survive the size filter via GetJobDescriptionsByIDs. Normalizing here in SQL instead would
 	// duplicate that logic in a second language and let the two drift apart; titles are cheap to
 	// ship, descriptions are not.
+	//
+	// "Canonical" here means NOT CLAIMED BY AN EXACT PASS, which is why the predicate names their
+	// two owned columns rather than the derived duplicate_of. A row carrying this pass's OWN marker
+	// is offered again on purpose: it is the only way the pass can ever re-decide it, and without
+	// that a marker survives its canon closing, the descriptions diverging, and every later run.
 	FuzzyDedupCandidateTitlesForCompany(ctx context.Context, company string) ([]FuzzyDedupCandidateTitlesForCompanyRow, error)
 	// Authentication accepts only active identities. A pending Apple revocation
 	// must not sign the user back in and silently cancel an unlink request.
@@ -2624,11 +2637,26 @@ type Querier interface {
 	MarkDigestSent(ctx context.Context, id int64) error
 	// Stamp read on first open; a no-op once already read.
 	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
-	// Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
-	// one company's whole assignment lands in a single statement rather than a round trip per row.
-	// Scoped to the company and to still-canonical open rows, so a row the exact pass claimed in the
-	// meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
-	// recompute reverses everything here by recomputing duplicate_of from scratch.
+	// Write one company's whole fuzzy verdict in a single statement rather than a round trip per
+	// row: `candidates` is every row the pass CONSIDERED, and (ids, canons) are the ones it
+	// clustered. A candidate with no assignment gets NULL — that is the release, and it is the only
+	// mechanism there is.
+	//
+	// It has to be, and the comment this replaces said otherwise for a year. Migrations 0114/0115
+	// moved the marker into duplicate_of_fuzzy and left duplicate_of to a trigger deriving it from
+	// the three owned columns, so the role recompute — which writes duplicate_of_role — can no
+	// longer reach this one, and the COALESCE keeps surfacing it. Nothing else releases a fuzzy
+	// marker. Measured on prod 2026-09-01: 42 633 open duplicates behind a closed owner, invisible
+	// in search, with no pass that would ever let them go.
+	//
+	// `candidates` is deliberately NOT "every open row of the company". It is what the pass looked
+	// at, which excludes the buckets it refuses to judge (over the size cap). A cap is a cost
+	// heuristic, not a verdict, so releasing what it skipped would silently un-collapse the largest
+	// groups in the catalogue. A row in a bucket too SMALL to cluster is a different thing — the
+	// pass did judge it, and the answer was "no cluster".
+	//
+	// Scoped to the company and to open rows, so a row the exact pass claimed in the meantime is
+	// left alone. The IS DISTINCT FROM guard makes a re-run free.
 	MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error)
 	// Mark a job as applied for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or updates applied_at in place, and
