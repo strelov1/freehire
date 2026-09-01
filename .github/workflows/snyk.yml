@@ -9,6 +9,22 @@ name: snyk
 # directories, and the paths filter below meant a change to the root lockfile did not even
 # start the job. Those are dev dependencies, but they run in CI and on every laptop, which
 # is the same trust boundary as anything else here.
+#
+# THE SCAN NEEDS A CREDENTIAL, AND SAYS SO WHEN IT HAS NONE. Without `SNYK_TOKEN` the CLI
+# exits 2 on its first call, which painted a red cross on every dependency PR — a standing
+# failure nobody reads is how a real one gets waved through. The `credentials` job below
+# decides, and the scan skips rather than fails when there is nothing to authenticate with.
+#
+# That skip is deliberately LOUD: a warning annotation on the run and a note in the job
+# summary, both naming what went unscanned. A scanner that quietly opts out makes a commit
+# look examined, which is the same reason the gitleaks hook fails hard when its binary is
+# missing.
+#
+# The gate is a separate job because `secrets` is NOT one of the contexts available to an
+# `if:` — not on a job, not on a step. Written there it evaluates to nothing, the condition
+# is false however the repository is configured, and the scan silently never runs again.
+# `needs` IS available, so the credential is read in a step's `env` and handed forward as
+# an output.
 on:
   schedule:
     - cron: '41 6 * * *'
@@ -27,7 +43,40 @@ permissions:
   contents: read
 
 jobs:
+  # Reads the secret in the one place an `if:` cannot: a step's `env`. Emits a plain
+  # string, not the credential, so the scan job can branch on it through `needs`.
+  credentials:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.probe.outputs.configured }}
+    steps:
+      - name: Probe for a Snyk credential
+        id: probe
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -n "$SNYK_TOKEN" ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'configured=false' >> "$GITHUB_OUTPUT"
+          echo '::warning title=Snyk did not run::No SNYK_TOKEN secret is set, so the JS lockfiles went unscanned.'
+          # Quoted heredoc: the body is Markdown for the summary, and nothing in it expands.
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Snyk did not run
+
+          No `SNYK_TOKEN` secret is set on this repository, so the four JS lockfiles
+          (root, `design-system/`, `web/`, `extension/`) were **not scanned** for known
+          vulnerabilities.
+
+          Go dependencies are unaffected: `govulncheck` covers those and needs no credential.
+
+          Set the secret to restore the scan.
+          SUMMARY
+
   snyk:
+    needs: credentials
+    if: needs.credentials.outputs.configured == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
