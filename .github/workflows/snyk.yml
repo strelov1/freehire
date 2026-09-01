@@ -15,6 +15,14 @@ name: snyk
 # failure nobody reads is how a real one gets waved through. The `credentials` job below
 # decides, and the scan skips rather than fails when there is nothing to authenticate with.
 #
+# WHICH IS ALMOST ALWAYS DEPENDABOT, NOT A MISSING SECRET. A run started from a Dependabot
+# pull request reads a SEPARATE store — repository secrets are not visible to it, only the
+# ones added under Settings › Secrets › Dependabot. `SNYK_TOKEN` is set as a repository
+# secret and the scan passes on an ordinary PR; it was empty on all thirteen open
+# Dependabot PRs at once, which is what made it look like the secret was missing. Adding
+# the same token to the Dependabot store is what restores coverage on exactly the PRs that
+# change a lockfile — the ones this scan exists for.
+#
 # That skip is deliberately LOUD: a warning annotation on the run and a note in the job
 # summary, both naming what went unscanned. A scanner that quietly opts out makes a commit
 # look examined, which is the same reason the gitleaks hook fails hard when its binary is
@@ -60,18 +68,20 @@ jobs:
             exit 0
           fi
           echo 'configured=false' >> "$GITHUB_OUTPUT"
-          echo '::warning title=Snyk did not run::No SNYK_TOKEN secret is set, so the JS lockfiles went unscanned.'
+          echo '::warning title=Snyk did not run::No SNYK_TOKEN was visible to this run, so the JS lockfiles went unscanned.'
           # Quoted heredoc: the body is Markdown for the summary, and nothing in it expands.
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
           ## Snyk did not run
 
-          No `SNYK_TOKEN` secret is set on this repository, so the four JS lockfiles
-          (root, `design-system/`, `web/`, `extension/`) were **not scanned** for known
+          No `SNYK_TOKEN` was visible to this run, so the four JS lockfiles (root,
+          `design-system/`, `web/`, `extension/`) were **not scanned** for known
           vulnerabilities.
 
-          Go dependencies are unaffected: `govulncheck` covers those and needs no credential.
+          On a Dependabot pull request that usually does not mean the secret is missing:
+          such runs read their own store, so a repository secret is invisible to them.
+          Adding the token under **Settings › Secrets › Dependabot** restores the scan.
 
-          Set the secret to restore the scan.
+          Go dependencies are unaffected: `govulncheck` covers those and needs no credential.
           SUMMARY
 
   snyk:
