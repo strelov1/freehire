@@ -66,6 +66,34 @@ func TestDraftUnwrapsADoubleEncodedAnswer(t *testing.T) {
 	}
 }
 
+// The same gateway also nests the object WITHOUT stringifying it, and sometimes puts the
+// sentence straight under its own key. All three shapes came out of one production run,
+// which is why the unwrapping is shaped by evidence rather than by guesswork.
+func TestDraftUnwrapsTheOtherEnvelopesProductionSent(t *testing.T) {
+	tests := []struct {
+		name  string
+		reply string
+		want  string
+	}{
+		{"nested object", `{"answer":{"description":"Bluebeam is a PDF markup tool."}}`,
+			"Bluebeam is a PDF markup tool."},
+		{"sentence under the wrapper's key", `{"answer":"These algorithms analyze user behavior."}`,
+			"These algorithms analyze user behavior."},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := &fakeDrafter{reply: tc.reply}
+			got, err := draft(context.Background(), d, skill{canonical: "x", label: "X"})
+			if err != nil {
+				t.Fatalf("draft: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("draft = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // One level, not any number. A wrapper around a wrapper is a gateway doing something
 // this has not seen, and guessing deeper would turn an unknown shape into a plausible
 // sentence rather than an error the operator can read.

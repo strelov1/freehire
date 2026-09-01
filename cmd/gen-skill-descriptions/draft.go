@@ -38,8 +38,13 @@ language, a database, a certification, a cloud service, an ERP module) and what 
 used for.
 
 Rules:
+- BEGIN WITH THE TERM. "Kubernetes is an open-source system that…", not "It is an
+  open-source system that…" or "This platform…". The entry is quoted on its own in
+  search results and by assistants, where "It is a project management methodology"
+  names nothing.
 - Plain language. No marketing, no adjectives like "powerful" or "popular".
-- Do not restate the name. "Kubernetes is a Kubernetes tool" says nothing.
+- Naming the term is not restating it: say what CATEGORY it belongs to and what it does.
+  "Kubernetes is a Kubernetes tool" is the failure to avoid, not "Kubernetes is a…".
 - Do not say how in-demand it is, what it pays, or who should learn it.
 - If the name is ambiguous, describe the meaning the listed spellings point at.
 - English. No markdown, no line breaks.
@@ -88,6 +93,11 @@ func draft(ctx context.Context, d drafter, s skill) (string, error) {
 	return line, nil
 }
 
+// wrapperKeys are the field names a gateway has been seen to hand the answer back under.
+// A closed list on purpose: it is the difference between unwrapping an envelope and
+// treating any single-field object as one.
+var wrapperKeys = map[string]bool{"answer": true, "response": true, "result": true, "output": true}
+
 // describedIn pulls the description out of the model's answer, tolerating one layer of
 // gateway envelope.
 //
@@ -109,15 +119,36 @@ func describedIn(raw string) (string, error) {
 		return answer.Description, nil
 	}
 
-	// No description at the top level: the object may be one string-valued field deep.
-	var envelope map[string]string
+	// No description at the top level, so look one field down. One production run
+	// produced all three shapes below, which is why this is a list of what was seen
+	// rather than a general unwrapper.
+	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &envelope); err != nil || len(envelope) != 1 {
 		return "", nil // not an envelope shape; the caller reports the empty answer
 	}
-	for _, inner := range envelope {
-		if err := json.Unmarshal([]byte(inner), &answer); err != nil {
+	for key, inner := range envelope {
+		// Only a key a gateway is known to wrap in. Accepting any single key would make
+		// {"error": "I cannot help with that"} a glossary entry — the model's refusal
+		// printed as a definition, which is exactly the shape a reviewer skims past.
+		if !wrapperKeys[key] {
 			return "", nil
 		}
+		// {"answer": {"description": "…"}} — the object, nested.
+		if err := json.Unmarshal(inner, &answer); err == nil && answer.Description != "" {
+			return answer.Description, nil
+		}
+		var text string
+		if err := json.Unmarshal(inner, &text); err != nil {
+			return "", nil
+		}
+		// {"answer": "{\"description\": \"…\"}"} — the object, stringified.
+		if err := json.Unmarshal([]byte(text), &answer); err == nil && answer.Description != "" {
+			return answer.Description, nil
+		}
+		// {"answer": "…"} — the sentence itself under the gateway's key. Accepted
+		// because the schema asked for exactly one string and this is it; anything
+		// deeper is a shape nobody has seen and stays an error the operator can read.
+		return text, nil
 	}
-	return answer.Description, nil
+	return "", nil
 }
