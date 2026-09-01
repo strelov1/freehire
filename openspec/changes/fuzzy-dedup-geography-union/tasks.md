@@ -1,0 +1,83 @@
+## 1. The closure query
+
+- [ ] 1.1 Write the whole-catalogue closure query `DuplicateClosureGeoAll` in
+      `internal/platform/db/queries/jobs.sql`: recursive, seeded from open rows with
+      `duplicate_of IS NULL` that own at least one open duplicate, returning
+      `(owner_id, countries, regions, cities)` unioned over the closure's open members. Document
+      in the comment why cycles are unreachable (the seed is nobody's duplicate) and what the
+      depth bound is for. `make sqlc`.
+- [ ] 1.2 Add the by-id-set variant `DuplicateClosureGeoFor(owner_ids)` sharing the same recursive
+      body, for the drain wave and the single-row link import. Decide from `EXPLAIN` whether a
+      separate single-row query is warranted; prefer one query with a one-element argument.
+- [ ] 1.3 Integration test (`//go:build integration`, `internal/platform/db`): seed a
+      role→fuzzy chain (`A --duplicate_of_role--> B --duplicate_of_fuzzy--> C`, three distinct
+      cities) and assert `C`'s closure geography carries all three. Cover a plain role cluster
+      (unchanged behaviour), a closed member (excluded), and a marker cycle (terminates, returns
+      nothing).
+- [ ] 1.4 Measure: `EXPLAIN ANALYZE` the whole-catalogue query against a prod-sized dataset and
+      record the timing in `design.md` next to the risk it answers. If it is materially slower
+      than `RoleClusterGeoAll`, stop and revisit before continuing.
+
+## 2. The index writers
+
+- [ ] 2.1 `cmd/reindex`: replace `buildClusterGeoLookup`'s `RoleClusterGeoAll` with the closure
+      query and rekey the map by owner id; `splitJobs` looks up by `j.ID`. Drop the fingerprint
+      plumbing that only fed geography (leave the reality-signal cluster counts alone — they still
+      key by fingerprint).
+- [ ] 2.2 `cmd/search-drain/indexer.go`: same swap, keyed by job id. The `askGeo` gate becomes "the
+      row owns at least one open duplicate"; keep its fail-open default, since skipping the merge
+      is destructive rather than conservative.
+- [ ] 2.3 `internal/ingest/linkimport`: same swap.
+- [ ] 2.4 Update `MergeClusterGeography`'s doc comment in `internal/search/search/document.go` to
+      name the duplicate closure instead of the role cluster, and rename it if the new name reads
+      better at all three call sites.
+- [ ] 2.5 Unit tests for all three writers: a document built for an owner carries the closure's
+      union, and a writer that skips the union is caught (assert the merge happens on the
+      incremental paths, not only the rebuild).
+- [ ] 2.6 Delete `RoleClusterGeo`, `RoleClusterGeoAll` and `RoleClusterGeoFor` from `jobs.sql`,
+      `make sqlc`, and confirm nothing else references them.
+
+## 3. The copies endpoint
+
+- [ ] 3.1 Replace `ListRoleClusterCopies` with a closure-based query: resolve the addressed slug to
+      its ultimate owner, then list that owner's closure's open, non-private members ordered by
+      location, with `COUNT(*) OVER()` pre-LIMIT as today.
+- [ ] 3.2 Integration test: copies of a fuzzy canon include the fuzzy-suppressed posting; copies
+      requested from a SUPPRESSED posting return its owner's whole closure including the owner; a
+      closed member and unrelated roles stay excluded; an out-of-range offset is an empty page.
+- [ ] 3.3 Confirm `internal/api/handler/copies.go`'s response shape is unchanged (`public_slug`,
+      `location`, `apply_url`, `posted_at`, `meta.total`) so `web/` needs no diff, and that
+      `JobRelated.svelte`'s `copiesTotal > 1` gate still reads correctly.
+
+## 4. Releasing stale fuzzy markers
+
+- [ ] 4.1 Change `CompaniesWithFuzzyDedupCandidates` and `FuzzyDedupCandidateTitlesForCompany` from
+      `duplicate_of IS NULL` to "not claimed by an exact pass"
+      (`duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL`), so already-fuzzy-marked
+      rows are re-decided.
+- [ ] 4.2 Teach `MarkFuzzyDuplicatesForCompany` to clear: take the full candidate id set alongside
+      the assignment and write NULL for a candidate absent from the assignment, mirroring
+      `RecomputeRoleDuplicatesForCompanies`'s `CASE`. Keep the `IS DISTINCT FROM` guard and the
+      existing `search_outbox` / `search_delete_outbox` transition bookkeeping.
+- [ ] 4.3 Pass the candidate set through `collapseFuzzyDuplicatesForCompany` in
+      `cmd/reindex/fuzzy.go`.
+- [ ] 4.4 Invert `TestFuzzyDedup_CandidateTitlesSkipAlreadyMarkedRows` in
+      `internal/platform/db/fuzzy_dedup_integration_test.go` — an already-marked row IS a
+      candidate now — and rename it to say so.
+- [ ] 4.5 Integration tests for release: a marker clears when its canon closes and the row
+      re-enters `search_outbox`; a marker clears when the descriptions diverge below the
+      threshold; a second run with no changes writes nothing (idempotence).
+- [ ] 4.6 Rewrite the two false comments in `jobs.sql` (near lines 1630 and 1735) that claim the
+      standard recompute reverses the fuzzy pass.
+
+## 5. Verification and rollout
+
+- [ ] 5.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`,
+      then the full `go test -tags=integration ./...` since behaviour changed.
+- [ ] 5.2 `pnpm check:sql` is a no-op here (no migration added) — confirm, and confirm
+      `golangci-lint run` reports nothing new.
+- [ ] 5.3 Write the rollout runbook into the change: stop `freehire-reindexw.timer`,
+      `REINDEX_DEDUP_ONLY=1`, full `make reindex`, restart the timer.
+- [ ] 5.4 After deploy, re-run the four URLs from issue #2225 and record the results: both affected
+      searches return `total: 1`, both controls stay `total: 1`. Comment on the issue with the
+      outcome.
