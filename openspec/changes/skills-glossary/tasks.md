@@ -1,32 +1,38 @@
 ## 1. The dictionary
 
-- [ ] 1.1 Add `internal/dict/skilltag/descriptions.tsv` (empty but for a header comment
-      row) and `descriptions.go`: `//go:embed`, a parser, `Description(canonical) string`
-      returning "" for an unknown or undescribed slug, and `Descriptions() map[string]string`.
-- [ ] 1.2 Add `descriptions_test.go`: no orphan keys (every key is in `Canonicals()`), no
-      duplicate keys, no blank description, no tab or newline inside a description, and
-      `Description` returns "" for an undescribed canonical and for a non-canonical slug.
-- [ ] 1.3 Add the `describedFloor` constant and the coverage test asserting
-      `len(Descriptions()) >= describedFloor`, with the comment stating the constant only
-      ever rises and names the task that deletes it (5.3).
-- [ ] 1.4 Add `Aliases(canonical) []string` — the spellings the parser accepts for a
-      canonical, drawn from every alias tier, deduplicated and sorted, with a test
-      covering a canonical reachable only through an acronym.
-- [ ] 1.5 Record the description side in `internal/dict/skilltag/AGENTS.md`: what the TSV
+- [x] 1.1 Add `internal/dict/skilltag/descriptions.tsv` — a header comment plus the `dbt`
+      row the spec's first scenario requires — and `descriptions.go`: `//go:embed`, a
+      parser, `Description(canonical) string` returning "" for an unknown or undescribed
+      slug, and `Descriptions() map[string]string`.
+- [x] 1.2 Add `descriptions_test.go`: no orphan keys (every key is in `Canonicals()`), no
+      duplicate keys, no blank description, no tab inside a description, and `Description`
+      returns "" for an undescribed canonical and for a non-canonical slug. A newline
+      inside a description needs no case — the line scanner forecloses it; say so where a
+      reader would look for the missing check.
+- [x] 1.3 Add the `describedFloor` constant and the coverage test asserting
+      `len(Descriptions()) >= describedFloor`. The same test fails once the floor reaches
+      the vocabulary, so the endgame (5.3) is a property of the build and not a promise.
+- [x] 1.4 Add `Aliases(canonical) []string` — the spellings the parser accepts for a
+      canonical, drawn from every alias tier, deduplicated and sorted. Test it by walking
+      the alias tables themselves: no canonical is reachable through an acronym alone, so
+      pinned examples cannot notice a dropped tier.
+- [x] 1.5 Record the description side in `internal/dict/skilltag/AGENTS.md`: what the TSV
       is, why generation is offline, and the ratchet.
 
 ## 2. The generator
 
-- [ ] 2.1 Add `cmd/gen-skill-descriptions`: read `Canonicals()`, subtract
+- [x] 2.1 Add `cmd/gen-skill-descriptions`: read `Canonicals()`, subtract
       `Descriptions()`, order the remainder by open-posting count from
       `GET /jobs/facets?facets=skills`, take `--limit`, and print TSV rows to stdout.
-- [ ] 2.2 Prompt each undescribed skill with its slug, display label and `Aliases`;
+- [x] 2.2 Prompt each undescribed skill with its slug, display label and `Aliases`;
       constrain the model to one or two sentences of plain language, no marketing, no
       restating the label. Use the service LLM credential, never a user's.
-- [ ] 2.3 Test the ordering and the subtraction against a stubbed facets response and a
-      stubbed LLM, so a run with no network is still meaningful.
-- [ ] 2.4 Document the worker in the root `CLAUDE.md` worker list: what it needs, that it
-      prints rather than writes, and that its output is edited before merge.
+- [x] 2.3 Test the ordering, the subtraction, and the partial-failure behaviour against a
+      stubbed facets response and a stubbed LLM, so a run with no network is still
+      meaningful.
+- [x] 2.4 Add a `make gen-skill-descriptions` target beside `gen-cities` and
+      `gen-contracts`, and the binary to `.gitignore`. NOT the `CLAUDE.md` worker list —
+      that names cron workers, and the other two generators are not in it either.
 
 ## 3. Wave 1 — the first 100 descriptions
 
@@ -66,13 +72,18 @@
 - [ ] 7.1 Add `web/src/lib/skillGlossary.ts`: pure helpers — described-slug lookup, the
       `MIN_SKILL_OPEN = 25` postings gate, and neighbour selection — unit-tested without
       fetch or Svelte, following `roleLandings.ts`.
-- [ ] 7.2 Add the `/skills/<slug>` route: 404 for an undescribed slug; otherwise label,
-      description, accepted spellings, neighbours, and the postings block behind the gate.
-      Server-rendered, with page metadata.
-- [ ] 7.3 Add the `/skills` index listing every described skill, grouped alphabetically.
-- [ ] 7.4 Add `sitemap-skills.xml` listing exactly the slugs the route serves, and
+- [ ] 7.2 Add `displayAliases(slug)` to the same module: the accepted spellings minus the
+      slug and the label, and minus any spelling that differs from another only by an
+      invisible codepoint (`1c` carries a Latin and a Cyrillic `с`). Empty for 64% of the
+      vocabulary — the block renders only when it is not.
+- [ ] 7.3 Add the `/skills/<slug>` route: 404 for an undescribed slug; otherwise label,
+      description, the live posting count linking to the filter, neighbours, the aliases
+      block when 7.2 yields any, and the postings block behind the gate. Server-rendered,
+      with page metadata.
+- [ ] 7.4 Add the `/skills` index listing every described skill, grouped alphabetically.
+- [ ] 7.5 Add `sitemap-skills.xml` listing exactly the slugs the route serves, and
       register it in the sitemap index.
-- [ ] 7.5 Add the glossary to the internal-linking surfaces that already list the
+- [ ] 7.6 Add the glossary to the internal-linking surfaces that already list the
       product's pages (`sitemap-pages.xml` and wherever `/roles` is linked from).
 
 ## 8. Ship

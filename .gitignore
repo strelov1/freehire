@@ -148,6 +148,7 @@ extension/*.zip
 /enrich
 /gen-cities
 /gen-contracts
+/gen-skill-descriptions
 /gmail-sync
 /harvest-ats
 /harvest-boards

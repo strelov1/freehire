@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// The assertion tracks a scenario in the change's spec, not the prose's wording for its
+// own sake: rewording this sentence is allowed, dropping what it says dbt IS is not.
 func TestDescriptionResolvesACuratedSkill(t *testing.T) {
 	got := Description("dbt")
 	if got == "" {
@@ -43,6 +45,11 @@ func TestDescriptionsHaveNoOrphans(t *testing.T) {
 // The file is hand-written and reviewed, not scraped, so a malformed row is a mistake
 // in this repository rather than noise in someone else's dataset. It fails the build
 // instead of being skipped the way internal/dict/location tolerates GeoNames rows.
+//
+// A newline INSIDE a description has no case here because it cannot reach the loader:
+// the scanner splits on it first, so a wrapped description arrives as two rows and the
+// second one fails "no tab". The guard exists in the shape of the parser rather than in
+// a check, which is why looking for one finds nothing.
 func TestLoadDescriptionsRejectsMalformedRows(t *testing.T) {
 	tests := []struct {
 		name string
@@ -53,7 +60,10 @@ func TestLoadDescriptionsRejectsMalformedRows(t *testing.T) {
 		{"blank slug", "\tA SQL transformation tool.\n"},
 		{"duplicate slug", "dbt\tOne.\ndbt\tTwo.\n"},
 		{"untrimmed description", "dbt\t A SQL transformation tool. \n"},
+		{"untrimmed slug", " dbt\tA SQL transformation tool.\n"},
 		{"uppercase slug", "DBT\tA SQL transformation tool.\n"},
+		// The shape a paste out of a spreadsheet produces.
+		{"tab inside the description", "dbt\tA SQL\ttransformation tool.\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -65,7 +75,8 @@ func TestLoadDescriptionsRejectsMalformedRows(t *testing.T) {
 }
 
 func TestLoadDescriptionsParsesRowsAndSkipsComments(t *testing.T) {
-	got, err := loadDescriptions("# a comment\n\ndbt\tA SQL transformation tool.\ngo\tA compiled language.\n")
+	// The \r\n row is the CRLF checkout the loader tolerates.
+	got, err := loadDescriptions("# a comment\n\ndbt\tA SQL transformation tool.\r\ngo\tA compiled language.\n")
 	if err != nil {
 		t.Fatalf("loadDescriptions: %v", err)
 	}
@@ -89,6 +100,13 @@ func TestDescriptionCoverageDoesNotRegress(t *testing.T) {
 		t.Errorf("%d canonicals are described, below the recorded floor of %d — raise the "+
 			"coverage or restore what was removed, but do not lower the floor",
 			described, describedFloor)
+	}
+	// The endgame, as a property of the build rather than a line in a task list. The
+	// floor exists only because the vocabulary cannot be reviewed in one pass; once it
+	// has been, two rules for the same thing would coexist and could disagree.
+	if describedFloor >= total {
+		t.Errorf("every canonical is described — delete describedFloor and assert the "+
+			"absolute rule instead: %d described, %d canonicals", described, total)
 	}
 	t.Logf("described %d of %d canonicals (floor %d)", described, total, describedFloor)
 }

@@ -31,6 +31,35 @@ func TestAliasesGathersEveryTier(t *testing.T) {
 	}
 }
 
+// Every tier, exhaustively. Pinning a handful of canonicals cannot notice a dropped
+// tier: no canonical today is reachable ONLY through an acronym table, so deleting the
+// sharedAcronyms loop would leave every example still passing through its word or
+// phrase alias. Walking the tables themselves is what makes a sixth tier added to
+// Canonicals() and forgotten here a failure.
+func TestAliasesCoversEveryAliasTable(t *testing.T) {
+	present := func(t *testing.T, tier, alias, canonical string) {
+		t.Helper()
+		if !slices.Contains(Aliases(canonical), alias) {
+			t.Errorf("Aliases(%q) is missing %q from %s", canonical, alias, tier)
+		}
+	}
+	for alias, canonical := range wordAliases {
+		present(t, "wordAliases", alias, canonical)
+	}
+	for _, p := range phraseAliases {
+		present(t, "phraseAliases", p.alias, p.canonical)
+	}
+	for alias, canonical := range sharedAcronyms {
+		present(t, "sharedAcronyms", alias, canonical)
+	}
+	for alias, canonical := range resumeAcronyms {
+		present(t, "resumeAcronyms", alias, canonical)
+	}
+	for alias, scoped := range categoryScopedAcronyms {
+		present(t, "categoryScopedAcronyms", alias, scoped.canonical)
+	}
+}
+
 // The glossary renders this list, so it must be stable between builds — Go's map
 // iteration is not — and must not spell one thing twice: "RAG" is in two acronym
 // tables at once.

@@ -45,9 +45,13 @@ var aliasIndex = func() map[string][]string {
 	return index
 }()
 
-// Aliases is every spelling that resolves to a canonical skill, sorted and without
-// repeats — "k8s" and "kubernetes", "c++" and "c/c++", "RAG" and "retrieval augmented
-// generation". Empty for a slug the dictionary does not know.
+// Aliases is every spelling the PARSER accepts for a canonical skill, sorted and
+// without repeats — "k8s" and "kubernetes", "c++" and "c/c++", "RAG" and "retrieval
+// augmented generation". Empty for a slug the dictionary does not know.
+//
+// "The parser", not "resolves to it": Canonicalize additionally admits a bare canonical
+// through canonicalSet, and a canonical is not automatically an alias of itself
+// (canonicalize.go). This lists the alias tables and nothing else.
 //
 // The glossary renders this as the skill's other names, which is why the order is fixed
 // rather than map order: the same page must read the same way on every build.

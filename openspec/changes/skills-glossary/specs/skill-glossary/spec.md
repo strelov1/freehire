@@ -153,6 +153,14 @@ The postings block SHALL render only when the facet holds enough open postings t
 describe honestly; below that the page SHALL still serve its definition, because the
 definition is the page's subject and the postings are its illustration.
 
+The accepted-spellings block SHALL render only when the skill has a spelling that is
+neither its slug nor its display label. Two canonicals in three have none, and "also
+written as: javascript" under a heading reading JavaScript is filler — the exact
+thin-content failure the postings gate exists to prevent. Two spellings that differ only
+by an invisible codepoint SHALL be shown once: `1c` carries both a Latin and a Cyrillic
+`с`, and the parser must keep accepting both while the page must not print the same word
+twice.
+
 #### Scenario: A described skill's page
 
 - **WHEN** a reader opens the page for a described skill with postings open
@@ -163,6 +171,12 @@ definition is the page's subject and the postings are its illustration.
 - **WHEN** a reader opens the page for a described skill with too few open postings
 - **THEN** the page serves the definition and the aliases, and shows no postings block
   rather than a block that misdescribes the catalogue
+
+#### Scenario: A skill whose only spelling is its own name
+
+- **WHEN** a reader opens the page for a skill whose accepted spellings are just the slug
+  and the label, as two canonicals in three are
+- **THEN** no accepted-spellings block is shown
 
 #### Scenario: An unknown slug
 

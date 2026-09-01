@@ -65,6 +65,9 @@ func loadDescriptions(tsv string) (map[string]string, error) {
 	sc := bufio.NewScanner(strings.NewReader(tsv))
 	for line := 1; sc.Scan(); line++ {
 		row := strings.TrimSuffix(sc.Text(), "\r") // tolerate a CRLF checkout
+		// The only two shapes skipped rather than judged. No canonical begins with '#'
+		// — the one skill whose name carries it is slugged "csharp" — so a comment
+		// cannot swallow a real row.
 		if row == "" || strings.HasPrefix(row, "#") {
 			continue
 		}
@@ -74,6 +77,11 @@ func loadDescriptions(tsv string) (map[string]string, error) {
 			return nil, fmt.Errorf("line %d: no tab separating slug from description", line)
 		case slug == "":
 			return nil, fmt.Errorf("line %d: blank slug", line)
+		// Symmetric with the description's own trim check below. Without it a row with
+		// a stray leading space parses into the key " dbt" and only the orphan test
+		// notices, three files away and with a message about a skill that does not exist.
+		case strings.TrimSpace(slug) != slug:
+			return nil, fmt.Errorf("line %d: slug %q has surrounding space", line, slug)
 		case slug != strings.ToLower(slug):
 			return nil, fmt.Errorf("line %d: slug %q is not lowercase", line, slug)
 		case desc == "":

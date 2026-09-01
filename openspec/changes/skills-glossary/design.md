@@ -148,10 +148,27 @@ page is *about* the postings; a glossary page is about the definition. Gating it
 mean the tooltip's "What is X?" link disappears for exactly the obscure skills a reader
 is most likely not to recognise.
 
-*Thin-content risk is real and answered with facts, not filler:* the aliases block is
-genuinely useful ("also written as k8s, kube") and comes free from the alias tables. It
-needs a new accessor on the package — `skilltag.Aliases(canonical)` — since the tables
-are unexported.
+*Thin-content risk is real and answered with facts, not filler.* The aliases block comes
+free from the alias tables through a new `skilltag.Aliases(canonical)`, since they are
+unexported — but **it carries far less than this section first assumed**. Measured after
+group 1 landed: 1,038 aliases across 863 canonicals, and **552 of them (64%) have no
+spelling beyond the slug and the label**. `Aliases("javascript")` is exactly
+`["javascript"]`, so an unconditional block would read "also written as: javascript"
+under a heading that says JavaScript — filler on two pages in three.
+
+Two consequences, both settled here rather than discovered in task 7:
+
+- **The aliases block is gated like the postings block**, on having at least one spelling
+  that is neither the slug nor the label. On the majority of pages it simply does not
+  render.
+- **`Aliases("1c")` is `["1c", "1с"]`** — Latin and Cyrillic `с`, which render
+  identically. A spelling that differs from another only by an invisible codepoint is
+  dropped from the *display* list (never from the parser), or the block shows the same
+  word twice and reads as a bug.
+
+What actually carries a sparse page is therefore the definition, the live posting count
+with a link to the filter, and neighbouring skills — not the aliases. The aliases are a
+bonus where they exist.
 
 ## Risks / Trade-offs
 
