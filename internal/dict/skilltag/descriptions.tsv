@@ -1,0 +1,7 @@
+# Plain-language descriptions for the canonical skill vocabulary — the third side of
+# the same slugs labels.go names and dictionaries.go resolves. Tab-separated:
+# canonical-slug<TAB>description. Blank lines and '#' comments are skipped.
+#
+# Drafted by cmd/gen-skill-descriptions and edited by a human before merge. Nothing
+# here is generated at request time; see descriptions.go.
+dbt	A SQL-based transformation tool for data warehouses: analysts write models as SELECT statements and dbt builds them into tables and views, with tests and lineage.
