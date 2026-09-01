@@ -57,6 +57,21 @@ func ValidChannel(c string) bool {
 // itemizes dozens of jobs is a page nobody reads to the bottom of.
 const ListLimit = 10
 
+// Listed splits a grouped message's items into the ones it itemizes — the first
+// ListLimit — and the count it only mentions as an "and N more" tail. It lives
+// beside the bound, and is generic, because all three engines apply the same rule
+// to three different message types and a private copy per engine is a copy that
+// drifts.
+//
+// The shown slice has no spare capacity, so a renderer that appends to it cannot
+// scribble over the items it left out.
+func Listed[T any](items []T) (shown []T, more int) {
+	if len(items) <= ListLimit {
+		return items, 0
+	}
+	return items[:ListLimit:ListLimit], len(items) - ListLimit
+}
+
 // Digest is one subscription's batch of new matches, rendered by a Notifier into
 // a channel-specific message. Jobs is the whole match set (bounded only by
 // Config.SnapshotCap) and is what the in-app notification records; Listed is the
@@ -74,13 +89,11 @@ type Digest struct {
 }
 
 // Listed returns the jobs a channel message should itemize: the first ListLimit,
-// or all of them when the digest is shorter. The result has no spare capacity, so
-// a renderer that appends to it cannot scribble over the rest of Jobs.
+// or all of them when the digest is shorter. The omitted count is not returned
+// here — a digest's tail counts against Total, which can exceed len(Jobs).
 func (d Digest) Listed() []DigestJob {
-	if len(d.Jobs) <= ListLimit {
-		return d.Jobs
-	}
-	return d.Jobs[:ListLimit:ListLimit]
+	shown, _ := Listed(d.Jobs)
+	return shown
 }
 
 // DigestJob is the display shape of one matched job (no internal id). The salary

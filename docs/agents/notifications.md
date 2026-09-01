@@ -46,6 +46,15 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   three small, near-identical `PushNotifier`s (a few lines of message-rendering each) rather than
   three copies of anything structurally significant. Revisit if a fourth channel makes the
   per-engine cost look different.
+  **Grouping made the duplication bigger, and that is the seam to watch.** `reminder` and
+  `nudge` now each carry a near-identical `collect` + `deliverBatch` pair — claim, validate
+  per item, group, send once, finalize every member — differing only in their ledger's
+  method names and in nudge's kind in the group key. Two copies is not yet an abstraction:
+  a shared engine would have to be generic over the delivery row, the ledger's five
+  statements and the message type, which is more machinery than the ~80 duplicated lines
+  cost. What IS shared is what would silently diverge — `notify.ListLimit` and `Listed`,
+  `notify.SnapshotJob`/`JobsSnapshot`, and `telegramnotify.MaxMessageLen`/`UTF16Len`. A
+  third batching engine is the signal to extract the loop itself.
 - **Push needs no server-side credential and is therefore always registered.** Unlike Telegram
   (`TELEGRAM_BOT_TOKEN`) and email (`AWS_REGION`+`NOTIFY_EMAIL_FROM`), Expo's relay holds the
   APNs/FCM credential on its own side (set up once via `eas credentials` in `freehire-mobile`), so

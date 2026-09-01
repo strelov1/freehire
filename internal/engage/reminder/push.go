@@ -2,11 +2,9 @@ package reminder
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 
-	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -80,14 +78,4 @@ func renderReminderBatch(ms []ReminderMessage) (title, body string) {
 // the one a batch of one must be indistinguishable from.
 func renderReminder(m ReminderMessage) (title, body string) {
 	return "⏰ Reminder", fmt.Sprintf("You saved %s at %s — still interested?", m.JobTitle, m.Company)
-}
-
-// jobsSnapshot is the job list a multi-job batch records for its notification's own
-// page, in the shape notify owns because one page renders every engine's rows.
-func jobsSnapshot(ms []ReminderMessage) json.RawMessage {
-	jobs := make([]notify.SnapshotJob, len(ms))
-	for i, m := range ms {
-		jobs[i] = notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
-	}
-	return notify.JobsSnapshot(jobs)
 }

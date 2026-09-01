@@ -26,18 +26,6 @@ var (
 	_ Notifier = (*EmailNotifier)(nil)
 )
 
-// listed splits a batch into the nudges a message itemizes and how many it only
-// counts. The bound is notify.ListLimit, shared with the subscription digest and
-// the reminder engine so no two channels disagree about how long a list may be; the
-// batch itself is bounded separately and much higher by Config.SnapshotCap, because
-// the message is short for readability while the record behind it is long by design.
-func listed(ms []Message) (shown []Message, more int) {
-	if len(ms) <= notify.ListLimit {
-		return ms, 0
-	}
-	return ms[:notify.ListLimit:notify.ListLimit], len(ms) - notify.ListLimit
-}
-
 // TelegramNotifier delivers a nudge as a Telegram HTML message, reusing the
 // telegramnotify Bot API client. Every link stays on-platform: the tracking board
 // for kinds about the application (follow-up, interview-prep), the job's own page
@@ -90,7 +78,7 @@ func (n *TelegramNotifier) render(kind string, ms []Message) string {
 	tailReserve := telegramnotify.UTF16Len(n.moreLine(len(ms), kind))
 	used := telegramnotify.UTF16Len(b.String())
 	fitted := 0
-	shown, _ := listed(ms)
+	shown, _ := notify.Listed(ms)
 	for _, m := range shown {
 		line := n.jobLine(m)
 		lineLen := telegramnotify.UTF16Len(line)
@@ -151,6 +139,8 @@ func (n *TelegramNotifier) batchURL(kind string) string {
 	return n.origin + "/my/tracking"
 }
 
+// renderOne is the single-nudge body, kept per kind and unchanged, because a batch
+// of one must be indistinguishable from what shipped before grouping.
 func (n *TelegramNotifier) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug
@@ -205,12 +195,11 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest, kind string, m
 // batchBody is what the batch template renders from. Jobs carries the source data,
 // escaped in context by html/template.
 type batchBody struct {
-	Jobs   []mailtpl.Job
-	More   int
-	Lead   string
-	URL    string
-	CTA    string
-	Reason string
+	Jobs []mailtpl.Job
+	More int
+	Lead string
+	URL  string
+	CTA  string
 }
 
 // batchTemplate is the list body every kind's batch shares: the jobs, the one
@@ -230,7 +219,7 @@ var batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`
 
 // renderBatch builds the multi-nudge mail for one kind.
 func (n *EmailNotifier) renderBatch(kind string, ms []Message) (subject, htmlBody, textBody string) {
-	shown, more := listed(ms)
+	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
 		rows = append(rows, mailtpl.NewJob(m.JobTitle, m.Company, "", n.jobURL(m)))

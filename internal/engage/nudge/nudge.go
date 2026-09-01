@@ -22,6 +22,7 @@ package nudge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -584,6 +585,16 @@ func (r *Runner) recordNotification(ctx context.Context, b *batch) {
 	if _, err := r.store.RecordNotification(ctx, arg); err != nil {
 		log.Printf("nudge: record notification for user %d (%s): %v", b.info.UserID, b.info.Kind, err)
 	}
+}
+
+// jobsSnapshot is the job list a multi-job batch records for its notification's own
+// page, in the shape notify owns because one page renders every engine's rows.
+func jobsSnapshot(ms []Message) json.RawMessage {
+	jobs := make([]notify.SnapshotJob, len(ms))
+	for i, m := range ms {
+		jobs[i] = notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
+	}
+	return notify.JobsSnapshot(jobs)
 }
 
 // release drops the lease on a nudge so it is retried promptly on a later pass.

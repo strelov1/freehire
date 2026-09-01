@@ -2,24 +2,12 @@ package nudge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 
-	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
-
-// jobsSnapshot is the job list a multi-job batch records for its notification's own
-// page, in the shape notify owns because one page renders every engine's rows.
-func jobsSnapshot(ms []Message) json.RawMessage {
-	jobs := make([]notify.SnapshotJob, len(ms))
-	for i, m := range ms {
-		jobs[i] = notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
-	}
-	return notify.JobsSnapshot(jobs)
-}
 
 // Compile-time proof PushNotifier satisfies the engine's Notifier seam.
 var _ Notifier = (*PushNotifier)(nil)

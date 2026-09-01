@@ -26,18 +26,6 @@ var (
 	_ Notifier = (*EmailNotifier)(nil)
 )
 
-// listed splits a batch into the reminders a message itemizes and how many it only
-// counts. The bound is notify.ListLimit, shared with the subscription digest so the
-// two channels never disagree about how long a list may be; the batch itself is
-// bounded separately and much higher by Config.SnapshotCap, because the message is
-// short for readability while the record behind it is long by design.
-func listed(ms []ReminderMessage) (shown []ReminderMessage, more int) {
-	if len(ms) <= notify.ListLimit {
-		return ms, 0
-	}
-	return ms[:notify.ListLimit:notify.ListLimit], len(ms) - notify.ListLimit
-}
-
 // TelegramNotifier delivers an account's due reminders as one Telegram HTML
 // message, reusing the telegramnotify Bot API client. Links point at on-platform
 // job pages so the nudge keeps the user on freehire and never exposes a
@@ -92,7 +80,7 @@ func (n *TelegramNotifier) render(ms []ReminderMessage) string {
 
 	// The list bound picks the candidates; the length cap decides how many of them
 	// actually fit, so the tail is computed from what was written, not from it.
-	shown, _ := listed(ms)
+	shown, _ := notify.Listed(ms)
 	var b strings.Builder
 	fmt.Fprintf(&b, "⏰ You saved <b>%d</b> jobs and haven't applied yet.\n\n", len(ms))
 
@@ -196,7 +184,7 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, ms []Re
 	if len(ms) == 0 {
 		return nil
 	}
-	shown, more := listed(ms)
+	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
 		rows = append(rows, mailtpl.NewJob(m.JobTitle, m.Company, "", n.jobURL(m)))
