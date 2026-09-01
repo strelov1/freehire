@@ -25,7 +25,7 @@
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import ReportDialog from './ReportDialog.svelte';
-  import SkillIcon from './SkillIcon.svelte';
+  import SkillChip from './SkillChip.svelte';
   import VoteControl from './VoteControl.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
@@ -444,13 +444,11 @@
         <ul class="flex flex-wrap gap-1.5 border-t border-border pt-4 first:border-t-0 first:pt-0">
           {#each job.skills as skill (skill)}
             <li>
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-              <a href={filterHref('skills', skill)}>
-                <Badge variant="brand" class="gap-1 transition hover:opacity-80">
-                  <SkillIcon slug={skill} />
-                  {skill}
-                </Badge>
-              </a>
+              <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
+                   filter panel reading "CI/CD" — the same skill spelled two ways on one
+                   screen. SkillChip labels it from the dictionary and, for a skill the
+                   glossary has reached, carries the definition too. -->
+              <SkillChip slug={skill} />
             </li>
           {/each}
         </ul>

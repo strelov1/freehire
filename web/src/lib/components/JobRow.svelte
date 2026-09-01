@@ -21,6 +21,7 @@
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import SkillIcon from './SkillIcon.svelte';
+  import { skillLabel } from '$lib/facets';
   import { timeAgo } from '$lib/utils';
   import { hasViewed } from '$lib/viewedJobs.svelte';
   import { isSaved, markSaved, markUnsaved } from '$lib/savedJobs.svelte';
@@ -333,10 +334,15 @@
            own chip and stretch the row to two lines, breaking the card's rhythm on a
            phone. Each chip stays one line and ellipsises past max-w; the full skill is
            in `title` for anyone who needs it. -->
+      <!-- The label, not the slug: a card read "ci-cd" where the filter panel beside it
+           read "CI/CD". No definition here, unlike the chips on the posting itself —
+           these sit inside the card's navigation <a>, where a second activation target
+           is invalid markup and the hazard the comment at the top of this file is
+           about. The card is for scanning; the posting is where you read. -->
       {#each shownSkills as skill (skill)}
         <Badge variant={chipVariant(skill)} class="max-w-[9rem] gap-1">
           <SkillIcon slug={skill} />
-          <span class="truncate" title={skill}>{skill}</span>
+          <span class="truncate" title={skillLabel(skill)}>{skillLabel(skill)}</span>
         </Badge>
       {/each}
       {#if extraSkills > 0}

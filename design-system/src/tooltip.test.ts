@@ -106,6 +106,59 @@ describe('Tooltip', () => {
     expect(queryByRole('tooltip')).not.toBeNull();
   });
 
+  // A touch pointer has no hover, so before this the tooltip was simply unreachable on
+  // a phone — the one place a reader is most likely to meet a skill chip.
+  describe('touch', () => {
+    const tap = (el: Element) => fireEvent.pointerDown(el, { pointerType: 'touch' });
+
+    it('opens on tap', async () => {
+      const { wrapper, trigger, queryByRole } = setup();
+
+      await tap(wrapper);
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+      expect(trigger.getAttribute('aria-describedby')).toBeTruthy();
+    });
+
+    it('closes on a second tap of the trigger', async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await tap(wrapper);
+      await tap(wrapper);
+
+      expect(queryByRole('tooltip')).toBeNull();
+    });
+
+    it('closes on a tap anywhere else', async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await tap(wrapper);
+      await tap(document.body);
+
+      expect(queryByRole('tooltip')).toBeNull();
+    });
+
+    // The tap that opened it must not also be the tap that dismisses it.
+    it('stays open after the tap that opened it', async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await tap(wrapper);
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+    });
+
+    // A mouse already has hover. Toggling on its pointerdown too would close the
+    // tooltip the moment someone clicked a link inside it.
+    it('ignores a mouse pointerdown', async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await fireEvent.mouseEnter(wrapper);
+      await fireEvent.pointerDown(wrapper, { pointerType: 'mouse' });
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+    });
+  });
+
   it('nests inside the wrapper so the pointer can travel onto it', async () => {
     const { wrapper, queryByRole } = setup();
 

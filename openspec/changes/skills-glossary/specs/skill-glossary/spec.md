@@ -104,17 +104,34 @@ sentence thousands of times.
 
 ### Requirement: A skill chip reveals its description on hover, focus and tap
 
-Wherever a skill chip is rendered, a described skill SHALL reveal its description
+Where a skill chip stands on its own, a described skill SHALL reveal its description
 without leaving the page — on pointer hover, on keyboard focus, and on tap for a touch
 pointer, which has no hover. The reveal SHALL be dismissible without moving the pointer,
 and SHALL remain readable while the pointer travels onto it.
 
 The chip's own activation SHALL keep its existing destination — the postings filtered to
-that skill. The reveal SHALL carry a link to the skill's glossary page, so the longer
+that skill. Because that makes the chip a link, and a tap on a link navigates, the
+reveal SHALL have its OWN activation target inside the chip rather than sharing the
+chip's: a touch reader given only the chip would reach the filter and never the
+definition. The reveal SHALL carry a link to the skill's glossary page, so the longer
 read is one deliberate click away rather than in the path of the common one.
 
 An undescribed skill SHALL render as a plain chip, with no empty reveal and no
-affordance suggesting one.
+affordance suggesting one. Whether a skill is described MUST therefore be answerable as
+the chip renders, without waiting on the description text — an affordance that appears
+late, or appears on a skill with nothing behind it, is worse than none.
+
+**Chips nested inside a larger link are excluded.** On the feed card the chips sit
+inside the `<a>` that opens the posting, where a nested activation target is invalid
+markup and an assistive-technology hazard, and the surrounding card is a scanning
+surface rather than a reading one. Those chips SHALL still render the display label
+(next requirement); the definition is reached from the posting itself.
+
+#### Scenario: A skill chip on a posting
+
+- **WHEN** a reader hovers, focuses or taps the reveal target on a described skill's chip
+  on a job page
+- **THEN** the description appears without leaving the page
 
 #### Scenario: A touch reader opens a definition
 

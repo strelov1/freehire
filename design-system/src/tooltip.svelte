@@ -63,6 +63,30 @@
     if (e.key === 'Escape') hide();
   }
 
+  // A touch pointer never hovers and rarely focuses, so without this the tooltip
+  // is unreachable on a phone — mouse and keyboard readers get the content and
+  // touch readers get nothing at all. Tap toggles instead.
+  //
+  // A mouse pointerdown is deliberately ignored: hover already opened it, and
+  // toggling here would close the tooltip the moment someone clicked a link
+  // inside it.
+  function toggleOnTouch(e: PointerEvent) {
+    if (e.pointerType === 'mouse') return;
+    if (visible) hide();
+    else show();
+  }
+
+  // The touch half of "dismissible": there is no pointer to move away, so the
+  // next tap elsewhere is what closes it.
+  //
+  // The `contains` guard is what stops the opening tap from also being the
+  // closing one. Svelte attaches this listener after the current event finishes,
+  // so the tap that opened the tooltip should never reach it — but the guard
+  // costs a line and does not depend on that ordering holding.
+  function dismissOutside(e: PointerEvent) {
+    if (!triggerEl?.contains(e.target as Node)) hide();
+  }
+
   function hide() {
     clearTimeout(hideTimer);
     visible = false;
@@ -79,7 +103,10 @@
   };
 </script>
 
-<svelte:window onkeydown={visible ? dismiss : undefined} />
+<svelte:window
+  onkeydown={visible ? dismiss : undefined}
+  onpointerdown={visible ? dismissOutside : undefined}
+/>
 
 <!-- The pointer handlers sit on the wrapper, not the trigger: the trigger is the
      consumer's snippet, and the wrapper has to enclose the tooltip so moving the
@@ -93,6 +120,7 @@
   onmouseleave={scheduleHide}
   onfocusin={show}
   onfocusout={hide}
+  onpointerdown={toggleOnTouch}
 >
   {@render children()}
   {#if visible}

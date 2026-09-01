@@ -1,6 +1,12 @@
 package main
 
-import "github.com/strelov1/freehire/internal/dict/skilltag"
+import (
+	"maps"
+	"slices"
+	"strings"
+
+	"github.com/strelov1/freehire/internal/dict/skilltag"
+)
 
 // The skill glossary ships as its OWN module rather than as one more map in
 // contracts.ts, and the split is the point.
@@ -22,4 +28,27 @@ const skillDescriptionsPath = "web/src/lib/generated/skillDescriptions.ts"
 // the SPA reads a missing key as "no definition", which is what it is.
 func genSkillDescriptions() string {
 	return header + emitMap("SkillDescriptions", "SKILL_DESCRIPTIONS", skilltag.Descriptions())
+}
+
+// emitDescribedSkills renders WHICH skills have an entry — the slugs, no prose — into
+// the shared, eagerly loaded module.
+//
+// This one has to be eager while the sentences must not be. A skill chip carries a
+// "what is this?" affordance, and that affordance may not appear on a skill with no
+// definition behind it: the decision is made as the chip renders, before any lazily
+// imported chunk could have arrived. Slugs are a fraction of the weight of the
+// sentences they key, which is what makes paying for them upfront reasonable.
+//
+// It is also temporary. Once every canonical is described, "described" and "canonical"
+// name the same set and SKILL_LABELS already lists it eagerly — so the last wave
+// deletes this alongside describedFloor.
+//
+// No `as const`: nothing needs the union of 863 string literals, only membership.
+func emitDescribedSkills(descriptions map[string]string) string {
+	slugs := slices.Sorted(maps.Keys(descriptions))
+	quoted := make([]string, len(slugs))
+	for i, s := range slugs {
+		quoted[i] = quoteTS(s)
+	}
+	return "export const SKILL_DESCRIBED = [" + strings.Join(quoted, ", ") + "];\n"
 }

@@ -8,7 +8,23 @@
  *  reaching it through `import()` is what keeps a reader who never opens a definition
  *  from downloading one. Everything here is async for that reason alone. */
 
+import { SKILL_DESCRIBED } from './generated/contracts';
+
 type SkillDescriptions = Readonly<Record<string, string>>;
+
+/** Which skills have an entry, from the eagerly loaded contracts module.
+ *
+ *  The one synchronous thing here, and it has to be: a chip decides whether to draw its
+ *  "what is this?" affordance as it renders, and an affordance that appears a moment
+ *  late — or appears on a skill with nothing behind it — is worse than none. Slugs are a
+ *  fraction of the weight of the sentences they key, which is what makes this affordable
+ *  eagerly when the prose is not. */
+const described = new Set<string>(SKILL_DESCRIBED);
+
+/** Whether this canonical skill has a glossary entry. Synchronous; see `described`. */
+export function hasSkillDescription(slug: string): boolean {
+  return described.has(slug);
+}
 
 /** The in-flight or settled fetch, memoised. The PROMISE is memoised rather than its
  *  value: a job card renders a row of chips at once, and memoising after the await would

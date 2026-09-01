@@ -3754,6 +3754,7 @@ export const SKILL_LABELS = {
   'zustand': 'Zustand',
 } as const;
 export type SkillLabels = typeof SKILL_LABELS;
+export const SKILL_DESCRIBED = ['dbt'];
 export const ROLE_ALIASES = {
   'account_executive': ['account executive'],
   'account_manager': ['account manager'],
