@@ -1,6 +1,6 @@
 ## 1. Measurement and groundwork
 
-- [ ] 1.1 Measure the `maxlength` values that captured `cover_letter_text` fields actually carry in `apply_forms.payload` on production, and set the two length bands (short / standard) from that distribution rather than from a guess. Record the numbers in `design.md`'s Open Questions section, replacing the placeholder.
+- [x] 1.1 Measure the `maxlength` values that captured `cover_letter_text` fields carry in `apply_forms.payload` on production, and set the two length bands from that distribution. **Done, and the answer was that the data does not exist**: no captured field carries `maxlength` (the stored keys are `id`, `type`, `raw_type`, `label`, `required`, `section`). Measured instead what the postings do offer — 209,297 open postings ask for a letter, 172,783 accept it as text, 36,514 only as a file. `design.md` now sets the bands as a stated product decision and records the file-only share as a limitation.
 - [ ] 1.2 Register `internal/candidate/coverletter` in the block table in `internal/platform/arch/layering/blocks.go` and confirm `go test ./internal/platform/arch/layering/` passes with an empty package present.
 
 ## 2. Storage

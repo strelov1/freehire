@@ -2,7 +2,8 @@
 
 The tailoring workspace takes a candidate all the way to a CV shaped for one vacancy and then
 stops, one step short of the application. Of the 402,117 open postings whose apply form we have
-captured, **219,198 (54%) ask for a cover letter** — and the two things that decide whether that
+captured, **209,297 (52%) ask for a cover letter**, and **172,783 of those (83%) accept it as
+text** rather than only as an uploaded file — and the two things that decide whether that
 letter is any good are things only this platform holds: the fit analysis already knows which
 requirements the candidate meets but fails to show (`missing-have`) versus which are genuine gaps
 (`missing-gap`), and the experience bank already knows which achievements the candidate has

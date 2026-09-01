@@ -146,6 +146,10 @@ Migration number is `0120`: `0119` was taken twice by parallel branches
   `feature:` tag, so the cost is visible per user from day one.
 - **Three model calls where one might do** → accepted. The user's stated priority is quality over
   cost, and the audit stage is the mechanism for the brevity requirement, not an optional polish.
+- **17% of the postings that ask for a letter accept only a file** → 36,514 of the 209,297 open
+  postings (recruitee, ashby) expose `cover_letter` as an upload with no text field. The letter is
+  still useful there — it is copied out by hand — but the seamless path does not reach them, and a
+  claim that it does would be false. The remaining 172,783 (greenhouse, workable) accept text.
 - **A new package that `depguard` does not know** → registering it in
   `internal/platform/arch/layering/blocks.go` is a task, not an afterthought. A package in neither
   the table nor a block fails the guard, and the guard only sees tagged test files when
@@ -160,10 +164,24 @@ Migration number is `0120`: `0119` was taken twice by parallel branches
 3. The allowance is wired when `add-plan-limits` ships. Rollback is dropping the tab; the table can
    stay, since an unread table costs nothing and re-adding one costs a migration.
 
+### The length bands are a product decision, because the forms do not state a limit
+
+The first task of this change was to read the real `maxlength` of captured `cover_letter_text`
+fields and set the bands from the distribution. **That measurement came back empty: `apply_forms`
+does not capture `maxlength` at all.** The keys stored per field are `id`, `type`, `raw_type`,
+`label`, `required` and sometimes `section`, across all 482,750 captured cover-letter fields.
+
+Widening the capture to record `maxlength` belongs to `apply-form-capture`, not here, and it would
+only pay off after a re-capture of the whole queue. So the bands are set as a product decision and
+stated as one: **short ≈ 900 characters, standard ≈ 1,800**, the range a recruiter-facing letter
+occupies in practice. They live in the same process-wide bounds mechanism the fit analysis uses
+(`SetBounds` loaded from environment in `cmd/server`), so correcting them later is configuration
+rather than a release.
+
 ## Open Questions
 
-- **The length bands.** Two are planned (short / standard) with the ceilings expressed in
-  characters, since that is what a `textarea` bounds. The exact numbers should be set against real
-  `apply_forms` `maxlength` values rather than guessed, and that measurement is a task.
 - **Whether the tab or the chat is the first surface a user meets.** Both exist from the start; the
   question is which one the empty state points at. Deferred to the UI task.
+- **Whether the file-only 17% deserve their own path.** 36,514 open postings (recruitee and ashby)
+  expose the cover letter only as a file upload. They can still be served by copying the text out,
+  but a rendered file would serve them properly. Out of scope here; revisit with the export seam.
