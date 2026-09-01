@@ -30,14 +30,14 @@ type coverLetterResponse struct {
 //
 // Cookie or API key, owner-scoped (a foreign id is the same 404 as a missing one).
 func (h *cvHandlers) GetCVCoverLetter(c *fiber.Ctx) error {
-	if h.letters == nil {
+	if h.letter.letters == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "cover letters are not enabled on this deployment")
 	}
 	userID, jobID, err := h.coverLetterTarget(c)
 	if err != nil {
 		return err
 	}
-	stored, err := h.letters.Get(c.Context(), userID, jobID)
+	stored, err := h.letter.letters.Get(c.Context(), userID, jobID)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (h *cvHandlers) GetCVCoverLetter(c *fiber.Ctx) error {
 		Present: true,
 		Stale:   stored.Stale(modelIDOf(h.llm.client), job.PostingLanguage),
 		Letter:  &stored.Letter,
-		Cited:   citedAtomsOf(c.Context(), h.letterBank, userID, stored.Cited),
+		Cited:   citedAtomsOf(c.Context(), h.letter.bank, userID, stored.Cited),
 		Model:   stored.Model,
 	}})
 }
@@ -74,7 +74,7 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 		return err
 	}
 
-	attempt := letterAttempt(c.Context(), h.letters, userID, jobID)
+	attempt := letterAttempt(c.Context(), h.letter.letters, userID, jobID)
 	charge, refused, decision := chargeLetter(c.Context(), h.plans, userID, jobID, attempt)
 	if refused {
 		return refuse(c, decision)
@@ -99,7 +99,7 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": coverLetterResponse{
 		Present: true,
 		Letter:  letter,
-		Cited:   citedAtomsOf(c.Context(), h.letterBank, userID, letter.Cited),
+		Cited:   citedAtomsOf(c.Context(), h.letter.bank, userID, letter.Cited),
 		Model:   modelIDOf(client),
 	}})
 }
@@ -107,8 +107,8 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 // letterDrafter assembles the shared drafting path from this surface's dependencies.
 func (h *cvHandlers) letterDrafter() letterDrafter {
 	return letterDrafter{
-		jobs: h.jobReader, fit: h.fit, bank: h.letterBank,
-		resume: h.resume, chain: h.letterChain, letters: h.letters,
+		jobs: h.jobReader, fit: h.fit, bank: h.letter.bank,
+		resume: h.resume, chain: h.letter.chain, letters: h.letter.letters,
 	}
 }
 

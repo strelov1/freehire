@@ -478,13 +478,16 @@ func Register(app *fiber.App, cfg Config) {
 	// Same repository the tracking surface uses: tailor bootstrap places the vacancy on
 	// the Kanban so a pursued role is not invisible under Activity → Saved alone.
 	trackingJobs := trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, cfg.Pool)}
-	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, !cfg.CVEditAllowBulletTruncation)
+	// One store, one chain, one bank, shared by the endpoint and by cover_letter_draft - which
+	// is what stops the button path and the chat path from writing two different letters for
+	// one pair. Built here, before either handler, so both take it through their constructor.
+	letterDeps := coverLetterDeps{
+		letters: coverletter.NewStore(coverletter.NewQueriesRepository(queries)),
+		chain:   coverletter.NewAnalyzer(cfg.LLM),
+		bank:    bank,
+	}
+	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
 
-	// The cover-letter surface. Assigned rather than passed: newCVHandlers already takes 15
-	// arguments and 78 integration tests call it, so three more would edit all of them.
-	cvH.letters = coverletter.NewStore(coverletter.NewQueriesRepository(queries))
-	cvH.letterChain = coverletter.NewAnalyzer(cfg.LLM)
-	cvH.letterBank = bank
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	discordH := newDiscordHandlers(queries, cfg.JWTSecret, cfg.DiscordBotToken, cfg.DiscordApplicationID, cfg.DiscordPublicKey, cfg.DiscordGuildID, cfg.FrontendOrigin, contributionsH.intake)
@@ -556,18 +559,12 @@ func Register(app *fiber.App, cfg Config) {
 			Agent: cfg.AssistantLLM.WithTimeout(assistantLLMTimeout), Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
-		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc, plans)
+		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc, plans, letterDeps)
 	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
 	if cfg.Realtime != nil {
 		assistantH.realtime = cfg.Realtime
 	}
-	// cover_letter_draft shares the endpoint's store and chain, so the chat path and the
-	// button path cannot drift into two different letters for one pair.
-	assistantH.letters = cvH.letters
-	assistantH.letterChain = cvH.letterChain
-	assistantH.letterBank = bank
-
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the

@@ -24,6 +24,17 @@ type letterBankPort interface {
 	candidateProfiler
 }
 
+// coverLetterDeps is the cover-letter surface's dependencies travelling as one value. Both
+// handler types take it through their constructor rather than by assignment afterwards: the
+// bank, the store and the chain all exist before either handler is built, and
+// handler/AGENTS.md reserves post-construction assignment for dependencies that genuinely do
+// not. Passing them as three parameters instead would be the same clump written out.
+type coverLetterDeps struct {
+	letters *coverletter.Store
+	chain   *coverletter.Analyzer
+	bank    letterBankPort
+}
+
 // letterDrafter is the one path from a vacancy to a stored cover letter. Both entry points —
 // the endpoint and the assistant tool — assemble one and call it, so what a letter is built
 // from cannot drift between the button and the chat.

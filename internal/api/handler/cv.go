@@ -15,7 +15,6 @@ import (
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
-	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
@@ -83,12 +82,9 @@ type cvHandlers struct {
 	// rather than through newCVHandlers, whose signature 78 integration tests already call —
 	// widening it for three optional dependencies would edit every one of them to say nil.
 	// All three are nil-safe: a fixture that never asks for a letter needs none of them.
-	letters     *coverletter.Store
-	letterChain *coverletter.Analyzer
-	// letterBank is the experience bank, under the two narrow interfaces a letter needs of it:
-	// Retriever to gather evidence, candidateProfiler to compose the projection. One object,
-	// held once - it arrived as `bank` and `letterProfile` and read as two dependencies.
-	letterBank letterBankPort
+	// letter holds the cover-letter surface's dependencies as one value: the store, the chain,
+	// and the experience bank under the two narrow interfaces a letter needs of it.
+	letter coverLetterDeps
 	// llm binds a model call to the caller's own gateway credential, tagged by feature.
 	llm llmBinding
 }
@@ -133,8 +129,9 @@ func (s trackingBoarder) EnsureOnBoard(ctx context.Context, userID, jobID int64)
 
 // refuseListCap is normally true (Commit refuses over-cap edits). Pass false only when
 // an operator has turned on CV_EDIT_ALLOW_BULLET_TRUNCATION.
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, plans *plan.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, refuseListCap bool) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, plans *plan.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, letter coverLetterDeps, refuseListCap bool) *cvHandlers {
 	h := &cvHandlers{
+		letter:            letter,
 		cvStore:           cvStore,
 		assistantSessions: assistantSessions,
 		cvRenderer:        cvRenderer,

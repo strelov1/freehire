@@ -9,8 +9,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/tmc/langchaingo/llms"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -25,13 +29,45 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
+
+// letterModel answers the three chain stages in order, so the fixture can drive a real draft
+// end to end. Past its script it errors, which is how a test asserts that a stage did not run.
+type letterModel struct {
+	responses []string
+	calls     int
+}
+
+func (m *letterModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
+	i := m.calls
+	m.calls++
+	if i >= len(m.responses) {
+		return nil, errors.New("letterModel: unexpected extra call")
+	}
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: m.responses[i]}}}, nil
+}
+
+func (m *letterModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+// chainFor scripts select/draft/audit around one atom, with a body long enough to clear the
+// floor so the audited letter is the one that survives.
+func chainFor(atomID uuid.UUID, body string) *letterModel {
+	return &letterModel{responses: []string{
+		`{"selected":["` + atomID.String() + `"]}`,
+		`{"body":"DRAFT ` + strings.Repeat("word ", 80) + `"}`,
+		`{"body":"` + body + " " + strings.Repeat("word ", 80) + `","cited_atom_ids":["` + atomID.String() + `"]}`,
+	}}
+}
 
 type coverLetterFixture struct {
 	h        *cvHandlers
 	app      *fiber.App
 	token    string
 	letters  *coverletter.Store
+	bank     *experience.Store
 	tailored cv.Meta
 	base     cv.Meta
 	userID   int64
@@ -52,13 +88,12 @@ func newCoverLetterFixture(t *testing.T, pool *pgxpool.Pool) coverLetterFixture 
 
 	h := &cvHandlers{
 		queries: queries, jobReader: queries, cvStore: store,
-		fit:     fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
-		resume:  resume.New(nil, resume.NewQueriesRepository(queries)),
-		letters: letters,
+		fit:    fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		resume: resume.New(nil, resume.NewQueriesRepository(queries)),
 		// A nil chain is the unconfigured-LLM deployment: Draft returns (nil, nil), which is
-		// exactly the "produced nothing" path the release rule is about.
-		letterChain: coverletter.NewAnalyzer(nil),
-		letterBank:  bank,
+		// exactly the "produced nothing" path the release rule is about. Tests that want a
+		// real draft replace the chain.
+		letter: coverLetterDeps{letters: letters, chain: coverletter.NewAnalyzer(nil), bank: bank},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
@@ -83,13 +118,28 @@ func newCoverLetterFixture(t *testing.T, pool *pgxpool.Pool) coverLetterFixture 
 	if err != nil {
 		t.Fatalf("create tailored cv: %v", err)
 	}
-	return coverLetterFixture{h: h, app: app, token: token, letters: letters,
+	return coverLetterFixture{h: h, app: app, token: token, letters: letters, bank: bank,
 		tailored: tailored, base: base, userID: userID, jobID: jobID}
 }
 
 func (f coverLetterFixture) get(t *testing.T, id string) (coverLetterResponse, int) {
 	t.Helper()
 	resp := doCV(t, f.app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/cover-letter", f.token, nil)
+	defer resp.Body.Close()
+	var body struct {
+		Data coverLetterResponse `json:"data"`
+	}
+	if resp.StatusCode == fiber.StatusOK {
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+	}
+	return body.Data, resp.StatusCode
+}
+
+func (f coverLetterFixture) post(t *testing.T, id string) (coverLetterResponse, int) {
+	t.Helper()
+	resp := doCV(t, f.app, fiber.MethodPost, "/api/v1/me/cvs/"+id+"/cover-letter", f.token, nil)
 	defer resp.Body.Close()
 	var body struct {
 		Data coverLetterResponse `json:"data"`
@@ -265,5 +315,111 @@ func TestCoverLetter_UnproducedDraftLeavesTheStoreAndTheAllowanceAlone(t *testin
 	}
 	if st.Used != 0 {
 		t.Errorf("used = %d, want 0 — the allowance was released when nothing was produced", st.Used)
+	}
+}
+
+// Task 5.2, the happy path the earlier fixture could not reach: a real chain runs, the letter
+// is stored, and the response carries its evidence with the claims already resolved — the part
+// the workspace renders and the part a candidate actually checks.
+func TestCoverLetter_DraftsStoresAndResolvesItsEvidence(t *testing.T) {
+	pool := startPostgres(t)
+	f := newCoverLetterFixture(t, pool)
+	ctx := context.Background()
+
+	atom, err := f.bank.AddAtom(ctx, f.userID, experience.Atom{
+		Claim: "cut p95 latency from 800ms to 120ms",
+	}, experience.AuthorCandidate)
+	if err != nil {
+		t.Fatalf("bank atom: %v", err)
+	}
+	seedAnalysis(t, f.h, f.userID, f.jobID)
+	model := chainFor(atom.ID, "AUDITED")
+	f.h.letter.chain = coverletter.NewAnalyzer(llm.NewWithModel(model))
+	f.h.llm = llmBinding{client: llm.NewWithModel(model)}
+
+	got, status := f.post(t, f.tailored.ID.String())
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if model.calls != 3 {
+		t.Errorf("model called %d times, want 3 — select, draft, audit", model.calls)
+	}
+	if got.Letter == nil || !strings.HasPrefix(got.Letter.Body, "AUDITED") {
+		t.Fatalf("body = %+v, want the audited letter", got.Letter)
+	}
+	if len(got.Cited) != 1 || got.Cited[0].ID != atom.ID.String() {
+		t.Fatalf("Cited = %+v, want the one banked atom", got.Cited)
+	}
+	if got.Cited[0].Claim != "cut p95 latency from 800ms to 120ms" {
+		t.Errorf("claim = %q, want it resolved server-side — an id alone is not checkable", got.Cited[0].Claim)
+	}
+
+	stored, err := f.letters.Get(ctx, f.userID, f.jobID)
+	if err != nil || stored == nil {
+		t.Fatalf("stored: (%v, %v)", stored, err)
+	}
+	if !strings.HasPrefix(stored.Body, "AUDITED") {
+		t.Errorf("stored body = %q, want the audited letter", stored.Body)
+	}
+}
+
+// A candidate whose bank holds nothing they asserted gets a refusal and no model call at all —
+// the chain does not run, because a letter written without evidence is what this feature
+// exists not to produce.
+func TestCoverLetter_RefusesWhenNothingIsPublishable(t *testing.T) {
+	pool := startPostgres(t)
+	f := newCoverLetterFixture(t, pool)
+	ctx := context.Background()
+
+	if _, err := f.bank.AddAtom(ctx, f.userID, experience.Atom{Claim: "a model's own reading"},
+		experience.AuthorAgent); err != nil {
+		t.Fatalf("bank atom: %v", err)
+	}
+	seedAnalysis(t, f.h, f.userID, f.jobID)
+	model := &letterModel{}
+	f.h.letter.chain = coverletter.NewAnalyzer(llm.NewWithModel(model))
+	f.h.llm = llmBinding{client: llm.NewWithModel(model)}
+
+	resp := doCV(t, f.app, fiber.MethodPost, "/api/v1/me/cvs/"+f.tailored.ID.String()+"/cover-letter", f.token, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Errorf("status = %d, want 409 when no evidence is the candidate's own", resp.StatusCode)
+	}
+	if model.calls != 0 {
+		t.Errorf("model called %d times, want 0", model.calls)
+	}
+}
+
+// Task 9.2: an exhausted allowance refuses the write with a 402, and the same account can
+// still READ its stored draft — the read calls no model, so nothing entitles it to refuse.
+func TestCoverLetter_ExhaustedAllowanceRefusesTheWriteButNotTheRead(t *testing.T) {
+	pool := startPostgres(t)
+	f := newCoverLetterFixture(t, pool)
+	ctx := context.Background()
+
+	if err := f.letters.Save(ctx, f.userID, f.jobID,
+		coverletter.Letter{Body: "already written", Language: "en"}, "m"); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	seedAnalysis(t, f.h, f.userID, f.jobID)
+	// Enforcement ships OFF per feature, so the refusal has to be turned on to be tested at
+	// all — which is itself worth pinning: a shadow-mode deployment never refuses.
+	f.h.plans = plan.NewStore(db.New(pool), pool, plan.DefaultConfig().WithFreeDaily(plan.FeatureCoverLetter, 0).Enforcing())
+	model := chainFor(uuid.New(), "NEVER")
+	f.h.letter.chain = coverletter.NewAnalyzer(llm.NewWithModel(model))
+	f.h.llm = llmBinding{client: llm.NewWithModel(model)}
+
+	resp := doCV(t, f.app, fiber.MethodPost, "/api/v1/me/cvs/"+f.tailored.ID.String()+"/cover-letter", f.token, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusPaymentRequired {
+		t.Fatalf("status = %d, want 402 for an exhausted allowance", resp.StatusCode)
+	}
+	if model.calls != 0 {
+		t.Errorf("model called %d times, want 0 — the refusal precedes the chain", model.calls)
+	}
+
+	got, status := f.get(t, f.tailored.ID.String())
+	if status != fiber.StatusOK || !got.Present || got.Letter.Body != "already written" {
+		t.Errorf("read after refusal = (%d, %+v), want the stored letter served", status, got)
 	}
 }

@@ -53,7 +53,7 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
 
-			attempt := letterAttempt(ctx, h.letters, userID, jobID)
+			attempt := letterAttempt(ctx, h.letter.letters, userID, jobID)
 			charge, refused, _ := chargeLetter(ctx, h.plans, userID, jobID, attempt)
 			if refused {
 				// A refusal reaches the model as a sentence it can relay, not as a 402: the
@@ -83,8 +83,8 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 // letterDrafter assembles the shared drafting path from this surface's dependencies.
 func (h *assistantHandlers) letterDrafter() letterDrafter {
 	return letterDrafter{
-		jobs: h.jobs, fit: h.fit, bank: h.letterBank,
-		resume: h.resumeStore(), chain: h.letterChain, letters: h.letters,
+		jobs: h.jobs, fit: h.fit, bank: h.letter.bank,
+		resume: h.resumeStore(), chain: h.letter.chain, letters: h.letter.letters,
 	}
 }
 

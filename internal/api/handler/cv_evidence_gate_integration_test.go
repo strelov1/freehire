@@ -57,7 +57,8 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 		plans,
 		&matchHandlers{fit: fitanalysis.New(queries, plans, matchanalysis.NewAnalyzer(nil))},
 		bankGate{bank: bank},
-		nil, // tracking save unused — this fixture never bootstraps tailor
+		nil,               // tracking save unused — this fixture never bootstraps tailor
+		coverLetterDeps{}, // cover letters unused — this fixture only exercises the evidence gate
 		true,
 	)
 
