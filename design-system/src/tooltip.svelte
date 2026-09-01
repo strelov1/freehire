@@ -16,6 +16,8 @@
 
   let visible = $state(false);
   let triggerEl: HTMLElement | undefined = $state();
+  // The floating content, so a tap can be told apart from a tap on the trigger.
+  let contentEl: HTMLElement | undefined = $state();
 
   // The floating content sits outside the wrapper's own layout box (it's
   // `position: absolute`, offset by the `positions` margin below), so the pointer
@@ -70,8 +72,14 @@
   // A mouse pointerdown is deliberately ignored: hover already opened it, and
   // toggling here would close the tooltip the moment someone clicked a link
   // inside it.
+  //
+  // A tap inside the tooltip's OWN content is ignored for a sharper version of
+  // the same reason. The content is a descendant of this wrapper, so it reaches
+  // this handler — and closing there unmounts the link before the click that
+  // follows the pointerdown can land on it, so the tap does nothing at all.
   function toggleOnTouch(e: PointerEvent) {
     if (e.pointerType === 'mouse') return;
+    if (contentEl?.contains(e.target as Node)) return;
     if (visible) hide();
     else show();
   }
@@ -136,6 +144,7 @@
          content's own max-content width instead, still capped by max-w-xs. -->
     <span
       id={tooltipId}
+      bind:this={contentEl}
       role="tooltip"
       class={cn(
         'absolute z-popover w-max max-w-xs rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md',

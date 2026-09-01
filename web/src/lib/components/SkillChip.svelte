@@ -13,11 +13,9 @@
   // a tap on a link navigates, so a touch reader given only the chip would reach the
   // filter and never the glossary.
   //
-  // Nothing here is a component test, because web/ runs vitest in plain Node with no DOM
-  // (vitest.config.ts) — the repository keeps logic in pure modules and tests those.
-  // Both of this file's decisions live in one: `hasSkillDescription` and
-  // `skillDescription` are covered in skillDescriptions.test.ts, and the reveal's own
-  // behaviour in design-system/src/tooltip.test.ts.
+  // This file has no component test: web/ runs vitest in plain Node with no DOM. Its two
+  // decisions live in tested pure modules — skillDescriptions.test.ts for what is
+  // described and what the text is, tooltip.test.ts for how the reveal behaves.
 
   let { slug }: { slug: string } = $props();
 
@@ -28,11 +26,10 @@
   // to have no definition would be a lie.
   const described = $derived(hasSkillDescription(slug));
 
-  // The text itself is fetched only when the chip is actually built, which is the whole
-  // point of the split — the sentences are their own chunk. `#await` renders nothing
-  // while it is in flight: the reveal is already open by then, and a spinner inside a
-  // tooltip is more motion than the sentence is worth.
-  const description = $derived(described ? skillDescription(slug) : Promise.resolve(''));
+  // Read only from inside the reveal's content, which mounts when the reveal opens — so
+  // a $derived that is never read is a chunk never fetched. That is the whole point of
+  // the split, and it is why this is not simply awaited up front.
+  const description = $derived(skillDescription(slug));
 </script>
 
 <span class={badgeVariants({ variant: 'brand' })}>
@@ -53,6 +50,10 @@
         ?
       </button>
       {#snippet content()}
+        <!-- Nothing renders while the chunk is in flight: the reveal is already open by
+             then, and a spinner inside a tooltip is more motion than a sentence is
+             worth. `text` is empty when the fetch failed, and an empty reveal is the
+             right answer to that too. -->
         {#await description then text}
           {#if text}
             <span class="block text-left">{text}</span>

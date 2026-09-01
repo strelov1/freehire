@@ -3,10 +3,11 @@
  *  Generated from `internal/dict/skilltag`, the same dictionary that decides the skills
  *  themselves, so a definition cannot drift from the thing it defines.
  *
- *  It is imported dynamically and never re-exported eagerly. The catalog is a sentence
- *  per skill against a word per skill in `contracts.ts`, which every page loads — so
- *  reaching it through `import()` is what keeps a reader who never opens a definition
- *  from downloading one. Everything here is async for that reason alone. */
+ *  The prose is imported dynamically and never re-exported eagerly. The catalog is a
+ *  sentence per skill against a word per skill in `contracts.ts`, which every page loads
+ *  — so reaching it through `import()` is what keeps a reader who never opens a
+ *  definition from downloading one. That is the only reason the two readers here are
+ *  async; the third, `hasSkillDescription`, is not, and says below why. */
 
 import { SKILL_DESCRIBED } from './generated/contracts';
 

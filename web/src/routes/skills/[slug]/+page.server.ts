@@ -18,10 +18,6 @@ import type { PageServerLoad } from './$types';
 // The alias table is imported here rather than in the component: it is 28 KB covering
 // the whole vocabulary, and this page renders one row of it. Reading it server-side
 // keeps all of it off the wire.
-//
-// Two calls, run together. The skills distribution under this skill is what the
-// neighbours read; `total` from the same response is what the gate reads, so the block
-// and the sentence above it cannot disagree.
 const NEIGHBOUR_LIMIT = 8;
 const POSTINGS_SHOWN = 10;
 
@@ -43,6 +39,9 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   // entry, and the sitemap lists exactly what this route serves.
   if (!description) error(404, 'Not found');
 
+  // Two calls, run together. The neighbours read the skills distribution under this
+  // skill; the gate and the sentence above it read `total` from that same response, so
+  // the two cannot state different numbers.
   const filter = new URLSearchParams({ skills: slug });
   const api = serverApi(fetch);
   const [counts, postings] = await Promise.all([

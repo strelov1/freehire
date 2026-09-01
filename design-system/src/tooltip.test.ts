@@ -147,6 +147,20 @@ describe('Tooltip', () => {
       expect(queryByRole('tooltip')).not.toBeNull();
     });
 
+    // The content is a descendant of the wrapper the toggle listens on, so a tap on a
+    // link inside the tooltip would close it — unmounting the link before the click
+    // that follows the pointerdown could land on it. The navigation would silently do
+    // nothing, on the one pointer type this whole path exists for.
+    it('stays open when the tap lands inside the tooltip’s own content', async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await tap(wrapper);
+      const tooltip = must(queryByRole('tooltip'));
+      await tap(tooltip);
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+    });
+
     // A mouse already has hover. Toggling on its pointerdown too would close the
     // tooltip the moment someone clicked a link inside it.
     it('ignores a mouse pointerdown', async () => {
