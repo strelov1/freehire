@@ -245,10 +245,11 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 	})
 }
 
-// TestMatchAnalysisCredits covers the points gate on the match feature: a new job with no points
-// is a 402 (no LLM call, nothing persisted), a recompute of an already-analyzed job is
-// always free, a fresh analysis debits one point, and GET reports the balance.
-func TestMatchAnalysisCredits(t *testing.T) {
+// TestMatchAnalysisAllowance covers the plan gate on the match feature: a new job with the
+// day's allowance spent is a 402 (no LLM call, nothing persisted), a recompute of an
+// already-analyzed job is always free, a fresh analysis consumes one, and GET reports where
+// the caller stands.
+func TestMatchAnalysisAllowance(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 	queries := db.New(pool)
@@ -328,7 +329,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 	}
 	newModel := func() *fitModel { return &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}} }
 
-	t.Run("new job with no points is 402 and never calls the LLM", func(t *testing.T) {
+	t.Run("new job with the day's allowance spent is 402 and never calls the LLM", func(t *testing.T) {
 		userID, token := seedUser(t, "broke@example.test")
 		seedJob(t, "broke-new", "broke-new")
 		model := newModel()
@@ -339,7 +340,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 			t.Errorf("status = %d, want 402", status)
 		}
 		if model.n != 0 {
-			t.Errorf("LLM was called %d times, want 0 when out of credits", model.n)
+			t.Errorf("LLM was called %d times, want 0 when the allowance is spent", model.n)
 		}
 		var n int
 		_ = pool.QueryRow(ctx, `SELECT count(*) FROM user_job_analysis WHERE user_id=$1`, userID).Scan(&n)
@@ -348,7 +349,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		}
 	})
 
-	t.Run("recompute of an analyzed job is free even with no points", func(t *testing.T) {
+	t.Run("recompute of an analyzed job is free even with the allowance spent", func(t *testing.T) {
 		userID, token := seedUser(t, "recompute@example.test")
 		jid := seedJob(t, "rc", "rc-job")
 		seedAnalysis(t, userID, jid, time.Hour) // prior cache row → recompute, not a new job
@@ -362,14 +363,22 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		if model.n == 0 {
 			t.Error("recompute must run the LLM")
 		}
-		var debits int
-		_ = pool.QueryRow(ctx, `SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit'`, userID).Scan(&debits)
-		if debits != 0 {
-			t.Errorf("recompute debited %d points, want 0", debits)
+		// Against usage_ledger, and with the error checked. Pointed at the retired
+		// credit_ledger this counted a table nothing writes to any more: it returned zero
+		// whatever the code did, so the rule it exists to hold — a recompute is free —
+		// went unwatched behind a green assertion.
+		var charges int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM usage_ledger WHERE user_id=$1 AND feature='match' AND kind='consume'`,
+			userID).Scan(&charges); err != nil {
+			t.Fatalf("count consumptions: %v", err)
+		}
+		if charges != 0 {
+			t.Errorf("recompute consumed %d allowances, want 0", charges)
 		}
 	})
 
-	t.Run("a fresh analysis debits one point and GET reports the balance", func(t *testing.T) {
+	t.Run("a fresh analysis consumes one and GET reports the standing", func(t *testing.T) {
 		userID, token := seedUser(t, "spend@example.test")
 		seedJob(t, "spend-1", "spend-1")
 		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(newModel())), 2)
@@ -408,7 +417,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		}
 	})
 
-	t.Run("stream out of credits is 402 before opening the stream", func(t *testing.T) {
+	t.Run("a stream past the allowance is 402 before opening the stream", func(t *testing.T) {
 		userID, token := seedUser(t, "stream-broke@example.test")
 		seedJob(t, "sb-new", "sb-new")
 		model := newModel()
@@ -425,7 +434,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 			t.Errorf("stream status = %d, want 402", resp.StatusCode)
 		}
 		if model.n != 0 {
-			t.Errorf("LLM called %d times, want 0 for an out-of-credits stream", model.n)
+			t.Errorf("LLM called %d times, want 0 for a refused stream", model.n)
 		}
 	})
 }

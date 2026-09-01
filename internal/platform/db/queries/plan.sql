@@ -115,15 +115,24 @@ WHERE user_id = sqlc.arg(user_id)
   AND feature = sqlc.arg(feature)::text
   AND ref = sqlc.arg(ref)::text;
 
--- name: CountConsumptionsByRefPrefix :one
--- How many consumptions a user holds for refs beginning with a prefix. This is what makes
--- the tailoring turn ceiling need no column of its own: a session's charges are written
--- as '<session_id>#1', '#2', and so on, so counting them gives the number of ceilings
--- bought, and the ceiling in force is that count times the per-session turn allowance.
+-- name: ListConsumptionRefsByPrefix :many
+-- The live consumption references a user holds beginning with a prefix. This is what makes
+-- the tailoring turn ceiling need no column of its own: a session's charges are written as
+-- '<session_id>#1', '#2', and so on, so the SLOT NUMBERS say how many ceilings the session
+-- holds and the ceiling in force is the highest of them times the per-session turn allowance.
+--
+-- It returns the references rather than counting them, because a count and a slot number
+-- are not the same answer. A session that predates this metering holds no row at all and is
+-- given slot 1 implicitly, so its first extension buys slot 2 — under a count that extension
+-- would have read back as one ceiling and bought the session nothing. The same gap opens
+-- whenever a row is released: the count drops while the slots already sold do not.
+--
+-- The suffix is parsed by the caller, in the file that writes it, so one place owns the
+-- format. A session holds a handful of rows, so there is nothing to aggregate away.
 --
 -- The prefix is passed already terminated by the caller (the session id plus '#'), so a
 -- session id that is a prefix of another cannot borrow its charges.
-SELECT count(*)
+SELECT ref
 FROM usage_ledger
 WHERE user_id = sqlc.arg(user_id)
   AND kind = 'consume'

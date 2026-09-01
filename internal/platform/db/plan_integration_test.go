@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration tests for the plan and usage query semantics — the consumption-idempotency
-// index, what a release frees, how a tailoring session's ceilings are counted from refs
+// index, what a release frees, how a tailoring session's ceilings are read off its refs
 // alone, and the day key that makes a rollover need no reset. All of it is SQL behaviour
 // and can only be verified against a real Postgres. Run with:
 // go test -tags=integration ./internal/platform/db/
@@ -9,6 +9,7 @@ package db
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -161,10 +162,10 @@ func TestReleaseFreesTheRefForARetry(t *testing.T) {
 	}
 }
 
-// TestSessionCeilingsAreCountedFromRefs covers the decision that the tailoring turn
-// ceiling needs no column: the ceilings bought are the '<session>#n' charges held, and a
-// session id that prefixes another must not borrow its charges.
-func TestSessionCeilingsAreCountedFromRefs(t *testing.T) {
+// TestSessionCeilingsAreReadFromRefs covers the decision that the tailoring turn ceiling
+// needs no column: the ceilings a session holds are read off its '<session>#n' charges, and
+// a session id that prefixes another must not borrow its charges.
+func TestSessionCeilingsAreReadFromRefs(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -180,21 +181,48 @@ func TestSessionCeilingsAreCountedFromRefs(t *testing.T) {
 		}
 	}
 
-	n, err := q.CountConsumptionsByRefPrefix(ctx, CountConsumptionsByRefPrefixParams{
+	refs, err := q.ListConsumptionRefsByPrefix(ctx, ListConsumptionRefsByPrefixParams{
 		UserID: user, Feature: "tailor", RefPrefix: "sess-1#",
 	})
 	if err != nil {
-		t.Fatalf("CountConsumptionsByRefPrefix: %v", err)
+		t.Fatalf("ListConsumptionRefsByPrefix: %v", err)
 	}
-	if n != 2 {
-		t.Fatalf("sess-1 holds %d ceilings, want 2 — sess-12's charge leaked in through the prefix", n)
+	if got := refTexts(refs); !slices.Equal(got, []string{"sess-1#1", "sess-1#2"}) {
+		t.Fatalf("sess-1 holds %v, want [sess-1#1 sess-1#2] — sess-12's charge leaked in through the prefix", got)
 	}
 
-	if n, err = q.CountConsumptionsByRefPrefix(ctx, CountConsumptionsByRefPrefixParams{
-		UserID: user, Feature: "tailor", RefPrefix: "sess-12#",
-	}); err != nil || n != 1 {
-		t.Fatalf("sess-12 holds %d ceilings (err %v), want 1", n, err)
+	// A release must not shrink what the session holds: the slot was sold, and reading the
+	// live rows only is what keeps the ceiling from moving backwards under it.
+	if _, err := q.ReleaseConsumption(ctx, ReleaseConsumptionParams{
+		UserID: user, Feature: "tailor", Ref: "sess-1#1",
+	}); err != nil {
+		t.Fatalf("ReleaseConsumption: %v", err)
 	}
+	if refs, err = q.ListConsumptionRefsByPrefix(ctx, ListConsumptionRefsByPrefixParams{
+		UserID: user, Feature: "tailor", RefPrefix: "sess-1#",
+	}); err != nil {
+		t.Fatalf("ListConsumptionRefsByPrefix after release: %v", err)
+	}
+	if got := refTexts(refs); !slices.Equal(got, []string{"sess-1#2"}) {
+		t.Fatalf("after releasing #1 sess-1 holds %v, want [sess-1#2] — the highest slot is what the ceiling follows", got)
+	}
+
+	if refs, err = q.ListConsumptionRefsByPrefix(ctx, ListConsumptionRefsByPrefixParams{
+		UserID: user, Feature: "tailor", RefPrefix: "sess-12#",
+	}); err != nil || !slices.Equal(refTexts(refs), []string{"sess-12#1"}) {
+		t.Fatalf("sess-12 holds %v (err %v), want [sess-12#1]", refTexts(refs), err)
+	}
+}
+
+// refTexts flattens the nullable ref column for comparison. Every row this query returns was
+// written with a reference, so an absent one would itself be the finding.
+func refTexts(refs []pgtype.Text) []string {
+	out := make([]string, 0, len(refs))
+	for _, r := range refs {
+		out = append(out, r.String)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // TestUsageDayIsKeyedByDay covers the lazy rollover: yesterday's counter is a different

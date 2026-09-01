@@ -57,35 +57,6 @@ func (q *Queries) CountAssistantUserTurns(ctx context.Context, sessionID uuid.UU
 	return count, err
 }
 
-const countConsumptionsByRefPrefix = `-- name: CountConsumptionsByRefPrefix :one
-SELECT count(*)
-FROM usage_ledger
-WHERE user_id = $1
-  AND kind = 'consume'
-  AND feature = $2::text
-  AND ref LIKE $3::text || '%'
-`
-
-type CountConsumptionsByRefPrefixParams struct {
-	UserID    int64  `json:"user_id"`
-	Feature   string `json:"feature"`
-	RefPrefix string `json:"ref_prefix"`
-}
-
-// How many consumptions a user holds for refs beginning with a prefix. This is what makes
-// the tailoring turn ceiling need no column of its own: a session's charges are written
-// as '<session_id>#1', '#2', and so on, so counting them gives the number of ceilings
-// bought, and the ceiling in force is that count times the per-session turn allowance.
-//
-// The prefix is passed already terminated by the caller (the session id plus '#'), so a
-// session id that is a prefix of another cannot borrow its charges.
-func (q *Queries) CountConsumptionsByRefPrefix(ctx context.Context, arg CountConsumptionsByRefPrefixParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countConsumptionsByRefPrefix, arg.UserID, arg.Feature, arg.RefPrefix)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const deleteUsageDailyForUser = `-- name: DeleteUsageDailyForUser :exec
 DELETE FROM usage_daily WHERE user_id = $1
 `
@@ -250,6 +221,57 @@ func (q *Queries) InsertConsumption(ctx context.Context, arg InsertConsumptionPa
 		arg.Ref,
 	)
 	return err
+}
+
+const listConsumptionRefsByPrefix = `-- name: ListConsumptionRefsByPrefix :many
+SELECT ref
+FROM usage_ledger
+WHERE user_id = $1
+  AND kind = 'consume'
+  AND feature = $2::text
+  AND ref LIKE $3::text || '%'
+`
+
+type ListConsumptionRefsByPrefixParams struct {
+	UserID    int64  `json:"user_id"`
+	Feature   string `json:"feature"`
+	RefPrefix string `json:"ref_prefix"`
+}
+
+// The live consumption references a user holds beginning with a prefix. This is what makes
+// the tailoring turn ceiling need no column of its own: a session's charges are written as
+// '<session_id>#1', '#2', and so on, so the SLOT NUMBERS say how many ceilings the session
+// holds and the ceiling in force is the highest of them times the per-session turn allowance.
+//
+// It returns the references rather than counting them, because a count and a slot number
+// are not the same answer. A session that predates this metering holds no row at all and is
+// given slot 1 implicitly, so its first extension buys slot 2 — under a count that extension
+// would have read back as one ceiling and bought the session nothing. The same gap opens
+// whenever a row is released: the count drops while the slots already sold do not.
+//
+// The suffix is parsed by the caller, in the file that writes it, so one place owns the
+// format. A session holds a handful of rows, so there is nothing to aggregate away.
+//
+// The prefix is passed already terminated by the caller (the session id plus '#'), so a
+// session id that is a prefix of another cannot borrow its charges.
+func (q *Queries) ListConsumptionRefsByPrefix(ctx context.Context, arg ListConsumptionRefsByPrefixParams) ([]pgtype.Text, error) {
+	rows, err := q.db.Query(ctx, listConsumptionRefsByPrefix, arg.UserID, arg.Feature, arg.RefPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.Text{}
+	for rows.Next() {
+		var ref pgtype.Text
+		if err := rows.Scan(&ref); err != nil {
+			return nil, err
+		}
+		items = append(items, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTailoredCVLabelsBySessions = `-- name: ListTailoredCVLabelsBySessions :many

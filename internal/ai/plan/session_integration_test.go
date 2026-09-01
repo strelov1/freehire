@@ -109,6 +109,55 @@ func TestExtendingASessionBuysAnotherCeiling(t *testing.T) {
 	}
 }
 
+// TestExtendingAGrandfatheredSessionBuysTurns is the end of the path a live conversation
+// takes on deploy day: it holds no ledger row, it is given one ceiling implicitly, and when
+// it reaches that ceiling its owner spends another of the day's sessions to continue.
+//
+// Priced off a row count, that extension would buy slot 1 — the slot the implicit ceiling
+// already stands on — leaving the ceiling exactly where it was. The candidate would pay one
+// of two daily sessions, be refused on the very next message, and be offered the same button
+// again.
+func TestExtendingAGrandfatheredSessionBuysTurns(t *testing.T) {
+	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
+	s, pool := newStore(t, enforcing(), now)
+	ctx := context.Background()
+	user := insertUser(t, pool, "session-grandfathered@example.test")
+	const sess = "sess-predates-the-ledger" // never passed through StartSession
+
+	per := s.cfg.TailorTurnsPerSession
+
+	// One ceiling's worth, not zero: a live conversation is bounded, not walled off.
+	d, err := s.AllowTurn(ctx, user, sess, per-1)
+	if err != nil {
+		t.Fatalf("AllowTurn: %v", err)
+	}
+	if !d.Allowed || d.Ceiling != per {
+		t.Fatalf("an uncharged session got Allowed=%v Ceiling=%d, want true and %d", d.Allowed, d.Ceiling, per)
+	}
+	if d, err = s.AllowTurn(ctx, user, sess, per); err != nil || d.Allowed {
+		t.Fatalf("the uncharged session ran past its one ceiling (allowed=%v, err %v)", d.Allowed, err)
+	}
+
+	ext, err := s.ExtendSession(ctx, user, sess)
+	if err != nil {
+		t.Fatalf("ExtendSession: %v", err)
+	}
+	if ext.Charge != 1 {
+		t.Fatalf("extending charged %d, want 1", ext.Charge)
+	}
+
+	d, err = s.AllowTurn(ctx, user, sess, per)
+	if err != nil {
+		t.Fatalf("AllowTurn after extending: %v", err)
+	}
+	if !d.Allowed {
+		t.Fatal("the extension bought no turns; one of the day's two sessions was spent for nothing")
+	}
+	if d.Ceiling != 2*per {
+		t.Errorf("Ceiling = %d after extending a grandfathered session, want %d", d.Ceiling, 2*per)
+	}
+}
+
 func TestExtendingWithNoAllowanceLeftIsRefused(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
 	s, pool := newStore(t, enforcing(), now)

@@ -66,6 +66,58 @@ func TestASessionWithNoChargeGetsOneCeiling(t *testing.T) {
 	}
 }
 
+// The implicit ceiling is granted as SLOT 1, which is what makes the first extension of a
+// grandfathered session worth something. Priced off a row count instead, that extension
+// would buy slot 1, land the session on the ceiling it already had, and cost one of the
+// day's two tailoring sessions for no extra turns at all.
+func TestExtendingAGrandfatheredSessionBuysTheNextSlot(t *testing.T) {
+	cfg := enforcing()
+	per := cfg.TailorTurnsPerSession
+
+	// No charges: slot 1 is implicit, so the extension to sell is slot 2.
+	if got, want := ceilingsHeld(0)+1, 2; got != want {
+		t.Fatalf("an uncharged session extends into slot %d, want %d", got, want)
+	}
+	// And having bought it, the session really can run further than before.
+	if !cfg.decideTurn(TierFree, 2, per).Allowed {
+		t.Fatal("the extension bought no turns; a session allowance was spent for nothing")
+	}
+	if got := cfg.decideTurn(TierFree, 2, per).Ceiling; got != 2*per {
+		t.Errorf("Ceiling = %d after extending a grandfathered session, want %d", got, 2*per)
+	}
+}
+
+// A session that started normally extends into slot 2 as well — the implicit rule must not
+// hand a charged session a ceiling it did not buy.
+func TestExtendingAChargedSessionBuysTheNextSlot(t *testing.T) {
+	if got, want := ceilingsHeld(1)+1, 2; got != want {
+		t.Errorf("a session holding slot 1 extends into slot %d, want %d", got, want)
+	}
+}
+
+// The ceiling follows the highest slot sold, not how many rows survive. A bootstrap whose
+// charge was released leaves slot 2 standing, and shrinking the ceiling back would refuse
+// turns the candidate paid for.
+func TestTheCeilingFollowsTheHighestSlotNotTheRowCount(t *testing.T) {
+	cfg := enforcing()
+	if got, want := cfg.decideTurn(TierFree, 2, 0).Ceiling, 2*cfg.TailorTurnsPerSession; got != want {
+		t.Errorf("Ceiling = %d for a session whose highest slot is 2, want %d", got, want)
+	}
+}
+
+func TestRefSlotReadsBackWhatSessionRefWrote(t *testing.T) {
+	if got := refSlot(sessionRef("sess-1", 3)); got != 3 {
+		t.Errorf("refSlot = %d, want 3", got)
+	}
+	// A reference this package did not write is not counted rather than failing a turn.
+	if got := refSlot("no-terminator"); got != 0 {
+		t.Errorf("refSlot of an unterminated ref = %d, want 0", got)
+	}
+	if got := refSlot("sess-1#not-a-number"); got != 0 {
+		t.Errorf("refSlot of a non-numeric slot = %d, want 0", got)
+	}
+}
+
 func TestProSessionsHaveNoTurnCeiling(t *testing.T) {
 	cfg := enforcing()
 	d := cfg.decideTurn(TierPro, 1, 500)
