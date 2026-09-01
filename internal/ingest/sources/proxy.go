@@ -50,7 +50,9 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// spike ran from a residential IP). It is pre-wired here so that, if the prod IP is blocked
 	// like djinni's, setting SOURCES_PROXY_URL routes only this provider through the proxy with
 	// no code change; while the proxy is unset this entry is inert.
-	"onstrider": func(c HTTPClient) Source { return NewOnstrider(c) },
+	"onstrider": func(c HTTPClient) Source {
+		return NewOnstrider(c, os.Getenv("ONSTRIDER_REFERRAL_HANDLE"))
+	},
 	// geekjob.ru is a Russian board reached only over the prod datacenter IP in production and is
 	// untested from it (the spike ran from a residential IP). Like its RU sibling habr_career it
 	// fetches a per-vacancy detail page for the description, so a WAF challenge on the detail HTML

@@ -262,7 +262,7 @@ func All(c HTTPClient) map[string]Source {
 		NewApple(c),
 		NewLumenalta(c),
 		NewDataArt(c),
-		NewOnstrider(c),
+		NewOnstrider(c, os.Getenv("ONSTRIDER_REFERRAL_HANDLE")),
 		NewAlignerr(c),
 		NewTalentHR(c),
 		NewMicro1(c),
