@@ -177,6 +177,13 @@ func ApplyProxyEgress(registry map[string]Source) error {
 // spike-verified and re-verified from prod on 2026-09-01: via the same proxy, curl's JA3
 // 403s while the Chrome JA3 is served the sitemap index.
 //
+// That entry is necessary and not sufficient, and the difference has been mistaken for
+// success once. Wiring the right transport gets ONE request served; it does not get the
+// crawl through. gulftalent's sitemap is thousands of detail pages funnelled through this
+// single shared exit address, and a full run on 2026-09-01 was refused by the same edge
+// partway through — see sources/gulftalent.yml for the measurement and why its timer is off.
+// Validate a provider here by what a whole run yields, never by one 200.
+//
 // bayt is absent, but not because it is unpassable. That was the earlier reading and it is
 // wrong: measured 2026-09-01 with this same transport, bayt's UAE listing returns 200 and
 // 251 KB of real HTML from a residential IP, so no JS challenge is involved. It is 403 from
