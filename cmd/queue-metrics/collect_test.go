@@ -20,7 +20,7 @@ type fakeQueries struct {
 	semantic  db.SemanticOutboxMetricsRow
 	boards    db.BoardHealthMetricsRow
 	newest    pgtype.Timestamptz
-	freshness []db.ProviderIngestFreshnessRow
+	health    []db.ProviderIngestHealthRow
 	newestErr error
 	searchErr error
 }
@@ -45,8 +45,8 @@ func (f fakeQueries) NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz
 	return f.newest, f.newestErr
 }
 
-func (f fakeQueries) ProviderIngestFreshness(context.Context) ([]db.ProviderIngestFreshnessRow, error) {
-	return f.freshness, nil
+func (f fakeQueries) ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error) {
+	return f.health, nil
 }
 
 func populatedQueries() fakeQueries {
@@ -56,9 +56,15 @@ func populatedQueries() fakeQueries {
 		semantic: db.SemanticOutboxMetricsRow{Depth: 0, DeadLetters: 0, OldestAgeSeconds: 0},
 		boards:   db.BoardHealthMetricsRow{Healthy: 74894, Failing: 7002, Cooled: 1882},
 		newest:   pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
-		freshness: []db.ProviderIngestFreshnessRow{
-			{Provider: "greenhouse", LastSuccessAt: pgtype.Timestamptz{Time: time.Unix(1786821000, 0), Valid: true}},
-			{Provider: "gulftalent", LastSuccessAt: pgtype.Timestamptz{}},
+		health: []db.ProviderIngestHealthRow{
+			{
+				Provider:      "greenhouse",
+				LastSuccessAt: pgtype.Timestamptz{Time: time.Unix(1786821000, 0), Valid: true},
+				Healthy:       9312, Failing: 604, Cooled: 71,
+			},
+			// The shape that started this: no success ever, so no timestamp — and one
+			// failing board, which is the only thing left that can name it.
+			{Provider: "gulftalent", LastSuccessAt: pgtype.Timestamptz{}, Failing: 1},
 		},
 	}
 }
@@ -80,6 +86,15 @@ func TestCollectKeepsNeverSucceededProviderDistinctFromZero(t *testing.T) {
 	}
 	if got := snap.providers[1]; got.name != "gulftalent" || !got.lastSuccess.IsZero() {
 		t.Errorf("second provider = %+v, want gulftalent with no measurement", got)
+	}
+	// The board counts are what that provider is left with once the timestamp drops out,
+	// so they must arrive alongside the NULL rather than be lost with it.
+	if got := snap.providers[1]; got.failing != 1 || got.healthy != 0 || got.cooled != 0 {
+		t.Errorf("gulftalent boards = %d healthy/%d failing/%d cooled, want 0/1/0",
+			got.healthy, got.failing, got.cooled)
+	}
+	if got := snap.providers[0]; got.healthy != 9312 || got.failing != 604 || got.cooled != 71 {
+		t.Errorf("greenhouse boards = %d/%d/%d, want 9312/604/71", got.healthy, got.failing, got.cooled)
 	}
 }
 

@@ -21,7 +21,7 @@ type metricsQueries interface {
 	SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMetricsRow, error)
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
-	ProviderIngestFreshness(context.Context) ([]db.ProviderIngestFreshnessRow, error)
+	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -51,16 +51,22 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		return snapshot{}, err
 	}
 
-	freshness, err := q.ProviderIngestFreshness(ctx)
+	health, err := q.ProviderIngestHealth(ctx)
 	if err != nil {
-		return snapshot{}, fmt.Errorf("provider ingest freshness: %w", err)
+		return snapshot{}, fmt.Errorf("provider ingest health: %w", err)
 	}
-	providers := make([]providerFreshness, len(freshness))
-	for i, r := range freshness {
+	providers := make([]providerHealth, len(health))
+	for i, r := range health {
 		// An invalid Timestamptz is max() over a provider whose every board has never
 		// succeeded. It stays the zero time here and is dropped by render, because the
 		// alternative — a Unix zero — reads downstream as a provider overdue since 1970.
-		p := providerFreshness{name: r.Provider}
+		// The board counts below carry that provider instead: they are always present.
+		p := providerHealth{
+			name:    r.Provider,
+			cooled:  r.Cooled,
+			failing: r.Failing,
+			healthy: r.Healthy,
+		}
 		if r.LastSuccessAt.Valid {
 			p.lastSuccess = r.LastSuccessAt.Time
 		}

@@ -1,5 +1,15 @@
 # JustJoin.it Polish/CEE IT marketplace. Boardless: one public API
 # (api.justjoin.it/v2/user-panel/offers/by-cursor), so the entry carries no board; each job's
 # company comes from the posting, not this placeholder.
+#
+# BLOCKED since 2026-08-21, 10,984 open postings going stale. Unlike echojobs/bayt/wantedkr this is
+# NOT an IP or fingerprint problem: the endpoint answers 503 from a residential IP, from the prod
+# datacenter IP, through SOURCES_PROXY_URL, and with the Chrome-fingerprint transport alike, while
+# justjoin.it itself serves 200. An nginx 503 on one path with the site up reads as a retired
+# route, not an outage — and it has read that way for eleven days.
+#
+# The adapter needs a re-spike against whatever justjoin.it serves its listing from now; the
+# v2/user-panel path is not coming back on its own. Left in place meanwhile so board_health keeps
+# saying so out loud.
 - company: JustJoin
   provider: justjoin

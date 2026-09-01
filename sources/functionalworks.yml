@@ -1,5 +1,15 @@
 # Functional Works (functional.works-hub.com) niche engineering board. Boardless: one public
 # GraphQL endpoint (functional.works-hub.com/api/graphql), so the entry carries no board; each
 # job's company comes from the posting, not this placeholder.
+#
+# BLOCKED since 2026-08-12, 888 open postings going stale. Not a moved endpoint, though it looks
+# like one from the outside: functional.works-hub.com 302s to works-hub.com, so a redirect-following
+# GET reports success while the adapter's POST loses its body to the redirect and fails. Measured
+# 2026-09-01, the destination is a rebuilt site — /api/graphql and /graphql on the new host both
+# answer with the app's HTML shell, and the `functional` vertical no longer exists as a subdomain.
+#
+# So the GraphQL feed this adapter is written against is gone, and there is no one-line host swap
+# that recovers it. The new site server-renders its listing (~260 job links on /jobs, plus a live
+# sitemap), which is a different adapter shape and wants its own spike.
 - company: Functional Works
   provider: functionalworks

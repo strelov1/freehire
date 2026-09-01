@@ -174,9 +174,16 @@ func ApplyProxyEgress(registry map[string]Source) error {
 // direct datacenter IP even with a correct Chrome TLS fingerprint, but serves that same
 // fingerprint through the residential proxy — so they need both, unlike proxiedProviders
 // (proxy only) and the direct fingerprint providers (fingerprint only). gulftalent is
-// spike-verified: via the same proxy, curl's JA3 403s while the Chrome JA3 is 200. bayt is
-// deliberately absent — it sits behind a Cloudflare JS challenge that no fingerprint or IP
-// passes.
+// spike-verified and re-verified from prod on 2026-09-01: via the same proxy, curl's JA3
+// 403s while the Chrome JA3 is served the sitemap index.
+//
+// bayt is absent, but not because it is unpassable. That was the earlier reading and it is
+// wrong: measured 2026-09-01 with this same transport, bayt's UAE listing returns 200 and
+// 251 KB of real HTML from a residential IP, so no JS challenge is involved. It is 403 from
+// the prod datacenter IP AND 403 through SOURCES_PROXY_URL, whose exit that edge classifies
+// as datacenter too — adding bayt here today would route it through an IP it already
+// refuses. It belongs here the day a genuinely residential pool exists, alongside echojobs
+// (Vercel's bot firewall, same measurement, same answer) and wantedkr.
 var proxiedFingerprintProviders = map[string]func(*fingerprintHTTP) Source{
 	"gulftalent": func(c *fingerprintHTTP) Source { return NewGulfTalent(c) },
 }

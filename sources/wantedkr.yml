@@ -1,4 +1,16 @@
 # Wanted (wanted.co.kr) South-Korean tech job board. Boardless: one public API, so the
 # entry carries no board; each job's company comes from the API. Postings are Korean.
+#
+# PARKED since 2026-09-01, 6,175 open postings going stale. wantedkr is on proxiedProviders because
+# its API 403s the prod datacenter IP, and that entry is no longer enough: measured 2026-09-01, the
+# API returns 200 from a residential IP and 403 through SOURCES_PROXY_URL, whose exit
+# (45.61.127.48) wanted.co.kr classifies as datacenter as well. The proxy itself is healthy — djinni,
+# enlizt and vagas are all served 200 through the same credential on the same day — so this is that
+# edge's IP classification, not a broken proxy.
+#
+# Its timer is disabled rather than left to fail hourly, because a run that reaches the API and is
+# refused looks like a run: `ingested=0 failed=0`, exit 0. Re-enable it the day a genuinely
+# residential pool exists; echojobs and bayt are waiting on the same purchase, and echojobs alone
+# is 84,606 postings, so the three are one decision rather than three.
 - company: Wanted Korea
   provider: wantedkr

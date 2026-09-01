@@ -105,8 +105,18 @@ func TestOnlyThisPackageUnwrapsAPgError(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
+			name := d.Name()
+			// A dot- or underscore-prefixed directory is not part of this module: the go
+			// toolchain never descends into one, so `./...` cannot compile what lives there.
+			// This is a filesystem walk, not a package walk, and without the same rule it
+			// reads every git worktree checked out INSIDE the repo (.worktrees,
+			// .claude/worktrees) as another copy of this package — one offender per
+			// worktree, none of them real, and the count below then fails on a clean tree.
+			if path != root && (strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
+				return filepath.SkipDir
+			}
 			// Vendored and generated trees are nobody's taxonomy to keep.
-			if name := d.Name(); name == "node_modules" || name == ".git" || name == "archive" {
+			if name == "node_modules" || name == "archive" {
 				return filepath.SkipDir
 			}
 			return nil

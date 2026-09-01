@@ -51,8 +51,17 @@ func TestOnlyOneLegalFormListExists(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
+			name := d.Name()
+			// A dot- or underscore-prefixed directory is not part of this module: the go
+			// toolchain never descends into one, so `./...` cannot compile what lives there.
+			// This walk is a filesystem walk, not a package walk, and without the same rule it
+			// reads every git worktree checked out INSIDE the repo (.worktrees, .claude/worktrees)
+			// as a second copy of company.go — one violation per worktree, none of them real.
+			if path != root && (strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
+				return fs.SkipDir
+			}
 			// Vendored and generated trees are not ours to police.
-			if name := d.Name(); name == ".git" || name == "node_modules" || name == "web" {
+			if name == "node_modules" || name == "web" {
 				return fs.SkipDir
 			}
 			return nil

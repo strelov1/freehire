@@ -2,6 +2,14 @@
 # enumerates the sitemap index, follows the job-posting shards (sitemap_jx0NN.xml), and reads each
 # posting's self-contained schema.org JobPosting. The employer comes from the posting, so `company`
 # here is only a placeholder label. GulfTalent is behind an Akamai edge, so the adapter crawls it
-# over the shared Chrome-fingerprint transport.
+# over the shared Chrome-fingerprint transport AND through SOURCES_PROXY_URL — it is the one entry
+# in proxiedFingerprintProviders, and it needs both: measured from prod 2026-09-01, the Chrome
+# fingerprint on the direct datacenter IP is 403 and the same fingerprint through the proxy is 200.
+#
+# Re-verified 2026-09-01 after 19,828 postings sat unrefreshed since 2026-07-07. The crawl path was
+# never the problem — the systemd timer was disabled and nothing crawled this file at all, which is
+# invisible three ways over: no run means no board_health row, no board_health row means no
+# last_success_at, and no last_success_at means the freshness gauge publishes no sample. The
+# per-provider board-state gauge (cmd/queue-metrics) exists because of this file.
 - company: GulfTalent
   provider: gulftalent

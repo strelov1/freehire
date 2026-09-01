@@ -168,9 +168,9 @@ func TestRenderGroupsEachFamilyUnderOneHelpAndType(t *testing.T) {
 // edit here, not a silent break of an alert nobody notices until the next outage.
 func TestRenderProviderFreshness(t *testing.T) {
 	s := fullSnapshot()
-	s.providers = []providerFreshness{
-		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0)},
-		{name: "peopleforce", lastSuccess: time.Unix(1785700000, 0)},
+	s.providers = []providerHealth{
+		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0), healthy: 4},
+		{name: "peopleforce", lastSuccess: time.Unix(1785700000, 0), healthy: 2},
 	}
 	got := render(s)
 	for _, want := range []string{
@@ -185,31 +185,82 @@ func TestRenderProviderFreshness(t *testing.T) {
 	}
 }
 
-// A provider that has never succeeded must be ABSENT, not zero. An alert rule reads a
-// missing series as no-data and a 1970 timestamp as infinitely overdue; only the first is
-// what the measurement actually supports.
-func TestRenderOmitsProviderThatNeverSucceeded(t *testing.T) {
+// A provider that has never succeeded must be ABSENT from the TIMESTAMP family, not zero.
+// An alert rule reads a missing series as no-data and a 1970 timestamp as infinitely
+// overdue; only the first is what the measurement actually supports.
+func TestRenderOmitsProviderThatNeverSucceededFromTimestamp(t *testing.T) {
 	s := fullSnapshot()
-	s.providers = []providerFreshness{
-		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0)},
-		{name: "gulftalent"},
+	s.providers = []providerHealth{
+		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0), healthy: 4},
+		{name: "gulftalent", failing: 1},
 	}
 	got := render(s)
-	if strings.Contains(got, `provider="gulftalent"`) {
-		t.Errorf("a provider with no successful crawl must publish no sample\ngot:\n%s", got)
+	if strings.Contains(got, `freehire_provider_last_success_timestamp_seconds{provider="gulftalent"}`) {
+		t.Errorf("a provider with no successful crawl must publish no timestamp sample\ngot:\n%s", got)
 	}
-	if !strings.Contains(got, `provider="greenhouse"`) {
-		t.Error("the provider that did succeed must still publish")
+	if !strings.Contains(got, `freehire_provider_last_success_timestamp_seconds{provider="greenhouse"}`) {
+		t.Error("the provider that did succeed must still publish a timestamp")
 	}
 }
 
-// Every provider having never succeeded leaves the family with nothing to say; emitting a
-// bare HELP/TYPE pair with no samples would be a valid but pointless exposition, so the
-// family is omitted entirely — the same rule newestJob already follows.
-func TestRenderOmitsEmptyProviderFamily(t *testing.T) {
+// Every provider having never succeeded leaves the TIMESTAMP family with nothing to say;
+// emitting a bare HELP/TYPE pair with no samples would be a valid but pointless exposition,
+// so that family is omitted entirely — the same rule newestJob already follows.
+func TestRenderOmitsEmptyProviderTimestampFamily(t *testing.T) {
 	s := fullSnapshot()
-	s.providers = []providerFreshness{{name: "gulftalent"}, {name: "bayt"}}
+	s.providers = []providerHealth{{name: "gulftalent", failing: 1}, {name: "bayt", cooled: 8}}
 	if got := render(s); strings.Contains(got, "freehire_provider_last_success_timestamp_seconds") {
 		t.Errorf("family must be omitted when no provider has a measurement\ngot:\n%s", got)
+	}
+}
+
+// The board-state family is the reason a never-succeeded provider is no longer invisible,
+// so the case the timestamp family drops is the case this one MUST keep. gulftalent held
+// 19,828 postings unrefreshed since 2026-07-07 with its timer disabled: no crawl, no
+// success, no timestamp — and nothing else named it.
+//
+// Like the timestamp family, the name and both labels are a freehire-ops contract.
+func TestRenderProviderBoardsCoversNeverSucceeded(t *testing.T) {
+	s := fullSnapshot()
+	s.providers = []providerHealth{
+		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0), healthy: 4, failing: 1},
+		{name: "gulftalent", failing: 1},
+	}
+	got := render(s)
+	for _, want := range []string{
+		"# HELP freehire_provider_boards",
+		"# TYPE freehire_provider_boards gauge",
+		`freehire_provider_boards{provider="greenhouse",state="healthy"} 4`,
+		`freehire_provider_boards{provider="greenhouse",state="failing"} 1`,
+		`freehire_provider_boards{provider="greenhouse",state="cooled"} 0`,
+		`freehire_provider_boards{provider="gulftalent",state="healthy"} 0`,
+		`freehire_provider_boards{provider="gulftalent",state="failing"} 1`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
+		}
+	}
+}
+
+// Every sample of a family must follow ONE HELP/TYPE pair, and this family emits three
+// samples per provider — so a loop nested the other way round would interleave the states
+// across providers and still look right sample-by-sample while being an invalid exposition.
+func TestRenderProviderBoardsIsOneWellFormedFamily(t *testing.T) {
+	s := fullSnapshot()
+	s.providers = []providerHealth{
+		{name: "greenhouse", healthy: 4, failing: 1, cooled: 2},
+		{name: "gulftalent", failing: 1},
+	}
+	got := render(s)
+	if n := strings.Count(got, "# TYPE freehire_provider_boards gauge"); n != 1 {
+		t.Errorf("family has %d TYPE lines, want exactly 1", n)
+	}
+	if n := strings.Count(got, "freehire_provider_boards{"); n != len(s.providers)*3 {
+		t.Errorf("family emitted %d samples, want %d (three states per provider)", n, len(s.providers)*3)
+	}
+	header := strings.Index(got, "# HELP freehire_provider_boards ")
+	first := strings.Index(got, "freehire_provider_boards{")
+	if header < 0 || first < header {
+		t.Errorf("samples must follow the HELP line\ngot:\n%s", got)
 	}
 }
