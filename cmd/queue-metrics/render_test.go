@@ -251,16 +251,26 @@ func TestRenderProviderBoardsIsOneWellFormedFamily(t *testing.T) {
 		{name: "greenhouse", healthy: 4, failing: 1, cooled: 2},
 		{name: "gulftalent", failing: 1},
 	}
-	got := render(s)
-	if n := strings.Count(got, "# TYPE freehire_provider_boards gauge"); n != 1 {
-		t.Errorf("family has %d TYPE lines, want exactly 1", n)
+
+	// Parsed rather than counted, and with providers present, because fullSnapshot() has
+	// none — so TestRenderIsValidPrometheusTextFormat never sees these two families at all
+	// and the parser has never validated them. This family emits three samples per
+	// provider, which is the shape a loop nested the other way round would interleave:
+	// still correct sample-by-sample, and an invalid exposition that the textfile
+	// collector answers by silently skipping the file.
+	parser := expfmt.NewTextParser(model.UTF8Validation)
+	families, err := parser.TextToMetricFamilies(strings.NewReader(render(s)))
+	if err != nil {
+		t.Fatalf("rendered exposition does not parse: %v", err)
 	}
-	if n := strings.Count(got, "freehire_provider_boards{"); n != len(s.providers)*3 {
-		t.Errorf("family emitted %d samples, want %d (three states per provider)", n, len(s.providers)*3)
+	family, ok := families["freehire_provider_boards"]
+	if !ok {
+		t.Fatal("parsed exposition is missing family freehire_provider_boards")
 	}
-	header := strings.Index(got, "# HELP freehire_provider_boards ")
-	first := strings.Index(got, "freehire_provider_boards{")
-	if header < 0 || first < header {
-		t.Errorf("samples must follow the HELP line\ngot:\n%s", got)
+	if got, want := len(family.GetMetric()), len(s.providers)*3; got != want {
+		t.Errorf("family has %d samples, want %d (three states per provider)", got, want)
+	}
+	if family.GetType() != dto.MetricType_GAUGE {
+		t.Errorf("family parsed as %v, want GAUGE", family.GetType())
 	}
 }

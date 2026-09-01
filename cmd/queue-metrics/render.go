@@ -62,15 +62,8 @@ func render(s snapshot) string {
 		func(q queueMetrics) string { return fmt.Sprintf("%.3f", q.oldestAgeSeconds) }, s.queues)
 
 	writeHeader(&b, "freehire_boards_total", "Ingest boards by health state.")
-	for _, state := range []struct {
-		name  string
-		count int64
-	}{
-		{"healthy", s.healthyBoards},
-		{"failing", s.failingBoards},
-		{"cooled", s.cooledBoards},
-	} {
-		fmt.Fprintf(&b, "freehire_boards_total{state=%q} %d\n", state.name, state.count)
+	for _, st := range boardStates(s.healthyBoards, s.failingBoards, s.cooledBoards) {
+		fmt.Fprintf(&b, "freehire_boards_total{state=%q} %d\n", st.name, st.count)
 	}
 
 	// A zero timestamp would be read as 1970, i.e. a catalogue infinitely overdue for
@@ -116,21 +109,40 @@ func render(s snapshot) string {
 	if len(s.providers) > 0 {
 		writeHeader(&b, "freehire_provider_boards", "Ingest boards by health state, per provider.")
 		for _, p := range s.providers {
-			for _, state := range []struct {
-				name  string
-				count int64
-			}{
-				{"healthy", p.healthy},
-				{"failing", p.failing},
-				{"cooled", p.cooled},
-			} {
+			for _, st := range boardStates(p.healthy, p.failing, p.cooled) {
 				fmt.Fprintf(&b, "freehire_provider_boards{provider=%q,state=%q} %d\n",
-					p.name, state.name, state.count)
+					p.name, st.name, st.count)
 			}
 		}
 	}
 
 	return b.String()
+}
+
+// boardState pairs one of the three mutually exclusive board health states with how many
+// boards are in it.
+type boardState struct {
+	name  string
+	count int64
+}
+
+// boardStates returns those three in the order both board families publish them.
+//
+// Two families carry these labels — freehire_boards_total fleet-wide and
+// freehire_provider_boards per provider — and a dashboard that stacks one against the
+// other only reads correctly while they agree on the names and the order. Spelled twice
+// they can drift apart without failing to compile, and the drift shows up as a graph that
+// quietly disagrees with itself, so the vocabulary lives here once.
+//
+// The precedence behind the counts (cooled over failing, so the three sum to the fleet
+// rather than double-counting) is BoardHealthMetrics' in queries/metrics.sql; this only
+// fixes how they are named and ordered.
+func boardStates(healthy, failing, cooled int64) [3]boardState {
+	return [3]boardState{
+		{"healthy", healthy},
+		{"failing", failing},
+		{"cooled", cooled},
+	}
 }
 
 // writeFamily emits one metric family: its HELP and TYPE lines, then one sample per
