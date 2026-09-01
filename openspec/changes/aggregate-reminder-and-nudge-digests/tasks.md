@@ -7,19 +7,19 @@
 
 ## 2. Reminder delivery — group by user
 
-- [ ] 2.1 Change `reminder.Notifier`/`Router` to take `[]ReminderMessage`, and update the compile-time assertions
-- [ ] 2.2 Add `SnapshotCap` (default 200) to `reminder.Config`; reuse `notify.ListLimit` for the message list bound
-- [ ] 2.3 Split `Runner.fire` into a per-item validation step (load, `job_open`/`still_actionable`, quiet hours) and a per-group send, and make `Runner.Run` group survivors by `user_id` oldest-due first
-- [ ] 2.4 Record one in-app notification per group: `jobs` set and `public_slug` unset for a multi-item group, today's shape for a single-item group
-- [ ] 2.5 Mark every item in a delivered group delivered, and record a delivery failure against every item in a failed group
-- [ ] 2.6 Cover with tests: two jobs of one user is one `Send`, two users is two `Send`s, a cancelled item leaves the group while the rest still deliver, a failed group attempts every item, a group of one keeps the single-job record shape
+- [x] 2.1 Change `reminder.Notifier`/`Router` to take `[]ReminderMessage`, and update the compile-time assertions
+- [x] 2.2 Add `SnapshotCap` (default 200) to `reminder.Config`; reuse `notify.ListLimit` for the message list bound
+- [x] 2.3 Split `Runner.fire` into a per-item validation step (load, `job_open`/`still_actionable`, quiet hours) and a per-group send, and make `Runner.Run` group survivors by `user_id` oldest-due first
+- [x] 2.4 Record one in-app notification per group: `jobs` set and `public_slug` unset for a multi-item group, today's shape for a single-item group
+- [x] 2.5 Mark every item in a delivered group delivered, and record a delivery failure against every item in a failed group
+- [x] 2.6 Cover with tests: two jobs of one user is one `Send`, two users is two `Send`s, a cancelled item leaves the group while the rest still deliver, a failed group attempts every item, a group of one keeps the single-job record shape
 
 ## 3. Reminder transports — render a list
 
-- [ ] 3.1 Render the email body as a list of `mailtpl` job rows, itemizing at most `notify.ListLimit` with an "and N more" tail, and adjust the subject and preheader for a multi-job group
-- [ ] 3.2 Render the Telegram message as a list under the existing UTF-16 length cap, reserving the widest possible tail up front
-- [ ] 3.3 Render the push notification as a single summary carrying the group's count
-- [ ] 3.4 Cover each transport with tests for a group of one, a group under the list limit, and a group over it
+- [x] 3.1 Render the email body as a list of `mailtpl` job rows, itemizing at most `notify.ListLimit` with an "and N more" tail, and adjust the subject and preheader for a multi-job group
+- [x] 3.2 Render the Telegram message as a list under the existing UTF-16 length cap, reserving the widest possible tail up front
+- [x] 3.3 Render the push notification as a single summary carrying the group's count
+- [x] 3.4 Cover each transport with tests for a group of one, a group under the list limit, and a group over it
 
 ## 4. Nudge delivery — group by (user, kind)
 

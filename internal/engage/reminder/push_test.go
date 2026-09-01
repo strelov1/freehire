@@ -3,6 +3,7 @@ package reminder
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -44,7 +45,7 @@ func TestPushNotifier_RendersTitleBodyAndSlugDataToEveryDevice(t *testing.T) {
 	n := NewPushNotifier(lister, transport)
 	msg := ReminderMessage{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "https://ats/x"}
 
-	if err := n.Send(context.Background(), "push", strconv.FormatInt(42, 10), msg); err != nil {
+	if err := n.Send(context.Background(), "push", strconv.FormatInt(42, 10), []ReminderMessage{msg}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -71,7 +72,7 @@ func TestPushNotifier_RendersTitleBodyAndSlugDataToEveryDevice(t *testing.T) {
 
 func TestPushNotifier_InvalidUserIDErrors(t *testing.T) {
 	n := NewPushNotifier(&fakePushTokenLister{}, &fakePushTransport{})
-	if err := n.Send(context.Background(), "push", "not-a-number", ReminderMessage{}); err == nil {
+	if err := n.Send(context.Background(), "push", "not-a-number", []ReminderMessage{{Slug: "s"}}); err == nil {
 		t.Error("want an error for a non-numeric user id")
 	}
 }
@@ -81,7 +82,33 @@ func TestPushNotifier_NoDevicesReturnsAnError(t *testing.T) {
 	// this is a defense-in-depth path, not the normal soft-skip — but the fan-out
 	// helper still reports it as an error (SendToDevices' empty-tokens rule).
 	n := NewPushNotifier(&fakePushTokenLister{}, &fakePushTransport{})
-	if err := n.Send(context.Background(), "push", "42", ReminderMessage{Slug: "s"}); err == nil {
+	if err := n.Send(context.Background(), "push", "42", []ReminderMessage{{Slug: "s"}}); err == nil {
 		t.Error("want an error when the user has no registered devices")
+	}
+}
+
+// A batch is one notification, not one per saved job — the whole point of the
+// grouping. The deep link is dropped because several jobs have no one destination.
+func TestPushNotifier_BatchIsOneNotificationWithoutADeepLink(t *testing.T) {
+	lister := &fakePushTokenLister{tokens: map[int64][]db.UserPushToken{42: {{Token: "tok-1"}}}}
+	transport := &fakePushTransport{}
+	n := NewPushNotifier(lister, transport)
+
+	err := n.Send(context.Background(), "push", "42", []ReminderMessage{
+		{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"},
+		{JobTitle: "SRE", Company: "Globex", Slug: "sre-globex"},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(transport.calls) != 1 {
+		t.Fatalf("transport calls = %d, want 1 for one device and one batch", len(transport.calls))
+	}
+	call := transport.calls[0]
+	if !strings.Contains(call.body, "2 jobs") {
+		t.Errorf("body = %q, want the batch count", call.body)
+	}
+	if call.data["slug"] != "" {
+		t.Errorf("data[slug] = %q, want no deep link for a multi-job batch", call.data["slug"])
 	}
 }

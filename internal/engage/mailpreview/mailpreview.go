@@ -89,6 +89,7 @@ var renderers = []func(string) (Sample, error){
 	passwordResetSample,
 	digestSample,
 	savedJobReminderSample,
+	savedJobReminderBatchSample,
 	followUpNudgeSample,
 	jobClosedNudgeSample,
 	referralRequestSample,
@@ -217,10 +218,23 @@ func digestSample(baseURL string) (Sample, error) {
 func savedJobReminderSample(baseURL string) (Sample, error) {
 	return sample("saved-job-reminder", "Tracking / Saved-job reminder", func(c *capture) error {
 		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", reminder.ReminderMessage{
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []reminder.ReminderMessage{{
 				JobTitle: "Senior Backend Engineer (Go)",
 				Company:  "Fingerprint",
 				Slug:     "senior-backend-engineer-go-fingerprint",
+			}})
+	})
+}
+
+// savedJobReminderBatchSample is the shape a day of saves produces, and the one
+// worth looking at: the single-job mail above is now the special case.
+func savedJobReminderBatchSample(baseURL string) (Sample, error) {
+	return sample("saved-job-reminder-batch", "Tracking / Saved-job reminders (batch)", func(c *capture) error {
+		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []reminder.ReminderMessage{
+				{JobTitle: "Senior Backend Engineer (Go)", Company: "Fingerprint", Slug: "senior-backend-engineer-go-fingerprint"},
+				{JobTitle: "Staff Platform Engineer", Company: "Vercel", Slug: "staff-platform-engineer-vercel"},
+				{JobTitle: "Site Reliability Engineer", Company: "Datadog", Slug: "site-reliability-engineer-datadog"},
 			})
 	})
 }

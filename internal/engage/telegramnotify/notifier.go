@@ -12,8 +12,11 @@ import (
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
-// telegramMaxLen is Telegram's sendMessage text limit, measured in UTF-16 code units.
-const telegramMaxLen = 4096
+// MaxMessageLen is Telegram's sendMessage text limit, measured in UTF-16 code
+// units. Exported because every engine that can build a multi-job message needs
+// the same number: a body over the limit is rejected deterministically, so each
+// retry re-fails and the batch is dead-lettered.
+const MaxMessageLen = 4096
 
 // Compile-time guarantee that Notifier satisfies the channel abstraction.
 var _ notify.Notifier = (*Notifier)(nil)
@@ -57,7 +60,7 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Dig
 //
 // The listing is bounded twice. notify.ListLimit is the product bound, shared with
 // the email channel so the two never disagree about a digest's shape. On top of it
-// the body is capped to Telegram's telegramMaxLen: job lines are added until the
+// the body is capped to Telegram's MaxMessageLen: job lines are added until the
 // next one (plus the largest possible "+ N more" tail) would overflow, then the
 // tail absorbs the remainder. Without the length cap a digest of many long-title
 // jobs exceeds the limit, Telegram rejects the send deterministically, every retry
@@ -70,13 +73,13 @@ func (n *Notifier) render(d notify.Digest) string {
 	// Reserve room for the widest possible tail up front (d.Total is its worst-case
 	// count), so appending the actual tail after the loop can never push past the limit.
 	viewAll := n.viewAllURL(d)
-	tailReserve := utf16Len(moreLine(d.Total, viewAll))
-	used := utf16Len(b.String())
+	tailReserve := UTF16Len(moreLine(d.Total, viewAll))
+	used := UTF16Len(b.String())
 	shown := 0
 	for _, j := range d.Listed() {
 		line := n.jobLine(j)
-		lineLen := utf16Len(line)
-		if used+lineLen+tailReserve > telegramMaxLen {
+		lineLen := UTF16Len(line)
+		if used+lineLen+tailReserve > MaxMessageLen {
 			break
 		}
 		b.WriteString(line)
@@ -131,8 +134,10 @@ func moreLine(more int, viewAllURL string) string {
 	return fmt.Sprintf("\n<a href=%q>+ %d more</a>", viewAllURL, more)
 }
 
-// utf16Len counts s in UTF-16 code units — the unit Telegram measures a message
-// against — so a supplementary-plane rune (e.g. the 🔔 emoji) correctly counts as two.
-func utf16Len(s string) int {
+// UTF16Len counts s in UTF-16 code units — the unit Telegram measures a message
+// against — so a supplementary-plane rune (e.g. the 🔔 emoji) correctly counts as
+// two. Exported alongside MaxMessageLen: a caller given the limit and not the way
+// to measure against it would reach for len(), which is bytes.
+func UTF16Len(s string) int {
 	return len(utf16.Encode([]rune(s)))
 }
