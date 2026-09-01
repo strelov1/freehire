@@ -187,6 +187,33 @@ func TestListJobCopies_AMarkerCycleTerminates(t *testing.T) {
 	}
 }
 
+// An offset past the end is an empty page, never an error. The handler clamps into int32 via
+// pageParamsBounded (TestOffsetIsParsedOnlyByTheSharedHelper pins that it must), but the query
+// has to survive the clamped extreme too — this endpoint is public and unauthenticated, and it
+// once answered 500 where every other list endpoint answers with nothing.
+func TestListJobCopies_AnOffsetPastTheEndIsAnEmptyPage(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	mustUpsert(t, q, withFingerprint("acme:1", "Staff Engineer", "role-page"))
+	mustUpsert(t, q, withFingerprint("acme:2", "Staff Engineer", "role-page"))
+	anchorID, _ := dupOf(t, pool, "acme:1")
+	otherID, _ := dupOf(t, pool, "acme:2")
+	markDuplicate(t, pool, otherID, anchorID)
+
+	for _, offset := range []int32{2, 1 << 30, 1<<31 - 1} {
+		rows, err := q.ListJobCopies(context.Background(),
+			ListJobCopiesParams{JobID: anchorID, RowLimit: 100, RowOffset: offset})
+		if err != nil {
+			t.Fatalf("offset %d must yield an empty page, not an error: %v", offset, err)
+		}
+		if len(rows) != 0 {
+			t.Errorf("offset %d returned %d rows, want none", offset, len(rows))
+		}
+	}
+}
+
 // A private job (jd-tailor-intake: a pasted JD or an unrecognized-URL scrape) must never
 // surface in a PUBLIC job's copies list, even when it is inside the same closure — that would
 // hand the private job's slug and location/url to anyone browsing an unrelated public posting,
