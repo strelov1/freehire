@@ -40,13 +40,18 @@ const (
 	FeatureFit       Feature = "match"
 	FeatureAssistant Feature = "assistant"
 	FeatureDictation Feature = "dictation"
+	// FeatureCoverLetter is one drafted cover letter: three model calls over a fit analysis
+	// and a tailoring context that are already computed and cached by the time it runs. It is
+	// the cheapest metered feature per action, which is why its daily figures sit above the
+	// tailoring session's and below the assistant's.
+	FeatureCoverLetter Feature = "cover-letter"
 )
 
 // AllFeatures lists every metered feature. Tests walk it, and the usage surface reports
 // each one, so a feature added to the config and forgotten here is a feature the user
 // cannot see.
 func AllFeatures() []Feature {
-	return []Feature{FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation}
+	return []Feature{FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation, FeatureCoverLetter}
 }
 
 // TierOf resolves a plan from the one column that decides it. A zero or past pro_until is
@@ -119,6 +124,9 @@ func DefaultConfig() Config {
 			FeatureFit:       {freeDaily: 3, proFairUse: 60, enforce: false},
 			FeatureAssistant: {freeDaily: 10, proFairUse: 200, enforce: false},
 			FeatureDictation: {freeDaily: 10, proFairUse: 200, enforce: false},
+			// Ships with enforcement OFF like every other feature: the shadow run is read
+			// first, and a ceiling set before there is any usage to read is a guess.
+			FeatureCoverLetter: {freeDaily: 3, proFairUse: 60, enforce: false},
 		},
 		TailorTurnsPerSession: 15,
 	}

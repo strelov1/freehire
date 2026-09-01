@@ -77,6 +77,7 @@ func genStructs() (string, error) {
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
 	hardconstraintTS := filepath.Join(tmp, "hardconstraint.ts")
 	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
+	coverletterTS := filepath.Join(tmp, "coverletter.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
 	cveditTS := filepath.Join(tmp, "cvedit.ts")
@@ -158,6 +159,18 @@ func genStructs() (string, error) {
 				TypeMappings: map[string]string{"hardconstraint.Blocker": "Blocker"},
 			},
 			{
+				// The cover letter wire shape (Letter + Band). Only coverletter.go — the
+				// chain, the store and the evidence gathering are server-only, and Bounds is
+				// a server-owned ceiling the client has no business restating.
+				Path:         "github.com/strelov1/freehire/internal/candidate/coverletter",
+				OutputPath:   coverletterTS,
+				IncludeFiles: []string{"coverletter.go"},
+				// A uuid is a string on the wire. Without the mapping tygo emits `any`, and
+				// `any` in a generated contract is the one thing the generation is for
+				// avoiding — the client would lose the compile error when the shape moves.
+				TypeMappings: map[string]string{"uuid.UUID": "string"},
+			},
+			{
 				// The read-only structured résumé wire shape (Structured + Experience +
 				// Education). Only structured.go — resumeextract.go holds the server-only
 				// Extractor.
@@ -233,6 +246,10 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	coverletterBody, err := readBody(coverletterTS)
+	if err != nil {
+		return "", err
+	}
 	resumeextractBody, err := readBody(resumeextractTS)
 	if err != nil {
 		return "", err
@@ -253,7 +270,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

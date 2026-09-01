@@ -901,6 +901,55 @@ export interface Analysis {
 }
 
 /**
+ * Band is how long the letter should be. Two are offered rather than a free-form length,
+ * because the application forms do not state a limit — no captured apply_forms field carries
+ * maxlength — so the numbers are a product decision and a slider over them would be a
+ * precision the data does not support.
+ */
+export type Band = string;
+export const BandShort: Band = "short";
+export const BandStandard: Band = "standard";
+/**
+ * Bounds are the server-owned ceilings on what the chain may return. The model is never
+ * trusted to observe them; Sanitize enforces them after the fact, the same discipline
+ * matchanalysis keeps over its own output.
+ */
+export interface Bounds {
+  /**
+   * ShortCeiling and StandardCeiling bound the body in runes, per band.
+   */
+  ShortCeiling: number /* int */;
+  StandardCeiling: number /* int */;
+  /**
+   * Floor is the shortest body that still counts as a letter. The audit stage cuts, and a
+   * stage whose only instruction is to cut can cut to nothing; below this the caller keeps
+   * the un-audited draft instead.
+   */
+  Floor: number /* int */;
+  /**
+   * MaxCited caps how many atoms one letter may cite. A letter that cites everything cites
+   * nothing — the point of the citation list is that a reader can check it.
+   */
+  MaxCited: number /* int */;
+}
+/**
+ * Letter is one drafted cover letter: the prose, and the banked atoms it stands on.
+ */
+export interface Letter {
+  body: string;
+  /**
+   * Cited are the atoms the letter's claims rest on, in the order the letter uses them.
+   * This is what the UI shows beside the letter and what makes the honesty claim checkable.
+   */
+  cited_atom_ids: string[];
+  /**
+   * Language is what the letter was written in, taken from the VACANCY and not from the
+   * candidate's profile — the employer is the reader.
+   */
+  language: string;
+}
+
+/**
  * Structured is the typed, sanitized résumé. Every field is optional — a value the CV
  * does not state is left empty rather than invented (the model is prompted accordingly
  * and Sanitize drops empty entries).

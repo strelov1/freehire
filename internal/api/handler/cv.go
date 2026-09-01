@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
+	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
@@ -78,6 +79,15 @@ type cvHandlers struct {
 	// jobs puts a vacancy on the Tracking Kanban when the caller starts (or reopens)
 	// tailoring for it. Nil-safe for fixtures that never assert board membership.
 	jobs jobBoarder
+	// letters, letterChain and bank serve the cover-letter surface. Wired after construction
+	// rather than through newCVHandlers, whose signature 78 integration tests already call —
+	// widening it for three optional dependencies would edit every one of them to say nil.
+	// All three are nil-safe: a fixture that never asks for a letter needs none of them.
+	letters     *coverletter.Store
+	letterChain *coverletter.Analyzer
+	bank        coverletter.Retriever
+	// llm binds a model call to the caller's own gateway credential, tagged by feature.
+	llm llmBinding
 }
 
 // jobReader is the one vacancy read the tailoring context needs.
@@ -205,6 +215,8 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Patch("/me/cvs/:id", mw.key, h.PatchCV)
 	api.Put("/me/cvs/:id/session", mw.key, h.SetCVSession)
 	api.Get("/me/cvs/:id/tailor-context", mw.key, h.TailorContext)
+	api.Get("/me/cvs/:id/cover-letter", mw.key, h.GetCVCoverLetter)
+	api.Post("/me/cvs/:id/cover-letter", mw.cookie, h.DraftCVCoverLetter)
 	// The history of what changed the CV, and the two ways to undo an entry: on its own, or
 	// as the run it belonged to. Cookie-only for the same reason as every other mutation —
 	// the browser is where the candidate is watching this happen, and the tailoring agent

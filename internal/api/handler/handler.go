@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
+	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
@@ -478,6 +479,13 @@ func Register(app *fiber.App, cfg Config) {
 	// the Kanban so a pursued role is not invisible under Activity → Saved alone.
 	trackingJobs := trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, cfg.Pool)}
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, !cfg.CVEditAllowBulletTruncation)
+
+	// The cover-letter surface. Assigned rather than passed: newCVHandlers already takes 15
+	// arguments and 78 integration tests call it, so three more would edit all of them.
+	cvH.letters = coverletter.NewStore(coverletter.NewQueriesRepository(queries))
+	cvH.letterChain = coverletter.NewAnalyzer(cfg.LLM)
+	cvH.bank = bank
+	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	discordH := newDiscordHandlers(queries, cfg.JWTSecret, cfg.DiscordBotToken, cfg.DiscordApplicationID, cfg.DiscordPublicKey, cfg.DiscordGuildID, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)

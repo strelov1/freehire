@@ -21,6 +21,7 @@ const (
 	tagAutofill      = "autofill"
 	tagMailRecall    = "mail-recall"
 	tagSearchIntent  = "search-intent"
+	tagCoverLetter   = "cover-letter"
 )
 
 // llmBinding is what a per-user surface needs to spend as its caller: the client the

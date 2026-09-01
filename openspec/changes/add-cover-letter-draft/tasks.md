@@ -28,11 +28,11 @@
 
 ## 5. HTTP endpoints
 
-- [ ] 5.1 Add `GET /api/v1/me/cvs/:id/cover-letter` behind `RequireAuth`: serves the stored draft with its staleness or reports none. Integration-test that no model is called on either path.
-- [ ] 5.2 Add `POST /api/v1/me/cvs/:id/cover-letter`: loads and authorizes the job, calls `fitanalysis.Required`, runs the chain, upserts the draft. Integration-test the happy path and the no-publishable-evidence refusal.
-- [ ] 5.3 Test that a mid-chain gateway failure leaves an existing stored draft untouched and returns a failure rather than an empty body.
-- [ ] 5.4 Tag the chain's model calls with a new `feature:` value so spend is attributable per candidate from the first deploy, and confirm the call goes out on the candidate's own gateway credential.
-- [ ] 5.5 Generate the TypeScript wire types via `cmd/gen-contracts` and commit them.
+- [x] 5.1 Add `GET /api/v1/me/cvs/:id/cover-letter` behind `RequireAuth`: serves the stored draft with its staleness or reports none. Integration-test that no model is called on either path.
+- [x] 5.2 Add `POST /api/v1/me/cvs/:id/cover-letter`: loads and authorizes the job, calls `fitanalysis.Required`, runs the chain, upserts the draft. Integration-test the happy path and the no-publishable-evidence refusal.
+- [ ] 5.3 Test that a mid-chain gateway failure leaves an existing stored draft untouched and returns a failure rather than an empty body. The chain half is covered (`TestDraftFailsWhenTheGatewayFails`); the handler half — that Save is never reached and the allowance is released — needs the integration harness, so it lands with 4.3 and 9.2.
+- [x] 5.4 Tag the chain's model calls with a new `feature:` value so spend is attributable per candidate from the first deploy, and confirm the call goes out on the candidate's own gateway credential.
+- [x] 5.5 Generate the TypeScript wire types via `cmd/gen-contracts` and commit them.
 
 ## 6. Assistant tool
 
@@ -54,5 +54,5 @@
 
 ## 9. Metering (unblocked — add-plan-limits landed on main in #2271)
 
-- [ ] 9.1 Add a cover-letter value to `internal/ai/plan`'s `Feature` vocabulary and `AllFeatures`, give it a free-daily and pro-fair-use figure, and reserve against it on the POST path only. The GET path stays free, since it calls no model.
+- [x] 9.1 Add a cover-letter value to `internal/ai/plan`'s `Feature` vocabulary and `AllFeatures`, give it a free-daily and pro-fair-use figure, and reserve against it on the POST path only. The GET path stays free, since it calls no model.
 - [ ] 9.2 Test that an exhausted allowance refuses the POST with a 402 naming the feature and the reset instant, and that the same account can still read its stored draft.
