@@ -67,7 +67,7 @@ func TestRun_SendsToEveryCandidateAndRecordsThem(t *testing.T) {
 	store := &fakeStore{ids: []int64{1, 2, 3}}
 	sender := &fakeSender{}
 
-	stats, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "ph-heads-up"))
+	stats, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "hiring-season-september"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestRun_BurnsTheLedgerEvenOnFailure(t *testing.T) {
 	store := &fakeStore{ids: []int64{9}}
 	sender := &fakeSender{err: errors.New("ses rejected it")}
 
-	stats, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "ph-heads-up"))
+	stats, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "hiring-season-september"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -100,13 +100,13 @@ func TestRun_BurnsTheLedgerEvenOnFailure(t *testing.T) {
 // looks at the result.
 func TestRun_HonoursTheCap(t *testing.T) {
 	store := &fakeStore{}
-	if _, err := newRunner(store, &fakeSender{}, 25).Run(context.Background(), campaign(t, "ph-heads-up")); err != nil {
+	if _, err := newRunner(store, &fakeSender{}, 25).Run(context.Background(), campaign(t, "hiring-season-september")); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if store.lastQuery.MaxRows != 25 {
 		t.Errorf("cap = %d, want 25", store.lastQuery.MaxRows)
 	}
-	if store.lastQuery.Campaign != "ph-heads-up" {
+	if store.lastQuery.Campaign != "hiring-season-september" {
 		t.Errorf("campaign = %q, want the one being sent", store.lastQuery.Campaign)
 	}
 }
@@ -115,7 +115,7 @@ func TestPending_SendsNothing(t *testing.T) {
 	store := &fakeStore{ids: []int64{1, 2}, remaining: 641}
 	sender := &fakeSender{}
 
-	got, err := newRunner(store, sender, 0).Pending(context.Background(), campaign(t, "ph-heads-up"))
+	got, err := newRunner(store, sender, 0).Pending(context.Background(), campaign(t, "hiring-season-september"))
 	if err != nil {
 		t.Fatalf("Pending: %v", err)
 	}
@@ -127,44 +127,34 @@ func TestPending_SendsNothing(t *testing.T) {
 	}
 }
 
-// Both Product Hunt letters point at the same page but ask for different things,
-// because before launch day the vote does not exist yet. Sending the launch-day
-// copy early would promise a button that is not on the page.
-func TestCampaigns_AskForTheRightThingAtTheRightTime(t *testing.T) {
-	heads := campaign(t, "ph-heads-up")
-	live := campaign(t, "ph-live")
-
-	if heads.Name == live.Name {
-		t.Fatal("the two campaigns share a ledger key, so the second would never send")
-	}
-
+// A campaign that links back into freehire must take the origin from the Mailer, not
+// spell it out: the previews render against a relative base, and a hard-coded
+// https://freehire.me would show the production host there while still looking right.
+// Both bodies are checked because the plain-text one is the copy most likely to be
+// written by hand and the least likely to be looked at.
+func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 	sender := &fakeSender{}
-	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me")
-	for _, c := range []broadcast.Campaign{heads, live} {
-		if err := m.Send(context.Background(), c, "someone@example.com"); err != nil {
-			t.Fatalf("Send %s: %v", c.Name, err)
-		}
+	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test")
+	c := campaign(t, "hiring-season-september")
+	if err := m.Send(context.Background(), c, "someone@example.com"); err != nil {
+		t.Fatalf("Send %s: %v", c.Name, err)
 	}
 
-	before, after := sender.sent[0], sender.sent[1]
-	if !strings.Contains(before.html, "Notify me") {
-		t.Error("the pre-launch mail should ask for a reminder tap, not a vote")
+	sent := sender.sent[0]
+	const want = "https://preview.test/my/notifications"
+	if !strings.Contains(sent.html, want) {
+		t.Errorf("the HTML body does not link through the configured origin (%s)", want)
 	}
-	if strings.Contains(strings.ToLower(before.html), "upvote") {
-		t.Error("the pre-launch mail asks for an upvote that cannot be cast yet")
+	if !strings.Contains(sent.text, want) {
+		t.Errorf("the text body does not link through the configured origin (%s)", want)
 	}
-	if !strings.Contains(strings.ToLower(after.html), "upvote") {
-		t.Error("the launch-day mail should ask for the vote")
+	if strings.Contains(sent.text, "freehire.me/my/notifications") {
+		t.Error("the text body spells the production origin out instead of taking it from the Mailer")
 	}
-	for _, m := range []sentMail{before, after} {
-		if !strings.Contains(m.from, "Ilya") {
-			t.Errorf("from = %q, want a person's name", m.from)
-		}
-		if strings.TrimSpace(m.text) == "" {
-			t.Errorf("%q has no plain-text body", m.subject)
-		}
-		if !strings.Contains(m.html, "producthunt.com") {
-			t.Errorf("%q does not link to the launch page", m.subject)
-		}
+	if !strings.Contains(sent.from, "Ilya") {
+		t.Errorf("from = %q, want a person's name", sent.from)
+	}
+	if strings.TrimSpace(sent.text) == "" {
+		t.Error("the campaign has no plain-text body")
 	}
 }

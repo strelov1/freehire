@@ -21,57 +21,56 @@ const signature = `
   </tr>
 </table>`
 
-// productHuntURL is the launch page. Both campaigns point at it; only what they ask
-// for there differs, because Product Hunt itself changes what is possible on the day.
-const productHuntURL = "https://www.producthunt.com/products/freehire?launch=freehire"
+// alertsPath is where a campaign sends someone to set a search up, matching the
+// onboarding sequence's own link so the two letters land on the same page.
+const alertsPath = "/my/notifications?utm_source=email"
 
 func body(name, markup string) *template.Template {
 	return template.Must(mailtpl.Partials().New(name).Parse(markup + signature))
 }
 
-// campaigns is the registry. The two Product Hunt letters are deliberately separate
-// campaigns rather than one mail sent twice: before launch day a vote does not
-// exist, so asking for one would send people to a page where the button they were
-// promised is not there.
+// campaigns is the registry. A campaign is removed once it has been sent: the ledger
+// in broadcast_emails is what records that it went out, so keeping the copy here
+// after the fact only offers a letter about a date that has passed to whoever reads
+// the worker's usage line. The two Product Hunt letters were dropped on 2026-09-01
+// for that reason; git holds them.
 var campaigns = map[string]Campaign{
-	"ph-heads-up": {
-		Name:      "ph-heads-up",
-		Subject:   "We're launching on Product Hunt on 26 August",
-		Preheader: "One click now means one notification then.",
-		Heading:   "We launch on 26 August",
-		body: body("ph-heads-up", `
-{{template "p" "freehire goes up on Product Hunt on 26 August. For a small open-source project that day decides how many people ever hear about it — and more people means more boards covered, more duplicates caught, more of the work done in the open."}}
-{{template "p" "Votes do not count until the day itself, so there is nothing to vote for yet. What helps now is one thing:"}}
-{{template "lead" "Tap “Notify me” on the page — it takes five seconds."}}
-{{template "p" "Product Hunt will remind you on the 26th. That is all — no second mail from me until launch day."}}
-{{template "icon-button" (mailIconLink "`+productHuntURL+`" "Notify me on Product Hunt" .ProductHuntIcon)}}`),
-		text: "freehire goes up on Product Hunt on 26 August. For a small open-source project that day\n" +
-			"decides how many people ever hear about it.\n\n" +
-			"Votes do not count until the day itself, so there is nothing to vote for yet. What helps\n" +
-			"now is one thing: tap \"Notify me\" on the page. It takes five seconds, and Product Hunt\n" +
-			"will remind you on the 26th.\n\n" + productHuntURL + "\n\n" +
-			"That is all — no second mail from me until launch day.\n\n" +
-			"— Ilya Strelov, building freehire\n",
-	},
-
-	"ph-live": {
-		Name:      "ph-live",
-		Subject:   "freehire is live on Product Hunt",
-		Preheader: "Today is the day the votes count.",
-		Heading:   "We’re live today",
-		body: body("ph-live", `
-{{template "p" "freehire is on Product Hunt today. Unlike last time I wrote, today the votes actually count — and the ranking is decided within the first few hours."}}
-{{template "p" "If the project has been useful to you, an upvote is the single most effective thing you can do for it. One click, and it costs nothing."}}
-{{template "icon-button" (mailIconLink "`+productHuntURL+`" "Upvote on Product Hunt" .ProductHuntIcon)}}
-{{template "p" "A comment saying what you actually use it for is worth more than the vote — that is what people read before trying something new."}}
-{{template "muted" "Either way: thank you for being here early."}}`),
-		text: "freehire is on Product Hunt today. Unlike last time I wrote, today the votes actually\n" +
-			"count — and the ranking is decided within the first few hours.\n\n" +
-			"If the project has been useful to you, an upvote is the single most effective thing you\n" +
-			"can do for it:\n\n" + productHuntURL + "\n\n" +
-			"A comment saying what you actually use it for is worth more than the vote — that is what\n" +
-			"people read before trying something new.\n\n" +
-			"Either way: thank you for being here early.\n\n" +
-			"— Ilya Strelov, building freehire\n",
+	// The September letter says nothing about "the market waking up", though the
+	// posting counts would look like evidence for it: what grew over the summer was
+	// this project's own coverage — more boards, more sources — and reading that as a
+	// market signal would be measuring the instrument. The figures below are only
+	// claims about the catalogue, which is all they can honestly be.
+	"hiring-season-september": {
+		Name:      "hiring-season-september",
+		Subject:   "Happy hiring season",
+		Preheader: "1 September — budgets reopen. Set your search up once.",
+		Heading:   "Happy hiring season",
+		body: body("hiring-season-september", `
+{{template "p" "Hi — it’s the 1st of September. In our line of work that is the real new year, so: happy hiring season."}}
+{{template "p" "You know how this month goes. Everyone is back at once, the good roles all surface in the same fortnight, and at some point on a Tuesday night you have twenty career pages open, hoping you have not already missed the one."}}
+{{template "lead" "You don’t have to do that part. Tell freehire what you’re after, once."}}
+{{template "p" "It watches the boards and pings you — email, Telegram or push, whichever you actually read. And you can tell it what you don’t want, which is the half nobody offers: the company you already applied to, the stack you’re done with, the “remote” that turns out to be three days in an office."}}
+{{template "button" (mailLink .AlertsURL "Set up your alert")}}
+{{template "p" "There are 3.2 million open jobs in there right now, from 326,000 companies — about half a million of them showed up last week. I won’t pretend that says anything about the market. It’s just what we’re carrying, and it’s a lot to go through by hand."}}
+{{template "muted" "And if it’s easier: hit reply and tell me what you’re looking for. I read every one of these myself, and it’s usually what I work on next."}}`),
+		text: func(base string) string {
+			return "Hi — it's the 1st of September. In our line of work that is the real new year, so:\n" +
+				"happy hiring season.\n\n" +
+				"You know how this month goes. Everyone is back at once, the good roles all surface in\n" +
+				"the same fortnight, and at some point on a Tuesday night you have twenty career pages\n" +
+				"open, hoping you have not already missed the one.\n\n" +
+				"You don't have to do that part. Tell freehire what you're after, once.\n\n" +
+				"It watches the boards and pings you — email, Telegram or push, whichever you actually\n" +
+				"read. And you can tell it what you don't want, which is the half nobody offers: the\n" +
+				"company you already applied to, the stack you're done with, the \"remote\" that turns\n" +
+				"out to be three days in an office.\n\n" +
+				"Set up your alert: " + base + alertsPath + "\n\n" +
+				"There are 3.2 million open jobs in there right now, from 326,000 companies — about half\n" +
+				"a million of them showed up last week. I won't pretend that says anything about the\n" +
+				"market. It's just what we're carrying, and it's a lot to go through by hand.\n\n" +
+				"And if it's easier: hit reply and tell me what you're looking for. I read every one of\n" +
+				"these myself, and it's usually what I work on next.\n\n" +
+				"— Ilya Strelov, building freehire\n"
+		},
 	},
 }

@@ -40,7 +40,10 @@ type Campaign struct {
 	Preheader string
 	Heading   string
 	body      *template.Template
-	text      string
+	// text takes the origin for the same reason the HTML side does: a campaign that
+	// links into freehire itself cannot spell the URL as a constant, and the previews
+	// render against a relative base. Campaigns that only link outward ignore it.
+	text func(base string) string
 }
 
 // Mailer renders and sends campaigns.
@@ -78,20 +81,20 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, to string) error {
 		Content:   template.HTML(body.String()), //nolint:gosec // trusted templates over package constants; no user data reaches them
 		Footer:    "You’re getting this because you signed up for freehire.",
 	})
-	return m.sender.SendWithReplyTo(ctx, m.from, m.replyTo, to, c.Subject, html, c.text)
+	return m.sender.SendWithReplyTo(ctx, m.from, m.replyTo, to, c.Subject, html, c.text(m.baseURL))
 }
 
 // assets are the absolute image URLs the templates need; they depend on the origin
 // and so cannot be baked into the copy.
 type assets struct {
-	PortraitURL     string
-	ProductHuntIcon string
+	PortraitURL string
+	AlertsURL   string
 }
 
 func (m *Mailer) assets() assets {
 	return assets{
-		PortraitURL:     m.baseURL + "/ilya.jpg",
-		ProductHuntIcon: m.baseURL + "/email-icon-producthunt.png",
+		PortraitURL: m.baseURL + "/ilya.jpg",
+		AlertsURL:   m.baseURL + alertsPath,
 	}
 }
 

@@ -80,8 +80,7 @@ func Samples(baseURL string) ([]Sample, error) {
 // renderers is the list of mails. Each drives the real notifier through the capture
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
-	phHeadsUpSample,
-	phLiveSample,
+	hiringSeasonSample,
 	welcomeSample,
 	advancedSearchSample,
 	noAlertSample,
@@ -150,12 +149,9 @@ func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
 	})
 }
 
-func phHeadsUpSample(baseURL string) (Sample, error) {
-	return campaignSample("campaign-ph-heads-up", "Campaigns / Product Hunt: heads-up", "ph-heads-up", baseURL)
-}
-
-func phLiveSample(baseURL string) (Sample, error) {
-	return campaignSample("campaign-ph-live", "Campaigns / Product Hunt: live", "ph-live", baseURL)
+func hiringSeasonSample(baseURL string) (Sample, error) {
+	return campaignSample("campaign-hiring-season-september", "Campaigns / Hiring season: September",
+		"hiring-season-september", baseURL)
 }
 
 // The signup sequence. Its Sender takes a Reply-To, which capture also satisfies —
