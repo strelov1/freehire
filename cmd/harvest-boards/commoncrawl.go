@@ -46,10 +46,11 @@ func commonCrawlSlug(rawURL string) (string, bool) {
 }
 
 // commonCrawlParsePage extracts candidate slugs from one CDX page response body: JSON-lines,
-// one record per line. GetText's response-size cap can truncate the last line mid-record; a
-// line that fails to parse (truncated or otherwise malformed) is silently skipped rather than
-// sinking the whole page, since every complete line before it is independently valid JSON.
-func commonCrawlParsePage(body string) []string {
+// one record per line, each URL sliced to a board id by slugOf. GetText's response-size cap can
+// truncate the last line mid-record; a line that fails to parse (truncated or otherwise
+// malformed) is silently skipped rather than sinking the whole page, since every complete line
+// before it is independently valid JSON.
+func commonCrawlParsePage(body string, slugOf func(string) (string, bool)) []string {
 	var slugs []string
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
@@ -62,7 +63,7 @@ func commonCrawlParsePage(body string) []string {
 		if err := json.Unmarshal([]byte(line), &rec); err != nil {
 			continue
 		}
-		if slug, ok := commonCrawlSlug(rec.URL); ok {
+		if slug, ok := slugOf(rec.URL); ok {
 			slugs = append(slugs, slug)
 		}
 	}
@@ -106,11 +107,13 @@ func commonCrawlPageCount(ctx context.Context, c httpClient, cdxAPI, hostPrefix 
 }
 
 // commonCrawlCandidates discovers candidate board slugs for hostPrefix (e.g.
-// "boards.greenhouse.io") from the most recent Common Crawl snapshots. A snapshot whose page
-// count can't be read, or whose every page fails to fetch, is a failed snapshot: it is
-// skipped and logged, and the sweep continues with the remaining snapshots. An error is
-// returned only when every swept snapshot fails.
-func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string) ([]string, error) {
+// "boards.greenhouse.io", or a path prefix like "www.workstream.us/j" where the boards do not
+// sit at the host root) from the most recent Common Crawl snapshots, slicing each matched URL
+// to a board id with slugOf. A snapshot whose page count can't be read, or whose every page
+// fails to fetch, is a failed snapshot: it is skipped and logged, and the sweep continues with
+// the remaining snapshots. An error is returned only when every swept snapshot fails.
+func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string,
+	slugOf func(string) (string, bool)) ([]string, error) {
 	apis, err := commonCrawlSnapshots(ctx, c)
 	if err != nil {
 		return nil, fmt.Errorf("commoncrawl: collinfo: %w", err)
@@ -137,7 +140,7 @@ func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string)
 				continue
 			}
 			fetched++
-			for _, slug := range commonCrawlParsePage(body) {
+			for _, slug := range commonCrawlParsePage(body, slugOf) {
 				seen[slug] = struct{}{}
 			}
 		}

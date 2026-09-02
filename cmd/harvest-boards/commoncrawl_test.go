@@ -36,7 +36,7 @@ func TestCommonCrawlParsePageSkipsMalformedLines(t *testing.T) {
 not valid json at all
 {"url": "https://boards.greenhouse.io/truncated/jobs/4"`
 
-	got := commonCrawlParsePage(body)
+	got := commonCrawlParsePage(body, commonCrawlSlug)
 	want := []string{"acme", "acme", "beta"}
 	if !slices.Equal(got, want) {
 		t.Errorf("commonCrawlParsePage = %v, want %v", got, want)
@@ -72,7 +72,7 @@ func TestCommonCrawlCandidatesMergesAcrossSnapshotsAndDedupes(t *testing.T) {
 		// recent snapshots are swept. No entry for it here — a query would fail the test.
 	}
 
-	got, err := commonCrawlCandidates(context.Background(), f, "boards.greenhouse.io")
+	got, err := commonCrawlCandidates(context.Background(), f, "boards.greenhouse.io", commonCrawlSlug)
 	if err != nil {
 		t.Fatalf("commonCrawlCandidates: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestCommonCrawlCandidatesErrorsWhenEverySnapshotFails(t *testing.T) {
 		// No page-count entries for any snapshot: every one of the 3 swept snapshots fails.
 	}
 
-	_, err := commonCrawlCandidates(context.Background(), f, "boards.greenhouse.io")
+	_, err := commonCrawlCandidates(context.Background(), f, "boards.greenhouse.io", commonCrawlSlug)
 	if err == nil {
 		t.Error("commonCrawlCandidates: want an error when every snapshot fails, got nil")
 	}

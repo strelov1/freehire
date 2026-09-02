@@ -64,6 +64,29 @@ const (
 	vagasRequestBurst    = 1
 )
 
+// www.workstream.us is served by AWS API Gateway and meters by request RATE per IP, on every
+// path — the listing and the posting pages alike. A SHORT sample reads the knee near 1 req/s
+// (measured 2026-09-02 over cold boards: 1.0 req/s refused nothing over 40, ~1.4 req/s refused
+// 48%, 2 req/s 71%), and that reading is wrong for a crawl. A 52-minute harvest paced at one
+// token a second was refused 524 of 2,138 requests, and what it sustained was ~0.52 ANSWERED
+// requests a second — so the budget is a rate the platform holds you to over the whole run,
+// not a burst the first refusal announces.
+//
+// Two things then make the pace worse than the number it names, both learned the same day:
+// the penalty outlives the burst that earned it (a run refused at 2 req/s kept being refused
+// minutes later at 0.8), and a refused request RETRIES three times beneath this limiter — the
+// backoff lives inside the client, so one paced token can become three requests exactly when
+// the platform is already refusing. That is a feedback loop, and it is why the pace sits at
+// half the observed ceiling rather than at it: the headroom is what the retries spend.
+//
+// Its detail fan-out bursts to defaultDetailWorkers, so the pacer — not the pool — is what
+// holds the aggregate rate. Tune from the observed refusal rate, downward while boards still
+// fail with 429.
+const (
+	workstreamRequestInterval = 2 * time.Second // ~0.5 req/s
+	workstreamRequestBurst    = 1
+)
+
 // ClinchTalent fronts detail pages with a rate-based AWS-WAF Challenge action: a cold IP is
 // served a handful of clean pages (spike observed ~6) before the WAF flips to a 202 challenge
 // and holds a long per-IP penalty. clinch fetches one detail page per new posting, so its

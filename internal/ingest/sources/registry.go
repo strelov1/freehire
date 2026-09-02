@@ -195,6 +195,10 @@ func All(c HTTPClient) map[string]Source {
 		// UKG Ready (formerly Kronos Workforce Ready) — a different UKG product from the one
 		// NewUKG crawls, on its own regional pod hosts.
 		NewUKGReady(c),
+		// Workstream: the hourly/frontline ATS (restaurants, retail, care homes), board = the
+		// employer's eight-hex career-site id. Rate-paced on every path: its AWS API Gateway
+		// origin meters by request rate per IP (see workstreamRequestInterval).
+		NewWorkstream(pacedHTMLGetter(c, workstreamRequestInterval, workstreamRequestBurst)),
 		NewSenior(c),
 		NewTrakstar(c),
 		NewFactorial(c),

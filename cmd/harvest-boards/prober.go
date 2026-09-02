@@ -118,7 +118,7 @@ const greenhouseBoardsHost = "boards.greenhouse.io"
 // discover finds Greenhouse board candidates from the Common Crawl CDX index: every URL
 // Common Crawl has seen under greenhouseBoardsHost, sliced to its company slug.
 func (greenhouseProber) discover(ctx context.Context, c httpClient) ([]string, error) {
-	return commonCrawlCandidates(ctx, c, greenhouseBoardsHost)
+	return commonCrawlCandidates(ctx, c, greenhouseBoardsHost, commonCrawlSlug)
 }
 
 // dedupKey folds a Greenhouse board id to lower case, like Workday's and Ashby's. The boards
@@ -225,7 +225,7 @@ const ashbyBoardsHost = "jobs.ashbyhq.com"
 // discover finds Ashby board candidates from the Common Crawl CDX index: every URL Common
 // Crawl has seen under ashbyBoardsHost, sliced to its company slug.
 func (ashbyProber) discover(ctx context.Context, c httpClient) ([]string, error) {
-	return commonCrawlCandidates(ctx, c, ashbyBoardsHost)
+	return commonCrawlCandidates(ctx, c, ashbyBoardsHost, commonCrawlSlug)
 }
 
 // bamboohrProber probes the BambooHR per-subdomain careers list. A non-empty result is a
@@ -795,6 +795,7 @@ var probers = map[string]prober{
 	"manatal":         manatalProber{},
 	"ukgready":        ukgreadyProber{},
 	"edjoin":          edjoinProber{},
+	"workstream":      workstreamProber{},
 	"cornerstone":     adapterProber{provider: "cornerstone", newSource: func() sources.Source { return sources.NewCornerstone(sources.NewClient()) }},
 	"taleo":           adapterProber{provider: "taleo", newSource: func() sources.Source { return sources.NewTaleo(sources.NewCookieClient()) }},
 	"neogov":          adapterProber{provider: "neogov", newSource: func() sources.Source { return sources.NewNeogov(sources.NewClient()) }},
