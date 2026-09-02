@@ -62,6 +62,12 @@ func TestDedupKeyOf(t *testing.T) {
 	if dedupKeyOf(paycomProber{})("0E35BF4CDCD4FEE99D33D853E535BD83") != "0e35bf4cdcd4fee99d33d853e535bd83" {
 		t.Error("paycom key must fold case")
 	}
+	// A UKG Ready board is identified by its tenant: the white-label hosts fronting one UKG
+	// environment all serve the same tenants, so the host is branding. Case folds too (confirmed
+	// live: "CBIZ767aa", "cbiz767aa" and "CBIZ767AA" all answer for the same tenant).
+	if dedupKeyOf(ukgreadyProber{})("Secure5.EnterTimeOnline.com/CBIZ767aa") != "cbiz767aa" {
+		t.Error("ukgready key must fold to the lower-cased tenant")
+	}
 }
 
 func TestWorkdayBoardID(t *testing.T) {

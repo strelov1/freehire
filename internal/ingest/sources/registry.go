@@ -190,6 +190,9 @@ func All(c HTTPClient) map[string]Source {
 		NewVouch(c),
 		NewRecruitingSolutions(c),
 		NewUKG(c),
+		// UKG Ready (formerly Kronos Workforce Ready) — a different UKG product from the one
+		// NewUKG crawls, on its own regional pod hosts.
+		NewUKGReady(c),
 		NewSenior(c),
 		NewTrakstar(c),
 		NewFactorial(c),
