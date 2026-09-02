@@ -2,6 +2,10 @@
 # board = the SAP SuccessFactors career-site host (see internal/sources/successfactors.go);
 # the adapter reads https://<board>/job_sitemap.xml.
 # Each board validated live (>0 jobs in its sitemap) before adding.
+#
+# One entry is a HUB rather than a single employer: it carries `hub: true` plus a `tenants`
+# map, and the adapter reads each posting's employer from its URL's first path segment. See
+# the comment on that entry for how its names were established.
 
 - company: Tetra Pak
   board: jobs.tetrapak.com
@@ -2073,8 +2077,44 @@
   board: jobsanz.veolia.com.au
 - company: Alstom
   board: jobsearch.alstom.com
-- company: Arvato
+# A Bertelsmann hub: one host and one shared job_sitemap.xml for 40 employers, which the site
+# names only as the job URL's first path segment. Contributed as a link, validated live
+# 2026-09-02 (973 postings in the sitemap). The 17 tenants missing below are the ones the
+# platform does not name — their /<tenant>/ landing page is empty, serves the platform's own
+# "Create Your Own Career" boilerplate, or shows a page heading — so their postings fall back
+# to Bertelsmann rather than get a name invented from the key.
+#
+# Each name below is that tenant's own landing-page title, read verbatim rather than expanded
+# from the key; "Penguin Random House" is PRH_US because that is what its title says, which is
+# why its three siblings are the qualified ones. The keys are matched EXACTLY, so transcribe
+# them from the sitemap: a re-cased or mistyped key is a silent fallback, not an error.
+- company: Bertelsmann
   board: jobsearch.createyourowncareer.com
+  hub: true
+  tenants:
+    ARVATO: Arvato
+    Arvato_Systems: Arvato Systems
+    BMG: BMG
+    BertelsmannStiftung: Bertelsmann Stiftung
+    Bertelsmann_Investments: Bertelsmann Investments
+    DK_UK: Dorling Kindersley UK
+    FREMANTLE: Fremantle
+    GBS: Bertelsmann Global Business Services
+    PRH_DEU: Penguin Random House Verlagsgruppe
+    PRH_GRUPO: Penguin Random House Grupo Editorial
+    PRH_UK: Penguin Random House UK
+    PRH_US: Penguin Random House
+    PostAdress: PostAdress
+    Playaway: Playaway
+    RTL: RTL
+    Relias_Learning: Relias
+    Riverty: Riverty
+    SDSH: Stiftung Deutsche Schlaganfallhilfe
+    TERRITORY: TERRITORY
+    VIVENO_Group: VIVENO Group
+    bfs_finance: bfs finance
+    smartclip: smartclip
+    weareera: We Are Era
 - company: University of Sheffield
   board: jobsite.sheffield.ac.uk
 - company: Captrain España

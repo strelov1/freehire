@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -59,7 +60,7 @@ func TestUKGReadyTenantFoldsThePodHost(t *testing.T) {
 		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
 	}
 	for i, w := range want {
-		if cfg.Sources[i] != w {
+		if !reflect.DeepEqual(cfg.Sources[i], w) {
 			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
 		}
 	}

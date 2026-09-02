@@ -26,12 +26,19 @@ const DefaultSweepGrace = 48 * time.Hour
 // belong to many partner companies; an adapter that honours it resolves each job's employer from
 // the posting and uses Company only as the hub name and per-vacancy fallback (e.g. huntflow's
 // AlumniHub). It is ignored by adapters that do not implement hub resolution.
+// Tenants is the companion map for a hub whose postings identify their tenant only by an opaque
+// key — a URL path segment or an id — that is not itself a usable company name; it maps that key
+// to the employer's display name (e.g. successfactors' "Arvato_Systems" → "Arvato Systems").
+// A key absent from the map falls back to Company rather than being turned into a name by
+// transforming the key, because a plausible-but-wrong employer reads worse in the catalogue than
+// the parent brand. Optional and adapter-specific, exactly as Hub and Region are.
 type CompanyEntry struct {
-	Company  string `yaml:"company"`
-	Provider string `yaml:"provider"`
-	Board    string `yaml:"board"`
-	Region   string `yaml:"region"`
-	Hub      bool   `yaml:"hub"`
+	Company  string            `yaml:"company"`
+	Provider string            `yaml:"provider"`
+	Board    string            `yaml:"board"`
+	Region   string            `yaml:"region"`
+	Hub      bool              `yaml:"hub"`
+	Tenants  map[string]string `yaml:"tenants"`
 }
 
 // Job is a raw posting as an adapter yields it, before the pipeline normalizes it

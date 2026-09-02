@@ -3,6 +3,7 @@ package sources
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestParseConfig(t *testing.T) {
 		t.Fatalf("len(Sources) = %d, want 2", len(cfg.Sources))
 	}
 	want := CompanyEntry{Company: "Cohere", Provider: "greenhouse", Board: "cohere"}
-	if cfg.Sources[0] != want {
+	if !reflect.DeepEqual(cfg.Sources[0], want) {
 		t.Errorf("Sources[0] = %+v, want %+v", cfg.Sources[0], want)
 	}
 }
@@ -57,7 +58,7 @@ func TestParseConfigDropsCaseInsensitiveBoardDuplicates(t *testing.T) {
 		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
 	}
 	for i, w := range want {
-		if cfg.Sources[i] != w {
+		if !reflect.DeepEqual(cfg.Sources[i], w) {
 			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
 		}
 	}
@@ -88,7 +89,7 @@ func TestParseConfigDropsBoardSpellingsAddressingTheSameSite(t *testing.T) {
 		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
 	}
 	for i, w := range want {
-		if cfg.Sources[i] != w {
+		if !reflect.DeepEqual(cfg.Sources[i], w) {
 			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
 		}
 	}
@@ -153,6 +154,37 @@ func TestParseConfigKeepsSameBoardOnDifferentRegions(t *testing.T) {
 	}
 	if len(cfg.Sources) != 2 {
 		t.Fatalf("len(Sources) = %d, want 2 (region variants kept): %+v", len(cfg.Sources), cfg.Sources)
+	}
+}
+
+// A hub whose postings name their tenant only by an opaque key carries the key→employer map
+// in the board file. The loader runs KnownFields(true), so an unmodelled `tenants:` block
+// does not decode to nothing — it fails the whole file.
+func TestParseConfigReadsHubTenants(t *testing.T) {
+	data := []byte(`
+- company: Bertelsmann
+  board: jobsearch.createyourowncareer.com
+  hub: true
+  tenants:
+    Riverty: Riverty
+    Arvato_Systems: Arvato Systems
+`)
+	cfg, err := ParseConfig("successfactors", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 1 {
+		t.Fatalf("len(Sources) = %d, want 1: %+v", len(cfg.Sources), cfg.Sources)
+	}
+	e := cfg.Sources[0]
+	if !e.Hub {
+		t.Error("Hub = false, want true")
+	}
+	if got := e.Tenants["Arvato_Systems"]; got != "Arvato Systems" {
+		t.Errorf("Tenants[Arvato_Systems] = %q, want %q", got, "Arvato Systems")
+	}
+	if _, ok := e.Tenants["Sonopress"]; ok {
+		t.Error("Tenants holds a key the file never listed")
 	}
 }
 
@@ -276,7 +308,7 @@ func TestParseConfigKeepsPerEntryProvider(t *testing.T) {
 		{Company: "NoProv", Provider: "custom", Board: "x"}, // fell back to the file name
 	}
 	for i, w := range want {
-		if cfg.Sources[i] != w {
+		if !reflect.DeepEqual(cfg.Sources[i], w) {
 			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
 		}
 	}

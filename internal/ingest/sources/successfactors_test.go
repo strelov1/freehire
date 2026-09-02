@@ -55,6 +55,31 @@ func TestSFJobID(t *testing.T) {
 	}
 }
 
+func TestSFTenant(t *testing.T) {
+	cases := map[string]string{
+		// A hub site serves every tenant from one host and names the tenant in the first
+		// path segment.
+		"https://jobsearch.createyourowncareer.com/Riverty/job/Berlin-Software-Engineer-10623/1425618633/": "Riverty",
+		"https://jobsearch.createyourowncareer.com/PRH_US/job/New-York-Assistant-Editor-10019/1414466433/": "PRH_US",
+		// The same hub sitemap also lists postings with no tenant segment at all; "job" is
+		// the platform's own word and must never read as a tenant.
+		"https://jobsearch.createyourowncareer.com/job/Dortmund-Delphi-Entwickler-44369/1431430433/": "",
+		// An ordinary single-tenant SuccessFactors site has the same shape, so it too
+		// yields no tenant and falls back to the configured company.
+		"https://jobs.tetrapak.com/job/Munich-Engineer/12345/": "",
+		"https://jobs.tetrapak.com/":                           "",
+		"https://jobs.tetrapak.com":                            "",
+		"://not a url":                                         "",
+		// A tenant's own landing page is all path and no posting; it still names the tenant.
+		"https://jobsearch.createyourowncareer.com/Riverty": "Riverty",
+	}
+	for loc, want := range cases {
+		if got := sfTenant(loc); got != want {
+			t.Errorf("sfTenant(%q) = %q, want %q", loc, got, want)
+		}
+	}
+}
+
 func TestSFItempropHelpers(t *testing.T) {
 	root := parseHTML(t, sfDetailHTML)
 	if got := itempropText(root, "title"); got != "Commissioning Engineer" {
@@ -171,6 +196,70 @@ func TestSuccessFactorsDropsJobWithNoParseableID(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("got %d jobs, want 0 (unparseable id dropped)", len(jobs))
+	}
+}
+
+// A hub site serves many employers from one host and one shared sitemap, naming the tenant
+// only in the job URL. The configured company is the hub's own name and the fallback.
+func TestSuccessFactorsHubResolvesEmployerPerPosting(t *testing.T) {
+	const host = "https://jobsearch.createyourowncareer.com"
+	mapped := host + "/Riverty/job/Berlin-Software-Engineer-10623/1425618633/"
+	unmapped := host + "/Sonopress/job/Guetersloh-Operator-33333/1400000001/"
+	tenantless := host + "/job/Dortmund-Delphi-Entwickler-44369/1431430433/"
+
+	fake := (&routedHTTP{}).
+		route("/job_sitemap.xml", sfSitemapXML(mapped, unmapped, tenantless)).
+		route("/Riverty/job/Berlin-Software-Engineer-10623/1425618633", sfDetailHTML).
+		route("/Sonopress/job/Guetersloh-Operator-33333/1400000001", sfDetailHTML).
+		route("/job/Dortmund-Delphi-Entwickler-44369/1431430433", sfDetailHTML)
+
+	jobs, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{
+		Company:  "Bertelsmann",
+		Provider: "successfactors",
+		Board:    "jobsearch.createyourowncareer.com",
+		Hub:      true,
+		Tenants:  map[string]string{"Riverty": "Riverty"},
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("got %d jobs, want 3", len(jobs))
+	}
+
+	byID := map[string]string{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j.Company
+	}
+	want := map[string]string{
+		"1425618633": "Riverty",     // mapped tenant
+		"1400000001": "Bertelsmann", // unmapped tenant falls back, never "Sonopress"
+		"1431430433": "Bertelsmann", // no tenant segment; never a company called "job"
+	}
+	for id, wantCompany := range want {
+		if byID[id] != wantCompany {
+			t.Errorf("job %s company = %q, want %q", id, byID[id], wantCompany)
+		}
+	}
+}
+
+// The hub branch must not reach an ordinary board: a single-tenant site's URLs carry path
+// segments too, and reading one as an employer would rename the company.
+func TestSuccessFactorsNonHubIgnoresTheURLPath(t *testing.T) {
+	loc := "https://jobs.tetrapak.com/Riverty/job/Munich-Engineer/12345/"
+	fake := (&routedHTTP{}).
+		route("/job_sitemap.xml", sfSitemapXML(loc)).
+		route("/Riverty/job/Munich-Engineer/12345", sfDetailHTML)
+
+	jobs, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Tetra Pak", Board: "jobs.tetrapak.com",
+		Tenants: map[string]string{"Riverty": "Riverty"}, // present but not honoured without Hub
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Company != "Tetra Pak" {
+		t.Fatalf("company = %+v, want Tetra Pak", jobs)
 	}
 }
 

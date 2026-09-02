@@ -51,9 +51,15 @@ func ParseConfig(provider string, data []byte) (Config, error) {
 // use ParseConfig or LoadConfig.
 //
 // Decoding is strict: an unrecognized key is a parse error rather than being silently
-// dropped. A typo in Region or Hub — the two fields whose absence has no required-field
-// error to catch it — would otherwise disable the behavior it names with no symptom
-// until someone investigates why a board crawled the wrong host.
+// dropped. A typo in Region, Hub or Tenants — the three fields whose absence has no
+// required-field error to catch it — would otherwise disable the behavior it names with no
+// symptom until someone investigates why a board crawled the wrong host.
+//
+// Strictness stops at the FIELD name, which matters most for Tenants: `tenatns:` is a parse
+// error, but a typo in a tenant key INSIDE the map is a perfectly good map entry. It decodes,
+// the adapter's lookup misses, and the posting quietly takes the fallback company. Nothing can
+// catch that here or in cmd/validate-sources — neither has the board to compare against — so
+// tenant keys must be transcribed from the board's own listing, never typed from memory.
 func ParseRawEntries(provider string, data []byte) ([]CompanyEntry, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
