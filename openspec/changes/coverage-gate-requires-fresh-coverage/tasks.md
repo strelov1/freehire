@@ -6,15 +6,15 @@ closed_at IS NULL AND company_slug <> ''`, verified 2026-09-02), and `last_seen_
 out of every index — `RefreshUnchangedJob` documents that the column is unindexed on purpose so
 the hot re-crawl update stays heap-only.
 
-- [ ] 1.1 Add `CompaniesWithFreshNonAggregatorCoverage :many` to
+- [x] 1.1 Add `CompaniesWithFreshNonAggregatorCoverage :many` to
       `internal/platform/db/queries/jobs.sql`. Takes the folded slugs asked about, the
       aggregator source list, and the `seen_after` cutoff; returns the folded slugs that have a
       qualifying row. Shape it as `unnest(folded_slugs) ... WHERE EXISTS (...)` so a large
       employer short-circuits on its first fresh row rather than aggregating all of them.
       Comment must state why `last_seen_at` carries no index and must not gain one.
-- [ ] 1.2 `make sqlc`, and commit the regenerated `internal/platform/db` in the same commit —
+- [x] 1.2 `make sqlc`, and commit the regenerated `internal/platform/db` in the same commit —
       the pre-commit hook and the `sqlc` CI job regenerate and diff.
-- [ ] 1.3 Integration test (`//go:build integration`, `internal/platform/db`): a fresh
+- [x] 1.3 Integration test (`//go:build integration`, `internal/platform/db`): a fresh
       non-aggregator row is returned; the same row aged past the cutoff is NOT; an aggregator
       row is never coverage however fresh; a closed row is never coverage; a slug asked with
       hyphens matches a stored slug written without them and vice versa.

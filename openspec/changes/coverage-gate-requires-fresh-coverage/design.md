@@ -131,7 +131,26 @@ all the same rule.
 ## Load
 
 One query per board run, in the batched path exactly where the Meili call is today. Himalayas'
-~2,000-posting run resolves to on the order of 1,500 distinct slugs, batched the same way. The
+~2,000-posting run resolves to on the order of 1,500 distinct slugs, batched the same way.
+
+`EXPLAIN (ANALYZE, BUFFERS)` on prod 2026-09-02 over a batch of 500 real company slugs confirms
+the shape the design assumes:
+
+```
+Nested Loop Semi Join
+  -> Function Scan on unnest asked                                    (500 rows)
+  -> Index Scan using jobs_open_company_slug_folded_col_idx  (loops=500)
+       Index Cond: (company_slug_folded = asked.folded)
+       Filter: (source <> ALL (...)) AND (last_seen_at > now() - '14 days')
+       rows=0.91 per loop, Rows Removed by Filter: 10
+```
+
+One index search per company, ~11 open rows touched each, the freshness test a heap recheck
+over exactly those — never a scan, and no index on `last_seen_at` involved. The batch cost
+525ms of cold I/O for 500 companies; the same query against a warm cache is a fraction of that,
+and it runs once per board run rather than per posting.
+
+The
 streaming path (`jobtech`) and the `CoverageGated` probe (`remotedotcom`) keep their existing
 shapes — memoized single-slug and mid-crawl batch respectively — since only the port's backing
 store changes, not its interface.

@@ -125,24 +125,29 @@ type BoardHealth interface {
 
 // CoverageLookup is the optional Store-adjacent port the ingest-time aggregator coverage gate
 // needs: for a batch of company slugs, which are already covered by an OPEN posting from a
-// non-aggregator source. Backed by the live Meili jobs index (see the aggregator-ats-coverage-
-// skip design doc), not Postgres, so a company's ATS coverage is checked near-real-time
-// without a per-run table scan. Optional: nil disables the gate entirely (ATS board files,
-// test fakes) — the same shape as BoardHealth.
+// non-aggregator source. Optional: nil disables the gate entirely (ATS board files, test
+// fakes) — the same shape as BoardHealth.
 //
 // companySlugs are company_slug values as normalize.CompanySlug produced them AND the alias
 // registry resolved them — the same value the upsert will store. The returned map's keys are
 // expected back in exactly that form — a lookup may consult other SPELLINGS of
 // a slug internally, but that is its own business and never leaks into the answer.
 //
-// A live Meili filter matches a stored field's literal value and has no equivalent of a SQL
-// expression index, so it cannot compute the hyphen-stripping fold cmd/reindex's
-// aggregator-ats-dedup suppression pass compares on. The search implementation gets most of
-// the way there by asking about the folded SPELLING alongside the exact one (see
-// search.coverageSpellings), which keeps every comparison an exact match against a stored
-// value. What that still cannot reach — an employer whose ATS is the side using hyphens,
-// where there is no way to guess where they go — remains coverage this port misses by design,
-// and aggregator-ats-dedup's periodic pass remains the mechanism that catches it.
+// COVERAGE MEANS CURRENT COVERAGE. An implementation MUST only count a posting the catalogue
+// has seen recently, and owns how recent that is. The gate's yes is unrecoverable — the
+// aggregator's posting is never written, so it is never in the database, in /find, or in
+// search, and it leaves no trace anyone can query afterwards. A no merely costs a duplicate
+// row, which aggregator-ats-dedup's periodic pass already marks on its own schedule. So a
+// coverage claim has to be about the present tense ("we still crawl this employer"), not the
+// past: without a freshness bound one forgotten row holds its slug forever, which is how a
+// 2013 posting from a board that had left sources/ suppressed every live posting for a
+// different employer of the same name (issue #2315).
+//
+// That bound is also why the port is Postgres-backed rather than search-backed. last_seen_at
+// cannot reach the search index: the incremental drain pushes a document only when its
+// content_hash moves, and the write that stamps the column on the common path
+// (RefreshUnchangedJob) deliberately writes nothing else and enqueues nothing — so an indexed
+// copy would be most wrong for exactly the actively-crawled rows the gate must credit.
 type CoverageLookup interface {
 	NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string) (map[string]bool, error)
 }

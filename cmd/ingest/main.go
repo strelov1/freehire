@@ -30,10 +30,8 @@ import (
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
-	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
-	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // staleAfter is the DEFAULT grace window before an unseen job is closed. An adapter that
@@ -45,19 +43,6 @@ const staleAfter = sources.DefaultSweepGrace
 
 func main() {
 	worker.Main(run)
-}
-
-// coverageLookup wires the aggregator ingest-time coverage gate's Meili-backed port when
-// search is configured, and nil otherwise — the same "MeiliKey empty ⇒ disabled" convention
-// cmd/server's searchClient wiring already uses. A nil port makes the gate a no-op (write
-// everything, exactly as before this change), never a hard failure: an ingest run must not
-// fail over search being unreachable/unconfigured, since it never needed Meili before. No
-// embed options are wired — the coverage lookup is a plain facet query, not embedding.
-func coverageLookup(cfg config.Settings) pipeline.CoverageLookup {
-	if cfg.MeiliKey == "" {
-		return nil
-	}
-	return search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 }
 
 func run() int {
@@ -139,7 +124,7 @@ func run() int {
 			hydrationWindow)
 	}
 
-	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
 		return 1
@@ -157,7 +142,11 @@ func run() int {
 		Registry:    registry,
 		Store:       store,
 		BoardHealth: newBoardHealth(pool),
-		Coverage:    coverageLookup(cfg),
+		// The coverage gate reads the same pool: last_seen_at decides the answer, and no
+		// index can hold it (see coverage.go). It was Meili-backed and gated on MeiliKey;
+		// every production ingest unit already carried that key, so the gate is on for the
+		// same runs as before — only a local run without search configured gains it.
+		Coverage: newCoverage(pool),
 		// Same object as Store: the alias registry is a read the store's pool already
 		// serves, and the pipeline asks for it once per board run.
 		Aliases: store,

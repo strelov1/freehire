@@ -582,10 +582,6 @@ func facetSettings() *meilisearch.Settings {
 			// reindex first on deploy, or /jobs 500s on the new attribute.
 			"id",
 			"source", "company_slug",
-			// company_slug_folded backs the ingest-time coverage gate only (never a user
-			// facet): it is what lets that gate match an employer the aggregator and the
-			// ATS spell differently. See JobDocument.CompanySlugFolded.
-			"company_slug_folded",
 			"work_mode", "regions", "countries", "cities", "skills", "collections",
 			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on
 			// the bare attribute; an unknown value is absent so it filters as empty.

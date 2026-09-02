@@ -1,0 +1,124 @@
+//go:build integration
+
+// Integration tests for the ingest-time aggregator coverage gate's lookup: which of the asked
+// companies still have RECENT coverage from a non-aggregator source. Every condition it tests
+// is a SQL behaviour — the freshness cutoff, the aggregator exclusion, the closed-row
+// exclusion, and the folded-slug match — so none of them can be verified without a real
+// Postgres.
+// Run with: go test -tags=integration ./internal/platform/db/
+package db
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+// aggregatorSources is the shape the caller passes: the provider keys ingest classifies as
+// aggregators. Coverage may never come from one of these, however fresh.
+var aggregatorSources = []string{"himalayas", "remoteok"}
+
+func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+
+	// seed writes one posting. slug is stored as written and folded the way UpsertJob folds
+	// it, so the rows match what production holds rather than a shape only the test produces.
+	seed := func(t *testing.T, source, externalID, slug string, lastSeen time.Time, closed bool) {
+		t.Helper()
+		_, err := pool.Exec(ctx, `
+			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
+			                  company_slug_folded, last_seen_at, closed_at)
+			VALUES ($1, $2, 'https://x.test/'||$2, 'Engineer', $2, 'Co', $3,
+			        replace($3, '-', ''), $4,
+			        CASE WHEN $5::bool THEN now() ELSE NULL END)`,
+			source, externalID, slug, lastSeen, closed)
+		if err != nil {
+			t.Fatalf("seed %s: %v", externalID, err)
+		}
+	}
+
+	now := time.Now()
+	cutoff := now.Add(-14 * 24 * time.Hour)
+
+	ask := func(t *testing.T, folded ...string) map[string]bool {
+		t.Helper()
+		rows, err := q.CompaniesWithFreshNonAggregatorCoverage(ctx, CompaniesWithFreshNonAggregatorCoverageParams{
+			FoldedCompanies: folded,
+			Aggregators:     aggregatorSources,
+			SeenAfter:       pgtype.Timestamptz{Time: cutoff, Valid: true},
+		})
+		if err != nil {
+			t.Fatalf("CompaniesWithFreshNonAggregatorCoverage: %v", err)
+		}
+		got := make(map[string]bool, len(rows))
+		for _, r := range rows {
+			got[r] = true
+		}
+		return got
+	}
+
+	t.Run("a recently seen non-aggregator posting is coverage", func(t *testing.T) {
+		seed(t, "greenhouse", "fresh:1", "freshco", now.Add(-time.Hour), false)
+		if !ask(t, "freshco")["freshco"] {
+			t.Error("a posting seen an hour ago must count as coverage")
+		}
+	})
+
+	t.Run("a posting unseen past the cutoff is NOT coverage", func(t *testing.T) {
+		// The reported defect: a 2013 trakstar posting last seen 31 days ago held the slug
+		// "pipe" covered and discarded every live aggregator posting for a different employer
+		// of the same name. Coverage is a claim about the present.
+		seed(t, "trakstar", "stale:1", "staleco", now.Add(-31*24*time.Hour), false)
+		if ask(t, "staleco")["staleco"] {
+			t.Error("a posting unseen for 31 days must not count as coverage")
+		}
+	})
+
+	t.Run("an aggregator posting is never coverage, however fresh", func(t *testing.T) {
+		seed(t, "himalayas", "agg:1", "aggonly", now, false)
+		if ask(t, "aggonly")["aggonly"] {
+			t.Error("an aggregator posting must not cover its own company")
+		}
+	})
+
+	t.Run("a closed posting is not coverage", func(t *testing.T) {
+		seed(t, "greenhouse", "closed:1", "closedco", now, true)
+		if ask(t, "closedco")["closedco"] {
+			t.Error("a closed posting must not count as coverage")
+		}
+	})
+
+	t.Run("hyphenation does not decide the match", func(t *testing.T) {
+		// The employer the ATS writes "cfoinsights" and the aggregator writes "cfo-insights"
+		// is one employer. The caller folds before asking, so both spellings arrive as one
+		// value and meet the stored fold.
+		seed(t, "lever", "fold:1", "cfoinsights", now, false)
+		if !ask(t, "cfoinsights")["cfoinsights"] {
+			t.Error("the folded spelling must match the stored fold")
+		}
+	})
+
+	t.Run("a company with no posting at all is absent from the answer", func(t *testing.T) {
+		got := ask(t, "freshco", "nobodyco")
+		if got["nobodyco"] {
+			t.Error("a company with no rows must not be reported as covered")
+		}
+		if !got["freshco"] {
+			t.Error("asking about several companies must still answer for the covered one")
+		}
+	})
+
+	t.Run("the answer never carries a company nobody asked about", func(t *testing.T) {
+		// The caller keys its result map by what it asked; a stray key would be a coverage
+		// claim about a company nobody enquired about.
+		for slug := range ask(t, "freshco") {
+			if slug != "freshco" {
+				t.Errorf("answer carries %q, which was not asked about", slug)
+			}
+		}
+	})
+}

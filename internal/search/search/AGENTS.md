@@ -105,10 +105,11 @@ Either run the reindex **before** rolling out the app image, or push the new ind
 to the **live** index first (settings updates are cheap; documents lag, so results are stale
 or empty — never a 500).
 
-`company_slug_folded` (added for the ingest-time coverage gate) is the gentler case worth
-knowing about: nothing on a user path filters it, and its only caller — the gate — fails open
-on a lookup error. So a missed settings patch costs an ingest gate that is off until the next
-rebuild, not a broken page. The order is still the one above; the blast radius just differs.
+The hazard is one-directional, which is worth knowing when a change goes the other way:
+REMOVING a filterable attribute needs no dance at all. `company_slug_folded` was declared here
+for the ingest-time coverage gate and was dropped when that gate moved to Postgres — the binary
+stops asking for it first, and the live index keeps a harmless declaration until the next
+rebuild. Only a binary that asks for an attribute the live index has not declared breaks.
 
 ## Skill vectors and the match sort
 

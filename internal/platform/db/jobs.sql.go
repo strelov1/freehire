@@ -471,6 +471,67 @@ func (q *Queries) CompaniesWithAggregatorPostings(ctx context.Context, aggregato
 	return items, nil
 }
 
+const companiesWithFreshNonAggregatorCoverage = `-- name: CompaniesWithFreshNonAggregatorCoverage :many
+SELECT asked.folded::text AS company_slug_folded
+FROM unnest($1::text[]) AS asked(folded)
+WHERE EXISTS (
+    SELECT 1
+    FROM jobs
+    WHERE jobs.company_slug_folded = asked.folded
+      AND jobs.closed_at IS NULL
+      AND jobs.company_slug <> ''
+      AND jobs.last_seen_at > $2
+      AND NOT (jobs.source = ANY($3::text[]))
+)
+`
+
+type CompaniesWithFreshNonAggregatorCoverageParams struct {
+	FoldedCompanies []string           `json:"folded_companies"`
+	SeenAfter       pgtype.Timestamptz `json:"seen_after"`
+	Aggregators     []string           `json:"aggregators"`
+}
+
+// The ingest-time aggregator coverage gate: of the companies asked about, which still have an
+// OPEN posting from a non-aggregator source that was seen recently. A yes makes ingest DISCARD
+// the aggregator's posting unsaved, so the question has to be about the present tense — "do we
+// still crawl this employer" — not "did we ever". Without the last_seen_at cutoff a single
+// forgotten row holds its slug forever: a 2013 trakstar posting from a board that had left
+// sources/ suppressed every live Himalayas posting for a different employer of the same name
+// (issue #2315), and 22,022 slugs were held that way on prod 2026-09-02.
+//
+// Companies arrive ALREADY FOLDED and are compared against the stored jobs.company_slug_folded
+// column, which UpsertJob writes beside company_slug. No exact-slug clause sits beside it
+// because none is needed: the fold is replace(company_slug,'-',”), so an exact match implies
+// a folded one. That is also what keeps the predicate on an index — see the note in
+// RecomputeAggregatorDuplicates about what the expression form costs the planner.
+//
+// company_slug <> ” is not a filter on meaning (an empty slug names nobody) but the partial
+// index's own predicate, without which jobs_open_company_slug_folded_col_idx cannot be used.
+//
+// last_seen_at carries NO index, and must not gain one: RefreshUnchangedJob writes that column
+// alone on the hot re-crawl path precisely because it is unindexed, which keeps the update
+// heap-only. It is a recheck here, over the few open rows the folded index already selected,
+// and EXISTS stops at the first fresh one so a large employer costs no more than a small one.
+func (q *Queries) CompaniesWithFreshNonAggregatorCoverage(ctx context.Context, arg CompaniesWithFreshNonAggregatorCoverageParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, companiesWithFreshNonAggregatorCoverage, arg.FoldedCompanies, arg.SeenAfter, arg.Aggregators)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug_folded string
+		if err := rows.Scan(&company_slug_folded); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug_folded)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const companiesWithFuzzyDedupCandidates = `-- name: CompaniesWithFuzzyDedupCandidates :many
 SELECT company_slug
 FROM jobs
