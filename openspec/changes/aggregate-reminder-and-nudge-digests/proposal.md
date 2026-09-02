@@ -9,8 +9,11 @@ noisy ones.
 
 ## What Changes
 
-- Due saved-job reminders are grouped by user and delivered as **one message per user
-  per pass**, on every channel (email, Telegram, push), instead of one message per job.
+- Due saved-job reminders are grouped by user **and by their snapshotted channel set**
+  and delivered as **one message per group per pass**, on every channel (email, Telegram,
+  push), instead of one message per job. The channel set is part of the key because
+  `job_reminders.channels` is frozen when the reminder is scheduled (migration 0034), so
+  an account that changed its rule between two saves has two different deliveries due.
 - Lifecycle nudges are grouped by `(user, kind)` and delivered as **one message per
   group**. The three kinds (`follow_up`, `interview_prep`, `job_closed`) stay in
   separate messages — they are different conversations and read badly merged.

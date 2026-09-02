@@ -177,7 +177,7 @@ func DefaultConfig() Config {
 type Stats struct {
 	Matched   int // newly recorded nudge candidates
 	Delivered int // nudges sent
-	Messages  int // channel messages sent (one per account per kind per pass)
+	Messages  int // messages that landed (one per batch PER CHANNEL, not per batch)
 	Cancelled int // nudges cancelled at fire (condition no longer holds)
 	SoftSkips int // nudges with no deliverable channel this pass
 	Deferred  int // nudges held back by quiet hours or by a full message
@@ -424,10 +424,10 @@ func (r *Runner) message(info db.GetNudgeForDeliveryRow) Message {
 // all of its nudges, because a partial result would need a second delivery ledger
 // to describe and nothing reads one.
 func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
-	delivered, failedErr := r.deliverChannels(ctx, b.info, b.msgs)
+	sent, failedErr := r.deliverChannels(ctx, b.info, b.msgs)
 
 	switch {
-	case delivered:
+	case sent > 0:
 		if failedErr != nil {
 			log.Printf("nudge: user %d %s delivered with a co-channel error: %v", b.info.UserID, b.info.Kind, failedErr)
 		}
@@ -438,7 +438,7 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 		}
 		r.recordNotification(ctx, b)
 		stats.Delivered += len(b.ids)
-		stats.Messages++
+		stats.Messages += sent
 	case failedErr != nil:
 		log.Printf("nudge: deliver %s batch for user %d: %v", b.info.Kind, b.info.UserID, failedErr)
 		for _, id := range b.ids {
@@ -496,12 +496,14 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	}
 }
 
-// deliverChannels attempts each configured channel that has a usable destination.
-// It reports whether at least one send succeeded and the last hard error (a
-// channel with no destination or no notifier is a soft-skip, not an error). One
-// successful channel makes the nudge delivered — a co-channel outage just misses
-// that channel for this one-shot nudge.
-func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msgs []Message) (delivered bool, failedErr error) {
+// deliverChannels attempts each configured channel that has a usable destination,
+// sending the whole batch as one message per channel. It reports HOW MANY messages
+// landed — a batch on email and Telegram is two, and the pass summary would
+// undercount if this were a bool — and the last hard error (a channel with no
+// destination or no notifier is a soft-skip, not an error). One successful channel
+// makes the batch delivered — a co-channel outage just misses that channel for these
+// one-shot nudges.
+func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msgs []Message) (sent int, failedErr error) {
 	for _, ch := range info.Channels {
 		dest, ok := recipient(ch, info)
 		if !ok {
@@ -522,9 +524,9 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 			failedErr = err
 			continue
 		}
-		delivered = true
+		sent++
 	}
-	return delivered, failedErr
+	return sent, failedErr
 }
 
 // unlinkTelegram forgets a user's Telegram chat after a send reported it

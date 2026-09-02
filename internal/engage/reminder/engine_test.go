@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -334,11 +335,10 @@ func TestRun_MultiJobGroupRecordsOneListNotification(t *testing.T) {
 	if rec.PublicSlug.Valid {
 		t.Errorf("PublicSlug = %+v, want unset for a multi-job group", rec.PublicSlug)
 	}
-	var jobs []struct {
-		Title   string `json:"title"`
-		Company string `json:"company"`
-		Slug    string `json:"slug"`
-	}
+	// Unmarshalled into the SHARED shape, not a local copy of it: the column's
+	// contract is notify.SnapshotJob, and a private struct here would keep passing
+	// while the two drifted apart.
+	var jobs []notify.SnapshotJob
 	if err := json.Unmarshal(rec.Jobs, &jobs); err != nil {
 		t.Fatalf("Jobs is not a job list: %v (raw %s)", err, rec.Jobs)
 	}

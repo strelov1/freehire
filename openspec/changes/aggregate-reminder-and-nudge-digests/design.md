@@ -78,6 +78,20 @@ the single-item case a slice of one and removes the ability to regress. The two 
 keep their own interfaces, as they do today — the doc's reason for that (each carries its
 own payload, `ErrChannelNotConfigured` and `recipient`) is unchanged.
 
+### The reminder batch key carries the channel set; the nudge key carries the kind
+
+`job_reminders.channels` is snapshotted when the reminder is scheduled — migration 0034
+says why: "a later rule edit never rewrites a pending reminder". It is therefore a
+property of the REMINDER, not of the account, and `GetReminderForDelivery` returns it per
+row. Grouping on `user_id` alone would let the first member's row decide the channels for
+the whole batch, sending one reminder over another's channels and stamping it delivered
+anyway. The key is `(user_id, canonical channel set)`; the set is sorted only for the key,
+so the send still walks the first member's own slice in its stored order.
+
+`internal/engage/nudge` needs no such split — `GetNudgeForDelivery` reads
+`notification_settings.channels` live, which IS an account property — and instead carries
+the kind, since the three kinds must not share a message.
+
 ### Group and validate in the same order as today
 
 `Runner.Run` claims as it does now, then loads each claimed item's delivery context and

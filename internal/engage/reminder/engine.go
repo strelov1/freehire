@@ -117,7 +117,7 @@ func DefaultConfig() Config {
 // the change that made one message carry many.
 type Stats struct {
 	Delivered int // reminders sent
-	Messages  int // channel messages sent (one per account per pass)
+	Messages  int // messages that landed (one per batch PER CHANNEL, not per batch)
 	Cancelled int // reminders cancelled at fire (job closed or no longer actionable)
 	SoftSkips int // reminders with no deliverable channel this pass
 	Deferred  int // reminders held back by quiet hours or by a full message
@@ -269,10 +269,10 @@ func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetRe
 // all of its reminders, because a partial result would need a second delivery
 // ledger to describe and nothing reads one.
 func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
-	delivered, failedErr := r.deliverChannels(ctx, b.info, b.msgs)
+	sent, failedErr := r.deliverChannels(ctx, b.info, b.msgs)
 
 	switch {
-	case delivered:
+	case sent > 0:
 		if failedErr != nil {
 			// One channel delivered but another errored: the batch is done (a
 			// one-shot nudge needs only one channel), but surface the broken channel
@@ -288,7 +288,7 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 		}
 		r.recordNotification(ctx, b)
 		stats.Delivered += len(b.ids)
-		stats.Messages++
+		stats.Messages += sent
 	case failedErr != nil:
 		log.Printf("reminder: deliver batch for user %d: %v", b.info.UserID, failedErr)
 		for _, id := range b.ids {
@@ -312,12 +312,13 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 }
 
 // deliverChannels attempts each of the account's channels that has a usable
-// destination, sending the whole batch as one message per channel. It reports
-// whether at least one send succeeded and the last hard error (a channel with no
+// destination, sending the whole batch as one message per channel. It reports HOW MANY
+// messages landed — a batch on email and Telegram is two, and the pass summary would
+// undercount if this were a bool — and the last hard error (a channel with no
 // destination or no notifier is a soft-skip, not an error). One successful channel
-// makes the batch delivered — a co-channel outage just misses that channel for
-// these one-shot nudges.
-func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeliveryRow, msgs []ReminderMessage) (delivered bool, failedErr error) {
+// makes the batch delivered — a co-channel outage just misses that channel for these
+// one-shot nudges.
+func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeliveryRow, msgs []ReminderMessage) (sent int, failedErr error) {
 	for _, ch := range info.Channels {
 		dest, ok := recipient(ch, info)
 		if !ok {
@@ -338,9 +339,9 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeli
 			failedErr = err
 			continue
 		}
-		delivered = true
+		sent++
 	}
-	return delivered, failedErr
+	return sent, failedErr
 }
 
 // unlinkTelegram forgets a user's Telegram chat after a send reported it

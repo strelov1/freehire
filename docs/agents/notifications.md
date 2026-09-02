@@ -17,9 +17,11 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 - **All three engines deliver in GROUPS, and a group is the unit of everything.**
   `notify` groups a subscription's matched jobs; `internal/engage/reminder` groups an
   account's due reminders; `internal/engage/nudge` groups an account's due nudges **of one
-  kind**. Every `Notifier.Send` therefore takes a slice, not a message — there is no
-  per-item send path left for a channel to keep using, which is the point: eight saves in
-  a day were eight emails three days later. The kinds stay apart because "your
+  kind**, and `internal/engage/reminder` additionally splits on the CHANNEL SET (see the
+  bullet below). Every `Notifier.Send` therefore takes a whole group — a `notify.Digest`
+  for subscriptions, a slice for the other two — and none of them takes a single item, so
+  no per-item send path is left for a channel to keep using. That is the point: eight
+  saves in a day were eight emails three days later. The kinds stay apart because "your
   application went quiet" and "prepare for your interview" are different errands with
   different call-to-actions; merging them would need a mail that says neither. One send
   outcome decides the whole group: a failure records an attempt against every member and
@@ -27,6 +29,15 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   delivery ledger to describe and nothing reads one. A group of ONE must stay
   byte-identical to the pre-grouping message — that is what makes the change invisible to
   everyone it doesn't help.
+- **A reminder's channels are a SNAPSHOT, so they are part of its batch key.**
+  `job_reminders.channels` is frozen when the reminder is scheduled — migration 0034 says
+  why: "a later rule edit never rewrites a pending reminder". So an account that changed
+  its rule between two saves has two genuinely different deliveries due, and grouping on
+  the account alone would send one of them over the other's channels and stamp it
+  delivered anyway. The key is `(user_id, sorted channel set)`; only the KEY is sorted, so
+  the send still walks the first member's own slice. `internal/engage/nudge` has no such
+  split: `GetNudgeForDelivery` reads `notification_settings.channels` live, which IS an
+  account property.
 - **A reminder's `fire_at` is rounded forward to the account's notification hour**
   (`notification_settings.digest_time` in the account's timezone; 09:00 and UTC when
   unset). Grouping alone would have bought the reminder engine almost nothing: `fire_at`

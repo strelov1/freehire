@@ -41,14 +41,15 @@ only move the fire time forward, never earlier than the default delay.
 ### Requirement: One-shot delivery
 
 A reminder SHALL fire exactly once at or after its scheduled fire time and then be marked
-delivered. Due reminders SHALL be delivered grouped by user: all of one account's due,
-still-actionable reminders in a pass form one batch, and that batch SHALL be sent as a
-single message over each channel in the rule's channel set for which the user has a
-usable destination, reusing the existing notification delivery engine. Delivery SHALL be
-idempotent under worker retries: a reminder already marked delivered is never sent again.
-If the account's local time falls inside its configured quiet-hours window when its
-reminders become due, delivery of that account's whole batch SHALL be deferred to a later
-worker pass rather than sent or dropped.
+delivered. Due reminders SHALL be delivered grouped by user AND by the channel set
+snapshotted on the reminder: all of one account's due, still-actionable reminders in a
+pass that share a channel set form one batch, and that batch SHALL be sent as a single
+message over each of those channels for which the user has a usable destination, reusing
+the existing notification delivery engine. One account MAY therefore produce more than one
+batch in a pass. Delivery SHALL be idempotent under worker retries: a reminder already
+marked delivered is never sent again. If the account's local time falls inside its
+configured quiet-hours window when its reminders become due, delivery of that account's
+batches SHALL be deferred to a later worker pass rather than sent or dropped.
 
 #### Scenario: Due reminders for one user arrive as one message
 
