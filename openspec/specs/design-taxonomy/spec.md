@@ -116,9 +116,19 @@ and the blind phrases MUST stay narrow: a qualified draughting title such as
 
 #### Scenario: Design disciplines of their own stay on the product side
 
-- **WHEN** a job titled "Service Design Engineer", "Sound Design Engineer" or
-  "Game Design Engineer" is classified
+- **WHEN** a job titled "Service Design Engineer", "Experience Design Engineer"
+  or "Game Design Engineer" is classified
 - **THEN** its category is `design`
+
+#### Scenario: The audio spellings leave the product side
+
+- **WHEN** a job titled "Sound Design Engineer" or "Audio Design Engineer" is
+  classified
+- **THEN** its category is `creative`, not `design` and not
+  `engineering_design` — audio moved out of product design with the rest of its
+  craft, and both of these spellings have to be declared above the draughting
+  block or they fall through the bare "design engineer" alias into draughting,
+  which would scatter one craft across three categories
 
 ### Requirement: A resolved engineering-design category vetoes deletion
 
