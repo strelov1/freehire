@@ -705,7 +705,7 @@ func TestCoverageGatedFallsBackToFetchNewWhenTheGateDoesNotApply(t *testing.T) {
 }
 
 // A failed probe must not read as "everything is covered" — that would starve the catalogue of
-// bodies over a transient Meili hiccup. It reads as "nothing is covered": the run costs what it
+// bodies over a transient lookup failure. It reads as "nothing is covered": the run costs what it
 // used to, which is the recoverable direction.
 func TestCoverageProbeFailureHydratesEverything(t *testing.T) {
 	src := &fakeCoverageGatedSource{fakeHydratingSource: fakeHydratingSource{
@@ -825,18 +825,48 @@ func TestRunSavesAggregatorPostingWhenCoverageNotWired(t *testing.T) {
 	}
 }
 
-// TestRunCoverageMatchesExactCompanySlugOnly proves the gate compares company_slug values
-// EXACTLY as computed, with NO folding: a live Meili filter cannot compute the reindex
-// suppression pass's hyphen-stripping fold at query time, and folding the query value
-// before sending it to Meili would break the ordinary, correctly-spelled case too (see
-// design.md's "Coverage definition" — NO folding). A covered-set entry that only agrees
-// with the posting's company_slug after folding must NOT match here; catching that case
-// remains the reindex pass's job.
-func TestRunCoverageMatchesExactCompanySlugOnly(t *testing.T) {
+// TestRunCoverageLookupFailureSavesEverything proves a failed lookup reads as "nothing is
+// covered" for the WHOLE board rather than failing the run. The two errors the gate can make
+// are not symmetric: a wrong "covered" is unrecoverable — the posting is never written, so it
+// is never in the database, in /find, or in search, and leaves nothing to query afterwards —
+// while a wrong "uncovered" costs one duplicate row that aggregator-ats-dedup's periodic pass
+// already marks. So the recoverable direction is the only safe one to fail in.
+func TestRunCoverageLookupFailureSavesEverything(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+		{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	// covered says Acme IS covered, but the error takes precedence: an errored lookup has no
+	// answer at all, and reusing a partial one would be the unrecoverable direction.
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}, err: errors.New("connection refused")}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "himalayas", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v — a coverage lookup failure must not fail the run", err)
+	}
+	if len(store.saved) != 2 || stats.Total().Ingested != 2 || stats.Total().ATSCovered != 0 {
+		t.Fatalf("saved=%d stats=%+v, want both saved Ingested=2 ATSCovered=0",
+			len(store.saved), stats.Total())
+	}
+}
+
+// TestRunKeysCoverageByTheSlugItWillStore proves the pipeline speaks to the port in exactly
+// one vocabulary: the alias-resolved company_slug the upsert is about to write. Folding two
+// spellings of one employer together is real and necessary, but it is the IMPLEMENTATION's
+// business (cmd/ingest/coverage.go folds before asking and credits the answer back to every
+// spelling that folds to it) — the port's contract says an answer keyed any other way is not
+// an answer to what was asked. So a covered-set entry that agrees with the posting only after
+// folding must NOT match here: if the pipeline honoured it, the gate would be deciding about
+// one slug and the upsert writing another.
+func TestRunKeysCoverageByTheSlugItWillStore(t *testing.T) {
 	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
 		// CompanySlug normalizes "CFO Insights" to "cfo-insights". The covered set below
-		// reports the FOLDED spelling ("cfoinsights", no hyphen) — as if a differently
-		// hyphenated ATS posting of the same employer were the only thing covered.
+		// answers with the FOLDED spelling ("cfoinsights", no hyphen) — a key the pipeline
+		// never asked about, which a conforming lookup would never return.
 		{ExternalID: "1", Title: "Backend Engineer", Company: "CFO Insights"},
 	}}
 	store := &fakeStore{}
@@ -850,7 +880,7 @@ func TestRunCoverageMatchesExactCompanySlugOnly(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(store.saved) != 1 || stats.Total().ATSCovered != 0 {
-		t.Fatalf("saved=%d ATSCovered=%d, want 1 saved / 0 covered (exact match only, no folding)", len(store.saved), stats.Total().ATSCovered)
+		t.Fatalf("saved=%d ATSCovered=%d, want 1 saved / 0 covered — an answer keyed by a slug nobody asked about must not match", len(store.saved), stats.Total().ATSCovered)
 	}
 }
 
@@ -889,7 +919,7 @@ func TestRunGatesStreamingAggregatorAndMemoizesPerCompany(t *testing.T) {
 // TestRunPassesAggregatorListToCoverageLookup proves the gate forwards
 // sources.AggregatorProviders(sources.Taxonomy()) as NonAggregatorCompanies' aggregators
 // argument, not an empty or nil list — a wrong list here would silently pass every
-// coverage check on the Meili adapter side (task 3.1), regardless of a company's real
+// coverage check on the adapter side, regardless of a company's real
 // coverage, and no other test asserts on this argument.
 func TestRunPassesAggregatorListToCoverageLookup(t *testing.T) {
 	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
@@ -916,7 +946,7 @@ func TestRunPassesAggregatorListToCoverageLookup(t *testing.T) {
 
 // TestRunStreamingCoverageSkipsBlankCompany proves the streaming resolver never queries
 // CoverageLookup for a posting with no company name — normalize.Slug("") folds to "", and
-// there is nothing meaningful to ask Meili about.
+// there is nothing meaningful to ask the lookup about.
 func TestRunStreamingCoverageSkipsBlankCompany(t *testing.T) {
 	src := fakeStreamingSource{provider: "jobtech", failAfter: -1, jobs: []sources.Job{
 		{ExternalID: "1", Title: "Backend Engineer", Company: ""},

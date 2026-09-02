@@ -101,39 +101,6 @@ func NotIn(attr string, ids []int64) string {
 	return b.String()
 }
 
-// InStrings builds an `attr IN ["a", "b"]` fragment over a set of quoted, escaped string
-// values (Meilisearch's native list-membership operator). An empty set yields the empty
-// string, so the caller adds no filter fragment at all — mirrors NotIn's empty-set handling.
-func InStrings(attr string, values []string) string {
-	return inStrings(attr, "IN", values)
-}
-
-// NotInStrings builds an `attr NOT IN ["a", "b"]` fragment, the exclude form of InStrings —
-// used by the aggregator ingest-time coverage gate to exclude aggregator sources from a
-// company's coverage check (internal/ingest/pipeline's CoverageLookup).
-func NotInStrings(attr string, values []string) string {
-	return inStrings(attr, "NOT IN", values)
-}
-
-func inStrings(attr, op string, values []string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(attr)
-	b.WriteByte(' ')
-	b.WriteString(op)
-	b.WriteString(" [")
-	for i, v := range values {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString(quote(v))
-	}
-	b.WriteByte(']')
-	return b.String()
-}
-
 // Filter nests OR-groups into a single AND filter for Meilisearch: fragments
 // within a group are ORed, groups are ANDed. Empty groups are dropped; the
 // result is nil when nothing remains, which Meilisearch treats as "no filter".

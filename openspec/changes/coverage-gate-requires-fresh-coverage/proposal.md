@@ -58,7 +58,12 @@ Between 11k and 22k employers are closed to aggregator ingest by rows nobody has
   (`Stats.ATSCovered`) falls; catalogue growth is bounded by the 22,022 slugs above, and every
   posting newly admitted is one the `aggregator-ats-dedup` reindex pass can still mark later if
   the employer really is the same. Erring this way is the recoverable direction — see design.md.
+- **Migration:** one, `0122`, recording `jobs_open_company_slug_folded_col_idx`. The index has
+  been on prod since 0109, but only because that file's COMMENT told an operator to build it by
+  hand — the file itself never created it, so any volume built from `migrations/` has the column
+  and no index. `IF NOT EXISTS` makes it a no-op on prod.
 - **Not in scope:** the reason those rows stay open at all. A board that leaves `sources/`
   takes its company slugs out of the ingest sweep's scope forever, so its rows are never
-  closed (`docs/agents/job-lifecycle.md` documents this as a deliberate under-close). That is a
-  separate defect, filed separately; this change stops it from suppressing live postings.
+  closed (`docs/agents/job-lifecycle.md` documents this as a deliberate under-close). Filed as
+  **freehire#2328**; this change stops those rows from suppressing live postings, and does not
+  close them.

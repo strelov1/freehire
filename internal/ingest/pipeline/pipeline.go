@@ -790,7 +790,7 @@ func (r Runner) streamAggregatorCoverage(ctx context.Context, e sources.CompanyE
 	cache := make(map[string]bool)
 	return func(companySlug string) bool {
 		if companySlug == "" {
-			return false // nothing to ask Meili about -- mirrors distinctCompanySlugs's skip
+			return false // nothing to ask about -- mirrors distinctCompanySlugs's skip
 		}
 		if v, ok := cache[companySlug]; ok {
 			return v

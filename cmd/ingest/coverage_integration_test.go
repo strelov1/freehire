@@ -1,9 +1,14 @@
 //go:build integration
 
-// Integration test for the aggregator coverage gate's adapter: the real query, through the
-// real constructor, against a real Postgres. coverage_test.go covers the fold-and-credit
-// mapping with a fake; this covers the part only the database can answer — that the freshness
-// window and the aggregator exclusion actually decide the answer the pipeline acts on.
+// Integration test for the aggregator coverage gate's WIRING: that newCoverage hands the query
+// the parameters it means to and reads the answer back in the caller's vocabulary.
+//
+// The matrix of what does and does not count as coverage (closed rows, aggregator sources, the
+// freshness cutoff, the fold) belongs to the query and is exhausted in
+// internal/platform/db/coverage_freshness_integration_test.go. Repeating it here would spend a
+// second container proving the same statement twice. What only this level can prove is that
+// the three parameters arrive correctly — a swapped or dropped one would leave every case
+// above still passing at the db layer while the gate silently answered nothing.
 // Run with: go test -tags=integration ./cmd/ingest/
 // Requires Docker (testcontainers spins up a throwaway Postgres with the migrations).
 package main
@@ -14,7 +19,7 @@ import (
 	"time"
 )
 
-func TestCoverageLookupAgainstPostgres(t *testing.T) {
+func TestCoverageAdapterWiring(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 	c := newCoverage(pool)
@@ -35,53 +40,41 @@ func TestCoverageLookupAgainstPostgres(t *testing.T) {
 	}
 
 	now := time.Now()
+	// One row per parameter the adapter is responsible for passing:
+	//   freshco    — proves seen_after is a cutoff and not, say, an equality or an upper bound
+	//   staleco    — proves seen_after is actually applied (issue #2315 in miniature: an
+	//                employer whose only ATS row is from a board that left sources/)
+	//   aggonly    — proves the aggregator list reaches the query
+	//   cfoinsights— proves the adapter folds before asking and credits the answer back
 	seed(t, "greenhouse", "fresh:1", "freshco", now.Add(-time.Hour))
-	// The reported defect in miniature: an employer whose only ATS row is from a board that
-	// left sources/ and was last seen a month ago.
-	seed(t, "trakstar", "stale:1", "staleco", now.Add(-31*24*time.Hour))
-	// Hyphenated on the aggregator's side, squashed on the ATS's — one employer.
+	seed(t, "trakstar", "stale:1", "staleco", now.Add(-coverageFreshness-24*time.Hour))
+	seed(t, "himalayas", "agg:1", "aggonly", now)
 	seed(t, "lever", "fold:1", "cfoinsights", now.Add(-time.Hour))
 
 	got, err := c.NonAggregatorCompanies(ctx,
-		[]string{"freshco", "staleco", "cfo-insights", "nobodyco"},
+		[]string{"freshco", "staleco", "aggonly", "cfo-insights", "nobodyco"},
 		[]string{"himalayas", "remoteok"})
 	if err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
 
-	if !got["freshco"] {
-		t.Error("freshco: a posting seen an hour ago must count as coverage")
+	for _, want := range []struct {
+		slug    string
+		covered bool
+		why     string
+	}{
+		{"freshco", true, "a posting seen an hour ago is coverage"},
+		{"staleco", false, "a posting unseen past the window is NOT coverage — issue #2315"},
+		{"aggonly", false, "an aggregator's own posting never covers its company"},
+		{"cfo-insights", true, "the hyphenated spelling must reach the squashed stored slug"},
+		{"nobodyco", false, "a company with no rows is not covered"},
+	} {
+		if got[want.slug] != want.covered {
+			t.Errorf("%s: covered = %v, want %v — %s", want.slug, got[want.slug], want.covered, want.why)
+		}
 	}
-	if got["staleco"] {
-		t.Error("staleco: a posting unseen for 31 days must NOT count as coverage — this is issue #2315")
-	}
-	if !got["cfo-insights"] {
-		t.Error("cfo-insights: the hyphenated spelling must reach the squashed stored slug")
-	}
-	if got["nobodyco"] {
-		t.Error("nobodyco: a company with no rows must not be reported as covered")
-	}
-}
-
-func TestCoverageLookupIgnoresAggregatorPostings(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	c := newCoverage(pool)
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
-		                  company_slug_folded, last_seen_at)
-		VALUES ('himalayas', 'agg:1', 'https://x.test/agg', 'Engineer', 'agg-1', 'Co', 'aggonly',
-		        'aggonly', now())`)
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	got, err := c.NonAggregatorCompanies(ctx, []string{"aggonly"}, []string{"himalayas"})
-	if err != nil {
-		t.Fatalf("NonAggregatorCompanies: %v", err)
-	}
-	if got["aggonly"] {
-		t.Error("an aggregator's own posting must never make its company covered")
+	// The answer is keyed by what was asked, never by the folded form the query speaks.
+	if _, leaked := got["cfoinsights"]; leaked {
+		t.Error("the answer leaked the folded spelling, which the caller never asked about")
 	}
 }

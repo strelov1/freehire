@@ -50,31 +50,6 @@ func TestNotIn(t *testing.T) {
 	}
 }
 
-func TestInStrings(t *testing.T) {
-	if got := InStrings("company_slug", []string{"acme", "globex"}); got != `company_slug IN ["acme", "globex"]` {
-		t.Errorf("InStrings = %q", got)
-	}
-	if got := InStrings("company_slug", []string{`a"b`}); got != `company_slug IN ["a\"b"]` {
-		t.Errorf("InStrings escape = %q", got)
-	}
-	// An empty set yields no fragment, so the caller adds no filter — mirrors NotIn(nil/empty).
-	if got := InStrings("company_slug", nil); got != "" {
-		t.Errorf("InStrings(nil) = %q, want empty", got)
-	}
-	if got := InStrings("company_slug", []string{}); got != "" {
-		t.Errorf("InStrings(empty) = %q, want empty", got)
-	}
-}
-
-func TestNotInStrings(t *testing.T) {
-	if got := NotInStrings("source", []string{"himalayas", "echojobs"}); got != `source NOT IN ["himalayas", "echojobs"]` {
-		t.Errorf("NotInStrings = %q", got)
-	}
-	if got := NotInStrings("source", nil); got != "" {
-		t.Errorf("NotInStrings(nil) = %q, want empty", got)
-	}
-}
-
 func TestFilter_NilWhenEmpty(t *testing.T) {
 	if got := Filter(); got != nil {
 		t.Errorf("Filter() = %v, want nil", got)

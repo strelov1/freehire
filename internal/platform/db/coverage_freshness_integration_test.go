@@ -10,6 +10,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,8 +62,15 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		return got
 	}
 
+	// Every row is seeded before any subtest runs, so no subtest depends on another's writes
+	// and each can be run alone with -run.
+	seed(t, "greenhouse", "fresh:1", "freshco", now.Add(-time.Hour), false)
+	seed(t, "trakstar", "stale:1", "staleco", now.Add(-31*24*time.Hour), false)
+	seed(t, "himalayas", "agg:1", "aggonly", now, false)
+	seed(t, "greenhouse", "closed:1", "closedco", now, true)
+	seed(t, "lever", "fold:1", "cfoinsights", now, false)
+
 	t.Run("a recently seen non-aggregator posting is coverage", func(t *testing.T) {
-		seed(t, "greenhouse", "fresh:1", "freshco", now.Add(-time.Hour), false)
 		if !ask(t, "freshco")["freshco"] {
 			t.Error("a posting seen an hour ago must count as coverage")
 		}
@@ -72,21 +80,18 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		// The reported defect: a 2013 trakstar posting last seen 31 days ago held the slug
 		// "pipe" covered and discarded every live aggregator posting for a different employer
 		// of the same name. Coverage is a claim about the present.
-		seed(t, "trakstar", "stale:1", "staleco", now.Add(-31*24*time.Hour), false)
 		if ask(t, "staleco")["staleco"] {
 			t.Error("a posting unseen for 31 days must not count as coverage")
 		}
 	})
 
 	t.Run("an aggregator posting is never coverage, however fresh", func(t *testing.T) {
-		seed(t, "himalayas", "agg:1", "aggonly", now, false)
 		if ask(t, "aggonly")["aggonly"] {
 			t.Error("an aggregator posting must not cover its own company")
 		}
 	})
 
 	t.Run("a closed posting is not coverage", func(t *testing.T) {
-		seed(t, "greenhouse", "closed:1", "closedco", now, true)
 		if ask(t, "closedco")["closedco"] {
 			t.Error("a closed posting must not count as coverage")
 		}
@@ -96,7 +101,6 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		// The employer the ATS writes "cfoinsights" and the aggregator writes "cfo-insights"
 		// is one employer. The caller folds before asking, so both spellings arrive as one
 		// value and meet the stored fold.
-		seed(t, "lever", "fold:1", "cfoinsights", now, false)
 		if !ask(t, "cfoinsights")["cfoinsights"] {
 			t.Error("the folded spelling must match the stored fold")
 		}
@@ -109,6 +113,23 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		}
 		if !got["freshco"] {
 			t.Error("asking about several companies must still answer for the covered one")
+		}
+	})
+
+	t.Run("the index the query's plan depends on exists in a migrated database", func(t *testing.T) {
+		// Not a performance test — a presence test, because the absence is SILENT. This index
+		// lived only in a comment in migration 0109 for months (an operator built it on prod
+		// by hand), so every result above was correct while the query seq-scanned ~7.4M rows.
+		// cmd/ingest now runs it once per board run, which is where that stops being cheap.
+		var def string
+		err := pool.QueryRow(ctx,
+			`SELECT indexdef FROM pg_indexes WHERE indexname = 'jobs_open_company_slug_folded_col_idx'`).Scan(&def)
+		if err != nil {
+			t.Fatalf("jobs_open_company_slug_folded_col_idx is missing from a freshly migrated "+
+				"database — the query above falls back to a sequential scan: %v", err)
+		}
+		if !strings.Contains(def, "company_slug_folded") {
+			t.Errorf("indexdef = %q, want an index on the company_slug_folded column", def)
 		}
 	})
 
