@@ -45,12 +45,15 @@ already filter and link to.
   creative-toolchain skill vocabulary.
 
 ### Modified Capabilities
-<!-- None. `design-taxonomy` keeps every requirement it states: the design/
-     engineering_design line is untouched, and the audio titles it never
-     claimed move under the new capability. `tech-classification`,
-     `role-facet`, `skill-tag-matching` and `facet-display-labels` state
-     mechanisms that already admit a new value; none of their requirements
-     change. -->
+- `design-taxonomy`: "Sound Design Engineer" is currently pinned to `design`.
+  It moves to `creative` with the rest of audio, and "Audio Design Engineer"
+  moves with it — otherwise one craft scatters across three categories, the
+  second spelling falling through the bare "design engineer" alias into
+  draughting.
+
+<!-- `tech-classification`, `role-facet`, `skill-tag-matching` and
+     `facet-display-labels` state mechanisms that already admit a new value;
+     none of their requirements change. -->
 
 ## Impact
 

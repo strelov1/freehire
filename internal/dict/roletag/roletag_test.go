@@ -458,12 +458,21 @@ func TestDeriveMediaCrafts(t *testing.T) {
 		{"Video Producer", "video_producer"},
 		{"Animator", "animator"},
 		{"3D Artist", "3d_artist"},
+		// Seats on the same 3D pipeline, deliberately folded into one slug.
+		{"Character Artist", "3d_artist"},
+		{"Environment Artist", "3d_artist"},
+		// Crafts of their own, deliberately NOT folded.
+		{"2D Artist", "2d_artist"},
+		{"VFX Artist", "vfx_artist"},
 		{"Concept Artist", "concept_artist"},
 		{"Technical Artist", "technical_artist"},
 		{"Storyboard Artist", "storyboard_artist"},
 		{"Illustrator", "illustrator"},
 		{"Photographer", "photographer"},
+		{"Photo Editor", "photographer"},
 		{"Sound Designer", "sound_designer"},
+		{"Sound Design Engineer", "sound_designer"},
+		{"Audio Design Engineer", "sound_designer"},
 	} {
 		if got := Derive("", "creative", tc.title); !slices.Contains(got, tc.want) {
 			t.Errorf("Derive(_, creative, %q) = %v, want it to contain %q", tc.title, got, tc.want)
@@ -506,6 +515,11 @@ func TestMediaRolesDoNotStealFromDesign(t *testing.T) {
 		{"Visual Designer", "design", "visual_designer"},
 		{"Product Designer", "design", "product_designer"},
 		{"Industrial Designer", "design", "industrial_designer"},
+		// The second-hat titles: a craft alias must not take a role the design alias
+		// already owns, on either side of the length ordering.
+		{"Graphic Designer & Photographer", "design", "graphic_designer"},
+		{"Junior Motion Designer / Animator", "design", "motion_designer"},
+		{"Social Media Manager (Canva, Illustrator)", "marketing", "social_media_manager"},
 	} {
 		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
 			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)

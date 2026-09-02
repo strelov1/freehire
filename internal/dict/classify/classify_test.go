@@ -612,8 +612,9 @@ func TestParse_DesignSplit(t *testing.T) {
 		// These name design disciplines of their own and stay on the product side.
 		{"Service Design Engineer", "design"},
 		{"Experience Design Engineer", "design"},
-		{"Sound Design Engineer", "design"},
 		{"Game Design Engineer", "design"},
+		// "Sound Design Engineer" left this set with the rest of audio when the
+		// `creative` category arrived — see TestParse_CreativeMedia.
 
 		// The rest of the silicon family rides with `hardware` too — the first pass
 		// covered only six phrases and left these as draughting.
@@ -790,7 +791,6 @@ func TestParse_CreativeMedia(t *testing.T) {
 		{"Senior Video Editor", "creative", "grade does not change the craft"},
 		{"Video Producer", "creative", ""},
 		{"Videographer", "creative", ""},
-		{"Social Media Video Editor", "creative", "video editing is the job; social is the channel"},
 
 		// The art family. Each is a distinct seat on a games or media team.
 		{"3D Artist", "creative", ""},
@@ -808,11 +808,16 @@ func TestParse_CreativeMedia(t *testing.T) {
 		{"2D Animator", "creative", ""},
 		{"Motion Graphics Artist", "creative", "the artist spelling; the designer spelling stays in design"},
 
-		// Audio: the one population that MOVES, out of design.
+		// Audio: the one population that MOVES, out of design. All three spellings go
+		// together — leaving any behind scatters one craft across three categories.
 		{"Sound Designer", "creative", "was design, for no reason but the word designer"},
 		{"Audio Designer", "creative", ""},
-		{"Sound Engineer", "creative", ""},
-		{"Audio Engineer", "creative", ""},
+		{"Sound Design Engineer", "creative", "was design"},
+		{"Audio Design Engineer", "creative", "fell through to engineering_design"},
+		// NOT audio: "Audio Engineer" and "Sound Engineer" are broadcast, live sound and
+		// AV integration as often as they are the craft, so neither is an alias.
+		{"Audio Engineer", "", ""},
+		{"Field Service Engineer - Audio Engineer", "", ""},
 
 		// Photography.
 		{"Photographer", "creative", ""},
@@ -827,15 +832,28 @@ func TestParse_CreativeMedia(t *testing.T) {
 		{"Brand Designer", "design", ""},
 		{"Product Designer", "design", ""},
 		{"Senior UX Designer", "design", ""},
+		// Game development keeps the categories it resolves to today — there is no game
+		// category, so these are the rows the named roles have to hang off.
 		{"Game Designer", "design", "a game category would take rows from two working facets"},
 		{"Narrative Designer", "design", ""},
-		{"Graphic Designer (Illustrator, Photoshop)", "design",
-			"the longer alias wins: the tool named in a design title must not steal it"},
+		{"Level Designer", "design", ""},
+		{"Game Developer", "software_engineering", ""},
+		{"Game Producer", "", "no category resolves; the named role carries it alone"},
+		// The craft aliases are declared LAST, so a title naming any other discipline
+		// keeps it. Each of these is a tool or a second hat inside someone else's title.
+		{"Graphic Designer (Illustrator, Photoshop)", "design", ""},
+		{"Graphic Designer & Photographer", "design", ""},
+		{"Junior Motion Designer / Animator", "design", ""},
 
-		// The boundary with marketing.
+		// The boundary with marketing — same rule, the other side of the table.
 		{"Content Creator", "marketing", ""},
 		{"UGC Creator", "", "resolves no category today and must not start resolving to creative"},
 		{"Video Marketing Manager", "marketing", "marketing that uses video is still marketing"},
+		{"Marketing Specialist (Photoshop, Illustrator)", "marketing", ""},
+		{"Social Media Manager (Canva, Illustrator)", "marketing", ""},
+		{"Content Creator / Illustrator", "marketing", ""},
+		{"Social Media Video Editor", "marketing",
+			"the stated cost of declaring the crafts last: still findable, on a facet already correct for it"},
 
 		// The boundary with engineering: a bare craft word never resolves on its own.
 		{"Audio DSP Engineer", "", "bare \"audio\" is not an alias"},

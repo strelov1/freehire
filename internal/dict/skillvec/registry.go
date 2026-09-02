@@ -885,4 +885,5 @@ var registry = []string{
 	"substance-painter",
 	"video-editing",
 	"zbrush",
+	"substance-designer",
 }

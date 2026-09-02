@@ -256,15 +256,24 @@ var namedRoleTable = []struct {
 	{"videographer", "Videographer", []string{"videographer"}},
 	{"video_producer", "Video Producer", []string{"video producer"}},
 	{"animator", "Animator", []string{"animator", "2d animator", "3d animator"}},
-	{"3d_artist", "3D Artist", []string{"3d artist", "2d artist", "character artist", "environment artist"}},
+	// One slug per craft, not per label: a VFX artist rendered as "Storyboard Artist"
+	// or a 2D artist as "3D Artist" is wrong data on a facet a candidate filters by,
+	// and the saving would be two table rows. Character and environment art DO fold
+	// into 3d_artist — they are seats on the same 3D pipeline, not other crafts.
+	{"3d_artist", "3D Artist", []string{"3d artist", "character artist", "environment artist"}},
+	{"2d_artist", "2D Artist", []string{"2d artist"}},
+	{"vfx_artist", "VFX Artist", []string{"vfx artist"}},
 	{"concept_artist", "Concept Artist", []string{"concept artist"}},
 	{"technical_artist", "Technical Artist", []string{"technical artist"}},
-	{"storyboard_artist", "Storyboard Artist", []string{"storyboard artist", "vfx artist"}},
+	{"storyboard_artist", "Storyboard Artist", []string{"storyboard artist"}},
 	// "Illustrator" is also the Adobe product, but the longer design aliases above
 	// win the length ordering, so only a title naming no design craft lands here.
 	{"illustrator", "Illustrator", []string{"illustrator"}},
-	{"photographer", "Photographer", []string{"photographer"}},
-	{"sound_designer", "Sound Designer", []string{"sound designer", "audio designer", "sound engineer", "audio engineer"}},
+	{"photographer", "Photographer", []string{"photographer", "photo editor"}},
+	// No bare "audio engineer"/"sound engineer": those are broadcast, live sound and AV
+	// integration as often as they are this craft, and labelling a field-service AV
+	// engineer "Sound Designer" is worse than leaving the row unnamed.
+	{"sound_designer", "Sound Designer", []string{"sound designer", "audio designer", "sound design engineer", "audio design engineer"}},
 
 	// Game development. Deliberately NOT a category: "Game Developer" is software
 	// and "Game Designer" is design, so a third category would take rows away from

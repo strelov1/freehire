@@ -1446,6 +1446,26 @@ func TestParse_CreativeToolchain(t *testing.T) {
 			[]string{"capcut", "premiere-pro"}, nil},
 		{"3d suite", "3D artist: modelling in Cinema 4D, sculpting in ZBrush, texturing in Substance Painter.",
 			[]string{"cinema-4d", "zbrush", "substance-painter"}, nil},
+		{"the two substance products are two skills", "Material artist: Substance Designer for procedural materials, ZBrush for sculpts.",
+			[]string{"substance-designer", "zbrush"}, []string{"substance-painter"}},
+
+		// c4d is gated in the word pass. As a phrase it was ungated, and a phrase match
+		// is always strong — it tagged a pathology posting AND lifted the gate beside it.
+		{"c4d the biomarker", "Transplant pathologist: interpret C4d staining and biopsy grading.",
+			nil, []string{"cinema-4d"}},
+		{"c4d the 3d suite", "Motion artist working in C4d and ZBrush.",
+			[]string{"cinema-4d", "zbrush"}, nil},
+
+		// The three craft names tag on their own but must never vouch for a gated word:
+		// each is a duty listed in passing on postings from other disciplines.
+		{"video editing does not corroborate", "Marketing intern, Spring 2026 cohort. Duties: video editing and scheduling.",
+			[]string{"video-editing"}, []string{"spring"}},
+		{"video editing does not corroborate unity", "Social media coordinator: video editing, and Unity within the team matters.",
+			[]string{"video-editing"}, []string{"unity"}},
+		{"storyboarding does not corroborate sketch", "Product manager: run workshops, build storyboards, sketch out flows.",
+			[]string{"storyboarding"}, []string{"sketch"}},
+		{"colour grading does not corroborate", "Events team handling colour grading of the pitch deck and the venue booking.",
+			[]string{"color-grading"}, nil},
 		{"game engines", "Gameplay programmer: Godot and Unreal Engine, C++ throughout.",
 			[]string{"godot", "unreal-engine", "cpp"}, nil},
 		{"the craft itself", "Motion designer doing storyboarding and video editing for launch films.",

@@ -1,8 +1,11 @@
 ## Context
 
 `internal/dict/classify` reads the TITLE only and never guesses. Its
-`categoryTable` matches the longest alias first, so vocabulary work is
-ordering work as much as it is wording work. The category it emits lands in
+`categoryTable` resolves in DECLARATION ORDER — the first alias that occurs as
+a whole word wins — so vocabulary work here is placement work as much as it is
+wording work. (`roletag` is the one that matches longest-alias-first; the two
+tables do not share a rule, and treating them alike is how an alias ends up on
+the wrong side of a collision.) The category it emits lands in
 `jobs.category` — a plain text column with no `CHECK` constraint and no
 Postgres enum; the vocabulary is enforced in Go by `vocab.CategoryValues`
 alone. That is why a new category needs no migration, and why the whole cost of
@@ -63,18 +66,34 @@ already carrying one.
 
 ### The vocabulary is qualified phrases, never bare craft words
 
-`video`, `audio`, `art` and `sound` appear in titles across every discipline
-("Audio DSP Engineer", "State of the Art"). Only phrases resolve: `video
-editor`, `audio designer`, `concept artist`. This mirrors the classify table's
-existing rule and is what keeps the new aliases from stealing rows.
+`video`, `audio`, `art`, `sound` and `photo` appear in titles across every
+discipline ("Audio DSP Engineer", "Art Director", "State of the Art"). Only
+phrases resolve: `video editor`, `audio designer`, `concept artist`. Bare
+"Audio Engineer" and "Sound Engineer" are left out for the same reason one step
+up: they are broadcast, live sound and AV integration as often as they are this
+craft, so labelling a field-service AV engineer a Sound Designer would be worse
+than leaving the row unnamed.
 
-### `illustrator` resolves, and the ordering protects it
+### The craft aliases are declared LAST
 
-`Illustrator` is both a job title and an Adobe product named in design
-postings. Longest-alias-first already gives `graphic designer` (16) priority
-over `illustrator` (11), so a design title naming the tool keeps `design`. The
-bare title resolves to `creative`. Each collision gets a regression test rather
-than a comment.
+Every media craft is also a tool or a second hat named inside someone else's
+title — "Marketing Specialist (Photoshop, Illustrator)", "Graphic Designer &
+Photographer", "Junior Motion Designer / Animator". Declared anywhere above
+`design` or `marketing`, the block does not merely add a category: it TAKES
+those rows, which is the one thing this change promised not to do. Declared at
+the end of the table, a title resolves to the craft only when it names no other
+discipline.
+
+The stated cost: a "Social Media Video Editor" resolves to `marketing`. That is
+the right side to err on — the posting stays findable on a facet already
+correct for it, whereas a stolen marketing row is a regression.
+
+Audio is the exception in both directions. `sound designer` and `audio
+designer` must be declared ABOVE the bare `designer` alias (they contain the
+word, which is the whole reason they were misfiled), and `sound design
+engineer` / `audio design engineer` above the draughting block (they end in
+"design engineer" and would fall through into draughting). Each collision gets
+a regression test naming the title it must NOT take.
 
 ### Game roles are roles, not a category
 
@@ -83,13 +102,30 @@ resolves — `UGC Creator` already demonstrates this. So the game titles get
 `game_designer`, `level_designer`, `narrative_designer`, `game_producer` and
 `game_developer` while keeping whatever category they resolve to today.
 
-### Ambiguous skills are gated or dropped, never shipped bare
+### Ambiguous skills are gated, dropped, or kept from vouching — and which one
+### depends on WHICH TABLE the entry sits in
 
-`animation` is CSS vocabulary as much as it is a craft, so it joins
-`skilltag.ambiguousWords` and needs corroboration. Anything that cannot be
-gated — the gate keys on single tokens, so a phrase cannot be gated — is
-omitted rather than shipped, the same call the design split made for `visual
-design` and bare `after effects`.
+`skilltag` has three tiers, and an entry lands in one of them by where it is
+declared:
+
+- **`ambiguousWords`** gates the WORD pass only. A single token whose bare form
+  is ordinary English or another field's term of art goes here: `houdini` (the
+  escapologist), `c4d` (the transplant-pathology biomarker). Declaring such a
+  token as a PHRASE routes around the gate entirely — a phrase match is always
+  strong — which is how `c4d` tagged a pathologist's posting.
+- **`nonCorroboratingPhrases`** lets a phrase tag on its own but never vouch
+  for a gated word beside it. The craft names go here — `video-editing`,
+  `color-grading`, `storyboarding` — because each is a duty a coordinator or a
+  product manager lists in passing, and as strong matches they lifted the gate
+  onto `spring`, `unity` and `sketch`. This tier is consulted on the phrase
+  pass only, so `storyboarding` is declared as a single-token phrase rather
+  than a word.
+- **Omission** for anything neither tier can save. `animation` is the CSS
+  property of every frontend posting that also names React, and `nuke` is what
+  a platform posting does to a cache next to Terraform; the gate is lifted by
+  ANY strong skill, so gating them would tag exactly the postings they are
+  wrong for. Same call the design split made for `visual design` and bare
+  `after effects`.
 
 ## Risks / Trade-offs
 
