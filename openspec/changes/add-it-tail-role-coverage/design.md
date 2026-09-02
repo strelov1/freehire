@@ -125,6 +125,29 @@ the gap.
    this change claims, and `software_engineering` should grow by about the
    Systems Engineer family's size and no more.
 
+### The measured gain, and the trap in measuring it
+
+Re-running the mining pass over the same dump with the new dictionary:
+
+| | open postings | share |
+|---|---|---|
+| unroled before | 935 604 | 47.5% |
+| after the named roles alone | 930 122 | 47.2% |
+| after the new categories too | 925 249 | 46.9% |
+| **gain** | **10 355** | |
+
+Half the gain comes from `roletag` alone: a named role is emitted whether or not
+a category resolves, so "Systems Engineer" and "Системный администратор" become
+filterable even before the category does.
+
+The trap: the first attempt at this measurement re-derived the category from the
+TITLE for every row and reported a gain of **minus 7 320**. The stored category
+is derived from the title *and* the description, and this change touches only
+the title path — so simulating it has to FILL an empty category and never
+overwrite one the description supplied. A title-only re-derivation silently
+discards every category the description had contributed, which reads exactly
+like a regression the change did not cause.
+
 Rollback: revert the binary. Stored categories stay until the next
 `backfill-derive`, and they are inert — every consumer reads the vocabulary
 from Go.

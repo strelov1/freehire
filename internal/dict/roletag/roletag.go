@@ -156,7 +156,35 @@ var namedRoleTable = []struct {
 	{"mlops_engineer", "MLOps Engineer", []string{"mlops engineer", "ml ops engineer"}},
 	{"prompt_engineer", "Prompt Engineer", []string{"prompt engineer"}},
 	{"business_analyst", "Business Analyst", []string{"business analyst"}},
-	{"systems_administrator", "Systems Administrator", []string{"systems administrator"}},
+	// The singular spelling, "sysadmin" and the OS-qualified forms all resolved the
+	// devops category and then emitted NO role: only the plural reached this entry.
+	// A role that the catalogue lists as covered but that cannot be reached from the
+	// commonest spelling of its own title is worse than a missing one — nothing in the
+	// picker suggests the gap.
+	{"systems_administrator", "Systems Administrator", []string{
+		"systems administrator", "system administrator", "sysadmin",
+		"linux system administrator", "windows system administrator",
+		"linux systems administrator", "windows systems administrator",
+		"системный администратор",
+	}},
+
+	// Enterprise platforms. The craft is the platform, not the language: a Salesforce
+	// developer and a Java developer share a category and almost nothing else, and the
+	// administrator and consultant spellings name the same craft as the developer one.
+	{"salesforce_developer", "Salesforce Developer", []string{
+		"salesforce developer", "salesforce administrator", "salesforce engineer",
+		"salesforce consultant", "salesforce architect",
+	}},
+	{"sap_developer", "SAP Developer", []string{"sap developer", "sap abap developer", "abap developer", "sap engineer"}},
+	{"servicenow_developer", "ServiceNow Developer", []string{
+		"servicenow developer", "servicenow engineer", "servicenow administrator",
+		"servicenow consultant", "servicenow architect",
+	}},
+	// The largest unresolved IT title in the catalogue. The industrial namesakes
+	// (control/power/electrical/quality systems engineer) never reach here: classify
+	// declares them blind, so they carry no category, and their longer alias would win
+	// the length ordering regardless.
+	{"systems_engineer", "Systems Engineer", []string{"systems engineer", "system engineer"}},
 
 	// Granular tech specializations (mined from prod titles — they collapse into a
 	// coarse category like mobile/devops/architecture, so a named role keeps the

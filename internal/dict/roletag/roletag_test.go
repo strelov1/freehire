@@ -526,3 +526,50 @@ func TestMediaRolesDoNotStealFromDesign(t *testing.T) {
 		}
 	}
 }
+
+// TestDeriveITTailRoles covers the platform and systems crafts, and the singular
+// administrator spelling that made an existing role unreachable from the commonest
+// way its own title is written.
+func TestDeriveITTailRoles(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Salesforce Developer", "software_engineering", "salesforce_developer"},
+		{"Salesforce Administrator", "software_engineering", "salesforce_developer"},
+		{"SAP Developer", "software_engineering", "sap_developer"},
+		{"SAP ABAP Developer", "software_engineering", "sap_developer"},
+		{"ServiceNow Developer", "software_engineering", "servicenow_developer"},
+		{"ServiceNow Administrator", "devops", "servicenow_developer"},
+		{"Systems Engineer", "software_engineering", "systems_engineer"},
+		{"System Engineer", "software_engineering", "systems_engineer"},
+
+		// The role existed; only the PLURAL spelling reached it. Everything below
+		// resolved the category and then emitted no role at all.
+		{"Systems Administrator", "devops", "systems_administrator"},
+		{"System Administrator", "devops", "systems_administrator"},
+		{"Sysadmin", "devops", "systems_administrator"},
+		{"Linux System Administrator", "devops", "systems_administrator"},
+		{"Windows System Administrator", "devops", "systems_administrator"},
+		{"Системный администратор", "devops", "systems_administrator"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestITTailRolesDoNotSteal pins the collisions the new aliases create: each of these
+// titles contains a shorter new alias and must keep the more specific role it has.
+func TestITTailRolesDoNotSteal(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Sales Engineer", "solutions_engineering", "sales_engineer"},
+		{"Cloud Solutions Engineer", "solutions_engineering", "cloud_solutions_engineer"},
+		{"Solutions Engineer", "solutions_engineering", "solutions_engineer"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}

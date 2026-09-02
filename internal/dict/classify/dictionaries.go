@@ -928,12 +928,92 @@ var categoryTable = []aliasEntry{
 	{"sviluppatore software", "software_engineering"},
 	{"ingegnere del software", "software_engineering"},
 	{"ingegnere software", "software_engineering"},
+	// The IT tail: titles the catalogue carries in volume that this dictionary had no
+	// word for at all. Measured on prod 2026-09-02, 47.5% of open postings reached the
+	// search index with no role, and EVERY one of them had an empty category — so the
+	// gap is here, not in roletag.
+	//
+	// The whole block is declared late on purpose. Nothing in it resolves to anything
+	// today, so a late declaration cannot take a row from a category that already
+	// works; the ordering that matters is only WITHIN the block.
+	//
+	// The four industrial namesakes come first and are BLIND. "Systems Engineer" is the
+	// single largest unresolved IT title here (1440 open for the exact spelling), so the
+	// bare alias has to exist — and without these four above it, every control, power,
+	// electrical and quality engineer in the catalogue would be swept into software.
+	// The sentinel keeps them resolving to nothing, which is what they do today; they
+	// belong to an industrial taxonomy this change does not introduce.
+	{"control systems engineer", categoryNone},
+	{"power systems engineer", categoryNone},
+	{"electrical systems engineer", categoryNone},
+	{"quality systems engineer", categoryNone},
+	// Then the qualified IT spellings, each naming its own discipline.
+	{"linux systems engineer", "devops"},
+	{"cyber systems engineer", "security"},
+	{"software systems engineer", "software_engineering"},
+	{"it systems engineer", "software_engineering"},
+	// The bare form closes the family. `software_engineering` and not `devops`: the
+	// population left after the four blind spellings is mixed between infrastructure
+	// and generalist software work, and the generic bucket is the honest answer where
+	// devops would be a guess.
+	{"systems engineer", "software_engineering"},
+	{"system engineer", "software_engineering"},
+
+	// Vendor platforms. Naming an enterprise product states the discipline as surely
+	// as naming a language does. "Salesforce Developer" and "SAP Developer" already
+	// resolved through the bare "developer" alias; the administrator and consultant
+	// spellings did not.
+	{"servicenow developer", "software_engineering"},
+	{"servicenow engineer", "software_engineering"},
+	{"servicenow administrator", "devops"},
+	{"salesforce administrator", "software_engineering"},
+	{"salesforce engineer", "software_engineering"},
+	{"salesforce consultant", "software_engineering"},
+	{"mainframe developer", "software_engineering"},
+	{"oracle dba", "devops"},
+	{"sharepoint administrator", "devops"},
+	{"tableau developer", "data_analytics"},
+
+	// Infrastructure and end-user IT. "IT Specialist"/"IT Technician" go to `support`
+	// rather than `devops`: "IT Support Specialist" already resolves there, and they
+	// name the same desk — splitting one job across two facets on a dropped word is
+	// the defect the design split existed to fix.
+	{"data center technician", "devops"},
+	{"data center engineer", "devops"},
+	{"release engineer", "devops"},
+	{"cloud operations engineer", "devops"},
+	{"cloud migration engineer", "devops"},
+	{"network operations engineer", "devops"},
+	{"network specialist", "network_engineering"},
+	{"network technician", "network_engineering"},
+	{"it specialist", "support"},
+	{"it technician", "support"},
+	// The integration family. None of these contains "systems engineer" as consecutive
+	// words, so their order against that alias does not matter.
+	{"integration engineer", "software_engineering"},
+
 	// 1С (the RU enterprise/ERP dev platform) resolves last so a more specific role word in the
 	// title wins first ("Аналитик 1С" → data_analytics, "Тестировщик 1С" → qa); a title whose only
 	// signal is 1С ("Программист 1С", "1С-разработчик") reads as backend — server-side enterprise
 	// development. Bare tokens so any separator ("1С-разработчик", "разработчик 1С") matches.
 	{"1c", "backend"},
 	{"1с", "backend"},
+
+	// Russian software and administration, declared AFTER 1С for exactly the reason
+	// stated above it: "Программист 1С" must stay backend, and a bare "программист"
+	// declared any earlier would take it.
+	//
+	// Bare tokens, unlike the English entries. Russian puts the technology FIRST
+	// ("Java-разработчик", "Python-разработчик", "Инженер-программист") and a hyphen is
+	// a word boundary, so no qualified alias can stand in for the bare one — while the
+	// bare one reaches every spelling. The same reasoning the 1С entry records.
+	// The more specific role words (backend, аналитик, тестировщик) are all declared
+	// far above, so they still win.
+	{"сетевой администратор", "network_engineering"},
+	{"системный администратор", "devops"},
+	{"администратор баз данных", "devops"},
+	{"программист", "software_engineering"},
+	{"разработчик", "software_engineering"},
 
 	// Media production, declared LAST on purpose. Every craft here is also a tool or a
 	// second hat named inside someone else's title — "Marketing Specialist (Photoshop,

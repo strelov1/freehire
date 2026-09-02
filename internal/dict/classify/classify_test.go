@@ -867,3 +867,91 @@ func TestParse_CreativeMedia(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_ITTailCoverage pins the IT titles the catalogue carries in volume that
+// the category dictionary had no word for. Measured on prod 2026-09-02: 47.5% of open
+// postings reached the index with no role, ALL of them because no category resolved.
+func TestParse_ITTailCoverage(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// Russian software. The qualified spellings put the technology FIRST, and a
+		// hyphen is a word boundary, so only the bare token reaches them.
+		{"Программист", "software_engineering", ""},
+		{"Разработчик", "software_engineering", ""},
+		{"Java-разработчик", "software_engineering", "the bare token is the only alias that can see this"},
+		{"Python-разработчик", "software_engineering", ""},
+		{"Инженер-программист", "software_engineering", ""},
+		{"Техник-программист", "software_engineering", ""},
+		{"Системный администратор", "devops", ""},
+		{"Администратор баз данных", "devops", ""},
+		{"Сетевой администратор", "network_engineering", ""},
+
+		// The Systems Engineer family. The non-IT namesakes are declared blind ABOVE
+		// the bare alias, so they keep resolving to nothing instead of being swept in.
+		{"Systems Engineer", "software_engineering", "1440 open postings spell it exactly"},
+		{"System Engineer", "software_engineering", ""},
+		{"Systems Engineer II", "software_engineering", ""},
+		{"IT Systems Engineer", "software_engineering", ""},
+		{"Software Systems Engineer", "software_engineering", ""},
+		{"Linux Systems Engineer", "devops", ""},
+		{"Cyber Systems Engineer", "security", ""},
+		{"Control Systems Engineer", "", "industrial; must not be swept into software"},
+		{"Power Systems Engineer", "", ""},
+		{"Electrical Systems Engineer", "", ""},
+		{"Quality Systems Engineer", "", ""},
+
+		// Vendor platforms — naming the product states the discipline.
+		{"ServiceNow Developer", "software_engineering", ""},
+		{"ServiceNow Engineer", "software_engineering", ""},
+		{"ServiceNow Administrator", "devops", ""},
+		{"Salesforce Administrator", "software_engineering", ""},
+		{"Salesforce Engineer", "software_engineering", ""},
+		{"Salesforce Consultant", "software_engineering", ""},
+		{"Salesforce Developer", "software_engineering", "already resolved; must not regress"},
+		{"Mainframe Developer", "software_engineering", ""},
+		{"Oracle DBA", "devops", ""},
+		{"SharePoint Administrator", "devops", ""},
+		{"Tableau Developer", "data_analytics", ""},
+
+		// Infrastructure and end-user IT.
+		{"Data Center Technician", "devops", ""},
+		{"Data Center Engineer", "devops", ""},
+		{"Release Engineer", "devops", ""},
+		{"Cloud Operations Engineer", "devops", ""},
+		{"Cloud Migration Engineer", "devops", ""},
+		{"Network Operations Engineer", "devops", ""},
+		{"Network Specialist", "network_engineering", ""},
+		{"Network Technician", "network_engineering", ""},
+		{"IT Specialist", "support", "the same desk \"IT Support Specialist\" already resolves to"},
+		{"IT Technician", "support", ""},
+
+		// The integration family.
+		{"Integration Engineer", "software_engineering", ""},
+		{"Systems Integration Engineer", "software_engineering", ""},
+		{"Software Integration Engineer", "software_engineering", ""},
+		{"Data Integration Engineer", "software_engineering", ""},
+		{"Cloud Integration Engineer", "software_engineering", ""},
+
+		// Collisions the mining pass surfaced. All four are artefacts of naive
+		// substring matching in that script ("count-ERP-erson", "P-IT T-echnician");
+		// the production dictionary matches on word boundaries and cannot make that
+		// mistake, but the next reader will not know that.
+		{"Parts Counterperson", "", ""},
+		{"Parts Interpreter", "", ""},
+		{"Pit Technician", "", ""},
+		{"SAP Operations Clerk Part Time Day", "", ""},
+
+		// Customer-facing engineering keeps what it has.
+		{"Sales Engineer", "solutions_engineering", ""},
+		{"Support Engineer", "support", ""},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}
