@@ -1,5 +1,10 @@
 # Design
 
+> **STATUS: reverted from production 2026-09-02, and this document is the reason it must not be
+> re-attempted in the shape below.** The code shipped, ran for eighteen minutes, and closed 110
+> live postings. The section "What production taught this design" at the end is the blocking
+> constraint; everything above it is the reasoning that was correct as far as it went.
+
 ## Why the company scope leaks, stated precisely
 
 The sweep asks "did this run cover the thing I am about to close?" and answers it with the set
@@ -160,3 +165,51 @@ the pipeline/sweep seam with a fake store:
 The SQL half — that `BoardPattern` selects one board's rows and not a prefix-sharing
 neighbour's — is an integration test in `internal/platform/db`, beside the existing
 `BoardTracked` one that pins the same pattern.
+
+## What production taught this design
+
+Shipped 2026-09-02 23:27 UTC, reverted the same hour. The fleet's first cycle produced exactly
+the readout the rollout section asked for, and it contained a false close:
+
+```text
+closed 110 stale solidjobs jobs on board "it"   (board was crawled and did not list them)
+closed  30 stale getro    jobs on board "15272"
+closed  50 stale workable jobs on board "assist-rx"
+closed 111 stale workable jobs across 3 of 1114 crawled board(s)
+```
+
+The workable line is what success looks like: 1,114 boards crawled, 3 with anything to retire.
+The solidjobs line is the failure, and `sources/solidjobs.yml` states why in its own header:
+
+> only the first 500 of "it"'s ~1400 postings are reachable (no working pagination parameter
+> was found for this public endpoint)
+
+The adapter returns those 500 as an **unqualified success** — no error, no failure count, no
+`sweepGrace` marker. Every condition in "What proves a board was covered" was satisfied, and
+every one of them was answered honestly. The board was crawled. It did yield postings. It named
+a board. And it still had not listed its content.
+
+**The design named this exposure and dismissed it.** "The remaining exposure is an adapter that
+returns a truncated crawl as an unqualified success — nothing here can see that, and it is not a
+new risk: the company-scoped close has always had it." Both clauses are true and the conclusion
+does not follow. The company scope's exposure is PARTIAL — it reaches a deep posting only when
+that company also appears in the reachable window. The board scope's is TOTAL: every posting
+past the window closes. The change converted a bounded pre-existing hazard into an unbounded
+one, and "pre-existing" was doing work it could not carry.
+
+### What a correct version needs
+
+The three conditions test what the RUN did. None of them tests what the ADAPTER can do, and
+that is the missing half: an adapter that cannot list a board in full must never license a
+close inside it, however well its crawl went.
+
+That has to be **opt-in per adapter, not opt-out**. The exclusions here were keyed on
+`sweepGrace`, which happened to name three adapters and happened to miss solidjobs — because
+`sweepGrace` is about a WINDOW, and solidjobs' deep postings are not late, they are permanently
+unreachable. A wider window cannot help them. An adapter must declare "I list a board in full"
+before its boards can be swept, so a new adapter, and every adapter whose truncation is recorded
+only in a YAML comment, is safe by default.
+
+Before re-attempting, enumerate which adapters can actually make that claim. `solidjobs`
+documented its limit in a comment nobody's code reads; the honest assumption is that others
+have the same shape and did not write it down.

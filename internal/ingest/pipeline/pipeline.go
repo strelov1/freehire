@@ -188,13 +188,6 @@ type Stats struct {
 	Cooled     int
 	Rejected   int
 	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
-	// SweepableBoards names the boards this run PROVED it covered: the crawl did not fail, the
-	// board yielded at least one posting, and the entry names a board. The post-run sweep may
-	// close those boards' stale postings without waiting for their company to appear in the
-	// crawled-slug set — which is the only way to retire a company whose LAST posting left a
-	// board we still crawl (freehire#2328). It is a report of what the run covered, not a
-	// counter, and it lives here because Stats is already the run's report to cmd/ingest.
-	SweepableBoards []string
 }
 
 // add accumulates another Stats into s, so the per-board and per-provider merges cannot
@@ -206,7 +199,6 @@ func (s *Stats) add(o Stats) {
 	s.Cooled += o.Cooled
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
-	s.SweepableBoards = append(s.SweepableBoards, o.SweepableBoards...)
 }
 
 // RunStats is a run's outcome broken down by provider. A run may cover several providers
@@ -507,11 +499,10 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		// correctly judged its company already covered elsewhere — and omitting it here
 		// would make a heavily-covered aggregator board MORE likely to be misclassified as
 		// failed as the coverage gate does its job better, not less.
-		if st.Failed > 0 && !boardReachedPostings(st) {
+		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
 			r.recordFailure(ctx, e, "streaming board failed with no progress")
 		} else {
 			r.recordSuccess(ctx, e, st.Ingested)
-			st.SweepableBoards = sweepableBoard(e, st)
 		}
 		return st
 	}
@@ -586,48 +577,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	// save skips — those are stats.Skipped, not a board outage.
 	r.recordSuccess(ctx, e, st.Ingested)
 	st.Rejected = rej.rejected
-	st.SweepableBoards = sweepableBoard(e, st)
 	return st
-}
-
-// boardReachedPostings reports whether a board's crawl actually reached postings, whatever
-// became of them. A rejected posting counts: the crawl reached it and the catalogue filter
-// turned it away — without that, a mid-crawl error on an all-rejected board (the normal case on
-// the non-tech-heavy national feeds) would read as a failure and cool a healthy board for hours.
-// An ATSCovered posting counts for the same reason.
-//
-// One definition, two readers: the streaming path's failure test and sweepableBoard below. They
-// were the same expression written twice, and the second was added by a change that had every
-// reason to keep them in step — which is exactly when two copies start to drift.
-func boardReachedPostings(st Stats) bool {
-	return st.Ingested > 0 || st.Rejected > 0 || st.ATSCovered > 0
-}
-
-// sweepableBoard returns the entry's board when this run proved it covered it, and nothing
-// otherwise. See Stats.SweepableBoards for what the proof is for.
-//
-// Three refusals, each closing a different way of not having read the board:
-//
-//   - A boardless entry, and this is the load-bearing one: its postings are namespaced with an
-//     empty board, so a board-scoped close would select the provider's ENTIRE catalogue.
-//   - A board that reached no postings, which cannot be told apart from a board whose crawl
-//     broke — that is how a Workday board reporting total:0 on its second page once had its
-//     live tail retired (freehire#725).
-//   - A board whose crawl reported a failure AT ALL, even after partial progress. This one is
-//     not the same test as recordSuccess's, deliberately. recordSuccess asks whether the board
-//     is HEALTHY, and a stream that emitted 2,000 postings and then hit a rate limit is healthy
-//     — treating it as failed would cool a working board for hours. But it did not LIST its
-//     content, and closing within it would retire everything past the point it died. Health and
-//     completeness are different questions, and only the second licenses a close.
-//
-// The remaining exposure is an adapter that returns a truncated crawl as an unqualified success
-// — no error, fewer postings. Nothing here can see that, and it is not a new risk: the
-// company-scoped close has always had it, which is precisely how freehire#725 happened.
-func sweepableBoard(e sources.CompanyEntry, st Stats) []string {
-	if e.Board == "" || st.Failed > 0 || !boardReachedPostings(st) {
-		return nil
-	}
-	return []string{e.Board}
 }
 
 // saveOne normalizes one posting, puts it through the catalogue filter, and saves what

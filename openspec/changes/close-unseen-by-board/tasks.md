@@ -123,3 +123,17 @@ Two parallel reviews (standards, spec) ran against the implementation commit.
 - [x] 7.7 Spec review: the `shouldSweep` interaction (a provider whose every posting was
       rejected never reaches either close) was correct but documented nowhere. Now stated in
       `cmd/ingest` and in design.md, with why it is left alone.
+
+## 8. Reverted
+
+- [x] 8.1 Reverted from `main` and production 2026-09-02, eighteen minutes after deploy. The
+      first fleet cycle closed 110 live `solidjobs` postings: that adapter reaches only the
+      first 500 of the board's ~1,400 and returns them as an unqualified success, so all three
+      proof conditions were satisfied honestly and the board still had not been listed.
+- [x] 8.2 The 110 rows were reopened and their `search_delete_outbox` entries deleted, so they
+      were never removed from the index.
+- [x] 8.3 design.md's "What production taught this design" records the constraint any retry
+      must satisfy: adapters must OPT IN to being sweepable, because the conditions here test
+      what the RUN did and never what the ADAPTER can do.
+- [ ] 8.4 Enumerate which adapters can honestly claim they list a board in full. Not started;
+      this is the gate on re-attempting.
