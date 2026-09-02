@@ -12,6 +12,7 @@ func TestHiringThingProbe(t *testing.T) {
 <a href="/job/952170/mobile-shred-operator">Learn more</a></div>
 <div class="job-container"><a href="/job/1054668/registered-occupational-therapist">Therapist</a></div>
 <a href="/privacy">Privacy</a>
+<a href="/privacy?next=/job/1052705">Privacy notice</a>
 </div></body></html>`
 	getter := fakeGetter{
 		// The board is the full careers host, and a reseller domain is as much a board as the
@@ -21,7 +22,9 @@ func TestHiringThingProbe(t *testing.T) {
 		"https://empty.oasisrecruit.com/":               `<html><body><a href="/privacy">Privacy</a></body></html>`,
 	}
 	// live: the two links to one posting inflate the count, which is fine — the probe judges
-	// liveness, not board size. The name is empty by design (see hiringthingProber).
+	// liveness, not board size. The privacy link carrying an id in its query is NOT counted:
+	// counting it would accept a board the ingest adapter cannot enumerate a posting from. The
+	// name is empty by design (see hiringthingProber).
 	if name, n, err := p.probe(context.Background(), getter, "crown-shredding-llc.prismhr-hire.com"); err != nil || name != "" || n != 3 {
 		t.Errorf("live reseller board: got (%q,%d,%v), want (\"\",3,nil)", name, n, err)
 	}

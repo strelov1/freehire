@@ -76,6 +76,9 @@ func TestHTJobID(t *testing.T) {
 		"https://skijapan.hiringthing.com/job/1052705#apply":      "1052705",
 		"https://skijapan.hiringthing.com/jobs":                   "",
 		"https://skijapan.hiringthing.com/job/apply":              "",
+		// An id in another link's query or fragment names no posting: only the path is matched.
+		"https://skijapan.hiringthing.com/privacy?next=/job/1052705": "",
+		"https://skijapan.hiringthing.com/privacy#/job/1052705":      "",
 	}
 	for u, want := range cases {
 		if got := htJobID(u); got != want {
@@ -180,6 +183,25 @@ func TestHiringThingEnumeratesOnePostingPerID(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "111" {
 		t.Fatalf("got %v, want the one posting", jobs)
+	}
+}
+
+func TestHiringThingSkipsPostingsLinkedOffTheBoardsHost(t *testing.T) {
+	// A board IS a host here, so a posting linked on a sibling tenant's host is another board's:
+	// crawling it would file a second employer's posting under this board's company.
+	detail := htDetailHTML(htRecord("Ours", "<p>x</p>",
+		"2026-08-17T12:30:54Z", "Orlando, FL", "US", false, htNoSalary))
+	fake := (&routedHTTP{}).
+		route("/job/111", detail).
+		route("https://b/", htListingHTML(
+			"https://b/job/111/ours", "https://elsewhere.example/job/222/theirs"))
+
+	jobs, err := NewHiringThing(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "111" {
+		t.Fatalf("got %v, want only this board's posting", jobs)
 	}
 }
 

@@ -20,9 +20,12 @@ import (
 // the seed's company labels the board.
 type hiringthingProber struct{}
 
-// hiringthingJobPattern is the posting permalink on a HiringThing listing: /job/<numeric id>/.
-// It must not match the site's other /job-prefixed navigation, which carries no id.
-var hiringthingJobPattern = regexp.MustCompile(`/job/\d+`)
+// hiringthingJobPattern is the posting permalink on a HiringThing listing: /job/<numeric id>,
+// relative or absolute. It must not match the site's other /job-prefixed navigation, which
+// carries no id, and it anchors at the start of the PATH so an id sitting in another link's
+// query string is not counted — the same shape the ingest adapter enumerates by, so a board
+// this accepts as live is one that adapter can crawl.
+var hiringthingJobPattern = regexp.MustCompile(`^(?:https?://[^/]+)?/job/\d+`)
 
 func (hiringthingProber) probe(ctx context.Context, c httpClient, host string) (string, int, error) {
 	root, err := c.GetHTML(ctx, fmt.Sprintf("https://%s/", host))

@@ -92,10 +92,18 @@ type htLink struct {
 // the slug is not part of a posting's identity, so the same posting linked under two slugs is one
 // posting, and keying the walk on the URL would buy its page twice and emit two jobs sharing one
 // dedup key. First-seen order, first-seen URL.
+//
+// A link off the board's own host is dropped. On this platform the board IS a host, so a posting
+// linked on another one is another board's: crawling it would file a second employer's postings
+// under this board's company, and would send the crawl to a host the board file never named.
 func htJobLinks(base *url.URL, root *html.Node) []htLink {
 	var links []htLink
 	seen := make(map[string]bool)
 	for _, u := range jobLinks(base, root, func(href string) bool { return htJobID(href) != "" }) {
+		parsed, err := url.Parse(u)
+		if err != nil || parsed.Host != base.Host {
+			continue
+		}
 		id := htJobID(u)
 		if seen[id] {
 			continue
@@ -145,15 +153,24 @@ func (s hiringthing) detail(ctx context.Context, e CompanyEntry, l htLink) (Job,
 
 // htJobIDPattern captures the native posting id from a posting permalink's /job/<id>/<slug>
 // path. The slug is not part of the id: the platform serves the posting under any slug. Nothing
-// follows the id in the pattern, so a permalink carrying a query or fragment still resolves —
-// and the harvest prober's own liveness pattern matches the same shape, so a board it accepts
-// as live is one this adapter can enumerate.
-var htJobIDPattern = regexp.MustCompile(`/job/(\d+)`)
+// is anchored after the id, so a permalink carrying a query or fragment still resolves — and the
+// harvest prober's own liveness pattern matches the same shape, so a board it accepts as live is
+// one this adapter can enumerate.
+var htJobIDPattern = regexp.MustCompile(`^/job/(\d+)(?:/|$)`)
 
 // htJobID extracts the native numeric posting id from a posting page URL, or "" when the URL is
-// not a posting permalink.
+// not a posting permalink. Only the PATH is matched, so absolute and relative hrefs both resolve
+// and an id that appears in some other link's query string ("/privacy?next=/job/1052705") is not
+// mistaken for a posting.
 func htJobID(u string) string {
-	return firstSubmatch(htJobIDPattern, u)
+	p := u
+	if parsed, err := url.Parse(u); err == nil {
+		p = parsed.Path
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return firstSubmatch(htJobIDPattern, p)
 }
 
 // htReactClass is the React component whose props carry a posting's job record. The listing and
