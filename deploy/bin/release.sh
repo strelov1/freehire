@@ -61,10 +61,31 @@ cd "/opt/freehire/src/${dir}-${new}"
 # has no terminal to prompt on, so the first 401 ends it.
 #
 # Why GitHub singles out the v2 POST from here is not established — this host crawls
-# hard, so a throttle on its address is the likeliest reason. Authenticating the remote
-# would be the durable fix and needs a credential provisioned; pinning the protocol costs
-# nothing and needs none. GIT_TERMINAL_PROMPT=0 keeps any future variant of this failing
-# fast instead of hanging on a prompt nobody can answer.
+# hard, so a throttle on its address is the likeliest reason.
+#
+# The pin bought about three hours. Later the same day the SAME 401 came back on v0,
+# which is the answer to what the paragraph above left open: the throttle is not on a
+# protocol version, it is on ANONYMOUS object fetches from this address. Both versions
+# POST to /git-upload-pack to download a pack; v0 merely reaches it second. What still
+# succeeded, and is the tell, was every request that downloads nothing:
+#
+#   git ls-remote  (GET  /info/refs)   -> 200, repeatedly
+#   git fetch      (POST /git-upload-pack) -> 401, 3/3
+#
+# So the durable fix the paragraph above named is the one now in place: the remote is
+# authenticated. `origin` is git@github.com:strelov1/freehire.git in BOTH colors, and
+# ~freehire/.ssh/config points github.com at the agent_deploy key already on the box
+# (provisioned 2026-07-14). No new secret was introduced — that key is issued to
+# strelov1/freehire-agent and reads this repository only because this repository is
+# public, which is worth replacing with a deploy key of its own when convenient.
+#
+# The protocol pin stays. It costs nothing, it is orthogonal to the transport, and
+# leaving it removes one variable if the fetch path is ever in question again.
+# GIT_TERMINAL_PROMPT=0 likewise stays: it keeps any future variant failing fast
+# instead of hanging on a prompt nobody can answer.
+#
+# If this fails again with a credential error, check the KEY first (`sudo -u freehire
+# ssh -T git@github.com` names the identity it authenticated as), not the protocol.
 sudo -u freehire env GIT_TERMINAL_PROMPT=0 git -c protocol.version=0 pull --ff-only
 echo "[release:$app] building api + web ..."
 sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$bin" ./cmd/server

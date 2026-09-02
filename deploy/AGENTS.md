@@ -38,6 +38,19 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   `10-skip-if-reindexing.conf` adjust one setting. A drop-in's directives apply after the
   unit's own, which is what makes `EnvironmentFile=` ordering come out right — the later
   file wins on a key both define (`AWS_REGION` is in both).
+- **The release fetches over SSH, and the two pieces that make that work are not in git.**
+  `origin` is `git@github.com:strelov1/freehire.git` in both `/opt/freehire/src/hire-blue`
+  and `hire-green`, and `~freehire/.ssh/config` (the account's home is `/var/lib/freehire`,
+  not `/home`) points `github.com` at the `agent_deploy` key beside it. Neither a remote URL
+  nor a private key belongs in this snapshot, so `check-drift.sh` cannot see either — this
+  paragraph is the record. The reason is in `bin/release.sh` beside the `pull`: GitHub
+  throttles ANONYMOUS object fetches from this address, and the repository being public is
+  not enough, because the throttle lands on the pack download rather than on the ref list.
+  A release that dies with *"could not read Username"* is that, or the key; it is not a
+  missing credential file and not the protocol version, which was the first diagnosis and
+  held for three hours. The key is issued to `strelov1/freehire-agent` and reads this
+  repository only because this repository is public — a deploy key of its own would be
+  tidier and is not urgent.
 - **The `.bak` files on the host are not here on purpose.** There are a dozen dated copies
   of `release.sh` alone. They are what a directory without version control grows instead of
   history; this directory is the replacement, so they were dropped rather than imported.
