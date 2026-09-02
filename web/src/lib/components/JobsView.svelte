@@ -793,7 +793,11 @@
 
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
-    <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
+    <!-- `top-20` is the site header's own `h-14` plus 24px of air. At `top-6` the rail
+         pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered its
+         first 32px — here, the "Filters" heading — for the whole scroll. The max-height
+         is then what is left of the viewport, less the same 24px at the bottom. -->
+    <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
       {#if !standalone && jobs.status === 'ready'}
         <!-- Company view: the (filtered) open-job count as the sidebar's lead stat.
              The inline count above the list is hidden on desktop (shown only on

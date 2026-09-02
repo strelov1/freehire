@@ -93,7 +93,11 @@
 
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
-    <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
+    <!-- `top-20` is the site header's own `h-14` plus 24px of air. At `top-6` the card
+         pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered its
+         top border and first row of controls for the whole scroll. The max-height is
+         then what is left of the viewport, less the same 24px at the bottom. -->
+    <div class="sticky top-20 max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
       <FilterSummary store={filters} onOpen={() => (modalOpen = true)} />
     </div>
   </aside>

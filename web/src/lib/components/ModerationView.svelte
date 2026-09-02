@@ -128,7 +128,11 @@
 
     <div class="lg:flex lg:gap-8">
       <aside aria-label="Moderation sections" class="hidden shrink-0 lg:block lg:w-56">
-        <nav class="sticky top-6 flex flex-col gap-1">
+        <!-- `top-20` is the site header's own `h-14` plus 24px of air. At `top-6` the nav
+             pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered
+             its first entry for the whole scroll. No max-height: this list is short
+             enough that it never reaches the fold. -->
+        <nav class="sticky top-20 flex flex-col gap-1">
           {@render navButtons()}
         </nav>
       </aside>
