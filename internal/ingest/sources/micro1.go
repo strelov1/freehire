@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -16,8 +17,17 @@ import (
 // Next.js RSC flight stream (no standalone ld+json tag). This is the dataart shape — sitemap
 // to enumerate, per-posting detail fetch — with the detail parsed out of the flight via the
 // shared decodeNextFlight/bracketSlice/nextFlightTextRows primitives (as deel does).
+//
+// Outbound links are attributable: micro1 pays a per-posting bounty for a referred candidate
+// (the amount is printed on the posting itself), and it is earned only when the candidate
+// arrives carrying a referral code. See applyURL.
 type micro1 struct {
 	http micro1HTTP
+	// referral is the micro1 referral code outbound links are attributed to, from
+	// MICRO1_REFERRAL_CODE (see registry.go). Empty means unattributed: the URL stays the
+	// canonical board posting, which is what an installation that is not a micro1 referrer —
+	// including every fork of this repository — gets.
+	referral string
 }
 
 // micro1HTTP is the transport micro1 needs: the XML sitemap plus HTML detail pages.
@@ -28,8 +38,14 @@ type micro1HTTP interface {
 
 const micro1SitemapURL = "https://jobs.micro1.ai/sitemap.xml"
 
-// NewMicro1 builds the micro1 adapter over the given HTTP client.
-func NewMicro1(c micro1HTTP) Source { return micro1{http: c} }
+// NewMicro1 builds the micro1 adapter over the given HTTP client, attributing outbound links
+// to the given micro1 referral code (empty = unattributed, see micro1.referral).
+func NewMicro1(c micro1HTTP, referral string) Source {
+	if !micro1ReferralCodePattern.MatchString(referral) {
+		referral = "" // absent or malformed: crawl unattributed rather than emit a broken link
+	}
+	return micro1{http: c, referral: referral}
+}
 
 func (micro1) Provider() string { return "micro1" }
 
@@ -97,7 +113,7 @@ func (m micro1) detail(ctx context.Context, ce CompanyEntry, jobURL string) (Job
 	location := strings.TrimSpace(d.LocationName)
 	return Job{
 		ExternalID:  d.ClientJobID,
-		URL:         jobURL,
+		URL:         m.applyURL(jobURL),
 		Title:       strings.TrimSpace(d.JobRoleName),
 		Company:     ce.Company,
 		Location:    location,
@@ -148,6 +164,45 @@ func micro1PostID(u string) string {
 		return m[1]
 	}
 	return ""
+}
+
+// micro1ReferralCodePattern is the shape of a micro1 referral code: a UUID, as micro1's own
+// share links carry. The code is interpolated into an outbound URL, so anything else is
+// rejected at construction rather than escaped — a code is copied from the referral dashboard
+// by hand, and a malformed one is a misconfiguration to notice, not input to sanitise.
+var micro1ReferralCodePattern = regexp.MustCompile(
+	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// micro1ReferralHost is the host micro1's own share links point a referred candidate at. It is
+// NOT the board host the sitemap enumerates, but the two share one posting-id space: a posting
+// id taken from jobs.micro1.ai/post/<uuid> renders the same vacancy at req.micro1.ai/post/<uuid>
+// (verified live across several of our own stored ids). The referral host is the one micro1
+// hands out, so it is the one we hand on.
+const micro1ReferralHost = "https://req.micro1.ai/post/"
+
+// applyURL rewrites a canonical board posting URL into micro1's own referral share link, so a
+// candidate who applies is attributed to the configured referrer. micro1 sets no attribution
+// cookie of its own — the apply form sits on the posting page and reads the code straight off
+// the query — so the code has to still be in the URL at the moment the candidate applies, which
+// is exactly what carrying it on the stored outbound link achieves.
+//
+// The utm_* triple mirrors what micro1's share button emits verbatim rather than being invented
+// here: they are micro1's own campaign tags, and a link that differs from the one they generate
+// is a link whose attribution we would be guessing at.
+//
+// An unset code (or a URL that is not a canonical posting) leaves the board URL alone.
+func (m micro1) applyURL(jobURL string) string {
+	id := micro1PostID(jobURL)
+	if m.referral == "" || id == "" {
+		return jobURL
+	}
+	q := url.Values{
+		"referralCode": {m.referral},
+		"utm_source":   {"referral"},
+		"utm_medium":   {"share"},
+		"utm_campaign": {"data_referral"},
+	}
+	return micro1ReferralHost + id + "?" + q.Encode()
 }
 
 // micro1Data is the subset of a micro1 posting's RSC-flight `data` object the adapter maps.

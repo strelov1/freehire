@@ -126,13 +126,13 @@ func TestMicro1PostID(t *testing.T) {
 }
 
 func TestMicro1Provider(t *testing.T) {
-	if got := NewMicro1(nil).Provider(); got != "micro1" {
+	if got := NewMicro1(nil, "").Provider(); got != "micro1" {
 		t.Errorf("Provider() = %q, want %q", got, "micro1")
 	}
 }
 
 func TestMicro1IsBoardless(t *testing.T) {
-	if _, ok := NewMicro1(nil).(boardless); !ok {
+	if _, ok := NewMicro1(nil, "").(boardless); !ok {
 		t.Error("micro1 adapter must be boardless (single-company, fixed host)")
 	}
 }
@@ -215,7 +215,7 @@ func TestMicro1Fetch(t *testing.T) {
 		page:       micro1ParseFixture(t, "micro1_post.html"),
 		sitemapXML: micro1Fixture(t, "micro1_sitemap.xml"),
 	}
-	jobs, err := NewMicro1(fake).Fetch(context.Background(), CompanyEntry{Company: "micro1"})
+	jobs, err := NewMicro1(fake, "").Fetch(context.Background(), CompanyEntry{Company: "micro1"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -227,5 +227,46 @@ func TestMicro1Fetch(t *testing.T) {
 		if j.Title != "Open Source Contributor" || j.Company != "micro1" {
 			t.Errorf("job = %+v, want fixture posting mapped under company micro1", j)
 		}
+	}
+}
+
+// micro1TestReferralCode is a well-formed but fictional referral code. The real one is an
+// account identifier and lives in MICRO1_REFERRAL_CODE, never in this repository.
+const micro1TestReferralCode = "00000000-1111-2222-3333-444444444444"
+
+func TestMicro1ApplyURLCarriesTheReferralCode(t *testing.T) {
+	m := micro1{referral: micro1TestReferralCode}
+	got := m.applyURL("https://jobs.micro1.ai/post/5b80dfdc-b737-4626-99f2-50baf207b94e")
+
+	// micro1's own share shape: the posting id moved onto the referral host, code on the query.
+	// The two hosts share one posting-id space, so the id carries across unchanged.
+	want := "https://req.micro1.ai/post/5b80dfdc-b737-4626-99f2-50baf207b94e" +
+		"?referralCode=" + micro1TestReferralCode +
+		"&utm_campaign=data_referral&utm_medium=share&utm_source=referral"
+	if got != want {
+		t.Errorf("applyURL() = %q, want %q", got, want)
+	}
+	// The trailing-slash form the sitemap also emits must fold onto the same link, else one
+	// posting would ship two different outbound URLs.
+	if slashed := m.applyURL("https://jobs.micro1.ai/post/5b80dfdc-b737-4626-99f2-50baf207b94e/"); slashed != want {
+		t.Errorf("applyURL(trailing slash) = %q, want %q", slashed, want)
+	}
+}
+
+func TestMicro1ApplyURLIsCanonicalWithoutACode(t *testing.T) {
+	// No code configured (every fork of this repository): the outbound link stays the board
+	// posting rather than pointing at somebody else's referral.
+	const jobURL = "https://jobs.micro1.ai/post/5b80dfdc-b737-4626-99f2-50baf207b94e"
+	if got := (micro1{}).applyURL(jobURL); got != jobURL {
+		t.Errorf("applyURL() = %q, want the canonical URL unchanged", got)
+	}
+	// A non-posting URL has no id to move onto the referral host, so it is left alone.
+	const listURL = "https://jobs.micro1.ai/"
+	if got := (micro1{referral: micro1TestReferralCode}).applyURL(listURL); got != listURL {
+		t.Errorf("applyURL(non-posting) = %q, want it unchanged", got)
+	}
+	// A malformed code would be interpolated into a URL, so the constructor drops it.
+	if s := NewMicro1(nil, "not-a-uuid").(micro1); s.referral != "" {
+		t.Errorf("referral = %q, want it dropped as malformed", s.referral)
 	}
 }
