@@ -29,6 +29,15 @@ them behaviour-neutral.
   "Security Guard", "Janitor" or "Housekeeper" is classified
 - **THEN** its category is `personal_services`
 
+#### Scenario: An ambiguous guard title is not claimed
+
+- **WHEN** a job titled "Security Officer" or "Chief Information Security
+  Officer" is classified
+- **THEN** its category is `security`, and the multi-category CV path does NOT
+  additionally report `personal_services` — `Categories` returns every matching
+  alias rather than the strongest, so declaration order cannot save it and the
+  phrase is dropped rather than guessed
+
 #### Scenario: Administration titles resolve
 
 - **WHEN** a job titled "Receptionist", "Secretary", "Office Manager",

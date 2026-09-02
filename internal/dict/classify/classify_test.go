@@ -1160,6 +1160,31 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 // TestParse_ServiceSectors pins the last clusters that have a shape: logistics,
 // education, personal services and office administration — plus the plural gap the
 // consumer wave left behind.
+// TestCategories_ServiceOverlaps guards the multi-category CV path, which `Parse`
+// cannot speak for: `Categories` returns EVERY matching alias rather than the
+// strongest, so declaration order does nothing for it. An alias that looks harmless
+// under `Parse` can still tag a title with a second, wrong category here — which is
+// exactly what a "security officer" entry did to a CISO.
+func TestCategories_ServiceOverlaps(t *testing.T) {
+	for _, tc := range []struct {
+		title    string
+		mustNot  string
+		mustHave string
+	}{
+		{"Chief Information Security Officer", "personal_services", "security"},
+		{"Information Security Officer", "personal_services", "security"},
+		{"Security Officer", "personal_services", "security"},
+	} {
+		got := Categories(tc.title)
+		if slices.Contains(got, tc.mustNot) {
+			t.Errorf("Categories(%q) = %v, must NOT contain %q", tc.title, got, tc.mustNot)
+		}
+		if !slices.Contains(got, tc.mustHave) {
+			t.Errorf("Categories(%q) = %v, must contain %q", tc.title, got, tc.mustHave)
+		}
+	}
+}
+
 func TestParse_ServiceSectors(t *testing.T) {
 	cases := []struct {
 		title        string
@@ -1222,7 +1247,9 @@ func TestParse_ServiceSectors(t *testing.T) {
 		{"Barber", "personal_services", ""},
 		{"Esthetician", "personal_services", ""},
 		{"Lifeguard", "personal_services", ""},
-		{"Security Guard", "personal_services", ""},
+		{"Security Guard", "personal_services", "was resolving to the infosec facet"},
+		{"Security Officer", "security", "deliberately not claimed: see the Categories() regression below"},
+		{"Chief Information Security Officer", "security", ""},
 		{"Janitor", "personal_services", ""},
 		{"Housekeeper", "personal_services", ""},
 		{"Парикмахер", "personal_services", ""},

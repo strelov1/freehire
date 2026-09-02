@@ -675,6 +675,10 @@ func TestDeriveServiceRoles(t *testing.T) {
 		{"Master Stylist", "personal_services", "stylist"},
 		{"Security Guard", "personal_services", "security_guard"},
 		{"Janitor", "personal_services", "cleaner"},
+		{"Cleaner", "personal_services", "cleaner"},
+		// The infosec role owns "security officer" and the length sort is stable, so
+		// listing that phrase under security_guard would have been dead code.
+		{"Security Officer", "security", "security_officer"},
 		// A named role is emitted whether or not the category agrees: a shop's own
 		// driver keeps `retail` and is still findable as a driver.
 		{"Store Driver", "retail", "driver"},

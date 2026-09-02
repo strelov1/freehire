@@ -282,12 +282,18 @@ var categoryTable = []aliasEntry{
 	// tell them apart: "Security Guard" and "Security Officer" have been resolving to
 	// the infosec facet, which is wrong in both directions — a guard is not findable
 	// where guards are looked for, and an infosec filter returns him.
-	// The information-security spellings come first: a CISO's title contains "security
-	// officer" verbatim, and the physical-security entries below would take it.
-	{"chief information security officer", "security"},
-	{"information security officer", "security"},
+	// Physical security is not information security, and the bare alias below cannot
+	// tell them apart: "Security Guard" was resolving to the infosec facet, wrong in
+	// both directions — a guard is not findable where guards are looked for, and an
+	// infosec filter returned him.
+	//
+	// "Security Officer" is deliberately NOT here, though it is a common guard title.
+	// `Categories()` returns EVERY matching alias rather than the strongest, so an
+	// entry for it tagged "Chief Information Security Officer" with `personal_services`
+	// on the multi-category CV path no matter what order the table declares — ordering
+	// only decides `Parse`. The phrase is genuinely ambiguous, so it is dropped rather
+	// than guessed, which is the same call `design systems` and bare `engineer` got.
 	{"security guard", "personal_services"},
-	{"security officer", "personal_services"},
 	{"armed guard", "personal_services"},
 	{"security", "security"},
 	{"infosec", "security"},
@@ -1189,8 +1195,9 @@ var categoryTable = []aliasEntry{
 	{"esthetician", "personal_services"},
 	{"aesthetician", "personal_services"},
 	{"lifeguard", "personal_services"},
-	{"security guard", "personal_services"},
-	{"security officer", "personal_services"},
+	// The guard entries live UP in the security block, where they have to sit above the
+	// bare "security" alias to take their own titles; declaring them again here would
+	// be dead for `Parse` and, worse, `Categories` would still see the duplicate.
 	{"janitor", "personal_services"},
 	{"custodian", "personal_services"},
 	{"housekeeper", "personal_services"},

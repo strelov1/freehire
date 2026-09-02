@@ -369,8 +369,12 @@ var namedRoleTable = []struct {
 	{"instructor", "Instructor", []string{"swim instructor", "chess instructor", "soccer coach", "basketball coach", "fitness coach"}},
 	{"receptionist", "Receptionist", []string{"receptionist", "secretary", "legal secretary", "medical secretary", "секретарь", "делопроизводитель"}},
 	{"stylist", "Stylist", []string{"stylist", "master stylist", "barber", "esthetician", "aesthetician", "парикмахер"}},
-	{"security_guard", "Security Guard", []string{"security guard", "security officer", "armed guard", "охранник"}},
-	{"cleaner", "Cleaner", []string{"janitor", "custodian", "housekeeper", "уборщик", "уборщица"}},
+	// No "security officer" alias: the security_officer role above already owns that
+	// exact phrase, the length sort is stable, and Derive stops at the first match —
+	// so listing it here would be dead. classify drops the phrase for the same
+	// underlying reason, that it cannot be told apart from a CISO's title.
+	{"security_guard", "Security Guard", []string{"security guard", "armed guard", "охранник"}},
+	{"cleaner", "Cleaner", []string{"cleaner", "janitor", "custodian", "housekeeper", "уборщик", "уборщица"}},
 
 	// Non-software professions the catalogue carries (broad scope).
 	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},
