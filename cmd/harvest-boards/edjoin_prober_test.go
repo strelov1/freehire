@@ -47,12 +47,32 @@ func TestEdjoinProbe(t *testing.T) {
 	}
 }
 
+// edjoinRecordingGetter answers nothing and remembers the URL it was asked for, so a test can
+// assert on the request the prober actually built rather than on one the test built beside it.
+type edjoinRecordingGetter struct {
+	httpClient
+	url string
+}
+
+func (g *edjoinRecordingGetter) GetJSON(_ context.Context, url string, _ any) error {
+	g.url = url
+	return errMissing
+}
+
 // The endpoint dereferences catID, districtID and recruitmentCenterID without a null check, so a
-// probe that drops one is answered a 500 error page and reads as a dead board.
+// probe that drops one is answered a 500 error page and reads as a dead board — a failure that
+// looks exactly like a harvest that found nothing. This asserts on the URL the prober itself
+// emits: pinning a string the test also wrote would pass however the prober changed.
 func TestEdjoinProbeSendsMandatoryFilters(t *testing.T) {
-	for _, want := range []string{"catID=0", "districtID=0", "recruitmentCenterID=0", "rows=1"} {
-		if !strings.Contains(edjoinProbeURL("25"), want) {
-			t.Errorf("probe URL is missing %q", want)
+	g := &edjoinRecordingGetter{}
+	if _, _, err := (edjoinProber{}).probe(context.Background(), g, "25"); err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	for _, want := range []string{
+		"catID=0", "districtID=0", "recruitmentCenterID=0", "rows=1", "jobTypes=25",
+	} {
+		if !strings.Contains(g.url, want) {
+			t.Errorf("probe requested %q, which is missing %q", g.url, want)
 		}
 	}
 }
