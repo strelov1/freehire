@@ -62,6 +62,20 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		return got
 	}
 
+	// seedPrivate writes a jd-tailor-intake posting: one user's pasted job description,
+	// visible only to them and crawled from nowhere.
+	seedPrivate := func(t *testing.T, externalID, slug string) {
+		t.Helper()
+		_, err := pool.Exec(ctx, `
+			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
+			                  company_slug_folded, last_seen_at, is_private)
+			VALUES ('weblink', $1, 'https://x.test/'||$1, 'Engineer', $1, 'Co', $2,
+			        replace($2, '-', ''), now(), true)`, externalID, slug)
+		if err != nil {
+			t.Fatalf("seed private %s: %v", externalID, err)
+		}
+	}
+
 	// Every row is seeded before any subtest runs, so no subtest depends on another's writes
 	// and each can be run alone with -run.
 	seed(t, "greenhouse", "fresh:1", "freshco", now.Add(-time.Hour), false)
@@ -69,6 +83,7 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 	seed(t, "himalayas", "agg:1", "aggonly", now, false)
 	seed(t, "greenhouse", "closed:1", "closedco", now, true)
 	seed(t, "lever", "fold:1", "cfoinsights", now, false)
+	seedPrivate(t, "private:1", "privateco")
 
 	t.Run("a recently seen non-aggregator posting is coverage", func(t *testing.T) {
 		if !ask(t, "freshco")["freshco"] {
@@ -113,6 +128,20 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		}
 		if !got["freshco"] {
 			t.Error("asking about several companies must still answer for the covered one")
+		}
+	})
+
+	t.Run("a private posting is not coverage, however fresh", func(t *testing.T) {
+		// The jd-tailor-intake path: a job description one user pasted in, visible only to
+		// them and never crawled. It cannot be evidence that the catalogue still crawls the
+		// employer — and if it were, one user's pasted JD for "Acme" would silently discard
+		// every aggregator posting for every other Acme.
+		//
+		// The search-backed lookup this replaced excluded these by accident, because
+		// cmd/reindex drops is_private rows from the index. Reading the table directly makes
+		// that an exclusion the query has to state, which is why it is pinned here.
+		if ask(t, "privateco")["privateco"] {
+			t.Error("a private posting must never count as coverage")
 		}
 	})
 

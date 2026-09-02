@@ -10,7 +10,7 @@ Issue #2315 reports the consequence twice. `https://himalayas.app/companies/pipe
 is a live remote US software job that `GET /api/v1/jobs/find` answers `{"data":null}` for. The
 slug `pipe` is held "covered" by this row:
 
-```
+```text
 source: trakstar   posted_at: 2013-11-07   last_seen_at: 2026-08-02   (31 days unseen)
 title: Business Development, Houston TX — a carbon steel line pipe distributor
 board Pipe.hire.trakstar.com is absent from sources/trakstar.yml

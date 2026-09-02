@@ -10,7 +10,7 @@ three consumers, so this looked like the cheap correct answer.
 
 **It was measured and it does not work.** No aggregator hands us an ATS URL:
 
-```
+```text
 himalayas.app/jobs/api, applicationLink field, 20 of 20 postings:
   https://himalayas.app/companies/<slug>/jobs/<slug>       — equal to the posting's own guid
 
@@ -38,9 +38,18 @@ A company is covered when it has at least one posting where all of:
 - `closed_at IS NULL`
 - `source` is not in `sources.AggregatorProviders(sources.Taxonomy())`
 - `last_seen_at > now() - coverageFreshness`
+- `NOT is_private`
 - `company_slug_folded` equals the asked slug's fold
 
-The freshness clause is the change. The last line restates today's behaviour in the form
+The freshness clause is the change. `NOT is_private` is a clause the search-backed lookup got
+for free and this one has to state: `cmd/reindex` drops `is_private` rows from the index
+entirely, so the old gate could never see one. A private posting is the jd-tailor-intake path —
+a job description a single user pasted in, visible only to them and crawled from nowhere — so
+it can never be evidence that we still crawl an employer, and counting it would let one user's
+pasted JD for "Acme" silently discard every aggregator posting for every other Acme. The
+index's other exclusions (`duplicate_of`, unresolved category, missing body) are NOT mirrored:
+each of those is still a posting crawled from the employer's own board, absent from the index
+because it is not worth SEARCHING, which is a different question. The last line restates today's behaviour in the form
 Postgres can express directly — and collapses it: `company_slug_folded` is
 `replace(company_slug,'-','')` written by the same `UpsertJob` that writes `company_slug`
 (verified on prod 2026-09-02: zero open rows with a non-empty slug and a NULL fold), so an
@@ -71,9 +80,8 @@ In SQL the fold is a stored column with its own partial index and the whole appa
 
 **Do not add an index on `last_seen_at`.** `RefreshUnchangedJob`'s comment states the column is
 deliberately in no index so the update stays heap-only on the hottest write path in ingest. The
-lookup does not need one: `jobs_open_company_slug_folded_idx` and
-`jobs_open_company_created_at_id_idx` select the few open rows per slug, and the freshness test
-is a heap recheck over that handful. The query is written as a per-slug `EXISTS` so a large
+lookup does not need one: `jobs_open_company_slug_folded_col_idx` selects the few open rows per
+slug, and the freshness test is a heap recheck over that handful. The query is written as a per-slug `EXISTS` so a large
 employer short-circuits on its first fresh row instead of aggregating thousands.
 
 ## Why 14 days
@@ -136,7 +144,7 @@ One query per board run, in the batched path exactly where the Meili call is tod
 `EXPLAIN (ANALYZE, BUFFERS)` on prod 2026-09-02 over a batch of 500 real company slugs confirms
 the shape the design assumes:
 
-```
+```text
 Nested Loop Semi Join
   -> Function Scan on unnest asked                                    (500 rows)
   -> Index Scan using jobs_open_company_slug_folded_col_idx  (loops=500)

@@ -9,6 +9,7 @@ which ALL of the following hold:
 - the posting is OPEN (`closed_at IS NULL`);
 - its source is NOT in `sources.AggregatorProviders(sources.Taxonomy())`;
 - its `last_seen_at` is within the coverage freshness window;
+- it is NOT private;
 - its `company_slug_folded` equals the asked slug with its hyphens removed.
 
 Matching on the folded slug alone is deliberate and is not a widening of today's behaviour
@@ -51,6 +52,15 @@ that silently stops matching looks exactly like a gate that found nothing to ski
 - **THEN** the company reads as UNCOVERED, the aggregator posting is saved, and
   `Stats.ATSCovered` is NOT incremented. A stale row is not evidence that the catalogue still
   carries this employer, and treating it as evidence discards a live posting permanently
+
+#### Scenario: A private posting is never coverage
+
+- **WHEN** the only open, recently-seen, non-aggregator posting for a company is private (the
+  jd-tailor-intake path: a job description one user pasted in, visible only to them)
+- **THEN** the company reads as UNCOVERED and the aggregator posting is saved. A private
+  posting is crawled from nowhere, so it cannot be evidence that the catalogue still crawls
+  the employer — and if it were, one user's pasted description for a common company name would
+  silently discard every aggregator posting for every other employer of that name
 
 #### Scenario: A streaming aggregator source is gated the same as a buffered one
 

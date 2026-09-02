@@ -519,6 +519,20 @@ type Querier interface {
 	// company_slug <> '' is not a filter on meaning (an empty slug names nobody) but the partial
 	// index's own predicate, without which jobs_open_company_slug_folded_col_idx cannot be used.
 	//
+	// NOT is_private is a correctness clause, not an inherited one. A private posting is the
+	// jd-tailor-intake path — a job description a single user pasted in, visible only to them and
+	// never crawled from anywhere. It can never be evidence that the catalogue still crawls an
+	// employer, and counting it would let one user's pasted JD for "Acme" silently discard every
+	// aggregator posting for every other Acme. The previous search-backed lookup excluded these by
+	// accident (cmd/reindex drops is_private rows from the index entirely); reading the table
+	// directly makes the exclusion something this query has to state.
+	//
+	// The index's OTHER exclusions are deliberately NOT mirrored here. A non-aggregator row marked
+	// duplicate_of is a repost of another posting of the same employer, and an uncategorised or
+	// body-less one is still a posting we crawled from that employer's own board — all three are
+	// real coverage. They are absent from the index because they are not worth SEARCHING, which is
+	// a different question from whether we still crawl the company.
+	//
 	// last_seen_at carries NO index, and must not gain one: RefreshUnchangedJob writes that column
 	// alone on the hot re-crawl path precisely because it is unindexed, which keeps the update
 	// heap-only. It is a recheck here, over the few open rows the folded index already selected,
