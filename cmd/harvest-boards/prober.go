@@ -781,6 +781,7 @@ var probers = map[string]prober{
 	"jazzhr":          jazzhrProber{},
 	"careerplug":      careerplugProber{},
 	"hiringthing":     hiringthingProber{},
+	"hrmdirect":       hrmdirectProber{},
 	"paycom":          paycomProber{},
 	"paycor":          paycorProber{},
 	"traffit":         traffitProber{},
