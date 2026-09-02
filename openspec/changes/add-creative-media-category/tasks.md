@@ -23,8 +23,8 @@
 
 ## 5. Contracts and web
 
-- [ ] 5.1 Regenerate `web/src/lib/generated/contracts.ts` via `cmd/gen-contracts` and verify `creative` and the new role labels are present.
-- [ ] 5.2 Add the `creative` label to `web/src/lib/labels.ts` and a "Creative & Media" group entry to `web/src/lib/filterSections.ts`; run `svelte-check` to prove the category is selectable.
+- [x] 5.1 Regenerate `web/src/lib/generated/contracts.ts` via `cmd/gen-contracts` and verify `creative` and the new role labels are present.
+- [x] 5.2 Add the `creative` label to `web/src/lib/labels.ts` and a "Creative & Media" group entry to `web/src/lib/filterSections.ts`; run `svelte-check` to prove the category is selectable.
 
 ## 6. Verification
 

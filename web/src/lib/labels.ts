@@ -107,6 +107,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   blockchain: 'Blockchain',
   architecture: 'Architecture',
   design: 'Design',
+  creative: 'Creative & Media',
   engineering_design: 'Engineering Design',
   product: 'Product',
   project_management: 'Project Management',

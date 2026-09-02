@@ -156,5 +156,7 @@ by a user, so labelling alone does not satisfy this requirement.
 #### Scenario: The category renders and can be chosen
 
 - **WHEN** a user opens the category filter
-- **THEN** `creative` appears under its own "Creative & Media" group with a
-  human label, and selecting it filters the job list
+- **THEN** `creative` appears labelled "Creative & Media" in the picker's
+  craft section — renamed from "Design" to "Design & Creative", since that
+  section now holds video, audio and photography beside the two design
+  categories — and selecting it filters the job list
