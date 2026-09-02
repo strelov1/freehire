@@ -41,30 +41,46 @@ if ! grep -q "127\.0\.0\.1:${aport};" "$newconf" || ! grep -q "127\.0\.0\.1:${wp
   exit 1
 fi
 cd "/opt/freehire/src/${dir}-${new}"
-# protocol.version=0, and the reason is worth the paragraph because the error message
-# points at the wrong thing entirely. On 2026-09-02 every release began dying with:
+# On 2026-09-02 releases started dying here with a message that names the wrong thing:
 #
 #   fatal: could not read Username for 'https://github.com': No such device or address
 #
-# The repository is public, `curl` as the same user fetched the same URL with a 200, and
-# there is no credential anywhere on the box — yet git was asking to log in. Tracing the
-# exchange showed why. Git's protocol v2 makes TWO requests, and GitHub answers them
-# differently for this host:
+# What is established. GitHub answers the two halves of a fetch differently for this
+# host, at ANY protocol version:
 #
 #   GET  /info/refs?service=git-upload-pack  -> 200
 #   POST /git-upload-pack                    -> 401  www-authenticate: Basic realm="GitHub"
 #
-# Protocol v0 needs only the first and succeeds: measured 10/10 where v2 managed 2/10.
-# The 2-in-10 is what made this look intermittent and cost an hour — it is not a flaky
-# network, it is two code paths, and retrying only repeats the doomed request. "No such
-# device or address" is a MISSING TERMINAL, not a refused credential; a scripted release
-# has no terminal to prompt on, so the first 401 ends it.
+# The repository is public and `curl` as the same user gets a 200, so this is not a
+# credential the box is missing. "No such device or address" is a MISSING TERMINAL: git
+# decided it wanted a login and a scripted release has nowhere to ask. It is also
+# intermittent — the release of 14:49 that day went through, and the next one did not.
 #
-# Why GitHub singles out the v2 POST from here is not established — this host crawls
-# hard, so a throttle on its address is the likeliest reason. Authenticating the remote
-# would be the durable fix and needs a credential provisioned; pinning the protocol costs
-# nothing and needs none. GIT_TERMINAL_PROMPT=0 keeps any future variant of this failing
-# fast instead of hanging on a prompt nobody can answer.
+# What is NOT the cause, recorded because both were tried and both convinced:
+#
+#   * A retry loop. Ten attempts, ten 401s. Reverted.
+#   * `protocol.version=0`. It measured 10/10 against v2's 2/10 and was shipped on that
+#     evidence — the measurement was invalid. v0 sends the POST only when the fetch has
+#     work to do, and every probe ran against an already-current checkout, where the
+#     whole exchange is one GET. Re-measured on a checkout that was genuinely behind, v0
+#     takes the same 401. Test this on a STALE checkout or the result means nothing.
+#
+# The pin stays because it costs nothing, but it is not a fix and must not be read as
+# one. GIT_TERMINAL_PROMPT=0 is the part that earns its place: it turns a hang on an
+# unanswerable prompt into an immediate, legible failure.
+#
+# The durable fix is to authenticate the remote — the limit that bites here is on
+# unauthenticated operations, and this host crawls hard enough to sit under it. That
+# needs a credential provisioned on the box, which is an owner's call, not a script's.
+#
+# Until then the manual way through, when a release must ship and the fetch will not:
+#
+#   git bundle create /tmp/hire.bundle origin/main          # from a machine that can
+#   scp /tmp/hire.bundle root@host:/tmp/
+#   sudo -u freehire git fetch /tmp/hire.bundle main:refs/remotes/origin/main
+#   sudo -u freehire git merge --ff-only origin/main
+#
+# A bundle is a file, so the fetch that reads it never talks to GitHub at all.
 sudo -u freehire env GIT_TERMINAL_PROMPT=0 git -c protocol.version=0 pull --ff-only
 echo "[release:$app] building api + web ..."
 sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$bin" ./cmd/server
