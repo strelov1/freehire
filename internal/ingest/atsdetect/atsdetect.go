@@ -54,14 +54,20 @@ var selfHosted = []struct {
 	{"teamtailor", regexp.MustCompile(`(?i)teamtailor`)},
 }
 
-// vendorDomains are the ATS vendors' own domains. Their marketing sites naturally carry their
-// own marker, and a tenant hosted on the vendor's domain is URL-derivable without fetching
-// anything — either way the fetched host is not an employer board.
+// vendorDomains are ATS vendors' own domains, which a self-hosted board never sits on. For the
+// four fingerprinted vendors that covers both their marketing sites (which naturally carry
+// their own marker) and their hosted tenants (URL-derivable without fetching anything).
+// eightfold.ai is here for a different reason: an Eightfold tenant is NOT URL-derivable (the
+// board is "<host>/<domain>" and the domain key is configured per board, see sources/eightfold.yml),
+// so such a host reaches this last resort — and a site that moved to Eightfold off another ATS
+// keeps the old vendor's tags for a while. johndeere.eightfold.ai still says "talentbrew" six
+// times, which is enough to have it recorded as a radancy board.
 var vendorDomains = []string{
 	"radancy.com", "talentbrew.com",
 	"phenom.com", "phenompeople.com",
 	"jibe.com", "jibeapply.com",
 	"teamtailor.com",
+	"eightfold.ai",
 }
 
 // DetectSelfHosted reports the board for a career site served from the employer's own domain:

@@ -142,6 +142,9 @@ func TestDetectSelfHosted(t *testing.T) {
 		// tenant hosted on the vendor's domain — atsboard resolves that one from the URL alone.
 		{name: "vendor marketing site", host: "www.phenom.com", html: `phenompeople`, ok: false},
 		{name: "tenant on the vendor domain", host: "bryter.teamtailor.com", html: `Teamtailor`, ok: false},
+		// A tenant that moved to Eightfold keeps the previous ATS's tags for a while; the host is
+		// the vendor's, so the page is not a self-hosted board of whatever marker it still carries.
+		{name: "eightfold tenant still tagged talentbrew", host: "johndeere.eightfold.ai", html: `talentbrew`, ok: false},
 		// Another ATS's page must not be claimed.
 		{name: "greenhouse embed page", host: "acme.com", html: `<script src="https://boards.greenhouse.io/embed/job_board/js?for=acme"></script>`, ok: false},
 		{name: "plain careers page", host: "acme.com", html: `<h1>Join us</h1>`, ok: false},
