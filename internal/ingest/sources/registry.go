@@ -180,6 +180,9 @@ func All(c HTTPClient) map[string]Source {
 		NewFreshteam(c),
 		NewSoftgarden(c),
 		NewBetterteam(c),
+		// White-labelled ATS: the board is the full careers host, because the same tenant is
+		// served under the vendor's domain and under each reseller's.
+		NewHiringThing(c),
 		NewEarcu(c),
 		NewPageUp(c),
 		NewNeogov(c),
