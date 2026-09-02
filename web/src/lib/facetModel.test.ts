@@ -18,14 +18,17 @@ import {
   filtersWithRole,
   defaultSortFor,
   effectiveSort,
+  sortOptionsFor,
+  selectedSortFor,
   type FacetState,
   type JobFilters,
   type JobSort,
 } from './facetModel';
 import { must } from './utils';
 
-// A JobFilters carrying a query and an ordering — the pair the sort default depends on.
-function withQuery(q: string, sort: JobSort): JobFilters {
+// A JobFilters carrying a query and an EXPLICITLY chosen ordering — the pair the sort
+// default depends on. Pass `null` for "the caller has not chosen one".
+function withQuery(q: string, sort: JobSort | null): JobFilters {
   return { ...emptyFilters(), q, sort };
 }
 
@@ -270,16 +273,19 @@ describe('sort', () => {
     expect(filtersFromParams(new URLSearchParams('sort=cv'))).toEqual(filtersFromParams(new URLSearchParams('')));
   });
 
-  it('reads an unknown sort value as the contextual default', () => {
-    expect(filtersFromParams(new URLSearchParams('sort=bogus')).sort).toBe('newest');
-    expect(filtersFromParams(new URLSearchParams('q=go&sort=bogus')).sort).toBe('relevance');
+  // An unrecognised value is not a choice, so it parses to `null` — "unchosen" — and
+  // resolves through the contextual default like any other link that names no ordering.
+  it('reads an unknown sort value as no choice at all', () => {
+    expect(filtersFromParams(new URLSearchParams('sort=bogus')).sort).toBeNull();
+    expect(effectiveSort(filtersFromParams(new URLSearchParams('sort=bogus')))).toBe('newest');
+    expect(effectiveSort(filtersFromParams(new URLSearchParams('q=go&sort=bogus')))).toBe('relevance');
   });
 
   it('defaults to newest while browsing and to relevance under a query', () => {
     expect(defaultSortFor('')).toBe('newest');
     expect(defaultSortFor('go')).toBe('relevance');
-    expect(filtersFromParams(new URLSearchParams('')).sort).toBe('newest');
-    expect(filtersFromParams(new URLSearchParams('q=go')).sort).toBe('relevance');
+    expect(effectiveSort(filtersFromParams(new URLSearchParams('')))).toBe('newest');
+    expect(effectiveSort(filtersFromParams(new URLSearchParams('q=go')))).toBe('relevance');
   });
 
   it('writes nothing for either contextual default', () => {
@@ -324,6 +330,65 @@ describe('sort', () => {
 
   it('serializes a stranded relevance selection as the browse default', () => {
     expect(filtersToParams(withQuery('', 'relevance')).get('sort')).toBeNull();
+  });
+
+  // The bug the review caught: storing the RESOLVED default made "the browse feed
+  // defaulted to newest" look identical to "the caller asked for newest", so typing
+  // into the search box carried sort=posted_at into a text search and date-ordered it.
+  // An unchosen ordering is null, and null follows the query.
+  it('does not pin an unchosen ordering when a query is typed', () => {
+    const browsing = filtersFromParams(new URLSearchParams(''));
+    expect(browsing.sort).toBeNull();
+    expect(effectiveSort(browsing)).toBe('newest');
+
+    const searching = { ...browsing, q: 'golang' };
+    expect(effectiveSort(searching)).toBe('relevance');
+    expect(filtersToParams(searching).get('sort')).toBeNull();
+  });
+
+  // Why that matters beyond the ordering: savedSearchQuery is filtersToParams(...),
+  // so a spurious sort param makes the live filters compare unequal to the saved
+  // search they came from — which reads as "dirty" and creates a duplicate on save.
+  it('keeps a typed query comparing equal to the saved search it came from', () => {
+    const saved = savedSearchQuery(filtersFromParams(new URLSearchParams('q=go')));
+    const typed = savedSearchQuery({ ...filtersFromParams(new URLSearchParams('')), q: 'go' });
+
+    expect(typed).toBe(saved);
+  });
+
+  it('still sends an explicitly chosen newest under a query', () => {
+    expect(filtersToParams(withQuery('go', 'newest')).get('sort')).toBe('posted_at');
+  });
+});
+
+// The option list is the sort control's visibility rule, kept pure and out of the
+// component so it can be tested at all — the same argument that put effectiveSort here.
+describe('sort options', () => {
+  it('offers relevance only under a query, and match only when it can be served', () => {
+    expect(sortOptionsFor('', false).map((o) => o.value)).toEqual(['newest']);
+    expect(sortOptionsFor('go', false).map((o) => o.value)).toEqual(['relevance', 'newest']);
+    expect(sortOptionsFor('', true).map((o) => o.value)).toEqual(['newest', 'match']);
+    expect(sortOptionsFor('go', true).map((o) => o.value)).toEqual(['relevance', 'newest', 'match']);
+  });
+
+  // A shared ?sort=match link opened signed out: the param survives (the server degrades
+  // the ordering rather than refusing it), but the control cannot show an option it does
+  // not offer. It shows what the server will actually serve — a select with nothing
+  // selected would be a blank control over a real ordering.
+  it('shows what the server will serve when the chosen ordering cannot be offered', () => {
+    expect(selectedSortFor(withQuery('go', 'match'), false)).toBe('relevance');
+    expect(selectedSortFor(withQuery('', 'match'), false)).toBe('newest');
+    expect(selectedSortFor(withQuery('go', 'match'), true)).toBe('match');
+  });
+
+  it('always names an option that exists', () => {
+    for (const q of ['', 'go']) {
+      for (const matchAvailable of [false, true]) {
+        const f = withQuery(q, 'match');
+        const values = sortOptionsFor(q, matchAvailable).map((o) => o.value);
+        expect(values).toContain(selectedSortFor(f, matchAvailable));
+      }
+    }
   });
 });
 

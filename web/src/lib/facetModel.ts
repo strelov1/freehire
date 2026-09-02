@@ -49,13 +49,20 @@ export interface JobFilters {
    *  `0` is a real bound — the jobs stating no prior experience is required — so
    *  every read of this field must test for null, never for falsiness. */
   experienceYearsMax: number | null;
-  /** Feed ordering. `relevance` is the engine's own ranking, `newest` is freshest
-   *  first, `match` ranks by how well a vacancy's skills overlap the signed-in
-   *  caller's profile. Which of the first two is the DEFAULT depends on `q` — see
-   *  defaultSortFor. The server degrades `match` to its default for anyone it cannot
-   *  serve it to — anonymous, no profile, no skills — so this is never gated
-   *  client-side beyond hiding the option. */
-  sort: JobSort;
+  /** Feed ordering, or `null` for "the caller has not chosen one".
+   *
+   *  `relevance` is the engine's own ranking, `newest` is freshest first, `match` ranks
+   *  by how well a vacancy's skills overlap the signed-in caller's profile. The server
+   *  degrades `match` to its default for anyone it cannot serve it to — anonymous, no
+   *  profile, no skills — so this is never gated client-side beyond hiding the option.
+   *
+   *  The `null` matters because the DEFAULT depends on `q` (see defaultSortFor) while
+   *  `q` changes under the ordering's feet. Storing the resolved default instead would
+   *  make "the browse feed defaulted to newest" indistinguishable from "the caller
+   *  asked for newest", so typing into the search box would carry `sort=posted_at`
+   *  into a text search and date-order it — the exact outcome design.md rejects. Read
+   *  this through effectiveSort, never directly. */
+  sort: JobSort | null;
 }
 
 /** The feed's ordering vocabulary. Deliberately short: this is not a general sort
@@ -74,12 +81,14 @@ export function defaultSortFor(q: string): JobSort {
 
 /** The ordering a filter set actually resolves to.
  *
- *  `relevance` has nothing to rank against once the query is cleared, so it collapses
- *  to the browse default. This is a pure function, not an effect that rewrites the
- *  stored value, because BOTH the sort control and filtersToParams need the answer
+ *  An unchosen ordering resolves to the contextual default, and an explicit
+ *  `relevance` collapses to the browse default once the query is cleared — it has
+ *  nothing left to rank against. This is a pure function, not an effect that rewrites
+ *  the stored value, because BOTH the sort control and filtersToParams need the answer
  *  and a second copy of the rule is a second answer. */
 export function effectiveSort(f: JobFilters): JobSort {
-  return f.sort === 'relevance' && !f.q ? 'newest' : f.sort;
+  const sort = f.sort ?? defaultSortFor(f.q);
+  return sort === 'relevance' && !f.q ? 'newest' : sort;
 }
 
 /** The `sort` values the search endpoint accepts, keyed by our vocabulary. `relevance`
@@ -92,6 +101,46 @@ const SORT_PARAM: Partial<Record<JobSort, string>> = { newest: 'posted_at', matc
 const SORT_FROM_PARAM: Record<string, JobSort> = Object.fromEntries(
   Object.entries(SORT_PARAM).map(([sort, param]) => [param, sort as JobSort]),
 );
+
+const SORT_LABEL: Record<JobSort, string> = {
+  relevance: 'Relevance',
+  newest: 'Newest',
+  match: 'Best match',
+};
+
+export interface SortOption {
+  value: JobSort;
+  label: string;
+}
+
+/** The orderings a caller can actually choose between, in display order.
+ *
+ *  `relevance` needs query text to rank against and `match` needs a profile the caller
+ *  has (plus the runtime flag the view resolves); `newest` always applies. The rule is
+ *  per OPTION rather than per control — gating the whole select on the match
+ *  precondition, as it was, took `newest` down with it, so a signed-out visitor
+ *  searching by text had no way to reach the freshest-first ordering.
+ *
+ *  It lives here, not in the view, for the reason effectiveSort does: it is pure, it
+ *  decides what the user sees, and in the component nothing could test it. */
+export function sortOptionsFor(q: string, matchAvailable: boolean): SortOption[] {
+  const values: JobSort[] = [...(q ? (['relevance'] as const) : []), 'newest', ...(matchAvailable ? (['match'] as const) : [])];
+  return values.map((value) => ({ value, label: SORT_LABEL[value] }));
+}
+
+/** The option the control shows as selected.
+ *
+ *  Normally the effective ordering — but a shared `?sort=match` link opened by someone
+ *  it cannot be served to resolves to an ordering that is not on offer. The param stays
+ *  (the server degrades it rather than refusing, and signing in should just work), so
+ *  the control instead names what the server will ACTUALLY serve that caller. A select
+ *  whose value matches no option renders blank, which would put an empty control over a
+ *  live ordering. */
+export function selectedSortFor(f: JobFilters, matchAvailable: boolean): JobSort {
+  const sort = effectiveSort(f);
+  const offered = sortOptionsFor(f.q, matchAvailable);
+  return offered.some((o) => o.value === sort) ? sort : defaultSortFor(f.q);
+}
 
 /** Splits every raw query value on comma and flattens the result, dropping
  *  empty fragments (a stray comma) — so a repeated key (`skills=go&skills=react`)
@@ -120,7 +169,7 @@ export function emptyFilters(): JobFilters {
     salaryMin: null,
     postedWithinDays: null,
     experienceYearsMax: null,
-    sort: defaultSortFor(''),
+    sort: null,
   };
 }
 
@@ -213,7 +262,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // rule the backend applies (ignore, never refuse) has to hold here or the two would
   // disagree about what a stale link means. Reads `f.q`, so it must follow the line
   // that sets it.
-  f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? defaultSortFor(f.q);
+  f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? null;
   return f;
 }
 

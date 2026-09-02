@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { Layers } from '@lucide/svelte';
+  import { EyeOff, Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -21,13 +21,14 @@
   import {
     FilterStore,
     filtersToParams,
-    effectiveSort,
+    selectedSortFor,
     signOf,
+    sortOptionsFor,
     type JobSort,
     activeFilterCount,
     generalCountsCoverRole,
   } from '$lib/filters';
-  import { FRESHNESS_PRESETS, freshnessLabel } from '$lib/filterControls';
+  import { freshnessOptions } from '$lib/filterControls';
   import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
   import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '$lib/geoScope';
   import {
@@ -242,18 +243,10 @@
   // gets verified on production before anyone can click it.
   const matchSortAvailable = $derived(matchFilterAvailable && matchSortEnabled(env));
 
-  // The orderings this caller can actually choose between, in display order.
-  //
-  // `relevance` needs query text to rank against; `match` needs the profile and the
-  // flag above; `newest` always applies. This gate is per OPTION, not per control —
-  // gating the whole select on the match precondition (as it was) took `newest` down
-  // with it, so a signed-out visitor searching by text had no way to reach the
-  // freshest-first ordering the endpoint has always served.
-  const sortOptions: { value: JobSort; label: string }[] = $derived([
-    ...(filters.value.q ? [{ value: 'relevance' as JobSort, label: 'Relevance' }] : []),
-    { value: 'newest', label: 'Newest' },
-    ...(matchSortAvailable ? [{ value: 'match' as JobSort, label: 'Best match' }] : []),
-  ]);
+  // The orderings this caller can choose between, and which one the control shows —
+  // both pure, both in facetModel so they can be tested (see sortOptionsFor).
+  const sortOptions = $derived(sortOptionsFor(filters.value.q, matchSortAvailable));
+  const selectedSort = $derived(selectedSortFor(filters.value, matchSortAvailable));
   // A one-option select is a label wearing a control's clothes: there is nothing to
   // choose, and the feed already IS that ordering.
   const sortSelectVisible = $derived(sortOptions.length > 1);
@@ -739,7 +732,7 @@
     <select
       aria-label="Sort jobs"
       class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
-      value={effectiveSort(filters.value)}
+      value={selectedSort}
       onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
     >
       {#each sortOptions as opt (opt.value)}
@@ -761,26 +754,32 @@
       value={String(filters.value.postedWithinDays ?? '')}
       onchange={(e) => filters.pickPostedWithinDays(Number(e.currentTarget.value) || null)}
     >
-      {#each FRESHNESS_PRESETS as preset (preset.label)}
-        <option value={String(preset.days ?? '')}>{freshnessLabel(preset.days)}</option>
+      {#each freshnessOptions(filters.value.postedWithinDays) as preset (preset.label)}
+        <option value={String(preset.days ?? '')}>{preset.label}</option>
       {/each}
     </select>
   </label>
 {/snippet}
 
 <!-- One-click access to the reality facet's common exclusion. `aria-pressed` rather than
-     a checkbox because it reads as a filter chip, matching the pills it mirrors. -->
+     a checkbox because it reads as a filter chip, matching the pills it mirrors.
+
+     The word is dropped below `sm` and the icon carries it, exactly as the Swipe entry
+     beside it already does: measured at 390px the four controls plus the count ran 49px
+     past the viewport, and this button was the widest of them. -->
 {#snippet evergreenToggle()}
   <button
     type="button"
     aria-pressed={evergreenHidden}
+    aria-label="Hide evergreen postings"
     title="Hide postings that look permanently open"
     onclick={() => filters.setSign('reality', 'likely-evergreen', evergreenHidden ? 'off' : 'exclude')}
-    class="shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-2 text-sm font-medium transition-colors md:py-1 {evergreenHidden
+    class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-sm font-medium transition-colors md:py-1 {evergreenHidden
       ? 'border-primary bg-primary text-primary-foreground'
       : 'border-border bg-card hover:bg-accent'}"
   >
-    Hide evergreen
+    <EyeOff class="size-4 shrink-0" />
+    <span class="hidden sm:inline">Hide evergreen</span>
   </button>
 {/snippet}
 

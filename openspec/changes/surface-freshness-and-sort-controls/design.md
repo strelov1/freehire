@@ -66,6 +66,30 @@ absence of a parameter already expresses exactly.
 `newest`. Rejected: relevance becomes unreachable, so every text search is
 ordered by date and quality drops for the common case.
 
+### The stored ordering is nullable: chosen, or not yet chosen
+
+**Chosen:** `sort: JobSort | null`, with `null` meaning "no choice made" and the
+default applied at read time.
+
+The first draft stored the resolved default (`sort: 'newest'` for a fresh browse
+feed). Code review caught what that costs: `setQuery` spreads the state and
+overwrites only `q`, so nothing distinguishes "the browse feed defaulted to
+newest" from "the caller asked for newest". Typing into the header search box
+therefore produced `q=golang&sort=posted_at` — the primary search path, date-
+ordered, which is the outcome the alternative below is rejected for. The AI filter
+dialog reached the same state by the same route.
+
+The second cost is quieter. `savedSearchQuery` is `filtersToParams(...)`, so
+`sort` is part of the key that decides whether the live filters ARE the saved
+search they came from (`SavedSearches.svelte`, `saveSearchAlert.ts`). A stored
+query `q=go` parses to no ordering and serializes clean, but the typed state
+serialized as `q=go&sort=posted_at` — so the saved search read as dirty, and
+saving again created a duplicate saved search and a duplicate digest
+subscription that would deliver byte-identical mail.
+
+Nullability closes both directions with one rule instead of patching each entry
+point that can change `q`.
+
 ### Collapse `relevance` → `newest` purely, not via an effect
 
 `relevance` has nothing to rank against once the query is cleared. `JobsView`
@@ -86,6 +110,22 @@ This falls out of the option rules rather than restating them: `newest` always,
 visitor on a bare list sees no select — correct, since the feed is already newest
 and there is nothing to choose — and the same visitor with a query sees two.
 
+The option list and the selected value are pure functions in `facetModel.ts`
+(`sortOptionsFor`, `selectedSortFor`), not `$derived` in the view. Review made the
+case: the first draft left them in `JobsView.svelte`, where `web/` has no
+component-test harness, and both of the sort bugs review found were inside that
+untestable region. The same argument that put `effectiveSort` in the model applies
+to every rule that decides what the user sees.
+
+`selectedSortFor` also answers a case the option rules alone do not. A shared
+`?sort=match` link opened signed out resolves to an ordering that is not on offer,
+and a `<select>` whose value matches no option renders **blank** — an empty control
+over a live ordering. It names the ordering the endpoint will actually serve that
+caller instead, which is honest rather than merely non-blank, because the endpoint
+degrades `match` to exactly that. The same shape of bug applies to the freshness
+select, where a day count from a shared link or the AI dialog need not be a preset;
+`freshnessOptions` offers the live bound as a stop of its own.
+
 ### A toggle for evergreen, not a third select
 
 The row already carries the total, two selects and (on the jobs list) the Swipe
@@ -93,6 +133,14 @@ entry; on a narrow phone a third select crowds it out. The `reality` facet's own
 comment (`facets.ts:421`) states the common use is the single exclusion of
 `likely-evergreen`, so a two-state toggle covers it. The full three-class facet
 stays available in the modal, which is where a less common selection belongs.
+
+Measured at a 390px viewport the toggle's WORD was wider than the select it
+replaced, and the row ran 49px past the edge — the sort select clipped off-screen.
+The toggle drops its word below `sm` and the icon carries it, which is what the
+Swipe entry beside it already does and what `ListToolbar`'s own comment argues for.
+`flex-wrap` on that row is the safety net under both: the children are sized by
+their content (a longer count, a translated label, a future fourth control), and a
+row that runs out of width must break rather than clip.
 
 ### `setNow`, not `setSoon`, for the freshness select
 

@@ -27,6 +27,28 @@ export function freshnessLabel(days: number | null): string {
   return `Last ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
+/** The freshness stops a SELECT offers, given the bound currently in force.
+ *
+ *  The presets, plus the current bound itself when it is not one of them. A select can
+ *  only show a value it has an option for: a bound arriving from a shared link, a
+ *  hand-edited URL or the AI filter dialog (which writes whatever day count it read)
+ *  matches nothing, leaves `selectedIndex = -1`, and renders the control BLANK while it
+ *  quietly hides every older posting — the same lie freshnessLabel exists to prevent,
+ *  told by the control instead of by the label.
+ *
+ *  The off-preset stop is inserted in day order so the list still reads oldest→newest,
+ *  and it disappears the moment the user picks a real preset. The modal's slider solves
+ *  the same input differently (it clamps the handle and labels it honestly), because a
+ *  slider has no option list to be absent from. */
+export function freshnessOptions(days: number | null): { days: number | null; label: string }[] {
+  if (days == null || FRESHNESS_PRESETS.some((p) => p.days === days)) return FRESHNESS_PRESETS;
+  const at = FRESHNESS_PRESETS.findIndex((p) => p.days != null && p.days > days);
+  const extra = { days, label: freshnessLabel(days) };
+  return at < 0
+    ? [...FRESHNESS_PRESETS.slice(0, -1), extra, ...FRESHNESS_PRESETS.slice(-1)]
+    : [...FRESHNESS_PRESETS.slice(0, at), extra, ...FRESHNESS_PRESETS.slice(at)];
+}
+
 /** Experience-ceiling presets, least→most with "Any" as the rightmost stop. Each
  *  stop is an upper bound on the years a posting asks for, so the leftmost is a
  *  real `0` — the postings stating no prior experience is required — and only the

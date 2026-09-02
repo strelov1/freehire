@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { EXPERIENCE_PRESETS, experienceLabel, FRESHNESS_PRESETS, freshnessLabel } from './filterControls';
+import {
+  EXPERIENCE_PRESETS,
+  experienceLabel,
+  FRESHNESS_PRESETS,
+  freshnessLabel,
+  freshnessOptions,
+} from './filterControls';
 
 describe('EXPERIENCE_PRESETS', () => {
   it('runs least-to-most experience with Any as the rightmost stop', () => {
@@ -60,5 +66,34 @@ describe('freshnessLabel', () => {
   it('describes an off-preset bound instead of calling it Any', () => {
     expect(freshnessLabel(5)).not.toBe('Any');
     expect(freshnessLabel(5)).toContain('5');
+  });
+});
+
+// A select can only display a value it has an option for. The label above tells the
+// truth about an off-preset bound; without a matching option the CONTROL still renders
+// blank over that live bound, which is the same lie from a different direction.
+describe('freshnessOptions', () => {
+  it('is the presets, unchanged, for an unset or preset bound', () => {
+    expect(freshnessOptions(null)).toBe(FRESHNESS_PRESETS);
+    expect(freshnessOptions(7)).toBe(FRESHNESS_PRESETS);
+  });
+
+  it('offers an off-preset bound so the control can show it', () => {
+    const opts = freshnessOptions(5);
+    const match = opts.find((o) => o.days === 5);
+
+    expect(match).toBeDefined();
+    expect(match?.label).toBe(freshnessLabel(5));
+    expect(opts).toHaveLength(FRESHNESS_PRESETS.length + 1);
+  });
+
+  it('keeps the list in day order with Any still last', () => {
+    const days = freshnessOptions(5).map((o) => o.days);
+
+    expect(days).toEqual([1, 3, 5, 7, 14, 30, 90, null]);
+  });
+
+  it('places a bound past every preset before Any, not after it', () => {
+    expect(freshnessOptions(365).map((o) => o.days)).toEqual([1, 3, 7, 14, 30, 90, 365, null]);
   });
 });

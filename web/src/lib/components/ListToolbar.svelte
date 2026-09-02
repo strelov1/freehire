@@ -37,8 +37,13 @@
 
 <!-- Mobile inline toolbar: total on the left, controls on the right. The Swipe entry is
      icon-only here (labelled for a11y) so the row stays on one line with the count and the
-     sort control; the word would crowd it out on a narrow phone. -->
-<div class="mb-3 flex items-center gap-2 md:hidden">
+     list controls; the word would crowd it out on a narrow phone — and the jobs list's
+     evergreen toggle drops its word for the same reason.
+
+     `flex-wrap` is the safety net under that: the controls are sized by their content
+     (a long count, a translated label, a fourth control) and a row that runs out of width
+     must break onto a second line rather than clip its rightmost control off-screen. -->
+<div class="mb-3 flex flex-wrap items-center gap-2 md:hidden">
   {#if total !== null}
     <span class="shrink-0 whitespace-nowrap text-sm text-muted-foreground" aria-live="polite">
       <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
