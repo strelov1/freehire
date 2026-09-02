@@ -49,20 +49,49 @@ export interface JobFilters {
    *  `0` is a real bound — the jobs stating no prior experience is required — so
    *  every read of this field must test for null, never for falsiness. */
   experienceYearsMax: number | null;
-  /** Feed ordering. Only two values exist: the default freshest-first, and `match`,
-   *  which ranks by how well a vacancy's skills overlap the signed-in caller's
-   *  profile. The server degrades `match` to the default for anyone it cannot serve
-   *  it to — anonymous, no profile, no skills — so this is never gated client-side
-   *  beyond hiding the control. */
+  /** Feed ordering. `relevance` is the engine's own ranking, `newest` is freshest
+   *  first, `match` ranks by how well a vacancy's skills overlap the signed-in
+   *  caller's profile. Which of the first two is the DEFAULT depends on `q` — see
+   *  defaultSortFor. The server degrades `match` to its default for anyone it cannot
+   *  serve it to — anonymous, no profile, no skills — so this is never gated
+   *  client-side beyond hiding the option. */
   sort: JobSort;
 }
 
-/** The feed's ordering vocabulary. Deliberately two values: this is not a general
- *  sort control (the API also accepts created_at and the salary bounds), it is the
- *  profile-match feed plus its default. */
-export type JobSort = 'newest' | 'match';
+/** The feed's ordering vocabulary. Deliberately short: this is not a general sort
+ *  control (the API also accepts created_at and the salary bounds), it is the two
+ *  orderings the endpoint defaults between plus the profile-match feed. */
+export type JobSort = 'relevance' | 'newest' | 'match';
 
-export const DEFAULT_JOB_SORT: JobSort = 'newest';
+/** The ordering the endpoint applies when a request carries no `sort` at all:
+ *  relevance under query text, posting date without it (see `searchSort` in
+ *  internal/api/handler/search.go). The client mirrors it rather than restating it,
+ *  so "the default" and "what the server does with no param" cannot drift — which is
+ *  also why serializing the default means writing nothing. */
+export function defaultSortFor(q: string): JobSort {
+  return q ? 'relevance' : 'newest';
+}
+
+/** The ordering a filter set actually resolves to.
+ *
+ *  `relevance` has nothing to rank against once the query is cleared, so it collapses
+ *  to the browse default. This is a pure function, not an effect that rewrites the
+ *  stored value, because BOTH the sort control and filtersToParams need the answer
+ *  and a second copy of the rule is a second answer. */
+export function effectiveSort(f: JobFilters): JobSort {
+  return f.sort === 'relevance' && !f.q ? 'newest' : f.sort;
+}
+
+/** The `sort` values the search endpoint accepts, keyed by our vocabulary. `relevance`
+ *  is absent on purpose: the endpoint spells it as no `sort` parameter at all, and
+ *  inventing a wire value for it would need a handler branch to mean the same thing —
+ *  so a sort with no entry here is one that serializes to nothing. */
+const SORT_PARAM: Partial<Record<JobSort, string>> = { newest: 'posted_at', match: 'match' };
+
+/** SORT_PARAM inverted, so the two directions cannot drift. */
+const SORT_FROM_PARAM: Record<string, JobSort> = Object.fromEntries(
+  Object.entries(SORT_PARAM).map(([sort, param]) => [param, sort as JobSort]),
+);
 
 /** Splits every raw query value on comma and flattens the result, dropping
  *  empty fragments (a stray comma) — so a repeated key (`skills=go&skills=react`)
@@ -91,7 +120,7 @@ export function emptyFilters(): JobFilters {
     salaryMin: null,
     postedWithinDays: null,
     experienceYearsMax: null,
-    sort: DEFAULT_JOB_SORT,
+    sort: defaultSortFor(''),
   };
 }
 
@@ -115,7 +144,13 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
   if (f.experienceYearsMax != null) p.set('experience_years_max', String(f.experienceYearsMax));
-  if (f.sort !== DEFAULT_JOB_SORT) p.set('sort', f.sort);
+  // The default is written as the ABSENCE of the param, which is how the endpoint
+  // spells both of its own defaults — so a browse feed and a relevance-ranked search
+  // both serialize clean, and `newest` under a query becomes explicit instead of
+  // silently meaning relevance.
+  const sort = effectiveSort(f);
+  const sortParam = SORT_PARAM[sort];
+  if (sortParam && sort !== defaultSortFor(f.q)) p.set('sort', sortParam);
   return p;
 }
 
@@ -172,11 +207,13 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   const rawYears = p.get('experience_years_max')?.trim() ?? '';
   const years = Number(rawYears);
   f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
-  // Anything but the one recognized value reads as the default — including the retired
-  // `sort=cv`. Shared links and saved searches still carry old sort params, and the
-  // same rule the backend applies (ignore, never refuse) has to hold here or the two
-  // would disagree about what a stale link means.
-  f.sort = p.get('sort') === 'match' ? 'match' : DEFAULT_JOB_SORT;
+  // Anything but a recognized value reads as the contextual default — including the
+  // retired `sort=cv` and the endpoint's `created_at`, which the browse UI does not
+  // offer. Shared links and saved searches still carry old sort params, and the same
+  // rule the backend applies (ignore, never refuse) has to hold here or the two would
+  // disagree about what a stale link means. Reads `f.q`, so it must follow the line
+  // that sets it.
+  f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? defaultSortFor(f.q);
   return f;
 }
 

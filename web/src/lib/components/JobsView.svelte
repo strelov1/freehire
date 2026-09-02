@@ -21,10 +21,13 @@
   import {
     FilterStore,
     filtersToParams,
+    effectiveSort,
+    signOf,
     type JobSort,
     activeFilterCount,
     generalCountsCoverRole,
   } from '$lib/filters';
+  import { FRESHNESS_PRESETS, freshnessLabel } from '$lib/filterControls';
   import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
   import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '$lib/geoScope';
   import {
@@ -232,12 +235,34 @@
   // runtime flag. It ships dark: the API accepts ?sort=match as soon as the binary is
   // out, but it ranks against skill vectors that only exist once a full index rebuild
   // has written them — before that the sort returns a near-empty feed, which reads as
-  // broken rather than new. The flag is what reveals the control once the rebuild has
+  // broken rather than new. The flag is what reveals the option once the rebuild has
   // landed, and flipping it is an env change plus a restart, not a redeploy.
   //
   // The URL param stays honoured either way, which is deliberate: it is how the sort
   // gets verified on production before anyone can click it.
-  const sortControlVisible = $derived(matchFilterAvailable && matchSortEnabled(env));
+  const matchSortAvailable = $derived(matchFilterAvailable && matchSortEnabled(env));
+
+  // The orderings this caller can actually choose between, in display order.
+  //
+  // `relevance` needs query text to rank against; `match` needs the profile and the
+  // flag above; `newest` always applies. This gate is per OPTION, not per control —
+  // gating the whole select on the match precondition (as it was) took `newest` down
+  // with it, so a signed-out visitor searching by text had no way to reach the
+  // freshest-first ordering the endpoint has always served.
+  const sortOptions: { value: JobSort; label: string }[] = $derived([
+    ...(filters.value.q ? [{ value: 'relevance' as JobSort, label: 'Relevance' }] : []),
+    { value: 'newest', label: 'Newest' },
+    ...(matchSortAvailable ? [{ value: 'match' as JobSort, label: 'Best match' }] : []),
+  ]);
+  // A one-option select is a label wearing a control's clothes: there is nothing to
+  // choose, and the feed already IS that ordering.
+  const sortSelectVisible = $derived(sortOptions.length > 1);
+
+  // `likely-evergreen` is the reality class the facet exists to exclude (see REALITY in
+  // $lib/facets), so the toggle above the list writes exactly that one sign. The full
+  // three-class facet stays in the modal for the rarer selections, and releasing this
+  // clears only this value — an `include` on another class is not ours to drop.
+  const evergreenHidden = $derived(signOf(filters.facet('reality'), 'likely-evergreen') === 'exclude');
 
   let modalOpen = $state(false);
   let started = false;
@@ -699,26 +724,72 @@
   }
 </script>
 
-<!-- The feed's ordering control, handed to ListToolbar so it sits in the shared
-     toolbar (mobile) / above the list (desktop) — same shape as the company catalog's
-     sortSelect. Rendered only under `matchFilterAvailable`: "Best match" needs profile
-     skills to rank against, and an option that silently does nothing is worse than an
-     absent one. The URL param is NOT cleared when it disappears — the server degrades
-     the ordering for a caller it cannot serve, so a shared match link stays intact and
-     starts working the moment its opener signs in. -->
+<!-- The list's own controls, handed to ListToolbar so they sit in the shared toolbar
+     (mobile) / above the list (desktop) — same shape as the company catalog's
+     sortSelect. Each is reachable without opening the filter modal, which is the whole
+     point: the endpoint has always served these orderings and bounds, and every one of
+     them used to require either a profile, a modal, or a hand-edited URL.
+
+     The URL params are NOT cleared when a control disappears — the server degrades an
+     ordering it cannot serve rather than refusing it, so a shared match link stays
+     intact and starts working the moment its opener signs in. -->
 {#snippet sortSelect()}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">Sort</span>
     <select
       aria-label="Sort jobs"
       class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
-      value={filters.value.sort}
+      value={effectiveSort(filters.value)}
       onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
     >
-      <option value="newest">Newest</option>
-      <option value="match">Best match</option>
+      {#each sortOptions as opt (opt.value)}
+        <option value={opt.value}>{opt.label}</option>
+      {/each}
     </select>
   </label>
+{/snippet}
+
+<!-- The freshness bound, the same one the modal's slider drags. This is the control the
+     complaint that prompted it asked for: years-old postings in the feed, with the only
+     way to bound them buried in the modal's third section. -->
+{#snippet postedSelect()}
+  <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+    <span class="hidden sm:inline">Posted</span>
+    <select
+      aria-label="Posted within"
+      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+      value={String(filters.value.postedWithinDays ?? '')}
+      onchange={(e) => filters.pickPostedWithinDays(Number(e.currentTarget.value) || null)}
+    >
+      {#each FRESHNESS_PRESETS as preset (preset.label)}
+        <option value={String(preset.days ?? '')}>{freshnessLabel(preset.days)}</option>
+      {/each}
+    </select>
+  </label>
+{/snippet}
+
+<!-- One-click access to the reality facet's common exclusion. `aria-pressed` rather than
+     a checkbox because it reads as a filter chip, matching the pills it mirrors. -->
+{#snippet evergreenToggle()}
+  <button
+    type="button"
+    aria-pressed={evergreenHidden}
+    title="Hide postings that look permanently open"
+    onclick={() => filters.setSign('reality', 'likely-evergreen', evergreenHidden ? 'off' : 'exclude')}
+    class="shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-2 text-sm font-medium transition-colors md:py-1 {evergreenHidden
+      ? 'border-primary bg-primary text-primary-foreground'
+      : 'border-border bg-card hover:bg-accent'}"
+  >
+    Hide evergreen
+  </button>
+{/snippet}
+
+<!-- The three above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
+     where the row sits and how it collapses on a phone. -->
+{#snippet listControls()}
+  {@render evergreenToggle()}
+  {@render postedSelect()}
+  {#if sortSelectVisible}{@render sortSelect()}{/if}
 {/snippet}
 
 <div class="flex gap-6">
@@ -750,7 +821,7 @@
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
-      sortControl={sortControlVisible ? sortSelect : undefined}
+      controls={listControls}
     />
 
     <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;

@@ -178,6 +178,16 @@ export const RAIL: RailEntry[] = [
   // The two params stay independent, as they already were.
   { key: 'category', label: 'Role', section: 'ROLE', kind: 'category' },
   { key: 'experience', label: 'Experience', section: 'ROLE', kind: 'experience' },
+  // How old a posting is, and whether it looks permanently open, both describe the
+  // POSTING rather than anything asked of the candidate — so neither belongs under
+  // REQUIREMENTS & ELIGIBILITY, where `posted` sat as the rail's last row. They sit
+  // beside Experience, the other "how does this posting stand relative to me" question.
+  //
+  // `reality` had no rail entry at all until this: declared in FACETS, filterable on the
+  // index, and reachable only by hand-editing the URL. filterSections.test.ts now asserts
+  // the cover so the next facet cannot go the same way.
+  { key: 'posted', label: 'Posted', section: 'ROLE', kind: 'posted' },
+  { key: 'reality', label: 'Posting reality', section: 'ROLE', kind: 'facet', facetParam: 'reality' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },
@@ -186,5 +196,4 @@ export const RAIL: RailEntry[] = [
   { key: 'salary', label: 'Salary', section: 'PAY & BENEFITS', kind: 'salary' },
   { key: 'language', label: 'Language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'language' },
   { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'relocation' },
-  { key: 'posted', label: 'Posted', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'posted' },
 ];

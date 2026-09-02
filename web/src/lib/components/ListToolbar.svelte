@@ -15,21 +15,23 @@
   // where a swipe deck exists (the standalone jobs list). `showDesktopTotal` is false when
   // the desktop layout already surfaces the total elsewhere (the company page's sidebar
   // stat), so the above-list line isn't shown twice; the mobile toolbar total is unaffected.
-  // `sortControl` is an optional leading control (the jobs feed's sort selector) rendered
-  // in the mobile toolbar and beside the desktop total; it shows even when `total` is null
-  // so the control stays reachable while the list is empty or standing in a prompt.
+  // `controls` is an optional slot for the list's own controls — however many the view
+  // passes (the jobs feed's sort select, freshness select and evergreen toggle; the
+  // company catalog's sort select) — rendered in the mobile toolbar and beside the
+  // desktop total. It shows even when `total` is null so the controls stay reachable
+  // while the list is empty or standing in a prompt.
   let {
     total,
     unit,
     onSwipe,
     showDesktopTotal = true,
-    sortControl,
+    controls,
   }: {
     total: number | null;
     unit: string;
     onSwipe?: () => void;
     showDesktopTotal?: boolean;
-    sortControl?: Snippet;
+    controls?: Snippet;
   } = $props();
 </script>
 
@@ -44,7 +46,7 @@
     </span>
   {/if}
   <div class="ml-auto flex items-center gap-2">
-    {@render sortControl?.()}
+    {@render controls?.()}
     {#if onSwipe}
       <button
         type="button"
@@ -59,17 +61,19 @@
   </div>
 </div>
 
-<!-- Desktop: the total (and any sort control) sit top-right above the list (filters
-     live in the sidebar). Renders when there's a total OR a sort control to show, so
-     the control stays visible on an empty/prompt list where the total is null. -->
-{#if showDesktopTotal && (total !== null || sortControl)}
+<!-- Desktop: the total (and any list controls) sit top-right above the list (filters
+     live in the sidebar). The two are gated INDEPENDENTLY: the total on `showDesktopTotal`
+     (a view that renders its own total elsewhere suppresses this one), the controls on
+     their own presence. Gating both on `showDesktopTotal` is what hid the controls
+     entirely on a company page, where the sidebar carries the count. -->
+{#if (showDesktopTotal && total !== null) || controls}
   <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
-    {#if total !== null}
+    {#if showDesktopTotal && total !== null}
       <span class="text-sm text-muted-foreground" aria-live="polite">
         <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
         {unit}
       </span>
     {/if}
-    {@render sortControl?.()}
+    {@render controls?.()}
   </div>
 {/if}

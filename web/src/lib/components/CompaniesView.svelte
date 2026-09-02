@@ -162,7 +162,7 @@
     <ListToolbar
       total={companies.status === 'ready' && companies.items.length > 0 ? companies.total : null}
       unit={companies.total === 1 ? 'company' : 'companies'}
-      sortControl={sortSelect}
+      controls={sortSelect}
     />
     {#if companies.status === 'loading'}
       <States state="loading" />

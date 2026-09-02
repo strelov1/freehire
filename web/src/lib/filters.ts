@@ -89,6 +89,15 @@ export class FilterStore {
     this.#url.setSoon({ ...this.#url.value, postedWithinDays: n });
   }
 
+  /** The same freshness bound chosen from a select rather than dragged on the modal's
+   *  slider. setNow, not setSoon: a select commits one value, so there are no
+   *  intermediate stops to debounce away, and the list must reorder on the choice —
+   *  the same reasoning as setSort. Both setters write one field, so the slider, this
+   *  select and the filter summary can never disagree about the value. */
+  pickPostedWithinDays(n: number | null) {
+    this.#url.setNow({ ...this.#url.value, postedWithinDays: n });
+  }
+
   setExperienceYearsMax(n: number | null) {
     this.#url.setSoon({ ...this.#url.value, experienceYearsMax: n });
   }

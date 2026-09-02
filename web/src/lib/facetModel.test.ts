@@ -16,11 +16,18 @@ import {
   facetAdd,
   facetRemove,
   filtersWithRole,
-  DEFAULT_JOB_SORT,
+  defaultSortFor,
+  effectiveSort,
   type FacetState,
   type JobFilters,
+  type JobSort,
 } from './facetModel';
 import { must } from './utils';
+
+// A JobFilters carrying a query and an ordering — the pair the sort default depends on.
+function withQuery(q: string, sort: JobSort): JobFilters {
+  return { ...emptyFilters(), q, sort };
+}
 
 // A JobFilters seeded with one facet's state, for serialization tests.
 function withSkills(st: Partial<FacetState>): JobFilters {
@@ -251,17 +258,42 @@ describe('sign transitions (pure)', () => {
   });
 });
 
-// `sort` came back for the profile-match feed, but only as a two-value vocabulary:
-// the default freshest-first ordering and `match`. Every other value — including the
-// retired `sort=cv` — reads as the default rather than erroring, because shared links
-// and saved searches still carry old ones.
+// The sort vocabulary is `relevance` / `newest` / `match`, and its DEFAULT depends on
+// whether there is query text — mirroring the endpoint, which orders by relevance under
+// a query and by posting date without one (internal/api/handler/search.go). Serializing
+// the default therefore means writing nothing: the absence of `sort` is exactly how the
+// backend already spells both defaults. Every unrecognised value — including the retired
+// `sort=cv` — reads as that default rather than erroring, because shared links and saved
+// searches still carry old ones.
 describe('sort', () => {
   it('ignores a legacy sort=cv param — falls back to the default feed, not an error', () => {
     expect(filtersFromParams(new URLSearchParams('sort=cv'))).toEqual(filtersFromParams(new URLSearchParams('')));
   });
 
-  it('ignores an unknown sort value', () => {
-    expect(filtersFromParams(new URLSearchParams('sort=bogus')).sort).toBe(DEFAULT_JOB_SORT);
+  it('reads an unknown sort value as the contextual default', () => {
+    expect(filtersFromParams(new URLSearchParams('sort=bogus')).sort).toBe('newest');
+    expect(filtersFromParams(new URLSearchParams('q=go&sort=bogus')).sort).toBe('relevance');
+  });
+
+  it('defaults to newest while browsing and to relevance under a query', () => {
+    expect(defaultSortFor('')).toBe('newest');
+    expect(defaultSortFor('go')).toBe('relevance');
+    expect(filtersFromParams(new URLSearchParams('')).sort).toBe('newest');
+    expect(filtersFromParams(new URLSearchParams('q=go')).sort).toBe('relevance');
+  });
+
+  it('writes nothing for either contextual default', () => {
+    expect(filtersToParams(emptyFilters()).get('sort')).toBeNull();
+    expect(filtersToParams(withQuery('go', 'relevance')).get('sort')).toBeNull();
+    expect(new URLSearchParams(savedSearchQuery(withSkills({ include: ['go'] }))).get('sort')).toBeNull();
+  });
+
+  // The bug this replaces: `newest` was the unconditional default, so it was never
+  // serialized, so a text search carried no `sort` and the server ranked by relevance
+  // while the control still read "Newest".
+  it('sends newest explicitly once it stops being the default', () => {
+    expect(filtersToParams(withQuery('go', 'newest')).get('sort')).toBe('posted_at');
+    expect(filtersFromParams(new URLSearchParams('q=go&sort=posted_at')).sort).toBe('newest');
   });
 
   it('round-trips the match sort', () => {
@@ -282,9 +314,16 @@ describe('sort', () => {
     expect(filtersToParams(f).get('sort')).toBe('match');
   });
 
-  it('never serializes the default sort', () => {
-    expect(filtersToParams(emptyFilters()).get('sort')).toBeNull();
-    expect(new URLSearchParams(savedSearchQuery(withSkills({ include: ['go'] }))).get('sort')).toBeNull();
+  // Relevance has nothing to rank against once the query goes. The collapse is a pure
+  // function rather than an effect so the control and the serializer read one rule.
+  it('collapses relevance to newest when the query is empty', () => {
+    expect(effectiveSort(withQuery('', 'relevance'))).toBe('newest');
+    expect(effectiveSort(withQuery('go', 'relevance'))).toBe('relevance');
+    expect(effectiveSort(withQuery('', 'match'))).toBe('match');
+  });
+
+  it('serializes a stranded relevance selection as the browse default', () => {
+    expect(filtersToParams(withQuery('', 'relevance')).get('sort')).toBeNull();
   });
 });
 
