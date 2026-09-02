@@ -872,3 +872,15 @@ gorilla	Gorilla is a toolkit of libraries for the Go programming language used t
 sentence-transformers	Sentence Transformers is a Python framework that produces embeddings for text and images. It is used to measure semantic similarity for tasks like semantic search, clustering, and information retrieval.
 mdm	MDM is an acronym postings use two ways: master data management, the practice of keeping one authoritative copy of core business records such as customers and products, and mobile device management, administering and securing the phones and laptops a company issues.
 evm	EVM is an acronym postings use two ways: the Ethereum Virtual Machine, the runtime that executes smart contracts on Ethereum and the chains compatible with it, and earned value management, a project-control technique that measures progress by comparing work completed against budget and schedule.
+davinci-resolve	DaVinci Resolve is a video post-production application combining editing, colour grading, visual effects and audio work in one program. It is the industry standard for colour grading in film and television.
+final-cut-pro	Final Cut Pro is Apple's professional video editing application for macOS, used for cutting, colour correcting and delivering finished video.
+capcut	CapCut is a video editing application built for short-form vertical video, widely used to produce social and user-generated content.
+video-editing	Video editing is the craft of assembling recorded footage into a finished piece — cutting, sequencing, timing and mixing in sound and titles.
+color-grading	Colour grading is the post-production step that sets the colour and tone of finished video, both to correct the footage and to give it a deliberate look.
+storyboarding	Storyboarding is the practice of planning a video, animation or game sequence as a series of drawn frames before anything is shot or built.
+cinema-4d	Cinema 4D is a 3D modelling, animation and rendering application from Maxon, used heavily for motion graphics and broadcast design.
+zbrush	ZBrush is a digital sculpting application used to model high-detail 3D characters and organic shapes for games, film and 3D printing.
+substance-painter	Substance 3D Painter is a texture painting application that paints materials directly onto 3D models, used to finish game and film assets.
+substance-designer	Substance 3D Designer is a node-based application for authoring procedural materials and textures, which are then applied to 3D models in tools such as Substance 3D Painter.
+houdini	Houdini is a procedural 3D application from SideFX, used for visual effects work such as simulations of fire, water, destruction and crowds.
+godot	Godot is an open-source game engine for building 2D and 3D games, scripted in its own GDScript language or in C#.
