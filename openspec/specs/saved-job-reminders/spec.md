@@ -1,81 +1,71 @@
 # saved-job-reminders Specification
 
 ## Purpose
-TBD - created by archiving change add-saved-job-reminders. Update Purpose after archive.
+
+The one-shot nudge a saved job earns: come back before the vacancy goes stale. Every
+save schedules at most one, at a fixed delay, gated by the shared
+`notification-settings` rule; applying, unsaving, or the job closing cancels it before
+it fires.
+
 ## Requirements
-### Requirement: Account-level reminder default rule
-
-The system SHALL maintain a per-user reminder default rule with an enabled flag, a
-default delay (in days), and a set of delivery channels. The rule governs whether and
-how reminders are scheduled for newly saved jobs. The default rule SHALL be disabled
-until the user opts in, so no reminders are created for users who never touch the
-setting.
-
-#### Scenario: User enables reminders with a default delay
-
-- **WHEN** an authenticated user sets their reminder default rule to enabled with a
-  delay of 3 days and channel `telegram`
-- **THEN** the system persists the rule and returns it
-- **AND** subsequent saves schedule a reminder 3 days out over Telegram
-
-#### Scenario: Feature is off by default
-
-- **WHEN** a user who has never configured reminders saves a job
-- **THEN** no reminder is scheduled
-
-#### Scenario: User disables reminders globally
-
-- **WHEN** a user with the rule enabled sets the rule to disabled
-- **THEN** the default rule no longer schedules reminders for new saves
-- **AND** existing pending reminders are left intact unless individually cancelled
 
 ### Requirement: Scheduling a reminder on save
 
-When a user saves a job, the system SHALL schedule at most one pending reminder for that
-`(user, job)` pair, using the account default delay unless the save request supplies a
-per-job override. A per-job override MAY set a custom delay or opt out of a reminder for
-that job entirely. An explicit delay override SHALL take effect even when the account rule
-is disabled — a per-save "remind me" is a self-standing opt-in — falling back to the email
-channel when the rule has none configured. Without an override, a reminder is scheduled
-only when the account rule is enabled. Reminders SHALL only be scheduled for jobs that are
-saved and not yet applied.
+When a user saves a job, the system SHALL schedule at most one pending reminder for
+that `(user, job)` pair, using the fixed account default delay. A reminder is
+scheduled only when the shared `notification-settings` rule is enabled for that
+user. Reminders SHALL only be scheduled for jobs that are saved and not yet applied.
 
-#### Scenario: Save uses the account default
+The scheduled fire time SHALL be rounded forward from the default delay to the
+account's daily notification hour, so that reminders scheduled on the same day for
+the same account become due in the same worker pass and can be delivered as one
+message. The notification hour is `notification_settings.digest_time` interpreted in
+the account's timezone; an account with no configured digest time SHALL use 09:00,
+and an account with no configured timezone SHALL be treated as UTC. Rounding SHALL
+only move the fire time forward, never earlier than the default delay.
 
-- **WHEN** a user with an enabled 3-day default saves a job without an override
-- **THEN** a pending reminder is created with a fire time 3 days from the save
+#### Scenario: Save schedules at the fixed default delay, rounded to the notification hour
 
-#### Scenario: Save overrides the delay for one job
+- **WHEN** a user with notifications enabled and no configured digest time saves a job
+- **THEN** a pending reminder is created whose fire time is the first 09:00 in the
+  account's timezone at or after the fixed default delay from the save
 
-- **WHEN** the save request specifies a "tomorrow" override
-- **THEN** the reminder fire time is 1 day from the save, regardless of the account default
+#### Scenario: Two saves on the same day become due together
 
-#### Scenario: Save opts out for one job
+- **WHEN** the same user saves two jobs several hours apart on one day
+- **THEN** both pending reminders carry the same fire time
 
-- **WHEN** the save request specifies "don't remind"
-- **THEN** no reminder is created for that job even though the account default is enabled
+#### Scenario: Configured digest time is the rounding target
 
-#### Scenario: Explicit override schedules while the rule is disabled
+- **WHEN** a user whose digest time is 18:00 and whose timezone is `Europe/Berlin`
+  saves a job
+- **THEN** the reminder's fire time is the first 18:00 Berlin time at or after the
+  fixed default delay from the save
 
-- **WHEN** a user whose reminder rule is disabled saves a job with a "tomorrow" override
-- **THEN** a pending reminder is created 1 day out, delivered over the email channel
-- **AND** an ordinary save (no override) by that same user schedules nothing
+#### Scenario: Notifications disabled means no reminder
 
-#### Scenario: Re-saving replaces the pending reminder
-
-- **WHEN** a job that already has a pending reminder is saved again with a new override
-- **THEN** the pending reminder is replaced by one reflecting the new choice, and no
-  duplicate reminder exists for the pair
+- **WHEN** a user with notifications disabled saves a job
+- **THEN** no reminder is created
 
 ### Requirement: One-shot delivery
 
 A reminder SHALL fire exactly once at or after its scheduled fire time and then be marked
-delivered. A due reminder SHALL be delivered as a message over each channel in the rule's
-channel set for which the user has a usable destination, reusing the existing notification
-delivery engine. Delivery SHALL be idempotent under worker retries: a reminder already
+delivered. Due reminders SHALL be delivered grouped by user AND by the channel set
+snapshotted on the reminder: all of one account's due, still-actionable reminders in a
+pass that share a channel set form one batch, and that batch SHALL be sent as a single
+message over each of those channels for which the user has a usable destination, reusing
+the existing notification delivery engine. One account MAY therefore produce more than one
+batch in a pass. Delivery SHALL be idempotent under worker retries: a reminder already
 marked delivered is never sent again. If the account's local time falls inside its
-configured quiet-hours window when a reminder becomes due, delivery SHALL be deferred to a
-later worker pass rather than sent or dropped.
+configured quiet-hours window when its reminders become due, delivery of that account's
+batches SHALL be deferred to a later worker pass rather than sent or dropped.
+
+#### Scenario: Due reminders for one user arrive as one message
+
+- **WHEN** the reminder worker runs and three of one account's reminders are due
+- **THEN** the user receives exactly one reminder message per configured channel with a
+  usable destination, listing all three jobs
+- **AND** all three reminders are marked delivered
 
 #### Scenario: Due reminder is delivered once
 
@@ -83,6 +73,12 @@ later worker pass rather than sent or dropped.
 - **THEN** the user receives one reminder message per configured channel with a usable
   destination
 - **AND** the reminder is marked delivered
+
+#### Scenario: Reminders for different users are not merged
+
+- **WHEN** the worker runs and two different accounts each have due reminders
+- **THEN** each account receives its own message and neither message lists the other
+  account's jobs
 
 #### Scenario: Worker re-run does not resend
 
@@ -107,6 +103,13 @@ later worker pass rather than sent or dropped.
 - **THEN** delivery is deferred (the claim is released, not marked
   delivered or failed) and retried on a later pass
 
+#### Scenario: A cancelled reminder leaves the batch
+
+- **WHEN** one of an account's due reminders is no longer actionable (its job closed,
+  or the user applied or unsaved) while the others still are
+- **THEN** that reminder is cancelled and excluded from the message, and the remaining
+  reminders are still delivered as one message
+
 ### Requirement: Automatic cancellation
 
 The system SHALL cancel a pending reminder before it fires when the underlying intent no
@@ -128,24 +131,4 @@ when the job closes. A cancelled reminder SHALL NOT be delivered.
 - **WHEN** a job with pending reminders is closed
 - **THEN** those reminders are cancelled and no reminder is sent for the dead job
 
-### Requirement: Per-job reminder management
-
-The system SHALL expose, for each saved job, its pending reminder state (fire time or
-none) and allow the user to reschedule the reminder to a new delay or cancel it, without
-unsaving the job.
-
-#### Scenario: Reschedule a pending reminder
-
-- **WHEN** a user reschedules a saved job's reminder to a new delay
-- **THEN** the pending reminder's fire time is updated accordingly
-
-#### Scenario: Turn off a single reminder
-
-- **WHEN** a user turns off the reminder for one saved job
-- **THEN** that job's pending reminder is cancelled while the job stays saved
-
-#### Scenario: Saved-jobs listing exposes reminder state
-
-- **WHEN** a user views their saved jobs
-- **THEN** each saved job shows whether a reminder is pending and, if so, when it fires
 
