@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"golang.org/x/net/html"
-	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/net/html/charset"
 )
 
 // hrmdirect adapts HRM Direct career sites. The board is the tenant subdomain, so the career
@@ -19,8 +19,16 @@ import (
 // filter form above an empty result ("Select options from the menus above and click Search"),
 // and "search=true" with no department/city/state is the site's own "all openings" query: it
 // server-renders the WHOLE board in one page, with no pagination control anywhere (measured
-// live over 918 tenants — the largest answered 1,480 postings in an 853 KB page, and no tenant
-// carried a next-page link). So the listing is a single request and there is no paged walk.
+// live over 918 tenants — the largest board answered 1,480 postings, the heaviest page ran to
+// 880 KB, and no tenant carried a next-page link). So the listing is a single request and there
+// is no paged walk.
+//
+// The listing's latency is erratic and that is the platform, not a rate limit. Sequential
+// fetches of the same 50 KB page, spaced and unloaded, measured 0.7-0.9s for most of a run of
+// fifteen and 5.8s, 22.7s, 46.8s and 50.9s for the rest — the query behind it is a database
+// search the origin sometimes stalls on. So a slice of boards will trip the shared client's
+// 15s timeout on any given crawl and land in board_health; a following crawl clears it, and
+// nothing here is paced, because spacing requests does not make a stalled origin answer.
 //
 // A posting is keyed by the PAIR (req, req_loc), never by req alone: one requisition open in
 // several locations is listed once per location, each row linking its own page, so req alone
@@ -34,9 +42,15 @@ type hrmdirect struct {
 }
 
 // hrmdirectHTTP is the transport this adapter needs. The two halves of a crawl are read
-// differently on purpose: the listing is parsed as a DOM because the only thing taken from it
-// is hrefs, while a job page is read as RAW BYTES so its character set can be settled before
-// parsing (see hrmdirectUTF8).
+// differently on purpose. A job page is read as RAW BYTES so its character set can be settled
+// before parsing (see detail); the listing goes through the ordinary DOM path, so its
+// windows-1252 punctuation does reach it as U+FFFD. That is deliberate. The listing supplies
+// hrefs, which are ASCII, and the row titles — and a title from here is never stored, only
+// weighed by the catalogue's non-technical dictionary on a liveness refresh, which matches
+// whole words and cannot be swayed by a replaced apostrophe. Reading the listing as bytes
+// would instead put GetText's silently-truncating 2 MiB cap over a page already measured at
+// 880 KB, and a truncated listing on a per-board-swept provider closes the postings it never
+// reached.
 type hrmdirectHTTP interface {
 	HTMLGetter
 	TextGetter
@@ -77,20 +91,29 @@ func (s hrmdirect) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 	}
 	return fetchDetails(postings, defaultDetailWorkers, func(p hrmdirectPosting) (Job, bool) {
 		if seen(p.externalID) {
-			// Identity only: re-upserting a known posting content-less would wipe the
-			// description and the facets derived from it, so the pipeline routes a
-			// SeenRefresh to a liveness touch instead of a write.
-			return Job{ExternalID: p.externalID, URL: p.url, Company: e.Company, SeenRefresh: true}, true
+			// What the listing itself states, and nothing more: the pipeline resolves the
+			// stored row from the identity and must not re-upsert content, which would wipe
+			// the description and the facets derived from it. The title travels because a
+			// refresh faces the catalogue filter, and that is how a stored row ages out when
+			// the non-technical dictionary later grows to cover its title.
+			return Job{
+				ExternalID:  p.externalID,
+				URL:         p.url,
+				Title:       p.title,
+				Company:     e.Company,
+				SeenRefresh: true,
+			}, true
 		}
 		return s.detail(ctx, e, p)
 	}), nil
 }
 
-// hrmdirectPosting is one row of the listing: the identity of a posting and the page that
-// holds its body. Nothing else survives the listing — the row's own department/city/state
-// columns are exactly what the job page restates, so they are read there instead.
+// hrmdirectPosting is one row of the listing: a posting's identity, the title the row states,
+// and the page that holds its body. Nothing else survives the listing — the row's own
+// department/city/state columns are exactly what the job page restates, so they are read there.
 type hrmdirectPosting struct {
 	externalID string
+	title      string
 	url        string
 }
 
@@ -107,17 +130,26 @@ func (s hrmdirect) list(ctx context.Context, e CompanyEntry) ([]hrmdirectPosting
 		return nil, fmt.Errorf("hrmdirect: listing %s: %w", e.Board, err)
 	}
 
+	return hrmdirectPostings(base, root), nil
+}
+
+// hrmdirectPostings reads the listing's posting rows, first-seen order, one per (req, req_loc).
+// It walks the anchors itself rather than calling jobLinks because the row's link TEXT is the
+// posting title, which the liveness refresh carries (see FetchNew).
+func hrmdirectPostings(base *url.URL, root *html.Node) []hrmdirectPosting {
 	var out []hrmdirectPosting
 	emitted := map[string]bool{}
-	isJob := func(href string) bool { _, _, ok := hrmdirectRef(href); return ok }
-	for _, href := range jobLinks(base, root, isJob) {
-		req, loc, ok := hrmdirectRef(href)
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "a" {
+			return true
+		}
+		req, loc, ok := hrmdirectRef(attr(n, "href"))
 		if !ok {
-			continue
+			return true
 		}
 		id := req + "-" + loc
 		if emitted[id] {
-			continue
+			return true
 		}
 		emitted[id] = true
 		// The stored URL is rebuilt from the ids rather than taken from the href: the site
@@ -126,10 +158,12 @@ func (s hrmdirect) list(ctx context.Context, e CompanyEntry) ([]hrmdirectPosting
 		// the content hash.
 		out = append(out, hrmdirectPosting{
 			externalID: id,
+			title:      textContent(n),
 			url:        fmt.Sprintf("%sjob-opening.php?req=%s&req_loc=%s", base, req, loc),
 		})
-	}
-	return out, nil
+		return true
+	})
+	return out
 }
 
 // detail fetches one job page and maps it to a Job, returning ok=false when the page fetch
@@ -139,7 +173,19 @@ func (s hrmdirect) detail(ctx context.Context, e CompanyEntry, p hrmdirectPostin
 	if err != nil {
 		return Job{}, false
 	}
-	root, err := html.Parse(strings.NewReader(hrmdirectUTF8(body)))
+	// The pages declare no character set — not in the Content-Type header, not in a meta
+	// element — and are served as windows-1252, which is exactly the case charset.NewReader
+	// settles the way the HTML standard does: a declared charset wins, an undeclared body
+	// whose first kilobyte carries valid non-ASCII UTF-8 is taken as UTF-8, and everything
+	// else falls back to windows-1252. Handing the raw bytes to the parser instead turns
+	// every smart quote and em dash a posting was pasted in with into U+FFFD, and most
+	// postings are pasted in from a word processor. Measured over 67 tenants: 56 windows-1252
+	// bodies, 11 pure ASCII, and not one page the fallback would decode wrongly.
+	decoded, err := charset.NewReader(strings.NewReader(body), "")
+	if err != nil {
+		return Job{}, false
+	}
+	root, err := html.Parse(decoded)
 	if err != nil {
 		return Job{}, false
 	}
@@ -171,19 +217,28 @@ func (s hrmdirect) detail(ctx context.Context, e CompanyEntry, p hrmdirectPostin
 	}, true
 }
 
-// hrmdirectRefPattern captures a posting's (req, req_loc) pair from a job link. Both are
-// required: a link carrying only req is not a posting permalink, and taking req alone would
-// merge a requisition's separate locations onto one dedup key.
-var hrmdirectRefPattern = regexp.MustCompile(`job-opening\.php\?req=(\d+)&req_loc=(\d+)`)
+// hrmdirectPostingID matches one of the two ids in a posting link. They are numeric, and
+// requiring that is what keeps a link with an empty or non-numeric parameter from becoming a
+// board entry with a URL nothing answers.
+var hrmdirectPostingID = regexp.MustCompile(`^\d+$`)
 
 // hrmdirectRef reads a job link's (req, req_loc) pair, reporting ok=false when the link is not
 // a posting permalink (the listing also links the filter form and the site's own navigation).
-func hrmdirectRef(u string) (req, loc string, ok bool) {
-	m := hrmdirectRefPattern.FindStringSubmatch(u)
-	if m == nil {
+// Both ids are required: a link carrying only req is the filter form's, and keying on req alone
+// would merge a requisition's separate locations onto one dedup key. The query is decoded
+// rather than pattern-matched, so a link that ever orders its parameters differently still
+// resolves.
+func hrmdirectRef(href string) (req, loc string, ok bool) {
+	u, err := url.Parse(href)
+	if err != nil || path.Base(u.Path) != "job-opening.php" {
 		return "", "", false
 	}
-	return m[1], m[2], true
+	q := u.Query()
+	req, loc = q.Get("req"), q.Get("req_loc")
+	if !hrmdirectPostingID.MatchString(req) || !hrmdirectPostingID.MatchString(loc) {
+		return "", "", false
+	}
+	return req, loc, true
 }
 
 // hrmdirectField returns the value of the job page's label/value row carrying the given label
@@ -229,23 +284,4 @@ func hrmdirectLocation(raw string) string {
 		}
 	}
 	return strings.Join(parts, ", ")
-}
-
-// hrmdirectUTF8 decodes a job page's raw body into UTF-8. HRM Direct declares no character set
-// anywhere — not in the Content-Type header, not in a meta element — and serves windows-1252,
-// which no HTML parser can guess from a page whose first kilobyte is plain ASCII. Parsing those
-// bytes as UTF-8 turns every smart quote, em dash and ellipsis the posting was pasted in with
-// into U+FFFD, and most postings are pasted in from a word processor.
-//
-// A body that already IS valid UTF-8 is returned untouched, so a tenant serving UTF-8 (and the
-// ASCII-only majority) is never re-decoded.
-func hrmdirectUTF8(body string) string {
-	if utf8.ValidString(body) {
-		return body
-	}
-	decoded, err := charmap.Windows1252.NewDecoder().String(body)
-	if err != nil {
-		return body // the table maps all 256 bytes, so this is unreachable; keep the raw body
-	}
-	return decoded
 }

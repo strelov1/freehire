@@ -81,9 +81,14 @@ func TestHRMDirectRef(t *testing.T) {
 		{"job-opening.php?req=100&req_loc=11&&#job", "100", "11", true},
 		{"https://acme.hrmdirect.com/employment/job-opening.php?req=3798827&req_loc=1447910",
 			"3798827", "1447910", true},
+		// The query is decoded, not pattern-matched, so parameter order and anything sitting
+		// between the two ids are irrelevant.
+		{"job-opening.php?req_loc=11&src=email&req=100", "100", "11", true},
 		// req without req_loc is not a permalink: one requisition spans several locations,
 		// and keying on req alone would collapse them onto one dedup key.
 		{"job-opening.php?req=100", "", "", false},
+		{"job-opening.php?req=100&req_loc=", "", "", false},
+		{"job-opening.php?req=abc&req_loc=11", "", "", false},
 		{"job-openings.php?search=true&dept=7", "", "", false},
 		{"/employment/index.php", "", "", false},
 	}
@@ -196,9 +201,17 @@ func TestHRMDirectFetchNewSkipsSeenDetail(t *testing.T) {
 		if j.SeenRefresh != seen {
 			t.Errorf("job %s: SeenRefresh = %v, want %v", j.ExternalID, j.SeenRefresh, seen)
 		}
-		if seen && (j.Title != "" || j.Description != "") {
-			t.Errorf("job %s: a liveness refresh must carry identity only, got title=%q description=%q",
-				j.ExternalID, j.Title, j.Description)
+		if !seen {
+			continue
+		}
+		// The listing's own title travels, so the catalogue filter can still age the row out;
+		// nothing that would rewrite the stored content does.
+		if j.Title != "Senior Platform Engineer" {
+			t.Errorf("job %s: refresh title = %q, want the listing's row title", j.ExternalID, j.Title)
+		}
+		if j.Description != "" || j.Location != "" {
+			t.Errorf("job %s: a liveness refresh must not carry content, got description=%q location=%q",
+				j.ExternalID, j.Description, j.Location)
 		}
 	}
 }
