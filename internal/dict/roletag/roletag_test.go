@@ -614,3 +614,46 @@ func TestIndustrialRolesDoNotStealFromDesign(t *testing.T) {
 		}
 	}
 }
+
+// TestDeriveConsumerRoles names the seats the four consumer categories decompose into.
+func TestDeriveConsumerRoles(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Registered Nurse", "healthcare", "nurse"},
+		{"Nurse Practitioner", "healthcare", "nurse"},
+		{"Caregiver", "healthcare", "caregiver"},
+		{"Service Technician", "skilled_trades", "service_technician"},
+		{"Field Service Technician", "skilled_trades", "service_technician"},
+		{"Automotive Technician", "skilled_trades", "automotive_technician"},
+		{"Electrician", "skilled_trades", "electrician"},
+		{"Welder", "skilled_trades", "welder"},
+		{"Cashier", "retail", "cashier"},
+		{"Team Member", "retail", "retail_associate"},
+		{"Server", "hospitality", "server"},
+		{"Line Cook", "hospitality", "cook"},
+		{"Barista", "hospitality", "barista"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestConsumerRolesDoNotSteal guards the collisions: the industrial and design crafts
+// share words with the trades, and the engineer families must keep their rows.
+func TestConsumerRolesDoNotSteal(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Field Service Engineer", "industrial_engineering", "field_service_engineer"},
+		{"Maintenance Engineer", "industrial_engineering", "maintenance_engineer"},
+		{"Mechanical Design Engineer", "engineering_design", "mechanical_designer"},
+		{"Systems Engineer", "software_engineering", "systems_engineer"},
+		{"Sound Designer", "creative", "sound_designer"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}

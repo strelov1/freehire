@@ -1048,3 +1048,109 @@ func TestParse_IndustrialEngineering(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_ConsumerIndustries pins the four consumer categories: the residue left
+// after the IT and industrial waves, 225 000 open postings that were filterable by
+// nothing at all.
+func TestParse_ConsumerIndustries(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// Healthcare.
+		{"Registered Nurse", "healthcare", ""},
+		{"RN", "healthcare", ""},
+		{"Nurse Practitioner", "healthcare", ""},
+		{"Caregiver", "healthcare", ""},
+		{"Home Health Aide", "healthcare", ""},
+		{"Medical Assistant", "healthcare", ""},
+		{"Dental Hygienist", "healthcare", ""},
+		{"Pharmacy Technician", "healthcare", ""},
+		{"Medication Technician", "healthcare", "declared above the technician family"},
+		{"Patient Coordinator", "healthcare", ""},
+		{"Phlebotomist", "healthcare", ""},
+		{"Physical Therapist", "healthcare", ""},
+		{"Veterinarian", "healthcare", ""},
+		// The Russian medical family — bare token, since the qualified forms hyphenate
+		// or postfix a phrase.
+		{"Врач", "healthcare", ""},
+		{"Врач-терапевт", "healthcare", ""},
+		{"Врач-акушер-гинеколог", "healthcare", ""},
+		{"Врач ультразвуковой диагностики", "healthcare", ""},
+		{"Ветеринарный врач", "healthcare", ""},
+		{"Медсестра", "healthcare", ""},
+		{"Фельдшер", "healthcare", ""},
+
+		// Skilled trades.
+		{"Service Technician", "skilled_trades", ""},
+		{"Field Service Technician", "skilled_trades", ""},
+		{"Installation Technician", "skilled_trades", ""},
+		{"Diesel Technician", "skilled_trades", ""},
+		{"Automotive Technician", "skilled_trades", ""},
+		{"Automotive Mechanic", "skilled_trades", ""},
+		{"Electrician", "skilled_trades", ""},
+		{"Plumber", "skilled_trades", ""},
+		{"Welder", "skilled_trades", ""},
+		{"HVAC Technician", "skilled_trades", ""},
+		{"Machinist", "skilled_trades", ""},
+		{"Carpenter", "skilled_trades", ""},
+		{"Электрик", "skilled_trades", ""},
+		{"Электросварщик ручной сварки", "skilled_trades", ""},
+		{"Слесарь", "skilled_trades", ""},
+		{"Плотник", "skilled_trades", ""},
+		{"Электромеханик", "skilled_trades", ""},
+
+		// Retail, including the grocery clerk family that is shop floor, not office.
+		{"Team Member", "retail", ""},
+		// Stays `sales`, which resolves far above. A "Sales Associate" at a software
+		// company IS a sales role, and taking the row would be exactly the theft this
+		// whole line of work keeps guarding against.
+		{"Sales Associate", "sales", ""},
+		{"Cashier", "retail", ""},
+		{"Retail Service Specialist", "retail", ""},
+		{"Merchandising Specialist", "retail", ""},
+		{"Brand Ambassador", "retail", ""},
+		{"Product Demonstrator", "retail", ""},
+		{"Deli Clerk", "retail", ""},
+		{"Grocery Clerk", "retail", ""},
+		{"Produce Clerk", "retail", ""},
+		{"Store Driver", "retail", "a shop's own driver, not a haulier"},
+
+		// Hospitality.
+		{"Server", "hospitality", ""},
+		{"Host/Hostess", "hospitality", ""},
+		{"Chef", "hospitality", ""},
+		{"Line Cook", "hospitality", ""},
+		{"Prep Cook", "hospitality", ""},
+		{"Barista", "hospitality", ""},
+		{"Bartender", "hospitality", ""},
+		{"Dishwasher", "hospitality", ""},
+		{"Kitchen Assistant", "hospitality", ""},
+		{"Banquet Server", "hospitality", ""},
+
+		// The compound hazard: a short alias hiding INSIDE a longer word. Whole-word
+		// matching prevents it, but nothing in the alias list shows the hazard — the
+		// mining script, which matched on raw substrings, filed this one under
+		// logistics because it ends in "водитель".
+		{"Делопроизводитель", "", "a clerk; must not resolve through the driver alias"},
+
+		// Everything the earlier waves settled must be untouched.
+		{"Software Engineer", "software_engineering", ""},
+		{"Project Engineer", "industrial_engineering", ""},
+		{"Field Service Engineer", "industrial_engineering", "the engineer, not the technician"},
+		{"Systems Engineer", "software_engineering", ""},
+		{"Sales Engineer", "solutions_engineering", ""},
+		{"Support Engineer", "support", ""},
+		{"Программист", "software_engineering", ""},
+		{"Системный администратор", "devops", ""},
+		{"Video Editor", "creative", ""},
+		{"Sound Designer", "creative", ""},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}

@@ -25,6 +25,10 @@ const CATEGORY_GROUP_ORDER = [
   'Go-to-market & Support',
   'People',
   'Business & Legal',
+  // The consumer industries a broad multi-industry crawl carries in. None of the
+  // groups above fits a nurse or a line cook, and a category with no group is
+  // generated into the contracts but unreachable in the picker.
+  'Consumer & Services',
   'Other',
 ] as const;
 
@@ -58,6 +62,10 @@ const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   // Not a craft in the design sense — it sits with the engineering disciplines, since
   // that is where a plant or process engineer looks first.
   industrial_engineering: 'Engineering',
+  healthcare: 'Consumer & Services',
+  skilled_trades: 'Consumer & Services',
+  retail: 'Consumer & Services',
+  hospitality: 'Consumer & Services',
   product: 'Product & Management',
   project_management: 'Product & Management',
   management: 'Product & Management',

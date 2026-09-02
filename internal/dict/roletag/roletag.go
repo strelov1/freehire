@@ -86,12 +86,20 @@ var categoryNoun = map[string]string{
 	// label on two slugs shows as a duplicate option in the picker — the same trap
 	// "Software Generalist" documents above.
 	"industrial_engineering": "Plant Engineer",
-	"product":                "Product Manager",
-	"project_management":     "Project Manager",
-	"management":             "Manager",
-	"marketing":              "Marketing Specialist",
-	"sales":                  "Sales Specialist",
-	"support":                "Support Specialist",
+	// The consumer industries. Each noun is the seat a candidate would recognise, not
+	// the industry's name: "Healthcare Worker" reads as a survey category, "Nurse" as
+	// a job — but the namedRoleTable below owns "Nurse", so the umbrella takes the
+	// broader word and the seats stay named roles.
+	"healthcare":         "Healthcare Professional",
+	"skilled_trades":     "Tradesperson",
+	"retail":             "Retail Associate",
+	"hospitality":        "Hospitality Worker",
+	"product":            "Product Manager",
+	"project_management": "Project Manager",
+	"management":         "Manager",
+	"marketing":          "Marketing Specialist",
+	"sales":              "Sales Specialist",
+	"support":            "Support Specialist",
 	// IT-company roles added by expand-role-taxonomy.
 	"business_analysis":     "Business Analyst",
 	"solutions_engineering": "Solutions Engineer",
@@ -330,6 +338,21 @@ var namedRoleTable = []struct {
 	{"automation_engineer", "Automation Engineer", []string{"automation engineer"}},
 	{"field_service_engineer", "Field Service Engineer", []string{"field service engineer", "service engineer", "field engineer"}},
 	{"industrial_engineer", "Industrial Engineer", []string{"industrial engineer"}},
+
+	// The consumer-industry seats. "service engineer" and "field service engineer"
+	// belong to the industrial block above and win on alias length, so the technician
+	// spellings here cannot take them.
+	{"nurse", "Nurse", []string{"nurse", "registered nurse", "nurse practitioner", "licensed practical nurse", "медсестра", "медбрат"}},
+	{"caregiver", "Caregiver", []string{"caregiver", "home health aide", "personal care aide", "сиделка"}},
+	{"service_technician", "Service Technician", []string{"service technician", "field service technician", "installation technician", "maintenance technician"}},
+	{"automotive_technician", "Automotive Technician", []string{"automotive technician", "automotive mechanic", "diesel technician", "автомеханик"}},
+	{"electrician", "Electrician", []string{"electrician", "электрик", "электромонтёр", "электромонтер"}},
+	{"welder", "Welder", []string{"welder", "сварщик", "электросварщик"}},
+	{"retail_associate", "Retail Associate", []string{"retail associate", "team member", "retail service specialist", "sales associate", "stock associate", "продавец"}},
+	{"cashier", "Cashier", []string{"cashier", "кассир"}},
+	{"server", "Server", []string{"server", "banquet server", "официант"}},
+	{"cook", "Cook", []string{"cook", "line cook", "prep cook", "chef", "повар"}},
+	{"barista", "Barista", []string{"barista", "бариста"}},
 
 	// Non-software professions the catalogue carries (broad scope).
 	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},

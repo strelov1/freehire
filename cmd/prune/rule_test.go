@@ -56,6 +56,24 @@ func TestMatchRule(t *testing.T) {
 			want: "",
 		},
 		{
+			// The consumer industries are the opposite call: they ARE the business the
+			// rule exists to remove, and leaving them out of the craft set is what
+			// keeps their categorisation behaviour-neutral. Before they resolved to a
+			// category these matched ruleUnknown on the same condition — no technical
+			// evidence at the company — so the same postings are removable either way.
+			name: "a consumer-industry role at a non-technical company is still removable",
+			c:    candidate{CompanySlug: "acme", Title: "Server", Category: "hospitality", IsTech: techPtr(false)},
+			ev:   evidence{},
+			want: ruleBusiness,
+		},
+		{
+			name:    "the same consumer role is kept where the company has posted technical work",
+			c:       candidate{CompanySlug: "acme", Title: "Server", Category: "hospitality", IsTech: techPtr(false)},
+			ev:      evidence{anyTech: true},
+			crawled: true,
+			want:    "",
+		},
+		{
 			name:    "the same business role is kept where the company has posted technical work",
 			c:       candidate{CompanySlug: "acme", Title: "Account Manager", Category: "sales", IsTech: techPtr(false)},
 			ev:      evidence{anyTech: true},

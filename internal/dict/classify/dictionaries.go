@@ -992,6 +992,95 @@ var categoryTable = []aliasEntry{
 	// words, so their order against that alias does not matter.
 	{"integration engineer", "software_engineering"},
 
+	// The consumer industries: healthcare, skilled trades, retail and hospitality.
+	// 225 000 open postings that were filterable by nothing at all — the residue a
+	// broad multi-industry ATS crawl brings in with the boards it wants.
+	//
+	// Declared before the industrial block because two of its members are qualified
+	// spellings of words that block owns: a "Medication Technician" is healthcare and
+	// a "Field Service Technician" is a trade, and both must be settled before any
+	// bare technician or engineer word is reached.
+	//
+	// HEALTHCARE first, because its qualified spellings are the ones that would
+	// otherwise fall to the trades.
+	{"medication technician", "healthcare"},
+	{"pharmacy technician", "healthcare"},
+	{"patient care technician", "healthcare"},
+	{"veterinary technician", "healthcare"},
+	{"surgical technician", "healthcare"},
+	{"registered nurse", "healthcare"},
+	{"nurse practitioner", "healthcare"},
+	{"licensed practical nurse", "healthcare"},
+	{"nurse", "healthcare"},
+	{"rn", "healthcare"},
+	{"lpn", "healthcare"},
+	{"cna", "healthcare"},
+	{"caregiver", "healthcare"},
+	{"home health aide", "healthcare"},
+	{"medical assistant", "healthcare"},
+	{"dental hygienist", "healthcare"},
+	{"dental assistant", "healthcare"},
+	{"patient coordinator", "healthcare"},
+	{"phlebotomist", "healthcare"},
+	{"physical therapist", "healthcare"},
+	{"occupational therapist", "healthcare"},
+	{"veterinarian", "healthcare"},
+	{"physician", "healthcare"},
+
+	// SKILLED TRADES. The qualified technician spellings come first; the bare word
+	// closes the family.
+	{"field service technician", "skilled_trades"},
+	{"installation technician", "skilled_trades"},
+	{"service technician", "skilled_trades"},
+	{"diesel technician", "skilled_trades"},
+	{"automotive technician", "skilled_trades"},
+	{"maintenance technician", "skilled_trades"},
+	{"hvac technician", "skilled_trades"},
+	{"automotive mechanic", "skilled_trades"},
+	{"mechanic", "skilled_trades"},
+	{"electrician", "skilled_trades"},
+	{"plumber", "skilled_trades"},
+	{"welder", "skilled_trades"},
+	{"machinist", "skilled_trades"},
+	{"millwright", "skilled_trades"},
+	{"carpenter", "skilled_trades"},
+
+	// RETAIL. The grocery clerk family is shop floor, not office administration —
+	// filing it by the word "clerk" would put a supermarket's whole staff in the same
+	// facet as a receptionist.
+	{"deli clerk", "retail"},
+	{"grocery clerk", "retail"},
+	{"produce clerk", "retail"},
+	{"bakery clerk", "retail"},
+	{"meat clerk", "retail"},
+	{"store driver", "retail"},
+	{"sales associate", "retail"},
+	{"retail associate", "retail"},
+	{"retail service specialist", "retail"},
+	{"team member", "retail"},
+	{"cashier", "retail"},
+	{"merchandiser", "retail"},
+	{"merchandising", "retail"},
+	{"brand ambassador", "retail"},
+	{"product demonstrator", "retail"},
+	{"store leader", "retail"},
+	{"stock associate", "retail"},
+
+	// HOSPITALITY.
+	{"banquet server", "hospitality"},
+	{"server", "hospitality"},
+	{"host/hostess", "hospitality"},
+	{"hostess", "hospitality"},
+	{"line cook", "hospitality"},
+	{"prep cook", "hospitality"},
+	{"cook", "hospitality"},
+	{"chef", "hospitality"},
+	{"barista", "hospitality"},
+	{"bartender", "hospitality"},
+	{"dishwasher", "hospitality"},
+	{"busser", "hospitality"},
+	{"kitchen assistant", "hospitality"},
+
 	// Industrial engineering: the seats a factory, plant, utility or field-service
 	// organisation staffs. 51 994 open postings measured on prod after the IT wave, and
 	// the whole residue was this one shape — there was nowhere to file it, since
@@ -1081,6 +1170,33 @@ var categoryTable = []aliasEntry{
 	{"инженер по защите информации", "security"},
 	{"инженер", "industrial_engineering"},
 	{"технолог", "industrial_engineering"},
+
+	// The Russian consumer vocabularies. `врач` is a bare token for the same reason
+	// every Russian entry here is: the qualified forms hyphenate (`Врач-терапевт`,
+	// `Врач-акушер-гинеколог`) or postfix a phrase (`Врач ультразвуковой
+	// диагностики`), and a hyphen is a word boundary.
+	//
+	// The hazard runs the other way here — a short alias hiding INSIDE a longer word.
+	// `Делопроизводитель` (an office clerk) ends in `водитель`, and `Электромеханик`
+	// contains `механик`. wordmatch matches on boundaries and cannot make that
+	// mistake, but nothing in this list shows the hazard, so both pairs carry a
+	// regression test.
+	{"ветеринарный врач", "healthcare"},
+	{"врач", "healthcare"},
+	{"медсестра", "healthcare"},
+	{"медбрат", "healthcare"},
+	{"фельдшер", "healthcare"},
+	{"санитар", "healthcare"},
+	{"электромеханик", "skilled_trades"},
+	{"электросварщик", "skilled_trades"},
+	{"электромонтёр", "skilled_trades"},
+	{"электромонтер", "skilled_trades"},
+	{"электрик", "skilled_trades"},
+	{"сварщик", "skilled_trades"},
+	{"слесарь", "skilled_trades"},
+	{"плотник", "skilled_trades"},
+	{"маляр", "skilled_trades"},
+	{"механик", "skilled_trades"},
 
 	// NO bare English "engineer", though 689 open postings spell it exactly. It was
 	// tried and the existing suite rejected it, which is the answer: "Product

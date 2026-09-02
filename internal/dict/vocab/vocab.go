@@ -71,6 +71,14 @@ var (
 		// `Инженер-технолог`, `Инженер ПТО`) and carried no English alias at all.
 		"design", "creative", "engineering_design", "industrial_engineering",
 		"product", "project_management", "management",
+		// The consumer industries a broad multi-industry ATS crawl carries in with the
+		// boards it wants. They are here to be FILTERABLE — a facet excludes as well as
+		// it selects, and 225k unfilterable postings are worse than four options no IT
+		// candidate will choose. Deliberately NOT members of NonTechCraftCategories:
+		// unlike the two engineering categories, these are exactly the non-technical
+		// business cmd/prune's rule exists to remove, and leaving them out is what
+		// keeps categorising them behaviour-neutral.
+		"healthcare", "skilled_trades", "retail", "hospitality",
 		"marketing", "sales", "support",
 		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
@@ -103,6 +111,7 @@ var (
 		"marketing", "sales", "support", "management",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
 		"engineering_design", "industrial_engineering",
+		"healthcare", "skilled_trades", "retail", "hospitality",
 	}
 	// NonTechCraftCategories are the NonTechCategories members that are non-technical
 	// because the CRAFT sits outside IT — not because the posting is back-office or

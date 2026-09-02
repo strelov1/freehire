@@ -107,6 +107,32 @@ func TestCraftCategoriesAreNonTech(t *testing.T) {
 			t.Errorf("NonTechCraftCategories must contain %q", want)
 		}
 	}
+	// The consumer industries are deliberately NOT craft-protected. They are exactly
+	// the non-technical business prune's rule exists to remove at a company with no
+	// technical history, and leaving them out is also what keeps this vocabulary
+	// growth behaviour-neutral: the same postings match ruleUnknown before and
+	// ruleBusiness after. Adding one here would make a quarter of a million postings
+	// newly undeletable — a policy change wearing a vocabulary change's clothes.
+	for _, notCraft := range []string{"healthcare", "skilled_trades", "retail", "hospitality"} {
+		if slices.Contains(NonTechCraftCategories, notCraft) {
+			t.Errorf("%q must NOT be craft-protected: it is the business prune exists to remove", notCraft)
+		}
+	}
+}
+
+func TestConsumerCategoriesAreNonTech(t *testing.T) {
+	for _, c := range []string{"healthcare", "skilled_trades", "retail", "hospitality"} {
+		if !slices.Contains(CategoryValues, c) {
+			t.Errorf("CategoryValues must contain %q", c)
+			continue
+		}
+		if !slices.Contains(NonTechCategories, c) {
+			t.Errorf("%q must be a NonTechCategories member", c)
+		}
+		if slices.Contains(TechCategories, c) {
+			t.Errorf("%q must not be a TechCategories member", c)
+		}
+	}
 }
 
 func TestIndustrialEngineeringIsNonTech(t *testing.T) {
