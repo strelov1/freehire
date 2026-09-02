@@ -1204,6 +1204,7 @@ UPDATE jobs
 SET title        = sqlc.arg(title),
     company      = sqlc.arg(company),
     company_slug = sqlc.arg(company_slug),
+    company_slug_folded = replace(sqlc.arg(company_slug), '-', ''),
     location     = sqlc.arg(location),
     remote       = sqlc.arg(remote),
     description  = sqlc.arg(description),
@@ -1672,6 +1673,7 @@ SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
     role_fingerprint = sqlc.arg(role_fingerprint),
     public_slug      = sqlc.arg(public_slug),
     company_slug     = sqlc.arg(company_slug),
+    company_slug_folded = replace(sqlc.arg(company_slug), '-', ''),
     updated_at = CASE
         WHEN role_fingerprint IS DISTINCT FROM sqlc.arg(role_fingerprint) THEN now()
         ELSE updated_at

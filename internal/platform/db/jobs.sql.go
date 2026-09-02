@@ -3535,6 +3535,7 @@ SET countries = COALESCE($1::text[], '{}'),
     role_fingerprint = $15,
     public_slug      = $16,
     company_slug     = $17,
+    company_slug_folded = replace($17, '-', ''),
     updated_at = CASE
         WHEN role_fingerprint IS DISTINCT FROM $15 THEN now()
         ELSE updated_at
@@ -3645,6 +3646,7 @@ UPDATE jobs
 SET title        = $1,
     company      = $2,
     company_slug = $3,
+    company_slug_folded = replace($3, '-', ''),
     location     = $4,
     remote       = $5,
     description  = $6,

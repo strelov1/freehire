@@ -98,6 +98,13 @@ Verified as having no other reader: `chunkStrings` (0 uses outside the file), `f
       whose newest non-aggregator row is >30 days unseen). Out of scope here on purpose: this
       change stops those rows suppressing live postings; it does not close them. Filed as
       **#2328**.
+- [ ] 6.2a Run `cmd/backfill-slug-folded` on prod. Two write paths were rewriting
+      `company_slug` without `company_slug_folded` (7.2/7.3 below), so 1.63% of open rows carry
+      a STALE fold — measured 2026-09-02, 1,753 of 107,650 in a 2% sample. The gate now matches
+      on the folded column alone, so those rows are invisible to it (and were already invisible
+      to the aggregator-suppression pass). The worker's chunk UPDATE is `IS DISTINCT FROM`-
+      guarded, so this both repairs the stale rows and writes nothing where the fold is already
+      right. Under-matching is the recoverable direction, so this is a repair, not a blocker.
 - [ ] 6.2 After deploy, run `cmd/ingest` on `sources/himalayas.yml` and confirm
       `GET /api/v1/jobs/find?url=https://himalayas.app/companies/pipe/jobs/senior-software-engineer-5097528323`
       returns a `public_slug` instead of `{"data":null}` — the issue's own reproduction.
@@ -127,3 +134,20 @@ changed, so the next reader knows these were not the first draft:
       `cmd/ingest`'s test now proves only what that layer alone can — that the three
       parameters are wired through. The db test's seeds were hoisted out of its subtests so
       none depends on another's writes.
+- [x] 7.7 CodeRabbit: `NOT is_private` added to the coverage query. `cmd/reindex` drops
+      private rows from the index, so the search-backed lookup excluded them by accident and
+      reading the table directly did not. A private posting is one user's pasted job
+      description, crawled from nowhere, and it is written with `last_seen_at = now()` so the
+      freshness window would not have caught it either. Pinned by an integration case
+      confirmed to fail without the clause.
+- [x] 7.8 CodeRabbit: `UpdateManualJob` was rewriting `company_slug` and leaving
+      `company_slug_folded` stale — which matters more now that the folded column is the ONLY
+      thing the gate matches on.
+- [x] 7.9 The rule that exists to prevent exactly 7.8 had a hole, and closing it is the real
+      fix. `writesJobsCompanySlug` tested for `"set company_slug ="`, which reads only the
+      column immediately after SET; both offenders assign it mid-list. Widened to scan the
+      whole SET clause (bounded before WHERE/FROM/RETURNING, so a read is still not a write),
+      which immediately found a SECOND offender: **`UpdateJobDerived`**, the statement
+      `cmd/backfill-derive` runs over the entire catalogue. Both fixed, the population guard
+      raised 5 -> 6, and `TestAssignsCompanySlugInSetClause` added — the detector's own
+      failure mode is silence, which is what let this sit.

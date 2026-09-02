@@ -63,11 +63,40 @@ func TestEveryCompanySlugWriteAlsoWritesTheFoldedColumn(t *testing.T) {
 
 	// Counting the population, not just the violations: a rule that silently stops
 	// matching anything looks identical to a rule that passes.
-	if checked < 5 {
-		t.Errorf("only %d statements matched as jobs.company_slug writers, expected at least 5 "+
-			"(UpsertJob, UpsertManualJob, InsertPrivateJob, RenameSlugCompany, "+
+	if checked < 6 {
+		t.Errorf("only %d statements matched as jobs.company_slug writers, expected at least 6 "+
+			"(UpsertJob, UpsertManualJob, UpdateManualJob, InsertPrivateJob, RenameSlugCompany, "+
 			"RekeyCompanySlugChunk) — the detection below has probably drifted from how the "+
 			"queries are written", checked)
+	}
+}
+
+// TestAssignsCompanySlugInSetClause pins the detector against the shape that defeated it.
+//
+// A rule that silently stops matching is indistinguishable from a rule that passes, and this
+// one did exactly that: it read only the column immediately after SET, so UpdateManualJob and
+// UpdateJobDerived — which assign company_slug fourth and mid-list — were never checked, and
+// both rewrote the slug while leaving the folded column stale. The population guard did not
+// notice, because five other statements still matched.
+func TestAssignsCompanySlugInSetClause(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sql  string
+		want bool
+	}{
+		{"first in the set list", "update jobs\nset company_slug = $1\nwhere id = $2", true},
+		{"not first in the set list", "update jobs\nset title = $1,\n    company_slug = $2\nwhere id = $3", true},
+		{"aligned with padding", "update jobs\nset title        = $1,\n    company_slug     = $2\nwhere id = $3", true},
+		{"only the folded column is assigned", "update jobs\nset company_slug_folded = $1\nwhere id = $2", false},
+		{"read in the where clause is not a write", "update jobs\nset title = $1\nwhere company_slug = $2", false},
+		{"read in a returning clause is not a write", "update jobs\nset title = $1\nreturning company_slug = $2", false},
+		{"no set clause at all", "select company_slug = $1 from jobs", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := assignsCompanySlugInSetClause(tc.sql); got != tc.want {
+				t.Errorf("assignsCompanySlugInSetClause(%q) = %v, want %v", tc.sql, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -111,9 +140,60 @@ func writesJobsCompanySlug(body string) bool {
 	// An INSERT names the column in its list; an UPDATE assigns to it. Reading it in a
 	// WHERE/ON/RETURNING clause is not a write, so those forms must not match.
 	return strings.Contains(lower, "company, company_slug,") ||
-		strings.Contains(lower, "set company_slug =") ||
+		assignsCompanySlugInSetClause(lower) ||
 		strings.Contains(lower, "company_slug = @new_slug") ||
 		strings.Contains(lower, "company_slug = excluded.company_slug")
+}
+
+// assignsCompanySlugInSetClause reports whether an UPDATE assigns company_slug ANYWHERE in its
+// SET list, not only as the first column.
+//
+// This used to be a `strings.Contains(lower, "set company_slug =")`, which reads only the
+// column immediately after SET. UpdateManualJob assigns it fourth, so the rule scored zero
+// against a statement that does write the column — and because five other statements still
+// matched, the population guard below stayed satisfied and the whole thing looked healthy.
+// That left UpdateManualJob rewriting company_slug and leaving company_slug_folded stale,
+// which the aggregator-suppression pass and the ingest coverage gate both match on.
+//
+// The SET clause is bounded rather than searched whole, because `WHERE company_slug = $1` is a
+// READ and matching it would demand the folded column from statements that write nothing.
+func assignsCompanySlugInSetClause(lower string) bool {
+	start := strings.Index(lower, "\nset ")
+	if start < 0 {
+		return false
+	}
+	set := lower[start:]
+	for _, end := range []string{"\nwhere ", "\nfrom ", "\nreturning "} {
+		if i := strings.Index(set, end); i >= 0 {
+			set = set[:i]
+		}
+	}
+	// The suffix guard keeps company_slug_folded's own assignment from counting as one.
+	for _, i := range assignmentOffsets(set, "company_slug") {
+		if !strings.HasPrefix(set[i+len("company_slug"):], "_folded") {
+			return true
+		}
+	}
+	return false
+}
+
+// assignmentOffsets returns every offset in set where column is followed by an `=`, ignoring
+// whitespace — the shape of an assignment in a SET list.
+func assignmentOffsets(set, column string) []int {
+	var out []int
+	for i := 0; ; {
+		j := strings.Index(set[i:], column)
+		if j < 0 {
+			return out
+		}
+		at := i + j
+		rest := strings.TrimLeft(set[at+len(column):], " \t")
+		// A "_folded" match is reported too; the caller decides, so this stays a pure scan.
+		if strings.HasPrefix(rest, "=") || strings.HasPrefix(strings.TrimLeft(strings.TrimPrefix(rest, "_folded"), " \t"), "=") {
+			out = append(out, at)
+		}
+		i = at + len(column)
+	}
 }
 
 // stripSQLComments drops `-- …` line comments from a statement so the rule reads the SQL and
