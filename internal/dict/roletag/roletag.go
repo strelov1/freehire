@@ -248,6 +248,34 @@ var namedRoleTable = []struct {
 		"standard cell design engineer",
 	}},
 
+	// Media production — the crafts the `creative` category decomposes into. The
+	// bare category role says "some media craft"; these say which one. Aliases match
+	// longest-first, so the qualified art titles keep their own slug and only a
+	// title naming no craft falls through to the category role.
+	{"video_editor", "Video Editor", []string{"video editor"}},
+	{"videographer", "Videographer", []string{"videographer"}},
+	{"video_producer", "Video Producer", []string{"video producer"}},
+	{"animator", "Animator", []string{"animator", "2d animator", "3d animator"}},
+	{"3d_artist", "3D Artist", []string{"3d artist", "2d artist", "character artist", "environment artist"}},
+	{"concept_artist", "Concept Artist", []string{"concept artist"}},
+	{"technical_artist", "Technical Artist", []string{"technical artist"}},
+	{"storyboard_artist", "Storyboard Artist", []string{"storyboard artist", "vfx artist"}},
+	// "Illustrator" is also the Adobe product, but the longer design aliases above
+	// win the length ordering, so only a title naming no design craft lands here.
+	{"illustrator", "Illustrator", []string{"illustrator"}},
+	{"photographer", "Photographer", []string{"photographer"}},
+	{"sound_designer", "Sound Designer", []string{"sound designer", "audio designer", "sound engineer", "audio engineer"}},
+
+	// Game development. Deliberately NOT a category: "Game Developer" is software
+	// and "Game Designer" is design, so a third category would take rows away from
+	// two working facets to buy a name. The named role is what makes the craft
+	// pickable, and it is emitted whether or not a category resolves.
+	{"game_designer", "Game Designer", []string{"game designer"}},
+	{"level_designer", "Level Designer", []string{"level designer"}},
+	{"narrative_designer", "Narrative Designer", []string{"narrative designer"}},
+	{"game_producer", "Game Producer", []string{"game producer"}},
+	{"game_developer", "Game Developer", []string{"game developer", "game programmer", "gameplay engineer", "gameplay programmer"}},
+
 	// Non-software professions the catalogue carries (broad scope).
 	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},
 	{"mechanical_engineer", "Mechanical Engineer", []string{"mechanical engineer"}},

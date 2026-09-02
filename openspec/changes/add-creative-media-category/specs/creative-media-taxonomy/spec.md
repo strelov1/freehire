@@ -131,11 +131,20 @@ MUST be omitted rather than shipped ungated.
   "CapCut", "Godot", "Houdini", "Substance Painter" or "ZBrush"
 - **THEN** the job carries the corresponding canonical skill
 
-#### Scenario: An ambiguous creative token needs corroboration
+#### Scenario: An ambiguous product name needs corroboration
 
-- **WHEN** a backend description says "the UI animation is handled upstream"
-  and names no other creative tool
-- **THEN** no `animation` skill is tagged
+- **WHEN** an events posting advertises "a Houdini-style escape act" and names
+  no other tool
+- **THEN** no `houdini` skill is tagged — while an FX posting naming Houdini
+  beside Substance Painter carries it
+
+#### Scenario: A token the gate cannot save is omitted
+
+- **WHEN** a frontend posting says "React, CSS animation and Tailwind", or a
+  platform posting says "nuke the cache and redeploy via Terraform"
+- **THEN** no `animation` and no `nuke` skill is tagged, because neither is in
+  the dictionary at all: the corroboration gate is lifted by ANY strong skill,
+  and both of these collide with prose that always sits beside one
 
 ### Requirement: The new category is labelled and selectable
 

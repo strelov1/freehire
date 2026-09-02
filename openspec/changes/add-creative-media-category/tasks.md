@@ -13,13 +13,13 @@
 
 ## 3. Named roles
 
-- [ ] 3.1 Add the media-craft roles to `roletag` (`video_editor`, `videographer`, `video_producer`, `animator`, `3d_artist`, `concept_artist`, `technical_artist`, `storyboard_artist`, `illustrator`, `photographer`, `sound_designer`), ordered so no entry steals a longer alias, with tests.
-- [ ] 3.2 Add the game-development roles (`game_designer`, `level_designer`, `narrative_designer`, `game_producer`, `game_developer`) with tests asserting each keeps the category it resolves to today.
+- [x] 3.1 Add the media-craft roles to `roletag` (`video_editor`, `videographer`, `video_producer`, `animator`, `3d_artist`, `concept_artist`, `technical_artist`, `storyboard_artist`, `illustrator`, `photographer`, `sound_designer`), ordered so no entry steals a longer alias, with tests.
+- [x] 3.2 Add the game-development roles (`game_designer`, `level_designer`, `narrative_designer`, `game_producer`, `game_developer`) with tests asserting each keeps the category it resolves to today.
 
 ## 4. Skill dictionary
 
-- [ ] 4.1 Add the unambiguous creative canonicals to `skilltag` (`davinci-resolve`, `final-cut-pro`, `cinema-4d`, `capcut`, `godot`, `houdini`, `nuke`, `substance-painter`, `zbrush`, `color-grading`, `storyboarding`, `video-editing`), with tests.
-- [ ] 4.2 Add `animation` under `ambiguousWords` and a test that an uncorroborated mention in a backend description tags nothing.
+- [x] 4.1 Add the unambiguous creative canonicals to `skilltag` (`davinci-resolve`, `final-cut-pro`, `cinema-4d`, `capcut`, `godot`, `houdini`, `nuke`, `substance-painter`, `zbrush`, `color-grading`, `storyboarding`, `video-editing`), with tests.
+- [x] 4.2 Add `animation` under `ambiguousWords` and a test that an uncorroborated mention in a backend description tags nothing.
 
 ## 5. Contracts and web
 

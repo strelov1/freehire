@@ -444,3 +444,71 @@ func TestUXDesignerSpelledOutAliases(t *testing.T) {
 		}
 	}
 }
+
+// TestDeriveMediaCrafts covers the roles the `creative` category decomposes into.
+// The bare category role says "some media craft"; these say which one.
+func TestDeriveMediaCrafts(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		want  string
+	}{
+		{"Video Editor", "video_editor"},
+		{"Senior Video Editor", "video_editor"},
+		{"Videographer", "videographer"},
+		{"Video Producer", "video_producer"},
+		{"Animator", "animator"},
+		{"3D Artist", "3d_artist"},
+		{"Concept Artist", "concept_artist"},
+		{"Technical Artist", "technical_artist"},
+		{"Storyboard Artist", "storyboard_artist"},
+		{"Illustrator", "illustrator"},
+		{"Photographer", "photographer"},
+		{"Sound Designer", "sound_designer"},
+	} {
+		if got := Derive("", "creative", tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, creative, %q) = %v, want it to contain %q", tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestDeriveGameRoles pins the decision NOT to add a game category. The titles keep
+// whatever category they resolve to today — `design` for the designers,
+// `software_engineering` for the developer, none for the producer — and the named
+// role is what makes the craft pickable.
+func TestDeriveGameRoles(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Game Designer", "design", "game_designer"},
+		{"Senior Game Designer", "design", "game_designer"},
+		{"Level Designer", "design", "level_designer"},
+		{"Narrative Designer", "design", "narrative_designer"},
+		{"Game Developer", "software_engineering", "game_developer"},
+		// No category resolves for this one; a named role is emitted anyway.
+		{"Game Producer", "", "game_producer"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestMediaRolesDoNotStealFromDesign guards the collisions the new aliases create:
+// every one of these titles contains a shorter new alias and must keep the more
+// specific role it already has.
+func TestMediaRolesDoNotStealFromDesign(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Motion Designer", "design", "motion_designer"},
+		{"Motion Graphics Designer", "design", "motion_designer"},
+		{"Graphic Designer", "design", "graphic_designer"},
+		{"Visual Designer", "design", "visual_designer"},
+		{"Product Designer", "design", "product_designer"},
+		{"Industrial Designer", "design", "industrial_designer"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}

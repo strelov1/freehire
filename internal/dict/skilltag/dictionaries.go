@@ -381,6 +381,21 @@ var wordAliases = map[string]string{
 	"typography":    "typography",
 	"accessibility": "accessibility",
 	"a11y":          "accessibility",
+	// media production — the coined product names, plus the one practice whose gerund
+	// is unambiguous. "houdini" is listed but gated by ambiguousWords (the escapologist).
+	//
+	// Two are absent for the same reason "design systems" is: the corroboration gate is
+	// lifted by ANY strong skill, and both collide with prose that sits beside one.
+	// "animation" is the CSS property of every frontend posting that also names React,
+	// and "nuke" is what a platform posting does to a cache next to Terraform — gating
+	// them would tag exactly the postings they are wrong for. The Foundry product is
+	// reachable through the artists' other tools.
+	"godot":         "godot",
+	"zbrush":        "zbrush",
+	"capcut":        "capcut",
+	"houdini":       "houdini",
+	"storyboarding": "storyboarding",
+	"storyboards":   "storyboarding",
 	// web3 / crypto (mined from enrichment->skills; the long tail sits below the
 	// freq-500 floor). Distinctive tokens only — the ambiguous ones are NOT added:
 	// "cosmos" (↔ Azure Cosmos DB), "foundry" (↔ Palantir/Cloud Foundry),
@@ -862,6 +877,10 @@ var ambiguousWords = map[string]bool{
 	"canva":         true,
 	"lottie":        true,
 	"wireframes":    true,
+	// The VFX suite shares its name with the escapologist, and "a Houdini act" is how
+	// an events posting spells it. A real FX posting names Maya, Nuke's neighbours or
+	// a render farm beside it.
+	"houdini": true,
 	// batch 4 — products whose bare token is ordinary English, a mythological name or
 	// a body part, in exactly the postings this dictionary runs over: a startup that
 	// "bootstraps" itself, a laptop that "hibernates", a culture blurb about "unity",
@@ -1164,6 +1183,16 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"motion design", "motion-design"},
 	{"motion graphics", "motion-graphics"},
 	{"user flows", "user-flows"},
+	// media production — the multi-word products and the two practices. Both British
+	// and American spellings of the grade are listed: neither is the odd one out in a
+	// catalogue this international. "final cut" without "pro" is left out — it is
+	// ordinary prose ("the final cut of the budget").
+	{"davinci resolve", "davinci-resolve"}, {"da vinci resolve", "davinci-resolve"},
+	{"final cut pro", "final-cut-pro"},
+	{"cinema 4d", "cinema-4d"}, {"c4d", "cinema-4d"},
+	{"substance painter", "substance-painter"}, {"substance designer", "substance-painter"},
+	{"color grading", "color-grading"}, {"colour grading", "color-grading"},
+	{"video editing", "video-editing"},
 	// mechanical CAD phrases (the single-token products live in wordAliases).
 	{"3ds max", "3ds-max"},
 	{"fusion 360", "fusion-360"},
