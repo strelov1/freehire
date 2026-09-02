@@ -9,7 +9,7 @@ Snapshot taken 2026-09-01 from `/etc/systemd/system/freehire-*` and `/opt/freehi
 ## What is here
 
 ```
-systemd/   334 files — 46 .service, 283 .timer, 5 drop-in directories
+systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
 bin/        13 operator scripts (release, backups, alerting, ingest slotting)
 ```
 

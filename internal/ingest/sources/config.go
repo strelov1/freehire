@@ -123,9 +123,13 @@ func dedupeBoards(entries []CompanyEntry) []CompanyEntry {
 // one FORM of board id: iCIMS boards are stored both as a bare slug and as the full
 // "careers-<slug>.icims.com" host, and icimsHost resolves both to that host, so the two
 // spellings are one crawl target — 37 pairs were committed and crawled as if they were two.
+// Dayforce is the same shape for a different reason: its optional culture segment chooses
+// which translations of a site's postings to read, and one posting keeps the same id in every
+// culture, so two entries differing only in culture would store each shared posting twice.
 // A provider absent here folds on case alone.
 var boardIdentity = map[string]func(board string) string{
-	"icims": icimsHost,
+	"icims":    icimsHost,
+	"dayforce": dayforceSiteID,
 }
 
 // boardDedupeKey is the identity dedupeBoards and DuplicateBoards collapse on:

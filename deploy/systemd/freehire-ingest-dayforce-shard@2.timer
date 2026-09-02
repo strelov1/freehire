@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest dayforce shard 2/4
+[Timer]
+OnCalendar=*-*-* 01/4:42:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

@@ -354,6 +354,10 @@ func All(c HTTPClient) map[string]Source {
 	// a plain GET's csrftoken cookie) rather than the shared jar-less client — see
 	// cookieSessionSource.
 	registry["taleo"] = cookieSessionSource[taleoHTTP](c, NewTaleo)
+	// dayforce needs the same: its listing POST is authorized by a double-submit CSRF pair,
+	// so the token a bootstrap GET mints must ride back as BOTH a header and the cookie the
+	// jar-less shared client would drop.
+	registry["dayforce"] = cookieSessionSource[dayforceHTTP](c, NewDayforce)
 	aijobsMaxNewPerRun := aijobsMaxNewPerRunFromEnv()
 	registry["aijobs"] = cookieSessionSource[aijobsHTTP](c, func(h aijobsHTTP) Source {
 		return NewAijobs(h, aijobsMaxNewPerRun)
