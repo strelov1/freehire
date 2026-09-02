@@ -113,6 +113,10 @@ func TestRecognize(t *testing.T) {
 		{"paycor upper-case client id folds", "https://www.recruitingbypaycor.com/career/JobIntroduction.action?clientId=8A29A018478A87E70147A7588A6343CF&id=1", "paycor", "8a29a018478a87e70147a7588a6343cf", "https://www.recruitingbypaycor.com/career/CareerHome.action?clientId=8a29a018478a87e70147a7588a6343cf", true},
 		{"paycor without a client id", "https://recruitingbypaycor.com/career/CareerHome.action", "", "", "", false},
 		{"paycor empty client id", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=&id=1", "", "", "", false},
+		// A parameter is a weaker signal than a path segment on a board-only host, so the value
+		// must have the shape of a client key — the same guard pageup's pathnumeric mode carries.
+		{"paycor malformed client id is not a board", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=not-a-board", "", "", "", false},
+		{"paycor truncated client id is not a board", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=4028f88b24c330a2&id=1", "", "", "", false},
 
 		// hosttenant — UKG Ready: the host selects the environment the tenant is hosted in and is
 		// not derivable from the tenant id, so the board carries both. The ".careers" suffix is
@@ -355,7 +359,7 @@ func TestQueryModeRowsAreConfigured(t *testing.T) {
 		if a.mode != modeQuery {
 			continue
 		}
-		if q, ok := queryBoards[a.host]; !ok || q.param == "" || q.listingPath == "" {
+		if q, ok := queryBoards[a.host]; !ok || q.param == "" || q.listingPath == "" || q.boardPattern == nil {
 			t.Errorf("atsBoards entry %q (%s) is %s mode but queryBoards has no complete entry for it",
 				a.host, a.source, modeQuery)
 		}

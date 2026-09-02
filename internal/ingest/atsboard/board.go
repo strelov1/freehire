@@ -248,15 +248,28 @@ var atsBoards = []struct{ host, source, mode string }{
 }
 
 // queryBoards holds, per matched host entry in modeQuery, the query parameter that names the
-// board and the path its listing is served from. The canonical collapses to that listing, so a
-// posting URL and the board's own career home map to one board — the same collapse the host and
-// pathlocale modes make.
-var queryBoards = map[string]struct{ param, listingPath string }{
+// board, the shape its value must have to BE one, and the path the board's listing is served
+// from. The canonical collapses to that listing, so a posting URL and the board's own career
+// home map to one board — the same collapse the host and pathlocale modes make.
+//
+// The shape is required, not optional, for the reason pathnumeric exists: a parameter is a much
+// weaker signal than a path segment on a board-only host, so without it any value on the host
+// reads as a board — and a board that does not exist is the expensive direction, recorded by the
+// contribution flow and paid for.
+var queryBoards = map[string]struct {
+	param, listingPath string
+	boardPattern       *regexp.Regexp
+}{
 	// Paycor Recruiting addresses an employer's portal by a 32-hex clientId: the listing is
 	// /career/CareerHome.action?clientId=<board> and a posting is
 	// /career/JobIntroduction.action?clientId=<board>&id=<posting>. Nothing but the parameter
-	// names the board — the path is the same for every employer on the platform.
-	"recruitingbypaycor.com": {param: "clientId", listingPath: "/career/CareerHome.action"},
+	// names the board — the path is the same for every employer on the platform. All 2,442
+	// boards in paycor.yml carry that exact shape.
+	"recruitingbypaycor.com": {
+		param:        "clientId",
+		listingPath:  "/career/CareerHome.action",
+		boardPattern: regexp.MustCompile(`^[0-9a-f]{32}$`),
+	},
 }
 
 // apiBoards lists each ATS's OWN API host, where the board sits behind a fixed path prefix
@@ -410,11 +423,12 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		// UKG Ready: the platform serves either spelling of the hex client id and paycor.yml
 		// holds it lower-case.
 		q, configured := queryBoards[apex]
-		if !configured {
+		if !configured || q.boardPattern == nil {
 			return "", "", "", false
 		}
-		board = strings.ToLower(u.Query().Get(q.param))
-		if board == "" {
+		// The pattern rejects an absent or empty parameter along with a malformed one, so a link
+		// on the host that names no board is declined rather than turned into one.
+		if board = strings.ToLower(u.Query().Get(q.param)); !q.boardPattern.MatchString(board) {
 			return "", "", "", false
 		}
 		u.Fragment = ""

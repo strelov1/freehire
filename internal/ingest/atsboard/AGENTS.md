@@ -27,8 +27,9 @@ nothing but the URL. No network, no database.
   `pathnumeric` (like `path`, but the segment must be an all-digit id — PageUp's board is a
   numeric institution id, so localisation/section segments like `/cw/en/search` are not
   boards), `query` (a named query parameter, because Paycor serves every board from one path
-  under `?clientId=<board>`; `queryBoards` names the parameter, and it is the one mode that
-  needs a second row — a test fails if it is missing), `subdomain`
+  under `?clientId=<board>`; `queryBoards` names the parameter and the shape its value must
+  have, since a parameter is a weaker signal than a path segment — and it is the one mode that
+  needs a second row, so a test fails if it is missing), `subdomain`
   (leftmost DNS label), `subdomainchain` (every label under the apex, for a tenant nested under a
   regional instance like `<tenant>.global.huntflow.io`), `host` (the whole careers host IS the
   tenant), `hostpath` (host + first path segment, for Workday), `hostcareers`
