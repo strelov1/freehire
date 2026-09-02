@@ -165,6 +165,7 @@ func All(c HTTPClient) map[string]Source {
 		NewRapyd(c),
 		NewCareerPlug(c),
 		NewHRMDirect(c),
+		NewAppliTrack(c),
 		NewPaycom(c),
 		NewPaycor(c),
 		NewLuxoft(c),

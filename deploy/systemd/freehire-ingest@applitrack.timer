@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest applitrack
+[Timer]
+OnCalendar=*-*-* 02/3:52:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target
