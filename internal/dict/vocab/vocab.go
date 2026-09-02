@@ -79,6 +79,10 @@ var (
 		// business cmd/prune's rule exists to remove, and leaving them out is what
 		// keeps categorising them behaviour-neutral.
 		"healthcare", "skilled_trades", "retail", "hospitality",
+		// The service sectors: moving goods, teaching, the front desk, and the
+		// personal and facility services. Same placement as the four above — non-
+		// technical, and deliberately NOT craft-protected.
+		"logistics", "education", "personal_services", "administration",
 		"marketing", "sales", "support",
 		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
@@ -112,6 +116,7 @@ var (
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
 		"engineering_design", "industrial_engineering",
 		"healthcare", "skilled_trades", "retail", "hospitality",
+		"logistics", "education", "personal_services", "administration",
 	}
 	// NonTechCraftCategories are the NonTechCategories members that are non-technical
 	// because the CRAFT sits outside IT — not because the posting is back-office or

@@ -1133,7 +1133,9 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 		// matching prevents it, but nothing in the alias list shows the hazard — the
 		// mining script, which matched on raw substrings, filed this one under
 		// logistics because it ends in "водитель".
-		{"Делопроизводитель", "", "a clerk; must not resolve through the driver alias"},
+		// Resolved to nothing when this case was written; the service wave gave it a
+		// category. What it must NEVER be is `logistics` — see TestParse_ServiceSectors.
+		{"Делопроизводитель", "administration", ""},
 
 		// Everything the earlier waves settled must be untouched.
 		{"Software Engineer", "software_engineering", ""},
@@ -1146,6 +1148,132 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 		{"Системный администратор", "devops", ""},
 		{"Video Editor", "creative", ""},
 		{"Sound Designer", "creative", ""},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}
+
+// TestParse_ServiceSectors pins the last clusters that have a shape: logistics,
+// education, personal services and office administration — plus the plural gap the
+// consumer wave left behind.
+func TestParse_ServiceSectors(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// Logistics.
+		{"Delivery Specialist", "logistics", ""},
+		{"Commercial Driver", "logistics", ""},
+		{"Driver", "logistics", ""},
+		{"CDL A Driver", "logistics", ""},
+		{"Courier", "logistics", ""},
+		{"Warehouse Associate", "logistics", ""},
+		{"Warehouse Supervisor", "logistics", ""},
+		{"Forklift Operator", "logistics", ""},
+		{"Truck Unloader", "logistics", ""},
+		{"Fulfillment Associate", "logistics", ""},
+		{"Dispatcher", "logistics", ""},
+		{"Водитель", "logistics", ""},
+		{"Курьер", "logistics", ""},
+		{"Кладовщик", "logistics", ""},
+		{"Сборщик заказов", "logistics", ""},
+		{"Грузчик", "logistics", ""},
+
+		// THE hazard of this wave: an office clerk that ENDS in "водитель". Asserting
+		// a specific category, not merely "resolves to something" — a not-empty check
+		// would pass while the row was wrong.
+		{"Делопроизводитель", "administration", "ends in водитель; must not be logistics"},
+
+		// Education.
+		{"Swim Instructor", "education", ""},
+		{"Private Swim Instructor", "education", ""},
+		{"Chess Instructor", "education", ""},
+		{"Teacher", "education", ""},
+		{"Preschool Teacher", "education", ""},
+		{"Tutor", "education", ""},
+		{"Lecturer", "education", ""},
+		{"Педагог-психолог", "education", ""},
+		{"Помощник воспитателя", "education", ""},
+		{"Преподаватель", "education", ""},
+		{"Методист", "education", ""},
+
+		// Administration.
+		{"Receptionist", "administration", ""},
+		{"Secretary", "administration", ""},
+		{"Legal Secretary", "administration", ""},
+		// These two stay `operations`, where they already resolve. An IT company's
+		// office manager IS its operations, and taking the row would be the theft this
+		// line of work keeps guarding against — the front-desk and paperwork titles
+		// that resolved to NOTHING are what this category is for.
+		{"Office Manager", "operations", ""},
+		{"Administrative Assistant", "operations", ""},
+		{"Data Entry Specialist", "administration", ""},
+		{"Администратор", "administration", ""},
+		{"Секретарь руководителя", "administration", ""},
+
+		// Personal services.
+		{"Stylist", "personal_services", ""},
+		{"Master Stylist", "personal_services", ""},
+		{"Barber", "personal_services", ""},
+		{"Esthetician", "personal_services", ""},
+		{"Lifeguard", "personal_services", ""},
+		{"Security Guard", "personal_services", ""},
+		{"Janitor", "personal_services", ""},
+		{"Housekeeper", "personal_services", ""},
+		{"Парикмахер", "personal_services", ""},
+		{"Охранник", "personal_services", ""},
+		{"Уборщик", "personal_services", ""},
+
+		// The plural gap. wordmatch has no morphology, so a singular alias cannot
+		// reach a plural title — invisible from the alias list, and it left the three
+		// largest automotive spellings in the catalogue resolving to nothing.
+		{"Automotive Mechanic", "skilled_trades", ""},
+		{"Automotive Mechanics", "skilled_trades", "the plural the shipped alias could not reach"},
+		{"Automotive Tire Technicians", "skilled_trades", ""},
+		{"Automotive Alignment Technicians", "skilled_trades", ""},
+
+		// Missed outright by the consumer wave.
+		{"Optometrist", "healthcare", ""},
+		{"Host", "hospitality", "3 446 open postings spell it exactly"},
+
+		// Russian building maintenance joins the trades already there.
+		{"Рабочий по комплексному обслуживанию и ремонту зданий", "skilled_trades", ""},
+		{"Рабочий по благоустройству населенных пунктов", "skilled_trades", ""},
+
+		// Everything the earlier waves settled must be untouched.
+		{"Store Driver", "retail", "a shop's own driver stays with the shop"},
+		{"Software Engineer", "software_engineering", ""},
+		{"Project Engineer", "industrial_engineering", ""},
+		{"Registered Nurse", "healthcare", ""},
+		{"Server", "hospitality", ""},
+		{"Team Member", "retail", ""},
+		{"Agile Coach", "project_management", "the coach that is not a teacher"},
+
+		// Field-facing delivery work.
+		{"Professional Services Engineer", "solutions_engineering", ""},
+		{"Professional Services Consultant", "solutions_engineering", ""},
+		{"Partner Engineer", "solutions_engineering", ""},
+		{"Deployment Strategist", "solutions_engineering", ""},
+		{"Presales Consultant", "solutions_engineering", ""},
+		{"Technical Consultant", "solutions_engineering", ""},
+		{"ServiceNow Technical Consultant", "solutions_engineering", ""},
+		{"Delivery Consultant", "solutions_engineering", ""},
+		{"Integration Consultant", "solutions_engineering", ""},
+		// A correctness fix, not an addition: roletag already declared the hyphenated
+		// spelling, so the ROLE fired while the category stayed empty. Both spellings
+		// must agree.
+		{"Forward Deployed Engineer", "solutions_engineering", ""},
+		{"Forward-Deployed Engineer", "solutions_engineering", "the role fired; the category did not"},
+		// Unchanged neighbours.
+		{"Delivery Manager", "project_management", ""},
+		{"Engagement Manager", "management", ""},
+		{"Implementation Consultant", "customer_success", ""},
+		{"Solutions Architect", "architecture", ""},
 	}
 
 	for _, tc := range cases {

@@ -657,3 +657,30 @@ func TestConsumerRolesDoNotSteal(t *testing.T) {
 		}
 	}
 }
+
+// TestDeriveServiceRoles names the seats the four service categories decompose into.
+func TestDeriveServiceRoles(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Commercial Driver", "logistics", "driver"},
+		{"Courier", "logistics", "driver"},
+		{"Warehouse Associate", "logistics", "warehouse_associate"},
+		{"Forklift Operator", "logistics", "warehouse_associate"},
+		{"Dispatcher", "logistics", "dispatcher"},
+		{"Preschool Teacher", "education", "teacher"},
+		{"Swim Instructor", "education", "instructor"},
+		{"Receptionist", "administration", "receptionist"},
+		{"Legal Secretary", "administration", "receptionist"},
+		{"Master Stylist", "personal_services", "stylist"},
+		{"Security Guard", "personal_services", "security_guard"},
+		{"Janitor", "personal_services", "cleaner"},
+		// A named role is emitted whether or not the category agrees: a shop's own
+		// driver keeps `retail` and is still findable as a driver.
+		{"Store Driver", "retail", "driver"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}

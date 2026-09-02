@@ -90,10 +90,16 @@ var categoryNoun = map[string]string{
 	// the industry's name: "Healthcare Worker" reads as a survey category, "Nurse" as
 	// a job — but the namedRoleTable below owns "Nurse", so the umbrella takes the
 	// broader word and the seats stay named roles.
-	"healthcare":         "Healthcare Professional",
-	"skilled_trades":     "Tradesperson",
-	"retail":             "Retail Associate",
-	"hospitality":        "Hospitality Worker",
+	"healthcare":     "Healthcare Professional",
+	"skilled_trades": "Tradesperson",
+	"retail":         "Retail Associate",
+	"hospitality":    "Hospitality Worker",
+	"logistics":      "Logistics Worker",
+	"education":      "Educator",
+	"administration": "Administrator",
+	// Not "Stylist" or "Security Guard": the namedRoleTable owns both labels, and an
+	// identical label on two slugs shows as a duplicate option in the picker.
+	"personal_services":  "Personal Services Worker",
 	"product":            "Product Manager",
 	"project_management": "Project Manager",
 	"management":         "Manager",
@@ -353,6 +359,18 @@ var namedRoleTable = []struct {
 	{"server", "Server", []string{"server", "banquet server", "официант"}},
 	{"cook", "Cook", []string{"cook", "line cook", "prep cook", "chef", "повар"}},
 	{"barista", "Barista", []string{"barista", "бариста"}},
+
+	// The service seats. "Store Driver" keeps `retail` as its category, and the driver
+	// role is emitted on top — a named role does not depend on the category.
+	{"driver", "Driver", []string{"driver", "commercial driver", "cdl driver", "delivery driver", "truck driver", "courier", "водитель", "курьер"}},
+	{"warehouse_associate", "Warehouse Associate", []string{"warehouse associate", "warehouse operator", "warehouse assistant", "forklift operator", "fulfillment associate", "кладовщик", "грузчик"}},
+	{"dispatcher", "Dispatcher", []string{"dispatcher", "диспетчер"}},
+	{"teacher", "Teacher", []string{"teacher", "preschool teacher", "substitute teacher", "lecturer", "professor", "преподаватель", "педагог"}},
+	{"instructor", "Instructor", []string{"swim instructor", "chess instructor", "soccer coach", "basketball coach", "fitness coach"}},
+	{"receptionist", "Receptionist", []string{"receptionist", "secretary", "legal secretary", "medical secretary", "секретарь", "делопроизводитель"}},
+	{"stylist", "Stylist", []string{"stylist", "master stylist", "barber", "esthetician", "aesthetician", "парикмахер"}},
+	{"security_guard", "Security Guard", []string{"security guard", "security officer", "armed guard", "охранник"}},
+	{"cleaner", "Cleaner", []string{"janitor", "custodian", "housekeeper", "уборщик", "уборщица"}},
 
 	// Non-software professions the catalogue carries (broad scope).
 	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},

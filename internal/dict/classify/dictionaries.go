@@ -278,6 +278,17 @@ var categoryTable = []aliasEntry{
 	{"sdet", "qa"},
 	{"тестировщик", "qa"},
 	{"тестирование", "qa"},
+	// Physical security is not information security, and the bare alias below cannot
+	// tell them apart: "Security Guard" and "Security Officer" have been resolving to
+	// the infosec facet, which is wrong in both directions — a guard is not findable
+	// where guards are looked for, and an infosec filter returns him.
+	// The information-security spellings come first: a CISO's title contains "security
+	// officer" verbatim, and the physical-security entries below would take it.
+	{"chief information security officer", "security"},
+	{"information security officer", "security"},
+	{"security guard", "personal_services"},
+	{"security officer", "personal_services"},
+	{"armed guard", "personal_services"},
 	{"security", "security"},
 	{"infosec", "security"},
 	{"appsec", "security"},
@@ -992,6 +1003,26 @@ var categoryTable = []aliasEntry{
 	// words, so their order against that alias does not matter.
 	{"integration engineer", "software_engineering"},
 
+	// Field-facing delivery work — the seats between engineering and the customer.
+	// Small (1 180 open) but IT-profile, unlike most of what the later waves resolve.
+	//
+	// The hyphenated FDE is a correctness fix, not an addition: roletag declares
+	// "forward-deployed engineer" explicitly and classify did not, so the role fired
+	// while the category stayed empty. The same word-boundary trap as the automotive
+	// plurals, hiding inside a title the catalogue already considered covered.
+	{"forward-deployed engineer", "solutions_engineering"},
+	{"professional services engineer", "solutions_engineering"},
+	{"professional services consultant", "solutions_engineering"},
+	{"partner engineer", "solutions_engineering"},
+	{"deployment strategist", "solutions_engineering"},
+	{"presales consultant", "solutions_engineering"},
+	{"pre-sales consultant", "solutions_engineering"},
+	{"delivery consultant", "solutions_engineering"},
+	{"integration consultant", "solutions_engineering"},
+	// The volume behind the bare phrase is platform work — ServiceNow, Salesforce,
+	// Dynamics and Oracle Technical Consultants — not general management consulting.
+	{"technical consultant", "solutions_engineering"},
+
 	// The consumer industries: healthcare, skilled trades, retail and hospitality.
 	// 225 000 open postings that were filterable by nothing at all — the residue a
 	// broad multi-industry ATS crawl brings in with the boards it wants.
@@ -1026,6 +1057,7 @@ var categoryTable = []aliasEntry{
 	{"occupational therapist", "healthcare"},
 	{"veterinarian", "healthcare"},
 	{"physician", "healthcare"},
+	{"optometrist", "healthcare"},
 
 	// SKILLED TRADES. The qualified technician spellings come first; the bare word
 	// closes the family.
@@ -1037,6 +1069,18 @@ var categoryTable = []aliasEntry{
 	{"maintenance technician", "skilled_trades"},
 	{"hvac technician", "skilled_trades"},
 	{"automotive mechanic", "skilled_trades"},
+	// The PLURAL spellings. wordmatch matches whole words and has no morphology, so a
+	// singular alias cannot reach a plural title — a gap nothing in an alias list
+	// shows, and it left the three largest automotive spellings in the catalogue
+	// ("Automotive Mechanics" 1292, "AUTOMOTIVE TIRE TECHNICIANS" 1248, "Automotive
+	// Alignment Technicians" 490) resolving to nothing while their singular forms
+	// resolved fine.
+	{"automotive mechanics", "skilled_trades"},
+	{"automotive technicians", "skilled_trades"},
+	{"tire technicians", "skilled_trades"},
+	{"alignment technicians", "skilled_trades"},
+	{"service technicians", "skilled_trades"},
+	{"mechanics", "skilled_trades"},
 	{"mechanic", "skilled_trades"},
 	{"electrician", "skilled_trades"},
 	{"plumber", "skilled_trades"},
@@ -1071,6 +1115,11 @@ var categoryTable = []aliasEntry{
 	{"server", "hospitality"},
 	{"host/hostess", "hospitality"},
 	{"hostess", "hospitality"},
+	// 3 446 open postings are titled exactly "Host". The bare word collides with web
+	// hosting, but every hosting title in this catalogue names the thing it hosts
+	// ("Hosting Engineer", "Web Host") and resolves far above through its own
+	// discipline — this block is declared late, so what reaches it names nothing else.
+	{"host", "hospitality"},
 	{"line cook", "hospitality"},
 	{"prep cook", "hospitality"},
 	{"cook", "hospitality"},
@@ -1080,6 +1129,72 @@ var categoryTable = []aliasEntry{
 	{"dishwasher", "hospitality"},
 	{"busser", "hospitality"},
 	{"kitchen assistant", "hospitality"},
+
+	// The service sectors: the last clusters in the catalogue that have a shape.
+	// LOGISTICS. "Store Driver" is declared in the retail block above — a shop's own
+	// driver stays with the shop — so the bare driver aliases here cannot take it.
+	{"delivery specialist", "logistics"},
+	{"delivery driver", "logistics"},
+	{"commercial driver", "logistics"},
+	{"cdl driver", "logistics"},
+	{"truck driver", "logistics"},
+	{"driver", "logistics"},
+	{"courier", "logistics"},
+	{"warehouse associate", "logistics"},
+	{"warehouse operator", "logistics"},
+	{"warehouse supervisor", "logistics"},
+	{"warehouse assistant", "logistics"},
+	{"warehouse", "logistics"},
+	{"forklift operator", "logistics"},
+	{"truck unloader", "logistics"},
+	{"fulfillment associate", "logistics"},
+	{"dispatcher", "logistics"},
+
+	// EDUCATION. No bare "coach": "Agile Coach" resolves to project management far
+	// above, but "Career Coach" and "Sales Coach" are genuinely ambiguous, and the
+	// volume here is private sports coaching, which the qualified spellings reach.
+	{"swim instructor", "education"},
+	{"chess instructor", "education"},
+	{"soccer coach", "education"},
+	{"basketball coach", "education"},
+	{"fitness coach", "education"},
+	{"preschool teacher", "education"},
+	{"substitute teacher", "education"},
+	{"teacher", "education"},
+	{"tutor", "education"},
+	// No bare "instructor": the suite pins "Safe Driving Instructor" to no category —
+	// it is the guard that keeps a bare "safe" off the SAFe agile alias — and a bare
+	// instructor alias overrides it. The volume here is private sports and swim
+	// coaching, which the qualified spellings above already reach.
+	{"lecturer", "education"},
+	{"professor", "education"},
+
+	// ADMINISTRATION — the front desk and the paperwork, not an IT company's
+	// back-office (that is `operations`, and filing a court clerk there would muddy a
+	// facet that works).
+	{"administrative assistant", "administration"},
+	{"executive assistant", "administration"},
+	{"office manager", "administration"},
+	{"office assistant", "administration"},
+	{"receptionist", "administration"},
+	{"legal secretary", "administration"},
+	{"medical secretary", "administration"},
+	{"secretary", "administration"},
+	{"data entry", "administration"},
+
+	// PERSONAL AND FACILITY SERVICES.
+	{"master stylist", "personal_services"},
+	{"stylist", "personal_services"},
+	{"barber", "personal_services"},
+	{"esthetician", "personal_services"},
+	{"aesthetician", "personal_services"},
+	{"lifeguard", "personal_services"},
+	{"security guard", "personal_services"},
+	{"security officer", "personal_services"},
+	{"janitor", "personal_services"},
+	{"custodian", "personal_services"},
+	{"housekeeper", "personal_services"},
+	{"housekeeping", "personal_services"},
 
 	// Industrial engineering: the seats a factory, plant, utility or field-service
 	// organisation staffs. 51 994 open postings measured on prod after the IT wave, and
@@ -1197,6 +1312,47 @@ var categoryTable = []aliasEntry{
 	{"плотник", "skilled_trades"},
 	{"маляр", "skilled_trades"},
 	{"механик", "skilled_trades"},
+	// General building maintenance — 5 256 open across these two spellings, and the
+	// same work the trades above already cover.
+	{"рабочий по комплексному обслуживанию", "skilled_trades"},
+	{"рабочий по благоустройству", "skilled_trades"},
+
+	// The Russian service vocabularies.
+	//
+	// `делопроизводитель` is declared FIRST and on purpose: it is an office clerk, and
+	// it ENDS in `водитель`. wordmatch matches on word boundaries so the bare driver
+	// alias could not take it anyway — but the two now exist together in production,
+	// in different categories, and a reader scanning this list would have no way to
+	// see the hazard. The regression test asserts the clerk resolves to
+	// `administration` specifically, not merely to something.
+	{"делопроизводитель", "administration"},
+	{"секретарь", "administration"},
+	{"администратор", "administration"},
+	{"офис-менеджер", "administration"},
+
+	{"сборщик заказов", "logistics"},
+	{"заведующий складом", "logistics"},
+	{"кладовщик", "logistics"},
+	{"экспедитор", "logistics"},
+	{"грузчик", "logistics"},
+	{"курьер", "logistics"},
+	{"водитель", "logistics"},
+
+	// Russian inflects, and `wordmatch` has no more morphology for it than it has for
+	// English plurals: "Помощник воспитателя" (2 097 open across two spellings) is the
+	// genitive and the nominative alias cannot reach it. The same trap as the
+	// automotive plurals fixed in this change, in another language.
+	{"воспитателя", "education"},
+	{"воспитатель", "education"},
+	{"преподаватель", "education"},
+	{"педагог", "education"},
+	{"методист", "education"},
+
+	{"парикмахер", "personal_services"},
+	{"охранник", "personal_services"},
+	{"уборщик", "personal_services"},
+	{"уборщица", "personal_services"},
+	{"сиделка", "personal_services"},
 
 	// NO bare English "engineer", though 689 open postings spell it exactly. It was
 	// tried and the existing suite rejected it, which is the answer: "Product

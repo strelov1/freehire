@@ -113,7 +113,10 @@ func TestCraftCategoriesAreNonTech(t *testing.T) {
 	// growth behaviour-neutral: the same postings match ruleUnknown before and
 	// ruleBusiness after. Adding one here would make a quarter of a million postings
 	// newly undeletable — a policy change wearing a vocabulary change's clothes.
-	for _, notCraft := range []string{"healthcare", "skilled_trades", "retail", "hospitality"} {
+	for _, notCraft := range []string{
+		"healthcare", "skilled_trades", "retail", "hospitality",
+		"logistics", "education", "personal_services", "administration",
+	} {
 		if slices.Contains(NonTechCraftCategories, notCraft) {
 			t.Errorf("%q must NOT be craft-protected: it is the business prune exists to remove", notCraft)
 		}
@@ -121,7 +124,10 @@ func TestCraftCategoriesAreNonTech(t *testing.T) {
 }
 
 func TestConsumerCategoriesAreNonTech(t *testing.T) {
-	for _, c := range []string{"healthcare", "skilled_trades", "retail", "hospitality"} {
+	for _, c := range []string{
+		"healthcare", "skilled_trades", "retail", "hospitality",
+		"logistics", "education", "personal_services", "administration",
+	} {
 		if !slices.Contains(CategoryValues, c) {
 			t.Errorf("CategoryValues must contain %q", c)
 			continue
