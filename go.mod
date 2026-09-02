@@ -1,6 +1,6 @@
 module github.com/strelov1/freehire
 
-go 1.25.13
+go 1.26.8
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
@@ -41,7 +41,7 @@ require (
 	github.com/tmc/langchaingo v0.1.14
 	github.com/valyala/fasthttp v1.73.0
 	github.com/yuin/goldmark v1.8.5
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/image v0.45.0
 	golang.org/x/net v0.58.0
 	golang.org/x/oauth2 v0.36.0
