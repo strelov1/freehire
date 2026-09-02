@@ -288,6 +288,22 @@ var apiBoards = []struct{ host, source, prefix string }{
 	{"api.lever.co", "lever", "v0/postings"},
 }
 
+// noBoardHosts are hosts under a supported ATS's domain that serve the platform's own
+// infrastructure rather than any tenant, so no path on them names a board. platformLabels
+// cannot reach these: it reads the LEFTMOST label, and job-boards.cdn.greenhouse.io leads with
+// the same "job-boards" the real board hosts do — what makes it infrastructure sits in the
+// middle. A full-host entry is also the stabler statement: a CDN is not an employer whatever
+// it renames its asset folder to, whereas listing the folder ("assets") only holds until the
+// next bundler change.
+//
+// This matters because boardresolve takes the FIRST recognized ATS URL in a fetched page, and
+// every Greenhouse job page loads its stylesheet from this host in <head> — well before the
+// link to the board itself. A pasted vanity or grnh.se link therefore resolved to the board
+// "assets" instead of the employer (this cost lionhires, 27 postings, one rejected row).
+var noBoardHosts = map[string]bool{
+	"job-boards.cdn.greenhouse.io": true,
+}
+
 // reservedSegments lists, per matched host entry, the leading path segments that are the
 // platform's own machinery and never a tenant. They are skipped in path mode; when nothing
 // but reserved segments remains the URL is declined rather than turned into a false board.
@@ -331,6 +347,9 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return "", "", "", false
 	}
 	host := hostname(u)
+	if noBoardHosts[host] {
+		return "", "", "", false
+	}
 	if src, board, canonical, ok := recognizeAPI(u, host); ok {
 		return src, board, canonical, true
 	}

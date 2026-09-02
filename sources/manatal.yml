@@ -1435,3 +1435,7 @@
   board: way2b1
 - company: Welocalize
   board: welocalize-4
+
+# recovered from the rejected contribution pile, validated live 2026-09-02
+- company: Murano Global
+  board: murano-global

@@ -32,6 +32,10 @@ func TestRecognize(t *testing.T) {
 		{"jobvite portal segment skipped", "https://jobs.jobvite.com/careers/ness/jobs", "jobvite", "ness", "https://jobs.jobvite.com/careers/ness/jobs", true},
 		{"greenhouse embed app has no board", "https://job-boards.greenhouse.io/embed/job_app?token=1", "", "", "", false},
 		{"greenhouse embed script has no board", "https://boards.greenhouse.io/embed/job_board/js?for=acme", "", "", "", false},
+		// The CDN host leads with the same "job-boards" label the real board hosts do, so only a
+		// full-host rule declines it; every Greenhouse job page links it from <head>.
+		{"greenhouse CDN asset has no board", "https://job-boards.cdn.greenhouse.io/assets/entry-ZTzpC0b7.css", "", "", "", false},
+		{"greenhouse EU board still resolves", "https://job-boards.eu.greenhouse.io/lionhires/jobs/4941013101", "greenhouse", "lionhires", "https://job-boards.eu.greenhouse.io/lionhires/jobs/4941013101", true},
 
 		// Manatal's hosted career-page domain is path-based, not subdomain-based, and its boards
 		// live in manatal.yml — careerspage.yml is deliberately empty.
