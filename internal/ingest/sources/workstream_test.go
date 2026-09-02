@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -371,5 +372,24 @@ func TestWorkstreamPositionsURL(t *testing.T) {
 	const want = "https://www.workstream.us/j/965a796b/positions"
 	if got := workstreamPositionsURL(workstreamTestBoard); got != want {
 		t.Errorf("workstreamPositionsURL = %q, want %q", got, want)
+	}
+}
+
+func TestWorkstreamPageURL(t *testing.T) {
+	cases := map[string]string{
+		"https://www.workstream.us/j/965a796b/positions": "https://www.workstream.us/j/965a796b/positions?page=3",
+		// A listing URL that ever states a query of its own keeps it, and the page parameter is
+		// SET rather than appended so it cannot arrive twice.
+		"https://www.workstream.us/j/965a796b/positions?locale=en": "https://www.workstream.us/j/965a796b/positions?locale=en&page=3",
+		"https://www.workstream.us/j/965a796b/positions?page=1":    "https://www.workstream.us/j/965a796b/positions?page=3",
+	}
+	for base, want := range cases {
+		u, err := url.Parse(base)
+		if err != nil {
+			t.Fatalf("parse %q: %v", base, err)
+		}
+		if got := workstreamPageURL(u, 3); got != want {
+			t.Errorf("workstreamPageURL(%q, 3) = %q, want %q", base, got, want)
+		}
 	}
 }

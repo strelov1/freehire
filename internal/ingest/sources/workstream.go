@@ -168,7 +168,7 @@ func (s workstream) list(ctx context.Context, e CompanyEntry) ([]workstreamPosti
 	listed := make(map[string]bool)
 	for page := 1; page <= pages; page++ {
 		if page > 1 {
-			root, err = s.http.GetHTML(ctx, fmt.Sprintf("%s?page=%d", base, page))
+			root, err = s.http.GetHTML(ctx, workstreamPageURL(base, page))
 			if err != nil {
 				break // a later page failing just ends pagination; page 1's postings still ingest
 			}
@@ -195,22 +195,29 @@ func (s workstream) list(ctx context.Context, e CompanyEntry) ([]workstreamPosti
 // IS page 1; for a single-brand one the request was redirected to the brand root and searchBaseUrl
 // names the brand's positions listing, which costs one more request. A page stating no
 // searchBaseUrl is not a career site, and saying so beats paging an unrelated document.
-func (s workstream) listing(ctx context.Context, e CompanyEntry) (*html.Node, string, error) {
+func (s workstream) listing(ctx context.Context, e CompanyEntry) (*html.Node, *url.URL, error) {
 	asked := workstreamPositionsURL(e.Board)
 	root, err := s.http.GetHTML(ctx, asked)
 	if err != nil {
-		return nil, "", fmt.Errorf("workstream: listing %s: %w", e.Board, err)
+		return nil, nil, fmt.Errorf("workstream: listing %s: %w", e.Board, err)
 	}
-	base := firstSubmatch(workstreamSearchBasePattern, workstreamScripts(root))
-	if base == "" {
-		return nil, "", fmt.Errorf("workstream: listing %s: no positions listing on the page", e.Board)
+	stated := firstSubmatch(workstreamSearchBasePattern, workstreamScripts(root))
+	if stated == "" {
+		return nil, nil, fmt.Errorf("workstream: listing %s: no positions listing on the page", e.Board)
 	}
-	if base == asked {
+	// Resolved rather than believed verbatim: the site states an absolute URL today, and
+	// resolving costs nothing while leaving a relative one still fetchable.
+	ref, err := url.Parse(stated)
+	if err != nil {
+		return nil, nil, fmt.Errorf("workstream: listing %s: positions listing %q: %w", e.Board, stated, err)
+	}
+	base := workstreamBase.ResolveReference(ref)
+	if base.String() == asked {
 		return root, base, nil
 	}
-	root, err = s.http.GetHTML(ctx, base)
+	root, err = s.http.GetHTML(ctx, base.String())
 	if err != nil {
-		return nil, "", fmt.Errorf("workstream: listing %s: %w", e.Board, err)
+		return nil, nil, fmt.Errorf("workstream: listing %s: %w", e.Board, err)
 	}
 	return root, base, nil
 }
@@ -229,7 +236,17 @@ func workstreamTotalPages(root *html.Node) int {
 
 // workstreamPositionsURL builds a board's employer-wide positions listing URL.
 func workstreamPositionsURL(board string) string {
-	return fmt.Sprintf("%s/j/%s/positions", workstreamBaseURL, board)
+	return fmt.Sprintf("%s/j/%s/positions", workstreamBaseURL, url.PathEscape(board))
+}
+
+// workstreamPageURL builds one page of a positions listing, SETTING rather than appending the
+// page parameter so a listing URL that ever carries a query of its own stays well-formed.
+func workstreamPageURL(base *url.URL, page int) string {
+	u := *base
+	q := u.Query()
+	q.Set("page", strconv.Itoa(page))
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // detail fetches one posting page and returns the listing card's job with its body filled in.

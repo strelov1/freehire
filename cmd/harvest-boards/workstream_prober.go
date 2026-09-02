@@ -149,11 +149,3 @@ func workstreamScriptText(root *html.Node) string {
 	walk(root)
 	return b.String()
 }
-
-// firstSubmatch returns a pattern's first capture group in s, "" when it does not match.
-func firstSubmatch(pattern *regexp.Regexp, s string) string {
-	if m := pattern.FindStringSubmatch(s); m != nil {
-		return m[1]
-	}
-	return ""
-}

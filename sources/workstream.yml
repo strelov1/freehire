@@ -8,16 +8,20 @@
 # cmd/harvest-boards from Common Crawl's index of www.workstream.us/j/* and kept only because a
 # live probe returned postings — 1,388 candidates, 777 live.
 #
-# ONE BOARD PER EMPLOYER NAME, and the 777 are deliberately not all here. Workstream is sold to
-# franchise operators, and each operator's account reports the BRAND as its employer: 358 of the
-# 777 live boards are called "Chick-fil-A", 67 "Jimmy John's", 60 "Culver's". freehire keys a
-# company by normalize.CompanySlug, so those collapse onto one company page whatever we crawl —
-# and sources.Config.Shard assigns whole COMPANIES to shards, so 358 boards under one name are
-# one indivisible lump far larger than a run's budget and no amount of sharding can spread them.
-# Keeping the first board of each distinct employer leaves 237 that a run can actually crawl; the
-# ones dropped would have bought near-duplicate crew postings under a company page that already
-# has them, at ~7 requests each against a platform that meters hard by IP (see
-# workstreamRequestInterval — the crawl is paced to ~0.5 req/s).
+# ONE BOARD PER EMPLOYER NAME, and the 777 are deliberately not all here. This is a trade, not a
+# deduplication: the 540 boards left out are real franchise operators posting real jobs at their
+# own stores, and leaving them out is lost coverage. It is made because of how they are NAMED.
+# Workstream is sold to franchisees and each operator's account reports the BRAND as its employer,
+# so 358 of the 777 live boards are called "Chick-fil-A", 67 "Jimmy John's", 60 "Culver's".
+# sources.Config.Shard assigns whole COMPANIES to shards — it must, because the stale-job sweep
+# scopes closes by company_slug — so those 358 are one indivisible lump larger than any run's
+# budget: `--shard=1/40` over the full harvest still crawled 363 of 777 boards. A file that cannot
+# be sharded cannot be crawled at all at this platform's pace (~0.5 req/s per IP; see
+# workstreamRequestInterval), which is what decided the cut. Keeping the first board of each
+# distinct employer leaves 237, and those 237 do shard evenly (119/118).
+#
+# Raising this is a real option, but it needs the naming fixed first — company_slug_aliases or a
+# per-operator name — not just more entries.
 - company: Chick-fil-A
   board: 004a7767
 - company: Culver's
