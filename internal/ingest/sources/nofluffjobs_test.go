@@ -39,8 +39,14 @@ func (f *nofluffjobsFake) GetJSON(_ context.Context, url string, v any) error {
 }
 
 const nofluffjobsListingJSON = `{"postings":[
-  {"id":"gcp-verita-Kraków","url":"gcp-verita-krakow","name":"Verita HR","title":"GCP Data ETL","technology":"Python","category":"data","seniority":["Mid"],"fullyRemote":false,"posted":1784034271774,"location":{"places":[{"city":"Kraków","country":{"name":"Poland"}}],"fullyRemote":false}},
-  {"id":"remote-dev","url":"remote-dev","name":"Acme","title":"Backend Dev","technology":"Java","seniority":["Senior"],"fullyRemote":true,"posted":1784034271774,"location":{"places":[],"fullyRemote":true}},
+  {"id":"gcp-verita-Kraków","url":"gcp-verita-krakow","name":"Verita HR","title":"GCP Data ETL","technology":"Python","category":"data","seniority":["Mid"],"fullyRemote":false,"posted":1784034271774,"location":{"places":[{"city":"Kraków","country":{"code":"POL","name":"Poland"}}],"fullyRemote":false}},
+  {"id":"remote-dev","url":"remote-dev","name":"Acme","title":"Backend Dev","technology":"Java","seniority":["Senior"],"fullyRemote":false,"posted":1784034271774,"location":{"places":[{"city":"Remote"}],"fullyRemote":true}},
+  {"id":"remote-in-poland","url":"remote-in-poland","name":"Acme","title":"AI Engineer","technology":"Python","seniority":["Senior"],"fullyRemote":false,"posted":1784034271774,"location":{"places":[
+    {"city":"Remote"},
+    {"city":"Warsaw","street":"Puławska 2","country":{"code":"POL","name":"Poland"}},
+    {"province":"lower-silesian","provinceOnly":true,"country":{"code":"POL","name":"Poland"}},
+    {"city":"Budapest","country":{"code":"HUN","name":"Hungary"}}
+  ],"fullyRemote":true}},
   {"id":"no-company","url":"no-company","name":"","title":"X","seniority":["Junior"],"posted":1784034271774}
 ]}`
 
@@ -50,8 +56,8 @@ func TestNoFluffJobsFetchMapsAndDrops(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 2 {
-		t.Fatalf("len(jobs) = %d, want 2 (no-company dropped)", len(jobs))
+	if len(jobs) != 3 {
+		t.Fatalf("len(jobs) = %d, want 3 (no-company dropped)", len(jobs))
 	}
 	byID := map[string]Job{}
 	for _, j := range jobs {
@@ -79,9 +85,33 @@ func TestNoFluffJobsFetchMapsAndDrops(t *testing.T) {
 	if j.Remote {
 		t.Error("Remote = true for a Kraków job, want false")
 	}
+	if !slices.Equal(j.Countries, []string{"pl"}) {
+		t.Errorf("Countries = %v, want [pl]", j.Countries)
+	}
+	// The remote flag lives in location.fullyRemote; the posting-level "fullyRemote" beside it
+	// is false on every posting the feed serves, so reading that one loses remoteness entirely.
 	r := byID["remote-dev"]
 	if !r.Remote || r.WorkMode != "remote" || r.Seniority != "senior" {
 		t.Errorf("remote job: Remote=%v WorkMode=%q Seniority=%q", r.Remote, r.WorkMode, r.Seniority)
+	}
+	if r.Location != "Remote" {
+		t.Errorf("Location = %q, want 'Remote' (the marker is the only place)", r.Location)
+	}
+	if len(r.Countries) != 0 {
+		t.Errorf("Countries = %v, want none (no place states a country)", r.Countries)
+	}
+	// A remote posting lists the "Remote" pseudo-place AHEAD of its real offices. It states
+	// remoteness, not geography — reading it as the location erases the country and drops the
+	// job into the Global/Worldwide bucket.
+	p := byID["remote-in-poland"]
+	if p.Location != "Warsaw, Poland" {
+		t.Errorf("Location = %q, want 'Warsaw, Poland' (the Remote marker is skipped)", p.Location)
+	}
+	if !p.Remote || p.WorkMode != "remote" {
+		t.Errorf("remote-in-poland: Remote=%v WorkMode=%q, want remote", p.Remote, p.WorkMode)
+	}
+	if !slices.Equal(p.Countries, []string{"pl", "hu"}) {
+		t.Errorf("Countries = %v, want [pl hu] (every place, first-seen order)", p.Countries)
 	}
 }
 

@@ -83,7 +83,7 @@ func TestSweepRowByRow_SkipsOneUnclosableRowWithoutBlockingTheRest(t *testing.T)
 	pool := testdb.Pool(t)
 	ctx := context.Background()
 	q := db.New(pool)
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow)
+	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
 
 	if err := store.Save(ctx, sweepTestPosting("greenhouse", "acme:blocked", "Blocked Role")); err != nil {
 		t.Fatalf("save blocked job: %v", err)

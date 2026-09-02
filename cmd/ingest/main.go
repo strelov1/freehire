@@ -123,6 +123,14 @@ func run() int {
 		log.Printf("ingest: hydration retry window widened to %v — body-less rows will be re-fetched",
 			hydrationWindow)
 	}
+	refetchAll, err := refetchAllFor(os.Getenv("INGEST_REFETCH_ALL"))
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if refetchAll {
+		log.Printf("ingest: INGEST_REFETCH_ALL — every listed posting is treated as new, so stored rows are re-written, not just refreshed")
+	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -137,7 +145,7 @@ func run() int {
 	// tally records which of the two writes each persisted posting took, so the run says how far
 	// the cheap path actually reached rather than leaving it to be assumed (see writeTally).
 	tally := newWriteTally()
-	store := newDBStore(pool, enrich.Version, crawled, tally, hydrationWindow)
+	store := newDBStore(pool, enrich.Version, crawled, tally, hydrationWindow, refetchAll)
 	runner := pipeline.Runner{
 		Registry:    registry,
 		Store:       store,
@@ -303,6 +311,29 @@ func hydrationRetryWindowFor(env string) (time.Duration, error) {
 		return 0, fmt.Errorf("HYDRATION_RETRY_DAYS must be a positive number of days, got %q", env)
 	}
 	return time.Duration(days) * 24 * time.Hour, nil
+}
+
+// refetchAllFor resolves INGEST_REFETCH_ALL, the repair switch that empties the seen-set so a
+// crawl re-WRITES the provider's stored rows instead of only refreshing their liveness (see
+// dbStore.ExistingExternalIDs). It is what carries an adapter fix to the postings ingested before
+// it: the ordinary crawl never rewrites them, and re-deriving from the database cannot recover a
+// field the adapter read wrong, because what the database stored is the wrong reading.
+//
+// Set it by hand for one run and expect the crawl to cost one detail request per stored posting.
+// Nothing is lost if a detail request fails — UpsertJob keeps the stored description when the
+// incoming one is empty — so a run that hits its systemd timeout can simply be repeated.
+//
+// Anything other than the two accepted spellings is an error rather than a quiet false: this is a
+// hand-set one-off, where an ordinary crawl would look exactly like a repair that found nothing.
+func refetchAllFor(env string) (bool, error) {
+	switch env {
+	case "":
+		return false, nil
+	case "1", "true":
+		return true, nil
+	default:
+		return false, fmt.Errorf("INGEST_REFETCH_ALL must be 1 or true when set, got %q", env)
+	}
 }
 
 // sweepProvider closes one provider's unseen jobs: the bulk UPDATE (CloseUnseenJobs or

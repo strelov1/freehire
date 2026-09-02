@@ -37,6 +37,10 @@ type dbStore struct {
 	// the seen-set so a hydrating adapter re-attempts its detail fetch. See ExistingExternalIDs
 	// and cmd/ingest's hydrationRetryWindowFor.
 	hydrationWindow time.Duration
+	// refetchAll empties the seen-set for the whole run, so a hydrating adapter treats every
+	// listed posting as new and the pipeline re-WRITES it instead of only refreshing its
+	// liveness. See ExistingExternalIDs.
+	refetchAll bool
 }
 
 // dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
@@ -53,7 +57,7 @@ var (
 	_ pipeline.SeenLookup = (*dbStore)(nil)
 )
 
-func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, hydrationWindow time.Duration) *dbStore {
+func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, hydrationWindow time.Duration, refetchAll bool) *dbStore {
 	return &dbStore{
 		pool:            pool,
 		q:               db.New(pool),
@@ -61,6 +65,7 @@ func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tall
 		crawled:         crawled,
 		tally:           tally,
 		hydrationWindow: hydrationWindow,
+		refetchAll:      refetchAll,
 	}
 }
 
@@ -334,8 +339,18 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 // A row still without a description is withheld from the set until it is pipeline.
 // HydrationRetryWindow old, so the crawl re-attempts the detail fetch its first pass lost rather
 // than treating the body-less row as finished.
+//
+// refetchAll withholds EVERY row, which is the repair path for an adapter fix that changes what
+// the LISTING yields (a mis-read remote flag, a location built from the wrong place). Such a fix
+// reaches new postings on the next crawl and reaches stored ones never: a re-listed posting takes
+// the refresh path, which by design rewrites no content. Emptying the set puts the provider's
+// whole catalogue back through the ordinary write, so nothing about the repair is a second code
+// path that could disagree with the crawl.
 func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error) {
 	set := map[string]bool{}
+	if s.refetchAll {
+		return set, nil
+	}
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.hydrationWindow), Valid: true}
 	if board == "" {
 		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{

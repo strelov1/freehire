@@ -52,23 +52,44 @@ type nofluffjobsListing struct {
 
 // nofluffjobsPosting is one listing entry. posted is epoch milliseconds; technology is a single
 // skill string; seniority is an array whose first entry is the grade.
+//
+// A posting also carries a top-level "fullyRemote" beside Location. It is NOT read: the feed
+// serves it false on every one of its ~19k postings while location.fullyRemote is true on ~16.8k
+// of them, so the top-level copy is a dead field whose only effect is to lose remoteness.
 type nofluffjobsPosting struct {
-	ID          string   `json:"id"`
-	URL         string   `json:"url"`
-	Name        string   `json:"name"`
-	Title       string   `json:"title"`
-	Technology  string   `json:"technology"`
-	Seniority   []string `json:"seniority"`
-	FullyRemote bool     `json:"fullyRemote"`
-	Posted      int64    `json:"posted"`
-	Location    struct {
-		Places []struct {
-			City    string `json:"city"`
-			Country struct {
-				Name string `json:"name"`
-			} `json:"country"`
-		} `json:"places"`
-	} `json:"location"`
+	ID         string                   `json:"id"`
+	URL        string                   `json:"url"`
+	Name       string                   `json:"name"`
+	Title      string                   `json:"title"`
+	Technology string                   `json:"technology"`
+	Seniority  []string                 `json:"seniority"`
+	Posted     int64                    `json:"posted"`
+	Location   nofluffjobsLocationBlock `json:"location"`
+}
+
+// nofluffjobsLocationBlock is a posting's geography: the remote flag and the places it names.
+type nofluffjobsLocationBlock struct {
+	FullyRemote bool               `json:"fullyRemote"`
+	Places      []nofluffjobsPlace `json:"places"`
+}
+
+// nofluffjobsPlace is one named work location. Country.Code is alpha-3 on most postings and
+// lowercase alpha-2 on a few; NormalizeCountry resolves either.
+type nofluffjobsPlace struct {
+	City    string `json:"city"`
+	Country struct {
+		Code string `json:"code"`
+		Name string `json:"name"`
+	} `json:"country"`
+}
+
+// isRemoteMarker reports whether this is NoFluffJobs' pseudo-place rather than a real one: a
+// countryless entry named literally "Remote", which a remote posting carries AHEAD of its
+// offices. It states remoteness — the flag beside it says the same thing — and reading it as
+// geography erases the posting's country.
+func (p nofluffjobsPlace) isRemoteMarker() bool {
+	return p.Country.Code == "" && p.Country.Name == "" &&
+		strings.EqualFold(strings.TrimSpace(p.City), "remote")
 }
 
 // nofluffjobsDetail is the per-posting detail payload; the description is split across the offer
@@ -170,14 +191,15 @@ func (p nofluffjobsPosting) toJob() (Job, bool) {
 		URL:        fmt.Sprintf(nofluffjobsOfferURL, p.URL),
 		Title:      strings.TrimSpace(p.Title),
 		Company:    strings.TrimSpace(p.Name),
-		Location:   nofluffjobsLocation(p),
-		Remote:     p.FullyRemote,
+		Location:   nofluffjobsLocation(p.Location),
+		Remote:     p.Location.FullyRemote,
+		Countries:  nofluffjobsCountries(p.Location.Places),
 		// Canonicalize, not Parse: p.Technology is the platform's own single structured
 		// tag, an asserted name rather than prose to mine.
 		Skills:    skilltag.Canonicalize([]string{p.Technology}),
 		Seniority: nofluffjobsSeniority(p.Seniority),
 	}
-	if p.FullyRemote {
+	if p.Location.FullyRemote {
 		job.WorkMode = "remote"
 	}
 	if p.Posted > 0 {
@@ -187,19 +209,42 @@ func (p nofluffjobsPosting) toJob() (Job, bool) {
 	return job, true
 }
 
-// nofluffjobsLocation is the first place's "City, Country", or empty when the posting lists no place.
-func nofluffjobsLocation(p nofluffjobsPosting) string {
-	if len(p.Location.Places) == 0 {
-		return ""
-	}
-	place := p.Location.Places[0]
-	parts := make([]string, 0, 2)
-	for _, s := range []string{place.City, place.Country.Name} {
-		if s = strings.TrimSpace(s); s != "" {
-			parts = append(parts, s)
+// nofluffjobsLocation is the first REAL place's "City, Country" — the remote pseudo-place is
+// skipped, because a remote posting lists it ahead of the offices it actually names and the
+// location dictionary reads the bare word "Remote" as open-anywhere, replacing the country with
+// the Global/Worldwide bucket. A posting whose only place is the marker keeps "Remote": there,
+// open-anywhere is what the feed states.
+func nofluffjobsLocation(loc nofluffjobsLocationBlock) string {
+	for _, place := range loc.Places {
+		if place.isRemoteMarker() {
+			continue
+		}
+		parts := make([]string, 0, 2)
+		for _, s := range []string{place.City, place.Country.Name} {
+			if s = strings.TrimSpace(s); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ", ")
 		}
 	}
-	return strings.Join(parts, ", ")
+	if loc.FullyRemote {
+		return "Remote"
+	}
+	return ""
+}
+
+// nofluffjobsCountries is the posting's whole set of stated countries. A posting names its
+// offices AND the provinces it hires across, and a Polish board still lists cross-border roles
+// (715 of ~19k postings name more than one country), so keeping only the first would hide a job
+// from a filter on any of the others.
+func nofluffjobsCountries(places []nofluffjobsPlace) []string {
+	codes := make([]string, 0, len(places))
+	for _, place := range places {
+		codes = append(codes, place.Country.Code)
+	}
+	return countriesFromCodes(codes)
 }
 
 // nofluffjobsSeniority maps NoFluffJobs' first seniority grade into freehire's vocabulary. Its

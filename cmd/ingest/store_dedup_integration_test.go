@@ -57,7 +57,7 @@ func TestSave_CollapsesPerCityCopiesOfOneRole(t *testing.T) {
 	ctx := context.Background()
 	q := db.New(pool)
 
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow)
+	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
 
 	if err := store.Save(ctx, cityPosting("248544000257794970", "Querétaro, Mexico")); err != nil {
 		t.Fatalf("save the first city: %v", err)
