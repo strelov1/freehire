@@ -29,8 +29,9 @@ import (
 //     (fingerprintHTTP) rather than the shared client — the bayt/gulftalent/meta/uber case.
 //   - A RENAMED employer keeps its old slug resolving against the same uuid, so two spellings of
 //     one board both answer 200 and list identical postings. The pipeline namespaces an external
-//     id by BOARD, so a board file carrying both spellings stores every one of that employer's
-//     postings twice. One entry per company uuid — see the note in sources/gusto.yml.
+//     id by BOARD, so a board file carrying both spellings would store every one of that
+//     employer's postings twice. gustoBoardIdentity folds them for the board-file dedup, and
+//     sources/gusto.yml carries one entry per company uuid.
 //   - The listing serves 25 postings a page under ?page=N and renders "no open positions
 //     currently" past the last one, so the walk ends on a page that adds no posting.
 //   - The listing carries every field except the body, which only the posting page holds — hence
@@ -72,6 +73,25 @@ var gustoPostingIDPattern = regexp.MustCompile(
 // tracking suffix still matches.
 func gustoPostingID(loc string) string {
 	return firstSubmatch(gustoPostingIDPattern, trimURLSuffix(loc))
+}
+
+// gustoBoardUUIDPattern captures the company uuid a board id ends with, tolerating the format
+// suffix the board route ignores.
+var gustoBoardUUIDPattern = regexp.MustCompile(
+	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\.[a-z]+)?$`)
+
+// gustoBoardIdentity folds every spelling of a board onto the company uuid it addresses — the
+// entry sources.boardIdentity needs for gusto. Two spellings of one board both answer 200, and
+// both were met live: a renamed employer keeps its OLD slug resolving against the same uuid, and
+// a trailing ".json" is accepted because the route ignores the format suffix. Left unfolded they
+// would be crawled as two boards, and since external ids are namespaced by board, every posting
+// of that employer would be stored twice — the failure icimsHost exists for, met again. A board
+// carrying no uuid folds to itself, so a malformed entry is never quietly merged into another.
+func gustoBoardIdentity(board string) string {
+	if uuid := firstSubmatch(gustoBoardUUIDPattern, board); uuid != "" {
+		return uuid
+	}
+	return board
 }
 
 // gustoPosting is one row of a board listing: everything the platform states about a posting

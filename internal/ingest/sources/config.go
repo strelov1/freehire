@@ -130,6 +130,7 @@ func dedupeBoards(entries []CompanyEntry) []CompanyEntry {
 var boardIdentity = map[string]func(board string) string{
 	"icims":    icimsHost,
 	"dayforce": dayforceSiteID,
+	"gusto":    gustoBoardIdentity,
 }
 
 // boardDedupeKey is the identity dedupeBoards and DuplicateBoards collapse on:

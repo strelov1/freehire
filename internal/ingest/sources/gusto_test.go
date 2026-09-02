@@ -425,6 +425,51 @@ func TestGustoApplySalary(t *testing.T) {
 	}
 }
 
+func TestGustoBoardIdentity(t *testing.T) {
+	const uuid = "aacf81cf-0249-436a-a514-3014fea74892"
+	cases := map[string]string{
+		// The rename twins: one employer, two slugs, the same uuid, both answering 200.
+		"affordable-massage-company-" + uuid: uuid,
+		"affordable-massage-studios-" + uuid: uuid,
+		// The board route ignores a format suffix, so this is a third spelling of the same one.
+		"affordable-massage-studios-" + uuid + ".json": uuid,
+		// Nothing to fold on: kept verbatim rather than quietly merged into another board.
+		"no-uuid-here": "no-uuid-here",
+		"":             "",
+	}
+	for board, want := range cases {
+		if got := gustoBoardIdentity(board); got != want {
+			t.Errorf("gustoBoardIdentity(%q) = %q, want %q", board, got, want)
+		}
+	}
+}
+
+// Two spellings of one board in a board file must collapse to one crawl target: external ids
+// are namespaced by board, so crawling both would store every posting of that employer twice.
+func TestGustoConfigDropsASecondSpellingOfOneBoard(t *testing.T) {
+	data := []byte(`
+- company: Affordable Massage Studios
+  board: affordable-massage-studios-aacf81cf-0249-436a-a514-3014fea74892
+- company: Affordable Massage Company
+  board: affordable-massage-company-aacf81cf-0249-436a-a514-3014fea74892
+- company: Acme Robotics
+  board: ` + gustoTestBoard + `
+`)
+	cfg, err := ParseConfig("gusto", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(Sources) = %d, want 2: %+v", len(cfg.Sources), cfg.Sources)
+	}
+	if cfg.Sources[0].Company != "Affordable Massage Studios" {
+		t.Errorf("first entry = %+v, want the first spelling kept", cfg.Sources[0])
+	}
+	if dups := DuplicateBoards(cfg.Sources); len(dups) != 0 {
+		t.Errorf("the deduped config still reports duplicates: %v", dups)
+	}
+}
+
 func TestGustoBoardURL(t *testing.T) {
 	want := "https://jobs.gusto.com/boards/" + gustoTestBoard + "?page=2"
 	if got := gustoBoardURL(gustoTestBoard, 2); got != want {
