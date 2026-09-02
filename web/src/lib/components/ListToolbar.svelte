@@ -50,7 +50,12 @@
       {unit}
     </span>
   {/if}
-  <div class="ml-auto flex items-center gap-2">
+  <!-- Wraps too, not just the outer row. Without this the controls are one indivisible
+       block: the row can drop the whole block to a second line but the block itself
+       still overflows, so a longer control (a translated select value, a fourth entry)
+       clips exactly as before. `justify-end` keeps a wrapped line right-aligned under
+       the `ml-auto`. -->
+  <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
     {@render controls?.()}
     {#if onSwipe}
       <button
