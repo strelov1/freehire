@@ -73,6 +73,18 @@ cd "/opt/freehire/src/${dir}-${new}"
 # unauthenticated operations, and this host crawls hard enough to sit under it. That
 # needs a credential provisioned on the box, which is an owner's call, not a script's.
 #
+# What actually got releases moving again is upstream of all of this, and lives in the
+# checkouts rather than here: their refspec was the wildcard `+refs/heads/*`, so every
+# open PR branch on the remote was work the fetch had to do, and a fetch with work to do
+# always sends the POST. Narrowed to
+#
+#   git config remote.origin.fetch '+refs/heads/main:refs/remotes/origin/main'
+#
+# an already-current checkout fetches in a single GET and the release proceeds. A release
+# checkout has no business tracking every branch anyway. It is not a fix either — the
+# first release that genuinely has commits to pull still needs the POST — but it removes
+# the case where the fetch failed for branches nothing here will ever build.
+#
 # Until then the manual way through, when a release must ship and the fetch will not:
 #
 #   git bundle create /tmp/hire.bundle origin/main          # from a machine that can
