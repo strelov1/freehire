@@ -98,19 +98,44 @@ Verified as having no other reader: `chunkStrings` (0 uses outside the file), `f
       whose newest non-aggregator row is >30 days unseen). Out of scope here on purpose: this
       change stops those rows suppressing live postings; it does not close them. Filed as
       **#2328**.
-- [ ] 6.2a Run `cmd/backfill-slug-folded` on prod. Two write paths were rewriting
+- [x] 6.2a Run `cmd/backfill-slug-folded` on prod. Two write paths were rewriting
       `company_slug` without `company_slug_folded` (7.2/7.3 below), so 1.63% of open rows carry
       a STALE fold — measured 2026-09-02, 1,753 of 107,650 in a 2% sample. The gate now matches
       on the folded column alone, so those rows are invisible to it (and were already invisible
       to the aggregator-suppression pass). The worker's chunk UPDATE is `IS DISTINCT FROM`-
       guarded, so this both repairs the stale rows and writes nothing where the fold is already
       right. Under-matching is the recoverable direction, so this is a repair, not a blocker.
-- [ ] 6.2 After deploy, run `cmd/ingest` on `sources/himalayas.yml` and confirm
+- [x] 6.2 After deploy, run `cmd/ingest` on `sources/himalayas.yml` and confirm
       `GET /api/v1/jobs/find?url=https://himalayas.app/companies/pipe/jobs/senior-software-engineer-5097528323`
       returns a `public_slug` instead of `{"data":null}` — the issue's own reproduction.
-- [ ] 6.3 Read the run's `Stats.ATSCovered` against the previous run's. A fall is expected and
-      is the measure of the fix; an unexpected collapse to near-zero would mean the freshness
-      cutoff or the fold is wrong, not that the gate improved.
+      **Done 2026-09-02 17:19 UTC** on the scheduled hourly run (ingested=429, failed=0);
+      `/find` now answers `senior-software-engineer-pipe-577lw4nz`, and
+      `/jobs/search?company_slug=pipe` returns 2 rows instead of 1 — the fintech's Senior
+      Software Engineer beside the 2013 trakstar row that was suppressing it.
+- [x] 6.3 Read the run's `Stats.ATSCovered` against the previous run's.
+
+      **The prediction in this line was wrong, and the correction matters more than the
+      original guess.** Measured across himalayas' hourly runs on 2026-09-02, out of 2,000
+      postings offered:
+
+      ```text
+      11:16  1434 covered      15:21  1449 covered
+      12:25  1443 covered      16:24  1450 covered   <- last run on the old gate
+      14:16  1447 covered      17:19  1491 covered   <- first run on the new gate
+      ```
+
+      `ATSCovered` ROSE by 41 (+2.8%), it did not fall. Two effects pull against each other and
+      the second is the larger: the freshness window removes coverage, but moving from the
+      search index to the live table ADDS it. The index lags its rebuild by hours and carries
+      none of the rows `cmd/reindex` drops for search quality — uncategorised, body-less, and
+      `duplicate_of`-marked non-aggregator postings — all of which this design counts as real
+      coverage on purpose (see design.md, "Coverage definition"). The old gate was therefore
+      leaking coverage it should have found, and that leak was bigger than the stale coverage
+      it was wrongly claiming.
+
+      So the earlier "a fall is the measure of the fix" is not a usable check, and neither is
+      "a collapse to near-zero means something is wrong" — that one still holds, but nothing
+      approached it. **The measure of the fix is the reproduction in 6.2**, which passed.
 
 ## 7. Review findings applied
 

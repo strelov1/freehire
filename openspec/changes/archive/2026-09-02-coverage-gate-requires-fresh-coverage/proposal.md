@@ -54,10 +54,15 @@ Between 11k and 22k employers are closed to aggregator ingest by rows nobody has
 - Affected specs: `aggregator-ats-coverage-skip`
 - Affected code: `internal/ingest/pipeline` (the port's doc contract), a new Postgres-backed
   implementation and its query, `cmd/ingest` (wiring), `internal/search/search` (deletions).
-- **Behavioural:** more aggregator postings are saved. The gate's own counter
-  (`Stats.ATSCovered`) falls; catalogue growth is bounded by the 22,022 slugs above, and every
-  posting newly admitted is one the `aggregator-ats-dedup` reindex pass can still mark later if
-  the employer really is the same. Erring this way is the recoverable direction — see design.md.
+- **Behavioural:** the postings this change exists to rescue are saved — the reproduction in
+  tasks.md 6.2 passed on prod. What it does NOT do is lower the gate's counter, which this line
+  originally predicted. Measured on himalayas' hourly runs, `Stats.ATSCovered` went 1,450 ->
+  1,491 out of 2,000 offered. Two effects pull against each other and the second is larger: the
+  freshness window removes coverage, but reading the live table instead of the search index
+  adds it, because the index lags its rebuild by hours and omits every row `cmd/reindex` drops
+  for search quality (uncategorised, body-less, `duplicate_of`-marked) — all of which are real
+  coverage. Every posting newly admitted is still one the `aggregator-ats-dedup` reindex pass
+  can mark later, so erring either way stays recoverable — see design.md.
 - **Migration:** one, `0122`, recording `jobs_open_company_slug_folded_col_idx`. The index has
   been on prod since 0109, but only because that file's COMMENT told an operator to build it by
   hand — the file itself never created it, so any volume built from `migrations/` has the column
