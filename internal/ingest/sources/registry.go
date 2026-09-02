@@ -263,10 +263,10 @@ func All(c HTTPClient) map[string]Source {
 		NewLumenalta(c),
 		NewDataArt(c),
 		NewOnstrider(c, os.Getenv("ONSTRIDER_REFERRAL_HANDLE")),
-		NewAlignerr(c),
+		NewAlignerr(c, os.Getenv("ALIGNERR_REFERRAL_CODE")),
 		NewTalentHR(c),
 		NewMicro1(c, os.Getenv("MICRO1_REFERRAL_CODE")),
-		NewBairesDev(c),
+		NewBairesDev(c, os.Getenv("BAIRESDEV_REFERRER_CODE")),
 		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
 		// Concurrency-limited: its gov API degrades under the pipeline's board concurrency (500s +
 		// read-timeouts), so its in-flight requests are capped to a gentle few.

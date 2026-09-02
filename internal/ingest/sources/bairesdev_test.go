@@ -73,7 +73,7 @@ func TestBairesDevCrawlsListingDedupsAndHydrates(t *testing.T) {
 		},
 	}
 
-	jobs, err := NewBairesDev(fake).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewBairesDev(fake, "").Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestBairesDevSkipsPostingThatNoLongerResolves(t *testing.T) {
 		listing: bairesDevListingHTML([2]string{"https://applicants.bairesdev.com/job/97/999999/apply", "Ghost | Remote Work | Brazil"}),
 		jobs:    map[string]string{"999999": `{}`},
 	}
-	jobs, err := NewBairesDev(fake).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewBairesDev(fake, "").Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -139,7 +139,26 @@ func TestBairesDevSkipsPostingThatNoLongerResolves(t *testing.T) {
 
 func TestBairesDevErrorsWhenNoWidget(t *testing.T) {
 	fake := &bairesDevFake{listing: "<html>no widget here</html>"}
-	if _, err := NewBairesDev(fake).Fetch(context.Background(), CompanyEntry{}); err == nil {
+	if _, err := NewBairesDev(fake, "").Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Fatal("want error when the talent listing has no job widget")
+	}
+}
+
+func TestBairesDevApplyURLCarriesTheReferrerCode(t *testing.T) {
+	// The code is fictional: the real one is an account identifier and lives in
+	// BAIRESDEV_REFERRER_CODE, never in this repository.
+	const code = "AbC123xyZ_-"
+	const apply = "https://applicants.bairesdev.com/job/1001/298849/apply"
+
+	if got, want := (bairesdev{referral: code}).applyURL(apply), apply+"?referrer="+code; got != want {
+		t.Errorf("applyURL() = %q, want %q", got, want)
+	}
+	// No code configured (every fork of this repository): the plain apply link is unchanged.
+	if got := (bairesdev{}).applyURL(apply); got != apply {
+		t.Errorf("applyURL() = %q, want the apply link unchanged", got)
+	}
+	// A malformed code would be interpolated into a URL, so the constructor drops it.
+	if s := NewBairesDev(nil, "not a code&x=1").(bairesdev); s.referral != "" {
+		t.Errorf("referral = %q, want it dropped as malformed", s.referral)
 	}
 }

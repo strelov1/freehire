@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -12,12 +13,46 @@ import (
 // __NEXT_DATA__ script: the /jobs listing carries every active posting's id and title (its
 // description truncated to a preview), so the full body, dates, and structured fields come
 // from each posting's own detail page, fanned out like the other detail-fetching adapters.
+//
+// Outbound links are attributable: Alignerr pays a bounty for a referred contributor who
+// onboards and logs hours, and it is earned only when the contributor arrives carrying a
+// referral code. See applyURL.
 type alignerr struct {
 	http TextGetter
+	// referral is the Alignerr referral code outbound links are attributed to, from
+	// ALIGNERR_REFERRAL_CODE (see registry.go). Empty means unattributed: the URL stays the
+	// plain posting page, which is what an installation that is not an Alignerr referrer —
+	// including every fork of this repository — gets.
+	referral string
 }
 
-// NewAlignerr builds the Alignerr adapter over the given HTTP client.
-func NewAlignerr(c TextGetter) Source { return alignerr{http: c} }
+// NewAlignerr builds the Alignerr adapter over the given HTTP client, attributing outbound
+// links to the given referral code (empty = unattributed, see alignerr.referral).
+func NewAlignerr(c TextGetter, referral string) Source {
+	if !alignerrReferralCodePattern.MatchString(referral) {
+		referral = "" // absent or malformed: crawl unattributed rather than emit a broken link
+	}
+	return alignerr{http: c, referral: referral}
+}
+
+// alignerrReferralCodePattern is the shape of an Alignerr referral code: a UUID, as its own
+// share links carry. The code is interpolated into an outbound URL, so anything else is
+// rejected at construction rather than escaped — a code is copied from the "Refer & earn"
+// panel by hand, and a malformed one is a misconfiguration to notice.
+var alignerrReferralCodePattern = regexp.MustCompile(
+	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// applyURL hangs the configured referral code off the posting page, which is all Alignerr needs:
+// the page reads the parameter and builds its OWN apply links from it, pointing at
+// app.alignerr.com/signin?job=<posting id>&referral-code=<code> (verified live — the id it uses
+// is the same posting id we already store, so nothing has to be looked up). An unset code leaves
+// the plain posting URL alone.
+func (a alignerr) applyURL(jobURL string) string {
+	if a.referral == "" {
+		return jobURL
+	}
+	return jobURL + "?referral-code=" + a.referral
+}
 
 func (alignerr) Provider() string { return "alignerr" }
 
@@ -120,7 +155,7 @@ func (a alignerr) detail(ctx context.Context, e CompanyEntry, it alignerrListIte
 	location := firstNonEmpty(it.Location, j.Location)
 	return Job{
 		ExternalID:     id,
-		URL:            jobURL,
+		URL:            a.applyURL(jobURL),
 		Title:          firstNonEmpty(strings.TrimSpace(j.Name), strings.TrimSpace(it.Title)),
 		Company:        e.Company,
 		Location:       location,

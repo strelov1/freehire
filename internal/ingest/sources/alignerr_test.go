@@ -38,7 +38,7 @@ func alignerrDetailJSON(id, name, jobType string, active bool) string {
 }
 
 func TestAlignerrProvider(t *testing.T) {
-	if got := NewAlignerr(nil).Provider(); got != "alignerr" {
+	if got := NewAlignerr(nil, "").Provider(); got != "alignerr" {
 		t.Errorf("Provider() = %q, want %q", got, "alignerr")
 	}
 }
@@ -48,7 +48,7 @@ func TestAlignerrFetchListingThenDetailAndMaps(t *testing.T) {
 		route("/jobs/aaa", alignerrDetailJSON("aaa", "Software Engineer Task Author (AI Training)", "CONTRACT", true)).
 		route("alignerr.com/jobs", alignerrListingJSON("aaa"))
 
-	jobs, err := NewAlignerr(fake).Fetch(context.Background(), CompanyEntry{Company: "Alignerr", Provider: "alignerr"})
+	jobs, err := NewAlignerr(fake, "").Fetch(context.Background(), CompanyEntry{Company: "Alignerr", Provider: "alignerr"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestAlignerrDropsInactiveAndMissingDetail(t *testing.T) {
 		// no route for "gone" → its detail fetch fails
 		route("alignerr.com/jobs", alignerrListingJSON("live", "closed", "gone"))
 
-	jobs, err := NewAlignerr(fake).Fetch(context.Background(), CompanyEntry{Company: "Alignerr"})
+	jobs, err := NewAlignerr(fake, "").Fetch(context.Background(), CompanyEntry{Company: "Alignerr"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestAlignerrSanitizesShortDescriptionFallback(t *testing.T) {
 		route("/jobs/aaa", detail).
 		route("alignerr.com/jobs", alignerrListingJSON("aaa"))
 
-	jobs, err := NewAlignerr(fake).Fetch(context.Background(), CompanyEntry{Company: "Alignerr"})
+	jobs, err := NewAlignerr(fake, "").Fetch(context.Background(), CompanyEntry{Company: "Alignerr"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -153,5 +153,25 @@ func TestAlignerrRegisteredInAll(t *testing.T) {
 	// Single-company boardless: redundant with the company filter, so excluded from the facet.
 	if slices.Contains(FilterableProviders(), "alignerr") {
 		t.Error("FilterableProviders() should exclude boardless alignerr")
+	}
+}
+
+func TestAlignerrApplyURLCarriesTheReferralCode(t *testing.T) {
+	// The code is fictional: the real one is an account identifier and lives in
+	// ALIGNERR_REFERRAL_CODE, never in this repository.
+	const code = "00000000-1111-2222-3333-444444444444"
+	const jobURL = "https://www.alignerr.com/jobs/0060423d-eca1-4321-a802-93fb04195a46"
+
+	// The posting page reads the parameter and builds its own apply link from it, so hanging
+	// the code off the posting URL is the whole integration — no id lookup is needed.
+	if got, want := (alignerr{referral: code}).applyURL(jobURL), jobURL+"?referral-code="+code; got != want {
+		t.Errorf("applyURL() = %q, want %q", got, want)
+	}
+	if got := (alignerr{}).applyURL(jobURL); got != jobURL {
+		t.Errorf("applyURL() = %q, want the posting URL unchanged", got)
+	}
+	// A malformed code would be interpolated into a URL, so the constructor drops it.
+	if s := NewAlignerr(nil, "nope").(alignerr); s.referral != "" {
+		t.Errorf("referral = %q, want it dropped as malformed", s.referral)
 	}
 }

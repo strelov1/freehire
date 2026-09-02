@@ -18,8 +18,17 @@ import (
 // the public per-job endpoint (/api/JobPosting?JobPostingId=<id>) — the same schema.org JSON-LD
 // the linksource adapter reads, giving a clean title, description, date, and remote flag.
 // Single-company (every posting is BairesDev) and boardless, so its config entry is a placeholder.
+//
+// Outbound links are attributable: BairesDev pays a bounty for a referred candidate who is
+// hired and stays, and it is earned only when the candidate arrives carrying a referrer code.
+// See applyURL.
 type bairesdev struct {
 	http bairesDevHTTP
+	// referral is the BairesDev referrer code outbound links are attributed to, from
+	// BAIRESDEV_REFERRER_CODE (see registry.go). Empty means unattributed: the URL stays the
+	// plain apply link, which is what an installation that is not a BairesDev referrer —
+	// including every fork of this repository — gets.
+	referral string
 }
 
 // bairesDevHTTP is the transport bairesdev needs: the talent site's raw HTML (to read the embedded
@@ -40,8 +49,32 @@ const (
 	bairesDevApplyURL     = "https://applicants.bairesdev.com/job/%s/%s/apply"
 )
 
-// NewBairesDev builds the BairesDev adapter over the given HTTP client.
-func NewBairesDev(c bairesDevHTTP) Source { return bairesdev{http: c} }
+// NewBairesDev builds the BairesDev adapter over the given HTTP client, attributing outbound
+// links to the given referrer code (empty = unattributed, see bairesdev.referral).
+func NewBairesDev(c bairesDevHTTP, referral string) Source {
+	if !bairesDevReferrerCodePattern.MatchString(referral) {
+		referral = "" // absent or malformed: crawl unattributed rather than emit a broken link
+	}
+	return bairesdev{http: c, referral: referral}
+}
+
+// bairesDevReferrerCodePattern is the shape of a BairesDev referrer code: the opaque
+// alphanumeric token its share links carry. The code is interpolated into an outbound URL, so
+// anything else is rejected at construction rather than escaped — a code is copied from the
+// referral dashboard by hand, and a malformed one is a misconfiguration to notice.
+var bairesDevReferrerCodePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// applyURL hangs the configured referrer code off the apply link, which is all BairesDev needs:
+// its apply flow keeps the parameter across the hop to the login/register step (verified live —
+// clicking Apply on a job carrying ?referrer=<code> lands on
+// /login?careerId=…&jobId=…&referrer=<code>), so a candidate who signs up from our link is
+// attributed. An unset code leaves the plain apply link alone.
+func (b bairesdev) applyURL(applyLink string) string {
+	if b.referral == "" {
+		return applyLink
+	}
+	return applyLink + "?referrer=" + b.referral
+}
 
 func (bairesdev) Provider() string { return "bairesdev" }
 
@@ -201,7 +234,7 @@ func (b bairesdev) detail(ctx context.Context, r bairesDevRef) (Job, bool) {
 	}
 	return Job{
 		ExternalID:  r.jobID,
-		URL:         fmt.Sprintf(bairesDevApplyURL, r.careerID, r.jobID),
+		URL:         b.applyURL(fmt.Sprintf(bairesDevApplyURL, r.careerID, r.jobID)),
 		Title:       p.Title,
 		Company:     company,
 		Location:    r.location,
