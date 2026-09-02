@@ -291,6 +291,11 @@ func All(c HTTPClient) map[string]Source {
 		// Its GraphQL detail endpoint meters by a per-IP request budget, so only that path is
 		// rate-paced; the search listing stays on the bare client.
 		NewSeek(c, pacedSeekPoster(c)),
+		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
+		// job type (board) over one central index, hydrating bodies from each posting page's
+		// schema.org block. The board is a job type and not a district on purpose — see
+		// edjoin.go.
+		NewEdjoin(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),

@@ -1,0 +1,18 @@
+# EDJOIN (edjoin.org), the hiring board California's K-12 school districts, county offices of
+# education and community colleges publish on. One central index, so there is no per-district
+# board: each entry's board is a JOB-TYPE id, the facet EDJOIN's own search filters by, and the
+# crawl reads that slice of the index (the hh professional_role shape). company is a display
+# label only — the real employer is the district on each posting.
+#
+# The whole platform is 16,447 postings and almost all of it is teaching, aide, coaching and
+# custodial work that does not belong in an IT catalogue, so only the platform's own technology
+# facet is crawled. It is the single technical entry in EDJOIN's 66-value job-type vocabulary;
+# see internal/ingest/sources/edjoin.go for the measurement behind that.
+#
+# Add a board only after validating it live: /Home/LoadJobs must answer a non-zero
+# totalRecords for the id. An UNKNOWN id answers 200 with totalRecords 0 rather than an error,
+# so a typo reads exactly like an empty slice — which is why each id carries EDJOIN's own label.
+# harvest-boards edjoin <seed> does this for you in one request per candidate, and never
+# appends a job type that yields nothing.
+- company: EDJOIN — Information technology
+  board: "25" # Information Tech. / Computer Svcs.

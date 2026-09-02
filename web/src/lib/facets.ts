@@ -353,6 +353,7 @@ const SOURCE_LABELS: Record<string, string> = {
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
   jobstash: 'JobStash', globalpayments: 'Global Payments',
   usajobs: 'USAJobs', whatjobs: 'WhatJobs', ukgready: 'UKG Ready',
+  edjoin: 'EDJOIN',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
