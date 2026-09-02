@@ -18,7 +18,6 @@ func TestBoardSweepTargets(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		stats       pipeline.Stats
-		selfClosing bool
 		fullCatalog bool
 		slicedCrawl bool
 		want        []string
@@ -43,12 +42,11 @@ func TestBoardSweepTargets(t *testing.T) {
 			want:        nil,
 		},
 		{
-			// Its feed's removals are authoritative and it re-reports only what changed, so an
-			// unseen posting means nothing at all.
-			name:        "a self-closing provider sweeps none",
-			stats:       covered,
-			selfClosing: true,
-			want:        nil,
+			// A board listed twice — a repeated entry, or one board id recurring across
+			// regional slices — must not produce two identical statements and two log lines.
+			name:  "a board listed twice is swept once",
+			stats: pipeline.Stats{Ingested: 1, SweepableBoards: []string{"acme", "acme"}},
+			want:  []string{"acme"},
 		},
 		{
 			// It already closes by source alone on a clean run, which is strictly broader.
@@ -59,7 +57,7 @@ func TestBoardSweepTargets(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := boardSweepTargets(tc.stats, tc.selfClosing, tc.fullCatalog, tc.slicedCrawl)
+			got := boardSweepTargets(tc.stats, tc.fullCatalog, tc.slicedCrawl)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("boardSweepTargets = %v, want %v", got, tc.want)
 			}
@@ -71,7 +69,7 @@ func TestBoardSweepTargetsAreDeterministic(t *testing.T) {
 	// Boards finish in whatever order their goroutines do, so the sweep sorts them — a
 	// deterministic order keeps the per-board log lines comparable between runs.
 	stats := pipeline.Stats{Ingested: 1, SweepableBoards: []string{"zulu", "alpha", "mike"}}
-	got := boardSweepTargets(stats, false, false, false)
+	got := boardSweepTargets(stats, false, false)
 	if !slices.Equal(got, []string{"alpha", "mike", "zulu"}) {
 		t.Errorf("boardSweepTargets = %v, want them sorted", got)
 	}

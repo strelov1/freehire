@@ -91,3 +91,35 @@ fakes.
 - [ ] 6.3 Watch `search_delete_outbox` depth and the drain: 215,000 queued deletions is a larger
       wave than a normal sweep produces, and the drain's pace is what decides how long closed
       rows linger in search.
+
+## 7. Review findings applied
+
+Two parallel reviews (standards, spec) ran against the implementation commit.
+
+- [x] 7.1 **A real correctness hole, found by the spec review.** `sweepableBoard` took
+      `recordSuccess`'s decision as "the crawl did not fail". It is not: `ingestStream` sets
+      `Failed = 1` on a mid-crawl error AFTER partial progress, and such a board is
+      deliberately treated as healthy (a rate-limited stream must not cool a working board).
+      So a stream that died at posting 40 of 5,000 qualified its board, and the sweep would
+      have closed everything past the point it died — the exact freehire#725 class the design
+      calls its load-bearing safety. `st.Failed > 0` is now its own refusal, with a comment
+      separating HEALTH from COMPLETENESS. `TestRunReportsNoBoardWhenAStreamDiedMidCrawl`
+      reproduces the bug and was confirmed to fail before the fix.
+- [x] 7.2 The remaining exposure is recorded rather than solved: an adapter that returns a
+      truncated crawl as an unqualified success is invisible here, and always was — the
+      company-scoped close has the same hole, which is how #725 happened in the first place.
+- [x] 7.3 Standards review: `selfClosing` was a dead parameter — the sweep loop `continue`s on
+      it before reaching the board close, so the branch was unreachable and its test asserted
+      nothing. Removed.
+- [x] 7.4 Standards review: `slices.Compact` after the sort. A board can legitimately appear
+      twice (a repeated board-file entry, or one board id recurring across regional slices).
+      The duplicate closed nothing extra but doubled the board's log line and the board count.
+- [x] 7.5 The "across N boards" log counted boards ASKED, not boards that closed anything, so
+      a healthy provider read as if every board had retired rows. It now reports both.
+- [x] 7.6 The `fullCatalog` exclusion comment claimed that source "already closes by source
+      alone", which is only true on a zero-failure run. Reworded to say what happens in both
+      cases, and to record that both such adapters are boardless today so the exclusion is
+      belt-and-braces.
+- [x] 7.7 Spec review: the `shouldSweep` interaction (a provider whose every posting was
+      rejected never reaches either close) was correct but documented nowhere. Now stated in
+      `cmd/ingest` and in design.md, with why it is left alone.

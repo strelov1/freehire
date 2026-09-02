@@ -120,6 +120,20 @@ The backlog drains over one fleet cycle instead of one pass — which is the onl
 rejected design does better, and it does not justify a second mechanism in a lifecycle that
 already documents four.
 
+## What the enclosing loop already decides
+
+`sweepableProviders` gates the whole per-provider sweep on `Ingested > 0`, and that is not
+changed here. A consequence worth stating rather than discovering: a provider whose every
+posting this run was rejected by the catalogue filter never reaches EITHER close, even though
+the pipeline correctly marked its boards sweepable — a rejected posting is one the crawl
+reached, which is why it counts toward `boardReachedPostings`.
+
+The two rules answer different questions and both are right. The board qualification asks "did
+we read this board", the provider gate asks "did this run see enough of the world to justify
+closing anything". A board caught by the gap simply waits for the next run in which its provider
+saves something. Widening the gate would mean deciding that a provider whose entire crawl was
+filtered away is nevertheless known-good, which is a larger claim than this change needs.
+
 ## Rollout
 
 Live from the first run, with a per-board log line carrying the board and the count. The

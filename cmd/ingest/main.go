@@ -250,19 +250,31 @@ func run() int {
 		// slug therefore never enters the crawled set and whose row would otherwise stay open
 		// forever (freehire#2328). The two overlap; the overlap is one indexed statement per
 		// board.
+		//
+		// Note what the enclosing loop already decided: sweepableProviders gates on
+		// Ingested > 0, so a provider whose every posting this run was REJECTED never reaches
+		// either close, even though the pipeline correctly marked its boards sweepable (a
+		// rejected posting is one the crawl reached). That is the existing "a run that ingested
+		// nothing proves only that its crawl failed" rule, and it is left alone: such a board's
+		// turn comes on the next run in which its provider saves anything at all. Widening it
+		// would mean deciding that a provider whose entire crawl was filtered away is
+		// nevertheless known-good, which is a bigger claim than this change needs.
 		// Presence in grace IS the "declares a wider window" marker — SweepGraceWindows only
 		// lists adapters that declare one — so the lookup is a membership test, not a
 		// comparison against a zero that would read as an ordinary window of length nothing.
 		_, slicedCrawl := grace[provider]
-		boards := boardSweepTargets(runStats[provider], selfClosing[provider], fullCatalog[provider], slicedCrawl)
-		boardClosed, boardFailures := sweepBoards(ctx, queries, provider, boards, cutoff)
+		boards := boardSweepTargets(runStats[provider], fullCatalog[provider], slicedCrawl)
+		boardClosed, boardsClosed, boardFailures := sweepBoards(ctx, queries, provider, boards, cutoff)
 		if boardFailures > 0 {
 			failed++
 			log.Printf("close stale jobs (%s): %d of %d board sweeps failed — see preceding lines",
 				provider, boardFailures, len(boards))
 		}
 		if boardClosed > 0 {
-			log.Printf("closed %d stale %s jobs across %d crawled board(s)", boardClosed, provider, len(boards))
+			// boardsClosed, not len(boards): the second counts the boards ASKED, and most of a
+			// healthy provider's boards retire nothing.
+			log.Printf("closed %d stale %s jobs across %d of %d crawled board(s)",
+				boardClosed, provider, boardsClosed, len(boards))
 		}
 	}
 	return worker.ExitCode(failed, 0)

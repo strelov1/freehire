@@ -606,13 +606,25 @@ func boardReachedPostings(st Stats) bool {
 // sweepableBoard returns the entry's board when this run proved it covered it, and nothing
 // otherwise. See Stats.SweepableBoards for what the proof is for.
 //
-// A boardless entry is refused, and that refusal is the load-bearing one: its postings are
-// namespaced with an empty board, so a board-scoped close would select the provider's entire
-// catalogue. The zero-yield refusal is the other: a board that lists nothing cannot be told
-// apart from a board whose crawl broke, and closing within one on that basis is how a Workday
-// board reporting total:0 on its second page once had its live tail retired (freehire#725).
+// Three refusals, each closing a different way of not having read the board:
+//
+//   - A boardless entry, and this is the load-bearing one: its postings are namespaced with an
+//     empty board, so a board-scoped close would select the provider's ENTIRE catalogue.
+//   - A board that reached no postings, which cannot be told apart from a board whose crawl
+//     broke — that is how a Workday board reporting total:0 on its second page once had its
+//     live tail retired (freehire#725).
+//   - A board whose crawl reported a failure AT ALL, even after partial progress. This one is
+//     not the same test as recordSuccess's, deliberately. recordSuccess asks whether the board
+//     is HEALTHY, and a stream that emitted 2,000 postings and then hit a rate limit is healthy
+//     — treating it as failed would cool a working board for hours. But it did not LIST its
+//     content, and closing within it would retire everything past the point it died. Health and
+//     completeness are different questions, and only the second licenses a close.
+//
+// The remaining exposure is an adapter that returns a truncated crawl as an unqualified success
+// — no error, fewer postings. Nothing here can see that, and it is not a new risk: the
+// company-scoped close has always had it, which is precisely how freehire#725 happened.
 func sweepableBoard(e sources.CompanyEntry, st Stats) []string {
-	if e.Board == "" || !boardReachedPostings(st) {
+	if e.Board == "" || st.Failed > 0 || !boardReachedPostings(st) {
 		return nil
 	}
 	return []string{e.Board}

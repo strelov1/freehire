@@ -51,7 +51,7 @@ func TestSweepBoardsClosesACompanyTheRunNeverWrote(t *testing.T) {
 	// A board this run did not crawl: nothing about it was proved, so nothing of it closes.
 	uncrawled := seed(t, "globex", "1", "globex", 49*time.Hour)
 
-	closed, failures := sweepBoards(ctx, queries, "greenhouse", []string{"acme"},
+	closed, _, failures := sweepBoards(ctx, queries, "greenhouse", []string{"acme"},
 		pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true})
 	if failures != 0 {
 		t.Fatalf("board sweep reported %d failures, want 0", failures)
@@ -105,13 +105,13 @@ func TestSweepBoardsSurvivesOneBadBoard(t *testing.T) {
 	// without needing a corrupted row to reproduce.
 	dead, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, failures := sweepBoards(dead, queries, "greenhouse", []string{"good"}, pgtype.Timestamptz{
+	if _, _, failures := sweepBoards(dead, queries, "greenhouse", []string{"good"}, pgtype.Timestamptz{
 		Time: time.Now().Add(-48 * time.Hour), Valid: true}); failures != 1 {
 		t.Fatalf("failures = %d, want 1 — a failed board must be counted, not swallowed", failures)
 	}
 
 	// The same sweep on a live context still works: the failure above left no residue.
-	closed, failures := sweepBoards(ctx, queries, "greenhouse", []string{"good"}, pgtype.Timestamptz{
+	closed, _, failures := sweepBoards(ctx, queries, "greenhouse", []string{"good"}, pgtype.Timestamptz{
 		Time: time.Now().Add(-48 * time.Hour), Valid: true})
 	if failures != 0 || closed != 1 {
 		t.Errorf("closed=%d failures=%d, want 1 and 0", closed, failures)

@@ -85,6 +85,38 @@ func TestRunReportsNoBoardForABoardlessEntry(t *testing.T) {
 	}
 }
 
+func TestRunReportsNoBoardWhenAStreamDiedMidCrawl(t *testing.T) {
+	// The hazard the whole board scope has to avoid, arriving through the door "the crawl did
+	// not fail" leaves open if it is read as "the board is healthy". A stream that emitted 2 of
+	// 5 postings and then died IS healthy — partial progress is deliberately not a board
+	// failure, or a rate-limited board would cool for hours — but it did NOT list its content.
+	// Sweeping within it would close the three postings the crawl never reached, which is
+	// exactly the truncated-crawl false-close of freehire#725.
+	src := fakeStreamingSource{provider: "greenhouse", failAfter: 2, jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+		{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme"},
+		{ExternalID: "3", Title: "Platform Engineer", Company: "Acme"},
+		{ExternalID: "4", Title: "Data Engineer", Company: "Acme"},
+		{ExternalID: "5", Title: "SRE", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats["greenhouse"].Ingested == 0 {
+		t.Fatal("fixture no longer makes partial progress — the case under test needs some")
+	}
+	if got := stats["greenhouse"].SweepableBoards; len(got) != 0 {
+		t.Errorf("SweepableBoards = %v, want none — a truncated crawl proves nothing about "+
+			"what the board no longer lists", got)
+	}
+}
+
 func TestRunReportsABoardWhoseEveryPostingWasRejected(t *testing.T) {
 	// The crawl reached these postings; the catalogue filter turned them away afterwards. If
 	// a rejected posting did not count, the sweep would spare exactly the non-technical boards
