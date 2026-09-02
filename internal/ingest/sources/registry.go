@@ -362,13 +362,13 @@ func All(c HTTPClient) map[string]Source {
 	registry["aijobs"] = cookieSessionSource[aijobsHTTP](c, func(h aijobsHTTP) Source {
 		return NewAijobs(h, aijobsMaxNewPerRun)
 	})
-	// meta/uber are NOT served by the shared client: Meta's edge 400s the default Go TLS+HTTP/2
-	// fingerprint and Uber's Cloudflare edge challenges it, so both need the shared
-	// Chrome-fingerprint transport (fingerprintHTTP, also used by the bayt/gulftalent
-	// aggregators). Build it only when there is a real client to serve (the c == nil
-	// marker/listing path — e.g. FilterableProviders — must stay transport-free, so these
-	// register with a nil client there; Provider()/boardless() never touch it). If the
-	// deterministic transport build ever fails, all four are left unregistered so config
+	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
+	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
+	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
+	// bayt/gulftalent aggregators). Build it only when there is a real client to serve (the
+	// c == nil marker/listing path — e.g. FilterableProviders — must stay transport-free, so
+	// these register with a nil client there; Provider()/boardless() never touch it). If the
+	// deterministic transport build ever fails, all five are left unregistered so config
 	// validation fails fast on their board entries, rather than registering a client guaranteed
 	// to be rejected by the edge.
 	if c == nil {
@@ -376,11 +376,13 @@ func All(c HTTPClient) map[string]Source {
 		registry["bayt"] = NewBayt(nil)
 		registry["gulftalent"] = NewGulfTalent(nil)
 		registry["uber"] = NewUber(nil)
+		registry["gusto"] = NewGusto(nil)
 	} else if fp, err := newFingerprintHTTP(); err == nil {
 		registry["meta"] = NewMetaCareers(fp)
 		registry["bayt"] = NewBayt(fp)
 		registry["gulftalent"] = NewGulfTalent(fp)
 		registry["uber"] = NewUber(fp)
+		registry["gusto"] = NewGusto(fp)
 	}
 	return registry
 }

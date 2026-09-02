@@ -80,6 +80,17 @@ Source ingest: board list, provider registry, board-file parsing/validation, per
 - **`hasVirtualLocation` is the structured remote flag**, and such a posting usually carries `postingLocations: null` — no place at all. A posting can be both virtual and sited, so the flag is the only structured signal and a place merely NAMED "Remote" stays with the heuristic.
 - **No metering observed**: 400 listing POSTs at 32-way concurrency (~14 req/s) all returned 200, so no pacer is wired and `cmd/harvest-boards` needs no `-pace`.
 
+**Gusto Hiring traps** (all verified live 2026-09-02, across every candidate board):
+
+- **The board id is the WHOLE path segment** of `jobs.gusto.com/boards/<board>` — `<company-slug>-<company-uuid>`. The uuid alone 404s and so does the slug alone, so neither half is the key. Everything is server-rendered HTML: no JSON endpoint, no embedded page state, no ld+json on either page.
+- **A renamed employer keeps its OLD slug resolving against the same uuid**, so two spellings of one board both answer 200 and list identical postings — and a trailing `.json` answers 200 as well, since the route ignores it. External ids are namespaced by BOARD, so a board file carrying both spellings stores every one of that employer's postings twice. 33 of the 825 candidates were such twins; `sources/gusto.yml` carries one entry per company uuid, folded onto the spelling a posting's own breadcrumb links back to, and says so in its header.
+- **Cloudflare answers a managed challenge (403) to Go's default TLS+HTTP/2 fingerprint on every path**, so the adapter is wired with `fingerprintHTTP` alongside meta/uber/bayt/gulftalent.
+- The listing serves **25 postings a page** under `?page=N` and renders "There are no open positions currently" past the last one, so the walk ends on a page that adds nothing. It carries every field EXCEPT the body, which only the posting page holds — hence `HydratingSource`.
+- **Neither page states a publish date in any form**, so `PostedAt` is always nil.
+- The pay line is rendered text with a single fixed grammar (`$X - $Y per <period>`) — the platform's own compensation field formatted, not free text, which is what makes reading it structured signal. 2,098 of 2,789 live postings carried one and all but two matched. The currency is STATED as USD rather than read off the `$`: Gusto Payroll runs US employers only. The two exceptions say "per week", which freehire has no salary period for, so they yield no structured salary rather than a wrong one.
+- **A posting whose body does not parse is dropped, not stored.** A stored row is `seen`, so it is never hydrated again once it ages past the hydration-retry window — deferring a posting by one crawl is recoverable, storing it body-less is not (the same asymmetry seek's note argues, for a different cause).
+- **No rate limiting observed**: 825 board pages at 6-way concurrency (~13 req/s) twice over, plus a 790-board harvest that also fetched every posting page — all 200, no refusals. So no pacer is wired; `pacer.go` is where one would go.
+
 **WhatJobs FeedAPI traps** (its documentation is wrong in several places; all of the below was verified against the live API):
 
 - A `/` in the `user_agent` query value makes the edge redirect with the value corrupted (`Mozilla/5.0` → `Mozilla%215.0`), which is why every code sample in the vendor's docs fails. The adapter sends no `user_agent` at all.
