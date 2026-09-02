@@ -17,10 +17,12 @@ Three conditions, all already computed:
 
 1. **The crawl did not fail.** `pipeline.recordSuccess` is the existing decision point.
 2. **The board yielded at least one posting.** Not "saved at least one" — `Ingested + Rejected +
-   ATSCovered + Skipped > 0`. A board whose postings the catalogue filter all rejected was still
-   listed, and `pipeline.go` already uses that same disjunction to decide a mid-crawl error was
-   still progress. Using the saved count instead would refuse to sweep exactly the non-tech-heavy
-   boards where old rows accumulate.
+   ATSCovered > 0`, which is `boardReachedPostings`, the predicate `pipeline.go` already used to
+   decide a mid-crawl error was still progress. A board whose postings the catalogue filter all
+   rejected was still listed; using the saved count instead would refuse to sweep exactly the
+   non-tech-heavy boards where old rows accumulate. `Skipped` is deliberately NOT counted: it
+   means the posting was listed and then failed to PERSIST, so counting it would let a board
+   whose every save is failing prove itself on the strength of those failures.
 3. **The entry names a board.** A boardless entry (`board == ""`) namespaces its postings as
    `":<id>"`, so `BoardPattern("")` would match the provider's whole catalogue. There is no
    board scope to speak of; the company scope keeps those.

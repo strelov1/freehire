@@ -242,6 +242,28 @@ func run() int {
 			log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
 		}
 		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
+
+		// The board-scoped close, beside the company-scoped one above rather than instead of
+		// it: the company scope still reaches what a board scope cannot (a boardless entry, and
+		// a board that yielded nothing), and the board scope reaches what the company scope
+		// structurally cannot — a company whose LAST posting left a board we still crawl, whose
+		// slug therefore never enters the crawled set and whose row would otherwise stay open
+		// forever (freehire#2328). The two overlap; the overlap is one indexed statement per
+		// board.
+		// Presence in grace IS the "declares a wider window" marker — SweepGraceWindows only
+		// lists adapters that declare one — so the lookup is a membership test, not a
+		// comparison against a zero that would read as an ordinary window of length nothing.
+		_, slicedCrawl := grace[provider]
+		boards := boardSweepTargets(runStats[provider], selfClosing[provider], fullCatalog[provider], slicedCrawl)
+		boardClosed, boardFailures := sweepBoards(ctx, queries, provider, boards, cutoff)
+		if boardFailures > 0 {
+			failed++
+			log.Printf("close stale jobs (%s): %d of %d board sweeps failed — see preceding lines",
+				provider, boardFailures, len(boards))
+		}
+		if boardClosed > 0 {
+			log.Printf("closed %d stale %s jobs across %d crawled board(s)", boardClosed, provider, len(boards))
+		}
 	}
 	return worker.ExitCode(failed, 0)
 }

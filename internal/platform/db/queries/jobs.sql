@@ -1276,6 +1276,56 @@ WITH closed AS (
 )
 SELECT count(*) FROM closed;
 
+-- name: CloseUnseenJobsForBoard :one
+-- The BOARD-scoped half of the post-run sweep, beside CloseUnseenJobs' company-scoped half.
+--
+-- Why a second scope. The company scope is derived from the postings a run WROTE, so a company
+-- whose last posting leaves a board never enters it and its row stays open forever — measured on
+-- prod 2026-09-02, 235,313 open rows sat on boards that had been crawled successfully AFTER the
+-- posting was last seen, with nothing able to close them (freehire#2328). The board answers the
+-- sweep's real question directly: this board was listed, and it did not list this posting.
+--
+-- The caller decides which boards qualify and owns the cutoff. A board qualifies only when its
+-- crawl did not fail AND it yielded at least one posting; a zero-yield crawl is indistinguishable
+-- from a broken one, which is how a Workday board reporting total:0 on its second page once had
+-- its live tail closed (freehire#725). A boardless entry never qualifies — BoardPattern("")
+-- would select the provider's whole catalogue.
+--
+-- The board arrives as a LIKE pattern from externalid.BoardPattern, which escapes the board's
+-- LIKE metacharacters and appends the ":" terminator that keeps a board whose id is a PREFIX of
+-- another's out of the match. It rides (source, external_id text_pattern_ops), the same index the
+-- seen-set and BoardTracked use.
+--
+-- The search_delete_outbox enqueue is copied from CloseUnseenJobs and is not optional: riding the
+-- UPDATE's own RETURNING keeps it atomic with the close (a rolled-back sweep queues nothing) and
+-- exact (only rows that actually closed are queued). Without it the rows close in Postgres and
+-- stay in the search index until the next full rebuild.
+--
+-- No row-by-row fallback accompanies this one. CloseUnseenJobs has one because a single corrupted
+-- row aborts the bulk UPDATE and, at PROVIDER scope, blocks every closeable row of the provider
+-- (the 2026-08-11 incident: one duplicated jobs_pkey value blocked greenhouse's sweep on every
+-- run). At board scope that same corruption costs one board, and the provider's other boards are
+-- separate statements — so the caller logs the board and moves on.
+--
+-- closed_reason stays 'unseen': this is the same mechanism reaching rows its scope could not,
+-- not a fifth one operators must reason about separately.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND last_seen_at < sqlc.arg(cutoff)
+      AND external_id LIKE sqlc.arg(board_pattern)
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
 -- name: UnseenJobIDs :many
 -- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
 -- (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE

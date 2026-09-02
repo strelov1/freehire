@@ -91,6 +91,11 @@ const expiryWindow = 45 * 24 * time.Hour
 // candidates, restricted to jobs already past the sweep's own staleness window (see
 // staleCutoff), so this only ever picks up what the sweep structurally cannot reach
 // rather than racing it.
+//
+// The sweep's board scope does NOT retire these: it needs an entry that names a board, and
+// every source here is boardless by construction — that is the same property that puts them
+// on this list. So the leak this backstops is the part of the company_slug-scope leak the
+// board scope cannot reach, not the whole of it.
 var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
