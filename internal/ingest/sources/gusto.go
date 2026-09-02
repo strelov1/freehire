@@ -256,8 +256,8 @@ func gustoText(n *html.Node) string {
 
 // gustoMetaLine splits a listing row's second paragraph — "$70,000 - $90,000 per year · Full
 // time", or just "Full time" when the employer states no pay — into the pay line and Gusto's
-// employment-type label. The label is the last segment either way, so a row without pay is read
-// correctly rather than filed as a salary.
+// employment-type label. Both are read from the END of the line, so a row that states no pay
+// yields its employment type rather than filing that label as a salary.
 func gustoMetaLine(line string) (salary, employmentType string) {
 	parts := strings.Split(line, "·")
 	if len(parts) > 1 {
@@ -338,7 +338,7 @@ func gustoSummary(root *html.Node) string {
 	if h1 == nil {
 		return ""
 	}
-	next := gustoNextElement(h1)
+	next := nextElement(h1)
 	if next == nil || firstByTag(next, "h3") != nil || firstByTag(next, "h4") != nil {
 		return ""
 	}
@@ -367,15 +367,4 @@ func gustoSection(root *html.Node, heading string) string {
 		return true
 	})
 	return out
-}
-
-// gustoNextElement returns n's next element sibling, skipping the whitespace text nodes the
-// board's indentation leaves between them, or nil when n is the last one.
-func gustoNextElement(n *html.Node) *html.Node {
-	for c := n.NextSibling; c != nil; c = c.NextSibling {
-		if c.Type == html.ElementNode {
-			return c
-		}
-	}
-	return nil
 }
