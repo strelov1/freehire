@@ -1,0 +1,127 @@
+## Context
+
+`internal/dict/classify` reads the TITLE only and never guesses. Its
+`categoryTable` matches the longest alias first, so vocabulary work is
+ordering work as much as it is wording work. The category it emits lands in
+`jobs.category` — a plain text column with no `CHECK` constraint and no
+Postgres enum; the vocabulary is enforced in Go by `vocab.CategoryValues`
+alone. That is why a new category needs no migration, and why the whole cost of
+this change sits in `backfill-derive` re-deriving existing rows.
+
+Three consumers read the tech/non-tech split rather than the category itself:
+
+- `jobderive.deriveIsTech` (`internal/job/jobderive/jobderive.go:249`) sets
+  `is_tech = false` for any `NonTechCategories` member;
+- the enrichment enqueue gate in `internal/platform/db/queries/jobs.sql`
+  admits `is_tech IS TRUE` only;
+- `cmd/prune/rule.go:110` treats every `NonTechCategories` member except
+  `engineering_design` as removable.
+
+`vocab_test.go` asserts that `TechCategories`, `NonTechCategories` and
+`{"other"}` partition `CategoryValues` exactly, so a new value MUST join one of
+the two sets — there is no "unclassified" option.
+
+The previous split of this shape (`design` → `design` + `engineering_design`,
+shipped 2026-07-30) is the reference implementation and the source of the
+traps below.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- A `creative` category covering video, animation, art, audio and photography.
+- Named roles for those crafts, and for the game-development titles that
+  resolve to a coarse category or to nothing.
+- The creative toolchain in the skill dictionary, precision-first.
+- The category selectable in the web picker, not merely generated into the
+  contracts.
+
+**Non-Goals:**
+
+- No game category. `Game Developer` is software and `Game Designer` is
+  design; a third category would take rows away from two working facets to buy
+  a name.
+- No re-cut of `design`. Motion, graphic, visual and brand design stay where
+  they are; only audio moves, and it was never product design.
+- No description-derived signal. As with the design split, a "Senior Designer"
+  at a video studio is indistinguishable from a product designer by title
+  alone, and reading descriptions is a deliberate non-goal here too.
+- No `REINDEX_DEDUP` pass. Nothing in this change touches
+  `role_fingerprint`, so the duplicate markers are unaffected.
+
+## Decisions
+
+### `creative` is a technical category
+
+Chosen over the `engineering_design` treatment (non-technical, filterable, no
+LLM budget). Media production for software companies is IT-industry work in the
+same sense `design` and `product` are, and the population is small — roughly
+830 open postings by title measurement against the live search API — so the
+one-off enrichment spend is bounded. The alternative would also have required
+adding a second exception to `cmd/prune`'s business rule, and that rule is
+already carrying one.
+
+### The vocabulary is qualified phrases, never bare craft words
+
+`video`, `audio`, `art` and `sound` appear in titles across every discipline
+("Audio DSP Engineer", "State of the Art"). Only phrases resolve: `video
+editor`, `audio designer`, `concept artist`. This mirrors the classify table's
+existing rule and is what keeps the new aliases from stealing rows.
+
+### `illustrator` resolves, and the ordering protects it
+
+`Illustrator` is both a job title and an Adobe product named in design
+postings. Longest-alias-first already gives `graphic designer` (16) priority
+over `illustrator` (11), so a design title naming the tool keeps `design`. The
+bare title resolves to `creative`. Each collision gets a regression test rather
+than a comment.
+
+### Game roles are roles, not a category
+
+`roletag.Derive` emits a named role independently of whether a category
+resolves — `UGC Creator` already demonstrates this. So the game titles get
+`game_designer`, `level_designer`, `narrative_designer`, `game_producer` and
+`game_developer` while keeping whatever category they resolve to today.
+
+### Ambiguous skills are gated or dropped, never shipped bare
+
+`animation` is CSS vocabulary as much as it is a craft, so it joins
+`skilltag.ambiguousWords` and needs corroboration. Anything that cannot be
+gated — the gate keys on single tokens, so a phrase cannot be gated — is
+omitted rather than shipped, the same call the design split made for `visual
+design` and bare `after effects`.
+
+## Risks / Trade-offs
+
+- **A new alias steals rows from a working facet** → every alias added gets a
+  collision test naming the title it must NOT take; the suite is the guard, not
+  review.
+- **The category is generated but unselectable** → `filterSections.ts` gets its
+  group in the same commit as `labels.ts`; last time this defect was visible
+  only to `svelte-check`, so the web check runs before the PR.
+- **Enrichment spend is larger than measured** → the ~830 figure is an estimate
+  from title-match ratios over the public search API, not an exact count. It is
+  re-measured against the live `category` facet after the backfill, before
+  concluding the rollout.
+- **The facet is empty until the rebuild** → standard new-attribute window.
+  `backfill-derive` writes the columns; the plain reindex publishes them.
+
+## Migration Plan
+
+1. Merge and deploy the binary (dictionary changes alone change nothing that is
+   already stored).
+2. `backfill-derive` — re-derives `category`, `skills` and `is_tech` in one
+   keyset pass, ~3.5 h over 5.4M rows.
+3. `systemctl stop freehire-reindexw.timer`, then `make reindex` (no
+   `REINDEX_DEDUP`), then start the timer.
+4. Read the live `category` facet for `creative` and the `role` facet for the
+   new roles; compare against the estimate.
+
+Rollback: revert the binary. The stored `category` values stay until the next
+`backfill-derive`, and an unknown category in the column is inert — nothing
+reads it as an enum.
+
+## Open Questions
+
+None. The category name, its tech placement, and the boundary with `design`
+were settled with the user before this change was opened.
