@@ -1301,6 +1301,32 @@ func TestParse_ServiceSectors(t *testing.T) {
 		{"Engagement Manager", "management", ""},
 		{"Implementation Consultant", "customer_success", ""},
 		{"Solutions Architect", "architecture", ""},
+
+		// The ERP and CRM functional consultants. Deferred by the IT wave "to the
+		// industrial wave" for want of a home, and then not delivered by it — the
+		// industrial category was for plant engineering, and these are platform
+		// implementation work. They belong beside the platform consultants the service
+		// wave already resolved: "Oracle Fusion Technical Consultant" and "Workday
+		// Integration Consultant" have been `solutions_engineering` since then.
+		{"SAP Consultant", "solutions_engineering", ""},
+		{"SAP FICO Consultant", "solutions_engineering", ""},
+		{"SAP SD Consultant", "solutions_engineering", ""},
+		{"SAP MM Consultant", "solutions_engineering", ""},
+		{"SAP Basis Administrator", "devops", "Basis is the platform's infrastructure, not its business logic"},
+		{"Dynamics 365 CE Consultant", "solutions_engineering", ""},
+		{"Dynamics 365 F&O Consultant", "solutions_engineering", ""},
+		{"Dynamics 365 Developer", "software_engineering", "a developer, like the Salesforce and ServiceNow ones"},
+		{"Microsoft Dynamics CRM", "solutions_engineering", ""},
+		{"HubSpot CRM Administrator", "solutions_engineering", ""},
+		// NOT "CRM Specialist": an unqualified one is a marketing-operations seat at
+		// least as often as a platform one, and the IT wave already declined it for
+		// that reason. The qualified spellings above are what carry the volume.
+		{"CRM Specialist", "", ""},
+		// Unchanged: these already resolved through the service wave's aliases.
+		{"Oracle Fusion Technical Consultant", "solutions_engineering", ""},
+		{"Workday Integration Consultant", "solutions_engineering", ""},
+		{"SAP Developer", "software_engineering", ""},
+		{"SAP ABAP Developer", "software_engineering", ""},
 	}
 
 	for _, tc := range cases {

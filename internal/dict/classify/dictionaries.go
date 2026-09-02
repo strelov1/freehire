@@ -1029,6 +1029,30 @@ var categoryTable = []aliasEntry{
 	// Dynamics and Oracle Technical Consultants — not general management consulting.
 	{"technical consultant", "solutions_engineering"},
 
+	// The ERP and CRM functional consultants. The IT wave deferred them "to the
+	// industrial wave" for want of a home and that wave never took them — it was for
+	// plant engineering, and this is platform implementation work. They sit here, with
+	// the platform consultants above: an SAP FICO consultant configures a product for
+	// a customer, which is what this category names.
+	//
+	// The developer and the administrator spellings go elsewhere on purpose, the same
+	// split the Salesforce and ServiceNow families already carry: a developer writes
+	// for the platform, and SAP Basis is its infrastructure rather than its business
+	// logic.
+	{"sap basis administrator", "devops"},
+	{"dynamics 365 developer", "software_engineering"},
+	{"dynamics 365 consultant", "solutions_engineering"},
+	{"dynamics 365", "solutions_engineering"},
+	{"microsoft dynamics", "solutions_engineering"},
+	{"hubspot crm administrator", "solutions_engineering"},
+	{"sap consultant", "solutions_engineering"},
+	{"sap fico", "solutions_engineering"},
+	{"sap sd consultant", "solutions_engineering"},
+	{"sap mm consultant", "solutions_engineering"},
+	// No bare "crm specialist": an unqualified one is a marketing-operations seat at
+	// least as often as a platform one, and the IT wave declined it for that reason.
+	// The qualified spellings above carry the volume.
+
 	// The consumer industries: healthcare, skilled trades, retail and hospitality.
 	// 225 000 open postings that were filterable by nothing at all — the residue a
 	// broad multi-industry ATS crawl brings in with the boards it wants.
