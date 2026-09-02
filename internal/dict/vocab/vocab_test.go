@@ -68,6 +68,22 @@ func TestEngineeringDesignIsNonTech(t *testing.T) {
 	}
 }
 
+// TestCreativeIsTech pins the placement of the media-production category. It is
+// technical, so its postings are enriched and embedded like design and product,
+// and — because cmd/prune's business rule deletes from NonTechCategories — a
+// posting can never become removable by resolving to it.
+func TestCreativeIsTech(t *testing.T) {
+	if !slices.Contains(CategoryValues, "creative") {
+		t.Fatal("CategoryValues must contain creative")
+	}
+	if !slices.Contains(TechCategories, "creative") {
+		t.Error("creative must be a TechCategories member")
+	}
+	if slices.Contains(NonTechCategories, "creative") {
+		t.Error("creative must not be a NonTechCategories member — that set is what prune deletes from")
+	}
+}
+
 func TestDomainGlossCoversVocabulary(t *testing.T) {
 	for _, d := range DomainValues {
 		if strings.TrimSpace(DomainGloss[d]) == "" {

@@ -76,13 +76,17 @@ var categoryNoun = map[string]string{
 	"blockchain":           "Blockchain Engineer",
 	"architecture":         "Architect",
 	"design":               "Designer",
-	"engineering_design":   "Engineering Designer",
-	"product":              "Product Manager",
-	"project_management":   "Project Manager",
-	"management":           "Manager",
-	"marketing":            "Marketing Specialist",
-	"sales":                "Sales Specialist",
-	"support":              "Support Specialist",
+	// The category spans video, animation, art, audio and photography, so no craft
+	// noun fits it — "Creative Specialist" reads as the umbrella it is, and the
+	// crafts themselves are named roles below.
+	"creative":           "Creative Specialist",
+	"engineering_design": "Engineering Designer",
+	"product":            "Product Manager",
+	"project_management": "Project Manager",
+	"management":         "Manager",
+	"marketing":          "Marketing Specialist",
+	"sales":              "Sales Specialist",
+	"support":            "Support Specialist",
 	// IT-company roles added by expand-role-taxonomy.
 	"business_analysis":     "Business Analyst",
 	"solutions_engineering": "Solutions Engineer",

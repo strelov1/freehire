@@ -474,12 +474,47 @@ var categoryTable = []aliasEntry{
 	// own — the hyphen is a word boundary, so the bare form resolves it.
 	{"конструктор", "engineering_design"},
 	{"design engineer", "engineering_design"},
+
+	// Media production. These sit ABOVE the bare "designer"/"design" aliases because
+	// two of them contain that word: a Sound Designer was filed with product designers
+	// for no reason beyond the title spelling. Everything here is a qualified phrase —
+	// the bare craft words ("video", "audio", "art", "sound") are not aliases, since
+	// each occurs in titles across every discipline ("Audio DSP Engineer", "Art
+	// Director", "State of the Art").
+	{"sound designer", "creative"},
+	{"audio designer", "creative"},
+	{"sound engineer", "creative"},
+	{"audio engineer", "creative"},
+	{"video editor", "creative"},
+	{"video producer", "creative"},
+	{"videographer", "creative"},
+	{"photographer", "creative"},
+	{"photo editor", "creative"},
+	{"animator", "creative"},
+	// "motion graphics artist" is the artist spelling of the craft; the DESIGNER
+	// spelling ("Motion Graphics Designer") deliberately stays in `design`, where its
+	// named role already lives.
+	{"motion graphics artist", "creative"},
+	{"concept artist", "creative"},
+	{"character artist", "creative"},
+	{"environment artist", "creative"},
+	{"technical artist", "creative"},
+	{"storyboard artist", "creative"},
+	{"vfx artist", "creative"},
+	{"3d artist", "creative"},
+	{"2d artist", "creative"},
+
 	{"designer", "design"},
 	{"design", "design"},
 	{"ux", "design"},
 	{"ui", "design"},
 	{"дизайнер", "design"},
 	{"дизайн", "design"},
+	// Below the design aliases on purpose. "Illustrator" is a job title AND the Adobe
+	// product a design posting names in its own title ("Graphic Designer (Illustrator,
+	// Photoshop)"); placed above, the tool would take the designer's row. Here, only a
+	// title that says nothing about design resolves to the craft.
+	{"illustrator", "creative"},
 	{"product manager", "product"},
 	{"product owner", "product"},
 	{"продакт", "product"},

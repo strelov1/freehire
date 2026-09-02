@@ -774,3 +774,78 @@ func TestCategoryAliasesCarrySearchPhrases(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_CreativeMedia pins the media-production vocabulary: the video, art,
+// animation, audio and photography titles that resolved to NO category before the
+// `creative` category existed, and the boundary that keeps it from taking rows away
+// from `design` and `marketing`.
+func TestParse_CreativeMedia(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// The video family.
+		{"Video Editor", "creative", "the craft this catalogue could not name"},
+		{"Senior Video Editor", "creative", "grade does not change the craft"},
+		{"Video Producer", "creative", ""},
+		{"Videographer", "creative", ""},
+		{"Social Media Video Editor", "creative", "video editing is the job; social is the channel"},
+
+		// The art family. Each is a distinct seat on a games or media team.
+		{"3D Artist", "creative", ""},
+		{"2D Artist", "creative", ""},
+		{"Concept Artist", "creative", ""},
+		{"Character Artist", "creative", ""},
+		{"Environment Artist", "creative", ""},
+		{"Technical Artist", "creative", ""},
+		{"VFX Artist", "creative", ""},
+		{"Storyboard Artist", "creative", ""},
+
+		// Animation.
+		{"Animator", "creative", ""},
+		{"3D Animator", "creative", ""},
+		{"2D Animator", "creative", ""},
+		{"Motion Graphics Artist", "creative", "the artist spelling; the designer spelling stays in design"},
+
+		// Audio: the one population that MOVES, out of design.
+		{"Sound Designer", "creative", "was design, for no reason but the word designer"},
+		{"Audio Designer", "creative", ""},
+		{"Sound Engineer", "creative", ""},
+		{"Audio Engineer", "creative", ""},
+
+		// Photography.
+		{"Photographer", "creative", ""},
+		{"Photo Editor", "creative", ""},
+		{"Illustrator", "creative", "the job title, not the Adobe product"},
+
+		// The boundary with design: these keep the category they have today.
+		{"Motion Designer", "design", ""},
+		{"Motion Graphics Designer", "design", ""},
+		{"Graphic Designer", "design", ""},
+		{"Visual Designer", "design", ""},
+		{"Brand Designer", "design", ""},
+		{"Product Designer", "design", ""},
+		{"Senior UX Designer", "design", ""},
+		{"Game Designer", "design", "a game category would take rows from two working facets"},
+		{"Narrative Designer", "design", ""},
+		{"Graphic Designer (Illustrator, Photoshop)", "design",
+			"the longer alias wins: the tool named in a design title must not steal it"},
+
+		// The boundary with marketing.
+		{"Content Creator", "marketing", ""},
+		{"UGC Creator", "", "resolves no category today and must not start resolving to creative"},
+		{"Video Marketing Manager", "marketing", "marketing that uses video is still marketing"},
+
+		// The boundary with engineering: a bare craft word never resolves on its own.
+		{"Audio DSP Engineer", "", "bare \"audio\" is not an alias"},
+		{"Mechanical Design Engineer", "engineering_design", ""},
+		{"Art Director", "", "resolves no category today; the bare word \"art\" must not start one"},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}

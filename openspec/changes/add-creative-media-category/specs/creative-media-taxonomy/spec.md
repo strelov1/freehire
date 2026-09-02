@@ -61,10 +61,12 @@ saved searches already reference, and that landing pages already count.
   "Graphic Designer", "Visual Designer" or "Brand Designer" is classified
 - **THEN** its category is `design`, and its existing named role is unchanged
 
-#### Scenario: Content and UGC creation stay in marketing
+#### Scenario: Content and UGC creation are unaffected
 
 - **WHEN** a job titled "Content Creator" or "UGC Creator" is classified
-- **THEN** its category is `marketing` and its named role is `content_creator`
+- **THEN** its named role is `content_creator` and its category is unchanged —
+  `marketing` for the former, none for the latter, which resolves no category
+  today and MUST NOT start resolving to `creative`
 
 ### Requirement: A creative alias never steals from a more specific alias
 

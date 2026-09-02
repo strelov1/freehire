@@ -56,7 +56,13 @@ var (
 		"network_engineering",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
-		"design", "engineering_design", "product", "project_management", "management",
+		// "creative" is media production — video, animation, art, audio and
+		// photography. It is a sibling of `design`, not a slice of it: the titles
+		// it claims resolved to NO category before it existed, apart from the
+		// audio designers who sat in `design` for no reason beyond the word
+		// "designer" in the title. Product, motion, graphic, visual and brand
+		// design stay where they are.
+		"design", "creative", "engineering_design", "product", "project_management", "management",
 		"marketing", "sales", "support",
 		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
@@ -104,7 +110,7 @@ var (
 		"network_engineering",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
-		"design", "product", "project_management",
+		"design", "creative", "product", "project_management",
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
 	}
 	// DomainValues is the industry/vertical of the company or product behind a job

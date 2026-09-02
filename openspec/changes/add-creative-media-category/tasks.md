@@ -1,15 +1,15 @@
 ## 1. Vocabulary
 
-- [ ] 1.1 Add `creative` to `vocab.CategoryValues` and to `vocab.TechCategories`, with a comment saying what it covers and why it is technical; confirm `vocab_test.go`'s partition test passes unchanged.
+- [x] 1.1 Add `creative` to `vocab.CategoryValues` and to `vocab.TechCategories`, with a comment saying what it covers and why it is technical; confirm `vocab_test.go`'s partition test passes unchanged.
 
 ## 2. Title classification
 
-- [ ] 2.1 Add the video family aliases (`video editor`, `video producer`, `videographer`) to `classify`'s `categoryTable` → `creative`, with tests.
-- [ ] 2.2 Add the art family aliases (`3d artist`, `2d artist`, `concept artist`, `character artist`, `environment artist`, `technical artist`, `vfx artist`, `storyboard artist`) → `creative`, with tests.
-- [ ] 2.3 Add the animation aliases (`animator`, `3d animator`, `2d animator`, `motion graphics artist`) → `creative`, with tests.
-- [ ] 2.4 Move `sound designer` / `audio designer` from `design` to `creative` and add `audio engineer` / `sound engineer`, with a test asserting they no longer resolve to `design`.
-- [ ] 2.5 Add `photographer`, `photo editor` and `illustrator` → `creative`, with the collision test for "Graphic Designer (Illustrator, Photoshop)" staying `design`.
-- [ ] 2.6 Add regression tests that the bare craft words (`audio`, `video`, `art`, `sound`) resolve nothing, and that `motion designer`, `graphic designer`, `visual designer`, `brand designer`, `content creator` and `ugc creator` keep their current category.
+- [x] 2.1 Add the video family aliases (`video editor`, `video producer`, `videographer`) to `classify`'s `categoryTable` → `creative`, with tests.
+- [x] 2.2 Add the art family aliases (`3d artist`, `2d artist`, `concept artist`, `character artist`, `environment artist`, `technical artist`, `vfx artist`, `storyboard artist`) → `creative`, with tests.
+- [x] 2.3 Add the animation aliases (`animator`, `3d animator`, `2d animator`, `motion graphics artist`) → `creative`, with tests.
+- [x] 2.4 Move `sound designer` / `audio designer` from `design` to `creative` and add `audio engineer` / `sound engineer`, with a test asserting they no longer resolve to `design`.
+- [x] 2.5 Add `photographer`, `photo editor` and `illustrator` → `creative`, with the collision test for "Graphic Designer (Illustrator, Photoshop)" staying `design`.
+- [x] 2.6 Add regression tests that the bare craft words (`audio`, `video`, `art`, `sound`) resolve nothing, and that `motion designer`, `graphic designer`, `visual designer`, `brand designer`, `content creator` and `ugc creator` keep their current category.
 
 ## 3. Named roles
 
