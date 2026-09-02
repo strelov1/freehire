@@ -285,6 +285,10 @@ func All(c HTTPClient) map[string]Source {
 		// SolidJobs: Polish job board, multi-company aggregator enumerated by division (board),
 		// same keyword-as-board shape as whatjobs.
 		NewSolidJobs(c),
+		// SchoolSpring: the US K-12 education job board, multi-company aggregator over one central
+		// keyless API, enumerated by search keyword (board) because 0.4% of its 80k postings are
+		// technical and the platform's own category taxonomy cannot select them. Hydrating.
+		NewSchoolSpring(c),
 		// SEEK: the dominant AU/NZ job board, multi-company aggregator enumerated by ICT
 		// subclassification (board) with the market in region, reading its frontend search API and
 		// hydrating descriptions from its GraphQL endpoint. Keyless.
