@@ -26,19 +26,22 @@ import (
 // per-employer shape does not exist to be crawled.
 //
 // Crawling the whole index would be wrong for a different reason: it is a school board, not an IT
-// one. Of the 80,611 titles, 328 name a technical role — 0.4%. The catalogue filter does not save
-// us from the rest, because it is a non-tech TITLE dictionary rather than an IT gate: run over the
-// live index it turns away 39,068 postings and ADMITS 41,543, which are school psychologists, bus
-// monitors, crossing guards, football coaches and cafeteria workers. An unscoped crawl would move
-// forty thousand non-technical postings into the catalogue and re-fetch their bodies every run
-// (a rejected posting is never stored, so it is never `seen`).
+// one, and freehire's own dictionaries say so twice. `classify.IsTech` fires on 36 of the 80,611
+// titles (0.04%); a generous substring sweep for IT vocabulary finds 328 (0.4%). But
+// `classify.ConfirmedNonTech` — the gate that decides what a crawl may store — turns away only
+// 39,068 and **admits 41,543**, because it is a non-tech TITLE dictionary written against
+// tech-company ATS boards and it has no term for K-12 classified staff. What it lets through is
+// school psychologists, bus monitors, crossing guards, football coaches and cafeteria workers. An
+// unscoped crawl would move forty thousand non-technical postings into the catalogue and re-fetch
+// their bodies every run (a rejected posting is never stored, so it is never `seen`).
 //
-// The platform's own `category` taxonomy cannot do the scoping either, and it is the obvious thing
-// to reach for: 37% of postings carry no category at all (the union of all 239 categories is
-// 50,644 of 80,611), the densest categories reach only about a quarter of the technical postings,
-// and the categories overlap so heavily — Administration/Technology and Student Services/
-// Educational Technology share 335 of their 418 and 419 postings — that one board per category
-// would store 40% of its rows twice.
+// The platform's own `category` taxonomy is the obvious thing to scope with — a server-side facet
+// on the same index, the shape hh and trudvsem use — and it was measured before the keyword list
+// was: it does not work here. 37% of postings carry no category at all (the union of all 239
+// categories is 50,644 of 80,611), the densest categories reach only about a quarter of the
+// technical postings, and the categories overlap so heavily — Administration/Technology and
+// Student Services/Educational Technology share 335 of their 418 and 419 postings — that one board
+// per category would store 40% of its rows twice.
 //
 // `keyword` is what selects a crawlable slice. It is a plain case-insensitive SUBSTRING match over
 // a posting's title and its employer name (which is why "it manager" matches "Unit Manager" and

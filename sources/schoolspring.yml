@@ -8,13 +8,14 @@
 # label only — the real employer is the school district read off each posting.
 #
 # WHY THE CRAWL IS SCOPED AT ALL, since this file would otherwise be one line: this is a school
-# board, and only 328 of its 80,611 titles (0.4%) name a technical role. freehire's ingest
-# filter would not save the catalogue from the rest — it is a non-tech TITLE dictionary, and run
-# over the live index it admits 41,543 postings that are school psychologists, bus monitors,
-# crossing guards, football coaches and cafeteria workers. The platform's own category taxonomy
-# cannot select the technical slice either (37% of postings carry no category, the densest ones
-# reach a quarter of the technical postings, and they overlap enough that one board per category
-# would double-store 40% of its rows). See internal/ingest/sources/schoolspring.go.
+# board. classify.IsTech fires on 36 of its 80,611 titles (0.04%), and freehire's ingest filter
+# would not save the catalogue from the rest — classify.ConfirmedNonTech is a non-tech TITLE
+# dictionary with no term for K-12 classified staff, and run over the live index it admits
+# 41,543 postings (51.5%) that are school psychologists, bus monitors, crossing guards, football
+# coaches and cafeteria workers. The platform's own category taxonomy cannot select the technical
+# slice either (37% of postings carry no category, the densest ones reach a quarter of the
+# technical postings, and they overlap enough that one board per category would double-store 40%
+# of its rows). See internal/ingest/sources/schoolspring.go.
 #
 # The keyword is a case-insensitive SUBSTRING match over a posting's title AND its employer
 # name, which is why every keyword below is a whole phrase: bare "network" pulls in 235 stale
