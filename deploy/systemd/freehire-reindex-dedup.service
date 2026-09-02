@@ -22,8 +22,15 @@ IOWeight=40
 # Same drain pause as freehire-reindexw, and for the same reason: this run ends in a
 # rebuild that swaps the live index, and a concurrent search-drain push re-merges the
 # WHOLE index against it. ExecStopPost restores the timer on failure too.
+#
+# The SERVICE is stopped alongside the timer — stopping only the timer leaves a drain
+# ALREADY running untouched, and with a backlogged queue that run is a multi-hour loop,
+# not a batch. freehire-reindexw.service carries the measurement and why killing a push
+# mid-flight is safe. It matters more here: this run is the long one.
 ExecStartPre=+/usr/bin/systemctl stop freehire-search-drain.timer
+ExecStartPre=+/usr/bin/systemctl stop freehire-search-drain.service
 ExecStart=/opt/freehire/src/hire-current/reindex
+ExecStopPost=+/usr/bin/systemctl reset-failed freehire-search-drain.service
 ExecStopPost=+/usr/bin/systemctl start freehire-search-drain.timer
 # Deliberately larger than freehire-reindexw's 4h, because the dedup passes are what
 # make this run long — and deliberately NOT unbounded: search-drain is paused for the

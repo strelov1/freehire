@@ -14,16 +14,37 @@ CPUWeight=40
 IOWeight=40
 # search-drain pushes to the same live Meili index this rebuild swaps into; running both
 # at once is exactly the concurrent-push contention internal/searchdrain/AGENTS.md warns
-# about (each push re-merges the WHOLE index). Pause the drain TIMER (not the service —
-# an in-flight batch is left to finish naturally, not killed mid-push) before this
-# starts, and always resume it after, success or failure alike (+ExecStopPost still runs
-# on failure, unlike a plain "run after" step) — added after the 2026-08-06 incident
-# where search-drain was left off manually and forgotten.
+# about (each push re-merges the WHOLE index). Pause the drain before this starts, and
+# always resume it after, success or failure alike (+ExecStopPost still runs on failure,
+# unlike a plain "run after" step) — added after the 2026-08-06 incident where
+# search-drain was left off manually and forgotten.
 #
-# These two lines were added directly on host-2 and never committed back; this file
-# lacked them entirely until 2026-08-15.
+# The SERVICE is stopped, not just the timer. Stopping only the timer was right while a
+# drain run meant one batch: the run ended on its own within a couple of minutes, so
+# letting an in-flight push finish rather than killing it cost nothing. It stops being
+# true once search_outbox carries a backlog, because then a run is not a batch — it is a
+# loop over the whole queue. On 2026-09-02 the queue stood at 464k entries and the drain
+# had been running for 6h08m when this rebuild started; the timer was duly stopped and
+# changed nothing, so both worked the same Meilisearch task queue for three hours. The
+# rebuild crawled at 6.8k docs/min and each 200-document drain push took 2m13s. Stopping
+# the drain by hand took the rebuild to 26k docs/min and the drain (once it resumed
+# alone) to 19s per push — the same work, roughly 4x and 7x faster respectively.
+#
+# It also compounds: a slower drain grows the backlog, a bigger backlog lengthens the
+# run, and a longer run overlaps more of the next rebuild.
+#
+# Killing a push mid-flight is safe, which is what makes this the cheaper trade. The
+# worker's context is SIGTERM-cancelled (internal/platform/worker.Bootstrap), and
+# searchdrain deletes an outbox entry only AFTER its push succeeded — a cancelled wave
+# stays claimed and its lease simply expires, so the next run redoes it. The cost is one
+# repeated push; the cost of not doing it is hours of contention.
+#
+# reset-failed because stopping a Type=oneshot mid-run leaves it `failed`, and a rebuild
+# must not leave a red unit behind for an operator to interpret.
 ExecStartPre=+/usr/bin/systemctl stop freehire-search-drain.timer
+ExecStartPre=+/usr/bin/systemctl stop freehire-search-drain.service
 ExecStart=/opt/freehire/src/hire-current/reindex
+ExecStopPost=+/usr/bin/systemctl reset-failed freehire-search-drain.service
 ExecStopPost=+/usr/bin/systemctl start freehire-search-drain.timer
 # THE 2026-08-15 INCIDENT, and why this line exists.
 #
