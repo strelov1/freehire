@@ -41,7 +41,31 @@ if ! grep -q "127\.0\.0\.1:${aport};" "$newconf" || ! grep -q "127\.0\.0\.1:${wp
   exit 1
 fi
 cd "/opt/freehire/src/${dir}-${new}"
-sudo -u freehire git pull --ff-only
+# protocol.version=0, and the reason is worth the paragraph because the error message
+# points at the wrong thing entirely. On 2026-09-02 every release began dying with:
+#
+#   fatal: could not read Username for 'https://github.com': No such device or address
+#
+# The repository is public, `curl` as the same user fetched the same URL with a 200, and
+# there is no credential anywhere on the box — yet git was asking to log in. Tracing the
+# exchange showed why. Git's protocol v2 makes TWO requests, and GitHub answers them
+# differently for this host:
+#
+#   GET  /info/refs?service=git-upload-pack  -> 200
+#   POST /git-upload-pack                    -> 401  www-authenticate: Basic realm="GitHub"
+#
+# Protocol v0 needs only the first and succeeds: measured 10/10 where v2 managed 2/10.
+# The 2-in-10 is what made this look intermittent and cost an hour — it is not a flaky
+# network, it is two code paths, and retrying only repeats the doomed request. "No such
+# device or address" is a MISSING TERMINAL, not a refused credential; a scripted release
+# has no terminal to prompt on, so the first 401 ends it.
+#
+# Why GitHub singles out the v2 POST from here is not established — this host crawls
+# hard, so a throttle on its address is the likeliest reason. Authenticating the remote
+# would be the durable fix and needs a credential provisioned; pinning the protocol costs
+# nothing and needs none. GIT_TERMINAL_PROMPT=0 keeps any future variant of this failing
+# fast instead of hanging on a prompt nobody can answer.
+sudo -u freehire env GIT_TERMINAL_PROMPT=0 git -c protocol.version=0 pull --ff-only
 echo "[release:$app] building api + web ..."
 sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$bin" ./cmd/server
 # The design system is a `link:` dependency (freehire#1335) — a bare symlink into
