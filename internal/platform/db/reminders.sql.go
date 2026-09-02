@@ -134,6 +134,12 @@ func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (No
 const getReminderForDelivery = `-- name: GetReminderForDelivery :one
 SELECT r.id, r.user_id, r.job_id, r.channels,
        j.title, j.company, j.public_slug, j.url,
+       -- The live opt-out gate. COALESCE'd to TRUE, not FALSE: an account with no
+       -- notification_settings row has never configured the rule, and the
+       -- never-configured default is ENABLED (see notification-settings). Nudges
+       -- coalesce the other way because their MATCH already inner-joins an enabled
+       -- row, so a nudge cannot exist without one.
+       COALESCE(ns.enabled, true)::bool AS notifications_enabled,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
        u.email AS account_email,
@@ -153,22 +159,23 @@ WHERE r.id = $1
 `
 
 type GetReminderForDeliveryRow struct {
-	ID              int64       `json:"id"`
-	UserID          int64       `json:"user_id"`
-	JobID           int64       `json:"job_id"`
-	Channels        []string    `json:"channels"`
-	Title           string      `json:"title"`
-	Company         string      `json:"company"`
-	PublicSlug      string      `json:"public_slug"`
-	URL             string      `json:"url"`
-	JobOpen         bool        `json:"job_open"`
-	StillActionable bool        `json:"still_actionable"`
-	AccountEmail    string      `json:"account_email"`
-	Timezone        pgtype.Text `json:"timezone"`
-	TelegramChatID  pgtype.Int8 `json:"telegram_chat_id"`
-	HasPushDevice   bool        `json:"has_push_device"`
-	QuietHoursStart pgtype.Time `json:"quiet_hours_start"`
-	QuietHoursEnd   pgtype.Time `json:"quiet_hours_end"`
+	ID                   int64       `json:"id"`
+	UserID               int64       `json:"user_id"`
+	JobID                int64       `json:"job_id"`
+	Channels             []string    `json:"channels"`
+	Title                string      `json:"title"`
+	Company              string      `json:"company"`
+	PublicSlug           string      `json:"public_slug"`
+	URL                  string      `json:"url"`
+	NotificationsEnabled bool        `json:"notifications_enabled"`
+	JobOpen              bool        `json:"job_open"`
+	StillActionable      bool        `json:"still_actionable"`
+	AccountEmail         string      `json:"account_email"`
+	Timezone             pgtype.Text `json:"timezone"`
+	TelegramChatID       pgtype.Int8 `json:"telegram_chat_id"`
+	HasPushDevice        bool        `json:"has_push_device"`
+	QuietHoursStart      pgtype.Time `json:"quiet_hours_start"`
+	QuietHoursEnd        pgtype.Time `json:"quiet_hours_end"`
 }
 
 // The delivery context for one reminder: the job display fields, the channel set,
@@ -191,6 +198,7 @@ func (q *Queries) GetReminderForDelivery(ctx context.Context, id int64) (GetRemi
 		&i.Company,
 		&i.PublicSlug,
 		&i.URL,
+		&i.NotificationsEnabled,
 		&i.JobOpen,
 		&i.StillActionable,
 		&i.AccountEmail,

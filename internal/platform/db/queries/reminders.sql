@@ -109,6 +109,12 @@ SELECT id FROM claimed ORDER BY fire_at, id;
 -- saved-but-unapplied, closing the race between a cancel and the fire.
 SELECT r.id, r.user_id, r.job_id, r.channels,
        j.title, j.company, j.public_slug, j.url,
+       -- The live opt-out gate. COALESCE'd to TRUE, not FALSE: an account with no
+       -- notification_settings row has never configured the rule, and the
+       -- never-configured default is ENABLED (see notification-settings). Nudges
+       -- coalesce the other way because their MATCH already inner-joins an enabled
+       -- row, so a nudge cannot exist without one.
+       COALESCE(ns.enabled, true)::bool AS notifications_enabled,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
        u.email AS account_email,

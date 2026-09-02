@@ -7,13 +7,18 @@ that `(user, job)` pair, using the fixed account default delay. A reminder is
 scheduled only when the shared `notification-settings` rule is enabled for that
 user. Reminders SHALL only be scheduled for jobs that are saved and not yet applied.
 
-The scheduled fire time SHALL be rounded forward from the default delay to the
-account's daily notification hour, so that reminders scheduled on the same day for
-the same account become due in the same worker pass and can be delivered as one
-message. The notification hour is `notification_settings.digest_time` interpreted in
-the account's timezone; an account with no configured digest time SHALL use 09:00,
-and an account with no configured timezone SHALL be treated as UTC. Rounding SHALL
-only move the fire time forward, never earlier than the default delay.
+The scheduled fire time SHALL be the first occurrence of the account's daily
+notification hour at or after the default delay. The notification hour is
+`notification_settings.digest_time` interpreted in the account's timezone; an account
+with no configured digest time SHALL use 09:00, and an account with no configured
+timezone SHALL be treated as UTC. Rounding SHALL only move the fire time forward,
+never earlier than the default delay.
+
+Every save made on one day therefore lands on one of exactly TWO fire times — the
+notification hour on the delay's day for saves at or before that hour, the next day's
+for saves after it. It is not a guarantee that all of a day's saves share one fire
+time: honouring the delay floor and honouring a fixed hour cannot both hold for saves
+that straddle that hour.
 
 #### Scenario: Save schedules at the fixed default delay, rounded to the notification hour
 
@@ -21,10 +26,18 @@ only move the fire time forward, never earlier than the default delay.
 - **THEN** a pending reminder is created whose fire time is the first 09:00 in the
   account's timezone at or after the fixed default delay from the save
 
-#### Scenario: Two saves on the same day become due together
+#### Scenario: Saves on the same side of the notification hour become due together
 
-- **WHEN** the same user saves two jobs several hours apart on one day
+- **WHEN** the same user saves two jobs several hours apart on one day, both after the
+  account's notification hour
 - **THEN** both pending reminders carry the same fire time
+
+#### Scenario: Saves straddling the notification hour fall into two fire times
+
+- **WHEN** the same user saves one job before the account's notification hour and
+  another after it on the same day
+- **THEN** the two reminders carry fire times one day apart, each still at the
+  notification hour and each still at or after the default delay
 
 #### Scenario: Configured digest time is the rounding target
 

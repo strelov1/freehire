@@ -42,7 +42,10 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   (`notification_settings.digest_time` in the account's timezone; 09:00 and UTC when
   unset). Grouping alone would have bought the reminder engine almost nothing: `fire_at`
   was save + 3 days exactly and `freehire-remind` ticks every 15 minutes, so two saves
-  hours apart landed in different passes. `internal/engage/nudge` needs no such rounding —
+  hours apart landed in different passes. **It collapses a day onto TWO fire times, not
+  one** — the delay floor and a fixed hour disagree for saves that straddle that hour, so
+  a day's saves split at it. Two messages instead of eight is the win; do not write down
+  a promise of one. `internal/engage/nudge` needs no such rounding —
   it has no `fire_at`, and MATCH+DELIVER share a pass, so everything an account has
   pending is already together.
 - **A new channel is a new `Notifier` implementation — but there are THREE of them.** Each engine

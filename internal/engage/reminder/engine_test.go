@@ -91,7 +91,7 @@ func actionableRow(id int64, channels []string, chatID *int64, email string) db.
 	row := db.GetReminderForDeliveryRow{
 		ID: id, UserID: 42, JobID: id, Channels: channels,
 		Title: "Go Dev", Company: "Acme", PublicSlug: "go-dev-acme", URL: "https://ats/x",
-		JobOpen: true, StillActionable: true, AccountEmail: email,
+		JobOpen: true, StillActionable: true, NotificationsEnabled: true, AccountEmail: email,
 	}
 	if chatID != nil {
 		row.TelegramChatID = pgtype.Int8{Int64: *chatID, Valid: true}
@@ -173,6 +173,28 @@ func TestRun_CancelsWhenNoLongerActionable(t *testing.T) {
 
 	if len(notifier.sent) != 0 {
 		t.Errorf("must not send a stale reminder, sent %v", notifier.sent)
+	}
+	if len(store.cancelled) != 1 || store.cancelled[0] != 1 {
+		t.Errorf("must cancel at fire, cancelled = %v", store.cancelled)
+	}
+	if stats.Cancelled != 1 {
+		t.Errorf("stats.Cancelled = %d, want 1", stats.Cancelled)
+	}
+}
+
+// Opting out has to reach what is already scheduled. A reminder is scheduled at save
+// time and fires days later; without this the account keeps hearing from us after it
+// asked us to stop, which is the one failure a notification setting exists to prevent.
+func TestRun_CancelsWhenNotificationsDisabled(t *testing.T) {
+	chat := int64(555)
+	row := actionableRow(1, []string{"telegram"}, &chat, "a@b.c")
+	row.NotificationsEnabled = false // opted out after the save
+	store := &fakeStore{due: []int64{1}, rows: map[int64]db.GetReminderForDeliveryRow{1: row}}
+	notifier := &fakeNotifier{}
+	stats := run(t, store, notifier)
+
+	if len(notifier.sent) != 0 {
+		t.Errorf("must not send to an opted-out account, sent %v", notifier.sent)
 	}
 	if len(store.cancelled) != 1 || store.cancelled[0] != 1 {
 		t.Errorf("must cancel at fire, cancelled = %v", store.cancelled)

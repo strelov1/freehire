@@ -234,10 +234,15 @@ func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batc
 }
 
 // validate re-checks one claimed reminder immediately before it joins a batch: the
-// job must still be open and still saved-but-unapplied, and the account must not be
-// inside its quiet hours. A reminder that lost its intent is cancelled here, which
-// is how job-closure cancellation is enforced without hooking the scattered close
-// paths. It reports whether the reminder is deliverable this pass.
+// account must still want notifications, the job must still be open and still
+// saved-but-unapplied, and the account must not be inside its quiet hours. A reminder
+// that lost its intent is cancelled here, which is how job-closure cancellation — and
+// opting out after a save — is enforced without hooking the scattered write paths. It
+// reports whether the reminder is deliverable this pass.
+//
+// The opt-out is read LIVE rather than snapshotted, unlike the channel set: turning
+// notifications off is a statement about everything pending, while a channel choice
+// only describes what was scheduled under it.
 func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetReminderForDeliveryRow, bool) {
 	info, err := r.store.GetReminderForDelivery(ctx, id)
 	if err != nil {
@@ -245,7 +250,7 @@ func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetRe
 		r.release(ctx, id)
 		return info, false
 	}
-	if !info.JobOpen || !info.StillActionable {
+	if !info.NotificationsEnabled || !info.JobOpen || !info.StillActionable {
 		if _, err := r.store.CancelReminderAtFire(ctx, id); err != nil {
 			log.Printf("reminder: cancel-at-fire %d: %v", id, err)
 			r.release(ctx, id)

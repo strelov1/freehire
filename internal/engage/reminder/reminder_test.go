@@ -101,7 +101,38 @@ func TestScheduleOnSave_RoundsToTheConfiguredHourInTheAccountZone(t *testing.T) 
 	}
 }
 
-// The point of the rounding: saves hours apart on one day become one delivery.
+// The rounding cannot collapse a whole day onto one instant — honouring the delay
+// floor and honouring a fixed hour disagree for saves that straddle that hour. What it
+// guarantees is that a day's saves land on one of exactly TWO fire times, so the flood
+// becomes at most two messages instead of one per job.
+func TestScheduleOnSave_SavesStraddlingTheHourFallIntoTwoFireTimes(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{Enabled: true, Channels: []string{"email"}}}
+	svc := newService(repo)
+
+	// Default hour is 09:00 UTC; 08:00 is before it and 10:00 after.
+	svc.now = func() time.Time { return time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC) }
+	if err := svc.ScheduleOnSave(context.Background(), 7, 1); err != nil {
+		t.Fatalf("ScheduleOnSave: %v", err)
+	}
+	svc.now = func() time.Time { return time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC) }
+	if err := svc.ScheduleOnSave(context.Background(), 7, 2); err != nil {
+		t.Fatalf("ScheduleOnSave: %v", err)
+	}
+
+	early, late := repo.upserted[0].fireAt, repo.upserted[1].fireAt
+	if !early.Equal(time.Date(2026, 7, 22, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("pre-hour save fired at %v, want 22 July 09:00 UTC", early)
+	}
+	if !late.Equal(time.Date(2026, 7, 23, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("post-hour save fired at %v, want 23 July 09:00 UTC", late)
+	}
+	if late.Sub(early) != 24*time.Hour {
+		t.Errorf("the two fire times are %v apart, want exactly one day", late.Sub(early))
+	}
+}
+
+// Saves on the SAME side of the notification hour do share one fire time — the case
+// the grouping is actually for.
 func TestScheduleOnSave_SameDaySavesShareOneFireTime(t *testing.T) {
 	repo := &fakeRepo{settings: Settings{Enabled: true, Channels: []string{"email"}}}
 	svc := newService(repo)
