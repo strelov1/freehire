@@ -115,7 +115,43 @@ design` and bare `after effects`.
 3. `systemctl stop freehire-reindexw.timer`, then `make reindex` (no
    `REINDEX_DEDUP`), then start the timer.
 4. Read the live `category` facet for `creative` and the `role` facet for the
-   new roles; compare against the estimate.
+   new roles; compare against the estimate below.
+
+### The pre-deploy baseline
+
+Measured 2026-09-01 against the live public search API. Each figure is the
+full-text total scaled by the share of the first 100 results whose TITLE
+carries the phrase — the dictionary reads titles, so the full-text total on
+its own overstates the population several-fold (`executive advisor`: 1710
+full-text, 34 by title).
+
+| title | est. open postings |
+|---|---|
+| video editor | 366 |
+| videographer | 71 |
+| video producer | 45 |
+| animator | 94 |
+| sound designer | 65 |
+| photographer | 55 |
+| environment artist | 32 |
+| 3d artist | 23 |
+| vfx artist | 21 |
+| concept artist | 19 |
+| technical artist | 16 |
+| character artist | 16 |
+| audio designer | 6 |
+| photo editor | 4 |
+| **total** | **~833** |
+
+`illustrator` is not in the table: its title population could not be separated
+from the Adobe product by this method, so it is deliberately unestimated. If
+the post-backfill `creative` facet lands far above ~900, that alias is the
+first place to look.
+
+Prod facet counts the same day, for the categories this change borders:
+`design` 35914, `engineering_design` 12742, `motion_designer` 489,
+`graphic_designer` 2413, `ux_designer` 2377. Only `design` should move, and
+only by the audio postings.
 
 Rollback: revert the binary. The stored `category` values stay until the next
 `backfill-derive`, and an unknown category in the column is inert — nothing

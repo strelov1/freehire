@@ -28,5 +28,5 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...` and `golangci-lint run`; all clean.
-- [ ] 6.2 Write the rollout note into the change (backfill-derive → stop reindex timer → plain `make reindex` → start timer) and record the pre-deploy estimate to compare the post-backfill facet against.
+- [x] 6.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...` and `golangci-lint run`; all clean.
+- [x] 6.2 Write the rollout note into the change (backfill-derive → stop reindex timer → plain `make reindex` → start timer) and record the pre-deploy estimate to compare the post-backfill facet against.
