@@ -14,6 +14,7 @@
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
   import { formatDate } from '$lib/utils';
+  import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
@@ -462,6 +463,12 @@
               {job.source}
             </Badge>
           </a>
+          {#if job.source === 'adzuna'}
+            <!-- Required by Adzuna's API terms, not a courtesy credit — see the component. It
+                 sits in the provenance row beside the source chip, which is where a reader
+                 already looks to find out where a posting came from. -->
+            <AdzunaAttribution jobUrl={job.url} />
+          {/if}
           {#if job.manually_added}
             <Badge variant="secondary">Manually added</Badge>
           {/if}
