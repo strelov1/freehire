@@ -84,6 +84,43 @@ func TestCreativeIsTech(t *testing.T) {
 	}
 }
 
+// TestCraftCategoriesAreNonTech pins the set cmd/prune's business rule subtracts.
+// Those categories are non-technical because the CRAFT sits outside IT, not because
+// the posting is back-office work at a software employer — deleting them would take
+// out an engineering employer's whole catalogue the moment its board is retired.
+// A member that is not non-technical would mean the subtraction is pointless; a craft
+// category left out of the set becomes deletable in silence.
+func TestCraftCategoriesAreNonTech(t *testing.T) {
+	if len(NonTechCraftCategories) == 0 {
+		t.Fatal("NonTechCraftCategories must not be empty")
+	}
+	for _, c := range NonTechCraftCategories {
+		if !slices.Contains(NonTechCategories, c) {
+			t.Errorf("craft category %q is not a NonTechCategories member, so subtracting it is meaningless", c)
+		}
+		if !slices.Contains(CategoryValues, c) {
+			t.Errorf("craft category %q is not a member of CategoryValues", c)
+		}
+	}
+	for _, want := range []string{"engineering_design", "industrial_engineering"} {
+		if !slices.Contains(NonTechCraftCategories, want) {
+			t.Errorf("NonTechCraftCategories must contain %q", want)
+		}
+	}
+}
+
+func TestIndustrialEngineeringIsNonTech(t *testing.T) {
+	if !slices.Contains(CategoryValues, "industrial_engineering") {
+		t.Fatal("CategoryValues must contain industrial_engineering")
+	}
+	if !slices.Contains(NonTechCategories, "industrial_engineering") {
+		t.Error("industrial_engineering must be a NonTechCategories member")
+	}
+	if slices.Contains(TechCategories, "industrial_engineering") {
+		t.Error("industrial_engineering must not be a TechCategories member")
+	}
+}
+
 func TestDomainGlossCoversVocabulary(t *testing.T) {
 	for _, d := range DomainValues {
 		if strings.TrimSpace(DomainGloss[d]) == "" {

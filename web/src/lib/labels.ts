@@ -109,6 +109,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   design: 'Design',
   creative: 'Creative & Media',
   engineering_design: 'Engineering Design',
+  industrial_engineering: 'Industrial Engineering',
   product: 'Product',
   project_management: 'Project Management',
   management: 'Management',

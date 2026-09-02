@@ -573,3 +573,44 @@ func TestITTailRolesDoNotSteal(t *testing.T) {
 		}
 	}
 }
+
+// TestDeriveIndustrialRoles names the seats the industrial category decomposes into.
+func TestDeriveIndustrialRoles(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Project Engineer", "industrial_engineering", "project_engineer"},
+		{"Senior Project Engineer", "industrial_engineering", "project_engineer"},
+		{"Quality Engineer", "industrial_engineering", "quality_engineer"},
+		{"Supplier Quality Engineer", "industrial_engineering", "quality_engineer"},
+		{"Process Engineer", "industrial_engineering", "process_engineer"},
+		{"Manufacturing Engineer", "industrial_engineering", "process_engineer"},
+		{"Maintenance Engineer", "industrial_engineering", "maintenance_engineer"},
+		{"Controls Engineer", "industrial_engineering", "controls_engineer"},
+		{"Automation Engineer", "industrial_engineering", "automation_engineer"},
+		{"Field Service Engineer", "industrial_engineering", "field_service_engineer"},
+		{"Industrial Engineer", "industrial_engineering", "industrial_engineer"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestIndustrialRolesDoNotStealFromDesign guards the collision the new aliases create:
+// the draughting crafts all end in "engineer" too.
+func TestIndustrialRolesDoNotStealFromDesign(t *testing.T) {
+	for _, tc := range []struct {
+		title, category, want string
+	}{
+		{"Mechanical Design Engineer", "engineering_design", "mechanical_designer"},
+		{"Electrical Design Engineer", "engineering_design", "electrical_designer"},
+		{"Design Engineer", "engineering_design", "design_engineer"},
+		{"PCB Design Engineer", "hardware", "pcb_designer"},
+		{"Sales Engineer", "solutions_engineering", "sales_engineer"},
+	} {
+		if got := Derive("", tc.category, tc.title); !slices.Contains(got, tc.want) {
+			t.Errorf("Derive(_, %q, %q) = %v, want it to contain %q", tc.category, tc.title, got, tc.want)
+		}
+	}
+}

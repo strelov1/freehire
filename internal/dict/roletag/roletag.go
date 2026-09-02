@@ -81,12 +81,17 @@ var categoryNoun = map[string]string{
 	// crafts themselves are named roles below.
 	"creative":           "Creative Specialist",
 	"engineering_design": "Engineering Designer",
-	"product":            "Product Manager",
-	"project_management": "Project Manager",
-	"management":         "Manager",
-	"marketing":          "Marketing Specialist",
-	"sales":              "Sales Specialist",
-	"support":            "Support Specialist",
+	// The umbrella noun, deliberately NOT "Industrial Engineer": the namedRoleTable
+	// below owns that exact label for the discipline of the same name, and an identical
+	// label on two slugs shows as a duplicate option in the picker — the same trap
+	// "Software Generalist" documents above.
+	"industrial_engineering": "Plant Engineer",
+	"product":                "Product Manager",
+	"project_management":     "Project Manager",
+	"management":             "Manager",
+	"marketing":              "Marketing Specialist",
+	"sales":                  "Sales Specialist",
+	"support":                "Support Specialist",
 	// IT-company roles added by expand-role-taxonomy.
 	"business_analysis":     "Business Analyst",
 	"solutions_engineering": "Solutions Engineer",
@@ -312,6 +317,19 @@ var namedRoleTable = []struct {
 	{"narrative_designer", "Narrative Designer", []string{"narrative designer"}},
 	{"game_producer", "Game Producer", []string{"game producer"}},
 	{"game_developer", "Game Developer", []string{"game developer", "game programmer", "gameplay engineer", "gameplay programmer"}},
+
+	// The industrial engineering seats. The category says "some engineering seat
+	// outside software"; these say which seat. Every one of them ends in "engineer",
+	// so the draughting crafts above — mechanical_designer, design_engineer and the
+	// silicon family — win on alias length and keep their rows.
+	{"project_engineer", "Project Engineer", []string{"project engineer"}},
+	{"quality_engineer", "Quality Engineer", []string{"quality engineer", "supplier quality engineer", "quality assurance engineer"}},
+	{"process_engineer", "Process Engineer", []string{"process engineer", "manufacturing engineer", "production engineer"}},
+	{"maintenance_engineer", "Maintenance Engineer", []string{"maintenance engineer", "plant engineer", "facilities engineer"}},
+	{"controls_engineer", "Controls Engineer", []string{"controls engineer", "control engineer", "instrumentation engineer"}},
+	{"automation_engineer", "Automation Engineer", []string{"automation engineer"}},
+	{"field_service_engineer", "Field Service Engineer", []string{"field service engineer", "service engineer", "field engineer"}},
+	{"industrial_engineer", "Industrial Engineer", []string{"industrial engineer"}},
 
 	// Non-software professions the catalogue carries (broad scope).
 	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},

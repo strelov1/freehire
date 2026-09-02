@@ -992,6 +992,58 @@ var categoryTable = []aliasEntry{
 	// words, so their order against that alias does not matter.
 	{"integration engineer", "software_engineering"},
 
+	// Industrial engineering: the seats a factory, plant, utility or field-service
+	// organisation staffs. 51 994 open postings measured on prod after the IT wave, and
+	// the whole residue was this one shape — there was nowhere to file it, since
+	// `engineering_design` means draughting and a Quality Engineer is not a draughtsman.
+	//
+	// The IT lookalikes come first: each names a discipline of its own that no alias
+	// above would catch, and the bare "engineer" at the bottom of this block would
+	// otherwise take them. `field application engineer` is the semiconductor pre-sales
+	// title and goes to the customer-facing category, not to the plant.
+	{"it engineer", "software_engineering"},
+	{"database engineer", "devops"},
+	{"business intelligence engineer", "data_analytics"},
+	{"electronics engineer", "hardware"},
+	{"field application engineer", "solutions_engineering"},
+
+	// Then the seats themselves.
+	{"project engineer", "industrial_engineering"},
+	{"quality engineer", "industrial_engineering"},
+	{"supplier quality engineer", "industrial_engineering"},
+	{"process engineer", "industrial_engineering"},
+	{"manufacturing engineer", "industrial_engineering"},
+	{"production engineer", "industrial_engineering"},
+	{"maintenance engineer", "industrial_engineering"},
+	{"controls engineer", "industrial_engineering"},
+	{"control engineer", "industrial_engineering"},
+	{"instrumentation engineer", "industrial_engineering"},
+	// Both were left unresolved by the IT wave for want of a home. Here they read
+	// industrial: "Automation Engineer" sits beside "Controls Engineer" in this
+	// catalogue, and a QA automation engineer's title already carries "QA", which
+	// resolves far above.
+	{"automation engineer", "industrial_engineering"},
+	{"application engineer", "industrial_engineering"},
+	{"applications engineer", "industrial_engineering"},
+	// No "reliability engineer": the suite already pins it to no category because
+	// mechanical reliability and site reliability share the phrase, and only "site"
+	// tells them apart.
+	{"commissioning engineer", "industrial_engineering"},
+	{"validation engineer", "industrial_engineering"},
+	{"industrial engineer", "industrial_engineering"},
+	{"field service engineer", "industrial_engineering"},
+	{"service engineer", "industrial_engineering"},
+	{"field engineer", "industrial_engineering"},
+	{"site engineer", "industrial_engineering"},
+	{"plant engineer", "industrial_engineering"},
+	{"facilities engineer", "industrial_engineering"},
+	{"building engineer", "industrial_engineering"},
+	{"safety engineer", "industrial_engineering"},
+	{"environmental engineer", "industrial_engineering"},
+	{"geotechnical engineer", "industrial_engineering"},
+	{"planning engineer", "industrial_engineering"},
+	{"resident engineer", "industrial_engineering"},
+
 	// 1С (the RU enterprise/ERP dev platform) resolves last so a more specific role word in the
 	// title wins first ("Аналитик 1С" → data_analytics, "Тестировщик 1С" → qa); a title whose only
 	// signal is 1С ("Программист 1С", "1С-разработчик") reads as backend — server-side enterprise
@@ -1014,6 +1066,37 @@ var categoryTable = []aliasEntry{
 	{"администратор баз данных", "devops"},
 	{"программист", "software_engineering"},
 	{"разработчик", "software_engineering"},
+
+	// The Russian engineering family. Roughly half the industrial residue, and none of
+	// it carried an English alias. The two qualified forms that name ANOTHER discipline
+	// are declared first: "Инженер-проектировщик" is a draughtsman and
+	// "Инженер по защите информации" an information-security engineer, and the bare
+	// token below would otherwise claim both.
+	//
+	// Bare tokens for the same reason the software ones above are: the qualified forms
+	// either hyphenate ("Инженер-технолог") or postfix a prepositional phrase
+	// ("Инженер по подготовке производства"), and a hyphen is a word boundary — only
+	// the bare token reaches every spelling.
+	{"инженер-проектировщик", "engineering_design"},
+	{"инженер по защите информации", "security"},
+	{"инженер", "industrial_engineering"},
+	{"технолог", "industrial_engineering"},
+
+	// NO bare English "engineer", though 689 open postings spell it exactly. It was
+	// tried and the existing suite rejected it, which is the answer: "Product
+	// Engineer", "Growth Engineer", "Staff Engineer" and "Developer Onboarding
+	// Engineer" are all pinned to NO category on purpose, because the word before
+	// "engineer" is what decides and those words are ambiguous. A bare alias overrides
+	// every one of those decisions at once.
+	//
+	// It also breaks `Categories()`, which returns EVERY matching alias rather than the
+	// strongest: a bare "engineer" appends this category to "Senior Backend Engineer"
+	// and to every other engineering title in the catalogue, polluting the multi-
+	// category CV path that reads it.
+	//
+	// The Russian bare token above does not have the second problem to the same degree
+	// — "инженер" heads far fewer resolved titles here — and its qualified forms are
+	// declared above it, so `Parse` stays correct.
 
 	// Media production, declared LAST on purpose. Every craft here is also a tool or a
 	// second hat named inside someone else's title — "Marketing Specialist (Photoshop,

@@ -55,6 +55,9 @@ const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   design: 'Design & Creative',
   creative: 'Design & Creative',
   engineering_design: 'Design & Creative',
+  // Not a craft in the design sense — it sits with the engineering disciplines, since
+  // that is where a plant or process engineer looks first.
+  industrial_engineering: 'Engineering',
   product: 'Product & Management',
   project_management: 'Product & Management',
   management: 'Product & Management',

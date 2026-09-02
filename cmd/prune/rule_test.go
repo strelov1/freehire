@@ -46,6 +46,16 @@ func TestMatchRule(t *testing.T) {
 			want: "",
 		},
 		{
+			// The second craft category. One category spared by an inline name could
+			// not express a set, and this one would have been deletable the moment it
+			// joined NonTechCategories — by whoever added it to the vocabulary and
+			// never opened cmd/prune.
+			name: "industrial engineering is not a business role",
+			c:    candidate{CompanySlug: "acme", Title: "Process Engineer", Category: "industrial_engineering", IsTech: techPtr(false)},
+			ev:   evidence{},
+			want: "",
+		},
+		{
 			name:    "the same business role is kept where the company has posted technical work",
 			c:       candidate{CompanySlug: "acme", Title: "Account Manager", Category: "sales", IsTech: techPtr(false)},
 			ev:      evidence{anyTech: true},

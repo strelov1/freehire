@@ -817,7 +817,10 @@ func TestParse_CreativeMedia(t *testing.T) {
 		// NOT audio: "Audio Engineer" and "Sound Engineer" are broadcast, live sound and
 		// AV integration as often as they are the craft, so neither is an alias.
 		{"Audio Engineer", "", ""},
-		{"Field Service Engineer - Audio Engineer", "", ""},
+		// Still not `creative`, which is what this case guards. It now resolves to
+		// `industrial_engineering` instead of nothing: the title names a field service
+		// seat, and that category did not exist when this case was written.
+		{"Field Service Engineer - Audio Engineer", "industrial_engineering", ""},
 
 		// Photography.
 		{"Photographer", "creative", ""},
@@ -947,6 +950,96 @@ func TestParse_ITTailCoverage(t *testing.T) {
 		// Customer-facing engineering keeps what it has.
 		{"Sales Engineer", "solutions_engineering", ""},
 		{"Support Engineer", "support", ""},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}
+
+// TestParse_IndustrialEngineering pins the engineering seats outside software — the
+// whole residue left after the IT wave, 51 994 open postings measured on prod, half of
+// it Russian and none of that half carrying an English alias.
+func TestParse_IndustrialEngineering(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// The seats a plant, factory or field-service organisation staffs.
+		{"Project Engineer", "industrial_engineering", ""},
+		{"Quality Engineer", "industrial_engineering", ""},
+		{"Senior Quality Engineer", "industrial_engineering", ""},
+		{"Process Engineer", "industrial_engineering", ""},
+		{"Manufacturing Engineer", "industrial_engineering", ""},
+		{"Production Engineer", "industrial_engineering", ""},
+		{"Maintenance Engineer", "industrial_engineering", ""},
+		{"Controls Engineer", "industrial_engineering", ""},
+		{"Automation Engineer", "industrial_engineering", "deferred by the IT wave for want of a home"},
+		{"Commissioning Engineer", "industrial_engineering", ""},
+		{"Validation Engineer", "industrial_engineering", ""},
+		{"Industrial Engineer", "industrial_engineering", ""},
+		{"Field Service Engineer", "industrial_engineering", ""},
+		{"Field Engineer", "industrial_engineering", ""},
+		{"Site Engineer", "industrial_engineering", ""},
+		{"Facilities Engineer", "industrial_engineering", ""},
+		{"Supplier Quality Engineer", "industrial_engineering", ""},
+		{"Safety Engineer", "industrial_engineering", ""},
+		{"Environmental Engineer", "industrial_engineering", ""},
+		{"Geotechnical Engineer", "industrial_engineering", ""},
+		{"Application Engineer", "industrial_engineering", "the industrial reading; the field form goes to pre-sales"},
+		{"Applications Engineer", "industrial_engineering", ""},
+
+		// NO bare "engineer" alias, though 689 open postings spell it exactly. It was
+		// tried; the existing suite rejected it, and that rejection is the right
+		// answer — "Product Engineer", "Growth Engineer" and "Staff Engineer" are
+		// pinned to no category on purpose, and `Categories()` returns every match, so
+		// a bare alias would append this category to every engineering title there is.
+		{"Engineer", "", ""},
+		{"Engineer II", "", ""},
+		{"Associate Engineer", "", ""},
+		{"Product Engineer", "", "pinned elsewhere on purpose; the bare alias would have overridden it"},
+		{"Reliability Engineer", "", "mechanical and site reliability share the phrase"},
+
+		// The IT lookalikes, declared above the bare alias.
+		{"IT Engineer", "software_engineering", ""},
+		{"Database Engineer", "devops", ""},
+		{"Business Intelligence Engineer", "data_analytics", ""},
+		{"Electronics Engineer", "hardware", "the rest of electronics already lives there"},
+		{"Field Application Engineer", "solutions_engineering", "the semiconductor pre-sales title"},
+
+		// The Russian family.
+		{"Инженер", "industrial_engineering", ""},
+		{"Инженер-технолог", "industrial_engineering", ""},
+		{"Инженер-энергетик", "industrial_engineering", ""},
+		{"Инженер-механик", "industrial_engineering", ""},
+		{"Инженер-электроник", "industrial_engineering", ""},
+		{"Инженер ПТО", "industrial_engineering", ""},
+		{"Главный инженер", "industrial_engineering", ""},
+		{"Инженер по подготовке производства", "industrial_engineering", ""},
+		{"Инженер по наладке и испытаниям", "industrial_engineering", ""},
+		{"Технолог", "industrial_engineering", ""},
+
+		// Russian titles that name another discipline, declared above the bare token.
+		{"Инженер-проектировщик", "engineering_design", "a draughtsman, not a plant engineer"},
+		{"Инженер по защите информации", "security", ""},
+
+		// Every discipline that names itself must be untouched by the bare alias.
+		{"Backend Engineer", "backend", ""},
+		{"Data Engineer", "data_engineering", ""},
+		{"Security Engineer", "security", ""},
+		{"Site Reliability Engineer", "sre", ""},
+		{"Sales Engineer", "solutions_engineering", ""},
+		{"Support Engineer", "support", ""},
+		{"Systems Engineer", "software_engineering", "the IT wave's call, unchanged"},
+		{"Software Engineer", "software_engineering", ""},
+		{"QA Automation Engineer", "qa", "the QA alias resolves above automation"},
+		{"Mechanical Design Engineer", "engineering_design", ""},
+		{"Design Engineer", "engineering_design", ""},
+		{"Machine Learning Engineer", "ml_ai", ""},
+		{"Программист", "software_engineering", "the IT wave's call, unchanged"},
 	}
 
 	for _, tc := range cases {

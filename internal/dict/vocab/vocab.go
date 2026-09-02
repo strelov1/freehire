@@ -62,7 +62,15 @@ var (
 		// audio designers who sat in `design` for no reason beyond the word
 		// "designer" in the title. Product, motion, graphic, visual and brand
 		// design stay where they are.
-		"design", "creative", "engineering_design", "product", "project_management", "management",
+		// "industrial_engineering" is the engineering seat a factory, plant, utility
+		// or field-service organisation staffs — manufacturing, process, quality,
+		// maintenance, controls, commissioning, reliability, field service. It is a
+		// sibling of `engineering_design`, not a slice of it: draughting is drawing
+		// the thing, this is making and running it, and a Quality Engineer is not a
+		// draughtsman. Half the population it names is Russian (`Инженер`,
+		// `Инженер-технолог`, `Инженер ПТО`) and carried no English alias at all.
+		"design", "creative", "engineering_design", "industrial_engineering",
+		"product", "project_management", "management",
 		"marketing", "sales", "support",
 		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
@@ -94,8 +102,23 @@ var (
 	NonTechCategories = []string{
 		"marketing", "sales", "support", "management",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
-		"engineering_design",
+		"engineering_design", "industrial_engineering",
 	}
+	// NonTechCraftCategories are the NonTechCategories members that are non-technical
+	// because the CRAFT sits outside IT — not because the posting is back-office or
+	// go-to-market work at a software employer. The distinction is not decorative:
+	// `cmd/prune`'s business rule deletes non-technical categories at a company with no
+	// technical history, and applied to these it would take out an engineering
+	// employer's entire catalogue the moment its board was retired. That rule
+	// SUBTRACTS this set.
+	//
+	// It lives here rather than in prune because it states what a category MEANS, and
+	// because the alternative has already been tried: the exception was one category
+	// named inline at the rule, which meant the second craft category could be added to
+	// the vocabulary — by someone with no reason to open cmd/prune — and become
+	// deletable in silence. A test asserts every member is also a NonTechCategories
+	// member, so the two cannot drift.
+	NonTechCraftCategories = []string{"engineering_design", "industrial_engineering"}
 	// TechCategories are the CategoryValues for recognized technical roles: every
 	// category that is neither a NonTechCategories member nor the residual "other".
 	// It is the single source of truth for "is this a technical category?" that the
