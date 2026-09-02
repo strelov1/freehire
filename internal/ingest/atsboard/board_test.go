@@ -38,6 +38,17 @@ func TestRecognize(t *testing.T) {
 		{"manatal careers-page posting", "https://www.careers-page.com/nearshore-business-solutions/job/5W939XW3", "manatal", "nearshore-business-solutions", "https://www.careers-page.com/nearshore-business-solutions/job/5W939XW3", true},
 		{"manatal careers-page listing", "https://www.careers-page.com/hiretidal", "manatal", "hiretidal", "https://www.careers-page.com/hiretidal", true},
 
+		// Gusto: the board is the whole "<company-slug>-<company-uuid>" segment behind the
+		// platform's own "boards" word. A /postings/ URL names no board at all — the uuid it ends
+		// with is the POSTING's — so it is declined rather than turned into a board no crawl can
+		// resolve.
+		{"gusto board listing", "https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90?page=2", "gusto", "100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90", "https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90", true},
+		{"gusto board listing trailing slash", "https://jobs.gusto.com/boards/121g-consulting-llc-f41b3691-0c93-4406-acb7-6b28c2c69601/", "gusto", "121g-consulting-llc-f41b3691-0c93-4406-acb7-6b28c2c69601", "https://jobs.gusto.com/boards/121g-consulting-llc-f41b3691-0c93-4406-acb7-6b28c2c69601", true},
+		{"gusto posting carries the posting uuid, not the board", "https://jobs.gusto.com/postings/grupo-ei-el-paso-warehouse-team-lead-dc55dd36-ff48-49d3-9904-9a2c5746286d", "", "", "", false},
+		{"gusto bare postings path", "https://jobs.gusto.com/postings", "", "", "", false},
+		{"gusto bare boards path", "https://jobs.gusto.com/boards", "", "", "", false},
+		{"gusto bare host", "https://jobs.gusto.com", "", "", "", false},
+
 		// pathprefix — the ATS's OWN API host. A careers page on the employer's domain loads its
 		// listing over XHR, so the board is named in that API URL and nowhere else in the page.
 		{"ashby posting API", "https://api.ashbyhq.com/posting-api/job-board/phantom?includeCompensation=false", "ashby", "phantom", "https://api.ashbyhq.com/posting-api/job-board/phantom", true},
@@ -65,6 +76,58 @@ func TestRecognize(t *testing.T) {
 		{"rippling board listing", "https://ats.rippling.com/satomic", "rippling", "satomic", "https://ats.rippling.com/satomic", true},
 		{"rippling locale only no tenant", "https://ats.rippling.com/en-GB", "", "", "", false},
 
+		// pathlocalepair — Dayforce: every career site is on one host under
+		// "<culture?>/<tenant>/<site>" and the board is the two segments after the culture. The
+		// culture is dropped: a posting keeps one id across the cultures it is translated into,
+		// which is why the ingest adapter folds it off the board too. Tenant and site are
+		// case-insensitive at the platform, so the board is folded to the lower case the board
+		// file holds.
+		{"dayforce locale-prefixed vacancy", "https://jobs.dayforcehcm.com/en-US/dcrusa/join-us/jobs/12345?utm=x#top", "dayforce", "dcrusa/join-us", "https://jobs.dayforcehcm.com/dcrusa/join-us", true},
+		{"dayforce vacancy with no locale", "https://jobs.dayforcehcm.com/dcrusa/join-us/jobs/12345", "dayforce", "dcrusa/join-us", "https://jobs.dayforcehcm.com/dcrusa/join-us", true},
+		{"dayforce site listing", "https://jobs.dayforcehcm.com/en-US/4refuel/candidateportal", "dayforce", "4refuel/candidateportal", "https://jobs.dayforcehcm.com/4refuel/candidateportal", true},
+		{"dayforce site listing trailing slash", "https://jobs.dayforcehcm.com/en-US/4refuel/candidateportal/", "dayforce", "4refuel/candidateportal", "https://jobs.dayforcehcm.com/4refuel/candidateportal", true},
+		{"dayforce mixed-case board folds", "https://jobs.dayforcehcm.com/en-US/DCRUSA/Join-Us/jobs/1", "dayforce", "dcrusa/join-us", "https://jobs.dayforcehcm.com/dcrusa/join-us", true},
+		// A site that publishes in no English culture is entered in dayforce.yml WITH its culture
+		// ("agfgroup/employeereferralposting/fr-CA"), so this board is a prefix of the stored one
+		// rather than equal to it — the contribution flow will see such a link as a new board.
+		// Keeping the culture instead would break the other 3,029 entries, whose links carry
+		// en-US and whose stored board has no culture segment at all.
+		{"dayforce non-english culture stays out of the board", "https://jobs.dayforcehcm.com/fr-CA/agfgroup/employeereferralposting", "dayforce", "agfgroup/employeereferralposting", "https://jobs.dayforcehcm.com/agfgroup/employeereferralposting", true},
+		{"dayforce tenant with no site", "https://jobs.dayforcehcm.com/en-US/dcrusa", "", "", "", false},
+		{"dayforce locale only", "https://jobs.dayforcehcm.com/en-US", "", "", "", false},
+		{"dayforce bare host", "https://jobs.dayforcehcm.com", "", "", "", false},
+		// The platform's own machinery shares the tenants' host, and both shapes are linked from
+		// every page on it — read as career sites they name the boards "_next/static" and "api/geo".
+		{"dayforce app bundle is not a board", "https://jobs.dayforcehcm.com/_next/static/chunks/main.js", "", "", "", false},
+		{"dayforce listing api is not a board", "https://jobs.dayforcehcm.com/api/geo/dcrusa/jobposting/search", "", "", "", false},
+		// The platform's own paths take a locale prefix too, so the guard has to read the segment
+		// the BOARD would start at rather than the URL's first one.
+		{"dayforce locale-prefixed app bundle is not a board", "https://jobs.dayforcehcm.com/en-US/_next/data/build/dcrusa.json", "", "", "", false},
+		{"dayforce locale-prefixed api is not a board", "https://jobs.dayforcehcm.com/en-US/api/geo/dcrusa/jobposting/search", "", "", "", false},
+
+		// query — Paycor: nothing but the clientId parameter names the board, since the path is
+		// the same for every employer on the platform. The canonical collapses to the board's own
+		// career home, so a posting and the listing are one board.
+		{"paycor posting", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=4028f88b24c330a20124eb33b4ad1653&id=8a7883a6&source=&lang=en", "paycor", "4028f88b24c330a20124eb33b4ad1653", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=4028f88b24c330a20124eb33b4ad1653", true},
+		{"paycor career home", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=8a29a018478a87e70147a7588a6343cf", "paycor", "8a29a018478a87e70147a7588a6343cf", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=8a29a018478a87e70147a7588a6343cf", true},
+		{"paycor upper-case client id folds", "https://www.recruitingbypaycor.com/career/JobIntroduction.action?clientId=8A29A018478A87E70147A7588A6343CF&id=1", "paycor", "8a29a018478a87e70147a7588a6343cf", "https://www.recruitingbypaycor.com/career/CareerHome.action?clientId=8a29a018478a87e70147a7588a6343cf", true},
+		{"paycor without a client id", "https://recruitingbypaycor.com/career/CareerHome.action", "", "", "", false},
+		{"paycor empty client id", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=&id=1", "", "", "", false},
+
+		// hosttenant — UKG Ready: the host selects the environment the tenant is hosted in and is
+		// not derivable from the tenant id, so the board carries both. The ".careers" suffix is
+		// what proves the segment names a career site; the SPA's own REST API lives under the same
+		// /ta prefix and names no board.
+		{"ukgready vacancy", "https://secure.entertimeonline.com/ta/10284.careers?ShowJob=123456", "ukgready", "secure.entertimeonline.com/10284", "https://secure.entertimeonline.com/ta/10284.careers", true},
+		{"ukgready board listing", "https://secure7.saashr.com/ta/6010265.careers", "ukgready", "secure7.saashr.com/6010265", "https://secure7.saashr.com/ta/6010265.careers", true},
+		{"ukgready regional host", "https://secure.workforceready.com.au/ta/6162382.careers?ApplyToJob=1", "ukgready", "secure.workforceready.com.au/6162382", "https://secure.workforceready.com.au/ta/6162382.careers", true},
+		{"ukgready mykronos host", "https://prd01-hcm01.npr.mykronos.com/ta/6042637.careers", "ukgready", "prd01-hcm01.npr.mykronos.com/6042637", "https://prd01-hcm01.npr.mykronos.com/ta/6042637.careers", true},
+		{"ukgready bare apex host", "https://saashr.com/ta/6199997.careers", "ukgready", "saashr.com/6199997", "https://saashr.com/ta/6199997.careers", true},
+		{"ukgready upper-case tenant folds", "https://secure3.yourpayrollhr.com/ta/IHR0568.Careers", "ukgready", "secure3.yourpayrollhr.com/ihr0568", "https://secure3.yourpayrollhr.com/ta/ihr0568.careers", true},
+		{"ukgready rest api names no board", "https://secure7.saashr.com/ta/rest/ui/recruitment/companies/%7C6010265/job-requisitions", "", "", "", false},
+		{"ukgready tenant without the careers suffix", "https://secure7.saashr.com/ta/6010265", "", "", "", false},
+		{"ukgready bare host", "https://secure7.saashr.com/", "", "", "", false},
+
 		// subdomain — canonical collapses to the bare host
 		{"recruitee vacancy strips path", "https://acme.recruitee.com/o/senior-go/apply?utm=x", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"recruitee board listing", "https://acme.recruitee.com", "recruitee", "acme", "https://acme.recruitee.com", true},
@@ -79,6 +142,19 @@ func TestRecognize(t *testing.T) {
 		{"softgarden regional career host", "https://agilitaschweiz.career.softgarden.de/jobs/65679426/sap-consultant/", "softgarden", "agilitaschweiz", "https://agilitaschweiz.career.softgarden.de", true},
 		{"hibob careers subdomain", "https://qogita.careers.hibob.com/jobs/ceb6c947-c906-44d1-a56b-bb33ae5599fa", "hibob", "qogita", "https://qogita.careers.hibob.com", true},
 		{"hibob apply tail collapses to the same board", "https://unique.careers.hibob.com/jobs/f8d9a0bc/apply", "hibob", "unique", "https://unique.careers.hibob.com", true},
+		// HRM Direct: the board is the tenant subdomain. Its APPLICATION forms are served from the
+		// platform's own apply.hrmdirect.com, which without the platform-label guard reads as a
+		// company called "apply" — and that host is linked from every posting on the platform.
+		{"hrmdirect posting", "https://123loadboard.hrmdirect.com/employment/job-opening.php?req=3456&req_loc=1029#apply", "hrmdirect", "123loadboard", "https://123loadboard.hrmdirect.com", true},
+		{"hrmdirect listing", "https://1aautoinc.hrmdirect.com/employment/job-openings.php?search=true", "hrmdirect", "1aautoinc", "https://1aautoinc.hrmdirect.com", true},
+		{"hrmdirect listing trailing slash", "https://4air.hrmdirect.com/employment/", "hrmdirect", "4air", "https://4air.hrmdirect.com", true},
+		{"hrmdirect upper-case host folds", "https://500DegreesStudio.HRMDirect.com/employment/job-opening.php?req=1", "hrmdirect", "500degreesstudio", "https://500DegreesStudio.HRMDirect.com", true},
+		{"hrmdirect apply host is the platform's, not a board", "https://apply.hrmdirect.com/resumes/click2apply.php?req=1", "", "", "", false},
+		{"hrmdirect bare apex no tenant", "https://hrmdirect.com/", "", "", "", false},
+		// "apply" is HRM Direct's own host and a REAL recruitee board (recruitee.yml tracks it),
+		// so the guard is scoped to the apex that needs it. Declining it everywhere would drop a
+		// board the catalogue already crawls.
+		{"recruitee apply is a tenant, not a platform host", "https://apply.recruitee.com/o/senior-go", "recruitee", "apply", "https://apply.recruitee.com", true},
 
 		// subdomainchain — Huntflow nests its international tenants under a "global" label, and
 		// the adapter fetches <board>.huntflow.io, so the board must carry that label too;
@@ -116,6 +192,19 @@ func TestRecognize(t *testing.T) {
 		// the vanity ones (jobs.ea.com) stay out, like every other custom-domain ATS here.
 		{"avature vacancy", "https://koch.avature.net/en_us/careers/jobdetail/sr-engineer/186706", "avature", "koch.avature.net", "https://koch.avature.net", true},
 		{"avature board listing", "https://deloittecm.avature.net/careers", "avature", "deloittecm.avature.net", "https://deloittecm.avature.net", true},
+
+		// HiringThing is white-labelled across ~25 reseller domains, so the board is the whole
+		// careers host: a slug alone does not say which domain answers for it, and the same slug
+		// can exist under two resellers. Only the domains hiringthing.yml is actually on are
+		// listed; an unlisted one is unrecognised, never a false board.
+		{"hiringthing vendor domain", "https://4mindsai.hiringthing.com/job/12345/senior-engineer", "hiringthing", "4mindsai.hiringthing.com", "https://4mindsai.hiringthing.com", true},
+		{"hiringthing reseller domain", "https://10federal-partners-inc.prismhr-hire.com/job/98765/technician", "hiringthing", "10federal-partners-inc.prismhr-hire.com", "https://10federal-partners-inc.prismhr-hire.com", true},
+		{"hiringthing second reseller domain", "https://1440-by-the-bay.oasisrecruit.com/", "hiringthing", "1440-by-the-bay.oasisrecruit.com", "https://1440-by-the-bay.oasisrecruit.com", true},
+		// The BOARD folds to lower case (DNS is case-insensitive, and the board file holds the
+		// lower-case spelling); the canonical keeps the link's own, as it does in every host mode.
+		{"hiringthing upper-case host folds", "https://A-M-Crawford.HiringThing.com/job/1", "hiringthing", "a-m-crawford.hiringthing.com", "https://A-M-Crawford.HiringThing.com", true},
+		{"hiringthing bare reseller apex is not a board", "https://prismhr-hire.com/", "", "", "", false},
+		{"hiringthing platform app host is not a tenant", "https://app.hiringthing.com/", "", "", "", false},
 
 		// host+tenant+board mode — UKG: the board is "<host>/<tenant>/<guid>", the three parts
 		// the adapter needs to reach LoadSearchResults. The old rule took the first path segment
@@ -214,6 +303,17 @@ func TestVacancyAndListingSameBoard(t *testing.T) {
 		{"https://acme.bamboohr.com/careers/42/detail", "https://acme.bamboohr.com/careers/list"},
 		// host+path (Workday): a vacancy and the site landing collapse to one board
 		{"https://gm.wd5.myworkdayjobs.com/Careers_GM/job/x/Eng_JR-1", "https://gm.wd5.myworkdayjobs.com/Careers_GM"},
+		// pathlocalepair (Dayforce): a culture-prefixed vacancy and the bare site landing
+		{"https://jobs.dayforcehcm.com/en-US/dcrusa/join-us/jobs/12345", "https://jobs.dayforcehcm.com/dcrusa/join-us"},
+		// query (Paycor): a posting and the board's career home, which differ in path AND query
+		{"https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=4028f88b24c330a20124eb33b4ad1653&id=8a7883a6", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=4028f88b24c330a20124eb33b4ad1653"},
+		// hosttenant (UKG Ready): a vacancy and its board's career page
+		{"https://secure.entertimeonline.com/ta/10284.careers?ShowJob=123456", "https://secure.entertimeonline.com/ta/10284.careers"},
+		// host (HiringThing) and subdomain (HRM Direct): a posting and the board root
+		{"https://4mindsai.hiringthing.com/job/12345/senior-engineer", "https://4mindsai.hiringthing.com/"},
+		{"https://123loadboard.hrmdirect.com/employment/job-opening.php?req=3456&req_loc=1029", "https://123loadboard.hrmdirect.com/employment/job-openings.php?search=true"},
+		// path (Gusto): a paged listing and the bare board
+		{"https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90?page=3", "https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90"},
 	}
 	for _, p := range pairs {
 		sa, ba, _, oka := Recognize(p[0])
@@ -243,5 +343,76 @@ func TestRecognizeMapsHostsToTheIngestProviderName(t *testing.T) {
 		if !ok || src != c.wantSource {
 			t.Errorf("Recognize(%q) source = %q (ok %v), want %q", c.raw, src, ok, c.wantSource)
 		}
+	}
+}
+
+// TestQueryModeRowsAreConfigured guards the one mode whose row is not self-contained: a query
+// entry needs a second row in queryBoards naming the parameter, and without it the host matches
+// and then declines every link on it — a platform that looks supported and recognises nothing.
+// The rest of the table keeps the "one row plus one test case" promise on its own.
+func TestQueryModeRowsAreConfigured(t *testing.T) {
+	for _, a := range atsBoards {
+		if a.mode != modeQuery {
+			continue
+		}
+		if q, ok := queryBoards[a.host]; !ok || q.param == "" || q.listingPath == "" {
+			t.Errorf("atsBoards entry %q (%s) is %s mode but queryBoards has no complete entry for it",
+				a.host, a.source, modeQuery)
+		}
+	}
+}
+
+// TestRecognizeReturnsTheBoardTheBoardFileStores pins the extraction of the six platforms added
+// most recently against boards copied VERBATIM out of the shipped sources/<provider>.yml, one
+// per board-id shape each file contains.
+//
+// A rule that disagrees with the board file is worse than no rule at all. The board string is
+// what the contribution flow records and pays for, and what board coverage hands to the ingest
+// adapter — so a near-miss files an employer under a board no crawl can resolve, while looking
+// exactly like a successful recognition. The board files are the only authority on the shape: a
+// provider's crawl is built around it.
+func TestRecognizeReturnsTheBoardTheBoardFileStores(t *testing.T) {
+	cases := []struct{ name, raw, source, board string }{
+		// paycor: the 32-hex clientId, lower-case in the file (the platform serves either).
+		{"paycor Day Kimball Health", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=4028f88b24c330a20124eb33b4ad1653&id=1", "paycor", "4028f88b24c330a20124eb33b4ad1653"},
+		{"paycor Clark Hill", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=8a29a018478a87e70147a7588a6343cf", "paycor", "8a29a018478a87e70147a7588a6343cf"},
+
+		// dayforce: "<tenant>/<site>", the two segments after the culture.
+		{"dayforce 4Refuel", "https://jobs.dayforcehcm.com/en-US/4refuel/candidateportal", "dayforce", "4refuel/candidateportal"},
+		{"dayforce 99 Cents Only Stores", "https://jobs.dayforcehcm.com/en-US/99cents/candidateportal/jobs/1", "dayforce", "99cents/candidateportal"},
+		{"dayforce DCR USA", "https://jobs.dayforcehcm.com/dcrusa/join-us", "dayforce", "dcrusa/join-us"},
+
+		// gusto: the whole "<company-slug>-<company-uuid>" segment.
+		{"gusto 100 Degrees Consulting", "https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90", "gusto", "100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90"},
+		{"gusto 121G", "https://jobs.gusto.com/boards/121g-consulting-llc-f41b3691-0c93-4406-acb7-6b28c2c69601?page=1", "gusto", "121g-consulting-llc-f41b3691-0c93-4406-acb7-6b28c2c69601"},
+
+		// hiringthing: the full careers host, on the vendor's domain and on three resellers'.
+		{"hiringthing 4Minds", "https://4mindsai.hiringthing.com/job/1", "hiringthing", "4mindsai.hiringthing.com"},
+		{"hiringthing 10 Federal", "https://10federal-partners-inc.prismhr-hire.com/job/1", "hiringthing", "10federal-partners-inc.prismhr-hire.com"},
+		{"hiringthing Integral Senior Living", "https://1440-by-the-bay.oasisrecruit.com/job/1", "hiringthing", "1440-by-the-bay.oasisrecruit.com"},
+		{"hiringthing BASH", "https://1235-keystone-way-llc.gnahiring.com/job/1", "hiringthing", "1235-keystone-way-llc.gnahiring.com"},
+
+		// ukgready: "<host>/<tenant>", one per host family in the file (including the bare apex
+		// and the alphanumeric tenant ids, which are not all numeric).
+		{"ukgready Rapid Robert's", "https://secure.entertimeonline.com/ta/10284.careers?ShowJob=1", "ukgready", "secure.entertimeonline.com/10284"},
+		{"ukgready Phoenix Zoo", "https://secure7.saashr.com/ta/6010265.careers", "ukgready", "secure7.saashr.com/6010265"},
+		{"ukgready TotalTec", "https://saashr.com/ta/6199997.careers", "ukgready", "saashr.com/6199997"},
+		{"ukgready Copper State Bolt & Nut", "https://secure3.yourpayrollhr.com/ta/ihr0568.careers", "ukgready", "secure3.yourpayrollhr.com/ihr0568"},
+		{"ukgready SPC Global", "https://secure.workforceready.com.au/ta/6162382.careers", "ukgready", "secure.workforceready.com.au/6162382"},
+		{"ukgready C. Caswell Engineering", "https://secure.workforceready.eu/ta/6121944.careers", "ukgready", "secure.workforceready.eu/6121944"},
+		{"ukgready General Health System", "https://prd01-hcm01.npr.mykronos.com/ta/6042637.careers", "ukgready", "prd01-hcm01.npr.mykronos.com/6042637"},
+
+		// hrmdirect: the tenant subdomain alone.
+		{"hrmdirect 123Loadboard", "https://123loadboard.hrmdirect.com/employment/job-opening.php?req=1&req_loc=2", "hrmdirect", "123loadboard"},
+		{"hrmdirect 1A Auto", "https://1aautoinc.hrmdirect.com/employment/job-openings.php?search=true", "hrmdirect", "1aautoinc"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			src, board, _, ok := Recognize(c.raw)
+			if !ok || src != c.source || board != c.board {
+				t.Errorf("Recognize(%q) = (%q, %q, ok=%v), want (%q, %q) — the board sources/%s.yml stores",
+					c.raw, src, board, ok, c.source, c.board, c.source)
+			}
+		})
 	}
 }

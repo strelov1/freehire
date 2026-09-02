@@ -19,15 +19,22 @@ nothing but the URL. No network, no database.
   exist, while one adapter serves both domains as `factorial`.
 - **Adding an ATS is one row plus one test case.** Extraction modes say where the tenant sits:
   `path` (first path segment), `pathlocale` (same, skipping a leading `xx-XX` locale),
-  `pathportal` (the segment before the posting, for SmartRecruiters' portal URLs — plus its
+  `pathlocalepair` (the first TWO segments after that locale — Dayforce's board is
+  `<tenant>/<site>` and one tenant runs several sites), `pathportal` (the segment before the
+  posting, for SmartRecruiters' portal URLs — plus its
   one-click apply form, `/oneclick-ui/company/<board>/publication/<uuid>`, which names the
   employer mid-path and would otherwise be read as a board called `oneclick-ui`),
   `pathnumeric` (like `path`, but the segment must be an all-digit id — PageUp's board is a
   numeric institution id, so localisation/section segments like `/cw/en/search` are not
-  boards), `subdomain`
+  boards), `query` (a named query parameter, because Paycor serves every board from one path
+  under `?clientId=<board>`; `queryBoards` names the parameter, and it is the one mode that
+  needs a second row — a test fails if it is missing), `subdomain`
   (leftmost DNS label), `subdomainchain` (every label under the apex, for a tenant nested under a
   regional instance like `<tenant>.global.huntflow.io`), `host` (the whole careers host IS the
-  tenant), `hostpath` (host + first path segment, for Workday).
+  tenant), `hostpath` (host + first path segment, for Workday), `hostcareers`
+  (`<host>/<tenant>` from `<host>/ta/<tenant>.careers`, for UKG Ready, whose host selects the
+  environment its tenant lives in), `hosttenantboard` (`<host>/<tenant>/<guid>`, for UKG Pro
+  Recruiting — a different product from UKG Ready, on different hosts).
 - **The mode must match how the ingest adapter addresses the board**, not how the URL reads. The
   board string is copied verbatim into `sources/<provider>.yml` and into the `external_id`
   namespace, so a truncated one is a board that 404s every crawl: Huntflow's adapter fetches
@@ -35,9 +42,16 @@ nothing but the URL. No network, no database.
 - **Fail-safe by construction.** A wrong or missing entry makes a link *unrecognised*, never a
   false board: a bad apex or mode yields an empty board, which is declined. So a best-guess
   host is safe to add.
+- **A white-labelled ATS is one row per reseller domain.** HiringThing serves one application
+  from ~25 domains and its board IS the careers host, so a slug names nothing on its own — the
+  rows are copied from the domains `sources/hiringthing.yml` is actually on, and an unlisted one
+  is simply unrecognised.
 - **A platform's own hosts are declined** (`platformHost`). In `host` and `subdomain` mode the
   host IS the board, so a vendor's console (`app.teamtailor.com`, which every Teamtailor career
-  site links to) would otherwise be recorded as an employer.
+  site links to) would otherwise be recorded as an employer. `platformLabels` holds the labels
+  no ATS gives a tenant; `platformLabelsByApex` holds the ones only ONE platform keeps —
+  `apply` is HRM Direct's application host **and** a recruitee board we crawl, so declining it
+  everywhere would drop a real board.
 
 ## Limitations
 - **Vanity domains are invisible here.** Recognition keys on host, so a supported ATS behind a

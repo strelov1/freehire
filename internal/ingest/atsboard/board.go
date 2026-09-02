@@ -62,6 +62,25 @@ const (
 	// three (internal/ingest/sources/ukg.go), so anything less is not a shorter board id — it is one the
 	// crawl rejects outright.
 	modeHostTenantBoard = "hosttenantboard"
+	// pathlocalepair: like pathlocale, but the board is the first TWO segments after the optional
+	// locale. Dayforce serves every career site from one host under "<culture?>/<tenant>/<site>"
+	// and a board is "<tenant>/<site>": one tenant may run several sites and each is its own
+	// board, so the tenant alone is not a shorter board id but one the crawl rejects. The culture
+	// stays out — a posting keeps the same id in every culture it is translated into, which is
+	// why the ingest adapter folds it off too (sources.boardIdentity).
+	modePathLocalePair = "pathlocalepair"
+	// query: board = a named query parameter, because the platform addresses a tenant by
+	// parameter rather than by path or host — Paycor serves every board from one path under
+	// "?clientId=<board>". queryBoards names the parameter per host, and the listing path the
+	// canonical collapses to.
+	modeQuery = "query"
+	// hostcareers: board = "<host>/<tenant>" from <host>/ta/<tenant>.careers. UKG Ready's host
+	// selects the environment its tenant is hosted in and is not derivable from the tenant id, so
+	// the adapter needs both (internal/ingest/sources/ukgready.go) — the same self-describing shape
+	// hostpath and hosttenantboard carry. It is named after the career-page path rather than after
+	// its parts, so it cannot be misread as a variant of hosttenantboard above: that one is UKG
+	// PRO Recruiting, a different product on different hosts with a different board shape.
+	modeHostCareers = "hostcareers"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -89,6 +108,13 @@ var atsBoards = []struct{ host, source, mode string }{
 	// not a tenant subdomain, and its source is manatal: careerspage.yml is deliberately empty
 	// because every careers-page.com tenant is served by the Manatal adapter.
 	{"careers-page.com", "manatal", modePath},
+	// Gusto Hiring serves a board at /boards/<board>, where the board is the WHOLE
+	// "<company-slug>-<company-uuid>" segment — neither half resolves alone. "boards" is the
+	// platform's own path word (reservedSegments), so it is skipped to reach the board behind it.
+	// A /postings/<…> URL is declined (noBoardFirstSegments): its segment ends in the POSTING's
+	// uuid and carries the job's title slug, so it names no board at all — the only link back to
+	// one is the breadcrumb the posting page renders, which is boardresolve's job, not a URL's.
+	{"jobs.gusto.com", "gusto", modePath},
 
 	// --- pathportal: board = the segment before the posting segment ---
 	{"jobs.smartrecruiters.com", "smartrecruiters", modePathPortal},
@@ -96,6 +122,12 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- pathlocale: like path, skipping a leading xx-XX locale segment ---
 	{"ats.rippling.com", "rippling", modePathLocale},
+
+	// --- pathlocalepair: board = the two path segments after an optional leading locale ---
+	{"jobs.dayforcehcm.com", "dayforce", modePathLocalePair},
+
+	// --- query: board = a named query parameter (see queryBoards) ---
+	{"recruitingbypaycor.com", "paycor", modeQuery},
 
 	// --- subdomain: board = leftmost DNS label under the apex ---
 	{"recruitee.com", "recruitee", modeSubdomain},
@@ -127,6 +159,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// softgarden.io alone, a .de tenant hid behind a second DNS label and was declined.
 	{"career.softgarden.de", "softgarden", modeSubdomain},
 	{"careers.hibob.com", "hibob", modeSubdomain}, // HiBob's careers module: <tenant>.careers.hibob.com
+	// HRM Direct's career site is <board>.hrmdirect.com, exactly what hrmdirect.yml stores. Its
+	// application forms live on the platform's own apply.hrmdirect.com — see this apex's entry
+	// in platformLabelsByApex, without which every apply link on the platform names a board.
+	{"hrmdirect.com", "hrmdirect", modeSubdomain},
 
 	// --- subdomainchain: board = every label under the apex (tenant nested under a region) ---
 	{"huntflow.io", "huntflow", modeSubdomainChain},
@@ -145,6 +181,39 @@ var atsBoards = []struct{ host, source, mode string }{
 	// (deloittecm.avature.net). Only tenants on the platform's own domain are derivable; a
 	// vanity host (jobs.ea.com) is not, like every other custom-domain ATS here.
 	{"avature", "avature", modeHost},
+	// HiringThing is white-labelled: one application serves a tenant under the vendor's own
+	// domain (<tenant>.hiringthing.com) and under each reseller's, and a slug alone names
+	// nothing — nothing in it says which domain answers for it, and the same slug can exist
+	// under two resellers. So the board is the whole careers host, the shape hiringthing.yml
+	// stores, and every reseller domain needs its own row: an unlisted one is simply
+	// unrecognised. These 25 are the domains that file is actually on. ("rippling-ats" is a
+	// reseller of THIS platform and is unrelated to ats.rippling.com above, which is Rippling's
+	// own ATS on a different host and a different adapter.)
+	{"alignhrsolutions", "hiringthing", modeHost},
+	{"alphastaff-hiring", "hiringthing", modeHost},
+	{"atsmodule", "hiringthing", modeHost},
+	{"checkwritersrecruit", "hiringthing", modeHost},
+	{"deltahire-ats", "hiringthing", modeHost},
+	{"edistoats", "hiringthing", modeHost},
+	{"elevate-ats", "hiringthing", modeHost},
+	{"esi-hire", "hiringthing", modeHost},
+	{"exponentats", "hiringthing", modeHost},
+	{"ezhiregov", "hiringthing", modeHost},
+	{"gnahiring", "hiringthing", modeHost},
+	{"hiringthing", "hiringthing", modeHost},
+	{"iconnecthire", "hiringthing", modeHost},
+	{"lumberhiring", "hiringthing", modeHost},
+	{"nexstarrecruiter", "hiringthing", modeHost},
+	{"oasisrecruit", "hiringthing", modeHost},
+	{"primepay-recruit", "hiringthing", modeHost},
+	{"prismhr-hire", "hiringthing", modeHost},
+	{"rippling-ats", "hiringthing", modeHost},
+	{"tcr-hire", "hiringthing", modeHost},
+	{"teammemberhire-recruit", "hiringthing", modeHost},
+	{"topdoghrrecruiting", "hiringthing", modeHost},
+	{"topgradinghire", "hiringthing", modeHost},
+	{"verahr-hiring", "hiringthing", modeHost},
+	{"viewpointhr-ats", "hiringthing", modeHost},
 
 	// --- hostpath: board = "<host>/<site>" (Workday tenant host + first-path-segment site) ---
 	{"myworkdayjobs.com", "workday", modeHostPath},
@@ -157,6 +226,37 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"ultipro.com", "ukg", modeHostTenantBoard},
 	{"ultipro.ca", "ukg", modeHostTenantBoard},
 	{"rec.pro.ukg.net", "ukg", modeHostTenantBoard},
+
+	// --- hostcareers: board = "<host>/<tenant>" (UKG Ready — a DIFFERENT product from ukg above) ---
+	// One environment is fronted by several white-label hosts that all serve its tenants, so the
+	// host in a pasted link is by construction one that answers for that tenant — which is what
+	// makes it safe to keep. It cannot be dropped: a tenant lives in exactly one environment,
+	// every other host answers "Company not found" for it, and the environment is not derivable
+	// from the tenant id. The regional workforceready hosts are listed per TLD because a host
+	// entry keys on a full domain here; an unlisted TLD is unrecognised, never a false board.
+	//
+	// One board of the 2,230 is stored with a "www." host, which hostname() strips package-wide,
+	// so a link to it resolves to the same tenant on the bare host. That board is crawlable too,
+	// and boardIdentity folds the pair onto the tenant, so the cost is one duplicate contribution
+	// — cheaper than teaching one mode to keep a label the rest of the package normalizes away.
+	{"saashr.com", "ukgready", modeHostCareers},
+	{"entertimeonline.com", "ukgready", modeHostCareers},
+	{"yourpayrollhr.com", "ukgready", modeHostCareers},
+	{"mykronos.com", "ukgready", modeHostCareers},
+	{"workforceready.com.au", "ukgready", modeHostCareers},
+	{"workforceready.eu", "ukgready", modeHostCareers},
+}
+
+// queryBoards holds, per matched host entry in modeQuery, the query parameter that names the
+// board and the path its listing is served from. The canonical collapses to that listing, so a
+// posting URL and the board's own career home map to one board — the same collapse the host and
+// pathlocale modes make.
+var queryBoards = map[string]struct{ param, listingPath string }{
+	// Paycor Recruiting addresses an employer's portal by a 32-hex clientId: the listing is
+	// /career/CareerHome.action?clientId=<board> and a posting is
+	// /career/JobIntroduction.action?clientId=<board>&id=<posting>. Nothing but the parameter
+	// names the board — the path is the same for every employer on the platform.
+	"recruitingbypaycor.com": {param: "clientId", listingPath: "/career/CareerHome.action"},
 }
 
 // apiBoards lists each ATS's OWN API host, where the board sits behind a fixed path prefix
@@ -190,11 +290,23 @@ var apiBoards = []struct{ host, source, prefix string }{
 // company slug, which is worse than declining.
 var noBoardFirstSegments = map[string][]string{
 	"apply.workable.com": {"j"},
+	// Gusto's "/postings/<company-slug>-<job-slug>-<posting-uuid>" names a posting, not a board:
+	// the uuid it ends with is the POSTING's, and the board is "<company-slug>-<company-uuid>",
+	// which appears nowhere in it. Taking the segment would file a board no crawl can resolve.
+	"jobs.gusto.com": {"postings"},
+	// Dayforce serves every career site from one host, so its own machinery shares that host with
+	// the tenants: "/api/…" is the listing API the site loads over XHR and "/_next/…" is the app's
+	// static bundle, which every page on the platform links. Read as a career site they yield the
+	// boards "api/geo" and "_next/static" — and boardresolve, which takes the first recognized ATS
+	// URL in a fetched page, would meet them before any real one.
+	"jobs.dayforcehcm.com": {"api", "_next"},
 }
 
 var reservedSegments = map[string][]string{
 	"jobs.jobvite.com": {"careers"},
 	"greenhouse.io":    {"embed", "job_app", "job_board", "js"},
+	// Gusto's board listing is /boards/<board>; "boards" is the platform's word, never a tenant.
+	"jobs.gusto.com": {"boards"},
 }
 
 // Recognize parses a pasted job link into the company board it belongs to: the source
@@ -222,7 +334,7 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		// in that exact position for a subdomain tenant just as much as for a bare-host one —
 		// e.g. app.recruitee.com and help.bamboohr.com are the vendor's own login/support hosts,
 		// not a company named "app" or "help".
-		if platformHost(host) {
+		if platformHost(host, apex) {
 			return "", "", "", false
 		}
 		switch mode {
@@ -278,6 +390,55 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		board = strings.ToLower(host + "/" + tenant + "/" + guid)
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + tenant + "/JobBoard/" + guid
+		return src, board, u.String(), true
+
+	case modeHostCareers:
+		// UKG Ready: <host>/ta/<tenant>.careers[?ShowJob=…] → board "<host>/<tenant>". Lower-cased
+		// because tenant ids are case-insensitive at the platform and ukgready.yml holds them
+		// lower-case, so keeping a link's own spelling would file a board we already crawl as new.
+		tenant, ok := ukgReadyTenant(u)
+		if !ok {
+			return "", "", "", false
+		}
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/ta/" + tenant + ".careers"
+		return src, host + "/" + tenant, u.String(), true
+
+	case modeQuery:
+		// Paycor: the board is a query parameter, and the canonical is the board's own listing —
+		// so a posting and the career home collapse to one. Lower-cased for the same reason as
+		// UKG Ready: the platform serves either spelling of the hex client id and paycor.yml
+		// holds it lower-case.
+		q, configured := queryBoards[apex]
+		if !configured {
+			return "", "", "", false
+		}
+		board = strings.ToLower(u.Query().Get(q.param))
+		if board == "" {
+			return "", "", "", false
+		}
+		u.Fragment = ""
+		u.Path = q.listingPath
+		u.RawQuery = url.Values{q.param: {board}}.Encode()
+		return src, board, u.String(), true
+
+	case modePathLocalePair:
+		// Dayforce: <host>/<culture?>/<tenant>/<site>/… → board "<tenant>/<site>". The culture is
+		// dropped, not kept: it selects which translations of a site's postings to read and a
+		// posting keeps one id across them, which is why the ingest adapter folds it off too. The
+		// canonical collapses to the culture-free site root (verified live: it answers 200 with and
+		// without one). Lower-cased — tenant and site are case-insensitive at the platform and
+		// dayforce.yml holds them lower-case.
+		segs := segmentsAfterLocale(u)
+		// The no-board check reads the segment the board would START at, not the URL's first —
+		// the platform's own paths take a locale prefix too, and "/en-US/api/geo/…" would
+		// otherwise walk past the guard and name the board "api/geo".
+		if len(segs) < 2 || segs[0] == "" || segs[1] == "" || slices.Contains(noBoardFirstSegments[apex], segs[0]) {
+			return "", "", "", false // bare host, locale-only, a tenant with no site, or machinery
+		}
+		board = strings.ToLower(segs[0] + "/" + segs[1])
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/" + board
 		return src, board, u.String(), true
 
 	case modePathPortal:
@@ -413,10 +574,23 @@ var platformLabels = map[string]bool{
 	"tt": true,
 }
 
-// platformHost reports whether host is the ATS's own product host rather than a tenant's.
-func platformHost(host string) bool {
+// platformLabelsByApex lists the labels that are ONE platform's own hosts — the per-platform
+// companion to platformLabels, for a label another platform legitimately lets a tenant have.
+// "apply" is both: HRM Direct serves every tenant's application form from apply.hrmdirect.com,
+// which a bare subdomain rule reads as a company called "apply", while apply.recruitee.com is a
+// board recruitee.yml actually tracks. Declining it everywhere would drop a board we crawl.
+var platformLabelsByApex = map[string][]string{
+	"hrmdirect.com": {"apply"},
+}
+
+// platformHost reports whether host is the ATS's own product host rather than a tenant's —
+// either a label no multi-tenant ATS gives a tenant, or one this platform in particular keeps.
+func platformHost(host, apex string) bool {
 	label, _, ok := strings.Cut(host, ".")
-	return ok && platformLabels[label]
+	if !ok {
+		return false
+	}
+	return platformLabels[label] || slices.Contains(platformLabelsByApex[apex], label)
 }
 
 // smartrecruitersPosting matches a SmartRecruiters posting segment: the posting id (numeric or a
@@ -452,9 +626,6 @@ func segmentBeforePosting(u *url.URL, isPosting *regexp.Regexp) string {
 // record as new and pay for.
 var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Za-z]{2}$`)
 
-// firstSegmentAfterLocale returns the first path segment that isn't a leading xx-XX locale — the
-// tenant board in ats.rippling.com/<locale?>/<board>/… (Rippling) or the site in a Workday
-// host/<locale?>/<site> URL. "" when the path is empty or carries only a locale.
 // ukgTenantBoard pulls the tenant and board guid out of a UKG path,
 // "<tenant>/JobBoard/<guid>[/…]". ok is false unless all three parts are present and in that
 // order: the "JobBoard" marker is the only thing that distinguishes a board URL from the rest
@@ -470,19 +641,45 @@ func ukgTenantBoard(u *url.URL) (tenant, guid string, ok bool) {
 	return segs[0], segs[2], true
 }
 
+// firstSegmentAfterLocale returns the first path segment that isn't a leading xx-XX locale — the
+// tenant board in ats.rippling.com/<locale?>/<board>/… (Rippling) or the site in a Workday
+// host/<locale?>/<site> URL. "" when the path is empty or carries only a locale.
 func firstSegmentAfterLocale(u *url.URL) string {
+	if segs := segmentsAfterLocale(u); len(segs) > 0 {
+		return segs[0]
+	}
+	return ""
+}
+
+// segmentsAfterLocale returns u's path segments with a leading xx-XX locale dropped, nil for an
+// empty path. Rippling and Workday need only the first of them; Dayforce's board is the first two.
+func segmentsAfterLocale(u *url.URL) []string {
 	p := strings.Trim(u.Path, "/")
 	if p == "" {
-		return ""
+		return nil
 	}
 	segs := strings.Split(p, "/")
 	if localeSegment.MatchString(segs[0]) {
 		segs = segs[1:]
 	}
-	if len(segs) == 0 {
-		return ""
+	return segs
+}
+
+// ukgReadyTenant returns the lower-cased tenant a UKG Ready career-page path addresses,
+// "/ta/<tenant>.careers[/…]". ok is false unless the path leads with the platform's "ta" segment
+// AND the one after it carries the ".careers" suffix: that suffix is what proves the segment
+// names a career site at all. Everything else under /ta is the tenant's own application — the
+// SPA's REST API lives at /ta/rest/… — and carries no board.
+func ukgReadyTenant(u *url.URL) (string, bool) {
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segs) < 2 || !strings.EqualFold(segs[0], "ta") {
+		return "", false
 	}
-	return segs[0]
+	tenant, found := strings.CutSuffix(strings.ToLower(segs[1]), ".careers")
+	if !found || tenant == "" {
+		return "", false
+	}
+	return tenant, true
 }
 
 // hostname is u's lowercased hostname with a leading "www." stripped.
