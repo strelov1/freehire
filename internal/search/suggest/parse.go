@@ -1,6 +1,7 @@
 package suggest
 
 import (
+	"sort"
 	"strings"
 	"sync"
 )
@@ -92,6 +93,10 @@ func rank(k Kind) int {
 type Phrases struct {
 	mu     sync.RWMutex
 	byText map[string]Part
+	// sorted holds the same phrases in order, so a binary search can answer "does any
+	// phrase START with this?" — the question that decides whether the visitor is still
+	// typing one phrase or has finished it and begun another.
+	sorted []string
 	// longest is the word count of the longest phrase, which bounds how far the parse
 	// looks ahead. Without it every position would try every possible length.
 	longest int
@@ -131,9 +136,23 @@ func (p *Phrases) Replace(docs []Document) {
 			longest = n
 		}
 	}
+	sorted := make([]string, 0, len(byText))
+	for text := range byText {
+		sorted = append(sorted, text)
+	}
+	sort.Strings(sorted)
+
 	p.mu.Lock()
-	p.byText, p.longest = byText, longest
+	p.byText, p.sorted, p.longest = byText, sorted, longest
 	p.mu.Unlock()
+}
+
+// beginsAPhrase reports whether any known phrase starts with this text — which means
+// the visitor may still be typing that phrase rather than having finished a shorter
+// one.
+func beginsAPhrase(sorted []string, text string) bool {
+	i := sort.SearchStrings(sorted, text)
+	return i < len(sorted) && strings.HasPrefix(sorted[i], text)
 }
 
 // Len reports how many phrases are recognised, for the caller that logs a refresh.
@@ -152,7 +171,7 @@ func (p *Phrases) Len() int {
 // `data engineer`.
 func (p *Phrases) Parse(query string) Parsed {
 	p.mu.RLock()
-	byText, longest := p.byText, p.longest
+	byText, sorted, longest := p.byText, p.sorted, p.longest
 	p.mu.RUnlock()
 
 	normalised := Title(query)
@@ -169,6 +188,20 @@ func (p *Phrases) Parse(query string) Parsed {
 	recognisable := len(words)
 	if normalised != "" && !strings.HasSuffix(query, " ") {
 		recognisable--
+
+		// And if everything typed so far is the BEGINNING of a longer phrase, the
+		// visitor is still typing THAT — so nothing is recognised at all.
+		//
+		// Observed on production: `java dev` recognised `java` as a finished title and
+		// completed `dev` against employers, offering "Java Dev.Pro" (49) where "Java
+		// Developer" (5,480) is the obvious answer. Refusing to consume a prefix of a
+		// longer phrase is what keeps the longer one reachable.
+		//
+		// Only while the last word is unfinished: once a space follows, `java ` IS the
+		// phrase Java, however many longer ones happen to start with it.
+		if beginsAPhrase(sorted, normalised) {
+			recognisable = 0
+		}
 	}
 
 	var out Parsed

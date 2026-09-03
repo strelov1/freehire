@@ -201,3 +201,39 @@ func TestParse_OneUnfinishedWordIsAllFragment(t *testing.T) {
 		t.Errorf("recognised=%v fragment=%q", got.Recognised, got.Fragment)
 	}
 }
+
+// If what has been typed so far is the BEGINNING of a longer phrase the dictionary
+// knows, the visitor is still typing that phrase — so nothing is recognised yet.
+//
+// Observed on production: `java dev` recognised `java` as a finished title and
+// completed `dev` against employers, offering "Java Dev.Pro" (49) where "Java
+// Developer" (5,480) is the obvious answer. Refusing to consume a prefix of a longer
+// phrase is what keeps the longer one reachable.
+func TestParse_APrefixOfALongerPhraseIsStillBeingTyped(t *testing.T) {
+	ph := phrases("Java", "Java Developer", "Senior Software Engineer")
+
+	got := ph.Parse("java dev")
+	if len(got.Recognised) != 0 {
+		t.Errorf("recognised = %v, want none — this is the start of Java Developer", got.Recognised)
+	}
+	if got.Fragment != "java dev" {
+		t.Errorf("fragment = %q, want the whole thing", got.Fragment)
+	}
+
+	// Not a prefix of anything longer, so the finished phrase IS recognised and the
+	// trailing word gets completed. This is the composition the feature exists for.
+	other := ph.Parse("senior software engineer go")
+	if len(other.Recognised) != 1 || other.Fragment != "go" {
+		t.Errorf("recognised=%v fragment=%q", other.Recognised, other.Fragment)
+	}
+}
+
+// The exact phrase is not "still being typed" merely because a longer one starts with
+// it — that is only true while the LAST word is unfinished.
+func TestParse_AFinishedPhraseIsRecognisedEvenIfLongerOnesExist(t *testing.T) {
+	ph := phrases("Java", "Java Developer")
+	got := ph.Parse("java ")
+	if len(got.Recognised) != 1 {
+		t.Errorf("recognised = %v, want Java once the word is finished", got.Recognised)
+	}
+}
