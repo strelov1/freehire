@@ -224,7 +224,10 @@ export function collapseCities(rows: { value: string; country: string }[]): Face
 // live distribution carries no display name, so map them through the generated
 // ROLE_LABELS catalog (the roletag dictionary is the source of truth), falling
 // back to a title-cased slug for a value the catalog somehow lacks.
-export function roleLabel(slug: string): string {
+//
+// Local now: it was exported for the client-side role matcher, which the suggestions
+// endpoint replaced. Its one remaining caller is facetValueLabel below.
+function roleLabel(slug: string): string {
   return (ROLE_LABELS as Record<string, string>)[slug] ?? titleCase(slug);
 }
 
