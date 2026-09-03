@@ -287,7 +287,7 @@
   // stored value arrives on mount, by which point app.css has already hidden the
   // banner for anyone who dismissed or completed it. Reading localStorage here
   // instead would make the client disagree with the SSR output on the very first
-  // frame. Same shape as ProductHuntBanner's `dismissed`.
+  // frame. Same shape as CliBanner's `dismissed`.
   let onboardingState = $state<OnboardingLifecycle>('unseen');
   // The ephemeral post-onboarding Telegram-alert offer (set after the wizard, or on
   // mount to resume a pending alert after sign-in). Dismissible; not persisted.

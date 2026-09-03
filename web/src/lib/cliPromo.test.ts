@@ -1,33 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLI_BANNER_DISMISSED_KEY } from './cliPromo';
-import {
-  ownsMobileStickyCta,
-  readDismissed,
-  SUPPORT_DISMISSED_KEY,
-  suppressesToast,
-  writeDismissed,
-} from './supportToast';
-
-describe('route rules', () => {
-  it('suppresses the toast on the open-source page', () => {
-    expect(suppressesToast('/open')).toBe(true);
-  });
-
-  it('allows the toast elsewhere', () => {
-    expect(suppressesToast('/')).toBe(false);
-    expect(suppressesToast('/jobs')).toBe(false);
-    expect(suppressesToast('/openings')).toBe(false);
-  });
-
-  it('marks the job page as owning a sticky mobile call to action', () => {
-    expect(ownsMobileStickyCta('/jobs/senior-go-engineer-acme')).toBe(true);
-  });
-
-  it('does not mark the listing or other sections', () => {
-    expect(ownsMobileStickyCta('/jobs')).toBe(false);
-    expect(ownsMobileStickyCta('/companies/acme')).toBe(false);
-  });
-});
+import { CLI_BANNER_DISMISSED_KEY, readDismissed, writeDismissed } from './cliPromo';
 
 // The node environment has no localStorage at all, so each test installs the one it
 // needs and removes it afterwards.
@@ -64,17 +36,23 @@ describe('dismissal', () => {
     expect(readDismissed()).toBe(true);
   });
 
-  it('leaves the CLI strip’s own key alone', () => {
-    const store = new Map([[CLI_BANNER_DISMISSED_KEY, '1']]);
+  it('does not inherit the retired Product Hunt strip’s dismissal', () => {
+    installStorage(new Map([['hire.ph-banner-dismissed', '1']]));
+
+    expect(readDismissed()).toBe(false);
+  });
+
+  it('writes the key the app.html no-flash script reads', () => {
+    const store = new Map<string, string>();
     installStorage(store);
 
     writeDismissed();
 
     expect(store.get(CLI_BANNER_DISMISSED_KEY)).toBe('1');
-    expect(store.get(SUPPORT_DISMISSED_KEY)).toBe('1');
+    expect(CLI_BANNER_DISMISSED_KEY).toBe('hire.cli-banner-dismissed');
   });
 
-  it('reads as unanswered when storage is unavailable', () => {
+  it('reads as not dismissed when storage is unavailable', () => {
     installHostileStorage();
 
     expect(readDismissed()).toBe(false);
@@ -85,5 +63,4 @@ describe('dismissal', () => {
 
     expect(() => writeDismissed()).not.toThrow();
   });
-
 });

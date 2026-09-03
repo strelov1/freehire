@@ -39,13 +39,13 @@
             document.documentElement.classList.add('dark');
         } catch (e) {}
       })();
-      // Same trick for the Product Hunt strip: it renders on the server (so it never
+      // Same trick for the CLI promo strip: it renders on the server (so it never
       // shoves the page down after hydration), and this hides it before first paint
-      // for a visitor who already closed it. Mirrors $lib/productHunt.ts.
+      // for a visitor who already closed it. Mirrors $lib/cliPromo.ts.
       (function () {
         try {
-          if (localStorage.getItem('hire.ph-banner-dismissed') === '1')
-            document.documentElement.classList.add('ph-dismissed');
+          if (localStorage.getItem('hire.cli-banner-dismissed') === '1')
+            document.documentElement.classList.add('cli-banner-dismissed');
         } catch (e) {}
       })();
       // And once more for the onboarding nudge above the job feed, which is the

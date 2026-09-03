@@ -13,7 +13,7 @@
     trackSignupIfNew,
   } from '$lib/analytics';
   import TopBar from '$lib/components/TopBar.svelte';
-  import ProductHuntBanner from '$lib/components/ProductHuntBanner.svelte';
+  import CliBanner from '$lib/components/CliBanner.svelte';
   import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import CookieConsent from '$lib/components/CookieConsent.svelte';
@@ -159,10 +159,9 @@
   <!-- Self-gating: renders only for a signed-in, unverified account. -->
   <EmailVerificationBanner />
 
-  <!-- Self-gating: renders until the Product Hunt launch day is over, unless
-       dismissed. Below the verification prompt on purpose — a promo strip must not
-       push a security notice further from the header. -->
-  <ProductHuntBanner />
+  <!-- Self-gating: renders until dismissed. Below the verification prompt on purpose
+       — a promo strip must not push a security notice further from the header. -->
+  <CliBanner />
 
   <main class="flex-1">
     {@render children()}
@@ -178,9 +177,8 @@
 <CookieConsent />
 
 <!-- Open-source support toast: fixed-position, so it belongs here rather than beside
-     <ProductHuntBanner /> up in the flow. Self-gating — it waits for the Product Hunt
-     strip to stop asking, yields this same corner to the consent banner above, and
-     retires for good once answered. -->
+     <CliBanner /> up in the flow. Self-gating — it yields this same corner to the
+     consent banner above, and retires for good once answered. -->
 <SupportToast />
 
 <CvRefreshDialog />

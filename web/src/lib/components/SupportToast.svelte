@@ -4,27 +4,23 @@
   import { Star, X } from '@lucide/svelte';
   import { githubStars, formatStars, GITHUB_URL } from '$lib/github.svelte';
   import { bannerVisible } from '$lib/consent.svelte';
-  import { phBannerDismissed } from '$lib/phBanner.svelte';
   import { cn } from '$lib/ui';
   import {
     ownsMobileStickyCta,
     readDismissed,
-    shouldShow,
     suppressesToast,
     writeDismissed,
   } from '$lib/supportToast';
 
   // A floating ask for a GitHub star, self-gating so the layout mounts it unconditionally.
   //
-  // It queues behind the Product Hunt strip rather than competing with it: `shouldShow`
-  // holds it back until that strip has stopped asking. Unlike the strip, this surface is
-  // `fixed` and so moves nothing — which is why it needs neither SSR nor the pre-paint
-  // class in app.html, and why that file (and the CSP hash over its inline script) stays
-  // untouched.
+  // Unlike the CLI strip under the header, this surface is `fixed` and so moves nothing —
+  // which is why it needs neither SSR nor the pre-paint class in app.html, and why that
+  // file (and the CSP hash over its inline script) stays untouched.
   //
-  // Everything it depends on is reactive: the strip's dismissal, the consent banner, the
-  // route. Only the visitor's own answer is read once, on mount, because nothing else in
-  // the session can change it.
+  // What it defers to is reactive: the consent banner, which owns the same corner, and
+  // the route. Only the visitor's own answer is read once, on mount, because nothing else
+  // in the session can change it.
 
   // Starts true so the gate is decided by mount-time storage rather than flashing first;
   // `mounted` keeps the toast off the server-rendered pass.
@@ -38,14 +34,7 @@
   });
 
   const visible = $derived(
-    mounted &&
-      shouldShow({
-        now: Date.now(),
-        phBannerDismissed: phBannerDismissed(),
-        selfDismissed: answered,
-      }) &&
-      !bannerVisible() &&
-      !suppressesToast(page.url.pathname),
+    mounted && !answered && !bannerVisible() && !suppressesToast(page.url.pathname),
   );
 
   const count = $derived(githubStars.count);
