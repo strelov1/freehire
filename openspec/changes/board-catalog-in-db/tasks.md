@@ -135,30 +135,39 @@
       `'active'` (frontend type-check not run — no `node_modules` in this worktree; the
       change is a single literal in a union type with no other references).
 
-## 8. Cutover — MANUAL/OPERATOR STEPS, not done from this workspace
+## 8. Cutover — DONE, deployed to prod 2026-09-03
 
-All code for this step is already shipped (§4-§7). What remains is real infrastructure
-this coding session has no access to (a sibling ops repo, SSH to prod hosts, and prod
-itself) and is sequenced across real deploys, not something to execute speculatively:
+Executed live once the code (§1-§7) was merged (freehire#2357) and CI was green. Sequenced
+by hand with `AUTODEPLOY` (host2's freehire-ops#64 CI-triggered auto-release, discovered
+armed mid-cutover) temporarily disarmed, so the code deploy and the ops-side timer changes
+landed in the same controlled window instead of racing a 10-minute poll:
 
-- [ ] 8.1 Update deployment cron/systemd units (in `freehire-ops`) from
-      one-timer-per-file to one-timer-per-provider-name. **Not the same count**: found
-      during implementation — `sources/custom.yml` bundles ~25 distinct providers into
-      ONE cron timer today (each row already names its own provider, but they all crawl
-      in a single `cmd/ingest sources/custom.yml` process); splitting by provider means
-      ~25 separate timers for what is one timer now. Every other file is a 1:1 rename.
-- [ ] 8.2 Deploy §4-§7 together (per design.md's Migration Plan step 3 — `cmd/ingest`
-      cannot read two sources at once), after §3.3's backfill has run.
-- [ ] 8.3 Confirm a full crawl cycle of every provider completes clean against `boards`
-      in prod before proceeding to §9.
+- [x] 8.1 `freehire-ops` updated: `freehire-ingest@.service` and all 7 shard templates
+      (workday/eightfold/oracle/paylocity/join, plus two that had drifted onto host2
+      outside git — `dayforce`/`workstream`, found and reconciled during this cutover)
+      now pass the provider name instead of a board-file path. `custom.yml`'s ~24
+      providers split from one bundled 3h timer into 24 individual hourly timers (the 3h
+      cadence existed because bundling 24 API calls took a while, not because any one is
+      slow). `cmd/add-board` and `cmd/backfill-board-catalog` added to `release.sh`'s
+      worker-binary build list.
+- [x] 8.2 Deployed via `release.sh freehire` on host2 (green): `cmd/migrate` applied
+      `0123_boards.sql`/`0124_board_submissions.sql`, then `cmd/backfill-board-catalog`
+      ran manually — **157,552 rows inserted, 0 failed** across 237 providers — before the
+      new systemd timers went live.
+- [x] 8.3 Confirmed within the hour: 26,711 of 143,849 `board_health` rows already
+      recrawled successfully against `boards` (fresh `last_run_at`/`last_success_at`,
+      `consecutive_failures=0`) and 11,989 jobs written since the deploy. Full coverage of
+      every provider takes up to 24h (paylocity's cadence) — the daily and 3h-cadence
+      providers are the tail still to confirm, not a sign of a problem.
 
-## 9. Retire the old path — BLOCKED on §8.3, not done in this session
+## 9. Retire the old path — still deliberately not done
 
-Deliberately NOT executed here even though the resulting diff is simple: deleting
-`sources/*.yml` now, before §3.3/§8 have actually run in prod, would break the CURRENTLY
-DEPLOYED `cmd/ingest` (which still reads those files) the moment this branch merges,
-well before the replacement code has proven itself against real traffic. Once §8.3 is
-confirmed:
+Not executed yet, even though §8 is live: §8.3's confirmation is partial (see above) — the
+slower-cadence providers (daily `apple`/`taleo`, every-6h `reed`, paylocity's 24h cycle)
+have not yet completed a full pass against the new code. Deleting `sources/*.yml` before
+every provider has proven itself would remove the fallback (git history) with no upside —
+`cmd/ingest` already reads only from `boards`, so nothing currently depends on the files.
+Revisit once a full 24h+ cycle confirms no provider regressed. Once confirmed:
 
 - [ ] 9.1 Delete `sources/*.yml` and `cmd/validate-sources`.
 - [ ] 9.2 Remove the "Validate sources" CI step.
