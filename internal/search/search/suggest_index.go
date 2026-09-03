@@ -2,7 +2,9 @@ package search
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/meilisearch/meilisearch-go"
 )
@@ -115,6 +117,16 @@ func AllSuggestions[T any](ctx context.Context, c *Client) ([]T, error) {
 	return SearchSuggestions[T](ctx, c, "", "", maxDictionary)
 }
 
+// isIndexMissing reports whether the dictionary index does not exist.
+//
+// By status rather than by the engine's error code: the SDK keeps that code in an
+// unexported type, so a check written against it could never be tested. A 404 from a
+// search against this one index has a single meaning anyway.
+func isIndexMissing(err error) bool {
+	var me *meilisearch.Error
+	return errors.As(err, &me) && me.StatusCode == http.StatusNotFound
+}
+
 // SearchSuggestions runs a query against the dictionary and decodes the hits into the
 // caller's document type.
 //
@@ -130,6 +142,14 @@ func SearchSuggestions[T any](ctx context.Context, c *Client, query, filter stri
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, fmt.Errorf("search: suggest: %w", ctxErr)
+		}
+		// A dictionary that has not been built yet is "no suggestions", not a fault.
+		// Between a deploy and the first cmd/build-suggestions run the index does not
+		// exist, and the box asks for a completion on every settled keystroke — so
+		// surfacing this as an error made that whole window a broken-looking dropdown
+		// and a stream of 500s. Found in production, not in a test.
+		if isIndexMissing(err) {
+			return nil, nil
 		}
 		if isBadRequest(err) {
 			return nil, fmt.Errorf("search: suggest: %w: %v", ErrBadQuery, err)
