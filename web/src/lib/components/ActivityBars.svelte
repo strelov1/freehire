@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { buildActivityChart, formatCount, pickTickIndices } from '$lib/activityChart';
+  import { buildActivityChart, pickTickIndices } from '$lib/activityChart';
+  import { formatCount } from '$lib/utils';
   import type { ActivityPoint } from '$lib/types';
 
   // A grouped bar chart of catalogue flow: per period, a green "added" bar and a

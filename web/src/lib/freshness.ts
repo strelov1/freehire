@@ -78,3 +78,26 @@ export function freshnessBadges(
   }
   return badges;
 }
+
+/** cardFreshnessBadges is the list card's stricter gate: no reality signal, no badges.
+ *
+ *  `freshnessBadges` lets the date stand alone when the signal is absent, which is right
+ *  on the job's own page — the detail read always computes one. A card is different,
+ *  because of where cards get their data: the browse feed is served from `/jobs/search`,
+ *  whose hits carry the signal, but the `/jobs` list never attaches it (it computes
+ *  reality only to derive the ghost verdict) and the tracking/assistant Card projection
+ *  has no such field at all. On those surfaces the gate would pass blindly and print
+ *  "New" on precisely the eight-month-old postings whose source rewrites its date every
+ *  crawl — on the surface people scan fastest and least critically.
+ *
+ *  So a card that cannot verify freshness claims nothing. An absent badge costs less
+ *  than a false one. Everything else — the thresholds, the tooltips — is the shared
+ *  rule's, deliberately not restated here. */
+export function cardFreshnessBadges(
+  postedAt?: string | null,
+  reality?: Reality | null,
+  appliedCount = 0,
+): FreshnessBadge[] {
+  if (!reality) return [];
+  return freshnessBadges(postedAt, reality, appliedCount);
+}

@@ -358,16 +358,50 @@ describe('sort', () => {
   it('still sends an explicitly chosen newest under a query', () => {
     expect(filtersToParams(withQuery('go', 'newest')).get('sort')).toBe('posted_at');
   });
+
+  // Most viewed is never a contextual default, so it always serializes, and it round
+  // trips through the wire name the endpoint accepts.
+  it('round trips most-viewed through sort=view_count', () => {
+    expect(filtersToParams(withQuery('', 'views')).get('sort')).toBe('view_count');
+    expect(filtersToParams(withQuery('go', 'views')).get('sort')).toBe('view_count');
+    expect(filtersFromParams(new URLSearchParams('sort=view_count')).sort).toBe('views');
+  });
+
+  // `relevance` collapses to `newest` when the query empties because it has nothing left
+  // to rank against. `views` ranks by a stored figure, so it must survive that — the
+  // ordering the caller chose is still perfectly servable.
+  it('keeps most-viewed when the query is cleared', () => {
+    expect(effectiveSort(withQuery('', 'views'))).toBe('views');
+    expect(filtersToParams(withQuery('', 'views')).get('sort')).toBe('view_count');
+  });
 });
 
 // The option list is the sort control's visibility rule, kept pure and out of the
 // component so it can be tested at all — the same argument that put effectiveSort here.
 describe('sort options', () => {
   it('offers relevance only under a query, and match only when it can be served', () => {
-    expect(sortOptionsFor('', false).map((o) => o.value)).toEqual(['newest']);
-    expect(sortOptionsFor('go', false).map((o) => o.value)).toEqual(['relevance', 'newest']);
-    expect(sortOptionsFor('', true).map((o) => o.value)).toEqual(['newest', 'match']);
-    expect(sortOptionsFor('go', true).map((o) => o.value)).toEqual(['relevance', 'newest', 'match']);
+    expect(sortOptionsFor('', false).map((o) => o.value)).toEqual(['newest', 'views']);
+    expect(sortOptionsFor('go', false).map((o) => o.value)).toEqual(['relevance', 'newest', 'views']);
+    expect(sortOptionsFor('', true).map((o) => o.value)).toEqual(['newest', 'views', 'match']);
+    expect(sortOptionsFor('go', true).map((o) => o.value)).toEqual([
+      'relevance',
+      'newest',
+      'views',
+      'match',
+    ]);
+  });
+
+  // `views` ranks by a stored figure, so unlike `relevance` it needs no query text and
+  // unlike `match` it needs no profile. Being unconditional it joins `newest`, which
+  // means the control now holds two options for every caller and is therefore rendered
+  // on every listing — including the signed-out browse that previously showed none.
+  it('offers most-viewed unconditionally', () => {
+    for (const q of ['', 'go']) {
+      for (const matchAvailable of [false, true]) {
+        expect(sortOptionsFor(q, matchAvailable).map((o) => o.value)).toContain('views');
+      }
+    }
+    expect(sortOptionsFor('', false).length).toBeGreaterThan(1);
   });
 
   // A shared ?sort=match link opened signed out: the param survives (the server degrades

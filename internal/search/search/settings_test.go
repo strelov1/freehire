@@ -120,3 +120,26 @@ func TestFacetSettingsSkipsExpensiveProximityIndexing(t *testing.T) {
 		t.Errorf("facetSettings().PrefixSearch = %v, want nil (prefix search stays enabled for live query-as-you-type)", *s.PrefixSearch)
 	}
 }
+
+func TestViewCountIsSortable(t *testing.T) {
+	// The "Most viewed" ordering sorts on a bare top-level `view_count`. The counter
+	// rides the embedded job projection, so it is already on every document and needs
+	// no new field; declaring it sortable is the whole index-side change.
+	//
+	// This must reach the LIVE index BEFORE a binary that accepts `sort=view_count`:
+	// Meilisearch rejects the whole query for an undeclared sort attribute, and this
+	// package maps any Meili error to a 500, so the wrong order breaks search rather
+	// than ignoring a parameter.
+	s := facetSettings()
+	if !contains(s.SortableAttributes, "view_count") {
+		t.Errorf("view_count must be sortable for the most-viewed ordering, got %v", s.SortableAttributes)
+	}
+	// The other orderings must survive the addition. A settings patch replaces this
+	// list wholesale, so dropping posted_at here would break the feed's DEFAULT
+	// ordering rather than just this one sort.
+	for _, want := range []string{"posted_at", "created_at"} {
+		if !contains(s.SortableAttributes, want) {
+			t.Errorf("%s must stay sortable, got %v", want, s.SortableAttributes)
+		}
+	}
+}

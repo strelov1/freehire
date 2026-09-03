@@ -114,6 +114,11 @@ func ignoredParams(c *fiber.Ctx, own []string) []search.UnknownParam {
 var searchSortable = map[string]string{
 	"created_at": "created_at",
 	"posted_at":  "posted_at",
+	// The "Most viewed" ordering. This entry must NEVER ship ahead of the live index
+	// declaring view_count sortable (see facetSettings): Meilisearch rejects the entire
+	// query for an undeclared sort attribute, and search.go maps any Meili error to a
+	// 500 — so the wrong deploy order breaks the page rather than ignoring the param.
+	"view_count": "view_count",
 	"salary_min": "enrichment.salary_min",
 	"salary_max": "enrichment.salary_max",
 }

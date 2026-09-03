@@ -793,11 +793,13 @@ components:
         enum:
           - created_at
           - posted_at
+          - view_count
           - salary_min
           - salary_max
       description: |
         Sort field. Omitted, a text query sorts by relevance and an empty query
-        by `posted_at` descending.
+        by `posted_at` descending. `view_count` orders by how many people have
+        opened each posting.
     Order:
       name: order
       in: query

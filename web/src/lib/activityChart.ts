@@ -90,19 +90,6 @@ export function buildActivityChart(points: ActivityPoint[]): ActivityChartModel 
   return { ...frame, bars, max, barW, slot };
 }
 
-/** Compact count formatting for axis/summary labels: 3354251 → "3.4M",
- *  697191 → "697K", 842 → "842". Full precision is left to the tooltip. */
-export function formatCount(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1e6) return trimZero((n / 1e6).toFixed(1)) + 'M';
-  if (abs >= 1e3) return trimZero((n / 1e3).toFixed(abs >= 1e5 ? 0 : 1)) + 'K';
-  return String(n);
-}
-
-function trimZero(s: string): string {
-  return s.replace(/\.0$/, '');
-}
-
 /** Choose which period indices get an x-axis date label. Few periods → label all;
  *  a long series is thinned to at most MAX_TICKS evenly-spaced labels, always
  *  including the first and last so the time span reads correctly. */

@@ -111,6 +111,30 @@ for the ingest-time coverage gate and was dropped when that gate moved to Postgr
 stops asking for it first, and the live index keeps a harmless declaration until the next
 rebuild. Only a binary that asks for an attribute the live index has not declared breaks.
 
+## Adding a sortable attribute
+
+Same window, same rule, one worse detail. Meili answers `invalid_search_sort`, which the
+handler maps to 500 the same way — so a binary whose `searchSortable` accepts a value the
+live index has not declared does not fall back to the default ordering, it breaks the page.
+Settings first, binary second.
+
+**A hand patch must send the COMPLETE `sortableAttributes` list.** Meili replaces that
+setting wholesale rather than merging it, so a patch naming only the new attribute silently
+drops `posted_at` — and `posted_at` is what the feed's DEFAULT ordering uses, so the blast
+radius is every caller, not just the one who picked the new sort. There is no operator
+script for this: `EnsureIndex` runs only in tests, and settings otherwise reach production
+when `cmd/reindex` swaps a freshly built index in. Read the setting back afterwards; a 200
+on the patch only means the task was accepted.
+
+`view_count` (the "Most viewed" ordering) is the easy case of this and worth contrasting
+with the match embedder below: the counter rides the embedded job projection, so it is
+already on every document. Declaring it sortable is the whole change, and the ordering is
+correct the moment the setting applies — no rebuild to wait for, no dark flag. What the
+counter does NOT get is outbox plumbing: `cmd/rollup-views` moves it daily without touching
+indexed content, so the incremental push never fires, but the scheduled rebuild reads it
+from Postgres more often than the rollup writes it. The indexed figure is never staler than
+the source figure.
+
 ## Skill vectors and the match sort
 
 The facet index carries ONE embedder, named `skills` and sourced `userProvided`. No

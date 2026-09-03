@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildActivityChart, formatCount, pickTickIndices, type ActivityBar } from './activityChart';
+import { buildActivityChart, pickTickIndices, type ActivityBar } from './activityChart';
 import { must } from './utils';
 import type { ActivityPoint } from './types';
 
@@ -66,17 +66,9 @@ describe('buildActivityChart', () => {
   });
 });
 
-describe('formatCount', () => {
-  it('leaves small numbers as-is', () => {
-    expect(formatCount(0)).toBe('0');
-    expect(formatCount(842)).toBe('842');
-  });
-  it('abbreviates thousands and millions', () => {
-    expect(formatCount(697191)).toBe('697K');
-    expect(formatCount(3354251)).toBe('3.4M');
-    expect(formatCount(3400)).toBe('3.4K');
-  });
-});
+// formatCount moved to utils.ts when the job card joined the chart surfaces as a
+// caller; its cases (including the boundaries this block never covered) are in
+// utils.test.ts.
 
 describe('pickTickIndices', () => {
   it('labels every index when there are few', () => {

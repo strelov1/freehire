@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Reality } from './generated/contracts';
-import { daysSince, freshnessBadges } from './freshness';
+import { cardFreshnessBadges, daysSince, freshnessBadges } from './freshness';
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
@@ -73,5 +73,37 @@ describe('freshnessBadges', () => {
   it('states what the applied count actually counted', () => {
     const [, early] = freshnessBadges(daysAgo(1), reality(), 2);
     expect(early?.tooltip).toContain('2 people have told us they applied');
+  });
+});
+
+// The card's gate. Unlike the detail page, a card can be drawn from a projection that
+// carries no reality signal at all (the /jobs list does not attach it; the tracking and
+// assistant Card shape has no such field), and there the date would stand alone on
+// exactly the postings the fake-freshness gate exists to suppress.
+describe('cardFreshnessBadges', () => {
+  it('shows the pair when the signal is present and fresh', () => {
+    expect(cardFreshnessBadges(daysAgo(1), reality(), 0).map((b) => b.label)).toEqual([
+      'New',
+      'Be an early applicant',
+    ]);
+  });
+
+  it('shows nothing when no reality signal was computed, however fresh the date', () => {
+    expect(cardFreshnessBadges(daysAgo(0), null, 0)).toEqual([]);
+    expect(cardFreshnessBadges(daysAgo(0), undefined, 0)).toEqual([]);
+  });
+
+  it('still defers to the signal when it distrusts the date', () => {
+    expect(cardFreshnessBadges(daysAgo(0), reality({ fake_freshness: true }), 0)).toEqual([]);
+  });
+
+  it('still applies the shared thresholds', () => {
+    expect(cardFreshnessBadges(daysAgo(5), reality(), 0).map((b) => b.label)).toEqual(['New']);
+    expect(cardFreshnessBadges(daysAgo(20), reality(), 0)).toEqual([]);
+  });
+
+  // The wrapper must not quietly relax the applied bound the shared rule enforces.
+  it('still applies the shared applied-count bound', () => {
+    expect(cardFreshnessBadges(daysAgo(1), reality(), 9).map((b) => b.label)).toEqual(['New']);
   });
 });

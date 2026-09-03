@@ -235,7 +235,7 @@ export const GROUPS: Group[] = [
         filterable: true,
         query: [
           { name: 'q', type: 'string', description: 'Full-text query over title, company, and description.', example: 'golang' },
-          { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
+          { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
           { name: 'order', type: 'string', description: '`asc` or `desc` (default `desc`).', example: 'desc' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },
@@ -259,7 +259,7 @@ export const GROUPS: Group[] = [
         query: [
           { name: 'q', type: 'string', description: 'Full-text query over title, company, and description.', example: 'golang' },
           { name: 'description_format', type: 'string', description: 'One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`.', example: 'markdown' },
-          { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
+          { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
           { name: 'order', type: 'string', description: '`asc` or `desc` (default `desc`).', example: 'desc' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },

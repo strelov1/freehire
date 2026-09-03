@@ -6,7 +6,8 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { skillLabel } from '$lib/facets';
   import { buildSkillDetailChart } from '$lib/skillDetailChart';
-  import { pickTickIndices, formatCount } from '$lib/activityChart';
+  import { pickTickIndices } from '$lib/activityChart';
+  import { formatCount } from '$lib/utils';
   import { Button } from '$lib/ui';
   import States from '$lib/components/States.svelte';
   import SkillDeltaBadge from '$lib/components/SkillDeltaBadge.svelte';

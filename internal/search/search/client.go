@@ -635,7 +635,13 @@ func facetSettings() *meilisearch.Settings {
 			"reality.class",
 		},
 		// posted_at / created_at are RFC3339 UTC strings and sort chronologically as text.
-		SortableAttributes: []string{"posted_at", "created_at", "enrichment.salary_min", "enrichment.salary_max"},
+		// view_count backs the "Most viewed" ordering. It needs no document change: the
+		// document embeds the public job projection, which has carried the counter since
+		// the counter existed — declaring it sortable is the whole index-side change.
+		// The settings-before-binary warning above applies to it as well, and here it is
+		// the SORT that breaks: Meilisearch rejects the whole query for an undeclared
+		// sort attribute, so a binary accepting ?sort=view_count first 500s the page.
+		SortableAttributes: []string{"posted_at", "created_at", "view_count", "enrichment.salary_min", "enrichment.salary_max"},
 		// posted_ts:desc is a freshness tie-breaker appended AFTER exactness: relevance
 		// (and any explicit sort) always decides first, and among results otherwise tied
 		// on every relevance rule the fresher posting wins. It uses the numeric

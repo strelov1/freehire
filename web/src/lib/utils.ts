@@ -43,6 +43,21 @@ export function isLinkedInUrl(s: string): boolean {
   return /^\/in\/[^/]+/.test(u.pathname);
 }
 
+/** Compact count formatting: 3354251 → "3.4M", 697191 → "697K", 842 → "842". Full
+ *  precision is left to whatever sits behind the label — a chart's tooltip, or the
+ *  job's own page. Shared by the activity chart's axis and the job card's view
+ *  count, which is why it lives here and not in either of them. */
+export function formatCount(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e6) return trimZero((n / 1e6).toFixed(1)) + 'M';
+  if (abs >= 1e3) return trimZero((n / 1e3).toFixed(abs >= 1e5 ? 0 : 1)) + 'K';
+  return String(n);
+}
+
+function trimZero(s: string): string {
+  return s.replace(/\.0$/, '');
+}
+
 const TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31536000],
   ['month', 2592000],

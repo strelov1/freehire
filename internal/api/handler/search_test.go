@@ -241,3 +241,37 @@ func TestSearchJobs_CleanQueryReportsNothingIgnored(t *testing.T) {
 		t.Errorf("meta.ignored_params = %v, want the key absent", meta["ignored_params"])
 	}
 }
+
+// The "Most viewed" ordering. It is a plain attribute sort like the dates, so what is
+// worth pinning is that the bare `view_count` name is accepted at all — an unlisted
+// value is silently ignored, which would leave the feed date-ordered while the control
+// claimed otherwise — and that it defaults to descending, since most-viewed-first is
+// the whole point and needing `&order=desc` to reach it would be a trap.
+func TestSearchJobs_ViewCountSortDefaultsToDescending(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+
+	if status, _ := doGet(t, app, "/jobs/search?sort=view_count"); status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "view_count:desc" {
+		t.Errorf("Sort = %v, want [view_count:desc] — an ignored sort value would leave the feed date-ordered", fake.got.Sort)
+	}
+
+	// Ascending is reachable, so "least viewed first" needs no separate parameter.
+	if status, _ := doGet(t, app, "/jobs/search?sort=view_count&order=asc"); status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "view_count:asc" {
+		t.Errorf("Sort = %v, want [view_count:asc]", fake.got.Sort)
+	}
+
+	// It ranks by a stored figure, so it survives query text rather than yielding to
+	// relevance the way an unrecognised value would.
+	if status, _ := doGet(t, app, "/jobs/search?q=golang&sort=view_count"); status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "view_count:desc" {
+		t.Errorf("Sort = %v, want [view_count:desc] under query text", fake.got.Sort)
+	}
+}
