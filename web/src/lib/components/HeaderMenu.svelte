@@ -21,6 +21,8 @@
     SquarePlus,
     ShieldCheck,
     Layers,
+    Wand,
+    Bell,
     ChartColumn,
     TrendingUp,
     MessagesSquare,
@@ -75,15 +77,26 @@
 
   // Static nav (always shown) and the signed-in account items (shown only when
   // authenticated). Moderation is gated on the moderator role at render time.
-  // Primary destinations pinned to the very top of the menu. Jobs is the homepage
-  // feed (also reachable via the logo); Companies leads the browse surfaces.
+  // Primary destinations pinned to the very top of the menu. Jobs is the feed at
+  // /jobs — the homepage is the landing page above it, reachable via the logo.
   const primaryLinks = [
-    { href: '/', label: 'Jobs', icon: Briefcase },
+    { href: '/jobs', label: 'Jobs', icon: Briefcase },
     { href: '/companies', label: 'Companies', icon: Building2 },
   ] as const;
 
+  // The rest of the site. The two feature pages here are what the product DOES beyond
+  // listing jobs, and until now nothing in this menu led to either of them — the
+  // /features/* landings were reachable only from the pages that happened to link
+  // them, which for a signed-out visitor was almost nowhere.
+  //
+  // A signed-in visitor also has "Tailor" and "Search alerts" in the account section
+  // above. Those are the app; these are what it is for, and the divider between the
+  // sections is what tells them apart — so the labels here name the subject
+  // ("CV tailoring") rather than the tool.
   const navLinks = [
     { href: '/collections', label: 'Collections', icon: Layers },
+    { href: '/features/tailor', label: 'CV tailoring', icon: Wand },
+    { href: '/features/notifications', label: 'Job notifications', icon: Bell },
     { href: '/analytics', label: 'Analytics', icon: ChartColumn },
     { href: '/trends', label: 'Trends', icon: TrendingUp },
     { href: '/discussions', label: 'Discussions', icon: MessagesSquare },

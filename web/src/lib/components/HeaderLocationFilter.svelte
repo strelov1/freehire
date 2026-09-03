@@ -70,7 +70,7 @@
   function launch(param: string, value: string) {
     open = false;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- one facet appended to the resolved feed path
-    void goto(`${resolve('/')}?${param}=${encodeURIComponent(value)}`);
+    void goto(`${resolve('/jobs')}?${param}=${encodeURIComponent(value)}`);
   }
 
   function onWindowClick(e: MouseEvent) {

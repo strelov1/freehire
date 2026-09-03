@@ -45,6 +45,7 @@
   "web/src/lib/components/HeaderMenu.svelte": 1,
   "web/src/lib/components/HeaderSearch.svelte": 2,
   "web/src/lib/components/HomeFunnel.svelte": 1,
+  "web/src/lib/components/HomeLandingView.svelte": 1,
   "web/src/lib/components/HomeView.svelte": 16,
   "web/src/lib/components/InboxLandingView.svelte": 4,
   "web/src/lib/components/InboxView.svelte": 8,

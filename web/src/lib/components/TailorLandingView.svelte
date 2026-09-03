@@ -75,7 +75,7 @@
         cannot find in your history.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        <Button href={resolve('/')} variant="primary" size="lg">Find a job to tailor for</Button>
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Find a job to tailor for</Button>
         <Button href={resolve('/my/cvs')} variant="outline" size="lg">Your CVs</Button>
       </div>
     </div>
@@ -287,7 +287,7 @@ freehire <span class="text-foreground">cv render &lt;cv-id&gt; --out cv.pdf</spa
         application, and nothing on the page that you did not do.
       </p>
       <div class="flex flex-wrap gap-3">
-        <Button href={resolve('/')} variant="primary" size="lg">Browse jobs</Button>
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
         <Button href={resolve('/my/cvs')} variant="outline" size="lg">Your CVs</Button>
       </div>
     </div>

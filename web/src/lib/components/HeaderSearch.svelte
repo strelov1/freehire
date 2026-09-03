@@ -31,7 +31,32 @@
   // commits it. The box used to push every keystroke into the store, so the feed
   // refetched while the visitor was still composing — and the half-typed word it
   // searched for was rarely the one they meant.
-  let { placeholder }: { placeholder: string } = $props();
+  //
+  // `size` and `autofocus` are presentation. The homepage renders this same box, at
+  // hero size, as the whole of its content (see HomeLandingView) — it registers no
+  // list, so it gets the browse target above and every pick becomes a link to the
+  // feed. A hero-sized second copy of this component is how the two would drift.
+  let {
+    placeholder,
+    size = 'header',
+    autofocus = false,
+    counts = null,
+  }: {
+    placeholder: string;
+    size?: 'header' | 'hero';
+    /** Focus the box on mount — desktop only. A page whose whole content is this box
+     *  should put the caret in it; on a phone the same call raises the keyboard over
+     *  the page before the visitor has decided to search, so the width check below is
+     *  the feature rather than a fallback. */
+    autofocus?: boolean;
+    /** The category distribution behind the empty box, when the page has already
+     *  measured it. Off a list page this is otherwise fetched here on first focus;
+     *  a caller that server-rendered the same numbers passes them instead of making
+     *  the browser ask for them again. */
+    counts?: FacetCounts | null;
+  } = $props();
+
+  const hero = $derived(size === 'hero');
 
   // How long the draft must sit still before the suggestions are recomputed. A pass
   // costs ~10 ms over the catalogue on a warm desktop, more on a phone. Short enough
@@ -49,6 +74,17 @@
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    if (!autofocus) return;
+    if (!window.matchMedia('(min-width: 640px)').matches) return;
+    inputEl?.focus();
+    // Focusing normally opens the dropdown, and on a landing page that would drop a
+    // ten-row panel over the page on every load, covering the very shortcuts printed
+    // underneath it. A caret the visitor did not place is not the question "what can I
+    // put here", so close it back: their first click or keystroke opens it as usual.
+    dismissed = true;
+  });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
   let activeIndex = $state(-1);
@@ -65,6 +101,9 @@
   let browseCountsAsked = false;
 
   function loadBrowseCounts() {
+    // Already measured by the page that rendered us — asking again would fetch the
+    // identical unfiltered distribution a second time.
+    if (counts) return;
     if (browseCountsAsked) return;
     browseCountsAsked = true;
     void api
@@ -84,7 +123,7 @@
     if (query === '') return;
     close();
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
-    void goto(`${resolve('/')}?${query}`);
+    void goto(`${resolve('/jobs')}?${query}`);
   }
 
   // The list page's own store, or — on every other page — a target that navigates to
@@ -96,7 +135,7 @@
       value: { q: '' },
       commitQuery: (q) => browse({ facets: [], q }),
       suggest: {
-        counts: () => browseCounts,
+        counts: () => counts ?? browseCounts,
         apply: (s) => browse(planForSuggestion(s)),
         applyParts: browse,
       },
@@ -341,7 +380,15 @@
      overflowing it — the inner input (also min-w-0) absorbs the shrink. -->
 <div bind:this={wrapEl} class="relative min-w-0 flex-1">
   <div
-    class="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
+    class={cn(
+      'flex items-center border border-border bg-background focus-within:ring-2 focus-within:ring-ring',
+      hero
+        ? // Taller, rounder and lifted off the page: at the centre of an otherwise
+          // empty screen this is the only interactive thing, so it carries the weight
+          // the header version borrows from the bar around it.
+          'h-14 gap-3 rounded-2xl px-4 text-base shadow-lg shadow-foreground/5 sm:h-16 sm:px-5'
+        : 'h-11 gap-2 rounded-md px-3 text-sm',
+    )}
   >
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
          scope-prefix, divided from the search icon. `variant` picks the popover body
@@ -360,11 +407,17 @@
       counts={target.filterScope?.counts() ?? null}
       inferred={target.filterScope?.inferred?.() ?? false}
     />
-    <div class="h-5 w-px shrink-0 bg-border"></div>
-    <Search class="size-4 shrink-0 text-muted-foreground" />
+    <div class={cn('w-px shrink-0 bg-border', hero ? 'h-7' : 'h-5')}></div>
+    <Search class={cn('shrink-0 text-muted-foreground', hero ? 'size-5' : 'size-4')} />
     <input
       bind:this={inputEl}
       value={draft.text}
+      onpointerdown={() => {
+        // A click on an already-focused box fires no `focus` event, so without this an
+        // autofocused hero would stay silent when its own field is clicked.
+        dismissed = false;
+        activeIndex = -1;
+      }}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
@@ -452,7 +505,10 @@
       id="role-suggestions"
       role="listbox"
       aria-label="Search suggestions"
-      class="absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-background py-1 shadow-lg"
+      class={cn(
+        'absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
+        hero ? 'rounded-2xl' : 'rounded-md',
+      )}
     >
       {#each rows as row, i (row.key)}
         {#if row.first && row.kind !== 'text'}

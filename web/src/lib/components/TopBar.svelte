@@ -15,15 +15,33 @@
   // viewport. Nav links, the account items, the theme toggle, and the auth
   // action all live in HeaderMenu.
   //
-  // The middle slot is ONE search box, on every page. Where a list has registered
-  // itself (the homepage feed `/`, /companies, and a company's or collection's own
-  // scoped jobs list) it filters that list in place and hosts the All-filters trigger;
-  // everywhere else the same box navigates to the feed carrying the same filter.
+  // The middle slot is ONE search box, on every page but one. Where a list has
+  // registered itself (the feed at /jobs, /companies, and a company's or collection's
+  // own scoped jobs list) it filters that list in place and hosts the All-filters
+  // trigger; everywhere else the same box navigates to the feed carrying the same
+  // filter.
   //
   // `listKind` survives only to word the placeholder — the box asks the page nothing
   // else. It used to select between two components that shared everything but that one
   // behaviour and drifted apart in the parts they shared.
   const listKind = $derived(page.url.pathname === '/companies' ? 'companies' : 'jobs');
+
+  // The homepage is the one exception: its whole content is a large centred copy of
+  // this same box, so the header renders none. Two identical fields on one screen make
+  // the visitor choose between them for no reason, and the hero is the focused one.
+  // The brand, the bell and the menu stay — sign-in has to remain reachable.
+  const bareHeader = $derived(page.url.pathname === '/');
+
+  // What the freed slot carries instead. The three browse surfaces, which everywhere
+  // else are one tap down inside HeaderMenu — on the page whose entire content is a
+  // search box, the visitor who arrived to LOOK rather than to search has nowhere else
+  // to be told the catalogue can also be walked. Kept to three: this is the menu's own
+  // top, not a second navigation with its own opinions.
+  const browseLinks = [
+    { href: resolve('/jobs'), label: 'Jobs' },
+    { href: resolve('/companies'), label: 'Companies' },
+    { href: resolve('/collections'), label: 'Collections' },
+  ];
 
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
@@ -98,9 +116,22 @@
          a 48rem basis so it lands at that width instead of an even third of the row; the
          cap then hands the rest back to the side slots, which keeps it on the axis. -->
     <div class={['flex min-w-0 flex-1', fullBleed && 'max-w-3xl basis-3xl']}>
-      <HeaderSearch
-        placeholder={listKind === 'companies' ? 'Search companies…' : 'Search jobs…'}
-      />
+      {#if bareHeader}
+        <nav aria-label="Browse" class="flex items-center gap-4 sm:gap-6">
+          {#each browseLinks as link (link.href)}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href in browseLinks is already a resolve() result; the rule cannot see through the array -->
+            <a href={link.href}
+              class="whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {link.label}
+            </a>
+          {/each}
+        </nav>
+      {:else}
+        <HeaderSearch
+          placeholder={listKind === 'companies' ? 'Search companies…' : 'Search jobs…'}
+        />
+      {/if}
     </div>
 
     <div class={['flex shrink-0 items-center gap-1', fullBleed && 'flex-1 basis-0 justify-end']}>

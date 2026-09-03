@@ -54,7 +54,7 @@
         both reach you the same way: email, Telegram, or push.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        <Button href={resolve('/')} variant="primary" size="lg">Browse jobs</Button>
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
         <Button href={resolve('/my/notifications/settings')} variant="outline" size="lg">Notification settings</Button>
       </div>
     </div>
@@ -271,7 +271,7 @@
         matters.
       </p>
       <div class="flex flex-wrap gap-3">
-        <Button href={resolve('/')} variant="primary" size="lg">Browse jobs</Button>
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
         <Button href={resolve('/my/notifications/settings')} variant="outline" size="lg">Notification settings</Button>
       </div>
     </div>

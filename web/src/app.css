@@ -67,6 +67,15 @@
   -webkit-mask-image: radial-gradient(ellipse 90% 75% at 25% 0%, #000 18%, transparent 80%);
   mask-image: radial-gradient(ellipse 90% 75% at 25% 0%, #000 18%, transparent 80%);
 }
+/* The centred variant, for a hero that is one thing in the middle of the screen
+   rather than a left column beside a visual — the homepage's search box. Everything
+   the grid IS (dot size, spacing, opacity, the --muted-foreground that carries it
+   through both themes) stays above; only where the dots gather moves. Pair it with
+   `dot-grid`, which still sets the positioning context. */
+.dot-grid-centred::before {
+  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 42%, #000 15%, transparent 78%);
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 42%, #000 15%, transparent 78%);
+}
 
 /* CLI promo strip: hidden before first paint for a visitor who already closed it.
    The banner is server-rendered on purpose — it lives in the document flow, so

@@ -75,7 +75,7 @@
   // urlSearchString.ts); normalize it back to a literal comma for the "Open" link
   // so a multi-value facet reads the same compact way it does everywhere else.
   function openHref(query: string): string {
-    return `/?${toSearchString(new URLSearchParams(query))}`;
+    return `/jobs?${toSearchString(new URLSearchParams(query))}`;
   }
 
   function startShare(s: SavedSearch) {

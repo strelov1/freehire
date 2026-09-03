@@ -54,10 +54,10 @@ function label(map: Record<string, string>, value: string): string {
   return map[value] ?? sentenceCase(value);
 }
 
-/** The job-feed URL that filters by a single facet value. The feed lives at the
- *  homepage (`/`); param names match the search API (see facets.ts / filters.ts). */
+/** The job-feed URL that filters by a single facet value. The feed lives at `/jobs`;
+ *  param names match the search API (see facets.ts / filters.ts). */
 export function filterHref(param: string, value: string): string {
-  return `/?${param}=${encodeURIComponent(value)}`;
+  return `/jobs?${param}=${encodeURIComponent(value)}`;
 }
 
 /** Compact an amount the way companyDetails.ts's funding figures already read:

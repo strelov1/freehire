@@ -23,6 +23,10 @@ export const JOB_SITEMAP_CHUNK = 10000;
 /** The site's static, always-present pages (relative paths). */
 export const STATIC_PATHS = [
   '/',
+  // The job feed. It used to BE `/`, which is now the landing page — so this entry is
+  // not a second copy of the homepage but the URL every filtered and paginated feed
+  // link resolves to, and the one page here that carries the catalogue itself.
+  '/jobs',
   '/about',
   '/companies',
   '/collections',

@@ -223,7 +223,7 @@
   // funnel event — and, since it also decides `sameQuery`, doesn't reset the page.
   //
   // Seeded with what the route searched with rather than left empty. Empty only
-  // matches an unfiltered feed, so on `/?q=engineer&page=3` the first re-run read
+  // matches an unfiltered feed, so on `/jobs?q=engineer&page=3` the first re-run read
   // as a brand-new search and snapped the reader from page 3 back to page 1 — and
   // logged a search they had not performed. It went unnoticed while scrolling was
   // how anyone paged; the page links made it visible.

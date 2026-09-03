@@ -11,7 +11,7 @@
     {
       title: 'Product',
       links: [
-        { label: 'Jobs', href: resolve('/') },
+        { label: 'Jobs', href: resolve('/jobs') },
         { label: 'Companies', href: resolve('/companies') },
         { label: 'Collections', href: resolve('/collections') },
         { label: 'Jobs by role', href: resolve('/roles') },

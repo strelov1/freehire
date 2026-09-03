@@ -328,7 +328,7 @@ freehire <span class="text-foreground">note &lt;slug&gt; "referred by a former t
         Offer, tracked from there on.
       </p>
       <div class="flex flex-wrap gap-3">
-        <Button href={resolve('/')} variant="primary" size="lg">Browse jobs</Button>
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
         <Button href={resolve('/my/tracking')} variant="outline" size="lg">Open Tracking</Button>
       </div>
     </div>

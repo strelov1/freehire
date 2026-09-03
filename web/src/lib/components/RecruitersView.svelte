@@ -41,7 +41,7 @@
     </p>
     <div class="flex flex-wrap items-center gap-3">
       <Button href="/submit" variant="primary" size="lg">Submit a job</Button>
-      <Button href="/" variant="outline" size="lg">Browse the catalogue</Button>
+      <Button href="/jobs" variant="outline" size="lg">Browse the catalogue</Button>
     </div>
   </section>
 

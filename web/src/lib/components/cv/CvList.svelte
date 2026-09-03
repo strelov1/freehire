@@ -94,7 +94,7 @@
         </ol>
         <div class="mt-6 text-center">
           <a
-            href={resolve('/')}
+            href={resolve('/jobs')}
             class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
             Browse jobs <ArrowRight class="size-4" />
