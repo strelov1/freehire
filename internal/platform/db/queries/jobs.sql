@@ -387,13 +387,16 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- and cmd/reindex has no --since flag despite what its comment says), because a column stamped
 -- on every crawl selects the whole catalogue and answers nothing.
 --
--- The match key is (content_hash, cities, salary_*_source), not the hash alone. cities and the
--- four salary_*_source columns are what the upsert writes that jobhash.Of does not read — a
--- caller's structured city list overrides the location-derived one, and a structured salary
--- (Lever/Ashby/Recruitee) is a base fact, not something Of hashes, so either can move while
--- every hashed field stands still. Folding them into the hash instead would change every stored
--- content_hash at once and make the first crawl after deploy rewrite and re-index the whole
--- catalogue. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
+-- The match key is (content_hash, cities, salary_*_source, english_level), not the hash alone.
+-- Those are what the upsert writes that jobhash.Of does not read — a caller's structured city
+-- list overrides the location-derived one, a structured salary (Lever/Ashby/Recruitee) is a
+-- base fact rather than something Of hashes, and english_level gained a structured tier of its
+-- own (profession.hu states it as a picklist) so it too can move while every hashed field
+-- stands still. Folding them into the hash instead would change every stored content_hash at
+-- once and make the first crawl after deploy rewrite and re-index the whole catalogue — 6.6M
+-- rows through a queue that drains at ~9 documents a second. Note the asymmetry with
+-- education_level, which IS hashed: it was hashed before either had a structured tier, and
+-- moving it out now would cost exactly the storm this key exists to avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
 -- (both NULL) still match — a plain = would push every non-salary-bearing source off the cheap
 -- path forever. Whether the key still covers every written column is enforced by
 -- TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites (internal/job); add a derived
@@ -425,6 +428,7 @@ WHERE source = sqlc.arg(source)
   AND salary_max_source IS NOT DISTINCT FROM sqlc.arg(salary_max_source)
   AND salary_currency_source = sqlc.arg(salary_currency_source)
   AND salary_period_source = sqlc.arg(salary_period_source)
+  AND english_level = sqlc.arg(english_level)
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of;
 

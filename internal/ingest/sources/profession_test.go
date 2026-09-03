@@ -45,6 +45,7 @@ type professionPostingOpts struct {
 	locationRequirement    string
 	employmentType         string
 	experienceRequirements string
+	educationRequirements  string
 	// sections are the body sections the page renders, in order, as (id, heading, inner HTML).
 	sections [][3]string
 }
@@ -62,6 +63,7 @@ func professionPostingHTML(o professionPostingOpts) string {
 		"validThrough":           "2026-10-03T17:04:20",
 		"employmentType":         o.employmentType,
 		"experienceRequirements": o.experienceRequirements,
+		"educationRequirements":  o.educationRequirements,
 		"occupationalCategory":   "IT programozás, Fejlesztés - Programozó, Fejlesztő",
 		// The block's own description: the same text as the sections below with its list
 		// markup flattened, which is why the adapter must not read it.
@@ -121,6 +123,8 @@ func professionHybridPosting() string {
 		employmentType:      "Teljes munkaidő, Alkalmazotti jogviszony",
 		// The picklist's own spelling; the adapter reads the low end of the band.
 		experienceRequirements: "3-5 év tapasztalat",
+		// English at B2 and a college degree — the platform's two commonest answers.
+		educationRequirements: "Angol középfok, Főiskola",
 		sections: [][3]string{
 			{"tasks", "Feladatok", "<ul><li>Microservice-ek fejlesztése</li></ul>"},
 			{"requirements", "Elvárások", "<ul><li>Minimum 3 éves NodeJs tapasztalat</li></ul>"},
@@ -227,6 +231,11 @@ func TestProfessionFetch(t *testing.T) {
 	}
 	if hybrid.ExperienceYearsMin == nil || *hybrid.ExperienceYearsMin != 3 {
 		t.Errorf("experience = %v, want 3", hybrid.ExperienceYearsMin)
+	}
+	// The platform states both as a picklist, so neither is left to the English-prose
+	// matchers — which would find nothing at all in a Hungarian body.
+	if hybrid.EducationLevel != "bachelor" || hybrid.EnglishLevel != "b2" {
+		t.Errorf("education/english = %q/%q, want bachelor/b2", hybrid.EducationLevel, hybrid.EnglishLevel)
 	}
 	if hybrid.PostedAt == nil || hybrid.PostedAt.Format("2006-01-02") != "2026-09-02" {
 		t.Errorf("posted at = %v", hybrid.PostedAt)
@@ -403,5 +412,51 @@ func TestProfessionExperienceYears(t *testing.T) {
 		case want != nil && (got == nil || *got != *want):
 			t.Errorf("professionExperienceYears(%q) = %v, want %d", level, got, *want)
 		}
+	}
+}
+
+// TestProfessionEducationAndLanguage pins the platform's educationRequirements picklist,
+// which states two different things in one comma-joined field: zero or more LANGUAGE
+// levels and exactly one SCHOOL level. The whole closed vocabulary — 28 tokens — was read
+// off all 709 live postings, so a value outside it is a change on the platform's side and
+// must yield nothing rather than a guess.
+func TestProfessionEducationAndLanguage(t *testing.T) {
+	cases := []struct {
+		name, field, wantEdu, wantEng string
+	}{
+		// The two commonest values, together 46% of the slice.
+		{"intermediate english, secondary school", "Angol középfok, Középiskola", "none", "b2"},
+		{"intermediate english, college", "Angol középfok, Főiskola", "bachelor", "b2"},
+		// Hungary's exam levels are NOT "basic/medium/high": alapfok/középfok/felsőfok are
+		// the state-recognised levels and map to B1/B2/C1 (Gov. Decree 137/2008). The trio
+		// has no name for C2, which is why felsőfok is so often mistranslated as one.
+		{"basic english is B1, not A-something", "Angol alapfok, Középiskola", "none", "b1"},
+		{"advanced english is C1, not C2", "Angol felsőfok, Egyetem", "master", "c1"},
+		{"native english", "Angol anyanyelvi szint, Egyetem", "master", "native"},
+		// The platform's own way of saying no language is required.
+		{"no language needed", "Nem kell nyelvtudás, Középiskola", "none", "none"},
+		// A posting may require several languages; only English answers this facet, and a
+		// posting naming other languages says nothing about English.
+		{"english alongside german", "Angol középfok, Német középfok, Középiskola", "none", "b2"},
+		{"german only states no english level", "Német felsőfok, Egyetem", "master", ""},
+		{"hungarian native alongside english", "Angol felsőfok, Magyar anyanyelvi szint, Egyetem", "master", "c1"},
+		// School levels below a degree are the platform stating that no degree is needed.
+		{"primary school", "Nem kell nyelvtudás, Általános iskola", "none", "none"},
+		{"vocational school", "Angol alapfok, Szakiskola / szakmunkás képző", "none", "b1"},
+		// Felsőoktatási szakképzés is a two-year tertiary programme, below a bachelor's and
+		// above secondary — freehire's four-value vocabulary has no member for it, so it
+		// yields nothing rather than rounding to a neighbour.
+		{"higher vocational maps to neither", "Angol középfok, Felsőoktatási szakképzés", "", "b2"},
+		{"empty field", "", "", ""},
+		{"a value the platform has not published before", "Angol mesterfok, Doktori", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			edu, eng := professionEducationAndLanguage(tc.field)
+			if edu != tc.wantEdu || eng != tc.wantEng {
+				t.Errorf("professionEducationAndLanguage(%q) = %q/%q, want %q/%q",
+					tc.field, edu, eng, tc.wantEdu, tc.wantEng)
+			}
+		})
 	}
 }

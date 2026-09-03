@@ -53,6 +53,14 @@ type Input struct {
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	// EducationLevel and EnglishLevel are the caller's structured signal for the two
+	// facets a platform states as a picklist rather than in prose (Profession.hu
+	// publishes both, on every posting). They obey the same contract as the scalars
+	// above — a member of vocab.EducationLevelValues / vocab.EnglishLevelValues, set
+	// only from a stated field and never from an adapter's own reading of the text,
+	// so an adapter with nothing to say leaves them empty and the matchers decide.
+	EducationLevel string
+	EnglishLevel   string
 	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod are the caller's structured
 	// salary signal — an adapter sets them only when the ATS states a salary in its
 	// own structured field (never a description-text guess: unlike the scalars
@@ -187,6 +195,17 @@ func Derive(in Input) Derived {
 	if experience == nil {
 		experience = jobfacts.ExperienceYearsMin(in.Description)
 	}
+	// Education and English precedence: structured source signal → description text
+	// parse. Both matchers read English prose only, so on a posting written in another
+	// language they are the weaker source by a wide margin, not merely the later one.
+	educationLevel := in.EducationLevel
+	if educationLevel == "" {
+		educationLevel = jobfacts.EducationLevel(in.Description)
+	}
+	englishLevel := in.EnglishLevel
+	if englishLevel == "" {
+		englishLevel = jobfacts.EnglishLevel(in.Description)
+	}
 	return Derived{
 		CompanySlug: normalize.CompanySlug(in.Company),
 		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
@@ -207,8 +226,8 @@ func Derive(in Input) Derived {
 		RequiresClearance:  deriveRequiresClearance(in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
-		EducationLevel:     jobfacts.EducationLevel(in.Description),
-		EnglishLevel:       jobfacts.EnglishLevel(in.Description),
+		EducationLevel:     educationLevel,
+		EnglishLevel:       englishLevel,
 		ExperienceYearsMin: experience,
 		SalaryMin:          in.SalaryMin,
 		SalaryMax:          in.SalaryMax,

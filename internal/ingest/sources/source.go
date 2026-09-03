@@ -73,6 +73,15 @@ type Job struct {
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	// EducationLevel and EnglishLevel follow the same structured-only contract, for the
+	// platforms that state them as a picklist instead of leaving them in prose
+	// (profession.hu publishes both on every posting, as "Angol középfok, Egyetem").
+	// Members of vocab.EducationLevelValues / vocab.EnglishLevelValues. They matter more
+	// than the other scalars on a non-English board: the fallback matchers
+	// (internal/job/jobfacts) read English prose only, so without a structured value a
+	// Hungarian or Polish posting yields nothing at all rather than something weaker.
+	EducationLevel string
+	EnglishLevel   string
 	// Countries mirrors the same contract for geography: an adapter sets it only when
 	// the platform states the country in a STRUCTURED field (not the free-text location
 	// the description/location string carries), normalized through
