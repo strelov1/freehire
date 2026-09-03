@@ -9,7 +9,7 @@
 
 ## 2. Database
 
-- [x] 2.1 Migration `0125_threads_open_created_idx.sql`: partial index on
+- [x] 2.1 Migration `0126_threads_open_created_idx.sql`: partial index on
   `threads (created_at DESC, id DESC) WHERE status = 'open'`, with a comment
   saying why the existing subject-prefixed index cannot serve the feed
 - [x] 2.2 `pnpm check:sql` passes on the new file
