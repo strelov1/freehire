@@ -3,9 +3,11 @@
   import { ArrowRight } from '@lucide/svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
+  import type { ApplyPlan } from '$lib/apiSuggestions';
+  import { countryLabel } from '$lib/facets';
   import { CLI_INSTALL, CLI_REPO } from '$lib/cliLinks';
-  import { EXTENSION_STORE_URL } from '$lib/extensionLinks';
-  import { starterSuggestions, type Suggestion } from '$lib/suggestions';
+  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
+  import { starterSuggestions } from '$lib/suggestions';
   import { Button, SectionLabel } from '$lib/ui';
   import type { CatalogScale, FacetCounts } from '$lib/types';
 
@@ -28,9 +30,10 @@
     counts,
     scale,
   }: {
-    /** The unfiltered category distribution, or null when the call failed. Feeds both
-     *  the chips below and — handed to the box — the empty dropdown's starting points,
-     *  so the two cannot disagree about what the catalogue holds. */
+    /** The unfiltered category and country distributions, or null when the call
+     *  failed. Feeds both rows of chips below and — handed to the box — the empty
+     *  dropdown's starting points, so the two cannot disagree about what the catalogue
+     *  holds. */
     counts: FacetCounts | null;
     /** How big the catalogue is, or null when the call failed. */
     scale: CatalogScale | null;
@@ -40,32 +43,58 @@
    *  tidy rows under the box on a laptop without the eye giving up on the second. */
   const CHIP_LIMIT = 8;
 
-  /** What the extension's own page leads with, in its order. Read from here rather
-   *  than written into the markup so the promise this card makes and the one that page
-   *  keeps are the same three sentences. */
-  const EXTENSION_CLAIMS = [
-    'Reads the page itself',
-    'Scores it against your CV',
-    'Fills the application form',
-  ];
+  /** How many countries to offer beside the crafts. Four is what fits on one line next
+   *  to "Remote" without the row wrapping on a laptop. */
+  const COUNTRY_CHIP_LIMIT = 4;
 
-  /** The starting points, in the curated group order the filter modal uses —
-   *  Engineering first, the consumer industries last. Built by the same function the
-   *  dropdown's empty state uses, from the same distribution. */
-  const chips = $derived(starterSuggestions(counts, CHIP_LIMIT));
+  type Chip = { href: string; label: string; count?: number };
 
   /** Where a chip goes, serialized by the same `browseQuery` a pick in the dropdown
    *  navigates through — so the link and the control that offers it cannot come to
-   *  filter differently.
+   *  filter differently. A chip always names exactly one facet, so the query is never
+   *  empty and needs no fallback to the bare feed.
    *
    *  Rendered as a real `<a href>` rather than a click handler: these are the
    *  homepage's only outgoing links into the catalogue, so they are what a crawler
    *  follows to reach the feed at all. */
-  function chipHref(chip: Suggestion): string {
-    // A starter row always names exactly one facet, so the serialized query is never
-    // empty and needs no fallback to the bare feed.
-    return `${resolve('/jobs')}?${browseQuery(planForSuggestion(chip))}`;
+  function planHref(plan: ApplyPlan): string {
+    return `${resolve('/jobs')}?${browseQuery(plan)}`;
   }
+
+  function feedHref(param: string, value: string): string {
+    return planHref({ facets: [[param, value]] });
+  }
+
+  /** What, rather than where: the starting points in the curated group order the filter
+   *  modal uses — Engineering first, the consumer industries last. Built by the same
+   *  function the dropdown's empty state uses, from the same distribution, and turned
+   *  into a link by the same `planForSuggestion` the dropdown applies — so which facet
+   *  a craft means is answered in one place, not two. */
+  const crafts = $derived<Chip[]>(
+    starterSuggestions(counts, CHIP_LIMIT).map((s) => ({
+      href: planHref(planForSuggestion(s)),
+      label: s.label,
+      count: s.count,
+    })),
+  );
+
+  /** Where, rather than what. Remote leads because it is the answer that is not a place;
+   *  behind it the busiest countries the catalogue actually carries — measured, not
+   *  listed, so this row cannot offer a country with nothing in it.
+   *
+   *  Unlike the crafts there is no curated order to honour: a country's only claim on
+   *  the row is how much work is in it. */
+  const places = $derived<Chip[]>([
+    { href: feedHref('work_mode', 'remote'), label: 'Remote' },
+    ...Object.entries(counts?.facets?.countries ?? {})
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, COUNTRY_CHIP_LIMIT)
+      .map(([code, count]) => ({
+        href: feedHref('countries', code),
+        label: countryLabel(code),
+        count,
+      })),
+  ]);
 
   type Figure = { value: string; label: string };
 
@@ -102,6 +131,26 @@
     }
   }
 </script>
+
+<!-- One row of shortcuts into the catalogue. Two rows use it — the crafts and the
+     places — and they differ only in what they list, so they are one shape. -->
+{#snippet chipRow(label: string, chips: Chip[])}
+  <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
+    {#each chips as chip (chip.href)}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
+      <a href={chip.href}
+        class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
+      >
+        {chip.label}
+        {#if chip.count !== undefined}
+          <span class="ml-1 text-xs tabular-nums opacity-60"
+            >{chip.count.toLocaleString('en-US')}</span
+          >
+        {/if}
+      </a>
+    {/each}
+  </nav>
+{/snippet}
 
 <!-- The one link shape this page uses twice: an onward link with an arrow that leans
      when you point at it. Written once so the two cannot drift into being two
@@ -154,22 +203,13 @@
       />
     </div>
 
-    {#if chips.length > 0}
-      <nav aria-label="Browse by specialization" class="flex flex-wrap justify-center gap-2">
-        {#each chips as chip (chip.slug)}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- chipHref resolves /jobs and appends the serialized filter -->
-          <a href={chipHref(chip)}
-            class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
-          >
-            {chip.label}
-            {#if chip.count !== undefined}
-              <span class="ml-1 text-xs tabular-nums opacity-60"
-                >{chip.count.toLocaleString('en-US')}</span
-              >
-            {/if}
-          </a>
-        {/each}
-      </nav>
+    {#if crafts.length > 0}
+      {@render chipRow('Browse by specialization', crafts)}
+    {/if}
+    {#if places.length > 1}
+      <!-- Only with real countries behind it: Remote alone is a row that looks like a
+           measurement and is a constant. -->
+      {@render chipRow('Browse by location', places)}
     {/if}
 
     {@render onward(resolve('/jobs'), 'Browse the whole catalogue')}

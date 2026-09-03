@@ -2,11 +2,10 @@
   import { resolve } from '$app/paths';
   import { Button, NumberedGrid, SectionLabel } from '$lib/ui';
   import { EXTENSION_FAQ } from '$lib/extensionFaq';
-  import { EXTENSION_STORE_URL } from '$lib/extensionLinks';
+  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
 
   // The three claims the panel makes, in the order it makes them on a posting:
   // it reads, it scores, it fills.
-  const claims = ['Reads the page itself', 'Scores it against your CV', 'Fills the application form'];
 
   // Autofill, as the panel actually performs it (extension/AGENTS.md). Step 03 is
   // the one that matters and the one a screenshot cannot show: the fills are
@@ -90,7 +89,7 @@
         form from your profile — on any site, not just the ones freehire tracks.
       </p>
       <div class="mt-8 flex flex-wrap gap-2">
-        {#each claims as claim (claim)}
+        {#each EXTENSION_CLAIMS as claim (claim)}
           <span class="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">
             {claim}
           </span>
