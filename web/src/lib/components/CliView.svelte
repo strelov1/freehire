@@ -1,11 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { CLI_REPO, MCP_REPO } from '$lib/cliLinks';
+  import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '$lib/cliLinks';
   import { Button } from '$lib/ui';
   import { SectionLabel } from '$lib/ui';
 
   const SKILLS_URL = 'https://github.com/strelov1/freehire-cli/tree/main/skills';
-  const INSTALL = 'curl -fsSL https://freehire.me/install.sh | sh';
 
   // Agent skills, one per task rather than one per tool, so a host loads what the
   // question needs instead of the whole surface. Mirrors freehire-cli's skills/
@@ -83,7 +82,7 @@
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   async function copyInstall() {
     try {
-      await navigator.clipboard.writeText(INSTALL);
+      await navigator.clipboard.writeText(CLI_INSTALL);
       copied = true;
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = false), 1600);

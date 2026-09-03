@@ -3,7 +3,7 @@
   import { ArrowRight } from '@lucide/svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
-  import { CLI_REPO } from '$lib/cliLinks';
+  import { CLI_INSTALL, CLI_REPO } from '$lib/cliLinks';
   import { EXTENSION_STORE_URL } from '$lib/extensionLinks';
   import { starterSuggestions, type Suggestion } from '$lib/suggestions';
   import { Button, SectionLabel } from '$lib/ui';
@@ -40,9 +40,14 @@
    *  tidy rows under the box on a laptop without the eye giving up on the second. */
   const CHIP_LIMIT = 8;
 
-  /** The install one-liner, the same one /cli prints and `web/static/install.sh`
-   *  serves. Two spellings of it would be two things to keep true. */
-  const INSTALL = 'curl -fsSL https://freehire.me/install.sh | sh';
+  /** What the extension's own page leads with, in its order. Read from here rather
+   *  than written into the markup so the promise this card makes and the one that page
+   *  keeps are the same three sentences. */
+  const EXTENSION_CLAIMS = [
+    'Reads the page itself',
+    'Scores it against your CV',
+    'Fills the application form',
+  ];
 
   /** The starting points, in the curated group order the filter modal uses —
    *  Engineering first, the consumer industries last. Built by the same function the
@@ -57,16 +62,19 @@
    *  homepage's only outgoing links into the catalogue, so they are what a crawler
    *  follows to reach the feed at all. */
   function chipHref(chip: Suggestion): string {
-    const query = browseQuery(planForSuggestion(chip));
-    return query ? `${resolve('/jobs')}?${query}` : resolve('/jobs');
+    // A starter row always names exactly one facet, so the serialized query is never
+    // empty and needs no fallback to the bare feed.
+    return `${resolve('/jobs')}?${browseQuery(planForSuggestion(chip))}`;
   }
+
+  type Figure = { value: string; label: string };
 
   /** One catalogue figure, or nothing at all. A cold stats snapshot answers with an
    *  estimated open-job count and zeroes the figures that exist only in the database,
    *  so a zero here is an ABSENT measurement — and a homepage that says "0 companies"
    *  is worse than one that says nothing. Same rule /open applies to the same
    *  snapshot. */
-  function figure(value: number | undefined, label: string) {
+  function figure(value: number | undefined, label: string): Figure | null {
     if (!value) return null;
     return { value: value.toLocaleString('en-US'), label };
   }
@@ -77,14 +85,14 @@
       figure(scale?.companies, 'companies'),
       figure(scale?.sources, 'sources'),
       figure(scale?.ats_platforms, 'ATS platforms'),
-    ].filter((f): f is { value: string; label: string } => f !== null),
+    ].filter((f) => f !== null),
   );
 
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   async function copyInstall() {
     try {
-      await navigator.clipboard.writeText(INSTALL);
+      await navigator.clipboard.writeText(CLI_INSTALL);
       copied = true;
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = false), 1600);
@@ -95,6 +103,19 @@
   }
 </script>
 
+<!-- The one link shape this page uses twice: an onward link with an arrow that leans
+     when you point at it. Written once so the two cannot drift into being two
+     different-looking ways of saying "there is more of this over there". -->
+{#snippet onward(href: string, text: string)}
+  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
+  <a {href}
+    class="group inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong transition-colors hover:text-foreground"
+  >
+    {text}
+    <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
+  </a>
+{/snippet}
+
 <!-- Hero. Not quite a full viewport: `-8rem` rather than the 3.5rem header alone, so
      the strip below shows about a line at the fold. A landing whose first screen ends
      exactly at the fold reads as the whole page, and nobody scrolls a page they have
@@ -103,8 +124,9 @@
      `svh` rather than `vh`: on mobile Safari `100vh` counts browser chrome that is not
      there, so the box it centres would sit noticeably below the middle of the screen.
 
-     `dot-grid` is the shared backdrop from app.css that every landing hero here wears;
-     the mask override below is this page's only departure from it. -->
+     `dot-grid` is the shared backdrop from app.css that every landing hero here wears.
+     `dot-grid-centred` (also in app.css) is its one variant: the same grid with its
+     mask moved to the middle, because this hero is not a left column beside a visual. -->
 <section
   class="dot-grid dot-grid-centred -mx-4 flex min-h-[calc(100svh-8rem)] flex-col items-center justify-center px-4 pb-16 pt-12"
 >
@@ -150,13 +172,7 @@
       </nav>
     {/if}
 
-    <a
-      href={resolve('/jobs')}
-      class="group inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong transition-colors hover:text-foreground"
-    >
-      Browse the whole catalogue
-      <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
-    </a>
+    {@render onward(resolve('/jobs'), 'Browse the whole catalogue')}
   </div>
 </section>
 
@@ -169,25 +185,21 @@
     <SectionLabel text="the catalogue, today" />
     <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">
       {#each figures as f (f.label)}
-        <div class="flex flex-col gap-1">
-          <dt class="sr-only">{f.label}</dt>
-          <dd
-            class="text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl"
-            aria-label="{f.value} {f.label}"
-          >
+        <!-- `flex-col-reverse` so the number reads first and the label sits under it,
+             while the DOM keeps the term before its description. The label is written
+             once and is its own <dt>: an sr-only copy plus an aria-label plus a visible
+             span was three spellings of one word, and each could go stale alone. -->
+        <div class="flex flex-col-reverse gap-1">
+          <dt class="text-sm text-muted-foreground">{f.label}</dt>
+          <dd class="text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl">
             {f.value}
           </dd>
-          <span aria-hidden="true" class="text-sm text-muted-foreground">{f.label}</span>
         </div>
       {/each}
     </dl>
-    <a
-      href={resolve('/open')}
-      class="group mt-8 inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong transition-colors hover:text-foreground"
-    >
-      Every number, live, with the endpoint behind it
-      <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
-    </a>
+    <div class="mt-8">
+      {@render onward(resolve('/open'), 'Every number, live, with the endpoint behind it')}
+    </div>
   </section>
 {/if}
 
@@ -210,19 +222,20 @@
       </div>
 
       <figure class="overflow-hidden rounded-lg border border-border bg-secondary/40 font-mono text-xs">
+        <!-- The figure carries `font-mono text-xs`, so nothing inside restates it. -->
         <figcaption
-          class="flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs text-muted-foreground"
+          class="flex items-center gap-2 border-b border-border px-3 py-1.5 text-muted-foreground"
         >
           install
           <button
             type="button"
             onclick={copyInstall}
-            class="ml-auto rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            class="ml-auto rounded-md border border-border px-2 py-0.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             {copied ? 'copied ✓' : 'copy'}
           </button>
         </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed">{INSTALL}</pre>
+        <pre class="overflow-x-auto p-4 leading-relaxed">{CLI_INSTALL}</pre>
       </figure>
 
       <div class="mt-auto flex flex-wrap items-center gap-3">
@@ -247,15 +260,9 @@
         </p>
       </div>
 
-      <!-- The same three claims the extension page leads with, so the promise a
-           visitor arrives on that page holding is the one it was made. -->
-      <ul class="flex flex-col gap-2 text-sm text-muted-foreground">
-        {#each ['Reads the page itself', 'Scores it against your CV', 'Fills the application form'] as claim (claim)}
-          <li class="flex items-start gap-2">
-            <span aria-hidden="true" class="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground"
-            ></span>
-            {claim}
-          </li>
+      <ul class="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+        {#each EXTENSION_CLAIMS as claim (claim)}
+          <li>{claim}</li>
         {/each}
       </ul>
 
