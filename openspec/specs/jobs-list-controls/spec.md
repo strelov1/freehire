@@ -5,10 +5,11 @@ TBD - created by archiving change surface-freshness-and-sort-controls. Update Pu
 ## Requirements
 ### Requirement: The feed's ordering vocabulary names relevance explicitly
 
-The jobs feed's client-side sort vocabulary SHALL be `relevance`, `newest` and
-`match`. `relevance` names the engine's own ranking — the order a request with
-query text and no `sort` parameter already receives — so that the control can
-report it rather than mislabel it.
+The jobs feed's client-side sort vocabulary SHALL be `relevance`, `newest`,
+`views` and `match`. `relevance` names the engine's own ranking — the order a
+request with query text and no `sort` parameter already receives — so that the
+control can report it rather than mislabel it. `views` orders by how many people
+have opened each posting, labelled `Most viewed`.
 
 The default SHALL be contextual: `relevance` when the filter state carries query
 text, `newest` when it does not. Serialization SHALL omit the `sort` parameter
@@ -18,8 +19,9 @@ query text yields relevance, and no `sort` without query text yields `posted_at`
 descending.
 
 A non-default selection SHALL be serialized as the value the endpoint accepts:
-`newest` as `sort=posted_at`, `match` as `sort=match`. Deserialization SHALL map
-`posted_at` back to `newest` and `match` back to `match`; an absent or
+`newest` as `sort=posted_at`, `views` as `sort=view_count`, `match` as
+`sort=match`. Deserialization SHALL map `posted_at` back to `newest`,
+`view_count` back to `views`, and `match` back to `match`; an absent or
 unrecognised value SHALL resolve to the contextual default, so a hand-edited or
 shared link never leaves the control in a state it cannot render.
 
@@ -34,8 +36,9 @@ search they came from.
 
 `relevance` has nothing to rank against without query text. Resolving the
 selection SHALL therefore collapse `relevance` to `newest` whenever the query is
-empty. Both resolutions SHALL be one pure function shared by the control and the
-serializer so the two cannot disagree.
+empty. `views` SHALL NOT collapse — it ranks by a stored figure and is meaningful
+with or without query text. Both resolutions SHALL be one pure function shared by
+the control and the serializer so the two cannot disagree.
 
 #### Scenario: Browsing with no query omits the sort parameter
 
@@ -51,6 +54,22 @@ serializer so the two cannot disagree.
 
 - **WHEN** the filter state carries query text and the selection is `newest`
 - **THEN** the serialized parameters carry `sort=posted_at`
+
+#### Scenario: Most viewed is sent explicitly
+
+- **WHEN** the selection is `views`
+- **THEN** the serialized parameters carry `sort=view_count`
+
+#### Scenario: A shared most-viewed link resolves
+
+- **WHEN** parameters carrying `sort=view_count` are deserialized
+- **THEN** the selection is `views`
+
+#### Scenario: Most viewed survives clearing the query
+
+- **WHEN** the selection is `views` and the query text is emptied
+- **THEN** the resolved selection is still `views` and the serialized parameters
+  carry `sort=view_count`
 
 #### Scenario: A shared match link still resolves
 
@@ -87,9 +106,17 @@ The jobs list SHALL render its sort control whenever the control holds more than
 one option, and SHALL omit it otherwise. Option availability SHALL be:
 
 - `newest` — always available.
+- `views` — always available. It ranks by a stored figure, so it needs neither
+  query text nor a signed-in profile.
 - `relevance` — available only when the filter state carries query text.
 - `match` — available only under the existing precondition (an authenticated
   caller whose loaded profile names at least one skill, and the runtime flag).
+
+Because `newest` and `views` are both unconditional, the control now holds at
+least two options for every caller and is therefore rendered on every listing.
+The "omit it otherwise" clause is retained rather than dropped: it is the rule
+that makes the control's presence a consequence of what it can offer, and a
+future ordering could narrow the set again.
 
 A signed-out visitor searching by text therefore reaches the freshest-first
 ordering, which is the reachability gap this replaces: the control was previously
@@ -106,13 +133,14 @@ renders blank, which would put an empty control over a live ordering.
 #### Scenario: A signed-out visitor with a text query can reorder
 
 - **WHEN** a signed-out visitor searches for text
-- **THEN** the sort control is rendered offering `Relevance` and `Newest`
+- **THEN** the sort control is rendered offering `Relevance`, `Newest` and
+  `Most viewed`
 
-#### Scenario: A signed-out visitor browsing sees no control
+#### Scenario: A signed-out visitor browsing is offered two orderings
 
-- **WHEN** a signed-out visitor opens the list with no query text and no other
-  option available
-- **THEN** no sort control is rendered, and the feed is ordered freshest first
+- **WHEN** a signed-out visitor opens the list with no query text
+- **THEN** the sort control is rendered offering `Newest` and `Most viewed`
+- **AND** the feed is ordered freshest first
 
 #### Scenario: An eligible caller is offered the match sort
 

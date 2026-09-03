@@ -35,8 +35,9 @@
 - [x] 3.3 Swap the personal "you have viewed this" marker from `Eye` to `Check`
   (update the import and the `aria-label`), so the rail's eye means the public
   count and nothing else. Update the comment above it explaining the split.
-- [ ] 3.4 Verify the rail still respects the `pr-9` save-button gutter and that a
-  long company name plus a five-digit count still keeps the rail on one line.
+- [x] 3.4 Verified on production at 375px (see 10.1): the rail stays on one line,
+  the company name truncates (`Udhyam Learni…`) rather than pushing the count out,
+  and the count clears the save-button gutter.
 
 ## 4. The card: freshness badges
 
@@ -49,8 +50,8 @@
 - [x] 4.3 Widen the signal row's render guard to include the badges, so a
   badge-earning job with no reality chip, no tags, no countries and no
   credentials still opens the row.
-- [ ] 4.4 Check the row's wrapping on a narrow (phone-width) viewport with both
-  badges plus several facet chips present.
+- [x] 4.4 Checked on production at 375px (see 10.1): both badges, the region chip
+  and the country flag sit on ONE line. The wrap this anticipated does not occur.
 
 ## 5. Backend: make `view_count` sortable
 
@@ -140,10 +141,21 @@ sort attribute.
   detail page still rendering its counts, and — see 8.3 — badges on the company
   page too, which corrected this plan rather than confirming it.
 
-## 10. Left undone
+## 10. Looked at
 
-- [ ] 10.1 Look at the rendered card. Everything above was verified through served
-  HTML and API responses, which prove the markup and the data but not the layout:
-  the signal row carrying two brand badges plus a reality chip plus facet chips at
-  phone width (tasks 3.4 / 4.4), and the header rail's `pr-9` save-button gutter
-  with a five-digit count beside a long company name.
+- [x] 10.1 Screenshotted production at 1440px and at 375px. The signal row holds
+  `New`, `Be an early applicant`, the region chip and the country flag on ONE line
+  even at phone width — the wrap this worried about does not happen. The header
+  rail also stays on one line: the company name truncates (`Udhyam Learni…`) and
+  the count sits clear of the save-button gutter. The sort control reads
+  `Most viewed` and the feed is ordered by it. Tasks 3.4 and 4.4 are covered by
+  the same two screenshots.
+- [x] 10.2 The reality gate was observed doing its job on live data, which is
+  worth recording because it is the argument for reusing the shared rule rather
+  than writing a card-specific one. Of the eight most-viewed postings, **six carry
+  a rewritten `posted_at`**: haptik reads "4 hours ago" against `age_days=73`,
+  Stitch Fix "10 minutes ago" against `age_days=70`, Rubrik "2 hours ago" against
+  `age_days=54` and `79`. All six are `class=stale` and show no badge. A rule
+  written on `posted_at` alone — the shape this change originally set out to
+  build — would have printed `New` on every one of them, on the exact slice of the
+  catalogue the new ordering surfaces first.

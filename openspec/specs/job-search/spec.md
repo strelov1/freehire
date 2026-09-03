@@ -18,12 +18,13 @@ The index SHALL declare:
   visa_sponsorship, salary_currency, salary_period, skills, salary_min,
   salary_max, experience_years_min, and `posted_ts`. The raw `remote` flag SHALL
   NOT be a filterable attribute (work_mode subsumes it).
-- **sortable attributes**: posted_at, created_at, enrichment.salary_min,
-  enrichment.salary_max. The endpoint's `sort` values are the bare names — a
-  request says `sort=salary_min`, which the handler maps to the nested attribute.
-  The two salary facets live under `enrichment`, the two dates do not, and this
-  list names the ATTRIBUTES rather than the aliases. (`created_at` was already
-  accepted and already declared in code; this list had drifted.)
+- **sortable attributes**: posted_at, created_at, view_count,
+  enrichment.salary_min, enrichment.salary_max. The endpoint's `sort` values are
+  the bare names — a request says `sort=salary_min`, which the handler maps to the
+  nested attribute. The two salary facets live under `enrichment`, the two dates
+  and the view count do not, and this list names the ATTRIBUTES rather than the
+  aliases. (`created_at` was already accepted and already declared in code; this
+  list had drifted.)
 - **one embedder**, named for the skill vector it carries, declared as
   `userProvided` at the width `skill-match-sort` assigns. Being `userProvided`
   means Meilisearch SHALL NOT call any model: the vectors are supplied by the
@@ -58,6 +59,26 @@ parsed from its location.
 A job with no skill vector SHALL still be indexed and fully searchable: the vector's
 absence affects the match ordering alone, never that job's presence in the index or
 its matching by text or any facet.
+
+`view_count` requires no new document field and no new indexing path: the index
+document embeds the public job projection, which already carries the counter, so
+every document written since the counter existed already holds it. Declaring the
+attribute sortable is the whole of the index-side change.
+
+The counter's indexed value SHALL NOT be kept current through the search outbox.
+The offline view-count worker (see `view-count-aggregation`) updates the column
+daily without enqueueing, and the incremental push is gated on indexed content
+changing, so the counter moves without triggering one. The scheduled full rebuild
+reads the counter from Postgres on every run and runs more often than the daily
+rollup that produces it, so the indexed figure is never staler than the source
+figure. Outbox plumbing for this column would therefore add a queue path that
+buys no freshness.
+
+#### Scenario: The view count is sortable without a new document field
+
+- **WHEN** the index settings declare `view_count` sortable
+- **THEN** existing documents are orderable by it with no document rewrite,
+  because the projection they embed already carries the counter
 
 #### Scenario: A job is represented as one searchable document
 
@@ -282,10 +303,16 @@ again on the next run.
 A search request with no query text and no valid `sort` parameter SHALL return
 jobs ordered by the source's posting date (`posted_at`), newest first. A request
 with query text and no `sort` SHALL keep relevance order. An explicit valid
-`sort` parameter SHALL always take precedence. Both `posted_at` and `created_at`
-SHALL be sortable attributes of the index and accepted `sort` values. The
-DB-backed jobs list keeps its own stable default (`created_at` descending) and is
-no longer required to match the search default.
+`sort` parameter SHALL always take precedence. `posted_at`, `created_at` and
+`view_count` SHALL all be sortable attributes of the index and accepted `sort`
+values. The DB-backed jobs list keeps its own stable default (`created_at`
+descending) and is no longer required to match the search default — it accepts no
+`sort` parameter at all, so every ordering the feed offers is served by the search
+endpoint.
+
+`sort=view_count` orders by how many people have opened each posting. Like the
+other attribute sorts it honours `order` and defaults to descending, so the
+common case — the most-viewed postings first — needs no second parameter.
 
 `sort=match` is the one accepted value that is NOT an index attribute: it orders
 by the caller's own skill vector (see `skill-match-sort`). When it is served, the
@@ -307,6 +334,16 @@ discard the ordering the caller asked for.
 
 - **WHEN** the search endpoint is called with `sort=created_at&order=desc`
 - **THEN** results are ordered by `created_at` descending regardless of `q`
+
+#### Scenario: Most-viewed ordering defaults to descending
+
+- **WHEN** the search endpoint is called with `sort=view_count` and no `order`
+- **THEN** results are ordered by `view_count` descending
+
+#### Scenario: Most-viewed ordering honours an ascending order
+
+- **WHEN** the search endpoint is called with `sort=view_count&order=asc`
+- **THEN** results are ordered by `view_count` ascending
 
 #### Scenario: A served match sort suppresses the attribute sort
 
