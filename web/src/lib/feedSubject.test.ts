@@ -19,35 +19,48 @@ function thread(over: Partial<CommunityFeedThread>): CommunityFeedThread {
   };
 }
 
+const companyThread = thread({
+  subject_type: 'company',
+  subject_slug: 'acme',
+  // The server sends the company name in BOTH fields for a company subject.
+  subject_title: 'Acme Inc.',
+  subject_company: 'Acme Inc.',
+});
+
 describe('feedSubjectLine', () => {
-  it('reads employer then posting for a vacancy thread', () => {
+  it('reads kind, employer, then posting for a vacancy thread', () => {
     expect(feedSubjectLine(thread({}))).toEqual({
+      kind: 'Vacancy',
       employer: 'Acme Inc.',
       posting: 'Senior Go Engineer',
+      resolved: true,
     });
   });
 
   it('omits the posting for a company thread, whose subject is the company', () => {
-    // The server sends the company name in BOTH fields for a company subject, so
-    // without this the name would print twice on one line.
-    expect(
-      feedSubjectLine(
-        thread({
-          subject_type: 'company',
-          subject_slug: 'acme',
-          subject_title: 'Acme Inc.',
-          subject_company: 'Acme Inc.',
-        }),
-      ),
-    ).toEqual({ employer: 'Acme Inc.', posting: '' });
+    // Without this the company name would print twice on one line.
+    expect(feedSubjectLine(companyThread)).toEqual({
+      kind: 'Company',
+      employer: 'Acme Inc.',
+      posting: '',
+      resolved: true,
+    });
   });
 
-  it('falls back to the slug when the subject no longer resolves', () => {
+  it('marks the kind on both types, not only the ambiguous one', () => {
+    expect(feedSubjectLine(thread({})).kind).toBe('Vacancy');
+    expect(feedSubjectLine(companyThread).kind).toBe('Company');
+  });
+
+  it('falls back to the slug when the subject no longer resolves, and says so', () => {
     // A thread outlives its subject: no FK binds them and cmd/prune hard-deletes
-    // vacancies, so the server returns the row with both names empty.
+    // vacancies, so the server returns the row with both names empty. `resolved:
+    // false` is what stops the slug being rendered as if it were a company's name.
     expect(feedSubjectLine(thread({ subject_title: '', subject_company: '' }))).toEqual({
+      kind: 'Vacancy',
       employer: 'senior-go-engineer-acme-abc123',
       posting: '',
+      resolved: false,
     });
   });
 });

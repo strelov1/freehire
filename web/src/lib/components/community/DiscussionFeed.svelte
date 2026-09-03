@@ -5,7 +5,7 @@
   import { feedSubjectLine } from '$lib/feedSubject';
   import { companyLogoUrl } from '$lib/logo';
   import type { CommunityFeedThread } from '$lib/types';
-  import { Button, EntityLogo } from '$lib/ui';
+  import { Badge, Button, EntityLogo } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
 
   let {
@@ -31,13 +31,12 @@
       loadingMore = false;
     }
   }
-
 </script>
 
 {#if threads.length === 0}
   <p class="text-muted-foreground">No discussions yet.</p>
 {:else}
-  <ul class="flex flex-col gap-2">
+  <ul class="flex flex-col gap-1.5">
     {#each threads as t (t.id)}
       {@const subject = feedSubjectLine(t)}
       <li>
@@ -60,24 +59,35 @@
                 slug: t.subject_slug,
                 threadId: String(t.id),
               })}
-          class="flex gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/50"
+          class="flex gap-3 rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:bg-muted/50"
         >
           <EntityLogo
-            name={t.subject_company}
-            src={companyLogoUrl(t.subject_company) ?? undefined}
+            name={subject.resolved ? subject.employer : ''}
+            src={subject.resolved ? (companyLogoUrl(subject.employer) ?? undefined) : undefined}
             shape="square"
-            size="md"
+            size="sm"
             class="mt-0.5 shrink-0"
           />
 
           <div class="min-w-0 flex-1">
-            <!-- The subject rail. The employer holds its width; the posting title is
-                 what truncates, since it is the longer and the more expendable of
-                 the two. An unresolved subject prints its stored slug — the row
-                 stays readable and linkable rather than being dropped. -->
-            <div class="flex items-baseline gap-2 text-sm">
+            <!-- The subject rail. The kind marks every row, so it reads as the row's
+                 type rather than as a warning on one of them. The employer holds its
+                 width; the posting title is what truncates, being the longer and the
+                 more expendable of the two. -->
+            <div class="flex items-center gap-1.5 text-sm">
+              <Badge variant="outline" class="shrink-0">{subject.kind}</Badge>
               <span class="min-w-0 truncate text-muted-foreground">
-                <span class="font-medium text-foreground">{subject.employer}</span>
+                {#if subject.resolved}
+                  <span class="font-medium text-foreground">{subject.employer}</span>
+                {:else}
+                  <!-- The subject is gone, so this is its stored identifier, not a
+                       name. Rendered as one — muted and monospaced — because in the
+                       employer's own styling a slug reads as what the employer is
+                       called. -->
+                  <span class="font-mono text-xs" title="This subject no longer exists">
+                    {subject.employer}
+                  </span>
+                {/if}
                 {#if subject.posting}
                   <!-- Non-breaking spaces, not plain ones: Svelte trims whitespace at
                        an element boundary, which left the separator glued to the
@@ -91,15 +101,15 @@
               </span>
             </div>
 
-            <h2 class="mt-1.5 line-clamp-2 text-lg font-semibold leading-snug tracking-tight">
+            <h2 class="mt-1 line-clamp-1 font-semibold leading-snug tracking-tight">
               {t.title}
             </h2>
 
             {#if t.body}
-              <p class="mt-1 line-clamp-2 text-sm text-muted-foreground">{t.body}</p>
+              <p class="line-clamp-1 text-sm text-muted-foreground">{t.body}</p>
             {/if}
 
-            <div class="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <MessageSquare class="size-3.5" aria-hidden="true" />
               <span>{t.reply_count} {t.reply_count === 1 ? 'reply' : 'replies'}</span>
               <span aria-hidden="true">·</span>
