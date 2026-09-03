@@ -62,7 +62,7 @@ change because the `filter-modal` and `jobs-list-controls` specs currently forbi
       flag is on; keep it on `postedWithinDays` labelled `Posted` when off
 - [x] 5.3 Show the new bound in `FilterSummary.svelte` as its own removable chip,
       distinct from the posted one
-- [ ] 5.4 Verify in the browser: both bounds, the off-preset stop, and a shared link
+- [x] 5.4 Verify in the browser: both bounds, the off-preset stop, and a shared link
       carrying the bound with the flag off
 
 ## 6. The contract
