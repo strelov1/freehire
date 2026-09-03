@@ -104,20 +104,15 @@
   // same way they omit salary. Zero renders nothing at all: "0 views" reads as a dead
   // figure rather than as information.
   const views = $derived('view_count' in job ? job.view_count : 0);
+  const applied = $derived('applied_count' in job ? job.applied_count : 0);
   // The two freshness badges, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
   // vouch for a job the signal was written to distrust. Thresholds and wording are the
-  // shared rule's — the same one the job's own page renders.
-  //
-  // Closed jobs are excluded here as they are there: a closed posting is never worth
-  // hurrying to. Today no listing can reach this branch (every surface that serves a
-  // closed job also carries no reality), so this states the rule rather than relying on
-  // that staying true — the two surfaces must not disagree if a projection ever gains
-  // the signal.
+  // shared rule's — the same one the job's own page renders, closed-job rule included.
+  // No listing can currently serve a closed job WITH a reality signal, so that arm is
+  // stated rather than needed; the two surfaces must not disagree if one ever does.
   const freshness = $derived(
-    job.closed_at
-      ? []
-      : cardFreshnessBadges(job.posted_at, reality, 'applied_count' in job ? job.applied_count : 0),
+    job.closed_at ? [] : cardFreshnessBadges(job.posted_at, reality, applied),
   );
 
   const MAX_SKILLS = 5;
@@ -281,14 +276,12 @@
         <Check class="size-3.5" aria-label="You have viewed this" />
       {/if}
       {#if views > 0}
-        <!-- Abbreviated (1.2K), because the rail shares its width with a company name
-             that truncates — a five-digit figure spelled out crowds the name off the
-             card. The exact number is on the job's own page. -->
+        <!-- Abbreviated only because the rail shares its width with a company name that
+             truncates, and a five-digit figure spelled out crowds the name off the card.
+             A screen reader has no such constraint, so it hears the exact figure — the
+             same one the job's own page shows. -->
         <span class="flex items-center gap-1 text-xs tabular-nums">
           <Eye class="size-3.5" aria-hidden="true" />
-          <!-- The abbreviation exists only for the rail's width, which is not a
-               constraint a screen reader has — so it announces the exact figure, the
-               same one the job's own page shows. -->
           <span aria-hidden="true">{formatCount(views)}</span>
           <span class="sr-only">{views} views</span>
         </span>

@@ -342,11 +342,13 @@ export function canonicalQuery(query: string): string {
  *  (internal/engage/notify/match.go), so two sets differing only by sort mail the same
  *  jobs. Keeping the sort in the key made them compare unequal anyway, so choosing an
  *  ordering marked the saved search it came from as dirty and saving again created a
- *  duplicate that delivered identical digests. */
+ *  duplicate that delivered identical digests.
+ *
+ *  It serializes with the ordering UNCHOSEN rather than deleting the key afterwards:
+ *  `null` is the type's own word for "no choice", and filtersToParams already writes
+ *  nothing for it, so this cannot drift if the wire parameter is ever renamed. */
 export function savedSearchQuery(f: JobFilters): string {
-  const p = filtersToParams(f);
-  p.delete('sort');
-  return p.toString();
+  return filtersToParams({ ...f, sort: null }).toString();
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----
