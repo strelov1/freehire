@@ -44,7 +44,7 @@ func getFeed(t *testing.T, app *fiber.App, cookie, cursor string) (rows []feedRo
 	if cursor != "" {
 		url += "?cursor=" + cursor
 	}
-	r := httptest.NewRequest(fiber.MethodGet, url, nil)
+	r := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, url, nil)
 	if cookie != "" {
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 	}
@@ -67,6 +67,18 @@ func getFeed(t *testing.T, app *fiber.App, cookie, cursor string) (rows []feedRo
 		t.Fatalf("decode feed: %v (%s)", err, body)
 	}
 	return env.Data, env.Meta.NextCursor, string(body)
+}
+
+// seedThread opens a thread and asserts it was created, closing the response body —
+// these tests only care that the fixture exists, not what the create returned.
+func seedThread(t *testing.T, app *fiber.App, cookie, subjectType, slug string) {
+	t.Helper()
+	resp := postThread(t, app, cookie, subjectType, slug)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("seed thread on %s/%s: status %d: %s", subjectType, slug, resp.StatusCode, body)
+	}
 }
 
 func TestCommunityFeedResolvesSubjects(t *testing.T) {
@@ -98,9 +110,7 @@ func TestCommunityFeedResolvesSubjects(t *testing.T) {
 		{community.SubjectCompany, "acme"},
 		{community.SubjectJob, "senior-go-engineer-eng-1"},
 	} {
-		if resp := postThread(t, app, cookie, subj.typ, subj.slug); resp.StatusCode != fiber.StatusCreated {
-			t.Fatalf("seed thread on %s: status %d", subj.typ, resp.StatusCode)
-		}
+		seedThread(t, app, cookie, subj.typ, subj.slug)
 	}
 
 	t.Run("spans subjects, newest first, names each", func(t *testing.T) {
@@ -186,9 +196,7 @@ func TestCommunityListingsCursorOnlyOnFullPage(t *testing.T) {
 	subjectListURL := "/api/v1/threads?subject_type=" + community.SubjectCompany + "&subject_slug=acme"
 
 	// One thread: a partial page, so no cursor anywhere.
-	if resp := postThread(t, app, cookie, community.SubjectCompany, "acme"); resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("seed thread: status %d", resp.StatusCode)
-	}
+	seedThread(t, app, cookie, community.SubjectCompany, "acme")
 	t.Run("partial page omits the cursor", func(t *testing.T) {
 		if cur := cursorOf(t, app, subjectListURL); cur != "" {
 			t.Fatalf("want no cursor on a 1-row page, got %q", cur)
@@ -199,9 +207,7 @@ func TestCommunityListingsCursorOnlyOnFullPage(t *testing.T) {
 	})
 
 	// A second thread fills the page exactly, so a cursor is owed.
-	if resp := postThread(t, app, cookie, community.SubjectCompany, "acme"); resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("seed second thread: status %d", resp.StatusCode)
-	}
+	seedThread(t, app, cookie, community.SubjectCompany, "acme")
 	t.Run("full page carries a cursor that pages", func(t *testing.T) {
 		cur := cursorOf(t, app, subjectListURL)
 		if cur == "" {
@@ -258,7 +264,7 @@ func cursorOf(t *testing.T, app *fiber.App, url string) string {
 // decodeGet GETs url, asserts 200, and decodes the body into out.
 func decodeGet(t *testing.T, app *fiber.App, url string, out any) {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, url, nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, url, nil))
 	if err != nil {
 		t.Fatalf("app.Test(%s): %v", url, err)
 	}
