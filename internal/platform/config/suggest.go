@@ -1,5 +1,7 @@
 package config
 
+import "math"
+
 // Suggest holds the two floors that bound the search box's suggestion dictionary
 // (cmd/build-suggestions). Both are frequency cut-offs: they decide how much of the
 // catalogue's long tail becomes offerable vocabulary.
@@ -34,11 +36,28 @@ func LoadSuggest() Suggest {
 	// dictionary of hundreds of thousands of rows that answer nothing. Floor both at 1
 	// so a misconfiguration degrades to "everything measured at least once" rather
 	// than to a division of the catalogue by nothing.
-	if s.TitleFloor < 1 {
-		s.TitleFloor = 1
-	}
-	if s.CompanyFloor < 1 {
-		s.CompanyFloor = 1
-	}
+	//
+	// The CEILING is not cosmetic. The company floor is handed to Postgres as an int32,
+	// and on a 64-bit host `envInt` can return a value that does not fit — narrowing it
+	// wraps, and a wrapped floor can come out NEGATIVE, which admits every company
+	// slug in the catalogue. That is the opposite of what the operator asked for, and
+	// it would look like the floor simply not working.
+	//
+	// A floor at the cap yields an empty dictionary, which cmd/build-suggestions
+	// refuses to swap in — so an absurd value fails loudly instead of quietly
+	// rewriting the box's vocabulary.
+	s.TitleFloor = clamp(s.TitleFloor)
+	s.CompanyFloor = clamp(s.CompanyFloor)
 	return s
+}
+
+// maxSuggestFloor is the largest floor either knob may hold: the widest value that
+// survives narrowing to the int32 Postgres takes.
+const maxSuggestFloor = math.MaxInt32
+
+func clamp(n int) int {
+	if n < 1 {
+		return 1
+	}
+	return min(n, maxSuggestFloor)
 }
