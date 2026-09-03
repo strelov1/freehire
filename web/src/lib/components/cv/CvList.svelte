@@ -85,7 +85,7 @@
           </li>
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">2</span>
-            <span>Press <strong class="font-medium text-foreground">Analyze match</strong> on the job page.</span>
+            <span>Press <strong class="font-medium text-foreground">Tailor my CV</strong> on the job page.</span>
           </li>
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">3</span>

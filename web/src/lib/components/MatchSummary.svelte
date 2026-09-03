@@ -74,9 +74,10 @@
   }
 </script>
 
+<!-- No visible heading: the button says what it does, and a section label plus a
+     sentence of explanation above it was three lines of chrome for one action. The
+     aria-label stays — a section still has to be named for assistive tech. -->
 <section class="flex flex-col gap-3 border-t border-border pt-4" aria-label="Analyze match">
-  <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Analyze match</p>
-
   {#if data && !data.has_cv}
     <div class="flex items-center justify-between gap-2">
       <span class="flex items-center gap-1.5 text-xs text-muted-foreground"><FileText class="size-3.5 shrink-0" />Upload a CV to analyse</span>
@@ -99,7 +100,6 @@
   {:else if allowanceRefused}
     <p class="text-sm text-muted-foreground">You've used today's job analyses. More at {resetsAtLabel(allowance)}.</p>
   {:else}
-    <p class="text-sm text-muted-foreground">How your CV reads against this role — fit, gaps, and ATS flags.</p>
     <Button
       variant="primary"
       size="lg"
@@ -110,17 +110,14 @@
       Tailor my CV
       <SquarePen class="size-[1.15rem]" aria-hidden="true" />
     </Button>
-    <!-- The line under the button says what happens next: for a signed-in viewer that's
-         what today still allows, for a guest that it runs on a CV they haven't given us
-         yet. A guest has no allowance to report, so the two never both apply.
+    <!-- The one line kept under the button: what today still allows. A guest is told
+         nothing here — the button opens sign-in, which says it better than a caption.
          Nothing left and no refusal is the shadow run — the analysis still goes, so it
          says nothing rather than "0 left" beside a button that works. -->
     {#if remaining(allowance)}
       <p class="text-xs text-muted-foreground">
         {remaining(allowance)} of today's job analyses left
       </p>
-    {:else if guest}
-      <p class="text-xs text-muted-foreground">Sign in and add a CV to run it.</p>
     {/if}
   {/if}
 </section>
