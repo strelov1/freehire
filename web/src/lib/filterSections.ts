@@ -183,11 +183,12 @@ export const RAIL: RailEntry[] = [
   // REQUIREMENTS & ELIGIBILITY, where `posted` sat as the rail's last row. They sit
   // beside Experience, the other "how does this posting stand relative to me" question.
   //
-  // `reality` had no rail entry at all until this: declared in FACETS, filterable on the
-  // index, and reachable only by hand-editing the URL. filterSections.test.ts now asserts
-  // the cover so the next facet cannot go the same way.
+  // ONE pane holds both: the age bound and the `reality` classes answer the same
+  // question, and the age is most of what makes a posting read as evergreen in the
+  // first place. `reality` was once reachable only by hand-editing the URL — declared
+  // in FACETS, filterable on the index, absent from the rail. filterSections.test.ts
+  // asserts the cover so the next facet cannot go the same way.
   { key: 'posted', label: 'Posted', section: 'ROLE', kind: 'posted' },
-  { key: 'reality', label: 'Posting reality', section: 'ROLE', kind: 'facet', facetParam: 'reality' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },

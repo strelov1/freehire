@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { EyeOff, Layers } from '@lucide/svelte';
+  import { Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -22,7 +22,6 @@
     FilterStore,
     filtersToParams,
     selectedSortFor,
-    signOf,
     sortOptionsFor,
     type JobSort,
     activeFilterCount,
@@ -250,12 +249,6 @@
   // A one-option select is a label wearing a control's clothes: there is nothing to
   // choose, and the feed already IS that ordering.
   const sortSelectVisible = $derived(sortOptions.length > 1);
-
-  // `likely-evergreen` is the reality class the facet exists to exclude (see REALITY in
-  // $lib/facets), so the toggle above the list writes exactly that one sign. The full
-  // three-class facet stays in the modal for the rarer selections, and releasing this
-  // clears only this value — an `include` on another class is not ours to drop.
-  const evergreenHidden = $derived(signOf(filters.facet('reality'), 'likely-evergreen') === 'exclude');
 
   let modalOpen = $state(false);
   let started = false;
@@ -761,32 +754,13 @@
   </label>
 {/snippet}
 
-<!-- One-click access to the reality facet's common exclusion. `aria-pressed` rather than
-     a checkbox because it reads as a filter chip, matching the pills it mirrors.
+<!-- The two above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
+     where the row sits and how it collapses on a phone.
 
-     The word is dropped below `sm` and the icon carries it, exactly as the Swipe entry
-     beside it already does: measured at 390px the four controls plus the count ran 49px
-     past the viewport, and this button was the widest of them. -->
-{#snippet evergreenToggle()}
-  <button
-    type="button"
-    aria-pressed={evergreenHidden}
-    aria-label="Hide evergreen postings"
-    title="Hide postings that look permanently open"
-    onclick={() => filters.setSign('reality', 'likely-evergreen', evergreenHidden ? 'off' : 'exclude')}
-    class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-sm font-medium transition-colors md:py-1 {evergreenHidden
-      ? 'border-primary bg-primary text-primary-foreground'
-      : 'border-border bg-card hover:bg-accent'}"
-  >
-    <EyeOff class="size-4 shrink-0" />
-    <span class="hidden sm:inline">Hide evergreen</span>
-  </button>
-{/snippet}
-
-<!-- The three above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
-     where the row sits and how it collapses on a phone. -->
+     A "Hide evergreen" toggle used to lead this row, writing one sign of one value of the
+     `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
+     bound it belongs with. -->
 {#snippet listControls()}
-  {@render evergreenToggle()}
   {@render postedSelect()}
   {#if sortSelectVisible}{@render sortSelect()}{/if}
 {/snippet}

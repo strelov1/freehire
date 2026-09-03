@@ -178,7 +178,7 @@
         (f.clearance !== 'any' ? 1 : 0) +
         selCount(f, 'collections', employerCredentialValues)
       );
-    if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
+    if (e.kind === 'posted') return (f.postedWithinDays != null ? 1 : 0) + selCount(f, 'reality');
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
     if (e.key === 'skills') return selCount(f, 'skills') + (minMatch != null ? 1 : 0);
@@ -485,5 +485,12 @@
       aria-label="Posted within"
       class="w-full accent-primary"
     />
+    <!-- Under the age bound, not in a pane of its own: the reality classes answer the
+         same question the slider does, and the age is most of what makes a posting read
+         as evergreen. -->
+    <div class="mt-6"><ChipFacet store={staged} param="reality" label="Posting reality" counts={c} /></div>
+    <p class="mt-2 text-xs text-muted-foreground">
+      Evergreen postings sit open permanently rather than for one opening.
+    </p>
   {/if}
 {/snippet}
