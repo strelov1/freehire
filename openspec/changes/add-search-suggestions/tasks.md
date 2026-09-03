@@ -1,7 +1,7 @@
 ## 1. Stage 1 — the dropdown's behaviour (frontend only, no Go)
 
 - [x] 1.1 Stop the header input from filtering the list on every keystroke: hold the typed text locally in `HeaderListSearch.svelte` and commit it to the list store only on Enter or on choosing a row
-- [ ] 1.2 Open the dropdown on focus with an empty query, showing the category suggestions in `CATEGORY_GROUP_ORDER`; drop the two-character minimum
+- [x] 1.2 Open the dropdown on focus with an empty query, showing the category suggestions in `CATEGORY_GROUP_ORDER`; drop the two-character minimum
 - [ ] 1.3 Add the postings and companies sections to the dropdown, reusing `HeaderSearch.svelte`'s data calls and its `EntityLogo`/`companyLogoUrl` row rendering rather than writing a second one
 - [ ] 1.4 Make the keyboard highlight run continuously across all three sections, and cap each section (5 completions, 5 postings, 3 companies)
 - [ ] 1.5 Verify stage 1 in the browser on `/`: empty focus, typing without refetch, Enter, arrow-through, Escape, click-away

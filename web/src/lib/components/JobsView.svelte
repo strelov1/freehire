@@ -391,15 +391,20 @@
       },
       commitQuery: (q) => filters.commitQuery(q),
       filterScope: { store: filters, counts: () => counts, variant: 'jobs', inferred: () => scopeInferred },
-      roleSuggest: {
-        counts: () => roleCounts,
-        active: () => filters.facet('role').include,
-        apply: (slug) => {
+      suggest: {
+        roleCounts: () => roleCounts,
+        counts: () => counts,
+        activeRoles: () => filters.facet('role').include,
+        apply: (suggestion) => {
           // Its own event, not a flag on `search`: the question this answers is how
-          // often the dropdown is what puts the role facet on, and the role facet
-          // measured 1.1% of searches before it existed.
-          track('role_suggestion', { role: slug });
-          filters.applyRole(slug);
+          // often the dropdown is what puts a facet on, and the role facet measured
+          // 1.1% of searches before it existed. The kind rides along, so the empty
+          // box's categories can be told apart from a typed role.
+          track('role_suggestion', { role: suggestion.slug, kind: suggestion.kind });
+          if (suggestion.kind === 'role') filters.applyRole(suggestion.slug);
+          // A category comes from the EMPTY box, so there is no typed text to drop —
+          // this is an ordinary facet write, the same one the filter modal makes.
+          else filters.setSign('category', suggestion.slug, 'include');
         },
       },
       openFilters: () => (modalOpen = true),

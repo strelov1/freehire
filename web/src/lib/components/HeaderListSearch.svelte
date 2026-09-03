@@ -1,11 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { page } from '$app/state';
-  import { Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
+  import { LayoutGrid, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
   import { listSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
   import { suggestRoles } from '$lib/roleSuggest';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
+  import { starterSuggestions, type Suggestion } from '$lib/suggestions';
   import { cn } from '$lib/ui';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 
@@ -35,7 +36,10 @@
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
   let activeIndex = $state(-1);
-  let dismissed = $state(false);
+  // Starts TRUE, which is what keeps the dropdown shut on a cold page. An empty box
+  // now has rows to offer, so without this the starter list would hang open under the
+  // header on every load of the feed, focused or not.
+  let dismissed = $state(true);
   let settledQuery = $state('');
 
   const target = $derived(listSearchTarget());
@@ -74,9 +78,9 @@
   // the badge tracks the view's live filter state.
   const filterTrigger = $derived(headerFilterTrigger(target));
 
-  // Roles are a jobs facet, so the companies list publishes no `roleSuggest` and this
-  // stays null there — the header never asks which page it is on.
-  const roleSuggest = $derived(target?.roleSuggest ?? null);
+  // Roles and categories are jobs facets, so the companies list publishes no `suggest`
+  // and this stays null there — the header never asks which page it is on.
+  const suggest = $derived(target?.suggest ?? null);
 
   // Suggestions follow the DRAFT, not the committed query — they are what helps the
   // visitor decide what to commit, so waiting for the commit would be circular.
@@ -86,14 +90,25 @@
     return () => clearTimeout(timer);
   });
 
-  const suggestions = $derived(
-    roleSuggest ? suggestRoles(settledQuery, roleSuggest.counts(), roleSuggest.active()) : [],
-  );
+  // An empty box offers the catalogue's shape; a typed one offers what matches. The
+  // empty case is the whole point of opening on focus: "I don't know what I can type
+  // here" is the state the dropdown exists to answer, and a box that stays silent
+  // until the second keystroke never reaches it.
+  const suggestions = $derived.by((): Suggestion[] => {
+    if (!suggest) return [];
+    if (settledQuery.trim() === '') return starterSuggestions(suggest.counts());
+    return suggestRoles(settledQuery, suggest.roleCounts(), suggest.activeRoles()).map(
+      (r): Suggestion => ({ kind: 'role', slug: r.slug, label: r.label, count: r.count }),
+    );
+  });
   const suggestOpen = $derived(suggestions.length > 0 && !dismissed);
   // The last row runs the typed text as a free-text search. It used to only dismiss
   // the dropdown, because the list below was already showing those results as you
   // typed; now that typing commits nothing, that row IS how free text gets searched.
-  const rowCount = $derived(suggestOpen ? suggestions.length + 1 : 0);
+  // An empty box has no text to offer, so the row is absent there rather than
+  // proposing to search for nothing.
+  const textRow = $derived(draft.text.trim() !== '');
+  const rowCount = $derived(suggestOpen ? suggestions.length + (textRow ? 1 : 0) : 0);
 
   function close() {
     dismissed = true;
@@ -116,11 +131,13 @@
 
   function choose(index: number) {
     const picked = suggestions[index];
-    if (picked) roleSuggest?.apply(picked.slug);
-    // `applyRole` drops `q` from the filters, so the box must drop it too. Reconcile
-    // cannot see this: on a feed with no committed query the value does not MOVE
-    // (already `''`), and an unchanged value is exactly what it reads as "no news" —
-    // leaving the typed text sitting over a list that is no longer running it.
+    if (!picked) return;
+    suggest?.apply(picked);
+    // A role pick drops `q` from the filters (`applyRole`), so the box must drop it
+    // too. Reconcile cannot see this: on a feed with no committed query the value does
+    // not MOVE (already `''`), and an unchanged value is exactly what it reads as "no
+    // news" — leaving the typed text sitting over a list no longer running it.
+    // A category pick comes from the empty box, so this clears nothing.
     draft = commit(edit(draft, ''));
     close();
   }
@@ -226,6 +243,13 @@
         activeIndex = -1;
         draft = edit(draft, e.currentTarget.value);
       }}
+      onfocus={() => {
+        // Focus is the question "what can I put here", so it reopens the dropdown —
+        // including after a click-away dismissed it, which would otherwise leave the
+        // box permanently silent for the rest of the visit.
+        dismissed = false;
+        activeIndex = -1;
+      }}
       onkeydown={onKeydown}
       type="text"
       {placeholder}
@@ -286,17 +310,18 @@
     {/if}
   </div>
 
-  <!-- Role suggestions. Rendered only where the list published the capability, so
-       /companies needs no exclusion here. Each row applies the `role` facet; the last
-       row runs the typed text as a free-text search. -->
+  <!-- Suggestions. Rendered only where the list published the capability, so
+       /companies needs no exclusion here. Each row applies its own facet — `role` for a
+       typed match, `category` for the empty box's starting points; the last row runs
+       the typed text as a free-text search. -->
   {#if suggestOpen}
     <ul
       id="role-suggestions"
       role="listbox"
-      aria-label="Matching roles"
+      aria-label={textRow ? 'Matching roles' : 'Where to start'}
       class="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-md border border-border bg-background py-1 shadow-lg"
     >
-      {#each suggestions as suggestion, i (suggestion.slug)}
+      {#each suggestions as suggestion, i (`${suggestion.kind}:${suggestion.slug}`)}
         <li role="option" id="role-suggestion-{i}" aria-selected={activeIndex === i}>
           <button
             type="button"
@@ -304,7 +329,13 @@
             onclick={() => choose(i)}
             class={rowClass(activeIndex === i)}
           >
-            <Tag class="size-4 shrink-0 text-muted-foreground" />
+            <!-- The glyph says which axis the row filters on, which is the only thing
+                 the two kinds do differently. -->
+            {#if suggestion.kind === 'category'}
+              <LayoutGrid class="size-4 shrink-0 text-muted-foreground" />
+            {:else}
+              <Tag class="size-4 shrink-0 text-muted-foreground" />
+            {/if}
             <span class="min-w-0 flex-1 truncate">{suggestion.label}</span>
             {#if suggestion.count !== undefined}
               <span class="shrink-0 text-xs text-muted-foreground"
@@ -314,23 +345,25 @@
           </button>
         </li>
       {/each}
-      <li
-        role="option"
-        id="role-suggestion-{suggestions.length}"
-        aria-selected={activeIndex === suggestions.length}
-      >
-        <button
-          type="button"
-          onmouseenter={() => (activeIndex = suggestions.length)}
-          onclick={runSearch}
-          class={cn(rowClass(activeIndex === suggestions.length), 'border-t border-border')}
+      {#if textRow}
+        <li
+          role="option"
+          id="role-suggestion-{suggestions.length}"
+          aria-selected={activeIndex === suggestions.length}
         >
-          <Search class="size-4 shrink-0 text-muted-foreground" />
-          <span class="min-w-0 flex-1 truncate text-muted-foreground"
-            >Search “{draft.text.trim()}” as text</span
+          <button
+            type="button"
+            onmouseenter={() => (activeIndex = suggestions.length)}
+            onclick={runSearch}
+            class={cn(rowClass(activeIndex === suggestions.length), 'border-t border-border')}
           >
-        </button>
-      </li>
+            <Search class="size-4 shrink-0 text-muted-foreground" />
+            <span class="min-w-0 flex-1 truncate text-muted-foreground"
+              >Search “{draft.text.trim()}” as text</span
+            >
+          </button>
+        </li>
+      {/if}
     </ul>
   {/if}
 </div>

@@ -202,7 +202,7 @@ Facets combine with AND, so applying several parts narrows rather than replaces.
 
 ### Requirement: An empty query returns a curated entry point
 
-An empty `q` SHALL return the category suggestions in the curated display order
+An empty `q` SHALL return category suggestions drawn from the curated group order
 the filter modal already uses — Engineering, Data & AI, Quality & Security, Design
 & Creative, Product & Management, Go-to-market & Support, People, Business &
 Legal, then the consumer industries.
@@ -211,9 +211,39 @@ It SHALL NOT return the highest-count values. Measured on the live catalogue tho
 are Management (266,883), Sales (179,993) and Support (127,110), which read as a
 different website to a visitor who came for engineering work.
 
+Each group SHALL contribute its **two** busiest measured categories before the
+next group is reached, up to ten rows. Neither a flat walk of the order nor one
+row per group works:
+
+- A flat walk spends every row on Engineering, which carries 13 categories on its
+  own, and never reaches a designer or a PM.
+- One per group flattens the order into a map of a catalogue that is only half a
+  tech catalogue. Measured against production it spent five of the ten rows on
+  Management, Sales, HR, Operations and Healthcare.
+
+Two per group spends the budget on the groups the curated order puts first. The
+rest stay one keystroke and one filter pane away — this list is a starting point,
+not the vocabulary.
+
+A category the distribution does not carry SHALL NOT be offered, and the catch-all
+`other` SHALL NOT be offered at all: it names no craft, so it cannot answer the
+question an empty box is asking.
+
 #### Scenario: The empty box leads with engineering
 - **WHEN** the query is empty
 - **THEN** the first suggestions come from the Engineering group, not from the highest-count categories
+
+#### Scenario: A leading group gets two rows before a later one is reached
+- **WHEN** the query is empty and every group has measured categories
+- **THEN** two Engineering categories and two Data & AI categories are offered before any Go-to-market category
+
+#### Scenario: A group that cannot fill two rows does not hold the others back
+- **WHEN** a leading group has only one measured category
+- **THEN** it contributes that one and the next group follows immediately
+
+#### Scenario: The catch-all is never a starting point
+- **WHEN** the query is empty and the `other` category has more postings than any named one
+- **THEN** `other` is not among the suggestions
 
 #### Scenario: The empty box is never empty
 - **WHEN** the query is empty
