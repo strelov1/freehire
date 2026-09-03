@@ -312,6 +312,130 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	}
 }
 
+// A new CV's typography/margins come from the caller's saved appearance defaults, and its
+// template falls back to the saved default's template when the request names none — see the
+// add-cv-appearance-defaults change.
+func TestCVCreate_UsesSavedAppearanceDefaults(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
+	h := &cvHandlers{queries: queries, jobReader: queries, cvStore: cvStore,
+		editor: cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: experience.NewStore(experience.NewQueriesRepository(queries))})}
+	app := buildCVApp(h, iss)
+
+	user := seedAccount(t, pool, "appearance-defaults@example.test", false)
+	tok, _ := iss.Issue(user, testTokenVersion)
+
+	saved := cv.AppearanceDefaults{
+		TemplateID: "sidebar",
+		Style:      cv.Style{FontFamily: "carlito", FontSize: 10, LineHeight: 0.65},
+		Margins:    cv.Margins{Top: 1, Right: 1, Bottom: 1, Left: 1},
+	}
+	if _, err := cvStore.SetAppearanceDefaults(context.Background(), user, saved); err != nil {
+		t.Fatalf("set appearance defaults: %v", err)
+	}
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "New CV"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data cvResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&body)
+	resp.Body.Close()
+	if body.Data.TemplateID != saved.TemplateID {
+		t.Errorf("template = %q, want saved default %q", body.Data.TemplateID, saved.TemplateID)
+	}
+	if body.Data.Document.Style != saved.Style {
+		t.Errorf("style = %+v, want saved default %+v", body.Data.Document.Style, saved.Style)
+	}
+	if body.Data.Document.Margins != saved.Margins {
+		t.Errorf("margins = %+v, want saved default %+v", body.Data.Document.Margins, saved.Margins)
+	}
+}
+
+// An explicit template_id on the create request still wins over a saved appearance default;
+// typography/margins (which the request cannot express) still come from the saved default.
+func TestCVCreate_ExplicitTemplateOverridesSavedDefault(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
+	h := &cvHandlers{queries: queries, jobReader: queries, cvStore: cvStore,
+		editor: cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: experience.NewStore(experience.NewQueriesRepository(queries))})}
+	app := buildCVApp(h, iss)
+
+	user := seedAccount(t, pool, "explicit-template@example.test", false)
+	tok, _ := iss.Issue(user, testTokenVersion)
+
+	saved := cv.AppearanceDefaults{
+		TemplateID: "sidebar",
+		Style:      cv.Style{FontSize: 10},
+		Margins:    cv.Margins{Top: 1, Right: 1, Bottom: 1, Left: 1},
+	}
+	if _, err := cvStore.SetAppearanceDefaults(context.Background(), user, saved); err != nil {
+		t.Fatalf("set appearance defaults: %v", err)
+	}
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "New CV", TemplateID: "compact"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data cvResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&body)
+	resp.Body.Close()
+	if body.Data.TemplateID != "compact" {
+		t.Errorf("template = %q, want explicit request value %q", body.Data.TemplateID, "compact")
+	}
+	if body.Data.Document.Margins != saved.Margins {
+		t.Errorf("margins = %+v, want saved default %+v (request cannot express margins)", body.Data.Document.Margins, saved.Margins)
+	}
+}
+
+// Without saved appearance defaults, a new CV must still get the system's hardcoded
+// defaults, exactly as before the add-cv-appearance-defaults change.
+func TestCVCreate_NoSavedDefaultsUsesSystemDefaults(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &cvHandlers{queries: queries, jobReader: queries,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: experience.NewStore(experience.NewQueriesRepository(queries))})}
+	app := buildCVApp(h, iss)
+
+	user := seedAccount(t, pool, "no-defaults@example.test", false)
+	tok, _ := iss.Issue(user, testTokenVersion)
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "New CV"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data cvResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&body)
+	resp.Body.Close()
+	if body.Data.TemplateID != cv.DefaultTemplateID {
+		t.Errorf("template = %q, want system default %q", body.Data.TemplateID, cv.DefaultTemplateID)
+	}
+	if body.Data.Document.Margins != cv.DefaultMargins() {
+		t.Errorf("margins = %+v, want system default %+v", body.Data.Document.Margins, cv.DefaultMargins())
+	}
+}
+
 // The history feed and per-entry undo, end to end against a real database: the edits are
 // recorded, undoing an older one leaves the newer in place, and the undo is itself an entry.
 func TestCVRevisionHistoryAndUndo(t *testing.T) {

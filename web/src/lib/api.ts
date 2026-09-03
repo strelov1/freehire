@@ -12,6 +12,7 @@
 
 import type { Answers, Display, RevisionView } from '$lib/generated/contracts';
 import type {
+  CvAppearanceDefaults,
   CvAtsDelta,
   CvJobMatch,
   CvMeta,
@@ -1892,6 +1893,21 @@ export function createApi(
     await call(`/api/v1/me/cvs/${id}/template`, jsonBody('PUT', { template_id: templateId }));
   }
 
+  /** The caller's saved defaults for a NEW CV's template/typography/margins — or the system's
+   *  standard defaults when they have never saved any. */
+  async function getCvAppearanceDefaults(): Promise<CvAppearanceDefaults> {
+    return requestData<CvAppearanceDefaults>('/api/v1/me/cv-appearance-defaults');
+  }
+
+  /** Replace the caller's saved CV appearance defaults wholesale. Only seeds CVs created
+   *  afterward — never touches an existing CV. */
+  async function setCvAppearanceDefaults(defaults: CvAppearanceDefaults): Promise<CvAppearanceDefaults> {
+    return requestData<CvAppearanceDefaults>(
+      '/api/v1/me/cv-appearance-defaults',
+      jsonBody('PUT', defaults),
+    );
+  }
+
   /** List the caller's TAILORED CVs (the re-open list): each with its vacancy slug + bound
    *  agent session, newest edit first. */
   async function listCvs(): Promise<CvTailoredItem[]> {
@@ -2356,6 +2372,8 @@ export function createApi(
     listCvFonts,
     setCvTemplate,
     getCv,
+    getCvAppearanceDefaults,
+    setCvAppearanceDefaults,
     getCvAtsDelta,
     getCvJobMatch,
     updateCv,

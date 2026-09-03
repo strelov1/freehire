@@ -368,6 +368,14 @@ type Cv struct {
 	LastClickAt        pgtype.Timestamptz `json:"last_click_at"`
 }
 
+type CvAppearanceDefault struct {
+	UserID     int64              `json:"user_id"`
+	TemplateID string             `json:"template_id"`
+	Style      []byte             `json:"style"`
+	Margins    []byte             `json:"margins"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CvLinkClick struct {
 	ID           int64              `json:"id"`
 	TracerLinkID pgtype.UUID        `json:"tracer_link_id"`

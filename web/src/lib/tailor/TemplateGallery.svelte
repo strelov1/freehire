@@ -2,13 +2,22 @@
   import { api, ApiError } from '$lib/api';
   import type { CvTemplate } from '$lib/cv';
 
-  // The template gallery for one CV: a grid of static preview thumbnails (served from
-  // /cv-previews/<id>.svg) with the current template highlighted. Picking one persists it via
-  // the set-template endpoint and calls onSelected(id) so the host can keep its own template id in
-  // step (autosave writes it too) and cache-bust the PDF. A template that prints a headshot says
-  // so when none is stored — the render would otherwise silently fall back to the placeholder,
-  // which is easy to send without noticing.
-  let { cvId, onSelected }: { cvId: string; onSelected: (id: string) => void } = $props();
+  // The template gallery: a grid of static preview thumbnails (served from
+  // /cv-previews/<id>.svg) with the current template highlighted. Two modes:
+  //  - cvId given: self-persisting, exactly as the tailoring workspace has always used it —
+  //    picking a thumbnail persists it via the set-template endpoint and calls onSelected(id)
+  //    so the host can keep its own template id in step (autosave writes it too) and
+  //    cache-bust the PDF.
+  //  - cvId omitted: controlled — the highlighted thumbnail mirrors the bindable `value`, and
+  //    picking one only updates `value`; no API call. This is the appearance-defaults settings
+  //    screen's mode, where there is no CV yet to persist onto.
+  // A template that prints a headshot says so when none is stored — the render would otherwise
+  // silently fall back to the placeholder, which is easy to send without noticing.
+  let {
+    cvId,
+    onSelected,
+    value = $bindable(),
+  }: { cvId?: string; onSelected?: (id: string) => void; value?: string } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let templates = $state<CvTemplate[]>([]);
@@ -24,15 +33,18 @@
     let cancelled = false;
     void (async () => {
       try {
-        const [list, rec, photo] = await Promise.all([
+        const [list, photo] = await Promise.all([
           api.listCvTemplates(),
-          api.getCv(cvId),
           api.getPhoto().catch(() => null),
         ]);
         if (cancelled) return;
         templates = list;
-        current = rec.template_id;
         hasPhoto = photo === null ? null : photo.enabled && photo.present;
+        if (cvId) {
+          const rec = await api.getCv(cvId);
+          if (cancelled) return;
+          current = rec.template_id;
+        }
         status = 'ready';
       } catch (e) {
         if (cancelled) return;
@@ -45,15 +57,24 @@
     };
   });
 
+  // Controlled mode: the highlighted thumbnail always mirrors the caller's bound value.
+  $effect(() => {
+    if (!cvId) current = value ?? '';
+  });
+
   async function select(id: string) {
     if (id === current || saving) return;
+    if (!cvId) {
+      value = id;
+      return;
+    }
     const previous = current;
     saving = true;
     current = id; // optimistic highlight
     error = null;
     try {
       await api.setCvTemplate(cvId, id);
-      onSelected(id);
+      onSelected?.(id);
     } catch (e) {
       current = previous; // roll back the highlight on failure
       error = e instanceof ApiError ? e.message : 'Could not switch template.';

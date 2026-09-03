@@ -1429,6 +1429,9 @@ type Querier interface {
 	// repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
 	// other provider passes '' here, matching the column's default.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
+	// The user's saved CV appearance defaults, if any. No row means the user has never saved
+	// any — the caller falls back to the system defaults rather than treating this as an error.
+	GetCVAppearanceDefaults(ctx context.Context, userID int64) (CvAppearanceDefault, error)
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
 	// the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
@@ -4361,6 +4364,9 @@ type Querier interface {
 	// form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
 	// every write so a form's age always describes the payload actually stored.
 	UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error
+	// Replaces the user's CV appearance defaults wholesale — there is exactly one row per user,
+	// so a save always means "this is the new complete set", never a partial patch.
+	UpsertCVAppearanceDefaults(ctx context.Context, arg UpsertCVAppearanceDefaultsParams) (CvAppearanceDefault, error)
 	// Store the grant a calendar consent produced, and record that it now covers the calendar.
 	//
 	// Three things this deliberately does not do. It does not touch `email`: a candidate who
