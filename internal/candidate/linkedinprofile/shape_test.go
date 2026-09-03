@@ -86,9 +86,6 @@ func TestParseReadsTheVariantShapes(t *testing.T) {
 	if got.Location != "Lisbon, Portugal" {
 		t.Errorf("Location = %q", got.Location)
 	}
-	if strings.Join(got.Languages, ",") != "English,Russian" {
-		t.Errorf("Languages = %v", got.Languages)
-	}
 }
 
 // A raw newline inside a JSON string literal is invalid JSON, and Go's decoder — unlike a

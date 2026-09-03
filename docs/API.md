@@ -2701,7 +2701,7 @@ curl -X POST "https://freehire.me/api/v1/me/resume/extract" \
 
 Derive the same profile from a public LinkedIn profile link.
 
-Reads the profile page anonymously — no LinkedIn account, cookie or token is sent or accepted — and runs its headline and address through the same dictionaries `/me/resume/extract` uses, so the facet half of the response is identical in shape. Accepts a profile URL in any form (tracking parameters, a country subdomain, a sub-page path) or the bare public id. **Work history is not available**: LinkedIn withholds every job title and position description from a reader who is not signed in, so only the headline, address, languages, name and current employer come back. Nothing is stored, and this does not create a CV. Errors are distinct on purpose: `400` the link names no profile, `502` LinkedIn did not answer, `422` the page carried no readable profile.
+Reads the profile page anonymously — no LinkedIn account, cookie or token is sent or accepted — and runs its headline and address through the same dictionaries `/me/resume/extract` uses, so the facet half of the response is identical in shape. Accepts a profile URL in any form (tracking parameters, a country subdomain, a sub-page path) or the bare public id. **Work history is not available**: LinkedIn withholds every job title and position description from a reader who is not signed in, so the facets are derived from the headline and the location from the stated address. Nothing is stored, and this does not create a CV. Errors are distinct on purpose: `400` the link names no profile, `502` LinkedIn did not answer, `422` the page carried no readable profile.
 
 **Body**
 

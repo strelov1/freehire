@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -170,7 +172,10 @@ func TestImportLinkedInProfileRendersEachOutcomeDistinctly(t *testing.T) {
 		{"a URL that names no profile", linkedinprofile.ErrNotAProfileURL, fiber.StatusBadRequest},
 		{"a page that did not arrive", linkedinprofile.ErrFetch, fiber.StatusBadGateway},
 		{"a page that said nothing", linkedinprofile.ErrNoProfile, fiber.StatusUnprocessableEntity},
-		{"something else entirely", fmt.Errorf("boom"), fiber.StatusBadGateway},
+		// An error the reader is not documented to return is a bug on our side, and must
+		// reach RenderError as one: telling the user LinkedIn did not answer would be a
+		// lie, and would keep the bug off the error tracker for as long as it lived.
+		{"something else entirely", fmt.Errorf("boom"), fiber.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
@@ -238,6 +243,87 @@ func TestImportLinkedInProfilePassesTheInputThrough(t *testing.T) {
 	}
 }
 
+// TestLinkedInRegister_MountsCookieThenOutboundFetch pins the real register() rather than a
+// replica of it.
+//
+// Both guarantees the spec makes about this route are properties of the mounting, not of the
+// handler: an anonymous caller must be refused before any outbound request, and a throttled
+// one likewise. A test that builds its own middleware chain proves the handler behaves once
+// those gates are in place, and proves nothing at all about whether they are — a dropped or
+// reordered gate here would pass every other test in this file.
+//
+// The order matters twice over: mw.cookie must come first so the throttler's key resolves to
+// the user rather than falling back to the address, and both must come before the handler so
+// a refused request costs LinkedIn nothing.
+func TestLinkedInRegister_MountsCookieThenOutboundFetch(t *testing.T) {
+	t.Parallel()
+
+	var order []string
+	record := func(name string) fiber.Handler {
+		return func(c *fiber.Ctx) error {
+			order = append(order, name)
+			return c.Next()
+		}
+	}
+
+	reader := &stubReader{profile: linkedinprofile.Profile{Name: "Dana Okonkwo"}}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	(&linkedInHandlers{reader: reader}).register(api, middleware{
+		cookie:        record("cookie"),
+		outboundFetch: record("outboundFetch"),
+		key:           record("key"),
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost,
+		"/api/v1/me/linkedin/import", strings.NewReader(`{"url":"danaokonkwo"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if want := []string{"cookie", "outboundFetch"}; !slices.Equal(order, want) {
+		t.Fatalf("route ran %v, want %v", order, want)
+	}
+	if reader.calls != 1 {
+		t.Errorf("handler ran %d times, want 1", reader.calls)
+	}
+}
+
+// A route that stopped requiring a session would be an outbound-fetch amplifier anyone could
+// aim. This holds the real chain, with the real cookie gate, against that.
+func TestLinkedInRegister_RefusesAnonymousWithTheRealChain(t *testing.T) {
+	t.Parallel()
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	reader := &stubReader{}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	(&linkedInHandlers{reader: reader}).register(api, middleware{
+		cookie:        auth.RequireAuth(iss, testVersions),
+		outboundFetch: func(c *fiber.Ctx) error { return c.Next() },
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost,
+		"/api/v1/me/linkedin/import", strings.NewReader(`{"url":"danaokonkwo"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+	if reader.calls != 0 {
+		t.Errorf("an anonymous request caused %d outbound fetches", reader.calls)
+	}
+}
+
 // denyThrottler refuses everything, standing in for a user who has spent the shared
 // outbound-fetch budget.
 type denyThrottler struct{}
@@ -272,6 +358,27 @@ func TestImportLinkedInProfileThrottledMakesNoOutboundFetch(t *testing.T) {
 	}
 	if reader.calls != 0 {
 		t.Errorf("a throttled request caused %d outbound fetches", reader.calls)
+	}
+}
+
+// The import must not create a CV, because CV presence is the onboarding page's own redirect
+// gate: an import that quietly satisfied it would stop prompting a user who still has no CV.
+//
+// This is held structurally rather than by observing a store — linkedInHandlers is given no
+// résumé store, no profile service and no queries, so there is nothing for it to write
+// through. The assertion is that the type stays that way: adding a writer to it is exactly
+// the change that would break the gate, and it should have to break this test first.
+func TestLinkedInHandlersHoldNothingItCouldWriteThrough(t *testing.T) {
+	t.Parallel()
+
+	fields := reflect.VisibleFields(reflect.TypeOf(linkedInHandlers{}))
+	if len(fields) != 1 || fields[0].Name != "reader" {
+		var names []string
+		for _, f := range fields {
+			names = append(names, f.Name)
+		}
+		t.Fatalf("linkedInHandlers holds %v; it may hold only the reader, or the import is no "+
+			"longer guaranteed to persist nothing", names)
 	}
 }
 

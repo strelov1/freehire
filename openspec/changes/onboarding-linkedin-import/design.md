@@ -99,6 +99,14 @@ The new package must be added to the `candidate` list in `internal/platform/arch
 
 - **The rate limit is the shared outbound-fetch budget, not a new one.** `mw.outboundFetch` already exists for exactly this — "throttles every endpoint that makes the server fetch a caller-supplied URL, so one user's budget is spent across them rather than granted once per route" — at 20/hour keyed by user. A dedicated limiter would have handed the same user a fresh allowance on every such endpoint, which is the opposite of what that middleware is for.
 
+## Known limitation, not introduced here
+
+**A seeded location that the user never touches is shown but not saved.** `LocationPreferencesFields` seeds an unstated base from a `DerivedLocation`, but it calls `onChange` only from its own event handlers — there is no `$effect` or `onMount` that emits the seeded value. So a user who imports, sees their city pre-filled on the location step, and presses Finish without touching the field saves no location.
+
+This is the component's existing behaviour and it applies identically to the CV-derived location that has been shipping for months; the import inherits it rather than causing it. It is left alone here on purpose: the same component backs `/my/profile`'s form, so making it emit on mount changes what that page saves too, and that is a separate change with its own blast radius rather than a rider on this one.
+
+The consequence for this feature is bounded — role, skills and level are staged directly and do save; only the location bonus is affected — and the fix benefits both sources at once whenever it is made.
+
 ## Open Questions
 
 None outstanding.

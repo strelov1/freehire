@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -43,9 +42,6 @@ func TestParseRealShape(t *testing.T) {
 	if got.Company != "Northwind Systems" {
 		t.Errorf("Company = %q, want %q", got.Company, "Northwind Systems")
 	}
-	if want := []string{"English", "Russian", "Portuguese"}; !slices.Equal(got.Languages, want) {
-		t.Errorf("Languages = %v, want %v", got.Languages, want)
-	}
 }
 
 // The one failure that would actually reach a user's profile: a withheld value written
@@ -64,8 +60,7 @@ func TestParseNeverEmitsAWithheldValue(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	fields := append([]string{got.Name, got.Headline, got.Location, got.Company}, got.Languages...)
-	for _, f := range fields {
+	for _, f := range []string{got.Name, got.Headline, got.Location, got.Company} {
 		if masked(f) {
 			t.Errorf("field %q is a withheld run", f)
 		}

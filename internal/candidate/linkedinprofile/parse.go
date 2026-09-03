@@ -40,15 +40,18 @@ type Profile struct {
 	// Company is the current employer — the first employer entry LinkedIn left readable,
 	// which in practice is the only one.
 	Company string
-	// Languages are the languages the member lists.
-	Languages []string
 }
+
+// Nothing here carries the member's listed languages, though LinkedIn does release them.
+// The wizard this feeds does not collect languages, so a field for them would be parsed,
+// carried through the response, and read by nobody — while the API documentation promised
+// it. When a surface actually wants them, lifting them back is four lines.
 
 // empty reports whether nothing at all survived. A Person node with every field withheld is
 // not a sparse profile, it is a profile we were not given, and saying so lets the caller tell
 // the user that instead of showing them an empty form.
 func (p Profile) empty() bool {
-	return p.Name == "" && p.Headline == "" && p.Location == "" && p.Company == "" && len(p.Languages) == 0
+	return p.Name == "" && p.Headline == "" && p.Location == "" && p.Company == ""
 }
 
 // parse reads a fetched profile page and returns what LinkedIn released for the member with
@@ -123,11 +126,6 @@ func profileFrom(n ldNode) Profile {
 		if name := value(nameOf(w)); name != "" {
 			p.Company = name
 			break
-		}
-	}
-	for _, l := range n.list("knowsLanguage") {
-		if name := value(nameOf(l)); name != "" {
-			p.Languages = append(p.Languages, name)
 		}
 	}
 	return p
@@ -267,8 +265,16 @@ func decodeNodes(list []json.RawMessage) []ldNode {
 }
 
 // forEachLDBlock calls fn with the contents of every application/ld+json script element.
-// The type is compared after dropping any parameters, so a block declaring a charset is
-// still read.
+// The type is compared after dropping any parameters and without regard to case or quoting,
+// so `type=application/ld+json` and `type="application/ld+json; charset=utf-8"` are both
+// read — both are ordinary HTML that a parser handles for free.
+//
+// internal/ingest/sources walks for the same element, and this is deliberately not shared
+// with it. SanitizeControlChars was worth hoisting because it carries KNOWLEDGE — a
+// live-verified fact about how real pages break — and two copies of that would drift into
+// two answers. A DOM walk carries none: it is standard-library idiom with nothing to
+// disagree about, and hoisting it would mean editing four working adapters to gain
+// twenty shared lines.
 func forEachLDBlock(root *html.Node, fn func(raw []byte)) {
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {

@@ -54,11 +54,10 @@ type linkedInImportRequest struct {
 // Facets come from resumeProfile — the same helper /me/resume/extract runs — so a headline
 // and a CV carrying the same words can never resolve differently. There is no second
 // vocabulary here and there must not be one.
+// Authentication is the route's, not this function's: register mounts it behind mw.cookie,
+// which rejects an anonymous caller before any of this runs. There is no user id to read
+// here — the import writes nothing that would belong to one.
 func (h *linkedInHandlers) ImportLinkedInProfile(c *fiber.Ctx) error {
-	if _, err := requireUserID(c); err != nil {
-		return err
-	}
-
 	// A body that does not parse and a body carrying no link are the same situation to the
 	// user — there is nothing to follow — so they get the same answer, and neither costs an
 	// outbound request.
@@ -118,6 +117,11 @@ func derivedGeo(stated string) fiber.Map {
 // apart because they are three different situations for the user: one they can fix by
 // pasting a different link, one that is nothing to do with them, and one where the profile
 // simply is not public enough to read.
+//
+// Anything else is returned unwrapped, so RenderError treats it as the unexpected error it
+// is — 500, and reported. Folding an unrecognised error into the 502 would tell the user
+// LinkedIn did not answer when in fact we had a bug, and would keep that bug off the error
+// tracker for as long as it lived.
 func linkedInImportError(err error) error {
 	switch {
 	case errors.Is(err, linkedinprofile.ErrNotAProfileURL):
@@ -126,11 +130,11 @@ func linkedInImportError(err error) error {
 	case errors.Is(err, linkedinprofile.ErrNoProfile):
 		return fiber.NewError(fiber.StatusUnprocessableEntity,
 			"We couldn't read that profile. Upload your CV instead, or fill the next steps in yourself.")
-	default:
-		// Including an unrecognised error: an outbound fetch failed for a reason that is
-		// ours or LinkedIn's, never the user's.
+	case errors.Is(err, linkedinprofile.ErrFetch):
 		return fiber.NewError(fiber.StatusBadGateway,
 			"LinkedIn didn't answer just now. Try again in a moment, or upload your CV instead.")
+	default:
+		return err
 	}
 }
 
