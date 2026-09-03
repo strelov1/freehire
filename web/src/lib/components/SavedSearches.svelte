@@ -47,10 +47,15 @@
 
   // Apply a saved set: seed the staged filters from it and remember it as the base
   // (so later edits surface an "Update <name>").
+  //
+  // Through canonicalQuery, not the raw stored string: the ordering is not part of what
+  // a saved search IS (see savedSearchQuery), and sets written before that rule still
+  // carry a `sort=` they would otherwise restore. Canonicalising here makes old and new
+  // rows behave alike instead of leaving the difference visible to whoever saved first.
   function apply(set: SavedSearch) {
     error = null;
     renamingId = null;
-    store.apply(set.query);
+    store.apply(canonicalQuery(set.query));
     baseId = set.id;
   }
 

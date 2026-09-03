@@ -88,6 +88,30 @@ looks small".
   signal reports `fresh` with `fake_freshness` set
 - **THEN** no badge is returned
 
+### Requirement: A closed posting earns no badge
+
+A posting that is no longer open SHALL receive neither badge, whatever its date or
+reality signal says. Both badges urge the reader to hurry, and a closed posting is
+never worth hurrying to.
+
+This rule SHALL live in the shared rule beside the reality gate, not in each
+surface's template. It is the same KIND of statement the reality gate makes — "this
+is not a posting to hurry to" — and writing it per surface is precisely the drift a
+shared rule exists to prevent: it was briefly written twice, as `{#if !closed_at}` on
+the detail page and as a ternary on the card, and a change to one would silently have
+left the other behind.
+
+#### Scenario: A closed posting with today's date earns nothing
+
+- **WHEN** the badges are computed for a job posted today, with a fresh reality
+  signal, that has since been closed
+- **THEN** no badge is returned
+
+#### Scenario: An open posting is unaffected
+
+- **WHEN** the badges are computed for the same job with no close date
+- **THEN** both badges are returned
+
 ### Requirement: "Be an early applicant" claims only what freehire can observe
 
 The applied count behind `Be an early applicant` is the number of signed-in users
