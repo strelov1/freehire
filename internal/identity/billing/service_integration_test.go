@@ -266,3 +266,37 @@ func TestDeletingAnAccountErasesItsBillingEvents(t *testing.T) {
 		t.Fatalf("want the events gone with the account, got %d", n)
 	}
 }
+
+// TestARenewalWithNoWebhookIsRepaired is the reconciler's reason to exist, end to end. The
+// provider stops retrying a delivery after five attempts over about two and a half hours;
+// past that, this path is the only one left.
+func TestARenewalWithNoWebhookIsRepaired(t *testing.T) {
+	s, pool := newService(t, subscriberWith("2027-01-01T00:00:00Z"))
+	ctx := context.Background()
+	userID := insertUser(t, pool, "renewed@example.com")
+
+	// A subscriber whose recorded plan is about to lapse: the renewal happened at the
+	// provider and we never heard about it.
+	if _, _, err := s.Record(ctx, event("evt_old", fmt.Sprint(userID))); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET pro_until = now() + interval '1 hour' WHERE id = $1`, userID); err != nil {
+		t.Fatalf("seed pro_until: %v", err)
+	}
+
+	ids, err := s.SubscribersNearExpiry(ctx, 24*time.Hour, 100)
+	if err != nil {
+		t.Fatalf("candidates: %v", err)
+	}
+	for _, id := range ids {
+		if err := s.Sync(ctx, fmt.Sprint(id)); err != nil {
+			t.Fatalf("sync %d: %v", id, err)
+		}
+	}
+
+	got := proUntil(t, pool, userID)
+	if got == nil || got.UTC().Format(time.RFC3339) != "2027-01-01T00:00:00Z" {
+		t.Fatalf("want the renewal picked up, got %v", got)
+	}
+}

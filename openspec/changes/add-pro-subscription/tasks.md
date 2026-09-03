@@ -93,16 +93,16 @@ findings are in the design's "The provider contract, as verified".
 
 ## 4. The reconciler
 
-- [ ] 4.1 `cmd/billing-sync` on `platform/worker`'s Main/Bootstrap, `Type=oneshot`
+- [x] 4.1 `cmd/billing-sync` on `platform/worker`'s Main/Bootstrap, `Type=oneshot`
       semantics, exits non-zero on failure
-- [ ] 4.2 Without billing configuration it exits 0 **without opening the pool** — the
+- [x] 4.2 Without billing configuration it exits 0 **without opening the pool** — the
       `cmd/queue-metrics` shape; assert by test
-- [ ] 4.3 Pass one: apply unprocessed `billing_events`, oldest first, marking each
+- [x] 4.3 Pass one: apply unprocessed `billing_events`, oldest first, marking each
       processed. One failing user does not abort the run
-- [ ] 4.4 Pass two: re-sync users whose `pro_until` falls in a window around now
-- [ ] 4.5 Bounded per run (`BILLING_SYNC_MAX_PER_RUN`), so a backlog cannot turn a oneshot
+- [x] 4.4 Pass two: re-sync users whose `pro_until` falls in a window around now
+- [x] 4.5 Bounded per run (`BILLING_SYNC_MAX_PER_RUN`), so a backlog cannot turn a oneshot
       unit into a run that outlives its timer
-- [ ] 4.6 Integration test: a renewal that produced no webhook is corrected by a run
+- [x] 4.6 Integration test: a renewal that produced no webhook is corrected by a run
 
 ## 5. SPA
 
