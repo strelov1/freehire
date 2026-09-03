@@ -109,6 +109,23 @@ func TestTailorPromptStatesTheBulletCeilingRule(t *testing.T) {
 
 // Agents kept inventing a PROJECTS heading field and parking portfolio work under experience.
 // Templates already emit section titles from non-empty arrays; the prompt must say so.
+// Observed in production: a cv_edit batch was refused (one op touched the candidate's
+// locked title field), and the agent told the candidate it had rewritten the summary
+// anyway — even inventing a specific `"applied": 1` figure that was never in the tool
+// result. The prompt must say plainly that a rejected call applied nothing, and that only
+// the tool result itself is proof an edit landed.
+func TestTailorPromptForbidsClaimingAnEditSucceededWithoutCheckingTheResult(t *testing.T) {
+	p := SystemPrompt(PresetTailor, "en")
+	lower := strings.ToLower(p)
+
+	if !strings.Contains(lower, "all-or-nothing") && !strings.Contains(lower, "none of that call's ops applied") {
+		t.Error("the tailor prompt does not say a cv_edit batch is all-or-nothing on a rejection")
+	}
+	if !strings.Contains(lower, "only the tool result") && !strings.Contains(lower, "never tell the candidate an edit succeeded") {
+		t.Error("the tailor prompt does not forbid claiming success without checking the tool result")
+	}
+}
+
 func TestTailorPromptOwnsSectionHeadingsAndProjectsPlacement(t *testing.T) {
 	p := SystemPrompt(PresetTailor, "en")
 	lower := strings.ToLower(p)
@@ -212,6 +229,12 @@ func TestTailorPromptDescribesTheUnattendedRun(t *testing.T) {
 // own edits against the deterministic job_match score before it reports — the agent
 // cannot be trusted to know whether an edit actually reads as closing a requirement (see
 // openspec/changes/fit-analysis-post-autopilot-verify/design.md).
+//
+// The check must name job_match's OWN vocabulary (`items`/`status`/`"warn"`), not
+// cv_context's `missing_have`/`missing_gap` — job_match's actual result never carries
+// those two fields (they belong to a different tool's response shape), and a run was
+// observed in production reading job_match's own "Job Title Match" warning, declaring
+// the CV done anyway, and leaving the candidate to notice and ask for the fix by hand.
 func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
 	p := SystemPrompt(PresetTailor, "en")
 
@@ -221,10 +244,13 @@ func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
 	}
 	unattended := p[unattendedIdx:]
 
-	for _, want := range []string{"job_match", "missing_have", "missing_gap", "tailor_report"} {
+	for _, want := range []string{"job_match", `"warn"`, "tailor_report"} {
 		if !strings.Contains(unattended, want) {
 			t.Errorf("the unattended-run section never mentions %q; the agent has no instruction to verify its own edits before reporting", want)
 		}
+	}
+	if strings.Contains(unattended, "missing_have") || strings.Contains(unattended, "missing_gap") {
+		t.Error("the job_match self-check must not name missing_have/missing_gap — those are cv_context fields job_match never returns")
 	}
 	if strings.Index(unattended, "job_match") > strings.Index(unattended, "tailor_report") {
 		t.Error("job_match must be checked BEFORE tailor_report, not after — the report should reflect what the check found")

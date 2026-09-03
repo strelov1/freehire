@@ -185,6 +185,39 @@ func TestTurnRunsAToolThenAnswers(t *testing.T) {
 	}
 }
 
+// A model call can come back with no tool calls AND no text at all — observed in
+// production after a turn's context grew large (a batch of tool results feeding the
+// next call): the provider reports success with an empty completion. Silently treating
+// that as a clean end_turn leaves nothing in the transcript and nothing in the UI, so a
+// turn that "finished" looks indistinguishable from one that never started — the user
+// sees the assistant go silent and has no way to tell a turn even ran.
+func TestEmptyModelReplyGetsAFallbackNoteInsteadOfVanishing(t *testing.T) {
+	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("")}}
+	q := &fakeQueries{}
+	r := testRunner(m, q)
+
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "hi")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !hasKind(events, EventAssistantText) {
+		t.Fatalf("events = %v, want a fallback note so the turn leaves a visible trace", kinds(events))
+	}
+	if res := lastResult(t, events); res.StopReason != StopEndTurn || res.IsError {
+		t.Errorf("result = %+v, want a clean end_turn", res)
+	}
+	if len(q.messages) != 3 {
+		t.Fatalf("persisted %d messages, want the prompt, the empty model turn, and a fallback note", len(q.messages))
+	}
+	last := q.messages[len(q.messages)-1]
+	if last.Role != RoleAssistant {
+		t.Fatalf("last persisted message role = %q, want assistant", last.Role)
+	}
+	if strings.TrimSpace(string(last.Content)) == `{"text":""}` || strings.TrimSpace(string(last.Content)) == `{}` {
+		t.Errorf("persisted assistant content = %s, want a non-empty note", last.Content)
+	}
+}
+
 func TestStepCapForcesAFinalAnswerWithoutTools(t *testing.T) {
 	// The model never stops asking for tools.
 	m := &scriptedModel{replies: []*llms.ContentChoice{

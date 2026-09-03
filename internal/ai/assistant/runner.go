@@ -232,6 +232,16 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		history = r.appendAssistant(ctx, sess.ID, history, choice)
 
 		if len(choice.ToolCalls) == 0 {
+			// A provider can report success with a genuinely empty completion — no
+			// text, no tool calls — after a turn's context grew large (a batch of
+			// tool results feeding the next call is the case seen in production).
+			// Treating that as an ordinary end_turn leaves nothing in the transcript
+			// and nothing in the UI (the frontend never fabricates a message for a
+			// turn it never saw start), so the assistant appears to go silent with
+			// no way to tell the turn even ran.
+			if strings.TrimSpace(choice.Content) == "" {
+				r.noteEmptyReply(ctx, sess.ID, emptyReplyNote, &history, emit)
+			}
 			emitUsage(emit, choice)
 			return end(emit, StopEndTurn)
 		}
@@ -263,7 +273,7 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
 	}
 	if strings.TrimSpace(choice.Content) == "" {
-		r.noteStepLimit(ctx, sess.ID, &history, emit)
+		r.noteEmptyReply(ctx, sess.ID, stepLimitNote, &history, emit)
 	}
 	emitUsage(emit, choice)
 	return end(emit, StopMaxSteps)
@@ -277,24 +287,32 @@ func end(emit func(Event), reason string) error {
 	return nil
 }
 
-// noteStepLimit records a short prose line when the max_steps wrap-up produced
-// tool calls (or nothing) and no answer text. Without it the client only sees a
-// silent stop after the last tool chip.
-func (r *Runner) noteStepLimit(ctx context.Context, sessionID uuid.UUID, history *[]llms.MessageContent, emit func(Event)) {
-	const note = "I hit the step limit for this turn before finishing. Send another message and I will continue."
+const (
+	// stepLimitNote explains a max_steps wrap-up that produced no answer text.
+	stepLimitNote = "I hit the step limit for this turn before finishing. Send another message and I will continue."
+	// emptyReplyNote covers the other route to the same symptom: the model itself
+	// answered with nothing, well short of the step cap.
+	emptyReplyNote = "I didn't have anything to add there. Could you rephrase, or ask me to continue?"
+)
+
+// noteEmptyReply records a short prose line in place of a model turn that produced
+// neither an answer nor a tool call. Without it the transcript (and the UI, which
+// never fabricates a message for a turn it never saw start) shows no trace that the
+// turn ran at all — indistinguishable from the assistant having gone silent.
+func (r *Runner) noteEmptyReply(ctx context.Context, sessionID uuid.UUID, note string, history *[]llms.MessageContent, emit func(Event)) {
 	emit(Event{Kind: EventAssistantText, Text: note})
 	msg, err := EncodeAssistant(note, nil)
 	if err != nil {
-		log.Printf("assistant: encode step-limit note: %v", err)
+		log.Printf("assistant: encode empty-reply note: %v", err)
 		return
 	}
 	if err := r.persist(ctx, sessionID, msg); err != nil {
-		log.Printf("assistant: persist step-limit note: %v", err)
+		log.Printf("assistant: persist empty-reply note: %v", err)
 		return
 	}
 	decoded, err := msg.Decode()
 	if err != nil {
-		log.Printf("assistant: decode step-limit note: %v", err)
+		log.Printf("assistant: decode empty-reply note: %v", err)
 		return
 	}
 	*history = append(*history, decoded)
