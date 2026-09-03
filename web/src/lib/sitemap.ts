@@ -37,6 +37,10 @@ export const STATIC_PATHS = [
   '/features/ghost-jobs',
   '/features/advanced-search',
   '/how-it-works',
+  // The discussions feed. The individual threads are NOT here: they live under their
+  // subject's route, and a sub-sitemap for the handful that exist would be
+  // infrastructure ahead of need.
+  '/discussions',
   // The data and API surfaces. Indexable pages that carry the site's most citable
   // material — live catalogue figures (/open), market rollups (/trends), the API
   // reference — so they belong in the sitemap even though nothing links to some of

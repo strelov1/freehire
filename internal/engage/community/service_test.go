@@ -3,6 +3,7 @@ package community
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 )
@@ -17,6 +18,9 @@ type fakeRepo struct {
 	nextReply   int64
 	threadTimes []time.Time // creation times, for rate counting
 	replyTimes  []time.Time
+	// subjectNames stands in for the jobs/companies joins in the feed query, keyed
+	// "<subject_type>:<subject_ref>". A missing key is a subject that no longer exists.
+	subjectNames map[string]string
 
 	failHandleOnce bool // simulate one handle collision then succeed
 }
@@ -25,6 +29,7 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		personas: map[int64]Persona{}, handles: map[string]int64{},
 		threads: map[int64]Thread{}, replies: map[int64][]Reply{},
+		subjectNames: map[string]string{},
 	}
 }
 
@@ -73,6 +78,31 @@ func (f *fakeRepo) ListOpenThreads(_ context.Context, st, ref string, _ Cursor, 
 		if t.SubjectType == st && t.SubjectRef == ref && t.Status == StatusOpen {
 			out = append(out, t)
 		}
+	}
+	return out, nil
+}
+
+// ListRecentOpenThreads mirrors the SQL: open threads across every subject, newest
+// first, with the subject's name resolved on read. subjectNames stands in for the
+// jobs/companies joins — a ref absent from it is a subject that no longer exists, and
+// the row must still come back with an empty name rather than being filtered out.
+func (f *fakeRepo) ListRecentOpenThreads(_ context.Context, _ Cursor, limit int32) ([]ThreadWithSubject, error) {
+	var out []ThreadWithSubject
+	for _, t := range f.threads {
+		if t.Status != StatusOpen {
+			continue
+		}
+		out = append(out, ThreadWithSubject{
+			Thread:         t,
+			SubjectTitle:   f.subjectNames[t.SubjectType+":"+t.SubjectRef],
+			SubjectCompany: f.subjectNames[t.SubjectType+":"+t.SubjectRef],
+		})
+	}
+	// The map iteration above is unordered; the real query orders by (created_at DESC,
+	// id DESC) and the ids here are monotonic, so id DESC is the same order.
+	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	if limit > 0 && len(out) > int(limit) {
+		out = out[:limit]
 	}
 	return out, nil
 }
@@ -307,5 +337,104 @@ func TestReplyToClosedThread(t *testing.T) {
 	}
 	if _, err := svc.Reply(context.Background(), th.ID, 0, 2, "hi"); !errors.Is(err, ErrThreadClosed) {
 		t.Fatalf("want ErrThreadClosed, got %v", err)
+	}
+}
+
+func TestListRecentThreadsEmpty(t *testing.T) {
+	svc := newService(newFakeRepo())
+	got, err := svc.ListRecentThreads(context.Background(), Cursor{})
+	if err != nil {
+		t.Fatalf("ListRecentThreads: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("want no threads, got %d", len(got))
+	}
+}
+
+// The feed spans subject types — that is its whole point — and names each subject.
+func TestListRecentThreadsSpansSubjectTypes(t *testing.T) {
+	repo := newFakeRepo()
+	repo.subjectNames["company:acme"] = "Acme Inc."
+	repo.subjectNames["job:senior-go-acme-abc123"] = "Senior Go Engineer"
+	svc := newService(repo, "company/acme", "job/senior-go-acme-abc123")
+	ctx := context.Background()
+
+	for _, in := range []CreateThreadInput{
+		{UserID: 1, SubjectType: SubjectCompany, SubjectSlug: "acme", Title: "Do they ghost?", Body: "asking"},
+		{UserID: 2, SubjectType: SubjectJob, SubjectSlug: "senior-go-acme-abc123", Title: "Dead link", Body: "gone"},
+	} {
+		if _, err := svc.CreateThread(ctx, in); err != nil {
+			t.Fatalf("CreateThread(%s): %v", in.SubjectType, err)
+		}
+	}
+
+	got, err := svc.ListRecentThreads(ctx, Cursor{})
+	if err != nil {
+		t.Fatalf("ListRecentThreads: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 threads, got %d", len(got))
+	}
+	// Newest first: the job thread was opened second.
+	if got[0].SubjectType != SubjectJob || got[1].SubjectType != SubjectCompany {
+		t.Fatalf("want job then company, got %s then %s", got[0].SubjectType, got[1].SubjectType)
+	}
+	if got[0].SubjectTitle != "Senior Go Engineer" {
+		t.Fatalf("job thread subject title = %q", got[0].SubjectTitle)
+	}
+	if got[1].SubjectTitle != "Acme Inc." {
+		t.Fatalf("company thread subject title = %q", got[1].SubjectTitle)
+	}
+}
+
+// A subject can be hard-deleted (cmd/prune) while its threads survive, since no FK
+// binds them. The thread must stay in the feed with an unresolved name — dropping it
+// would make discussion disappear because the posting it was about did.
+func TestListRecentThreadsKeepsThreadWithMissingSubject(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newService(repo, "job/gone-forever-xyz789")
+	ctx := context.Background()
+	if _, err := svc.CreateThread(ctx, CreateThreadInput{
+		UserID: 1, SubjectType: SubjectJob, SubjectSlug: "gone-forever-xyz789", Title: "Expired", Body: "gone",
+	}); err != nil {
+		t.Fatalf("CreateThread: %v", err)
+	}
+	// No entry in subjectNames — the joins found nothing.
+	got, err := svc.ListRecentThreads(ctx, Cursor{})
+	if err != nil {
+		t.Fatalf("ListRecentThreads: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want the thread kept, got %d rows", len(got))
+	}
+	if got[0].SubjectTitle != "" || got[0].SubjectCompany != "" {
+		t.Fatalf("want empty subject names, got %q / %q", got[0].SubjectTitle, got[0].SubjectCompany)
+	}
+	if got[0].SubjectRef != "gone-forever-xyz789" {
+		t.Fatalf("want the slug preserved for the client fallback, got %q", got[0].SubjectRef)
+	}
+}
+
+// A closed thread is hidden from every default listing, the feed included.
+func TestListRecentThreadsExcludesClosed(t *testing.T) {
+	repo := newFakeRepo()
+	repo.subjectNames["company:acme"] = "Acme Inc."
+	svc := newService(repo, "company/acme")
+	ctx := context.Background()
+	th, err := svc.CreateThread(ctx, CreateThreadInput{
+		UserID: 1, SubjectType: SubjectCompany, SubjectSlug: "acme", Title: "spam", Body: "spam",
+	})
+	if err != nil {
+		t.Fatalf("CreateThread: %v", err)
+	}
+	if err := svc.Close(ctx, th.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	got, err := svc.ListRecentThreads(ctx, Cursor{})
+	if err != nil {
+		t.Fatalf("ListRecentThreads: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("want closed thread excluded, got %d rows", len(got))
 	}
 }

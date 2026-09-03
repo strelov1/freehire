@@ -54,6 +54,46 @@ WHERE t.subject_type = $1 AND t.subject_ref = $2 AND t.status = 'open'
 ORDER BY t.created_at DESC, t.id DESC
 LIMIT sqlc.arg(page_limit);
 
+-- name: ListRecentOpenThreadsFirst :many
+-- First page of the global discussions feed: open threads across ALL subjects, newest
+-- first. Served by the partial index threads_open_created_idx.
+--
+-- The two subject joins resolve the stored slug to a name a reader can read; without
+-- them a cross-subject listing can only print
+-- "design-systems-lead-b2b-donut-studios-new-engen-inc-dk43ucun". Each join is keyed on
+-- a UNIQUE column (jobs_public_slug_key, companies.slug is the primary key), so neither
+-- can multiply a thread row.
+--
+-- LEFT, like the persona join above and for the same reason: there is no FK from a
+-- thread to its subject (by design — see migration 0038), and cmd/prune hard-deletes
+-- jobs, so a thread can outlive its subject. An INNER JOIN would drop it from the feed
+-- instead of showing it with an unresolved subject.
+SELECT t.*, p.handle AS author_handle,
+       coalesce(j.title, c.name, '') AS subject_title,
+       coalesce(j.company, c.name, '') AS subject_company
+FROM threads t
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN jobs j ON t.subject_type = 'job' AND j.public_slug = t.subject_ref
+LEFT JOIN companies c ON t.subject_type = 'company' AND c.slug = t.subject_ref
+WHERE t.status = 'open'
+ORDER BY t.created_at DESC, t.id DESC
+LIMIT $1;
+
+-- name: ListRecentOpenThreadsAfter :many
+-- Keyset continuation of the global feed: rows strictly older than the cursor.
+SELECT t.*, p.handle AS author_handle,
+       coalesce(j.title, c.name, '') AS subject_title,
+       coalesce(j.company, c.name, '') AS subject_company
+FROM threads t
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN jobs j ON t.subject_type = 'job' AND j.public_slug = t.subject_ref
+LEFT JOIN companies c ON t.subject_type = 'company' AND c.slug = t.subject_ref
+WHERE t.status = 'open'
+  AND (t.created_at < sqlc.arg(cursor_created_at)
+       OR (t.created_at = sqlc.arg(cursor_created_at) AND t.id < sqlc.arg(cursor_id)))
+ORDER BY t.created_at DESC, t.id DESC
+LIMIT sqlc.arg(page_limit);
+
 -- name: CountOpenThreadsBySubject :one
 -- Open-thread count for one subject — the "Discussion · N" badge on the detail page.
 -- Served by the partial index threads_subject_open_created_idx; scoped to a single

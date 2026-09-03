@@ -126,6 +126,47 @@ func (r *QueriesRepository) ListOpenThreads(ctx context.Context, subjectType, su
 	return out, nil
 }
 
+func (r *QueriesRepository) ListRecentOpenThreads(ctx context.Context, cur Cursor, limit int32) ([]ThreadWithSubject, error) {
+	if cur.IsZero() {
+		rows, err := r.q.ListRecentOpenThreadsFirst(ctx, limit)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]ThreadWithSubject, len(rows))
+		for i, row := range rows {
+			out[i] = ThreadWithSubject{
+				Thread: Thread{
+					ID: row.ID, SubjectType: row.SubjectType, SubjectRef: row.SubjectRef,
+					AnchorPath: pgconv.TextString(row.AnchorPath), Title: row.Title, Body: row.Body,
+					AuthorHandle: pgconv.TextString(row.AuthorHandle), ReplyCount: row.ReplyCount, Status: row.Status,
+					CreatedAt: row.CreatedAt.Time,
+				},
+				SubjectTitle: row.SubjectTitle, SubjectCompany: row.SubjectCompany,
+			}
+		}
+		return out, nil
+	}
+	rows, err := r.q.ListRecentOpenThreadsAfter(ctx, db.ListRecentOpenThreadsAfterParams{
+		CursorCreatedAt: pgconv.Timestamptz(&cur.CreatedAt), CursorID: cur.ID, PageLimit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ThreadWithSubject, len(rows))
+	for i, row := range rows {
+		out[i] = ThreadWithSubject{
+			Thread: Thread{
+				ID: row.ID, SubjectType: row.SubjectType, SubjectRef: row.SubjectRef,
+				AnchorPath: pgconv.TextString(row.AnchorPath), Title: row.Title, Body: row.Body,
+				AuthorHandle: pgconv.TextString(row.AuthorHandle), ReplyCount: row.ReplyCount, Status: row.Status,
+				CreatedAt: row.CreatedAt.Time,
+			},
+			SubjectTitle: row.SubjectTitle, SubjectCompany: row.SubjectCompany,
+		}
+	}
+	return out, nil
+}
+
 func (r *QueriesRepository) CountOpenThreads(ctx context.Context, subjectType, subjectRef string) (int64, error) {
 	return r.q.CountOpenThreadsBySubject(ctx, db.CountOpenThreadsBySubjectParams{
 		SubjectType: subjectType, SubjectRef: subjectRef,

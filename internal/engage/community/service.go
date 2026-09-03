@@ -50,6 +50,11 @@ func New(repo Repository, subjects SubjectChecker, cfg Config) *Service {
 	return &Service{repo: repo, subjects: subjects, cfg: cfg, now: time.Now}
 }
 
+// PageSize is how many rows one listing page holds. Exposed because the caller
+// rendering a continuation cursor must distinguish a full page from the last one:
+// a cursor emitted on a partial page promises a further page that does not exist.
+func (s *Service) PageSize() int32 { return s.cfg.PageSize }
+
 // validSubjectType reports whether t is a supported subject discriminator.
 func validSubjectType(t string) bool {
 	return t == SubjectCompany || t == SubjectJob
@@ -102,6 +107,13 @@ func (s *Service) ListThreads(ctx context.Context, subjectType, subjectSlug stri
 		return nil, ErrUnsupportedSubject
 	}
 	return s.repo.ListOpenThreads(ctx, subjectType, subjectSlug, cur, s.cfg.PageSize)
+}
+
+// ListRecentThreads returns open threads across every subject, newest first,
+// keyset-paged — the global discussions feed. No subject validation to do: the listing
+// is not scoped to one, and each row names its own.
+func (s *Service) ListRecentThreads(ctx context.Context, cur Cursor) ([]ThreadWithSubject, error) {
+	return s.repo.ListRecentOpenThreads(ctx, cur, s.cfg.PageSize)
 }
 
 // CountThreads returns how many open threads a subject has — the detail-page badge.

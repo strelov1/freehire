@@ -33,6 +33,9 @@ func newCommunityApp(queries *db.Queries, iss *auth.Issuer, cfg community.Config
 	cookieAuth := auth.RequireAuth(iss, testVersions)
 	requireModerator := auth.RequireRole(queries, "moderator")
 	app.Get("/api/v1/threads", h.ListThreads)
+	// Before "/threads/:id", exactly as register() orders them — otherwise "recent"
+	// is parsed as a thread id and the feed tests would exercise GetThread instead.
+	app.Get("/api/v1/threads/recent", h.ListRecentThreads)
 	app.Get("/api/v1/threads/:id", h.GetThread)
 	app.Post("/api/v1/threads", cookieAuth, h.CreateThread)
 	app.Post("/api/v1/threads/:id/replies", cookieAuth, h.CreateReply)

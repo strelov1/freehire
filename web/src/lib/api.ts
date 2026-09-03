@@ -89,6 +89,7 @@ import type {
   NotificationSettings,
   NotificationItem,
   CommunityThread,
+  CommunityFeedThread,
   CommunityReply,
   CompanyFeedback,
   CompanyFeedbackSummary,
@@ -2006,6 +2007,21 @@ export function createApi(
     return { threads: res.data, nextCursor: res.meta?.next_cursor };
   }
 
+  /** Open discussion threads across every subject, newest first — the /discussions
+   *  feed. Each row names its own subject, since the caller has no other way to know
+   *  what a thread is about. Public — no auth needed to read. */
+  async function listRecentThreads(
+    cursor?: string,
+  ): Promise<{ threads: CommunityFeedThread[]; nextCursor?: string }> {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    const suffix = qs.size ? `?${qs}` : '';
+    const res = await request<{ data: CommunityFeedThread[]; meta: { next_cursor?: string } }>(
+      `/api/v1/threads/recent${suffix}`,
+    );
+    return { threads: res.data, nextCursor: res.meta?.next_cursor };
+  }
+
   /** How many open discussion threads a subject has — the detail-page badge. Public. */
   async function countThreads(subjectType: string, subjectSlug: string): Promise<number> {
     const qs = new URLSearchParams({ subject_type: subjectType, subject_slug: subjectSlug });
@@ -2305,6 +2321,7 @@ export function createApi(
     startTailorSession,
     resolveJd,
     listThreads,
+    listRecentThreads,
     countThreads,
     getThread,
     createThread,

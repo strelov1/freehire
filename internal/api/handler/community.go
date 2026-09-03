@@ -33,8 +33,10 @@ func (h *communityHandlers) register(api fiber.Router, mw middleware) {
 	// user id — so discussions are browsable without signing in. Writing a thread or
 	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
 	api.Get("/threads", h.ListThreads)
-	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
+	// Registered before "/threads/:id" so "count" and "recent" are not parsed as a
+	// thread id.
 	api.Get("/threads/count", h.CountThreads)
+	api.Get("/threads/recent", h.ListRecentThreads)
 	api.Get("/threads/:id", h.GetThread)
 	api.Post("/threads", mw.cookie, h.CreateThread)
 	api.Post("/threads/:id/replies", mw.cookie, h.CreateReply)
@@ -162,8 +164,54 @@ func (h *communityHandlers) ListThreads(c *fiber.Ctx) error {
 	for i, t := range threads {
 		out[i] = toThreadResponse(t)
 	}
+	return c.JSON(fiber.Map{"data": out, "meta": h.threadPageMeta(threads)})
+}
+
+// threadPageMeta carries the continuation cursor for a page of threads, and only when
+// the page came back FULL. A partial page is the last one, and a cursor on it tells the
+// client a further page exists — which is how a single-thread subject rendered a "Load
+// more" that fetched nothing.
+func (h *communityHandlers) threadPageMeta(threads []community.Thread) fiber.Map {
 	meta := fiber.Map{}
-	if n := len(threads); n > 0 {
+	if n := len(threads); n > 0 && int32(n) == h.community.PageSize() {
+		last := threads[n-1]
+		meta["next_cursor"] = encodeCursor(last.CreatedAt, last.ID)
+	}
+	return meta
+}
+
+// recentThreadResponse is a feed row: a thread plus the display name of the subject it
+// hangs off, which the cross-subject listing must carry because a reader has no other
+// way to know what the thread is about. Both name fields are empty when the subject no
+// longer exists (there is no FK to it) — the client renders the slug instead.
+type recentThreadResponse struct {
+	threadResponse
+	SubjectTitle   string `json:"subject_title"`
+	SubjectCompany string `json:"subject_company"`
+}
+
+// ListRecentThreads returns open threads across every subject, newest first,
+// keyset-paged — the /discussions feed. Public, like the other thread reads.
+func (h *communityHandlers) ListRecentThreads(c *fiber.Ctx) error {
+	cur, err := decodeCursor(queryValues(c).Get("cursor"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
+	}
+	threads, err := h.community.ListRecentThreads(c.Context(), cur)
+	if err != nil {
+		return communityError(err)
+	}
+	out := make([]recentThreadResponse, len(threads))
+	for i, t := range threads {
+		out[i] = recentThreadResponse{
+			threadResponse: toThreadResponse(t.Thread),
+			SubjectTitle:   t.SubjectTitle,
+			SubjectCompany: t.SubjectCompany,
+		}
+	}
+	// Same full-page rule as the subject listing — see threadPageMeta.
+	meta := fiber.Map{}
+	if n := len(threads); n > 0 && int32(n) == h.community.PageSize() {
 		last := threads[n-1]
 		meta["next_cursor"] = encodeCursor(last.CreatedAt, last.ID)
 	}
@@ -202,8 +250,9 @@ func (h *communityHandlers) GetThread(c *fiber.Ctx) error {
 	for i, r := range replies {
 		out[i] = toReplyResponse(r)
 	}
+	// Same full-page rule as the thread listing — see threadPageMeta.
 	meta := fiber.Map{}
-	if n := len(replies); n > 0 {
+	if n := len(replies); n > 0 && int32(n) == h.community.PageSize() {
 		last := replies[n-1]
 		meta["next_cursor"] = encodeCursor(last.CreatedAt, last.ID)
 	}

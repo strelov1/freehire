@@ -390,6 +390,154 @@ func (q *Queries) ListOpenThreadsFirst(ctx context.Context, arg ListOpenThreadsF
 	return items, nil
 }
 
+const listRecentOpenThreadsAfter = `-- name: ListRecentOpenThreadsAfter :many
+SELECT t.id, t.subject_type, t.subject_ref, t.anchor_path, t.title, t.body, t.author_user_id, t.reply_count, t.status, t.created_at, p.handle AS author_handle,
+       coalesce(j.title, c.name, '') AS subject_title,
+       coalesce(j.company, c.name, '') AS subject_company
+FROM threads t
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN jobs j ON t.subject_type = 'job' AND j.public_slug = t.subject_ref
+LEFT JOIN companies c ON t.subject_type = 'company' AND c.slug = t.subject_ref
+WHERE t.status = 'open'
+  AND (t.created_at < $1
+       OR (t.created_at = $1 AND t.id < $2))
+ORDER BY t.created_at DESC, t.id DESC
+LIMIT $3
+`
+
+type ListRecentOpenThreadsAfterParams struct {
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        int64              `json:"cursor_id"`
+	PageLimit       int32              `json:"page_limit"`
+}
+
+type ListRecentOpenThreadsAfterRow struct {
+	ID             int64              `json:"id"`
+	SubjectType    string             `json:"subject_type"`
+	SubjectRef     string             `json:"subject_ref"`
+	AnchorPath     pgtype.Text        `json:"anchor_path"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	AuthorUserID   pgtype.Int8        `json:"author_user_id"`
+	ReplyCount     int32              `json:"reply_count"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AuthorHandle   pgtype.Text        `json:"author_handle"`
+	SubjectTitle   string             `json:"subject_title"`
+	SubjectCompany string             `json:"subject_company"`
+}
+
+// Keyset continuation of the global feed: rows strictly older than the cursor.
+func (q *Queries) ListRecentOpenThreadsAfter(ctx context.Context, arg ListRecentOpenThreadsAfterParams) ([]ListRecentOpenThreadsAfterRow, error) {
+	rows, err := q.db.Query(ctx, listRecentOpenThreadsAfter, arg.CursorCreatedAt, arg.CursorID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentOpenThreadsAfterRow{}
+	for rows.Next() {
+		var i ListRecentOpenThreadsAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubjectType,
+			&i.SubjectRef,
+			&i.AnchorPath,
+			&i.Title,
+			&i.Body,
+			&i.AuthorUserID,
+			&i.ReplyCount,
+			&i.Status,
+			&i.CreatedAt,
+			&i.AuthorHandle,
+			&i.SubjectTitle,
+			&i.SubjectCompany,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentOpenThreadsFirst = `-- name: ListRecentOpenThreadsFirst :many
+SELECT t.id, t.subject_type, t.subject_ref, t.anchor_path, t.title, t.body, t.author_user_id, t.reply_count, t.status, t.created_at, p.handle AS author_handle,
+       coalesce(j.title, c.name, '') AS subject_title,
+       coalesce(j.company, c.name, '') AS subject_company
+FROM threads t
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN jobs j ON t.subject_type = 'job' AND j.public_slug = t.subject_ref
+LEFT JOIN companies c ON t.subject_type = 'company' AND c.slug = t.subject_ref
+WHERE t.status = 'open'
+ORDER BY t.created_at DESC, t.id DESC
+LIMIT $1
+`
+
+type ListRecentOpenThreadsFirstRow struct {
+	ID             int64              `json:"id"`
+	SubjectType    string             `json:"subject_type"`
+	SubjectRef     string             `json:"subject_ref"`
+	AnchorPath     pgtype.Text        `json:"anchor_path"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	AuthorUserID   pgtype.Int8        `json:"author_user_id"`
+	ReplyCount     int32              `json:"reply_count"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AuthorHandle   pgtype.Text        `json:"author_handle"`
+	SubjectTitle   string             `json:"subject_title"`
+	SubjectCompany string             `json:"subject_company"`
+}
+
+// First page of the global discussions feed: open threads across ALL subjects, newest
+// first. Served by the partial index threads_open_created_idx.
+//
+// The two subject joins resolve the stored slug to a name a reader can read; without
+// them a cross-subject listing can only print
+// "design-systems-lead-b2b-donut-studios-new-engen-inc-dk43ucun". Each join is keyed on
+// a UNIQUE column (jobs_public_slug_key, companies.slug is the primary key), so neither
+// can multiply a thread row.
+//
+// LEFT, like the persona join above and for the same reason: there is no FK from a
+// thread to its subject (by design — see migration 0038), and cmd/prune hard-deletes
+// jobs, so a thread can outlive its subject. An INNER JOIN would drop it from the feed
+// instead of showing it with an unresolved subject.
+func (q *Queries) ListRecentOpenThreadsFirst(ctx context.Context, limit int32) ([]ListRecentOpenThreadsFirstRow, error) {
+	rows, err := q.db.Query(ctx, listRecentOpenThreadsFirst, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentOpenThreadsFirstRow{}
+	for rows.Next() {
+		var i ListRecentOpenThreadsFirstRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubjectType,
+			&i.SubjectRef,
+			&i.AnchorPath,
+			&i.Title,
+			&i.Body,
+			&i.AuthorUserID,
+			&i.ReplyCount,
+			&i.Status,
+			&i.CreatedAt,
+			&i.AuthorHandle,
+			&i.SubjectTitle,
+			&i.SubjectCompany,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listThreadRepliesAfter = `-- name: ListThreadRepliesAfter :many
 SELECT r.id, r.thread_id, r.parent_reply_id, r.author_user_id, r.is_ai, r.body, r.created_at, p.handle AS author_handle
 FROM thread_replies r

@@ -2599,6 +2599,22 @@ type Querier interface {
 	// instead of the fixed window actually used. The caller reverses these rows back to
 	// ascending seq order before handing them to trim()/Conversation().
 	ListRecentAssistantMessages(ctx context.Context, arg ListRecentAssistantMessagesParams) ([]AssistantMessage, error)
+	// Keyset continuation of the global feed: rows strictly older than the cursor.
+	ListRecentOpenThreadsAfter(ctx context.Context, arg ListRecentOpenThreadsAfterParams) ([]ListRecentOpenThreadsAfterRow, error)
+	// First page of the global discussions feed: open threads across ALL subjects, newest
+	// first. Served by the partial index threads_open_created_idx.
+	//
+	// The two subject joins resolve the stored slug to a name a reader can read; without
+	// them a cross-subject listing can only print
+	// "design-systems-lead-b2b-donut-studios-new-engen-inc-dk43ucun". Each join is keyed on
+	// a UNIQUE column (jobs_public_slug_key, companies.slug is the primary key), so neither
+	// can multiply a thread row.
+	//
+	// LEFT, like the persona join above and for the same reason: there is no FK from a
+	// thread to its subject (by design — see migration 0038), and cmd/prune hard-deletes
+	// jobs, so a thread can outlive its subject. An INNER JOIN would drop it from the feed
+	// instead of showing it with an unresolved subject.
+	ListRecentOpenThreadsFirst(ctx context.Context, limit int32) ([]ListRecentOpenThreadsFirstRow, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
 	// Joins the catalogue for the company's display name (LEFT so an offer survives a
 	// company the catalogue no longer knows — the UI falls back to the slug).
