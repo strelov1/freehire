@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,9 +38,27 @@ type Service struct {
 // New constructs a Service. It never fails: an unconfigured Service reports itself
 // disabled and refuses every operation with ErrDisabled.
 func New(cfg Config, q *db.Queries) *Service {
+	return NewWithBase(cfg, q, apiBaseURL)
+}
+
+// NewWithBase is New pointed at a different provider base URL, for tests that stand a stub
+// in front of it. It mirrors telegramnotify.NewClientWithBase, which exists for the same
+// reason: the alternative is an unexported field a test in another package cannot reach.
+//
+// It dials WITHOUT the SSRF guard, because the guard would refuse the loopback address
+// every stub server listens on. That costs nothing real: the guard defends against a
+// CALLER-SUPPLIED destination, and there is none here — the production base URL is a
+// constant and the only variable part of the request is a path segment, escaped. New still
+// uses the guarded client, so nothing in production takes this path.
+func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 	s := &Service{cfg: cfg, q: q}
-	if cfg.Enabled() {
+	if !cfg.Enabled() {
+		return s
+	}
+	if baseURL == apiBaseURL {
 		s.client = newProviderClient(cfg.APIKey)
+	} else {
+		s.client = newClient(cfg.APIKey, baseURL, &http.Client{Timeout: requestTimeout})
 	}
 	return s
 }

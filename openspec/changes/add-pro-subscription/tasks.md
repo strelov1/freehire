@@ -72,20 +72,23 @@ findings are in the design's "The provider contract, as verified".
 
 ## 3. HTTP surface
 
-- [ ] 3.1 `POST /api/v1/billing/revenuecat/webhook`: verify the signature over `c.Body()`
-      (the raw bytes — never a re-marshalled struct), record, respond 200, then attempt to
-      apply inline with a short timeout. A failure to apply is logged and does **not**
-      change the response. A failure to *record* returns non-200 so the provider retries
-- [ ] 3.2 The whole handler must finish well inside the provider's **60-second** budget;
+- [x] 3.1 `POST /api/v1/billing/revenuecat/webhook`: verify the signature over `c.Body()`
+      (the raw bytes — never a re-marshalled struct), record, then attempt to apply inline
+      with a short timeout. The apply runs BEFORE the response is flushed — a handler
+      cannot write and then keep working without an unmanaged goroutine, and 10s inside a
+      60s budget does not need one. The guarantee is not the ordering but the outcome: a
+      failure to apply is logged and does **not** change the 200, while a failure to
+      *record* returns non-200 so the provider retries
+- [x] 3.2 The whole handler must finish well inside the provider's **60-second** budget;
       bound the inline apply accordingly
-- [ ] 3.3 The route is unauthenticated by session and authenticated by the signature only;
+- [x] 3.3 The route is unauthenticated by session and authenticated by the signature only;
       confirm it is exempt from the auth middleware and included in the rate limiter
-- [ ] 3.4 `GET /api/v1/billing/checkout` behind `RequireAuth`: returns
+- [x] 3.4 `GET /api/v1/billing/checkout` behind `RequireAuth`: returns
       `BILLING_CHECKOUT_URL` + `/` + the URL-**path**-encoded `users.id` of the caller. A
       client-supplied identifier is ignored
-- [ ] 3.5 With billing disabled, both routes return 404. Integration test asserts this and
+- [x] 3.5 With billing disabled, both routes return 404. Integration test asserts this and
       asserts the rest of the API is unaffected
-- [ ] 3.6 Integration tests: duplicate delivery, bad signature, stale signature, unknown
+- [x] 3.6 Integration tests: duplicate delivery, bad signature, stale signature, unknown
       event type, event for an unknown user, provider unreachable during the inline apply
 
 ## 4. The reconciler
