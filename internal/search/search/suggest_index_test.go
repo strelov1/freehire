@@ -38,3 +38,22 @@ func TestIsIndexMissing(t *testing.T) {
 		}
 	}
 }
+
+// Meilisearch caps a search at the index's `maxTotalHits`, whose DEFAULT is 1000. The
+// suggestions index inherited that default, which silently truncated the recognition
+// set the API loads at startup — and the symptom read as a parsing bug: `senior
+// software engineer` (23,643 postings) was recognised while `nodejs developer` (27)
+// was not, because the dictionary comes back in `searches:desc, jobs:desc` order and
+// the tail never arrived.
+//
+// So the ceiling and the request must be the SAME number. Asking for more than the
+// index will return is the whole failure.
+func TestSuggestSettings_PaginationCoversTheWholeDictionaryRead(t *testing.T) {
+	s := suggestSettings()
+	if s.Pagination == nil {
+		t.Fatal("no pagination set — the index would use the engine's 1000 default")
+	}
+	if got := s.Pagination.MaxTotalHits; got != maxDictionary {
+		t.Errorf("MaxTotalHits = %d, but AllSuggestions asks for %d", got, maxDictionary)
+	}
+}

@@ -25,6 +25,15 @@ import (
 const (
 	suggestIndexUID   = "suggestions"
 	suggestRebuildUID = "suggestions_rebuild"
+
+	// maxDictionary bounds BOTH how many documents a whole-dictionary read asks for and
+	// how many the index will return — the same number, deliberately, because the two
+	// disagreeing is exactly the failure this const was introduced to fix.
+	//
+	// The dictionary is tens of thousands of rows by construction (the frequency floors
+	// keep it there), so this is a guard against a misconfigured floor rather than a
+	// paging limit.
+	maxDictionary = 200_000
 )
 
 // suggestSettings configures the dictionary index.
@@ -46,6 +55,17 @@ func suggestSettings() *meilisearch.Settings {
 		// Demand first, then supply — the endpoint's tie-breakers, applied by the
 		// engine so they cost nothing at query time.
 		SortableAttributes: []string{"searches", "jobs"},
+		// Meilisearch caps a search at `maxTotalHits` results, and its DEFAULT is 1000 —
+		// which silently truncated the recognition set the API loads at startup. The
+		// symptom read as a parsing bug: `senior software engineer` (23,643 postings)
+		// was recognised and `nodejs developer` (27) was not, because the dictionary is
+		// returned in `searches:desc, jobs:desc` order and the tail never arrived.
+		//
+		// The ceiling is well above the dictionary's own bound (the frequency floors
+		// keep it in the tens of thousands, and AllSuggestions asks for at most 200,000)
+		// so it constrains nothing that should be served — it only stops the default
+		// from doing the constraining.
+		Pagination: &meilisearch.Pagination{MaxTotalHits: maxDictionary},
 		// The default rules minus `sort` reordering, plus the two custom rules that
 		// carry the ranking this index exists to apply. `searches` leads because what
 		// people actually ask for beats what merely exists a lot of.
@@ -100,13 +120,6 @@ func (c *Client) primaryKeyFor(uid string) string {
 	}
 	return primaryKey
 }
-
-// maxDictionary bounds the whole-dictionary read behind the recognition set. The
-// dictionary is tens of thousands of rows by construction — a floor keeps it there —
-// so this is a guard against a misconfigured floor rather than a paging limit: reading
-// a dictionary that large into a long-lived process is a memory problem, and silently
-// truncating it is better than the alternative of holding all of it.
-const maxDictionary = 200_000
 
 // AllSuggestions reads the dictionary whole, for the in-process recognition set.
 //
