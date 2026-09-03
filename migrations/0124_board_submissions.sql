@@ -14,6 +14,9 @@ CREATE TABLE board_submissions (
 
 CREATE UNIQUE INDEX board_submissions_url_key ON board_submissions (url);
 
+-- Every users FK needs an index, or deleting an account scans the whole table.
+CREATE INDEX board_submissions_submitted_by_idx ON board_submissions (submitted_by);
+
 COMMENT ON TABLE board_submissions IS
     'Unclassified-URL triage inbox (the link_contributions "review" case). A row is '
     'deleted once triage resolves its (provider, board) and inserts into boards.';

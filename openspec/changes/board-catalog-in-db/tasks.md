@@ -135,16 +135,26 @@
       `'active'` (frontend type-check not run — no `node_modules` in this worktree; the
       change is a single literal in a union type with no other references).
 
-## 8. Cutover
+## 8. Cutover — MANUAL/OPERATOR STEPS, not done from this workspace
 
-- [ ] 8.1 Update deployment cron/systemd units from one-timer-per-file to
-      one-timer-per-provider-name (same count).
+All code for this step is already shipped (§4-§7). What remains is real infrastructure
+this coding session has no access to (a sibling ops repo, SSH to prod hosts, and prod
+itself) and is sequenced across real deploys, not something to execute speculatively:
+
+- [ ] 8.1 Update deployment cron/systemd units (in `freehire-ops`) from
+      one-timer-per-file to one-timer-per-provider-name (same count).
 - [ ] 8.2 Deploy §4-§7 together (per design.md's Migration Plan step 3 — `cmd/ingest`
-      cannot read two sources at once).
+      cannot read two sources at once), after §3.3's backfill has run.
 - [ ] 8.3 Confirm a full crawl cycle of every provider completes clean against `boards`
-      in prod before proceeding.
+      in prod before proceeding to §9.
 
-## 9. Retire the old path
+## 9. Retire the old path — BLOCKED on §8.3, not done in this session
+
+Deliberately NOT executed here even though the resulting diff is simple: deleting
+`sources/*.yml` now, before §3.3/§8 have actually run in prod, would break the CURRENTLY
+DEPLOYED `cmd/ingest` (which still reads those files) the moment this branch merges,
+well before the replacement code has proven itself against real traffic. Once §8.3 is
+confirmed:
 
 - [ ] 9.1 Delete `sources/*.yml` and `cmd/validate-sources`.
 - [ ] 9.2 Remove the "Validate sources" CI step.
@@ -156,6 +166,17 @@
 
 ## 10. Review
 
-- [ ] 10.1 Run `go vet -tags=integration ./...` and the full integration suite once
-      behavior in §4-§7 is complete.
-- [ ] 10.2 `gofmt -l .` clean; `go vet ./...`; `go test ./...`.
+- [x] 10.1 `go vet -tags=integration ./...` and the full `go test -tags=integration ./...`
+      both clean. This caught three `internal/api/handler` integration test files
+      (`discord_integration_test.go`, `telegram_contribution_integration_test.go`,
+      `resolve_job_integration_test.go`) with raw SQL against `link_contributions` —
+      updated to `boards`/`board_submissions` (and `source` → `provider`); the
+      review-status assertion (no `status` column on `board_submissions` — a row's mere
+      existence there IS the review state) was rewritten as an existence check rather than
+      a status-string read.
+- [x] 10.2 `gofmt -l` clean on every changed file; `go vet ./...` and `go test ./...`
+      clean. A full (non-`-tags=integration`) `go test ./...` also caught two repo-wide
+      guard tests unrelated to the integration suite: the module-layering block table
+      (`boardcatalog` had no block assignment) and `.gitignore` (`/add-board`,
+      `/backfill-board-catalog` un-anchored, i.e. a local build of either could be
+      committed by accident) — both fixed.

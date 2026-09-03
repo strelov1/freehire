@@ -342,7 +342,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 		var recorded int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE url = $1`, page).Scan(&recorded); err != nil {
+			`SELECT count(*) FROM board_submissions WHERE url = $1`, page).Scan(&recorded); err != nil {
 			t.Fatalf("read the contribution queue: %v", err)
 		}
 		if recorded != 1 {
@@ -388,7 +388,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 		var queued int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE url = $1`, page).Scan(&queued); err != nil {
+			`SELECT count(*) FROM board_submissions WHERE url = $1`, page).Scan(&queued); err != nil {
 			t.Fatalf("read triage queue: %v", err)
 		}
 		if queued != 1 {
@@ -416,7 +416,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 		var status, surface string
 		if err := pool.QueryRow(ctx,
-			`SELECT status, surface FROM link_contributions WHERE source = 'recruitee' AND board = 'globex'`).
+			`SELECT status, surface FROM boards WHERE provider = 'recruitee' AND board = 'globex'`).
 			Scan(&status, &surface); err != nil {
 			t.Fatalf("the imported vacancy's board was not queued: %v", err)
 		}
@@ -464,7 +464,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 		var queued int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE source = 'recruitee' AND board = 'acme'`).
+			`SELECT count(*) FROM boards WHERE provider = 'recruitee' AND board = 'acme'`).
 			Scan(&queued); err != nil {
 			t.Fatalf("read triage queue: %v", err)
 		}

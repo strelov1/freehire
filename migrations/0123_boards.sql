@@ -36,6 +36,9 @@ CREATE UNIQUE INDEX boards_identity_key
 -- Board lookup by provider for cmd/ingest's per-provider crawl query.
 CREATE INDEX boards_provider_status_idx ON boards (provider, status);
 
+-- Every users FK needs an index, or deleting an account scans the whole table.
+CREATE INDEX boards_submitted_by_idx ON boards (submitted_by);
+
 COMMENT ON TABLE boards IS
     'Board catalog (replaces sources/*.yml). status: pending (unproven, still crawled) '
     '-> active (first crawl succeeded); or rejected (failed insert-time validation) / '
