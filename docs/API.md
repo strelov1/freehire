@@ -248,7 +248,7 @@ Combine free-text `q` with any of the filter params below. Repeated facet params
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
-| `sort` | string | no | One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
+| `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
@@ -280,7 +280,7 @@ Same query and filters as `/jobs/search`, but each result carries the `descripti
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
 | `description_format` | string | no | One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`. (e.g. `markdown`) |
-| `sort` | string | no | One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
+| `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
@@ -3664,7 +3664,7 @@ curl "https://freehire.me/api/v1/me/contributions" -H "Authorization: Bearer fhk
 ```
 
 ```json
-{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "onboarded", "created_at": "2026-07-20T12:00:00Z" } ] }
+{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "active", "created_at": "2026-07-20T12:00:00Z" } ] }
 ```
 
 ### `POST /me/jd/resolve`

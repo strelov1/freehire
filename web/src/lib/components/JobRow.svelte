@@ -107,13 +107,10 @@
   const applied = $derived('applied_count' in job ? job.applied_count : 0);
   // The two freshness badges, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
-  // vouch for a job the signal was written to distrust. Thresholds and wording are the
-  // shared rule's — the same one the job's own page renders, closed-job rule included.
-  // No listing can currently serve a closed job WITH a reality signal, so that arm is
-  // stated rather than needed; the two surfaces must not disagree if one ever does.
-  const freshness = $derived(
-    job.closed_at ? [] : cardFreshnessBadges(job.posted_at, reality, applied),
-  );
+  // vouch for a job the signal was written to distrust. Everything else — the
+  // thresholds, the wording, the closed-posting rule — is the shared rule's, so the card
+  // and the job's own page cannot tell different stories about one posting.
+  const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, applied, job.closed_at));
 
   const MAX_SKILLS = 5;
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));

@@ -65,7 +65,14 @@ export function freshnessBadges(
   postedAt?: string | null,
   reality?: Reality | null,
   appliedCount = 0,
+  closedAt?: string | null,
 ): FreshnessBadge[] {
+  // A closed posting is never worth hurrying to, whatever its date says. This sits with
+  // the reality gate rather than in each surface's template: it is the same KIND of
+  // statement ("this posting is not one to hurry to"), and it was previously written
+  // twice — `{#if !job.closed_at}` on the detail page, a ternary on the card — which is
+  // the drift a shared rule exists to prevent.
+  if (closedAt) return [];
   if (reality && (reality.class !== 'fresh' || reality.fake_freshness)) return [];
   const days = daysSince(postedAt);
   if (days === null || days > NEW_DAYS) return [];
@@ -97,7 +104,8 @@ export function cardFreshnessBadges(
   postedAt?: string | null,
   reality?: Reality | null,
   appliedCount = 0,
+  closedAt?: string | null,
 ): FreshnessBadge[] {
   if (!reality) return [];
-  return freshnessBadges(postedAt, reality, appliedCount);
+  return freshnessBadges(postedAt, reality, appliedCount, closedAt);
 }

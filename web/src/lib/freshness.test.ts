@@ -107,3 +107,24 @@ describe('cardFreshnessBadges', () => {
     expect(cardFreshnessBadges(daysAgo(1), reality(), 9).map((b) => b.label)).toEqual(['New']);
   });
 });
+
+// A closed posting is never worth hurrying to. The rule used to live in two templates —
+// `{#if !job.closed_at}` on the detail page and a ternary on the card — which is exactly
+// the drift the shared rule exists to prevent, one layer up from where it was caught.
+describe('closed postings', () => {
+  it('earn no badge however fresh the date', () => {
+    expect(freshnessBadges(daysAgo(0), reality(), 0, daysAgo(0))).toEqual([]);
+    expect(cardFreshnessBadges(daysAgo(0), reality(), 0, daysAgo(0))).toEqual([]);
+  });
+
+  it('leave an open posting badged, whether the close date is null or absent', () => {
+    expect(freshnessBadges(daysAgo(1), reality(), 0, null).map((b) => b.label)).toEqual([
+      'New',
+      'Be an early applicant',
+    ]);
+    expect(cardFreshnessBadges(daysAgo(1), reality(), 0).map((b) => b.label)).toEqual([
+      'New',
+      'Be an early applicant',
+    ]);
+  });
+});

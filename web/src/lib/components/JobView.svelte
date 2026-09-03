@@ -83,7 +83,7 @@
   const applies = $derived(job.applied_count ?? 0);
   // "New" / "Be an early applicant" — see freshness.ts for why the posting date alone
   // does not earn either.
-  const freshness = $derived(freshnessBadges(job.posted_at, job.reality, applies));
+  const freshness = $derived(freshnessBadges(job.posted_at, job.reality, applies, job.closed_at));
 
   // The content column is tabbed so "who are these people?" and "what will they ask
   // me?" are answerable without leaving the posting. Page state, not a route: the
@@ -428,18 +428,17 @@
 
       <!-- Freshness rides the same provenance line: like the backer and the reality
            badge it describes the POSTING, not the role, so the title keeps a single
-           voice and the reader still meets all of it in one glance. Closed jobs are
-           excluded — a closed posting is never worth hurrying to. -->
-      {#if !job.closed_at}
-        {#each freshness as badge (badge.label)}
-          <!-- The tooltip rides a wrapper, not the Chip: the primitive takes only
-               variant/class/children, so a `title` passed to it would be dropped
-               silently and the badge would state a claim with its evidence gone. -->
-          <span title={badge.tooltip} class="inline-flex">
-            <Chip variant="brand" class="font-semibold">{badge.label}</Chip>
-          </span>
-        {/each}
-      {/if}
+           voice and the reader still meets all of it in one glance. A closed posting
+           earns nothing here — that rule lives in freshnessBadges, beside the reality
+           gate, rather than as a second copy in this template. -->
+      {#each freshness as badge (badge.label)}
+        <!-- The tooltip rides a wrapper, not the Chip: the primitive takes only
+             variant/class/children, so a `title` passed to it would be dropped
+             silently and the badge would state a claim with its evidence gone. -->
+        <span title={badge.tooltip} class="inline-flex">
+          <Chip variant="brand" class="font-semibold">{badge.label}</Chip>
+        </span>
+      {/each}
     </div>
   </div>
 
