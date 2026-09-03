@@ -36,9 +36,10 @@ type entitlement struct {
 // removes the entitlement from the provider's map, the next sync derives the zero time,
 // and the sentinel is gone — it can never outlive the entitlement that produced it.
 //
-// We do not currently sell a lifetime product. That is exactly why this has to be right:
-// the case will first occur by accident, in a hand-granted entitlement or a promotion, and
-// there will be no reason for anyone to check it.
+// This is NOT hypothetical, which the first draft of this comment assumed. The provider's
+// catalogue already carries a `lifetime` non_consumable beside the monthly and yearly
+// subscriptions, so the first purchase of one produces a null expiry on day one — and
+// nobody would be watching for a subscriber who quietly reads as free.
 var neverExpires = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 
 // proUntilFrom reduces a subscriber's entitlements to the single timestamp users.pro_until

@@ -31,8 +31,14 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   webhook at `https://freehire.me/api/v1/billing/revenuecat/webhook` and **enabling HMAC
   signing** on it (the handler refuses an unsigned delivery — there is no fallback);
   minting a **secret** `sk_` key, since a public one is refused on the subscriber
-  endpoint; and creating the `pro` entitlement and the Web Billing paywall, whose token is
-  what `BILLING_CHECKOUT_URL` holds. With none of them set every billing route is simply
+  endpoint; and creating the Web Billing paywall, whose token is what
+  `BILLING_CHECKOUT_URL` holds.
+
+  **`REVENUECAT_ENTITLEMENT` is `freehire Pro`, not `pro`.** That is the lookup key the
+  project actually carries, and the package's default would match no entitlement at all —
+  which does not fail, it resolves every paying subscriber to the free plan. The value has
+  a space in it; systemd's `EnvironmentFile` strips the surrounding quotes and delivers it
+  whole, verified on the host rather than assumed. With none of them set every billing route is simply
   not mounted and the timer is a no-op that never opens the pool, so the units are safe to
   install before the dashboard is ready — they are just inert.
 - **A new worker needs its binary built on the host.** `release.sh` builds the API, not

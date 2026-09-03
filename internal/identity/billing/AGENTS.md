@@ -46,8 +46,9 @@ routes answer 404, and its worker exits without opening a connection.
 - **A null `expires_date` means never-expiring, not expired.** Reading it as the zero time
   would silently downgrade a lifetime purchaser. `neverExpires` is the sentinel, and it is
   safe only because the column is derived: a refund removes the entitlement and the next
-  sync clears it. We sell no lifetime product, which is exactly why this must be right —
-  the case will first occur by accident and nobody will be looking for it.
+  sync clears it. **The catalogue already carries a `lifetime` non_consumable** beside the
+  monthly and yearly subscriptions, so this is a live case rather than a defensive one —
+  and a subscriber it got wrong would simply read as free, with nobody looking.
 
 - **An entitlement reaches the LATER of its expiry and its grace period.** A grace period
   is the provider saying the payment failed but the subscriber is still entitled; reading
