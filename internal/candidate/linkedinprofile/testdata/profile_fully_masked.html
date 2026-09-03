@@ -1,0 +1,26 @@
+<!doctype html>
+<!--
+  A Person node where LinkedIn withheld everything. Nothing here is usable, and the
+  parser must say so rather than hand back a struct full of ghosts.
+-->
+<html lang="en">
+  <head>
+    <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@graph": [
+          {
+            "@type": "Person",
+            "name": "***** *******",
+            "description": "****** ******** ******** ** *** ******* ****",
+            "address": { "@type": "PostalAddress", "addressLocality": "*******, *******" },
+            "jobTitle": ["****** ******** ********"],
+            "knowsLanguage": [],
+            "worksFor": [{ "@type": "Organization", "name": "**********" }]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body></body>
+</html>

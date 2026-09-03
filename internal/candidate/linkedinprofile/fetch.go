@@ -1,0 +1,97 @@
+package linkedinprofile
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/strelov1/freehire/internal/platform/safehttp"
+)
+
+// ErrFetch means the page did not arrive: the request failed, the host answered with
+// something other than 200, or the body ran past the cap. It is deliberately distinct
+// from ErrNoProfile (a page that arrived and said nothing) and ErrNotAProfileURL (a
+// request never made) — a run of these three means three different things, and only
+// this one means LinkedIn stopped answering us.
+var ErrFetch = errors.New("linkedinprofile: could not fetch the profile page")
+
+const (
+	fetchTimeout = 10 * time.Second
+	// The profile pages measured on 2026-09-03 were 600-630 KB. This leaves room for
+	// the page to grow several times over while keeping a hostile response bounded.
+	defaultMaxBody = 4 << 20
+	// We identify ourselves rather than wearing a browser's user-agent. This was
+	// measured, not assumed: LinkedIn serves the same public page, with the same
+	// JSON-LD, to this string as it does to Chrome.
+	userAgent = "freehire/1.0 (+https://freehire.me)"
+)
+
+// Client reads public LinkedIn member profiles. The zero value is not usable; call
+// NewClient.
+type Client struct {
+	httpClient *http.Client
+	// base is the scheme and host to read profiles from. It exists so tests can
+	// point at a stub, and is never varied in production.
+	base    string
+	maxBody int64
+}
+
+// NewClient returns a reader that fetches over the platform's guarded HTTP client —
+// which refuses private address space, including across a redirect, so a profile URL
+// cannot be turned into a request against our own network.
+func NewClient() *Client {
+	return &Client{
+		httpClient: safehttp.NewClient(fetchTimeout),
+		base:       profileBase,
+		maxBody:    defaultMaxBody,
+	}
+}
+
+// Fetch reads the public profile named by input — a profile URL in any of the forms a
+// user pastes, or a bare public id — and returns what LinkedIn released.
+//
+// The request carries no credential of any kind. That is not a configuration choice
+// but the premise: this reads what any stranger can read, so there is nothing for a
+// session to add and nothing for LinkedIn to revoke.
+//
+// Errors are ErrNotAProfileURL (nothing was requested), ErrFetch (the page did not
+// arrive), or ErrNoProfile (the page arrived and carried no readable profile).
+func (c *Client) Fetch(ctx context.Context, input string) (Profile, error) {
+	id, err := publicID(input)
+	if err != nil {
+		return Profile{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/in/"+id, nil)
+	if err != nil {
+		return Profile{}, fmt.Errorf("%w: %w", ErrFetch, err)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "text/html")
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return Profile{}, fmt.Errorf("%w: %w", ErrFetch, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return Profile{}, fmt.Errorf("%w: status %d", ErrFetch, res.StatusCode)
+	}
+
+	// Reading one byte past the cap is what tells a body that is exactly at the limit
+	// from one that runs past it. A truncated page would parse, and would report
+	// whatever happened to fit — a measurement nobody asked for.
+	body, err := io.ReadAll(io.LimitReader(res.Body, c.maxBody+1))
+	if err != nil {
+		return Profile{}, fmt.Errorf("%w: %w", ErrFetch, err)
+	}
+	if int64(len(body)) > c.maxBody {
+		return Profile{}, fmt.Errorf("%w: body exceeds %d bytes", ErrFetch, c.maxBody)
+	}
+
+	return Parse(body)
+}
