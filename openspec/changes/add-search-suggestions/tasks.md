@@ -4,7 +4,7 @@
 - [x] 1.2 Open the dropdown on focus with an empty query, showing the category suggestions in `CATEGORY_GROUP_ORDER`; drop the two-character minimum
 - [x] 1.3 Add the postings and companies sections to the dropdown, reusing `HeaderSearch.svelte`'s data calls and its `EntityLogo`/`companyLogoUrl` row rendering rather than writing a second one
 - [x] 1.4 Make the keyboard highlight run continuously across all three sections, and cap each section (5 completions, 5 postings, 3 companies)
-- [ ] 1.5 Verify stage 1 in the browser on `/`: empty focus, typing without refetch, Enter, arrow-through, Escape, click-away
+- [x] 1.5 Verify stage 1 in the browser on `/`: empty focus, typing without refetch, Enter, arrow-through, Escape, click-away
 
 ## 2. Stage 2 — the suggestions package
 

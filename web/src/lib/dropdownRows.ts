@@ -30,10 +30,21 @@ export type DropdownRow = { key: string; first: boolean } & (
  *  anything to do with the query, and three such rows make the whole dropdown look
  *  broken.
  *
- *  Plain substring, so a half-typed name still matches (`goog` → Google) and so does
- *  a word inside one (`reject` → The Reject Shop). Precision over recall: a company
- *  the visitor is actually looking for is one more keystroke away, while a wrong row
- *  is there immediately.
+ *  The test is a PREFIX, not containment. Containment was the first attempt and it
+ *  admitted "Senior Lead Java Developer near York, UK" and "Solicitud De Empleo Para
+ *  Java Developer En Encora" for `java dev` — job titles sitting in the company field,
+ *  which is what aggregators with no employer column produce. The words really are in
+ *  there, so containment admits them honestly; what separates a hit from a coincidence
+ *  is that a company the visitor means is what the name STARTS with (`goog` → Google),
+ *  while a coincidence is buried mid-string.
+ *
+ *  Precision over recall: a company the visitor is actually looking for is one more
+ *  keystroke away, while a wrong row is there immediately.
+ *
+ *  A leading article is NOT skipped, deliberately. `reject` looks like it should reach
+ *  The Reject Shop — but `/companies?q=reject` returns nothing at all, so the row never
+ *  arrives here to be judged. Handling the article would be code that cannot run.
+ *  Should that endpoint start matching mid-name, this is the seam to widen.
  *
  *  Deliberately NOT pushed into the endpoint: fuzzy matching is correct for its other
  *  caller, and this is a rule about what a three-row section may show. */
@@ -44,7 +55,7 @@ export function namedCompanies(
 ): CompanyListItem[] {
   const q = text.trim().toLowerCase();
   if (q === '') return [];
-  return companies.filter((c) => c.name.toLowerCase().includes(q)).slice(0, limit);
+  return companies.filter((c) => c.name.toLowerCase().startsWith(q)).slice(0, limit);
 }
 
 export interface DropdownContent {

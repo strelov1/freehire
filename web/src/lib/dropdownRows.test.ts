@@ -110,10 +110,29 @@ describe('namedCompanies', () => {
     ]);
   });
 
-  it('matches inside the name, not only at its start', () => {
-    expect(namedCompanies(named('The Reject Shop'), 'reject').map((c) => c.name)).toEqual([
+  // Observed in the browser: `java dev` offered "Senior Lead Java Developer near York,
+  // UK" and "Solicitud De Empleo Para Java Developer En Encora" — job titles sitting in
+  // the company field, which is what aggregators with no employer column produce. A
+  // containment rule admits them honestly: the words really are in there.
+  it('drops a name that merely contains the query somewhere inside it', () => {
+    const got = namedCompanies(named('Senior Lead Java Developer near York, UK'), 'java dev');
+    expect(got).toEqual([]);
+  });
+
+  // `reject` looks like it should reach The Reject Shop. It does not, and that is not
+  // this function's doing: `/companies?q=reject` returns nothing at all, so the row
+  // never arrives to be judged. Asserting the prefix rule rather than a leading-article
+  // exception keeps the test describing what the system does.
+  it('judges by the whole name, article and all', () => {
+    expect(namedCompanies(named('The Reject Shop'), 'reject')).toEqual([]);
+    expect(namedCompanies(named('The Reject Shop'), 'the reject').map((c) => c.name)).toEqual([
       'The Reject Shop',
     ]);
+  });
+
+  it('keeps the longer spellings of a company the query starts', () => {
+    const got = namedCompanies(named('Google', 'GOOGLE ASIA PACIFIC PTE. LTD.', 'Google India'), 'google');
+    expect(got).toHaveLength(3);
   });
 
   it('offers nothing for an empty query rather than everything', () => {
