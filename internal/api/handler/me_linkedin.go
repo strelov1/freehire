@@ -59,9 +59,12 @@ func (h *linkedInHandlers) ImportLinkedInProfile(c *fiber.Ctx) error {
 		return err
 	}
 
+	// A body that does not parse and a body carrying no link are the same situation to the
+	// user — there is nothing to follow — so they get the same answer, and neither costs an
+	// outbound request.
 	var req linkedInImportRequest
 	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Paste your LinkedIn profile link.")
+		req.URL = ""
 	}
 	input := strings.TrimSpace(req.URL)
 	if input == "" {
@@ -105,9 +108,9 @@ func derivedGeo(stated string) fiber.Map {
 		return nil
 	}
 	return fiber.Map{
-		"countries": nonNil(geo.Countries),
-		"regions":   nonNil(geo.Regions),
-		"cities":    nonNil(geo.Cities),
+		"countries": orEmpty(geo.Countries),
+		"regions":   orEmpty(geo.Regions),
+		"cities":    orEmpty(geo.Cities),
 	}
 }
 
@@ -131,15 +134,11 @@ func linkedInImportError(err error) error {
 	}
 }
 
+// putIfSet omits an empty display field rather than sending "". The client renders these
+// back to the user as "here is what we recognised", and an empty string there would read as
+// "we recognised nothing" for a field LinkedIn simply withheld.
 func putIfSet(m fiber.Map, key, value string) {
 	if value != "" {
 		m[key] = value
 	}
-}
-
-func nonNil(v []string) []string {
-	if v == nil {
-		return []string{}
-	}
-	return v
 }

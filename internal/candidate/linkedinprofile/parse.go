@@ -236,11 +236,16 @@ func decodeNode(raw json.RawMessage) (ldNode, bool) {
 // candidate — a post listing carries its author as a Person, and descending into one would
 // return a stranger.
 func nodesIn(raw []byte) []ldNode {
-	doc, ok := decodeNode(flexjson.SanitizeControlChars(raw))
+	// Raw control bytes inside a string literal are invalid JSON that Go's decoder
+	// rejects outright, where a lenient one would not. Escaping them first is what keeps
+	// a stray newline in a headline from costing the whole profile.
+	block := flexjson.SanitizeControlChars(raw)
+
+	doc, ok := decodeNode(block)
 	if !ok {
 		// A block that is not an object may still be an array of nodes.
 		var list []json.RawMessage
-		if json.Unmarshal(flexjson.SanitizeControlChars(raw), &list) != nil {
+		if json.Unmarshal(block, &list) != nil {
 			return nil
 		}
 		return decodeNodes(list)
