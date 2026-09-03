@@ -105,17 +105,31 @@ func TestResolveDropsUncuratedCollection(t *testing.T) {
 	}
 }
 
-func TestResolveKeepsCatalogedRole(t *testing.T) {
+// The interpreter used to offer a `role` enum, and `senior_backend` was its shape: one
+// value fusing two axes. It offers `category` and `seniority` now, which is what that
+// slug decomposed into — so the model says the same thing in the vocabulary the rest of
+// the request already uses, and a grade can be widened or dropped without rebuilding
+// the filter.
+func TestResolveNoLongerOffersRole(t *testing.T) {
 	got := resolveFacet(t, "role", "senior_backend")
-	if !slices.Equal(got.Facets["role"], []string{"senior_backend"}) {
-		t.Fatalf("role = %v, want [senior_backend]", got.Facets["role"])
+	if len(got.Facets["role"]) != 0 {
+		t.Fatalf("role = %v, want none — the facet is gone", got.Facets["role"])
+	}
+	// Reported, not silently dropped: a model that still names it should see it named
+	// back, the same way an uncatalogued value always has.
+	if !slices.Contains(got.Unresolved, "senior_backend") {
+		t.Fatalf("unresolved = %v, want it to name the dropped value", got.Unresolved)
 	}
 }
 
-func TestResolveDropsUncatalogedRole(t *testing.T) {
-	got := resolveFacet(t, "role", "chief_vibes_officer")
-	if len(got.Facets["role"]) != 0 {
-		t.Fatalf("role = %v, want none", got.Facets["role"])
+func TestResolveKeepsTheTwoAxesARoleDecomposedInto(t *testing.T) {
+	cat := resolveFacet(t, "category", "backend")
+	if !slices.Equal(cat.Facets["category"], []string{"backend"}) {
+		t.Fatalf("category = %v, want [backend]", cat.Facets["category"])
+	}
+	sen := resolveFacet(t, "seniority", "senior")
+	if !slices.Equal(sen.Facets["seniority"], []string{"senior"}) {
+		t.Fatalf("seniority = %v, want [senior]", sen.Facets["seniority"])
 	}
 }
 

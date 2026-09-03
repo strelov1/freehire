@@ -55,7 +55,6 @@ Values you are given a list to choose from must come from that list. For the res
 - skills: name each technology the way it is normally written ("Kubernetes", "React", "Go"). One skill per entry, never a phrase.
 - countries: the country's ordinary English name ("Portugal", "Germany").
 - cities: the city's bare name ("Lisbon"), with no country or region attached.
-- role: a specific role key of the form <seniority>_<role>, e.g. "senior_backend". Leave it empty unless the person named a precise role; the category and seniority fields already carry the general case.
 
 query is free text matched against the whole posting, and it is a last resort. Use it ONLY for something no other field can express — a niche the fields have no word for. Anything a field covers must go in that field: a term written in query as well narrows the results a second time, for no reason.
 

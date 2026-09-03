@@ -30,7 +30,6 @@ type proposal struct {
 	Query string `json:"query"`
 
 	Category       flexStrings `json:"category"`
-	Role           flexStrings `json:"role"`
 	Seniority      flexStrings `json:"seniority"`
 	RoleType       flexStrings `json:"role_type"`
 	Skills         flexStrings `json:"skills"`
@@ -82,7 +81,6 @@ func (p proposal) intent() intent {
 	return intent{
 		Facets: map[string][]string{
 			"category":        p.Category,
-			"role":            p.Role,
 			"seniority":       p.Seniority,
 			"role_type":       p.RoleType,
 			"skills":          p.Skills,
