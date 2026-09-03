@@ -8,7 +8,10 @@ describe('ATS brand marks', () => {
 
     expect(mark?.title).toBe('Greenhouse');
     expect(mark?.path).toBeTruthy();
-    expect(mark?.hex).toBe('24A47F');
+    // Shape, not value. The exact hex is Greenhouse's to change, and simple-icons
+    // follows a rebrand — pinning it would redden this on a dependency bump over
+    // something that is not our behaviour. What matters is that BrandMark can use it.
+    expect(mark?.hex).toMatch(/^[0-9A-F]{6}$/);
   });
 
   // Asserted rather than left implicit. The caption puts the mark BESIDE the

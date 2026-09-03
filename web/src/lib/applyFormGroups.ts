@@ -30,7 +30,9 @@ const GROUP_BY_ANSWER: Record<string, GroupKey> = {
   upload: 'upload',
 };
 
-export interface QuestionGroup {
+/** Not exported: nothing outside needs to name it. A caller reaches a group through
+ *  `ApplyFormModel.groups` and gets the same type structurally. */
+interface QuestionGroup {
   key: GroupKey;
   questions: Question[];
 }
@@ -44,10 +46,19 @@ export interface ApplyFormModel {
    *  applying costs a minute or an evening. A zero is counted honestly here and
    *  simply not printed; withholding it would say "we do not know" instead. */
   written: number;
-  /** Whether the groups are worth heading. One group needs no heading: it would
-   *  only repeat the summary standing directly above it. */
+  /** Whether the groups are worth heading. */
   headed: boolean;
 }
+
+/** The kinds a lone group needs no heading for, because the heading would be the
+ *  second place the kind is named rather than the only one: `written` is already
+ *  counted in the summary above, and `short` was never named anywhere — display.go
+ *  withholds the word for a one-line answer on purpose.
+ *
+ *  Every other kind is named ONLY by its heading, since the hint that used to sit on
+ *  each row moved there. Suppressing it would delete the fact, and a form asking
+ *  nothing but two work-authorization dropdowns is an ordinary form to be handed. */
+const NEEDS_NO_HEADING: readonly GroupKey[] = ['short', 'written'];
 
 const groupOf = (question: Question): GroupKey => GROUP_BY_ANSWER[question.answer ?? ''] ?? 'short';
 
@@ -60,10 +71,12 @@ export function applyFormModel(questions: Question[]): ApplyFormModel {
     questions: questions.filter((question) => groupOf(question) === key),
   })).filter((group) => group.questions.length > 0);
 
+  const [only] = groups;
+
   return {
     groups,
     total: questions.length,
     written: groups.find((group) => group.key === 'written')?.questions.length ?? 0,
-    headed: groups.length > 1,
+    headed: groups.length > 1 || (only !== undefined && !NEEDS_NO_HEADING.includes(only.key)),
   };
 }

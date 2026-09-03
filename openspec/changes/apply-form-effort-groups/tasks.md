@@ -30,24 +30,24 @@
 
 ## 3. The rendering
 
-- [ ] 3.1 Render the caption line in `JobApplyForm.svelte`: the provider's mark via
+- [x] 3.1 Render the caption line in `JobApplyForm.svelte`: the provider's mark via
       `BrandMark` where `atsmarks` knows one and nothing where it does not, the
       provider's name, and the summary figures from `applyFormGroups`.
-- [ ] 3.2 Render the groups: a heading per group carrying its name and count, the
+- [x] 3.2 Render the groups: a heading per group carrying its name and count, the
       headings omitted entirely when the model says so, and the standard-fields
       line kept as its own group so it is not orphaned once headings exist.
-- [ ] 3.3 Drop the per-question answer-kind hint, leaving `optional` alone on the
+- [x] 3.3 Drop the per-question answer-kind hint, leaving `optional` alone on the
       row; key each group's `{#each}` by index, and carry forward the comment
       explaining why (the `each_key_duplicate` crash).
-- [ ] 3.4 Confirm `applyFormWorthShowing` and its exported contract are untouched,
+- [x] 3.4 Confirm `applyFormWorthShowing` and its exported contract are untouched,
       since `JobView.svelte` gates the whole tab on it.
 
 ## 4. Verification
 
-- [ ] 4.1 `pnpm --dir web test` green, `pnpm --dir web check` clean, eslint clean on
+- [x] 4.1 `pnpm --dir web test` green, `pnpm --dir web check` clean, eslint clean on
       the touched files.
-- [ ] 4.2 `pnpm check:dead` — both new modules are imported, so neither reads as a
+- [x] 4.2 `pnpm check:dead` — both new modules are imported, so neither reads as a
       dead file.
-- [ ] 4.3 Look at the block in a browser on a Greenhouse posting (mark, summary,
+- [x] 4.3 Look at the block in a browser on a Greenhouse posting (mark, summary,
       several groups) and on a posting from a provider with no mark, confirming the
       caption line degrades to text alone.

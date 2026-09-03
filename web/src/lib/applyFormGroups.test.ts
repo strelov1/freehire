@@ -16,16 +16,18 @@ describe('apply form groups', () => {
   it('sorts every answer kind in the served vocabulary into a group', () => {
     const model = applyFormModel([
       ask('Website', undefined),
-      ask('English level?', 'choose one'),
+      // Deliberately counter-alphabetical, so a re-ordering regression cannot slip
+      // past by coincidence: the served order and any obvious sort disagree here.
+      ask('Zurich office?', 'choose one'),
       ask('Which stacks?', 'choose any'),
-      ask('Worked in fintech?', 'yes / no'),
+      ask('Any relocation?', 'yes / no'),
       ask('Why this role?', 'written answer'),
       ask('Portfolio', 'upload'),
     ]);
 
     expect(model.groups.map((g) => [g.key, g.questions.map((q) => q.text)])).toEqual([
       ['short', ['Website']],
-      ['choice', ['English level?', 'Which stacks?', 'Worked in fintech?']],
+      ['choice', ['Zurich office?', 'Which stacks?', 'Any relocation?']],
       ['written', ['Why this role?']],
       ['upload', ['Portfolio']],
     ]);
@@ -102,11 +104,33 @@ describe('apply form headings', () => {
 
   // A lone heading reading "Written answers (5)" under a summary reading
   // "5 questions · 5 written answers" says the same thing twice in two lines.
-  it('drops the headings when every question is of one kind', () => {
+  it('drops the lone heading when the summary already names the kind', () => {
     const model = applyFormModel([ask('Why us?', 'written answer'), ask('Why this role?', 'written answer')]);
 
     expect(model.headed).toBe(false);
   });
+
+  // Nothing was ever said about a one-line answer — display.go withholds the word
+  // on purpose — so a heading here would introduce a label, not preserve one.
+  it('drops the lone heading when there is no kind to name', () => {
+    const model = applyFormModel([ask('Website', undefined), ask('LinkedIn', undefined)]);
+
+    expect(model.headed).toBe(false);
+  });
+
+  // These two are the reason the collapse is not simply "one group, no heading".
+  // The rows used to carry `choose one` and `upload` themselves; that hint moved
+  // into the heading, so suppressing the heading would delete the fact outright —
+  // and the summary never mentions either kind. A form asking nothing but two work
+  // authorization dropdowns is an ordinary Greenhouse form, not a corner case.
+  it.each(['choose one', 'choose any', 'yes / no', 'upload'])(
+    'keeps the lone heading for %s, the only place that kind is stated',
+    (answer) => {
+      const model = applyFormModel([ask('Authorized to work?', answer)]);
+
+      expect(model.headed).toBe(true);
+    },
+  );
 
   it('drops the headings when the form asks nothing', () => {
     expect(applyFormModel([]).headed).toBe(false);

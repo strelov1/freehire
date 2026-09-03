@@ -43,9 +43,34 @@ Each group's heading SHALL name the kind of answer its questions expect and how
 many there are, so that the kind is stated once for the group rather than once per
 question.
 
-A group no question falls into SHALL NOT be shown. Where every question falls into
-a single group the headings SHALL be omitted entirely, because a lone heading
-would only repeat the count already stated above it.
+A group no question falls into SHALL NOT be shown.
+
+Where every question falls into a single group, that group's heading SHALL be
+omitted only where the kind it names is already known to the reader without it:
+where the summary above has already counted that kind, or where the kind is the
+one nothing has ever named — the one-line answer everybody assumes. In every other
+case the lone heading SHALL be shown, because the kind moved out of the questions'
+own rows and into the heading, so suppressing it would not repeat a fact but delete
+it.
+
+#### Scenario: A lone group the summary already counts
+
+- **WHEN** the page renders a form every question of which demands a written answer
+- **THEN** the questions are listed without a heading, the summary above having
+  already said how many written answers there are
+
+#### Scenario: A lone group of one-line questions
+
+- **WHEN** the page renders a form every question of which is answerable in a line
+- **THEN** the questions are listed without a heading, no kind having been named for
+  them anywhere before this change either
+
+#### Scenario: A lone group whose kind nothing else names
+
+- **WHEN** the page renders a form every question of which is answered by choosing
+  from a list
+- **THEN** the heading is shown, being the only place the reader is told these
+  questions are answered by choosing rather than by writing
 
 Within a group the questions SHALL keep the order the employer put them in. The
 served order is not reordered — only partitioned — so that the employer's sequence
@@ -61,12 +86,6 @@ survives wherever grouping does not override it.
 
 - **WHEN** the page renders a form no question of which demands a file
 - **THEN** no heading for attachments appears
-
-#### Scenario: A form of one kind only
-
-- **WHEN** the page renders a form every question of which expects the same kind of
-  answer
-- **THEN** the questions are listed without any group heading
 
 #### Scenario: The employer's order within a group
 

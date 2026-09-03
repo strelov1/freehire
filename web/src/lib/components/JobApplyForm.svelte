@@ -51,16 +51,20 @@
          (see atsmarks.ts), so a mark-only caption would leave most postings unattributed. -->
     <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
       {#if mark}
-        <BrandMark path={mark.path} hex={mark.hex} title={mark.title} class="size-3.5 shrink-0" />
+        <!-- Hidden from the reader who is being read to: BrandMark labels itself with
+             the brand's name, which the sentence right beside it already says. -->
+        <span class="contents" aria-hidden="true">
+          <BrandMark path={mark.path} hex={mark.hex} title={mark.title} class="size-3.5 shrink-0" />
+        </span>
       {/if}
       <span>
         As published by <span class="capitalize">{form.provider}</span>
-        {#if model.total}
+        {#if model.total > 0}
           &middot; {model.total}
           {model.total === 1 ? 'question' : 'questions'}
           <!-- A zero is never printed. "0 written answers" states a cost that does not
                exist; the model counts it honestly and the decision not to say it is here. -->
-          {#if model.written}
+          {#if model.written > 0}
             &middot; {model.written}
             {model.written === 1 ? 'written answer' : 'written answers'}
           {/if}
@@ -74,7 +78,7 @@
            questions below are headed, so it is never the one labelled block on the page. -->
       <div class="flex max-w-3xl flex-col gap-1">
         {#if model.headed}
-          <h3 class="text-xs font-medium text-muted-foreground">Basics</h3>
+          <h2 class="text-xs font-medium text-muted-foreground">Basics</h2>
         {/if}
         <p class="text-sm text-muted-foreground">{form.basics.join(', ')}</p>
       </div>
@@ -91,9 +95,9 @@
     {#each model.groups as group (group.key)}
       <div class="flex max-w-3xl flex-col gap-1">
         {#if model.headed}
-          <h3 class="text-xs font-medium text-muted-foreground">
+          <h2 class="text-xs font-medium text-muted-foreground">
             {GROUP_LABELS[group.key]} ({group.questions.length})
-          </h3>
+          </h2>
         {/if}
         <!-- Keyed on index, not on the question text. The text is the employer's, verbatim, and
              real ATS forms repeat it — Greenhouse and Workable both publish the same screening
