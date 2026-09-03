@@ -1,0 +1,52 @@
+## 1. Stage 1 — the dropdown's behaviour (frontend only, no Go)
+
+- [ ] 1.1 Stop the header input from filtering the list on every keystroke: hold the typed text locally in `HeaderListSearch.svelte` and commit it to the list store only on Enter or on choosing a row
+- [ ] 1.2 Open the dropdown on focus with an empty query, showing the category suggestions in `CATEGORY_GROUP_ORDER`; drop the two-character minimum
+- [ ] 1.3 Add the postings and companies sections to the dropdown, reusing `HeaderSearch.svelte`'s data calls and its `EntityLogo`/`companyLogoUrl` row rendering rather than writing a second one
+- [ ] 1.4 Make the keyboard highlight run continuously across all three sections, and cap each section (5 completions, 5 postings, 3 companies)
+- [ ] 1.5 Verify stage 1 in the browser on `/`: empty focus, typing without refetch, Enter, arrow-through, Escape, click-away
+
+## 2. Stage 2 — the suggestions package
+
+- [ ] 2.1 Create `internal/search/suggest` and register it in the `search` block in `internal/platform/arch/layering/blocks.go`; assert `go vet ./...` and the layering test pass on the empty package
+- [ ] 2.2 Implement title normalisation (lowercase, collapse whitespace, cut at the first separator) as a pure exported function, with the mined-title and typed-query cases that must land on the same key
+- [ ] 2.3 Implement the drop rule for titles reducing to a bare grade or bare generic, driven by `vocab.SeniorityValues` plus the generic list
+- [ ] 2.4 Implement the suggestion document type and the builder's assembly: mined titles above the floor, roles, skills, categories, companies — each with its open-posting count
+- [ ] 2.5 Implement the category-vs-role de-duplication (a category sharing a role's slug is not emitted) and the one-row-per-base-role collapse
+- [ ] 2.6 Implement the index settings and the rebuild-and-swap write, reusing `search.Rebuild` rather than a second swap implementation
+
+## 3. Stage 2 — the builder worker
+
+- [ ] 3.1 Add `cmd/build-suggestions` on the `worker.Main`/`worker.Bootstrap` shape of `cmd/rollup-facets`, taking the floors as env with documented defaults
+- [ ] 3.2 Run it against production data, inspect the resulting dictionary, and set the title floor and company floor from what it shows
+- [ ] 3.3 Add the systemd unit and timer under `deploy/`, scheduled so it cannot overlap `freehire-reindexw`, and record that it must be copied to the host
+
+## 4. Stage 2 — the endpoint
+
+- [ ] 4.1 Implement the in-process phrase set: load the normalised phrases from the index at startup, refresh on a ticker, expose the exact longest-prefix parse
+- [ ] 4.2 Implement the fragment query against the index, excluding the kinds the prefix already filled (roles and companies once, skills unbounded)
+- [ ] 4.3 Implement ranking — relevance, then recorded demand, then open-posting count, then shorter text — and withhold any suggestion whose count is zero
+- [ ] 4.4 Implement the empty-`q` response: the curated category order, never the highest-count values
+- [ ] 4.5 Wire `GET /api/v1/suggest` in `internal/api/handler` with the standard list response shape, and give it its own rate-limit bucket
+- [ ] 4.6 Document the endpoint in `web/static/openapi.yaml`
+
+## 5. Stage 2 — the client moves onto the endpoint
+
+- [ ] 5.1 Point the dropdown's completions at `/api/v1/suggest` with a debounce and a stale-response token; cache the empty-state response for the session
+- [ ] 5.2 Apply every part a chosen suggestion names — role plus `company_slug` together — and keep the typed text instead of clearing it
+- [ ] 5.3 Apply a `title` suggestion as the free-text query rather than a facet
+- [ ] 5.4 Delete `web/src/lib/roleSuggest.ts`, its tests, and the now-unused `roleSuggest` bridge in `JobsView.svelte`/`listSearch.svelte.ts`; confirm `pnpm check:dead` stays clean
+- [ ] 5.5 Verify in the browser: `java developer`, `nodejs developer`, `backedn`, `senior software engineer go`, `google`
+
+## 6. Stage 3 — search frequency
+
+- [ ] 6.1 Add migration `0123` creating `search_queries` (normalised text key, count, last seen) and the sqlc query; run `make sqlc`
+- [ ] 6.2 Upsert the normalised query on every search carrying a non-empty `q`, failing open so a write error never delays or fails the response, and storing no identifier
+- [ ] 6.3 Join the recorded counts into the builder's documents, writing zero for a suggestion nobody has searched
+- [ ] 6.4 Confirm the endpoint's demand-first ranking now reorders suggestions, and that an unsearched suggestion is still offered
+
+## 7. Finish
+
+- [ ] 7.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...`
+- [ ] 7.2 Update `internal/search/AGENTS.md` with the new package, and the root `CLAUDE.md` worker list with `cmd/build-suggestions` and its env
+- [ ] 7.3 Verify the whole flow on production data, then finish the branch
