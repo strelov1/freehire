@@ -63,5 +63,8 @@
 - [x] 7.2 `go vet -tags=integration ./...`, then the tagged suite for the
   packages touched
 - [x] 7.3 `pnpm -C web check` / lint, `pnpm check:links`
-- [ ] 7.4 Verify the feed and the fixed "Load more" in a browser against prod
-  after deploy
+- [x] 7.4 Verify the feed and the fixed "Load more" in a browser against prod
+  after deploy. Live 2026-09-03: /discussions serves its three threads with
+  resolved subject names and logos, and the single-thread subject page no
+  longer draws "Load more". Took three releases — see 0126/0127 for the
+  CONCURRENTLY lock timeout and the invalid index it left behind.
