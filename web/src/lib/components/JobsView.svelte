@@ -739,19 +739,6 @@
          first 32px — here, the "Filters" heading — for the whole scroll. The max-height
          is then what is left of the viewport, less the same 24px at the bottom. -->
     <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
-      {#if !standalone && jobs.status === 'ready'}
-        <!-- Company view: the (filtered) open-job count as the sidebar's lead stat.
-             The inline count above the list is hidden on desktop (shown only on
-             mobile, where there's no sidebar), so it lives here instead. -->
-        <div class="rounded-xl border border-border bg-card px-4 py-3">
-          <p class="text-3xl font-semibold leading-none tracking-tight tabular-nums">
-            {listTotal.toLocaleString()}
-          </p>
-          <p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {listTotal === 1 ? 'open job' : 'open jobs'}
-          </p>
-        </div>
-      {/if}
       {@render sidebarTop?.()}
       <div class="rounded-xl border border-border bg-card p-4">
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
@@ -764,7 +751,6 @@
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
-      showDesktopTotal={standalone}
       controls={listControls}
     />
 
