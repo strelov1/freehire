@@ -101,12 +101,19 @@
 
 - [x] 8.1 Run the full web test suite (`pnpm test` in `web/`) and lint; run
   `go test ./...` and `go vet -tags=integration ./...`.
-- [ ] 8.2 Run the app and confirm on the browse feed: the count renders beside the
-  timestamp, badges appear on fresh postings, a viewed card shows a check (not a
-  second eye), and `Most viewed` reorders the feed.
-- [ ] 8.3 Confirm the company detail page and tracking board render no badges (no
-  reality signal in those projections) and do not error.
-- [ ] 8.4 Confirm the job detail page is visually unchanged.
+- [x] 8.2 Confirmed against production rather than a local stack (the browse feed
+  needs Meilisearch plus a populated catalogue): the served feed HTML carries the
+  `Most viewed` option, both badge labels and the screen-reader view count, and
+  `sort=view_count` returns `122, 102, 94, 93, 91` descending against `0, 0, 0, 0,
+  0` ascending.
+- [x] 8.3 Confirmed, and it corrected this plan: the company page is
+  **search-backed** (`companies/[slug]/+page.server.ts` calls `searchJobs` with a
+  `company_slug` facet), so it carries the reality signal and DOES show badges.
+  The surfaces the gate actually bounds are the `Card`-projection ones — tracking
+  board, saved and hidden lists, assistant deck — which have no `reality` field.
+  The plain `/jobs` list has no caller in the SPA at all.
+- [x] 8.4 Job detail page renders and still shows its counts. Not compared pixel
+  by pixel; `JobView.svelte` is untouched by this change.
 
 ## 9. Rollout
 
@@ -117,16 +124,26 @@ ordering — or opens a shared `?sort=view_count` link — gets a 500 on an
 SSR-rendered page, because Meilisearch rejects the whole query for an undeclared
 sort attribute.
 
-- [ ] 9.1 Confirm the in-flight rebuild has landed and the Meilisearch task queue
-  is clear before touching index settings.
-- [ ] 9.2 Make `view_count` sortable on the live index — via a rebuild, or by
-  patching with the **complete** five-attribute list — then read
-  `sortableAttributes` back and confirm all five are present. A partial patch
-  would drop `posted_at` and break the feed's default ordering for everyone. A
-  200 on the patch means the task was accepted, not that it ran.
-- [ ] 9.3 Only after 9.2 reads back clean, run the release (it carries the Go
-  change and the card together). Verify `/jobs/search?sort=view_count` returns 200
-  with a plausibly ordered page on production.
-- [ ] 9.4 Verify on production: the count and badges on a browse card, no badges
-  on the company page and tracking board, the detail page unchanged, and the
-  signal row on a phone-width viewport.
+- [x] 9.1 Queue held one small `documentAdditionOrUpdate` (86 documents) and no
+  rebuild, so the settings task would not queue behind hours of work.
+- [x] 9.2 Patched the live index with all five attributes at 17:46 UTC on
+  2026-09-03 (task 681454). It reported `enqueued`, then `processing` for 91
+  seconds while Meilisearch rebuilt the sort data over the catalogue, then
+  `succeeded`. Read back: `created_at, enrichment.salary_max,
+  enrichment.salary_min, posted_at, view_count` — `posted_at` survived, so the
+  default ordering is intact.
+- [x] 9.3 The autodeploy timer saw the merge at 17:47 and deferred ("still has 4
+  check(s) running"), so the setting was live before any binary carrying the
+  handler entry could roll out. The release landed on the following tick;
+  `/jobs/search?sort=view_count` now returns 200 with `122, 102, 94, 93, 91`.
+- [x] 9.4 Verified on production: the count and badges on a browse card, the
+  detail page still rendering its counts, and — see 8.3 — badges on the company
+  page too, which corrected this plan rather than confirming it.
+
+## 10. Left undone
+
+- [ ] 10.1 Look at the rendered card. Everything above was verified through served
+  HTML and API responses, which prove the markup and the data but not the layout:
+  the signal row carrying two brand badges plus a reality chip plus facet chips at
+  phone width (tasks 3.4 / 4.4), and the header rail's `pr-9` save-button gutter
+  with a five-digit count beside a long company name.

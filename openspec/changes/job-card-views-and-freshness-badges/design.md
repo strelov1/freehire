@@ -112,9 +112,18 @@ resolution ("in the component nothing could test it").
 change the detail page's behaviour for a job with no signal, which is not what
 this change is for, and would invalidate an existing tested case.
 
-*Accepted consequence:* the company detail page and the tracking board show no
-badges. They are fed by projections that cannot support the claim honestly, and
-an absent badge is a smaller cost than a false one.
+*Accepted consequence:* the `Card`-projection surfaces — the tracking board, the
+saved and hidden lists, the assistant deck — show no badges. That projection has
+no `reality` field at all, so it cannot support the claim honestly, and an absent
+badge is a smaller cost than a false one.
+
+The company detail page is NOT one of them, contrary to what this section said
+before production verified it: `web/src/routes/companies/[slug]/+page.server.ts`
+loads its jobs through `searchJobs` with a `company_slug` facet, so its rows are
+search hits and carry the signal like any other. The plain `/jobs` list, which
+genuinely does not attach reality, has no caller in the SPA at all — it is an
+API-only endpoint. So the rule bites exactly one family of surfaces, and it is
+the `Card` shape rather than any particular page.
 
 ### `formatCount` moves to `utils.ts`
 
@@ -245,11 +254,13 @@ what carries the setting, it never applies, quietly. Mitigation: verify disk, an
 confirm the setting is live by reading it back. As of 2026-09-03 a rebuild is in
 flight with the floor temporarily lowered.
 
-**[Badges disappear from the company page and tracking board]** → surfaces whose
-projections carry no reality signal now show no badges. This is the chosen
-trade-off (an absent badge beats a false one), but it is a visible reduction on
-surfaces that never had the badges to begin with, so nothing regresses for users
-— it only bounds where the feature reaches.
+**[The badges never reach the `Card`-projection surfaces]** → the tracking board,
+the saved and hidden lists and the assistant deck carry no reality signal, so
+they show no badges. This is the chosen trade-off (an absent badge beats a false
+one), and since those surfaces never had the badges, nothing regresses for users
+— it only bounds where the feature reaches. Production confirmed the bound is
+narrower than this document first claimed: the company page is search-backed and
+does show them.
 
 **[Sorting by views entrenches what is already popular]** → the ordering feeds
 attention to postings that already have it, and a good fresh posting can never
