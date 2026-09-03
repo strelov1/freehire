@@ -70,6 +70,12 @@ export class CompanyFilterStore implements FacetStore {
     this.#url.setSoon({ ...this.#url.value, q });
   }
 
+  /** The header's Enter and its clear button: a discrete act, not a keystroke, so it
+   *  skips the debounce that exists for typing. Mirrors FilterStore.commitQuery. */
+  commitQuery(q: string) {
+    this.#url.setNow({ ...this.#url.value, q });
+  }
+
   // A picked sort order, like a toggled facet, applies immediately.
   setSort(sort: CompanySortField) {
     this.#url.setNow({ ...this.#url.value, sort });

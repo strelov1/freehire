@@ -56,9 +56,17 @@
   // navigation, a filter chip removed, a suggestion applied. `untrack` reads the
   // current draft without subscribing to it — this effect writes `draft`, so
   // tracking the read would make it re-run itself forever.
-  $effect(() => {
+  // `$effect.pre` rather than `$effect`: this folds external state IN, so it belongs
+  // before the render that shows it. After the DOM update, a back/forward or a removed
+  // chip would paint one frame of the old text first.
+  $effect.pre(() => {
     const committed = q;
-    draft = reconcile(untrack(() => draft), committed);
+    const owner = target;
+    draft = reconcile(
+      untrack(() => draft),
+      committed,
+      owner,
+    );
   });
 
   // The All-filters trigger: shown (with its active-filter badge) only on list pages
@@ -94,20 +102,34 @@
 
   /** Run what is in the box, and close over it. The store owns the URL write and the
    *  reload from here. Every path that searches free text goes through this — Enter,
-   *  the dropdown's last row, and the clear button, which is a search for nothing. */
+   *  the dropdown's last row, and the clear button, which is a search for nothing.
+   *
+   *  With no target the draft stays UNCOMMITTED rather than recording a commit nobody
+   *  received: the view registers its store a few hundred ms after first paint, and
+   *  `q` does not move, so a draft marked committed here would never be corrected. */
   function runSearch() {
+    if (!target) return;
     draft = commit(draft);
-    target?.setQuery(draft.committed);
+    target.commitQuery(draft.committed);
     close();
   }
 
   function choose(index: number) {
     const picked = suggestions[index];
     if (picked) roleSuggest?.apply(picked.slug);
+    // `applyRole` drops `q` from the filters, so the box must drop it too. Reconcile
+    // cannot see this: on a feed with no committed query the value does not MOVE
+    // (already `''`), and an unchanged value is exactly what it reads as "no news" —
+    // leaving the typed text sitting over a list that is no longer running it.
+    draft = commit(edit(draft, ''));
     close();
   }
 
   function onKeydown(e: KeyboardEvent) {
+    // Mid-composition (CJK/IME) Enter CONFIRMS a candidate and the arrows move through
+    // them; the browser must keep those. `oninput` has already fired by then, so the
+    // draft holds pre-conversion text — searching it would search a half-typed word.
+    if (e.isComposing) return;
     // Enter is handled whether or not the dropdown is open — it is the only way typing
     // reaches the list now, so it cannot sit behind the dropdown's guard. A highlighted
     // ROLE row applies its facet; anything else (nothing highlighted, or the last row,
@@ -305,7 +327,7 @@
         >
           <Search class="size-4 shrink-0 text-muted-foreground" />
           <span class="min-w-0 flex-1 truncate text-muted-foreground"
-            >Search “{draft.text}” as text</span
+            >Search “{draft.text.trim()}” as text</span
           >
         </button>
       </li>

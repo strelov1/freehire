@@ -9,10 +9,15 @@ import type { FacetStore } from './facets';
 import type { FacetCounts } from './types';
 
 /** The slice of a page filter store the header drives. Both FilterStore and
- *  CompanyFilterStore satisfy the base contract (`value.q` + `setQuery`). */
+ *  CompanyFilterStore satisfy the base contract (`value.q` + `commitQuery`).
+ *
+ *  The header COMMITS; it does not type into the store. What the visitor types is a
+ *  draft the header holds until Enter, a chosen suggestion, or the clear button — so
+ *  every write arriving here is a discrete act, and the store's debounced `setQuery`
+ *  (which exists for continuous input) would only delay it. */
 export interface ListSearchTarget {
   readonly value: { q: string };
-  setQuery(q: string): void;
+  commitQuery(q: string): void;
 
   /** The geography (+ work-format) facet scope the header's Location & format popover
    *  drives, present on both list surfaces. `variant` selects the popover body: jobs

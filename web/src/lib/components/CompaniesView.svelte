@@ -71,7 +71,7 @@
       get value() {
         return filters.value;
       },
-      setQuery: (q) => filters.setQuery(q),
+      commitQuery: (q) => filters.commitQuery(q),
       filterScope: { store: filters, counts: () => null, variant: 'companies' },
       openFilters: () => (modalOpen = true),
       activeFilters: () => filters.active,

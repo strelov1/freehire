@@ -79,6 +79,14 @@ export class FilterStore {
     this.#url.setSoon({ ...this.#url.value, q });
   }
 
+  /** The header's Enter, its clear button, its free-text row: a discrete act, not a
+   *  keystroke. setNow, so the reload does not wait out a debounce window that exists
+   *  for typing — and so any timer a previous continuous write left pending is
+   *  cleared rather than landing after this. */
+  commitQuery(q: string) {
+    this.#url.setNow({ ...this.#url.value, q });
+  }
+
   setSalaryMin(n: number | null) {
     this.#url.setSoon({ ...this.#url.value, salaryMin: n });
   }
@@ -149,9 +157,10 @@ export class FilterStore {
   }
 
   /** Header role suggestion picked: turn the role on and drop the typed text in one
-   *  discrete write. setNow (not setSoon) is the point — it clears the timer the last
-   *  keystroke's setQuery left pending, so the debounced text cannot land after the
-   *  role and re-narrow the search the suggestion just widened. */
+   *  discrete write. setNow both applies at once and clears any pending continuous
+   *  write, so debounced text cannot land after the role and re-narrow the search the
+   *  suggestion just widened. (The header no longer types into the store at all — see
+   *  commitQuery — so that race is now only reachable from another caller.) */
   applyRole(slug: string) {
     this.#url.setNow(filtersWithRole(this.#url.value, slug));
   }

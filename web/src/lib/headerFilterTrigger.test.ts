@@ -6,7 +6,7 @@ import type { ListSearchTarget } from './listSearch.svelte';
 // store is irrelevant here — the header consumes the plain `openFilters`/`activeFilters`
 // callbacks, so a plain object exercises the contract without Svelte compilation.
 function target(over: Partial<ListSearchTarget> = {}): ListSearchTarget {
-  return { value: { q: '' }, setQuery: () => {}, ...over };
+  return { value: { q: '' }, commitQuery: () => {}, ...over };
 }
 
 describe('headerFilterTrigger', () => {

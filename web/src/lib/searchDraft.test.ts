@@ -50,4 +50,38 @@ describe('searchDraft', () => {
     const typed = edit(emptyDraft('java'), 'java dev');
     expect(reconcile(typed, '').text).toBe('');
   });
+
+  it('commits whitespace-only text as empty — the clear-by-spacebar path', () => {
+    expect(commit(edit(emptyDraft('java'), '   ')).committed).toBe('');
+  });
+
+  // The scope. A draft belongs to the list it was typed into, and TopBar keeps ONE
+  // HeaderListSearch across `/`, `/companies/:slug` and `/collections/:slug` — so the
+  // component survives a navigation between two different lists. Both carry `q=''`,
+  // which the committed rule alone reads as "no news", leaving the previous page's
+  // text over the new page's results.
+  describe('scope', () => {
+    const listA = { name: 'a' };
+    const listB = { name: 'b' };
+
+    it('drops the draft when a different list takes over the box', () => {
+      const typed = edit(emptyDraft('', listA), 'java dev');
+      expect(reconcile(typed, '', listB).text).toBe('');
+    });
+
+    it('keeps the draft while the same list owns the box', () => {
+      const typed = edit(emptyDraft('', listA), 'java dev');
+      expect(reconcile(typed, '', listA).text).toBe('java dev');
+    });
+
+    // The view registers its store ~300ms after first paint, so the box exists
+    // unowned before that. Text typed into it is the visitor's, not a previous
+    // list's, and adopting an owner must not throw it away.
+    it('adopts a first owner without discarding what was typed meanwhile', () => {
+      const typed = edit(emptyDraft(''), 'java dev');
+      const owned = reconcile(typed, '', listA);
+      expect(owned.text).toBe('java dev');
+      expect(reconcile(owned, '', listB).text).toBe('');
+    });
+  });
 });

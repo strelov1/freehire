@@ -389,7 +389,7 @@
       get value() {
         return filters.value;
       },
-      setQuery: (q) => filters.setQuery(q),
+      commitQuery: (q) => filters.commitQuery(q),
       filterScope: { store: filters, counts: () => counts, variant: 'jobs', inferred: () => scopeInferred },
       roleSuggest: {
         counts: () => roleCounts,
