@@ -4,10 +4,9 @@ import (
 	"cmp"
 	"slices"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/dict/skilltag"
+	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
 
 // Align rewrites doc so skill wording matches the spellings the vacancy used (canonical →
@@ -173,7 +172,7 @@ func replaceProse(text string, rules []proseRule) string {
 func ruleAt(text, lower string, i int, rules []proseRule) (proseRule, bool) {
 	for _, r := range rules {
 		end := i + len(r.from)
-		if end <= len(text) && lower[i:end] == r.from && proseBoundary(text, i, end) {
+		if end <= len(text) && lower[i:end] == r.from && wordmatch.TechTermBoundary(text, i, end) {
 			return r, true
 		}
 	}
@@ -194,24 +193,6 @@ func asciiLower(s string) string {
 		}
 	}
 	return string(b)
-}
-
-// proseBoundary mirrors wordmatch.ASCIIBoundary but also treats non-ASCII letters
-// as word runes so Cyrillic neighbours do not get false hits.
-func proseBoundary(s string, start, end int) bool {
-	if start > 0 {
-		r, _ := utf8.DecodeLastRuneInString(s[:start])
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '-' {
-			return false
-		}
-	}
-	if end < len(s) {
-		r, _ := utf8.DecodeRuneInString(s[end:])
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			return false
-		}
-	}
-	return true
 }
 
 func documentsEqualForAlign(a, b Document) bool {

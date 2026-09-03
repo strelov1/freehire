@@ -108,6 +108,33 @@ func TestParse_BoilerplateSectionsAreNotSkills(t *testing.T) {
 	}
 }
 
+// TestParse_AccentedWordsAreNotSkills pins the two places a word boundary is
+// decided — the phrase pass (wordmatch) and the word pass (wordTokens) — against
+// text whose letters are not ASCII. Both read a curated alias out of the middle of
+// an inflected foreign word before this: the Hungarian "elkészítése" ("preparing
+// it") yielded elk, on 18 of 110 postings sampled from a live Hungarian IT crawl.
+// The failure is not Hungarian-specific — any diacritic or non-Latin script ends an
+// ASCII-only token the same way.
+func TestParse_AccentedWordsAreNotSkills(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"hungarian inflection yields no elk", "A dokumentáció elkészítése a feladatod.", nil},
+		{"hungarian inflection beside a real stack", "Rendszertervek elkészítése Python nyelven.", []string{"python"}},
+		{"a real ELK mention still tags", "ELK stack üzemeltetése", []string{"elk"}},
+		{"lowercase elk as a whole word still tags", "we run elk for logging", []string{"elk"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Parse(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %#v, want %#v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParse_SeparatorInsensitive(t *testing.T) {
 	cases := []struct {
 		name string

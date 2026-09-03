@@ -35,7 +35,14 @@ var htmlTagRE = regexp.MustCompile(`<[^>]*>`)
 
 // wordTokenRE splits normalized text into bare alphanumeric tokens for the word
 // pass. Punctuated terms (c++, node.js) are handled separately by the phrase pass.
-var wordTokenRE = regexp.MustCompile(`[a-z0-9]+`)
+//
+// The class is Unicode, not [a-z0-9], even though every alias it is looked up
+// against is ASCII: an ASCII-only class ends a token at the first accented letter,
+// so an inflected foreign word DECOMPOSES into ASCII fragments and a fragment can
+// be an alias — Hungarian "elkészítése" tokenized to elk/sz/t/se and tagged ELK.
+// Widening the class only ever makes a token longer, so it removes fragment
+// matches and can never lose a term the text really states.
+var wordTokenRE = regexp.MustCompile(`[\p{L}\p{N}]+`)
 
 // sepRE matches a run of the word-joiners '-'/'_' and whitespace. It is used to
 // split a multi-word alias into its segments; the text itself is NOT rewritten, so
@@ -78,14 +85,14 @@ type phraseMatcher struct {
 }
 
 // matches reports whether the alias occurs in norm as a standalone term. Regex
-// hits are boundary-checked with the same ASCIIBoundary rule as the substring
+// hits are boundary-checked with the same TechTermBoundary rule as the substring
 // path, so a leading '-' (e.g. the "c" in "objective-c") is not a word start.
 func (m phraseMatcher) matches(norm string) bool {
 	if m.re == nil {
-		return wordmatch.Contains(norm, m.token, wordmatch.ASCIIBoundary)
+		return wordmatch.Contains(norm, m.token, wordmatch.TechTermBoundary)
 	}
 	for _, loc := range m.re.FindAllStringIndex(norm, -1) {
-		if wordmatch.ASCIIBoundary(norm, loc[0], loc[1]) {
+		if wordmatch.TechTermBoundary(norm, loc[0], loc[1]) {
 			return true
 		}
 	}
@@ -184,9 +191,10 @@ func Parse(text string, opts ...Option) []string {
 	standalone := map[string]struct{}{}
 
 	// Acronym pass: case-sensitive whole-word match over case-preserved text, so an
-	// UPPERCASE acronym resolves while its ambiguous lowercase form does not. Uses a
-	// Unicode word boundary because the text is not lowercased here (ASCIIBoundary's
-	// word test is lowercase-only and would misjudge uppercase neighbours).
+	// UPPERCASE acronym resolves while its ambiguous lowercase form does not. It takes
+	// the plain word boundary rather than TechTermBoundary because an acronym surface
+	// carries no punctuation, so the dotted/hyphenated-suffix guard has nothing to
+	// protect here.
 	cased := stripMarkup(text)
 	matchAcronyms(cased, sharedAcronyms, strong)
 	if o.resumeAcronyms {

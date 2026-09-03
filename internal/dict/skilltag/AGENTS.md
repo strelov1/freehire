@@ -46,6 +46,34 @@ through `Parse`.
   that render it must not print a placeholder — but no canonical reaches that path any
   more, which is why the chip's reveal is unconditional.
 
+## What a word boundary is, and why it is not ASCII
+
+Every alias here is ASCII, which is exactly what made it tempting to test a boundary
+by looking at ASCII bytes — and that is a statement about the TERM, not about its
+NEIGHBOURS. Both places a boundary is decided read Unicode:
+`wordmatch.TechTermBoundary` (the phrase pass) and `wordTokenRE` (the word pass).
+
+A byte-level test reads any letter outside ASCII as a separator, so a curated alias
+becomes a whole word inside every accented or non-Latin one. Measured over 4,800 live
+prod descriptions from eight sources (2026-09-03), fixing it removed **89 tags across
+74 postings (1.5%) and added none** — widening the class can only ever lengthen a
+token, so it removes fragment matches and can never lose a term the text states:
+
+| False tag | Came from |
+|---|---|
+| `typescript` ×51 | the `ts` alias inside Swedish `möts` |
+| `elk` | Hungarian `elkészítése` — 18 of 110 postings on a live Hungarian IT crawl |
+| `express` / `nim` / `vue` | Portuguese `expressão`, Catalan `mínim`, French `prévue` |
+
+Some of the removals are second-order and correct: an ambiguous single word (`ai`,
+`erp`, `networking`) tags only when a strong match corroborates it, so a posting whose
+only strong match was the false `typescript` loses both.
+
+The one thing it gives up: an English tech word inflected with a foreign suffix —
+Russian `devopsа` — used to match by the same accident that caused the false
+positives. That was 1 posting in 4,800, and the Russian sources lost essentially
+nothing, because Russian postings write the term with a space or a hyphen.
+
 ## Convention
 
 - `internal/dict/skilltag/` owns the dictionary parser and canonical vocabulary.
