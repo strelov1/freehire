@@ -1,4 +1,4 @@
-package handler
+package candidateprofile
 
 import (
 	"context"
@@ -7,23 +7,34 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
+	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// fakeBaseCV is a baseCVReader returning a canned base CV. ok=false models a user with no
-// base CV — including one whose only CVs are tailored copies, which the store's query
-// excludes.
-type fakeBaseCV struct {
+// fakeCV is a CVReader returning a canned base CV. ok=false models a user with no base CV
+// — including one whose only CVs are tailored copies, which the store's query excludes.
+type fakeCV struct {
 	doc cv.Document
 	ok  bool
 	err error
 }
 
-func (f fakeBaseCV) BaseCV(context.Context, int64) (cv.Record, bool, error) {
+func (f fakeCV) BaseCV(context.Context, int64) (cv.Record, bool, error) {
 	return cv.Record{Document: f.doc}, f.ok, f.err
 }
 
-// fakeAccount is an accountReader returning a canned account row.
+// fakeResume is a ResumeReader returning a canned structured résumé.
+type fakeResume struct {
+	ret resumeextract.Structured
+	ok  bool
+	err error
+}
+
+func (f fakeResume) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
+	return f.ret, f.ok, f.err
+}
+
+// fakeAccount is an AccountReader returning a canned account row.
 type fakeAccount struct {
 	email string
 	err   error
@@ -33,33 +44,39 @@ func (f fakeAccount) GetUserByID(context.Context, int64) (db.GetUserByIDRow, err
 	return db.GetUserByIDRow{Email: f.email}, f.err
 }
 
-func autofillWith(cvs fakeBaseCV, st resumeextract.Structured, stOK bool, email string) *autofillHandlers {
-	return &autofillHandlers{
-		cvs:      cvs,
-		resumes:  fakeStructuredResume{ret: st, ok: stOK},
-		accounts: fakeAccount{email: email},
-	}
+// fakeScreening is a ScreeningAnswersReader returning a canned record/error.
+type fakeScreening struct {
+	ret screeninganswers.Answers
+	err error
 }
 
-func TestAutofillProfile_PrefersBaseCVOverStructuredResume(t *testing.T) {
-	h := autofillWith(
-		fakeBaseCV{doc: cv.Document{Header: cv.Header{FullName: "Ilya Strelov", Phone: "+1 555 0100"}}, ok: true},
+func (f fakeScreening) Get(context.Context, int64) (screeninganswers.Answers, error) {
+	return f.ret, f.err
+}
+
+func assemblerWith(cvs fakeCV, st resumeextract.Structured, stOK bool, email string) *Assembler {
+	return NewAssembler(cvs, fakeResume{ret: st, ok: stOK}, fakeAccount{email: email}, nil)
+}
+
+func TestAssemble_PrefersBaseCVOverStructuredResume(t *testing.T) {
+	a := assemblerWith(
+		fakeCV{doc: cv.Document{Header: cv.Header{FullName: "Ilya Strelov", Phone: "+1 555 0100"}}, ok: true},
 		resumeextract.Structured{FullName: "I. Strelov", Phone: "+1 555 0199"}, true,
 		"account@example.com",
 	)
 
-	got, err := h.autofillProfile(context.Background(), 7)
+	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
-		t.Fatalf("autofillProfile: %v", err)
+		t.Fatalf("Assemble: %v", err)
 	}
 	if got.FullName != "Ilya Strelov" || got.Phone != "+1 555 0100" {
 		t.Errorf("got %q / %q, want the base CV's values", got.FullName, got.Phone)
 	}
 }
 
-func TestAutofillProfile_FallsBackToStructuredResume(t *testing.T) {
-	h := autofillWith(
-		fakeBaseCV{ok: false},
+func TestAssemble_FallsBackToStructuredResume(t *testing.T) {
+	a := assemblerWith(
+		fakeCV{ok: false},
 		resumeextract.Structured{
 			FullName: "Ilya Strelov",
 			Phone:    "+1 555 0100",
@@ -68,9 +85,9 @@ func TestAutofillProfile_FallsBackToStructuredResume(t *testing.T) {
 		"account@example.com",
 	)
 
-	got, err := h.autofillProfile(context.Background(), 7)
+	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
-		t.Fatalf("autofillProfile: %v", err)
+		t.Fatalf("Assemble: %v", err)
 	}
 	if got.FullName != "Ilya Strelov" || got.FirstName != "Ilya" || got.LastName != "Strelov" {
 		t.Errorf("name = %q (%q / %q), want the structured résumé's", got.FullName, got.FirstName, got.LastName)
@@ -83,16 +100,16 @@ func TestAutofillProfile_FallsBackToStructuredResume(t *testing.T) {
 	}
 }
 
-func TestAutofillProfile_EmptyBaseCVFallsThroughToStructuredResume(t *testing.T) {
-	h := autofillWith(
-		fakeBaseCV{doc: cv.Document{Header: cv.Header{}}, ok: true},
+func TestAssemble_EmptyBaseCVFallsThroughToStructuredResume(t *testing.T) {
+	a := assemblerWith(
+		fakeCV{doc: cv.Document{Header: cv.Header{}}, ok: true},
 		resumeextract.Structured{FullName: "Ilya Strelov", Phone: "+1 555 0100"}, true,
 		"account@example.com",
 	)
 
-	got, err := h.autofillProfile(context.Background(), 7)
+	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
-		t.Fatalf("autofillProfile: %v", err)
+		t.Fatalf("Assemble: %v", err)
 	}
 	if got.FullName != "Ilya Strelov" || got.Phone != "+1 555 0100" {
 		t.Errorf("got %q / %q, want the résumé's values through the empty CV", got.FullName, got.Phone)
@@ -101,9 +118,9 @@ func TestAutofillProfile_EmptyBaseCVFallsThroughToStructuredResume(t *testing.T)
 
 // The chosen source answers for the whole block. A gap in the base CV is a gap the
 // candidate left there — the résumé that seeded it must not fill the gap back in.
-func TestAutofillProfile_DoesNotMergeTheResumeIntoTheBaseCV(t *testing.T) {
-	h := autofillWith(
-		fakeBaseCV{doc: cv.Document{Header: cv.Header{FullName: "Ilya Strelov"}}, ok: true},
+func TestAssemble_DoesNotMergeTheResumeIntoTheBaseCV(t *testing.T) {
+	a := assemblerWith(
+		fakeCV{doc: cv.Document{Header: cv.Header{FullName: "Ilya Strelov"}}, ok: true},
 		resumeextract.Structured{
 			FullName: "Ilya Strelov",
 			Phone:    "+1 555 0199",
@@ -112,9 +129,9 @@ func TestAutofillProfile_DoesNotMergeTheResumeIntoTheBaseCV(t *testing.T) {
 		"account@example.com",
 	)
 
-	got, err := h.autofillProfile(context.Background(), 7)
+	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
-		t.Fatalf("autofillProfile: %v", err)
+		t.Fatalf("Assemble: %v", err)
 	}
 	if got.Phone != "" {
 		t.Errorf("phone = %q, want empty: the résumé must not fill a gap in the chosen CV", got.Phone)
@@ -124,12 +141,12 @@ func TestAutofillProfile_DoesNotMergeTheResumeIntoTheBaseCV(t *testing.T) {
 	}
 }
 
-func TestAutofillProfile_NoSourceYieldsAccountEmailOnly(t *testing.T) {
-	h := autofillWith(fakeBaseCV{ok: false}, resumeextract.Structured{}, false, "account@example.com")
+func TestAssemble_NoSourceYieldsAccountEmailOnly(t *testing.T) {
+	a := assemblerWith(fakeCV{ok: false}, resumeextract.Structured{}, false, "account@example.com")
 
-	got, err := h.autofillProfile(context.Background(), 7)
+	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
-		t.Fatalf("autofillProfile: %v", err)
+		t.Fatalf("Assemble: %v", err)
 	}
 	if got.Email != "account@example.com" {
 		t.Errorf("email = %q, want the account address", got.Email)
@@ -139,16 +156,16 @@ func TestAutofillProfile_NoSourceYieldsAccountEmailOnly(t *testing.T) {
 	}
 }
 
-func TestAutofillProfile_SourceWithoutEmailGetsAccountAddress(t *testing.T) {
-	h := autofillWith(
-		fakeBaseCV{doc: cv.Document{Header: cv.Header{FullName: "Ilya Strelov", Phone: "+1 555 0100"}}, ok: true},
+func TestAssemble_SourceWithoutEmailGetsAccountAddress(t *testing.T) {
+	a := assemblerWith(
+		fakeCV{doc: cv.Document{Header: cv.Header{FullName: "Ilya Strelov", Phone: "+1 555 0100"}}, ok: true},
 		resumeextract.Structured{}, false,
 		"account@example.com",
 	)
 
-	got, err := h.autofillProfile(context.Background(), 7)
+	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
-		t.Fatalf("autofillProfile: %v", err)
+		t.Fatalf("Assemble: %v", err)
 	}
 	if got.Email != "account@example.com" {
 		t.Errorf("email = %q, want the account address completing a source that states none", got.Email)
@@ -160,11 +177,11 @@ func TestAutofillProfile_SourceWithoutEmailGetsAccountAddress(t *testing.T) {
 
 // A failing CV read is a server fault, not an empty profile: silently autofilling a form
 // with a blank identity is worse than reporting the failure.
-func TestAutofillProfile_CVReadErrorIsReturned(t *testing.T) {
-	h := autofillWith(fakeBaseCV{err: errors.New("boom")}, resumeextract.Structured{}, false, "account@example.com")
+func TestAssemble_CVReadErrorIsReturned(t *testing.T) {
+	a := assemblerWith(fakeCV{err: errors.New("boom")}, resumeextract.Structured{}, false, "account@example.com")
 
-	if _, err := h.autofillProfile(context.Background(), 7); err == nil {
-		t.Fatal("autofillProfile returned no error, want the store's failure surfaced")
+	if _, err := a.Assemble(context.Background(), 7); err == nil {
+		t.Fatal("Assemble returned no error, want the store's failure surfaced")
 	}
 }
 
@@ -240,7 +257,7 @@ func TestContactHeaderFromStructured(t *testing.T) {
 		Summary:  "Backend engineer",
 	}
 
-	got := contactHeaderFromStructured(st)
+	got := ContactHeaderFromStructured(st)
 
 	want := cv.Header{
 		FullName: "Ilya Strelov",
@@ -254,5 +271,44 @@ func TestContactHeaderFromStructured(t *testing.T) {
 	}
 	if got.Location != want.Location || len(got.Links) != 1 || got.Links[0] != want.Links[0] {
 		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestAssemble_IncludesScreeningAnswersWhenStated(t *testing.T) {
+	days := 14
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"},
+		fakeScreening{ret: screeninganswers.Answers{NoticePeriodDays: &days}})
+
+	got, err := a.Assemble(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if got.NoticePeriod != "14 days" {
+		t.Errorf("NoticePeriod = %q, want %q", got.NoticePeriod, "14 days")
+	}
+}
+
+func TestAssemble_NoScreeningReaderYieldsEmptyScreeningFields(t *testing.T) {
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil)
+
+	got, err := a.Assemble(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if got.NoticePeriod != "" || got.DesiredSalary != "" {
+		t.Errorf("screening fields = %+v, want all empty with no reader configured", got)
+	}
+}
+
+func TestAssemble_ScreeningAnswersNotFoundYieldsEmptyFields(t *testing.T) {
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"},
+		fakeScreening{err: screeninganswers.ErrNotFound})
+
+	got, err := a.Assemble(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if got.WillingToRelocate != "" {
+		t.Errorf("WillingToRelocate = %q, want empty when the caller has stated no screening answers", got.WillingToRelocate)
 	}
 }

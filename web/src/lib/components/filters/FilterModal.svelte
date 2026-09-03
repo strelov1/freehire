@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
+  import { env } from '$env/dynamic/public';
+  import { openWithinEnabled } from '$lib/features';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '$lib/ui';
   import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '$lib/facets';
@@ -178,7 +180,12 @@
         (f.clearance !== 'any' ? 1 : 0) +
         selCount(f, 'collections', employerCredentialValues)
       );
-    if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
+    if (e.kind === 'posted')
+      return (
+        (f.postedWithinDays != null ? 1 : 0) +
+        (f.openWithinDays != null ? 1 : 0) +
+        selCount(f, 'reality')
+      );
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
     if (e.key === 'skills') return selCount(f, 'skills') + (minMatch != null ? 1 : 0);
@@ -212,6 +219,15 @@
   // (the rightmost stop) rather than snapping to "Today".
   const freshnessIndex = $derived.by(() => {
     const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.postedWithinDays);
+    return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
+  });
+
+  // The first-seen bound rides the same stops and the same snap-to-Any rule. Read
+  // straight from the runtime env rather than threaded through a prop: five callers
+  // mount this modal and none of them has an opinion about the flag.
+  const openWithinAvailable = openWithinEnabled(env);
+  const openIndex = $derived.by(() => {
+    const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.openWithinDays);
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
   });
 
@@ -471,7 +487,29 @@
       already hold one.
     </p>
   {:else if entry.kind === 'posted'}
-    <div class="mb-2 flex items-center justify-between">
+    <!-- Two bounds over one set of stops, each labelled for WHOSE date it reads. They
+         agree on most postings, which is exactly why the labels matter: where they
+         disagree is where a board has restated its posting date, and that is the case
+         the second bound was added for. `Open within` leads because it is the one no
+         source can rewrite. -->
+    {#if openWithinAvailable}
+      <div class="mb-2 flex items-center justify-between">
+        <h3 class="text-sm font-semibold tracking-tight">Open within</h3>
+        <span class="text-xs font-medium text-muted-foreground">{freshnessLabel(staged.value.openWithinDays)}</span>
+      </div>
+      <input
+        type="range"
+        min="0"
+        max={FRESHNESS_PRESETS.length - 1}
+        step="1"
+        value={openIndex}
+        oninput={(e) => staged.setOpenWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
+        aria-label="Open within"
+        class="w-full accent-primary"
+      />
+      <p class="mt-2 text-xs text-muted-foreground">How long the posting has been here.</p>
+    {/if}
+    <div class="mb-2 flex items-center justify-between" class:mt-6={openWithinAvailable}>
       <h3 class="text-sm font-semibold tracking-tight">Posted within</h3>
       <span class="text-xs font-medium text-muted-foreground">{freshnessLabel(staged.value.postedWithinDays)}</span>
     </div>
@@ -485,5 +523,17 @@
       aria-label="Posted within"
       class="w-full accent-primary"
     />
+    {#if openWithinAvailable}
+      <p class="mt-2 text-xs text-muted-foreground">
+        The date the board states. Some boards restate it on every crawl.
+      </p>
+    {/if}
+    <!-- Under the age bound, not in a pane of its own: the reality classes answer the
+         same question the slider does, and the age is most of what makes a posting read
+         as evergreen. -->
+    <div class="mt-6"><ChipFacet store={staged} param="reality" label="Posting reality" counts={c} /></div>
+    <p class="mt-2 text-xs text-muted-foreground">
+      Evergreen postings sit open permanently rather than for one opening.
+    </p>
   {/if}
 {/snippet}

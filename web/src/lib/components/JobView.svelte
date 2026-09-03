@@ -5,6 +5,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
+  import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
@@ -77,6 +78,9 @@
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
   const views = $derived(job.view_count ?? 0);
   const applies = $derived(job.applied_count ?? 0);
+  // "New" / "Be an early applicant" — see freshness.ts for why the posting date alone
+  // does not earn either.
+  const freshness = $derived(freshnessBadges(job.posted_at, job.reality, applies));
 
   // The content column is tabbed so "who are these people?" and "what will they ask
   // me?" are answerable without leaving the posting. Page state, not a route: the
@@ -283,6 +287,69 @@
   </Button>
 {/snippet}
 
+<!-- Save, a quiet peer of the apply CTA rather than the full-width button it was in the
+     sidebar: it belongs beside "Show", because keeping a job and opening it are the two
+     things a reader does with one. The filled bookmark is the state.
+     `iconOnly` is for the pinned header, whose one line already holds the company, the
+     title and the CTA; aria-label and the tooltip name the button either way. -->
+{#snippet saveButton(className = '', iconOnly = false)}
+  <Button
+    variant="ghost"
+    size="sm"
+    onclick={onSaveClick}
+    aria-pressed={saved}
+    aria-label={saved ? 'Remove from saved' : 'Save job'}
+    title={saved ? 'Saved' : 'Save'}
+    class={`shrink-0 gap-1.5 px-2 ${saved ? 'text-brand hover:text-brand' : 'text-muted-foreground'} ${className}`}
+  >
+    <Bookmark class="size-4 shrink-0 {saved ? 'fill-current' : ''}" aria-hidden="true" />
+    {#if !iconOnly}{saved ? 'Saved' : 'Save'}{/if}
+  </Button>
+{/snippet}
+
+<!-- Report, the same shape as Save and, like it, `ghost`: complaining about a posting is
+     the rarest thing on the strip, and a filled or outlined box would give it the
+     standing of the apply CTA beside it. -->
+{#snippet reportButton()}
+  <Button
+    variant="ghost"
+    size="sm"
+    onclick={onReportClick}
+    aria-label="Report this job"
+    title="Report this job"
+    class="shrink-0 gap-1.5 px-2 text-muted-foreground"
+  >
+    <Flag class="size-4 shrink-0" aria-hidden="true" />
+    Report
+  </Button>
+{/snippet}
+
+<!-- The action strip: everything a reader does WITH the posting — talk about it, flag
+     it, keep it, open it — on one line, sharing the tab row's rule. It carries the
+     rule itself (`border-b`) rather than sitting above one, so the line reads as a
+     single edge across the column: the strip and the TabStrip beside it are aligned on
+     their bottoms, and each draws its own half of it.
+     Rendered in two places, one visible at a time (the caller passes the display class):
+     the tab row on lg, and the company line below it, where the sidebar stacks between
+     the title and the description and a strip left on the tab row would put Save a whole
+     screen away from the job it saves. Only the apply CTA drops out below lg — the sticky
+     bottom bar carries it there, which is also what leaves the phone room for the labels. -->
+{#snippet actionStrip(className: string)}
+  <div class={`shrink-0 items-center gap-1.5 ${className}`}>
+    <a
+      class="inline-flex shrink-0 items-center gap-1.5 px-1 text-sm font-medium text-primary hover:underline"
+      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+      onclick={onDiscussionClick}
+    >
+      <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
+      Discussion{threadCount ? ` · ${threadCount}` : ''}
+    </a>
+    {@render reportButton()}
+    {@render saveButton()}
+    {@render applyCta('md', 'ml-1 hidden shrink-0 lg:inline-flex')}
+  </div>
+{/snippet}
+
 <!-- The posting itself. A snippet because it is rendered either inside the Description
      tab panel or, on a job whose employer we don't know, straight into the column with
      no tab strip above it at all. -->
@@ -303,9 +370,9 @@
 {/snippet}
 
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
-     sticky left sidebar (salary + actions + metadata) starts level with the title,
+     sticky left sidebar (match + salary + metadata) starts level with the title,
      and the description reads in the right column. On mobile everything stacks:
-     company → title + apply CTA → metadata → description. -->
+     company + actions → title → metadata → description. -->
 <!-- Explicit rows: company + header sized to content, the content row flexible so
      when the sticky sidebar (which spans all three rows) is taller than the right
      column, the slack collects below the content instead of being spread as gaps
@@ -313,8 +380,8 @@
 <article
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <div class="flex items-center justify-between gap-3 lg:col-start-2 lg:row-start-1">
-    <div class="flex items-center gap-3">
+  <div class="flex flex-wrap items-center justify-between gap-3 lg:col-start-2 lg:row-start-1">
+    <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
       <EntityLogo
         name={job.company || 'Unknown company'}
         src={companyLogoUrl(job.company) ?? undefined}
@@ -333,32 +400,47 @@
       <!-- Who backed the employer. The page has room the feed card does not, so the
            badge carries the brand name too and links to that collection's roles. -->
       <BackerBadge collections={job.collections} withLabel />
+
+      <!-- How long this has really been open, on the provenance line rather than under
+           the title: it is a fact ABOUT the posting, like the company and the backer,
+           and a chip on its own row read as a headline. The ghost checklist stays below
+           the title — it is a disclosure with a criteria list inside, not a chip, and it
+           supersedes this badge rather than joining it. -->
+      {#if !supersedesReality(job.ghost)}
+        <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
+      {/if}
     </div>
 
-    <a
-      class="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
-      onclick={onDiscussionClick}
-    >
-      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
-        ? ` · ${threadCount}`
-        : ''}
-    </a>
+    <!-- Below lg the strip belongs here, not on the tab row: the sidebar stacks between
+         the title and the description on a phone, so a strip left down there would put
+         Save a full screen of match card and metadata away from the job it saves.
+         `-mr-2` cancels the last button's own padding, so the label's right edge lines
+         up with the column's rather than sitting a hair inside it. -->
+    {@render actionStrip('-mr-2 flex w-full justify-end border-b border-border pb-2 lg:hidden')}
   </div>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <div class="flex flex-wrap items-center gap-2.5">
-        <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
-        {#if applied}
-          <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
-            <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
-          </Chip>
-        {/if}
-      </div>
-
-      <!-- Hidden below lg: on mobile the CTA lives in the sticky bottom bar instead. -->
-      {@render applyCta('md', 'hidden shrink-0 lg:inline-flex')}
+    <div class="flex flex-wrap items-center gap-2.5">
+      <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
+      <!-- Freshness sits beside the title rather than in the metadata sidebar: it is the
+           one fact that changes whether the posting is worth reading at all, so the
+           reader meets it in the same glance as the role. Closed jobs are excluded — a
+           closed posting is never worth hurrying to. -->
+      {#if !job.closed_at}
+        {#each freshness as badge (badge.label)}
+          <!-- The tooltip rides a wrapper, not the Chip: the primitive takes only
+               variant/class/children, so a `title` passed to it would be dropped
+               silently and the badge would state a claim with its evidence gone. -->
+          <span title={badge.tooltip} class="inline-flex">
+            <Chip variant="brand" class="font-semibold">{badge.label}</Chip>
+          </span>
+        {/each}
+      {/if}
+      {#if applied}
+        <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
+          <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
+        </Chip>
+      {/if}
     </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
@@ -370,8 +452,6 @@
          carries the ceiling on the claim ("possibly", two of four), not the essay. -->
     {#if supersedesReality(job.ghost)}
       <GhostChecklist ghost={job.ghost} />
-    {:else}
-      <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
     {/if}
 
     {#if job.referral_available && job.company_slug}
@@ -435,19 +515,6 @@
           {salary}
         </p>
       {/if}
-
-      <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <Button
-          variant="outline"
-          size="lg"
-          onclick={onSaveClick}
-          aria-pressed={saved}
-          class="w-full gap-2 rounded-xl border-transparent bg-brand-muted font-semibold text-brand-strong transition hover:bg-brand-muted hover:text-brand-strong hover:opacity-80"
-        >
-          <Bookmark class={saved ? 'size-[1.1rem] fill-current' : 'size-[1.1rem]'} />
-          {saved ? 'Saved' : 'Save'}
-        </Button>
-      </div>
 
       {#if facets.length}
         <dl class="flex flex-col gap-2 border-t border-border pt-4 text-sm first:border-t-0 first:pt-0">
@@ -524,16 +591,7 @@
       </div>
 
       <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex items-center justify-between gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onclick={onReportClick}
-            class="text-muted-foreground"
-          >
-            <Flag class="size-4" />
-            Report this job
-          </Button>
+        <div class="flex justify-center">
           <!-- Keyed on the slug so a client-side navigation to another job remounts
                the control and re-seeds its counts/highlight (JobView itself is not
                remounted on param change). -->
@@ -598,9 +656,14 @@
             <span class="px-1 text-muted-foreground" aria-hidden="true">·</span>
             <span class="font-semibold" lang={contentLang}>{job.title}</span>
           </p>
-          <!-- Hidden below lg for the same reason as the header's own copy: on mobile the
-               CTA is the sticky bottom bar, and two pinned buttons would fight. -->
-          {@render applyCta('md', 'hidden shrink-0 lg:inline-flex')}
+          <!-- Hidden below lg for the same reason as the action strip's own copy: on
+               mobile the CTA is the sticky bottom bar, and two pinned buttons would
+               fight. Save comes along, since this bar is what a reader has in front of
+               them for most of a description several screens long. -->
+          <div class="hidden shrink-0 items-center gap-2 lg:flex">
+            {@render saveButton('size-9 rounded-md px-0', true)}
+            {@render applyCta('md', 'shrink-0')}
+          </div>
         </div>
       </div>
     </div>
@@ -613,14 +676,28 @@
       </div>
     {/if}
 
+    <!-- Tabs left, actions right, one rule under both — and no gap between the halves,
+         because each draws its own stretch of that rule and a gap here is a gap in the
+         line (the strip's own left padding separates them instead). The row is rendered
+         whether or not there are tabs to put in it: a posting from an unknown employer
+         has only the description, and the rule then simply closes the actions off. -->
+    <div class="flex items-end justify-between">
+      {#if contentTabs.length > 1}
+        <TabStrip
+          tabs={contentTabs}
+          active={contentTab}
+          onSelect={(id) => (contentTab = id)}
+          label="Job details"
+          {panelId}
+          class="min-w-0 flex-1"
+        />
+      {:else}
+        <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
+      {/if}
+      {@render actionStrip('hidden border-b border-border pb-2 lg:flex')}
+    </div>
+
     {#if contentTabs.length > 1}
-      <TabStrip
-        tabs={contentTabs}
-        active={contentTab}
-        onSelect={(id) => (contentTab = id)}
-        label="Job details"
-        {panelId}
-      />
       <!-- One panel for every tab, its contents toggled by class rather than {#if}.
            Unmounting the inactive one would throw away the company the visitor already
            waited for, and re-render the description on every switch back. It also keeps

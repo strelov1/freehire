@@ -18,6 +18,7 @@ var scalarFilters = []string{
 	"experience_years_min",
 	"experience_years_max",
 	"posted_within_days",
+	"open_within_days",
 }
 
 // maxUnknownParamsReported bounds how many ignored params one response echoes.

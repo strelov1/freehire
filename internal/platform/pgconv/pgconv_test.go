@@ -17,6 +17,27 @@ func TestBoolPtr(t *testing.T) {
 	}
 }
 
+func TestInt8Ptr(t *testing.T) {
+	if got := Int8Ptr(pgtype.Int8{}); got != nil {
+		t.Errorf("Int8Ptr(invalid) = %v, want nil", got)
+	}
+	got := Int8Ptr(pgtype.Int8{Int64: 42, Valid: true})
+	if got == nil || *got != 42 {
+		t.Errorf("Int8Ptr(42) = %v, want pointer to 42", got)
+	}
+}
+
+func TestInt8(t *testing.T) {
+	if got := Int8(nil); got.Valid {
+		t.Errorf("Int8(nil) = %+v, want invalid", got)
+	}
+	n := int64(7)
+	got := Int8(&n)
+	if !got.Valid || got.Int64 != 7 {
+		t.Errorf("Int8(&7) = %+v, want valid 7", got)
+	}
+}
+
 func TestDurationPtr(t *testing.T) {
 	if got := DurationPtr(pgtype.Time{Valid: false}); got != nil {
 		t.Errorf("DurationPtr(invalid) = %v, want nil", got)

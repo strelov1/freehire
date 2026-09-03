@@ -68,12 +68,12 @@
   mask-image: radial-gradient(ellipse 90% 75% at 25% 0%, #000 18%, transparent 80%);
 }
 
-/* Product Hunt strip: hidden before first paint for a visitor who already closed it.
+/* CLI promo strip: hidden before first paint for a visitor who already closed it.
    The banner is server-rendered on purpose — it lives in the document flow, so
    mounting it after hydration would shove the page down under someone mid-read. The
    no-flash script in app.html sets this class from localStorage; the component then
-   catches up on mount and drops the node. See $lib/productHunt.ts. */
-.ph-dismissed [data-ph-banner] {
+   catches up on mount and drops the node. See $lib/cliPromo.ts. */
+.cli-banner-dismissed [data-cli-banner] {
   display: none;
 }
 

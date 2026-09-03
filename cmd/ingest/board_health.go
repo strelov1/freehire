@@ -12,18 +12,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // boardHealth adapts *db.Queries to pipeline.BoardHealth: it reads a board's cooldown
 // and records each crawl's outcome, applying the backoff policy (pipeline.CooldownFor)
-// to the failure count the DB returns.
-type boardHealth struct{ q *db.Queries }
+// to the failure count the DB returns. It also piggybacks the boards table's
+// pending -> active transition on the same success signal (see RecordSuccess) — a
+// board's crawl outcome is the one thing both tables react to, so there is no need for
+// a second place in the pipeline to learn it.
+type boardHealth struct {
+	q       *db.Queries
+	catalog boardcatalog.Repository
+}
 
 var _ pipeline.BoardHealth = (*boardHealth)(nil)
 
-func newBoardHealth(pool *pgxpool.Pool) *boardHealth { return &boardHealth{q: db.New(pool)} }
+func newBoardHealth(pool *pgxpool.Pool) *boardHealth {
+	q := db.New(pool)
+	return &boardHealth{q: q, catalog: boardcatalog.NewQueriesRepository(q)}
+}
 
 // Cooldown returns the board's cooldown_until; an absent row or a NULL cooldown means
 // eligible.
@@ -41,14 +51,21 @@ func (h *boardHealth) Cooldown(ctx context.Context, provider, board, region stri
 	return ts.Time, true, nil
 }
 
-// RecordSuccess clears the board's failure state and stamps freshness.
+// RecordSuccess clears the board's failure state and stamps freshness. It also flips a
+// pending boards row to active on this, its first successful crawl (a no-op — found=false,
+// no error — for a board that is already active, or that has no boards row at all, e.g.
+// one crawled before this migration).
 func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int) error {
-	return h.q.RecordBoardSuccess(ctx, db.RecordBoardSuccessParams{
+	if err := h.q.RecordBoardSuccess(ctx, db.RecordBoardSuccessParams{
 		Provider:          provider,
 		Board:             board,
 		Region:            region,
 		LastIngestedCount: pgtype.Int4{Int32: int32(ingested), Valid: true},
-	})
+	}); err != nil {
+		return err
+	}
+	_, err := h.catalog.Activate(ctx, provider, board, region)
+	return err
 }
 
 // RecordFailure bumps the failure count (the query returns the new count), then applies

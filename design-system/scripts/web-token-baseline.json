@@ -55,7 +55,7 @@
   "web/src/lib/components/JobRow.svelte": 4,
   "web/src/lib/components/JobSeeAlso.svelte": 1,
   "web/src/lib/components/JobsView.svelte": 1,
-  "web/src/lib/components/JobView.svelte": 5,
+  "web/src/lib/components/JobView.svelte": 3,
   "web/src/lib/components/MatchAnalysisFull.svelte": 15,
   "web/src/lib/components/MatchSummary.svelte": 1,
   "web/src/lib/components/MySubmissionsView.svelte": 8,

@@ -16,10 +16,10 @@
   // the desktop layout already surfaces the total elsewhere (the company page's sidebar
   // stat), so the above-list line isn't shown twice; the mobile toolbar total is unaffected.
   // `controls` is an optional slot for the list's own controls — however many the view
-  // passes (the jobs feed's sort select, freshness select and evergreen toggle; the
-  // company catalog's sort select) — rendered in the mobile toolbar and beside the
-  // desktop total. It shows even when `total` is null so the controls stay reachable
-  // while the list is empty or standing in a prompt.
+  // passes (the jobs feed's sort and freshness selects; the company catalog's sort
+  // select) — rendered in the mobile toolbar and beside the desktop total. It shows even
+  // when `total` is null so the controls stay reachable while the list is empty or
+  // standing in a prompt.
   let {
     total,
     unit,
@@ -37,8 +37,7 @@
 
 <!-- Mobile inline toolbar: total on the left, controls on the right. The Swipe entry is
      icon-only here (labelled for a11y) so the row stays on one line with the count and the
-     list controls; the word would crowd it out on a narrow phone — and the jobs list's
-     evergreen toggle drops its word for the same reason.
+     list controls; the word would crowd it out on a narrow phone.
 
      `flex-wrap` is the safety net under that: the controls are sized by their content
      (a long count, a translated label, a fourth control) and a row that runs out of width

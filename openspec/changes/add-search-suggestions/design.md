@@ -166,7 +166,7 @@ Staged, each stage independently shippable:
    hand, inspect the dictionary, add the systemd unit and timer, then wire the
    client and delete `roleSuggest.ts`. The endpoint is dead code until the client
    points at it, so the two can land in either order.
-3. **Frequency.** Migration `0123` applied before the binary that writes
+3. **Frequency.** Migration `0125` applied before the binary that writes
    `search_queries` rolls out. Ranking by demand is inert until the table has
    rows, so nothing changes on the day it ships.
 

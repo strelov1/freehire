@@ -16,11 +16,14 @@ hire
 # ignored every new file under internal/migrate/, and `enrich`/`embed`/`ingest` did the same
 # to theirs. 26 package directories were shadowed this way; a new source file in one of them
 # would simply never be committed.
+/add-board
 /apple-revoke
 /auth-cleanup
+/auto-apply
 /backfill-application-events
 /backfill-applications
 /backfill-blank-company
+/backfill-board-catalog
 /backfill-clearance
 /backfill-company-info
 /backfill-company-names

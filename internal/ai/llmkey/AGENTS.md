@@ -4,7 +4,8 @@
 `internal/ai/llmkey` — minting, reading and retiring the credential the LLM gateway knows an
 account by, and the resolver that hands it out. The clone that actually spends under it
 lives in `internal/platform/llm` (`Client.As`); the one place per-user calls resolve through is
-`userLLM` in `internal/api/handler`.
+`Bind`, in this package (`bind.go`) — moved here from `internal/api/handler`'s `userLLM` once
+`cmd/auto-apply` became a second caller with no reason to import `internal/api/handler`.
 
 ## Always true
 - **The credential is invisible to the user.** No page, no field, no setting, and it
@@ -120,13 +121,21 @@ the pool behind it runs on mixed upstream keys. They compare features and period
 other honestly and must never be quoted as a bill.
 
 ## Adding a per-user LLM call
-1. Resolve through `userLLM` in `internal/api/handler` — the single identifier to grep for.
-2. Give it a feature tag from the constants in `user_llm.go`. They are bare words — the
-   header `x-bf-dim-feature` names the dimension, so a `feature:` prefix in the value would
-   file the spend under `feature:assistant` and split one surface across two labels. One
-   tag per thing a person can ask for; do not tag two surfaces the same or the report stops
-   answering the question it exists for.
-3. If the service holds its client at construction, give it a one-line `As(*llm.Client)`
+1. Resolve through `Bind` (this package, `bind.go`) — the single identifier to grep for.
+   `internal/api/handler`'s `llmBinding.bind` is a thin per-request wrapper over it, not a
+   second implementation.
+2. Give it a feature tag — the constants live beside each caller (`internal/api/handler/
+   user_llm.go` for request-driven surfaces, `tagAutoApplyDrafting` in
+   `internal/api/atsapply/client.go` for `cmd/auto-apply`). They are bare words — the header
+   `x-bf-dim-feature` names the dimension, so a `feature:` prefix in the value would file
+   the spend under its own two-part label instead of alongside the others. One tag per
+   thing a person (or a queue-driven attempt on their behalf) can ask for; do not tag two
+   surfaces the same or the report stops answering the question it exists for.
+3. Only `cmd/server` and `cmd/auto-apply` may import this package at all — `scope_test.go`
+   enforces it structurally. A new binary that needs per-user attribution adds itself there
+   by name, with its own justification; the check is deliberately not a pattern that would
+   admit one by accident.
+4. If the service holds its client at construction, give it a one-line `As(*llm.Client)`
    clone rather than threading a second client through its constructor.
-4. Resolve BEFORE opening a stream. Minting is a network call, and making it after the
+5. Resolve BEFORE opening a stream. Minting is a network call, and making it after the
    headers are out stalls a stream the client is already reading.

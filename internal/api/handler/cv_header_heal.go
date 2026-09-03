@@ -5,6 +5,7 @@ import (
 	"log"
 	"reflect"
 
+	"github.com/strelov1/freehire/internal/api/candidateprofile"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 )
@@ -18,20 +19,20 @@ func (h *cvHandlers) resumeContactHeader(ctx context.Context, userID int64) (cv.
 	if owned, err := h.resume.CandidateOwned(ctx, userID); err != nil {
 		return cv.Header{}, false, err
 	} else if !owned.IdentityEmpty() {
-		hdr := contactHeaderFromStructured(owned.AsStructured())
+		hdr := candidateprofile.ContactHeaderFromStructured(owned.AsStructured())
 		return hdr, !contactHeaderEmpty(hdr), nil
 	}
 	if st, ok, err := h.resume.Structured(ctx, userID); err != nil {
 		return cv.Header{}, false, err
 	} else if ok {
-		hdr := contactHeaderFromStructured(st)
+		hdr := candidateprofile.ContactHeaderFromStructured(st)
 		return hdr, !contactHeaderEmpty(hdr), nil
 	}
 	contacts, ok, err := h.resume.ProvisionalContacts(ctx, userID)
 	if err != nil || !ok {
 		return cv.Header{}, false, err
 	}
-	hdr := contactHeaderFromStructured(contacts)
+	hdr := candidateprofile.ContactHeaderFromStructured(contacts)
 	return hdr, !contactHeaderEmpty(hdr), nil
 }
 

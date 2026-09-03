@@ -11,7 +11,7 @@
 // TestDiscordContribution/an_unlinked_identity's_.2Fcontribute_reaches_neither_intake_nor_the_reward_path
 // below. Because the account lookup runs synchronously, that branch answers immediately (an
 // ephemeral type-4 reply, not a deferred one) — the test asserts on the interaction response
-// itself, plus directly against link_contributions, that nothing was
+// itself, plus directly against boards, that nothing was
 // written. Run with: go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -148,7 +148,7 @@ func TestDiscordContribution(t *testing.T) {
 	contributions := func(uid int64) int {
 		var n int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE submitted_by=$1`, uid).Scan(&n); err != nil {
+			`SELECT count(*) FROM boards WHERE submitted_by=$1`, uid).Scan(&n); err != nil {
 			t.Fatalf("count contributions: %v", err)
 		}
 		return n
@@ -177,7 +177,7 @@ func TestDiscordContribution(t *testing.T) {
 		}
 		var rows int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE source='recruitee' AND board='newco2' AND submitted_by=$1`,
+			`SELECT count(*) FROM boards WHERE provider='recruitee' AND board='newco2' AND submitted_by=$1`,
 			userID).Scan(&rows); err != nil {
 			t.Fatalf("count board rows: %v", err)
 		}
@@ -194,7 +194,7 @@ func TestDiscordContribution(t *testing.T) {
 		}
 		var rows int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE source='recruitee' AND board='newco2'`).Scan(&rows); err != nil {
+			`SELECT count(*) FROM boards WHERE provider='recruitee' AND board='newco2'`).Scan(&rows); err != nil {
 			t.Fatalf("count board rows: %v", err)
 		}
 		if rows != 1 {
@@ -223,11 +223,11 @@ func TestDiscordContribution(t *testing.T) {
 		// and nothing was recorded against any user — GetUserIDByDiscordID's ErrNoRows branch
 		// really does return before intakeService.Resolve is ever called.
 		var rows int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM link_contributions WHERE url=$1`, url).Scan(&rows); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM boards WHERE url=$1`, url).Scan(&rows); err != nil {
 			t.Fatalf("count contribution rows: %v", err)
 		}
 		if rows != 0 {
-			t.Errorf("link_contributions rows for the unlinked attempt = %d, want 0", rows)
+			t.Errorf("boards rows for the unlinked attempt = %d, want 0", rows)
 		}
 		var jobs int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE source='recruitee' AND external_id LIKE 'newco3:%'`).Scan(&jobs); err != nil {

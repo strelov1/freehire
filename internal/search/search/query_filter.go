@@ -125,6 +125,21 @@ func FilterFromValues(v url.Values) any {
 	return filterFromValues(v, time.Now())
 }
 
+// maxWithinDays is the largest day count the two date bounds honour — a century, which
+// is further back than any posting and than the catalogue itself.
+//
+// It exists for the arithmetic, not for the semantics. time.Duration is int64
+// nanoseconds, so `time.Duration(n) * 24 * time.Hour` WRAPS above roughly 106,751 days:
+// the cutoff landed in the future and the query matched nothing, which inverted the
+// parameter — the most permissive bound anyone could type produced the emptiest result.
+const maxWithinDays = 36500
+
+// withinDays reports whether n is a day count the date bounds can honour. A value
+// outside the range imposes no restriction, the same way a zero, a negative or a
+// non-numeric one does: past a century the bound already means "any age", so dropping
+// it says exactly what honouring it would have.
+func withinDays(n int) bool { return n > 0 && n <= maxWithinDays }
+
 // filterFromValues is FilterFromValues with the reference time injected, so the
 // relative `posted_within_days` cutoff is deterministic under test. The exported
 // wrapper supplies time.Now(); only this inner form is unit-tested for the date
@@ -191,9 +206,23 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// Freshness: posted_within_days=N restricts to jobs posted in the last N days,
 	// i.e. whose effective posting date (posted_ts, unix seconds) is at or after
 	// now - N*86400. A non-positive or non-numeric value imposes no restriction.
-	if n, ok := atoiOK(v.Get("posted_within_days")); ok && n > 0 {
+	if n, ok := atoiOK(v.Get("posted_within_days")); ok && withinDays(n) {
 		cutoff := now.Add(-time.Duration(n) * 24 * time.Hour).Unix()
 		groups = append(groups, []string{Gte("posted_ts", int(cutoff))})
+	}
+
+	// How long the posting has been open: open_within_days=N restricts to jobs whose
+	// created_ts (the instant ingest first wrote the row) is at or after now - N*86400.
+	// Same shape and same lenient parse as the bound above, and independent of it — a
+	// request may carry both, and they AND.
+	//
+	// The two are NOT interchangeable, which is why both exist. posted_ts follows the
+	// date the SOURCE states, and some boards restate it every crawl, so a posting open
+	// for months passes a three-day posted bound. created_ts is the system's own
+	// observation and cannot be rewritten from outside.
+	if n, ok := atoiOK(v.Get("open_within_days")); ok && withinDays(n) {
+		cutoff := now.Add(-time.Duration(n) * 24 * time.Hour).Unix()
+		groups = append(groups, []string{Gte("created_ts", int(cutoff))})
 	}
 
 	return Filter(groups...)

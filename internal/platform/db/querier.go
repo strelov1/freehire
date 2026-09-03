@@ -12,6 +12,9 @@ import (
 )
 
 type Querier interface {
+	// Flip a board's first successful crawl from pending to active. A no-op (0 rows) when
+	// the board is already active or does not exist, so the caller need not check first.
+	ActivateBoard(ctx context.Context, arg ActivateBoardParams) (int64, error)
 	// Move an application forward to a new stage (the worker only calls this after
 	// checking the transition is strictly forward and high-confidence).
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
@@ -204,6 +207,20 @@ type Querier interface {
 	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
 	// FROM) so the platform identity comes back without a second query.
 	ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBatchParams) ([]ClaimApplyFormBatchRow, error)
+	// Claim a batch of live, unleased submission attempts by stamping claimed_at. Mirrors
+	// ClaimApplyFormBatch: FOR UPDATE OF q locks only queue rows (a bare FOR UPDATE would also
+	// lock jobs, making concurrent claim waves contend), SKIP LOCKED lets concurrent workers
+	// take disjoint rows, and the lease predicate reclaims entries whose worker died, so no
+	// separate reaper process is needed. failed_at/blocked_at excluded so a dead-lettered or
+	// parked attempt is never reclaimed by this query — auto_apply_queue_claimable_idx exists
+	// for exactly this predicate.
+	//
+	// Returns job.source, job.external_id and job.url because the caller builds the sidecar
+	// request from the row alone — source doubles as the ATS provider name, the same vocabulary
+	// internal/applyform's Provider field already uses, and external_id (board:posting-id) is
+	// what internal/applyform's own schema fetchers need to reuse their existing per-provider
+	// API calls rather than re-deriving them.
+	ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBatchParams) ([]ClaimAutoApplyBatchRow, error)
 	// Lease a batch of pending nudges, oldest first. FOR UPDATE OF n + SKIP LOCKED
 	// lets overlapping worker passes take disjoint rows so a nudge fires at most
 	// once; the lease predicate reclaims rows whose sender died (stale claimed_at).
@@ -884,6 +901,13 @@ type Querier interface {
 	// Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
 	// affected rows for a foreign or missing id.
 	DeleteAssistantSession(ctx context.Context, arg DeleteAssistantSessionParams) (int64, error)
+	// Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
+	// the same transaction, alongside LockJobForApply) is the durable record; the queue entry
+	// has nothing left to say. Mirrors DeleteApplyFormEntry.
+	DeleteAutoApplyEntry(ctx context.Context, id int64) error
+	// Remove a submission once triage has resolved its (provider, board) and inserted the
+	// corresponding boards row.
+	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
 	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
 	// when nothing was deleted (foreign or missing id).
 	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
@@ -1807,6 +1831,17 @@ type Querier interface {
 	// that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
 	HideCompanyFeedback(ctx context.Context, id int64) (string, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
+	// Insert a board row. Callers that pass status='active' also pass a non-null
+	// activated_at (curator additions via cmd/add-board, and the one-off
+	// cmd/backfill-board-catalog); every other caller passes NULL for both status='pending'
+	// and status='rejected'. A collision with an existing 'pending'/'active' row on
+	// (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
+	// the caller maps that to a duplicate-board error.
+	InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error)
+	// Queue an unclassified URL for triage. The unique index on (url) rejects a duplicate
+	// submission of the same link; the caller maps that violation the same way a duplicate
+	// board contribution is mapped.
+	InsertBoardSubmission(ctx context.Context, arg InsertBoardSubmissionParams) (BoardSubmission, error)
 	// Record one change: what it did (ops), what would undo it (inverse), who made it and through
 	// which entry point, and the document version it was computed against. Written in the same
 	// transaction as the document it changed — a change without its revision, or a revision
@@ -1962,6 +1997,9 @@ type Querier interface {
 	// A user's API keys, newest first. Metadata only — never the token_hash. scope is
 	// included so a user can see what each credential is allowed to do.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
+	// The boards cmd/ingest crawls for one provider: pending (unproven, still crawled) and
+	// active. Ordered by id for a stable crawl order across runs.
+	ListActiveBoardsForProvider(ctx context.Context, provider string) ([]Board, error)
 	// Every active subscription with the data the matching worker needs: the saved
 	// search query to translate into a filter, plus identity/channel for fan-out. The
 	// worker groups these by canonical(query) so each distinct filter hits the search
@@ -2059,6 +2097,12 @@ type Querier interface {
 	// everything, not a trimmed window — see ListRecentAssistantMessages for the bounded
 	// read the model's own history is rebuilt from.
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
+	// One user's still-unclassified submissions, newest first — the other half of the "my
+	// contributions" list (boards holds the recognized half).
+	ListBoardSubmissionsBySubmitter(ctx context.Context, submittedBy int64) ([]BoardSubmission, error)
+	// One user's crowdsourced boards, newest first — half of the "my contributions" list
+	// (board_submissions holds the other half, the unclassified-URL rows).
+	ListBoardsBySubmitter(ctx context.Context, submittedBy pgtype.Int8) ([]Board, error)
 	// Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
 	// Everyone who can be mailed and has not received this campaign yet.
 	//
@@ -2764,6 +2808,12 @@ type Querier interface {
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.
 	MarkAllNotificationsRead(ctx context.Context, userID int64) (int64, error)
+	// Park an attempt the sidecar could not fully resolve: record which fields stopped it and
+	// why, and leave the lease in place. Unlike RecordAutoApplyFailure this is not a retry
+	// countdown — a parked attempt needs new data, not another try — so attempts is left
+	// untouched and blocked_at, not failed_at, is what excludes it from
+	// auto_apply_queue_claimable_idx from here on.
+	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
@@ -3222,6 +3272,11 @@ type Querier interface {
 	// place — its expiry gates the retry to a later run and doubles as the crash reaper, so a
 	// failed entry is never reprocessed within the same run. Mirrors RecordSemanticFailure.
 	RecordApplyFormFailure(ctx context.Context, arg RecordApplyFormFailureParams) (RecordApplyFormFailureRow, error)
+	// Count a transient failure: bump attempts, record the error, and dead-letter (set
+	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left in
+	// place — its expiry gates the retry to a later run, so a failed entry is never
+	// reprocessed within the same run. Mirrors RecordApplyFormFailure.
+	RecordAutoApplyFailure(ctx context.Context, arg RecordAutoApplyFailureParams) (RecordAutoApplyFailureRow, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.
@@ -3623,6 +3678,8 @@ type Querier interface {
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
+	// Retire a live (pending or active) board without deleting its row.
+	RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error)
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
@@ -4093,6 +4150,10 @@ type Querier interface {
 	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
 	// guaranteed to exist (EnsureBalance ran first).
 	UpdateBalance(ctx context.Context, arg UpdateBalanceParams) error
+	// Correct a board's company name — for a crowdsourced row seeded with
+	// boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status
+	// (a placeholder is worth fixing whether the board is still pending or already active).
+	UpdateBoardCompany(ctx context.Context, arg UpdateBoardCompanyParams) (int64, error)
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)

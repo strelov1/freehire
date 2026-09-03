@@ -16,4 +16,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`appevent` `apptimeline` `calmatch` `calsync` `deliverywindow` `followup` `gmailsync` `ical` `inbox` `jobtracking` `mailbox` `mailclassify` `mailingest` `maillink` `mailmatch` `mailrecall` `mailtpl` `userjob` `viewlog`
+`appevent` `apptimeline` `autoapply` `calmatch` `calsync` `deliverywindow` `followup` `gmailsync` `ical` `inbox` `jobtracking` `mailbox` `mailclassify` `mailingest` `maillink` `mailmatch` `mailrecall` `mailtpl` `userjob` `viewlog`

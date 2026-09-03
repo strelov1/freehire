@@ -61,7 +61,7 @@ gap it was built to close is wider than roles.
 
 - **New:** `internal/search/suggest` (block `search`, layer 6 — must be added to
   `internal/platform/arch/layering/blocks.go`), `cmd/build-suggestions`, migration
-  `0123` for `search_queries`, a systemd unit and timer under `deploy/`.
+  `0125` for `search_queries`, a systemd unit and timer under `deploy/`.
 - **Modified:** `internal/search/search` (the second index and its settings),
   `internal/api/handler` (the endpoint, its rate-limit bucket, the `q=` write
   path), `web/src/lib/components/HeaderListSearch.svelte`,

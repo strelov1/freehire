@@ -110,7 +110,7 @@ func TestTelegramContribution(t *testing.T) {
 	// Pro, so what there is to assert is that the board was taken, once.
 	contributions := func() int {
 		var n int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM link_contributions WHERE submitted_by=$1`, userID).Scan(&n); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM boards WHERE submitted_by=$1`, userID).Scan(&n); err != nil {
 			t.Fatalf("count contributions: %v", err)
 		}
 		return n
@@ -131,7 +131,7 @@ func TestTelegramContribution(t *testing.T) {
 			t.Errorf("reply = %q, want the accepted-board confirmation naming blitzy", reply)
 		}
 		var board string
-		if err := pool.QueryRow(ctx, `SELECT board FROM link_contributions WHERE submitted_by=$1`, userID).Scan(&board); err != nil || board != "blitzy" {
+		if err := pool.QueryRow(ctx, `SELECT board FROM boards WHERE submitted_by=$1`, userID).Scan(&board); err != nil || board != "blitzy" {
 			t.Errorf("recorded board = %q (%v), want blitzy", board, err)
 		}
 	})
@@ -147,7 +147,7 @@ func TestTelegramContribution(t *testing.T) {
 		// from several accounts.
 		var rows int
 		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM link_contributions WHERE source='ashby' AND board='blitzy'`).Scan(&rows); err != nil {
+			`SELECT count(*) FROM boards WHERE provider='ashby' AND board='blitzy'`).Scan(&rows); err != nil {
 			t.Fatalf("count board rows: %v", err)
 		}
 		if rows != 1 {
@@ -187,9 +187,14 @@ func TestTelegramContribution(t *testing.T) {
 		if !strings.Contains(reply, "check by hand") {
 			t.Errorf("reply = %q, want the by-hand review message", reply)
 		}
-		var status string
-		if err := pool.QueryRow(ctx, `SELECT status FROM link_contributions WHERE submitted_by=$1 AND source IS NULL`, userID).Scan(&status); err != nil || status != contribution.StatusReview {
-			t.Errorf("review row status = %q (%v), want review", status, err)
+		// board_submissions has no status column — a row there IS the review state, since
+		// it is deleted the moment triage resolves it into a boards row.
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM board_submissions WHERE submitted_by=$1`, userID).Scan(&n); err != nil {
+			t.Fatalf("count board_submissions: %v", err)
+		}
+		if n != 1 {
+			t.Errorf("board_submissions rows = %d, want 1 (the unrecognized link queued for review)", n)
 		}
 	})
 }

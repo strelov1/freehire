@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -61,7 +62,7 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				return nil, errors.New("the candidate has used today's cover-letter allowance; " +
 					"tell them it resets tomorrow, or that Pro lifts the limit")
 			}
-			client := userLLM(ctx, h.keys, h.llm, userID, llm.Feature(tagCoverLetter))
+			client := llmkey.Bind(ctx, h.keys, h.llm, userID, llm.Feature(tagCoverLetter))
 			letter, err := drafter.draft(ctx, client, userID, jobID, toolBand(in.Band))
 			if err != nil || letter == nil {
 				// Every failing path gives the charge back, so it is given back once here.

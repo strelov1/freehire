@@ -171,6 +171,37 @@ type AssistantSession struct {
 	CvID      *uuid.UUID         `json:"cv_id"`
 }
 
+type AutoApplyQueue struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	JobID     int64              `json:"job_id"`
+	Attempts  int32              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt pgtype.Timestamptz `json:"blocked_at"`
+	LastError string             `json:"last_error"`
+	Unmapped  []byte             `json:"unmapped"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Board catalog (replaces sources/*.yml). status: pending (unproven, still crawled) -> active (first crawl succeeded); or rejected (failed insert-time validation) / retired (curator-removed). submitted_by/surface/url are set for a crowdsourced row and NULL/"curator" for one added by cmd/add-board.
+type Board struct {
+	ID             int64              `json:"id"`
+	Provider       string             `json:"provider"`
+	Board          string             `json:"board"`
+	Region         string             `json:"region"`
+	Company        string             `json:"company"`
+	Hub            bool               `json:"hub"`
+	Tenants        []byte             `json:"tenants"`
+	URL            pgtype.Text        `json:"url"`
+	Status         string             `json:"status"`
+	SubmittedBy    pgtype.Int8        `json:"submitted_by"`
+	Surface        string             `json:"surface"`
+	RejectedReason pgtype.Text        `json:"rejected_reason"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ActivatedAt    pgtype.Timestamptz `json:"activated_at"`
+}
+
 type BoardHealth struct {
 	Provider            string             `json:"provider"`
 	Board               string             `json:"board"`
@@ -182,6 +213,15 @@ type BoardHealth struct {
 	LastIngestedCount   pgtype.Int4        `json:"last_ingested_count"`
 	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
 	Region              string             `json:"region"`
+}
+
+// Unclassified-URL triage inbox (the link_contributions "review" case). A row is deleted once triage resolves its (provider, board) and inserts into boards.
+type BoardSubmission struct {
+	ID          int64              `json:"id"`
+	URL         string             `json:"url"`
+	SubmittedBy int64              `json:"submitted_by"`
+	Surface     string             `json:"surface"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 // Send ledger for one-off campaigns. PK (user_id, campaign) = one send per pair, ever.
