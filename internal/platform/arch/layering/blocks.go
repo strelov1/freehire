@@ -95,7 +95,7 @@ var blocks = map[string][]string{
 	},
 	"search": {
 		"facetsnapshot", "savedsearch", "search", "searchdrain", "searchintent",
-		"similarjobs",
+		"similarjobs", "suggest",
 	},
 	// catalogstats is here, not in job, because it imports nothing from job at all: it
 	// takes cache, db and testdb from platform, sources from here, and reaches the

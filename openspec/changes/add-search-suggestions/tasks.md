@@ -8,9 +8,9 @@
 
 ## 2. Stage 2 — the suggestions package
 
-- [ ] 2.1 Create `internal/search/suggest` and register it in the `search` block in `internal/platform/arch/layering/blocks.go`; assert `go vet ./...` and the layering test pass on the empty package
-- [ ] 2.2 Implement title normalisation (lowercase, collapse whitespace, cut at the first separator) as a pure exported function, with the mined-title and typed-query cases that must land on the same key
-- [ ] 2.3 Implement the drop rule for titles reducing to a bare grade or bare generic, driven by `vocab.SeniorityValues` plus the generic list
+- [x] 2.1 Create `internal/search/suggest` and register it in the `search` block in `internal/platform/arch/layering/blocks.go`; assert `go vet ./...` and the layering test pass on the empty package
+- [x] 2.2 Implement title normalisation (lowercase, collapse whitespace, cut at the first separator) as a pure exported function, with the mined-title and typed-query cases that must land on the same key
+- [x] 2.3 Implement the drop rule for titles reducing to a bare grade or bare generic, driven by `vocab.SeniorityValues` plus the generic list
 - [ ] 2.4 Implement the suggestion document type and the builder's assembly: mined titles above the floor, roles, skills, categories, companies — each with its open-posting count
 - [ ] 2.5 Implement the category-vs-role de-duplication (a category sharing a role's slug is not emitted) and the one-row-per-base-role collapse
 - [ ] 2.6 Implement the index settings and the rebuild-and-swap write, reusing `search.Rebuild` rather than a second swap implementation
