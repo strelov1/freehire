@@ -11,7 +11,7 @@ import (
 func phrases(p ...string) *Phrases {
 	docs := make([]Document, 0, len(p))
 	for _, s := range p {
-		docs = append(docs, Document{Kind: KindRole, Slug: Title(s), Text: s, Jobs: 1})
+		docs = append(docs, Document{Kind: KindCategory, Slug: Title(s), Text: s, Jobs: 1})
 	}
 	return NewPhrases(docs)
 }
@@ -105,8 +105,8 @@ func TestParse(t *testing.T) {
 // roles, and the pair would filter to nothing. Skills are the exception: several
 // skills narrow a search sensibly.
 func TestParsed_ExcludedKinds(t *testing.T) {
-	one := Parsed{Recognised: []Part{{Kind: KindRole}}}
-	if got := one.ExcludedKinds(); !slices.Contains(got, KindRole) {
+	one := Parsed{Recognised: []Part{{Kind: KindCategory}}}
+	if got := one.ExcludedKinds(); !slices.Contains(got, KindCategory) {
 		t.Errorf("a named role must not be offered again, got %v", got)
 	}
 
@@ -115,16 +115,16 @@ func TestParsed_ExcludedKinds(t *testing.T) {
 		t.Errorf("skills compose, got %v", got)
 	}
 
-	both := Parsed{Recognised: []Part{{Kind: KindRole}, {Kind: KindCompany}}}
+	both := Parsed{Recognised: []Part{{Kind: KindCategory}, {Kind: KindCompany}}}
 	got := both.ExcludedKinds()
-	if !slices.Contains(got, KindRole) || !slices.Contains(got, KindCompany) {
+	if !slices.Contains(got, KindCategory) || !slices.Contains(got, KindCompany) {
 		t.Errorf("excluded = %v, want both", got)
 	}
 }
 
-// Two kinds CAN spell the same phrase — `backend` is a role, a skill and a category —
-// and the parse has to pick ONE, because that choice decides which facet a
-// fully-typed phrase applies.
+// Two kinds CAN spell the same phrase — `backend` is a skill AND a category — and the
+// parse has to pick ONE, because that choice decides which facet a fully-typed phrase
+// applies.
 //
 // First-writer-wins is not enough: the recognition set is loaded from the index, whose
 // empty-query order is `searches:desc, jobs:desc`, so the winner would change as
@@ -132,14 +132,12 @@ func TestParsed_ExcludedKinds(t *testing.T) {
 // different days, and nothing would look broken. Hence an explicit precedence, tested
 // with the input reversed.
 func TestPhrases_DuplicatePhraseResolvesByKindNotByOrder(t *testing.T) {
-	role := Document{Kind: KindRole, Slug: "backend", Text: "Backend", Jobs: 1}
 	skill := Document{Kind: KindSkill, Slug: "backend", Text: "Backend", Jobs: 1}
 	category := Document{Kind: KindCategory, Slug: "backend", Text: "Backend", Jobs: 1}
 
 	for _, order := range [][]Document{
-		{role, skill, category},
-		{category, skill, role},
-		{skill, category, role},
+		{skill, category},
+		{category, skill},
 	} {
 		// Trailing space: the precedence question is about a FINISHED word, and a word
 		// still being typed is never recognised at all (see the trailing-word test).
@@ -147,8 +145,10 @@ func TestPhrases_DuplicatePhraseResolvesByKindNotByOrder(t *testing.T) {
 		if len(got.Recognised) != 1 {
 			t.Fatalf("recognised = %v", got.Recognised)
 		}
-		if got.Recognised[0].Kind != KindRole {
-			t.Errorf("kind = %q, want role regardless of input order", got.Recognised[0].Kind)
+		// A technology named inside a job beats a department's name — the category is
+		// the weakest reading of a phrase.
+		if got.Recognised[0].Kind != KindSkill {
+			t.Errorf("kind = %q, want skill regardless of input order", got.Recognised[0].Kind)
 		}
 	}
 }

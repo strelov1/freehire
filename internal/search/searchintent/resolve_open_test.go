@@ -2,6 +2,7 @@ package searchintent
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -107,18 +108,19 @@ func TestResolveDropsUncuratedCollection(t *testing.T) {
 
 // The interpreter used to offer a `role` enum, and `senior_backend` was its shape: one
 // value fusing two axes. It offers `category` and `seniority` now, which is what that
-// slug decomposed into — so the model says the same thing in the vocabulary the rest of
-// the request already uses, and a grade can be widened or dropped without rebuilding
-// the filter.
-func TestResolveNoLongerOffersRole(t *testing.T) {
-	got := resolveFacet(t, "role", "senior_backend")
-	if len(got.Facets["role"]) != 0 {
-		t.Fatalf("role = %v, want none — the facet is gone", got.Facets["role"])
+// slug decomposed into.
+//
+// The facet is gone from the schema, so a model cannot name it; this pins what happens
+// if one somehow does. Not a silent drop — a name nothing serves means this package and
+// the filter table have drifted apart, which is a bug in the build rather than a value
+// a person typed, and the loud failure is how it gets found.
+func TestResolveRefusesAFacetNothingServes(t *testing.T) {
+	_, err := intent{Facets: map[string][]string{"role": {"senior_backend"}}}.resolve()
+	if err == nil {
+		t.Fatal("resolve accepted role — the facet is retired and nothing serves it")
 	}
-	// Reported, not silently dropped: a model that still names it should see it named
-	// back, the same way an uncatalogued value always has.
-	if !slices.Contains(got.Unresolved, "senior_backend") {
-		t.Fatalf("unresolved = %v, want it to name the dropped value", got.Unresolved)
+	if !strings.Contains(err.Error(), "role") {
+		t.Errorf("error = %v, want it to name the facet that drifted", err)
 	}
 }
 

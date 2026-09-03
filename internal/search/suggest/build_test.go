@@ -80,51 +80,6 @@ func TestBuild_DropsATitleThatNamesNoCraft(t *testing.T) {
 	}
 }
 
-// A bare-category role and its category select the same postings — measured on the
-// live catalogue, role `devops` counts 53,250 against category `devops` at 53,251.
-// Offering both puts one filter in the dropdown twice, which is the confusion this
-// feature exists to remove.
-func TestBuild_ACategoryLosesToTheRoleThatSharesItsSlug(t *testing.T) {
-	docs := Build(Input{
-		Roles:      map[string]int{"devops": 53250},
-		RoleLabels: map[string]string{"devops": "DevOps Engineer"},
-		Categories: map[string]int{"devops": 53251, "healthcare": 77787},
-	})
-	got := slugs(docs)
-	if !slices.Contains(got, "role:devops") {
-		t.Error("the role names a job and wins")
-	}
-	if slices.Contains(got, "category:devops") {
-		t.Error("the category is the same postings under a department's name")
-	}
-	if !slices.Contains(got, "category:healthcare") {
-		t.Error("a category with no matching role survives")
-	}
-}
-
-// The catalogue carries every grade as its own role slug and graded slugs outnumber
-// ungraded ones about six to one, so offering each would spend a whole dropdown on
-// one role's grades.
-func TestBuild_OneRowPerBaseRole(t *testing.T) {
-	docs := Build(Input{
-		Roles: map[string]int{
-			"data_analytics": 77367, "senior_data_analytics": 20000,
-			"junior_data_analytics": 5000, "data_engineering": 42072,
-		},
-		RoleLabels: map[string]string{
-			"data_analytics": "Data Analyst", "senior_data_analytics": "Senior Data Analyst",
-			"junior_data_analytics": "Junior Data Analyst", "data_engineering": "Data Engineer",
-		},
-	})
-	got := slugs(docs)
-	if !slices.Contains(got, "role:data_analytics") || !slices.Contains(got, "role:data_engineering") {
-		t.Fatalf("both base roles must survive, got %v", got)
-	}
-	if slices.Contains(got, "role:senior_data_analytics") {
-		t.Error("a graded slug is the base role again, under a longer name")
-	}
-}
-
 func TestBuild_CompaniesAndSkillsCarryTheirCounts(t *testing.T) {
 	docs := Build(Input{
 		Companies: []Company{{Slug: "google", Name: "Google", Jobs: 3187}},
@@ -151,9 +106,7 @@ func TestBuild_CompaniesAndSkillsCarryTheirCounts(t *testing.T) {
 // page, which is worse than no suggestion.
 func TestBuild_NothingWithoutPostings(t *testing.T) {
 	docs := Build(Input{
-		Roles:      map[string]int{"backend": 0},
-		RoleLabels: map[string]string{"backend": "Backend Engineer"},
-		Categories: map[string]int{"qa": 0},
+		Categories: map[string]int{"backend": 0, "qa": 0},
 		Skills:     map[string]int{"cobol": 0},
 		Companies:  []Company{{Slug: "gone", Name: "Gone", Jobs: 0}},
 	})
@@ -163,11 +116,10 @@ func TestBuild_NothingWithoutPostings(t *testing.T) {
 }
 
 // The document id is what Meilisearch dedupes on, so two kinds sharing a slug must
-// not collide: `backend` is a plausible role AND a plausible category.
+// not collide: `backend` is a plausible category, skill AND posting title.
 func TestBuild_IdsAreUniqueAcrossKinds(t *testing.T) {
 	docs := Build(Input{
-		Roles:      map[string]int{"backend": 100},
-		RoleLabels: map[string]string{"backend": "Backend Engineer"},
+		Categories: map[string]int{"backend": 100},
 		Skills:     map[string]int{"backend": 200},
 		Titles:     map[string]int{"backend": 300},
 		TitleFloor: 1,
@@ -189,16 +141,15 @@ func TestBuild_IdsAreUniqueAcrossKinds(t *testing.T) {
 // reason a typed query and a mined title can meet at all.
 func TestBuild_CarriesRecordedDemand(t *testing.T) {
 	docs := Build(Input{
-		Roles:      map[string]int{"backend": 8000},
-		RoleLabels: map[string]string{"backend": "Backend Engineer"},
+		Categories: map[string]int{"backend": 8000},
 		Skills:     map[string]int{"cobol": 12},
-		Searches:   map[string]int{"backend engineer": 40},
+		Searches:   map[string]int{"backend": 40},
 	})
 	for _, d := range docs {
 		switch d.Kind {
-		case KindRole:
+		case KindCategory:
 			if d.Searches != 40 {
-				t.Errorf("role searches = %d, want 40", d.Searches)
+				t.Errorf("category searches = %d, want 40", d.Searches)
 			}
 		case KindSkill:
 			// Nobody having asked for it is not evidence against it — the posting count
@@ -239,8 +190,6 @@ func TestBuild_IdsAreAcceptableToTheEngine(t *testing.T) {
 	docs := Build(Input{
 		Titles:     map[string]int{"Node.js Developer (m/f/d)": 50, "C++ Engineer": 50},
 		TitleFloor: 1,
-		Roles:      map[string]int{"senior_backend": 10},
-		RoleLabels: map[string]string{"senior_backend": "Senior Backend Engineer"},
 		Categories: map[string]int{"ml_ai": 10},
 		Skills:     map[string]int{"ci-cd": 10, "node.js": 10},
 		Companies: []Company{
@@ -266,12 +215,10 @@ func TestBuild_IdsAreAcceptableToTheEngine(t *testing.T) {
 	}
 }
 
-// Namespacing is what the id is FOR — `backend` is a plausible role, skill and
-// category — so whatever encoding keeps it legal must keep it distinct too.
+// Namespacing is what the id is FOR — `backend` is a plausible skill, category and
+// posting title — so whatever encoding keeps it legal must keep it distinct too.
 func TestBuild_IdsStayDistinctAcrossKindsAfterEncoding(t *testing.T) {
 	docs := Build(Input{
-		Roles:      map[string]int{"backend": 100},
-		RoleLabels: map[string]string{"backend": "Backend"},
 		Skills:     map[string]int{"backend": 200},
 		Categories: map[string]int{"backend": 300},
 		Titles:     map[string]int{"backend": 400},
@@ -322,5 +269,28 @@ func TestBuild_IdLengthIsIndependentOfTheValue(t *testing.T) {
 	}
 	if len(long[0].ID) > 511 {
 		t.Errorf("id is %d bytes, over the engine's ceiling", len(long[0].ID))
+	}
+}
+
+// The role facet is retired, so the dictionary stops carrying its kind. The pleasant
+// consequence is the same edit: every specialization used to collide with a role of the
+// identical slug and lose the tie-break, so the dictionary held ZERO of them. With roles
+// gone the collision is gone, and a person typing "backend" is finally offered the
+// specialization they meant.
+func TestBuildOffersSpecializationsOnceRolesAreGone(t *testing.T) {
+	docs := Build(Input{
+		Categories: map[string]int{"backend": 40769, "data_engineering": 900},
+		Skills:     map[string]int{"go": 120},
+	})
+
+	byKind := map[Kind][]string{}
+	for _, d := range docs {
+		byKind[d.Kind] = append(byKind[d.Kind], d.Slug)
+	}
+	if got := byKind[Kind("role")]; len(got) != 0 {
+		t.Errorf("role documents = %v, want none — the kind is retired", got)
+	}
+	if len(byKind[KindCategory]) != 2 {
+		t.Errorf("categories = %v, want both — nothing collides with them now", byKind[KindCategory])
 	}
 }

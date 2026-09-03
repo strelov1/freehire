@@ -6,17 +6,17 @@
 
 ## 2. Stop serving the facet
 
-- [ ] 2.1 Remove `role` from `search.StringFacets`, which takes it out of the filter grammar and the `/jobs/facets` distribution in one edit
-- [ ] 2.2 Confirm `role=` now lands in `meta.ignored_params` rather than being refused, and that `role_exclude` / `role_mode` go with it
+- [x] 2.1 Remove `role` from `search.StringFacets`, which takes it out of the filter grammar and the `/jobs/facets` distribution in one edit
+- [x] 2.2 Confirm `role=` now lands in `meta.ignored_params` rather than being refused, and that `role_exclude` / `role_mode` go with it
 - [ ] 2.3 Remove the Role pane from the filter modal and the facet from `web/src/lib/facets.ts`
 - [ ] 2.4 Remove the facet, its parameter and its schema references from `web/static/openapi.yaml`; re-validate the document
 - [ ] 2.5 Drop the role branches from `seeAlsoMark.ts`, `familymarks.ts`, `saveSearchAlert.ts`, `cv.ts` and `facetValueLabel`
 
 ## 3. Stop building role suggestions
 
-- [ ] 3.1 Remove `KindRole` from the suggestion builder, with the one-row-per-base-role collapse it needed
-- [ ] 3.2 Remove the category-vs-role de-duplication — the collision it arbitrated is gone, and its absence is what lets specializations into the dictionary
-- [ ] 3.3 Drop `role` from the parse's kind precedence and from `singular`
+- [x] 3.1 Remove `KindRole` from the suggestion builder, with the one-row-per-base-role collapse it needed
+- [x] 3.2 Remove the category-vs-role de-duplication — the collision it arbitrated is gone, and its absence is what lets specializations into the dictionary
+- [x] 3.3 Drop `role` from the parse's kind precedence and from `singular`
 - [ ] 3.4 Rebuild the dictionary against production and confirm specializations now appear as suggestions, which they never have
 
 ## 4. Delete the dictionary

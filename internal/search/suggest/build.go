@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"sort"
 	"strings"
-
-	"github.com/strelov1/freehire/internal/dict/roletag"
 )
 
 // Kind says what a suggestion IS, which is the only thing that decides what picking it
@@ -16,7 +14,6 @@ type Kind string
 
 const (
 	KindTitle    Kind = "title"
-	KindRole     Kind = "role"
 	KindSkill    Kind = "skill"
 	KindCategory Kind = "category"
 	KindCompany  Kind = "company"
@@ -58,8 +55,6 @@ type Input struct {
 	// suggestion, so a floor applied before merging drops a title that clears it.
 	TitleFloor int
 
-	Roles      map[string]int
-	RoleLabels map[string]string
 	Categories map[string]int
 	Skills     map[string]int
 	Companies  []Company
@@ -125,29 +120,7 @@ func Build(in Input) []Document {
 		})
 	}
 
-	// Roles: one row per base role, keeping the busiest variant of each.
-	best := map[string]string{}
-	for slug, n := range in.Roles {
-		if n <= 0 {
-			continue
-		}
-		base := roletag.BaseRole(slug)
-		if cur, ok := best[base]; !ok || in.Roles[cur] < n {
-			best[base] = slug
-		}
-	}
-	roleSlugs := map[string]bool{}
-	for base, slug := range best {
-		roleSlugs[base] = true
-		add(KindRole, slug, in.RoleLabels[slug], in.Roles[slug])
-	}
-
 	for slug, n := range in.Categories {
-		// The de-duplication. A category whose slug a role already carries is those same
-		// postings under a department's name.
-		if roleSlugs[slug] {
-			continue
-		}
 		add(KindCategory, slug, categoryText(slug), n)
 	}
 
