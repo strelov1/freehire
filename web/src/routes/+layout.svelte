@@ -36,8 +36,9 @@
       page.url.pathname.startsWith('/tailor/'),
   );
 
-  // Apply the persisted theme and start tracking the OS preference once mounted.
-  // A no-FOUC inline script in app.html already set the class before paint.
+  // Re-apply the persisted theme once mounted (the singleton may have been
+  // constructed on the server, defaulting to light). A no-FOUC inline script
+  // in app.html already set the class before paint.
   onMount(() => {
     initTheme();
     registerPwaServiceWorker();

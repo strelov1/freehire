@@ -30,15 +30,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="freehire" />
     <script>
-      // No flash of the wrong theme: apply the persisted (or OS) choice before
-      // first paint. Mirrors theme.svelte.ts; the toggle re-syncs on mount.
+      // No flash of the wrong theme: apply the persisted choice before first
+      // paint. Defaults to light (no OS sniffing) — mirrors theme.svelte.ts;
+      // the toggle re-syncs on mount.
       (function () {
         try {
-          var m = localStorage.getItem('hire.theme');
-          var dark =
-            m === 'dark' ||
-            ((!m || m === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
-          if (dark) document.documentElement.classList.add('dark');
+          if (localStorage.getItem('hire.theme') === 'dark')
+            document.documentElement.classList.add('dark');
         } catch (e) {}
       })();
       // Same trick for the Product Hunt strip: it renders on the server (so it never
