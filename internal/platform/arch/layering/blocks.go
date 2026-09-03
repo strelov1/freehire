@@ -67,7 +67,15 @@ var blocks = map[string][]string{
 	},
 	"identity": {
 		"accountdelete", "accounts", "auth", "auth/apple", "auth/applejobs",
-		"auth/mobileauth", "auth/oauth", "auth/recentauth", "userprofile",
+		"auth/mobileauth", "auth/oauth", "auth/recentauth",
+		// billing is here and not in ai, where plan lives, because a subscription is an
+		// attribute of the ACCOUNT. The constraint that pushed plan out of this block —
+		// ai and identity share a layer, so ai/assistant could not import it — does not
+		// reach billing: plan reads users.pro_until through platform/db and never imports
+		// this package, and billing's only callers are the webhook handler in api and a
+		// binary in cmd.
+		"billing",
+		"userprofile",
 	},
 	"candidate": {
 		"atscheck",
