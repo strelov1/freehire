@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -43,10 +42,6 @@ func (h *billingHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie only. A checkout link decides who gets charged, so it is minted for a browser
 	// session and never for an API key, in the same spirit as key management itself.
 	api.Get("/billing/checkout", mw.cookie, h.Checkout)
-	// Where the caller cancels. Cookie-only for the same reason as checkout, and its own
-	// route rather than a field on /me/plan because it is a call to the provider — the plan
-	// surface must stay readable when the provider is not.
-	api.Get("/billing/manage", mw.cookie, h.Manage)
 }
 
 // applyTimeout bounds the inline attempt to bring the user's plan up to date.
@@ -137,31 +132,5 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
 }
 
-// Manage returns the provider's own management URL for this subscriber — where they cancel
-// or change the subscription.
-//
-// Deleting a freehire account does NOT cancel a subscription, and the delete surface says
-// so and links here. We do not compose that destination ourselves: a URL we built is wrong
-// the first time the provider changes theirs, and this is the question nobody should get a
-// stale answer to.
-func (h *billingHandlers) Manage(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
-	defer cancel()
-
-	url, err := h.billing.ManagementURL(ctx, strconv.FormatInt(userID, 10))
-	if err != nil || url == "" {
-		// The caller has no subscription with the provider, or the provider is unreachable.
-		// Either way there is nothing to manage right now, and 404 lets the surface omit the
-		// link rather than render a broken one.
-		if err != nil {
-			log.Printf("billing: no management URL for user %d: %v", userID, err)
-		}
-		return fiber.NewError(fiber.StatusNotFound, "no subscription to manage")
-	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
-}
+// There is no Manage route. The v2 customer object carries no management URL — see the
+// note where ManagementURL used to live in internal/identity/billing.

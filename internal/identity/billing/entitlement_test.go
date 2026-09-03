@@ -5,20 +5,33 @@ import (
 	"time"
 )
 
-func at(t *testing.T, s string) *time.Time {
+// ms is a v2 expiry: milliseconds since the epoch. Taking a string keeps the cases
+// readable while the type under test stays the one the provider actually sends.
+func ms(t *testing.T, s string) *int64 {
 	t.Helper()
 	v, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		t.Fatalf("bad test timestamp %q: %v", s, err)
 	}
-	return &v
+	out := v.UnixMilli()
+	return &out
 }
 
-// TestProUntilFrom walks every shape the provider's entitlement map arrives in. It is a
-// pure function precisely so that the two cases nobody would notice going wrong — a grace
-// period and an absent expiry — are as cheap to assert as the ordinary one.
+// sub builds a v2 customer carrying the given active entitlements.
+func sub(items ...entitlement) subscriber {
+	var s subscriber
+	s.ActiveEntitlements.Items = items
+	return s
+}
+
+// TestProUntilFrom walks every shape the provider's active-entitlement list arrives in.
+//
+// Note what is NOT here any more: a grace period. The v2 list carries only entitlements
+// that are ACTIVE, so the provider has already applied its own grace rule and what is left
+// is one expiry per entitlement. The v1 shape this replaced needed both fields and a rule
+// to combine them.
 func TestProUntilFrom(t *testing.T) {
-	proIDs := []string{"pro"}
+	proIDs := []string{"freehire Pro"}
 
 	cases := []struct {
 		name string
@@ -27,83 +40,56 @@ func TestProUntilFrom(t *testing.T) {
 		want string // RFC3339, or "" for the zero time
 	}{
 		{
-			name: "active entitlement",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro": {ExpiresDate: at(t, "2026-10-01T00:00:00Z")},
-			}},
+			name: "an active entitlement",
+			sub:  sub(entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")}),
 			want: "2026-10-01T00:00:00Z",
 		},
 		{
-			// A lapsed subscription still writes the provider's date. Deciding it is over
-			// is plan.TierOf's job, comparing against now; writing zero here would erase
-			// when it ended, which is the only thing that says why the account is free.
-			name: "lapsed entitlement keeps its date",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro": {ExpiresDate: at(t, "2020-01-01T00:00:00Z")},
-			}},
-			want: "2020-01-01T00:00:00Z",
-		},
-		{
-			name: "no entitlements at all",
-			sub:  subscriber{Entitlements: map[string]entitlement{}},
+			// Lapsed, refunded and transferred all look the same from here: the entitlement
+			// is simply not in the ACTIVE list, and no branch was needed to notice.
+			name: "no active entitlements at all",
+			sub:  sub(),
 			want: "",
 		},
 		{
 			name: "only an entitlement that does not confer pro",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"extra_storage": {ExpiresDate: at(t, "2026-10-01T00:00:00Z")},
-			}},
+			sub:  sub(entitlement{EntitlementID: "extra_storage", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")}),
 			want: "",
 		},
 		{
-			// The payment failed but the subscriber is still entitled. Reading expires_date
-			// alone would take access away from someone who has it.
-			name: "grace period outlasts the expiry",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro": {
-					ExpiresDate:            at(t, "2026-09-04T00:00:00Z"),
-					GracePeriodExpiresDate: at(t, "2026-09-20T00:00:00Z"),
-				},
-			}},
-			want: "2026-09-20T00:00:00Z",
-		},
-		{
-			name: "expiry outlasts a stale grace period",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro": {
-					ExpiresDate:            at(t, "2026-12-01T00:00:00Z"),
-					GracePeriodExpiresDate: at(t, "2026-09-04T00:00:00Z"),
-				},
-			}},
-			want: "2026-12-01T00:00:00Z",
-		},
-		{
-			// The trap. A null expires_date means the entitlement does not expire, and
-			// reading it as the zero time would silently downgrade a lifetime purchaser to
-			// the free plan — a wrong nobody would ever be looking for.
-			name: "entitlement with no expiry is not expired",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro": {ExpiresDate: nil},
-			}},
+			// The trap. A null expiry means the entitlement does not expire, and reading it
+			// as the zero time would silently downgrade a lifetime purchaser — and the
+			// catalogue already carries a lifetime product.
+			name: "an entitlement with no expiry is not expired",
+			sub:  sub(entitlement{EntitlementID: "freehire Pro", ExpiresAt: nil}),
 			want: neverExpires.Format(time.RFC3339),
 		},
 		{
 			name: "several entitlements confer pro; the latest wins",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro":        {ExpiresDate: at(t, "2026-10-01T00:00:00Z")},
-				"pro_annual": {ExpiresDate: at(t, "2027-03-01T00:00:00Z")},
-			}},
-			ids:  []string{"pro", "pro_annual"},
+			sub: sub(
+				entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")},
+				entitlement{EntitlementID: "entl58d5471b41", ExpiresAt: ms(t, "2027-03-01T00:00:00Z")},
+			),
+			ids:  []string{"freehire Pro", "entl58d5471b41"},
 			want: "2027-03-01T00:00:00Z",
 		},
 		{
 			name: "a non-expiring entitlement outranks a dated one",
-			sub: subscriber{Entitlements: map[string]entitlement{
-				"pro":        {ExpiresDate: at(t, "2026-10-01T00:00:00Z")},
-				"pro_annual": {ExpiresDate: nil},
-			}},
-			ids:  []string{"pro", "pro_annual"},
+			sub: sub(
+				entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")},
+				entitlement{EntitlementID: "entl58d5471b41", ExpiresAt: nil},
+			),
+			ids:  []string{"freehire Pro", "entl58d5471b41"},
 			want: neverExpires.Format(time.RFC3339),
+		},
+		{
+			// The payload names the entitlement with ONE of the provider's two identifiers
+			// and we do not get to choose which. Configuring both is what makes that a
+			// non-question rather than a production incident.
+			name: "the internal id is matched as readily as the lookup key",
+			sub:  sub(entitlement{EntitlementID: "entl58d5471b41", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")}),
+			ids:  []string{"freehire Pro", "entl58d5471b41"},
+			want: "2026-10-01T00:00:00Z",
 		},
 	}
 
@@ -136,11 +122,9 @@ func TestProUntilFrom(t *testing.T) {
 // is DERIVED from provider state, so applying the same state twice yields the same answer
 // and a repeated sync is free.
 func TestProUntilFromIsIdempotent(t *testing.T) {
-	sub := subscriber{Entitlements: map[string]entitlement{
-		"pro": {ExpiresDate: at(t, "2026-10-01T00:00:00Z")},
-	}}
-	first := proUntilFrom(sub, []string{"pro"})
-	second := proUntilFrom(sub, []string{"pro"})
+	s := sub(entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")})
+	first := proUntilFrom(s, []string{"freehire Pro"})
+	second := proUntilFrom(s, []string{"freehire Pro"})
 	if !first.Equal(second) {
 		t.Fatalf("not idempotent: %s then %s", first, second)
 	}

@@ -13,7 +13,11 @@ import (
 )
 
 // apiBaseURL is the provider's REST API. Overridden only by tests.
-const apiBaseURL = "https://api.revenuecat.com/v1"
+//
+// v2, and not by preference: the project's secret key is a v2 key, and v1 refuses it with
+// "You're trying to use a secret API key incompatible with RevenueCat API V1". The first
+// draft of this package spoke v1 and would have answered 403 to every sync.
+const apiBaseURL = "https://api.revenuecat.com/v2"
 
 // requestTimeout bounds one read of subscriber state.
 //
@@ -29,32 +33,37 @@ const errorBodyLimit = 512
 // client reads subscriber state from the provider. It is the only thing in this package
 // that talks to the network.
 type client struct {
-	http    *http.Client
-	baseURL string
-	apiKey  string
+	http      *http.Client
+	baseURL   string
+	apiKey    string
+	projectID string
 }
 
 // newProviderClient is the production constructor: an SSRF-guarded client against the real
 // API.
-func newProviderClient(apiKey string) *client {
-	return newClient(apiKey, apiBaseURL, safehttp.NewClient(requestTimeout))
+func newProviderClient(apiKey, projectID string) *client {
+	return newClient(apiKey, projectID, apiBaseURL, safehttp.NewClient(requestTimeout))
 }
 
 // newClient builds a client against an arbitrary base URL with an arbitrary HTTP client.
 // The seam exists for tests: safehttp refuses private addresses, which is correct in
 // production and makes a loopback test server unreachable.
-func newClient(apiKey, baseURL string, httpc *http.Client) *client {
-	return &client{http: httpc, baseURL: baseURL, apiKey: apiKey}
+func newClient(apiKey, projectID, baseURL string, httpc *http.Client) *client {
+	return &client{http: httpc, baseURL: baseURL, apiKey: apiKey, projectID: projectID}
 }
 
 // subscriberState reads the provider's current record for one identifier.
 //
-// THIS GET CREATES THE SUBSCRIBER if the identifier is unknown to the provider — a read
-// with a write's consequences. Callers must therefore only ask about accounts that have
-// actually transacted; the reconciler's query enforces that structurally by starting from
-// billing_events rather than from users.
+// A customer the provider has never seen answers 404, and that is NOT an error: it means
+// no purchase, which derives to no entitlement and the free plan. Treating it as a failure
+// would leave events unprocessed forever for every identifier that was never ours.
+//
+// Unlike v1's subscriber GET, this read has no write behind it — v2 does not create a
+// customer for an unknown id. The rule that callers only ask about accounts which have
+// transacted therefore stops being load-bearing, though the reconciler's query still holds
+// to it because it is also the cheaper way to find candidates.
 func (c *client) subscriberState(ctx context.Context, appUserID string) (subscriber, error) {
-	endpoint := c.baseURL + "/subscribers/" + url.PathEscape(appUserID)
+	endpoint := c.baseURL + "/projects/" + url.PathEscape(c.projectID) + "/customers/" + url.PathEscape(appUserID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -69,16 +78,21 @@ func (c *client) subscriberState(ctx context.Context, appUserID string) (subscri
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Never purchased anything, so there is nothing to be entitled to. An empty customer
+	// derives to the zero time, which resolves to the free plan.
+	if resp.StatusCode == http.StatusNotFound {
+		return subscriber{}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit))
-		return subscriber{}, fmt.Errorf("billing: reading subscriber %q: provider returned %d: %s", appUserID, resp.StatusCode, snippet)
+		return subscriber{}, fmt.Errorf("billing: reading customer %q: provider returned %d: %s", appUserID, resp.StatusCode, snippet)
 	}
 
-	var payload struct {
-		Subscriber subscriber `json:"subscriber"`
+	// The customer object carries active_entitlements inline; there is no envelope to
+	// unwrap, unlike v1's {"subscriber": …}.
+	var out subscriber
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return subscriber{}, fmt.Errorf("billing: decoding customer %q: %w", appUserID, err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return subscriber{}, fmt.Errorf("billing: decoding subscriber %q: %w", appUserID, err)
-	}
-	return payload.Subscriber, nil
+	return out, nil
 }

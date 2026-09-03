@@ -34,7 +34,14 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   endpoint; and creating the Web Billing paywall, whose token is what
   `BILLING_CHECKOUT_URL` holds.
 
-  **`REVENUECAT_ENTITLEMENT` is `freehire Pro`, not `pro`.** That is the lookup key the
+  **`REVENUECAT_PROJECT_ID` is required** (`proja56a40fc`): the code speaks API v2 and
+  every v2 call is scoped to a project. Its absence leaves billing disabled, which is the
+  safe direction but looks exactly like "not deployed yet".
+
+  **`REVENUECAT_ENTITLEMENT` holds BOTH names of the entitlement**, comma-separated:
+  `freehire Pro,entl58d5471b41`. The provider has a human lookup key and an internal id for
+  one entitlement and names it with one of them in the customer payload; configuring both
+  is what stops that being discovered from an incident. And note it is **not** `pro` — That is the lookup key the
   project actually carries, and the package's default would match no entitlement at all —
   which does not fail, it resolves every paying subscriber to the free plan. The value has
   a space in it; systemd's `EnvironmentFile` strips the surrounding quotes and delivers it

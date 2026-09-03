@@ -32,25 +32,12 @@
   let error = $state<string | null>(null);
   let reauthRequired = $state(false);
 
-  // Where this member cancels, asked of the payment provider rather than composed here: a
-  // destination we invent is wrong the first time they change theirs, and "where do I
-  // cancel" is the last question anyone should get a stale answer to.
-  //
-  // Fetched when the dialog OPENS, not on page load — it is a call to the provider, and
-  // most people opening this settings tab are not deleting anything. Null (no subscription,
-  // billing not configured, provider unreachable) simply omits the link: the note beside it
-  // still says the subscription is not cancelled, which is the part that must never depend
-  // on a network call succeeding.
-  let manageUrl = $state<string | null>(null);
-
-  $effect(() => {
-    if (!open) return;
-    api
-      .billingManageUrl()
-      .then(({ url }) => (manageUrl = url))
-      .catch(() => (manageUrl = null));
-  });
-
+  // There is no "manage subscription" link here, and its absence is the provider's doing.
+  // Their v2 customer object carries no management URL — v1's did, and this dialog linked
+  // to it precisely so the destination came from them rather than being composed by us.
+  // Composing one now would reintroduce exactly the staleness that avoided, so the note
+  // below says plainly that deleting the account does not cancel the subscription and
+  // leaves finding the cancel page to the member.
   const s = $derived(t(messages, locale()));
   const user = $derived(currentUser());
   const email = $derived(user?.email ?? '');
@@ -140,15 +127,7 @@
   <!-- Deleting here erases OUR side. The subscription is held by the payment provider,
        which never hears about this, so somebody who does not cancel there keeps paying
        for an account that no longer exists. -->
-  <p class="mt-3 text-sm text-muted-foreground">
-    {s.subscriptionNote}
-    {#if manageUrl}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the payment provider's own management URL, not a SvelteKit route -->
-      <a class="underline" href={manageUrl} target="_blank" rel="noopener noreferrer"
-        >{s.manageSubscription}</a
-      >
-    {/if}
-  </p>
+  <p class="mt-3 text-sm text-muted-foreground">{s.subscriptionNote}</p>
 
   <label class="mt-4 block text-sm font-medium" for="delete-account-confirm">
     {s.confirmPrefix} <span class="font-mono">{email}</span> {s.confirmSuffix}

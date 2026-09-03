@@ -6,10 +6,13 @@ import (
 )
 
 // setEnv points the whole configuration at test values; "" removes a variable.
+const testProjectID = "proj_test"
+
 func setEnv(t *testing.T, apiKey, secret, entitlements, checkout string) {
 	t.Helper()
 	t.Setenv("REVENUECAT_API_KEY", apiKey)
 	t.Setenv("REVENUECAT_WEBHOOK_SECRET", secret)
+	t.Setenv("REVENUECAT_PROJECT_ID", testProjectID)
 	t.Setenv("REVENUECAT_ENTITLEMENT", entitlements)
 	t.Setenv("BILLING_CHECKOUT_URL", checkout)
 }
@@ -27,6 +30,16 @@ func TestConfigFromEnvDisabledIsNotAnError(t *testing.T) {
 		{name: "api key only", apiKey: "sk_test"},
 		{name: "webhook secret only", secret: "whsec_test"},
 	}
+
+	// Every v2 call is scoped to a project, so a deployment without one has no URL to read
+	// state from. Checked separately because setEnv always supplies it.
+	t.Run("no project id", func(t *testing.T) {
+		setEnv(t, "sk_test", "whsec_test", "", "")
+		t.Setenv("REVENUECAT_PROJECT_ID", "")
+		if ConfigFromEnv().Enabled() {
+			t.Fatal("want billing disabled without a project id")
+		}
+	})
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

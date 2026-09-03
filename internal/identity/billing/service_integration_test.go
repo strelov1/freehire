@@ -35,7 +35,7 @@ func newService(t *testing.T, h http.HandlerFunc) (*Service, *pgxpool.Pool) {
 	if h != nil {
 		srv := httptest.NewServer(h)
 		t.Cleanup(srv.Close)
-		s.client = newClient("sk_test", srv.URL, srv.Client())
+		s.client = newClient("sk_test", testProjectID, srv.URL, srv.Client())
 	}
 	return s, pool
 }
@@ -78,15 +78,21 @@ func event(id, appUserID string) Event {
 	}
 }
 
-// subscriberWith serves a subscriber carrying one pro entitlement expiring at expires, or
-// no entitlement at all when expires is empty.
+// subscriberWith serves a v2 customer carrying one pro entitlement expiring at expires, or
+// no active entitlement at all when expires is empty.
 func subscriberWith(expires string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if expires == "" {
-			_, _ = w.Write([]byte(`{"subscriber":{"entitlements":{}}}`))
+			_, _ = w.Write([]byte(`{"active_entitlements":{"items":[]}}`))
 			return
 		}
-		_, _ = fmt.Fprintf(w, `{"subscriber":{"entitlements":{"pro":{"expires_date":%q}}}}`, expires)
+		at, err := time.Parse(time.RFC3339, expires)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = fmt.Fprintf(w,
+			`{"active_entitlements":{"items":[{"entitlement_id":"pro","expires_at":%d}]}}`, at.UnixMilli())
 	}
 }
 

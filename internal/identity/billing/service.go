@@ -56,9 +56,9 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 		return s
 	}
 	if baseURL == apiBaseURL {
-		s.client = newProviderClient(cfg.APIKey)
+		s.client = newProviderClient(cfg.APIKey, cfg.ProjectID)
 	} else {
-		s.client = newClient(cfg.APIKey, baseURL, &http.Client{Timeout: requestTimeout})
+		s.client = newClient(cfg.APIKey, cfg.ProjectID, baseURL, &http.Client{Timeout: requestTimeout})
 	}
 	return s
 }
@@ -179,27 +179,16 @@ func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
-// ManagementURL is where this subscriber cancels or changes their subscription.
+// There is no ManagementURL here, and its absence is a fact about the provider rather
+// than a decision.
 //
-// It is the provider's own answer, fetched when asked for, not a URL we composed: a
-// destination we built ourselves is wrong the first time they change theirs, and "where do
-// I cancel" is exactly the question nobody wants to get a stale answer to.
-//
-// It is a NETWORK CALL, which is why it lives on its own endpoint and not on the plan
-// surface. Plan resolution must stay free of the provider — see internal/ai/plan.
-func (s *Service) ManagementURL(ctx context.Context, appUserID string) (string, error) {
-	if !s.Enabled() {
-		return "", ErrDisabled
-	}
-	if _, ok := userIDFromAppUserID(appUserID); !ok {
-		return "", fmt.Errorf("%w: %q", ErrUnknownSubscriber, appUserID)
-	}
-	sub, err := s.client.subscriberState(ctx, appUserID)
-	if err != nil {
-		return "", err
-	}
-	return sub.ManagementURL, nil
-}
+// v1's subscriber object carried `management_url` — where that subscriber cancels — and
+// the delete-account surface was built to link to it, precisely so the destination came
+// from the provider instead of being composed by us. The v2 customer object does not carry
+// it. Inventing one would reintroduce exactly the staleness that linking to theirs
+// avoided, so the surface states that deleting an account does not cancel a subscription
+// and leaves it there. If v2 grows the field, the endpoint that served it is in this
+// package's history.
 
 // Sync reads the provider's current state for one subscriber and writes users.pro_until
 // from it.

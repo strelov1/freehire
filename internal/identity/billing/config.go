@@ -33,6 +33,10 @@ type Config struct {
 	APIKey string
 	// WebhookSecret signs incoming deliveries. See verifySignature.
 	WebhookSecret string
+	// ProjectID scopes every v2 call. v1 addressed a subscriber globally; v2 addresses a
+	// customer inside a project, so this is not optional decoration — without it there is
+	// no URL to read state from.
+	ProjectID string
 	// Entitlements are the entitlement identifiers that confer Pro. Usually one: an
 	// entitlement already sits above products, so monthly and annual share it.
 	Entitlements []string
@@ -53,6 +57,7 @@ func ConfigFromEnv() Config {
 	cfg := Config{
 		APIKey:        strings.TrimSpace(os.Getenv("REVENUECAT_API_KEY")),
 		WebhookSecret: strings.TrimSpace(os.Getenv("REVENUECAT_WEBHOOK_SECRET")),
+		ProjectID:     strings.TrimSpace(os.Getenv("REVENUECAT_PROJECT_ID")),
 		Entitlements:  entitlementList(os.Getenv("REVENUECAT_ENTITLEMENT")),
 		// Trimmed of a trailing slash so appending a segment cannot produce "//", which the
 		// paywall answers with a 404 — an easy thing to write in an env file and a
@@ -81,7 +86,7 @@ func entitlementList(raw string) []string {
 // state. Both credentials are needed, and one without the other is a half-configured
 // deployment that would accept unverifiable webhooks or record events it can never apply.
 func (c Config) Enabled() bool {
-	return c.APIKey != "" && c.WebhookSecret != ""
+	return c.APIKey != "" && c.WebhookSecret != "" && c.ProjectID != ""
 }
 
 // CanCheckout reports whether we can send anyone to buy.

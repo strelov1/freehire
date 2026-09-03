@@ -55,10 +55,16 @@ func enabledBillingConfig() billing.Config {
 	return billing.Config{
 		APIKey:        "sk_test",
 		WebhookSecret: billingSecret,
-		Entitlements:  []string{"pro"},
-		CheckoutURL:   "https://pay.rev.cat/tok",
+		// Every v2 call is scoped to a project; without this the config reports itself
+		// disabled and no route is mounted at all.
+		ProjectID:    "proj_test",
+		Entitlements: []string{"pro"},
+		CheckoutURL:  "https://pay.rev.cat/tok",
 	}
 }
+
+// v2CustomerWithPro is what the provider returns for a subscriber who is entitled.
+const v2CustomerWithPro = `{"active_entitlements":{"items":[{"entitlement_id":"pro","expires_at":1790812800000}]}}`
 
 func TestBillingWebhook(t *testing.T) {
 	pool := startPostgres(t)
@@ -72,7 +78,7 @@ func TestBillingWebhook(t *testing.T) {
 	var providerCalls int
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		providerCalls++
-		_, _ = w.Write([]byte(`{"subscriber":{"entitlements":{"pro":{"expires_date":"2026-10-01T00:00:00Z"}}}}`))
+		_, _ = w.Write([]byte(v2CustomerWithPro))
 	}))
 	defer stub.Close()
 

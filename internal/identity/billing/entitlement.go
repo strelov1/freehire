@@ -5,23 +5,29 @@ import "time"
 // subscriber is the provider's record of one account, as much of it as we read. The
 // provider's own record — product, status, period, payment method — stays with the
 // provider; this type exists to be reduced to a single timestamp and then forgotten.
+//
+// This is the API v2 customer, not the v1 subscriber. The project's secret key is a v2
+// key and v1 refuses it outright ("secret API key incompatible with RevenueCat API V1"),
+// so the v1 shape this package first spoke was not a stylistic choice between two working
+// options — it was 403 on every call.
+//
+// The v2 list carries only entitlements that are ACTIVE, which quietly removes work rather
+// than adding it: a lapsed, refunded or transferred entitlement simply is not there, and
+// the provider has already applied its own grace-period rule to what remains. There is no
+// grace field to reconcile because there is nothing left to reconcile.
 type subscriber struct {
-	Entitlements map[string]entitlement `json:"entitlements"`
-	// ManagementURL is where this subscriber cancels. It is the provider's answer, not
-	// ours, which is what the delete-account surface must link to: a destination we
-	// composed would be wrong the first time they change it.
-	ManagementURL string `json:"management_url"`
+	ActiveEntitlements struct {
+		Items []entitlement `json:"items"`
+	} `json:"active_entitlements"`
 }
 
-// entitlement is one entry of the provider's entitlements map.
+// entitlement is one active entitlement.
 //
-// Both dates are pointers because both are genuinely absent sometimes, and the two
-// absences mean different things. A missing grace period means there is none. A missing
-// expiry means the entitlement does not expire — see neverExpires.
+// ExpiresAt is milliseconds since the epoch, and it is a pointer because null is a real
+// value with its own meaning: the entitlement does not expire. See neverExpires.
 type entitlement struct {
-	ExpiresDate            *time.Time `json:"expires_date"`
-	GracePeriodExpiresDate *time.Time `json:"grace_period_expires_date"`
-	ProductIdentifier      string     `json:"product_identifier"`
+	EntitlementID string `json:"entitlement_id"`
+	ExpiresAt     *int64 `json:"expires_at"`
 }
 
 // neverExpires is what an entitlement with no expiry is written as.
@@ -56,9 +62,8 @@ var neverExpires = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 // card that needs renewing.
 func proUntilFrom(sub subscriber, proEntitlements []string) time.Time {
 	var out time.Time
-	for _, id := range proEntitlements {
-		ent, ok := sub.Entitlements[id]
-		if !ok {
+	for _, ent := range sub.ActiveEntitlements.Items {
+		if !confers(ent.EntitlementID, proEntitlements) {
 			continue
 		}
 		if until := ent.until(); until.After(out) {
@@ -68,14 +73,27 @@ func proUntilFrom(sub subscriber, proEntitlements []string) time.Time {
 	return out
 }
 
-// until is how far this one entitlement reaches.
+// confers reports whether this entitlement identifier is one that grants Pro.
+//
+// The configured list holds BOTH names the provider uses for the same entitlement — the
+// human lookup key ("freehire Pro") and the internal id ("entl…") — because the customer
+// payload names it with one of them and which one is not something to find out from a
+// production incident. Matching either costs nothing: an identifier that is neither is not
+// ours whichever field it came from.
+func confers(id string, proEntitlements []string) bool {
+	for _, want := range proEntitlements {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
+// until is how far this one entitlement reaches. A null expiry is not expired — see
+// neverExpires.
 func (e entitlement) until() time.Time {
-	if e.ExpiresDate == nil {
+	if e.ExpiresAt == nil {
 		return neverExpires
 	}
-	out := *e.ExpiresDate
-	if e.GracePeriodExpiresDate != nil && e.GracePeriodExpiresDate.After(out) {
-		out = *e.GracePeriodExpiresDate
-	}
-	return out
+	return time.UnixMilli(*e.ExpiresAt).UTC()
 }
