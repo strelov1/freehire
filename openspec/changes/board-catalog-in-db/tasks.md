@@ -1,12 +1,12 @@
 ## 1. Schema
 
-- [ ] 1.1 Migration: create `boards` table (`provider, board, region, company, hub,
+- [x] 1.1 Migration: create `boards` table (`provider, board, region, company, hub,
       tenants jsonb, url, status, submitted_by, surface, rejected_reason, created_at,
       activated_at`) with the CHECK constraints and the filtered unique index on
-      `(provider, lower(board), region) WHERE status <> 'retired'`.
-- [ ] 1.2 Migration: create `board_submissions` table (`url, submitted_by, surface,
+      `(provider, lower(board), region) WHERE status IN ('pending', 'active')`.
+- [x] 1.2 Migration: create `board_submissions` table (`url, submitted_by, surface,
       created_at`) with the unique index on `url`.
-- [ ] 1.3 Regenerate sqlc (`make sqlc`) after adding the queries used below.
+- [x] 1.3 Regenerate sqlc (`make sqlc`) after adding the queries used below.
 
 ## 2. Insert-time validation
 
