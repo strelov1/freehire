@@ -1,6 +1,7 @@
 package suggest
 
 import (
+	"encoding/hex"
 	"sort"
 	"strings"
 
@@ -92,7 +93,7 @@ func Build(in Input) []Document {
 			return
 		}
 		docs = append(docs, Document{
-			ID: string(kind) + ":" + slug, Text: text, Kind: kind, Slug: slug, Jobs: jobs,
+			ID: documentID(kind, slug), Text: text, Kind: kind, Slug: slug, Jobs: jobs,
 			Searches: in.Searches[Title(text)],
 		})
 	}
@@ -105,7 +106,12 @@ func Build(in Input) []Document {
 		}
 	}
 	for text, n := range merged {
-		if n < in.TitleFloor || !Offerable(text) {
+		// Two gates, and they refuse different things. `Recordable` asks whether this is
+		// a search PHRASE at all — the same question the demand path asks of typed text,
+		// and the answer that keeps a runaway title out of an id (hex doubles the value,
+		// so the engine's 511-byte ceiling is a ~255-byte one here). `Offerable` asks
+		// whether the phrase names a craft.
+		if n < in.TitleFloor || !Recordable(text) || !Offerable(text) {
 			continue
 		}
 		// A title names no facet, so its slug is empty and its id is the normalised
@@ -113,7 +119,7 @@ func Build(in Input) []Document {
 		// lowercase is what merges the spellings, and "product owner" sitting in a
 		// dropdown between "Backend Engineer" and "Google" reads as a bug.
 		docs = append(docs, Document{
-			ID: string(KindTitle) + ":" + text, Text: displayTitle(text), Kind: KindTitle, Jobs: n,
+			ID: documentID(KindTitle, text), Text: displayTitle(text), Kind: KindTitle, Jobs: n,
 			Searches: in.Searches[text],
 		})
 	}
@@ -156,6 +162,25 @@ func Build(in Input) []Document {
 	// same sequence — which is what makes a diff of two builds readable.
 	sort.Slice(docs, func(i, j int) bool { return docs[i].ID < docs[j].ID })
 	return docs
+}
+
+// documentID builds the identifier Meilisearch dedupes on.
+//
+// The engine accepts letters, digits, hyphens and underscores and nothing else, up to
+// 511 bytes. That rules out the readable separator this used to carry: the first
+// production build failed on its very first document, `company:01-tech`. It also rules
+// out characters the VALUES legitimately hold — `node.js`, `c++`, `at&t` — so the id
+// cannot simply be the value with a prefix glued on.
+//
+// So it is hex, which is legal by construction rather than by a list of the characters
+// seen so far. That costs readability in the engine's own UI and buys an id that
+// cannot be broken by a company registering a name nobody anticipated.
+//
+// The kind stays in front, unencoded, because it is a closed vocabulary of plain
+// words: `backend` is a plausible role, skill AND category, and the whole reason an id
+// is namespaced is that those three must not collide.
+func documentID(kind Kind, value string) string {
+	return string(kind) + "_" + hex.EncodeToString([]byte(value))
 }
 
 // categoryText and skillText render a slug as a person would write it. Neither
