@@ -182,3 +182,43 @@ func TestBuild_IdsAreUniqueAcrossKinds(t *testing.T) {
 		t.Errorf("want three documents sharing a slug, got %v", slugs(docs))
 	}
 }
+
+// Demand is what the endpoint ranks by first: what people actually ask for beats what
+// merely exists a lot of. The join is on the NORMALISED phrase, which is the only
+// reason a typed query and a mined title can meet at all.
+func TestBuild_CarriesRecordedDemand(t *testing.T) {
+	docs := Build(Input{
+		Roles:      map[string]int{"backend": 8000},
+		RoleLabels: map[string]string{"backend": "Backend Engineer"},
+		Skills:     map[string]int{"cobol": 12},
+		Searches:   map[string]int{"backend engineer": 40},
+	})
+	for _, d := range docs {
+		switch d.Kind {
+		case KindRole:
+			if d.Searches != 40 {
+				t.Errorf("role searches = %d, want 40", d.Searches)
+			}
+		case KindSkill:
+			// Nobody having asked for it is not evidence against it — the posting count
+			// still orders it, so it is offered with a zero rather than withheld.
+			if d.Searches != 0 {
+				t.Errorf("unsearched skill searches = %d, want 0", d.Searches)
+			}
+		}
+	}
+	if len(docs) != 2 {
+		t.Errorf("an unsearched suggestion must still be offered, got %v", slugs(docs))
+	}
+}
+
+func TestBuild_DemandJoinsAMinedTitle(t *testing.T) {
+	docs := Build(Input{
+		Titles:     map[string]int{"Product Owner": 20},
+		TitleFloor: 1,
+		Searches:   map[string]int{"product owner": 99},
+	})
+	if len(docs) != 1 || docs[0].Searches != 99 {
+		t.Errorf("a typed query must reach the title it names, got %+v", docs)
+	}
+}

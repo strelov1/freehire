@@ -30,3 +30,22 @@ SELECT slug, name, job_count
 FROM companies
 WHERE job_count >= @min_jobs::int
 ORDER BY job_count DESC, name;
+
+-- name: RecordSearchQuery :exec
+-- Record that a visitor searched for this normalised query. Upsert, so the table holds
+-- one row per phrase rather than one per search.
+--
+-- Called on every search carrying a non-empty `q`, and its failure is discarded by the
+-- caller: the search result is what the visitor asked for, and this is a by-product.
+INSERT INTO search_queries (query, count, last_seen)
+VALUES (@query::text, 1, now())
+ON CONFLICT (query) DO UPDATE
+SET count = search_queries.count + 1,
+    last_seen = now();
+
+-- name: SearchQueryCounts :many
+-- Every recorded query with its count, busiest first — the demand side of the
+-- suggestion ranking, read once per dictionary build.
+SELECT query, count
+FROM search_queries
+ORDER BY count DESC;

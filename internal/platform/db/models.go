@@ -867,6 +867,12 @@ type SearchOutbox struct {
 	JobPostedAt pgtype.Timestamptz `json:"job_posted_at"`
 }
 
+type SearchQuery struct {
+	Query    string             `json:"query"`
+	Count    int64              `json:"count"`
+	LastSeen pgtype.Timestamptz `json:"last_seen"`
+}
+
 type SemanticOutbox struct {
 	ID          int64              `json:"id"`
 	JobID       int64              `json:"job_id"`

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 	"slices"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
+	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
 // searchHandlers serves the Meilisearch-backed job search surfaces: the keyword
@@ -51,6 +53,11 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 		userProfile: profiles,
 	}
 }
+
+// searchRecordTimeout bounds the fire-and-forget demand write. Short: it is one
+// upsert on a small table, and a write still running past this is a database in
+// trouble rather than a slow row.
+const searchRecordTimeout = 5 * time.Second
 
 func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 	// Literal routes are registered before the /jobs/:slug param route (see
@@ -193,7 +200,36 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 		return search.SearchResult{}, 0, 0, err
 	}
 
+	h.recordQuery(c.Query("q"))
 	return res, limit, offset, nil
+}
+
+// recordQuery notes what the catalogue was asked for, so the suggestion dictionary can
+// rank by demand rather than only by supply.
+//
+// Three properties, all deliberate:
+//
+//   - It CANNOT fail the search. A write error is logged and discarded: the result is
+//     what the visitor asked for and this is a by-product.
+//   - It CANNOT delay the response. It runs on its own goroutine with its own bounded
+//     context, because c.Context() is released when the handler returns.
+//   - It identifies nobody. The row is the phrase and a counter; no user, no session,
+//     no address.
+//
+// The key is the same normalisation the builder applies to mined titles, so a typed
+// query and the title it names land on one row.
+func (h *searchHandlers) recordQuery(raw string) {
+	q := suggest.Title(raw)
+	if q == "" || h.queries == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), searchRecordTimeout)
+		defer cancel()
+		if err := h.queries.RecordSearchQuery(ctx, q); err != nil {
+			log.Printf("search: record query: %v", err)
+		}
+	}()
 }
 
 // searchSort builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.

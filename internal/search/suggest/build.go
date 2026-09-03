@@ -61,6 +61,12 @@ type Input struct {
 	Categories map[string]int
 	Skills     map[string]int
 	Companies  []Company
+
+	// Searches is how often each NORMALISED phrase has been searched for. Keyed by
+	// Title(text), which is why a typed query and the title it names meet here at all.
+	// Absent is zero rather than excluded: nobody having asked for a suggestion is not
+	// evidence against it, and the posting count still orders it.
+	Searches map[string]int
 }
 
 // Build assembles the suggestion dictionary.
@@ -87,6 +93,7 @@ func Build(in Input) []Document {
 		}
 		docs = append(docs, Document{
 			ID: string(kind) + ":" + slug, Text: text, Kind: kind, Slug: slug, Jobs: jobs,
+			Searches: in.Searches[Title(text)],
 		})
 	}
 
@@ -107,6 +114,7 @@ func Build(in Input) []Document {
 		// dropdown between "Backend Engineer" and "Google" reads as a bug.
 		docs = append(docs, Document{
 			ID: string(KindTitle) + ":" + text, Text: displayTitle(text), Kind: KindTitle, Jobs: n,
+			Searches: in.Searches[text],
 		})
 	}
 

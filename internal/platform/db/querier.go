@@ -3337,6 +3337,12 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed entry is never reprocessed within the same run.
 	RecordSearchOutboxFailure(ctx context.Context, arg RecordSearchOutboxFailureParams) (RecordSearchOutboxFailureRow, error)
+	// Record that a visitor searched for this normalised query. Upsert, so the table holds
+	// one row per phrase rather than one per search.
+	//
+	// Called on every search carrying a non-empty `q`, and its failure is discarded by the
+	// caller: the search result is what the visitor asked for, and this is a by-product.
+	RecordSearchQuery(ctx context.Context, query string) error
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left
 	// in place — its expiry gates the retry to a later run and doubles as the crash reaper,
@@ -3678,6 +3684,9 @@ type Querier interface {
 	// a real measurement that must publish an explicit zero, because an absent series is how
 	// the consuming alert rules recognize a dead exporter.
 	SearchOutboxMetrics(ctx context.Context) (SearchOutboxMetricsRow, error)
+	// Every recorded query with its count, busiest first — the demand side of the
+	// suggestion ranking, read once per dictionary build.
+	SearchQueryCounts(ctx context.Context) ([]SearchQueryCountsRow, error)
 	// Hand an unverified, password-backed account to the proven owner of its address when a
 	// provider-verified OAuth identity arrives for it: the password is destroyed, every
 	// session revoked, and every API key deleted, so a squatter who registered the address

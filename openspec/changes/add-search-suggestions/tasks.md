@@ -40,9 +40,9 @@
 
 ## 6. Stage 3 — search frequency
 
-- [ ] 6.1 Add migration `0123` creating `search_queries` (normalised text key, count, last seen) and the sqlc query; run `make sqlc`
-- [ ] 6.2 Upsert the normalised query on every search carrying a non-empty `q`, failing open so a write error never delays or fails the response, and storing no identifier
-- [ ] 6.3 Join the recorded counts into the builder's documents, writing zero for a suggestion nobody has searched
+- [x] 6.1 Add migration `0123` creating `search_queries` (normalised text key, count, last seen) and the sqlc query; run `make sqlc`
+- [x] 6.2 Upsert the normalised query on every search carrying a non-empty `q`, failing open so a write error never delays or fails the response, and storing no identifier
+- [x] 6.3 Join the recorded counts into the builder's documents, writing zero for a suggestion nobody has searched
 - [ ] 6.4 Confirm the endpoint's demand-first ranking now reorders suggestions, and that an unsearched suggestion is still offered
 
 ## 7. Finish

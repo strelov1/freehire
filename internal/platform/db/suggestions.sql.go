@@ -55,6 +55,57 @@ func (q *Queries) MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
 	return items, nil
 }
 
+const recordSearchQuery = `-- name: RecordSearchQuery :exec
+INSERT INTO search_queries (query, count, last_seen)
+VALUES ($1::text, 1, now())
+ON CONFLICT (query) DO UPDATE
+SET count = search_queries.count + 1,
+    last_seen = now()
+`
+
+// Record that a visitor searched for this normalised query. Upsert, so the table holds
+// one row per phrase rather than one per search.
+//
+// Called on every search carrying a non-empty `q`, and its failure is discarded by the
+// caller: the search result is what the visitor asked for, and this is a by-product.
+func (q *Queries) RecordSearchQuery(ctx context.Context, query string) error {
+	_, err := q.db.Exec(ctx, recordSearchQuery, query)
+	return err
+}
+
+const searchQueryCounts = `-- name: SearchQueryCounts :many
+SELECT query, count
+FROM search_queries
+ORDER BY count DESC
+`
+
+type SearchQueryCountsRow struct {
+	Query string `json:"query"`
+	Count int64  `json:"count"`
+}
+
+// Every recorded query with its count, busiest first — the demand side of the
+// suggestion ranking, read once per dictionary build.
+func (q *Queries) SearchQueryCounts(ctx context.Context) ([]SearchQueryCountsRow, error) {
+	rows, err := q.db.Query(ctx, searchQueryCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchQueryCountsRow{}
+	for rows.Next() {
+		var i SearchQueryCountsRow
+		if err := rows.Scan(&i.Query, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const suggestibleCompanies = `-- name: SuggestibleCompanies :many
 SELECT slug, name, job_count
 FROM companies

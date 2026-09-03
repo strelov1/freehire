@@ -109,6 +109,18 @@ func gather(ctx context.Context, q *db.Queries, client *search.Client, floors co
 		return suggest.Input{}, err
 	}
 
+	// Demand. Already normalised on the write path, so it joins the dictionary's own
+	// keys without a second pass — that shared normalisation is the whole reason a
+	// typed query can reach the title it names.
+	searched, err := q.SearchQueryCounts(ctx)
+	if err != nil {
+		return suggest.Input{}, err
+	}
+	demand := make(map[string]int, len(searched))
+	for _, s := range searched {
+		demand[s.Query] = int(s.Count)
+	}
+
 	return suggest.Input{
 		Titles:     raw,
 		TitleFloor: floors.TitleFloor,
@@ -119,6 +131,7 @@ func gather(ctx context.Context, q *db.Queries, client *search.Client, floors co
 		Skills:     ints(counts.Facets["skills"]),
 		Categories: ints(counts.Facets["enrichment.category"]),
 		Companies:  firms,
+		Searches:   demand,
 	}, nil
 }
 
