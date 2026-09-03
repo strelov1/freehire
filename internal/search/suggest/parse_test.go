@@ -59,7 +59,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("a phrase with nothing after it leaves no fragment", func(t *testing.T) {
-		got := ph.Parse("product owner")
+		got := ph.Parse("product owner ")
 		if got.Fragment != "" {
 			t.Errorf("fragment = %q, want empty", got.Fragment)
 		}
@@ -141,7 +141,9 @@ func TestPhrases_DuplicatePhraseResolvesByKindNotByOrder(t *testing.T) {
 		{category, skill, role},
 		{skill, category, role},
 	} {
-		got := NewPhrases(order).Parse("backend")
+		// Trailing space: the precedence question is about a FINISHED word, and a word
+		// still being typed is never recognised at all (see the trailing-word test).
+		got := NewPhrases(order).Parse("backend ")
 		if len(got.Recognised) != 1 {
 			t.Fatalf("recognised = %v", got.Recognised)
 		}
@@ -157,8 +159,45 @@ func TestPhrases_PrecedenceOrdersEveryKind(t *testing.T) {
 	title := Document{Kind: KindTitle, Text: "Data Engineer", Jobs: 1}
 	skill := Document{Kind: KindSkill, Slug: "data-engineer", Text: "Data Engineer", Jobs: 1}
 
-	got := NewPhrases([]Document{skill, title}).Parse("data engineer")
+	got := NewPhrases([]Document{skill, title}).Parse("data engineer ")
 	if len(got.Recognised) != 1 || got.Recognised[0].Kind != KindTitle {
 		t.Errorf("recognised = %v, want the title", got.Recognised)
+	}
+}
+
+// The last word is being TYPED, so it must never be consumed as recognised — even
+// when it happens to spell a phrase on its own.
+//
+// Observed on production: `senior software engineer go` consumed `go` as the skill
+// (it is one), leaving nothing to complete, so the box offered "Senior Software
+// Engineer Go Director" — three parts nobody was searching for. `go` there is the
+// first two letters of `google`, and the visitor has not finished typing it.
+//
+// A word is only recognisable once a SPACE follows it. That is the whole signal, and
+// it is the one the visitor gives.
+func TestParse_TheWordStillBeingTypedIsNeverConsumed(t *testing.T) {
+	ph := phrases("Senior Software Engineer", "Go")
+
+	got := ph.Parse("senior software engineer go")
+	if len(got.Recognised) != 1 {
+		t.Fatalf("recognised = %v, want only the completed phrase", got.Recognised)
+	}
+	if got.Fragment != "go" {
+		t.Errorf("fragment = %q, want the word still being typed", got.Fragment)
+	}
+
+	// The same word with a space after it IS finished, and is consumed.
+	done := ph.Parse("senior software engineer go ")
+	if len(done.Recognised) != 2 {
+		t.Errorf("recognised = %v, want both once the word is finished", done.Recognised)
+	}
+}
+
+// A single finished word is still a fragment until the space arrives, or the box would
+// stop completing the moment a whole word matched.
+func TestParse_OneUnfinishedWordIsAllFragment(t *testing.T) {
+	got := phrases("Go").Parse("go")
+	if len(got.Recognised) != 0 || got.Fragment != "go" {
+		t.Errorf("recognised=%v fragment=%q", got.Recognised, got.Fragment)
 	}
 }

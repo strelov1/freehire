@@ -155,10 +155,25 @@ func (p *Phrases) Parse(query string) Parsed {
 	byText, longest := p.byText, p.longest
 	p.mu.RUnlock()
 
-	words := strings.Fields(Title(query))
+	normalised := Title(query)
+	words := strings.Fields(normalised)
+
+	// The last word is still being TYPED unless a space follows it, and a word being
+	// typed must never be recognised — even when it already spells a phrase on its own.
+	// Observed on production: `senior software engineer go` consumed `go` as the skill
+	// it is, leaving nothing to complete, so the box offered "Senior Software Engineer
+	// Go Director". There `go` is the first two letters of `google`.
+	//
+	// The trailing space is the signal, and it is the one the visitor gives. Note it is
+	// read from the RAW query: Title trims, so by here the space is gone.
+	recognisable := len(words)
+	if normalised != "" && !strings.HasSuffix(query, " ") {
+		recognisable--
+	}
+
 	var out Parsed
 	i := 0
-	for i < len(words) {
+	for i < recognisable {
 		matched := false
 		// Never look past the end, and never past the longest phrase there is.
 		for n := min(longest, len(words)-i); n >= 1; n-- {
