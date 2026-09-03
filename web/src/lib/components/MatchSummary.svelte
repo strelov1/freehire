@@ -48,16 +48,14 @@
   // server still runs the analysis, and hiding the CTA on the count alone would refuse
   // somebody the server was about to serve.
   const allowance = $derived(data?.allowance ?? null);
-  // The CTA starts TAILORING, which draws on its own daily ceiling — a separate feature from
-  // the fit analysis, with its own number. Both stand between the button and a result, so
-  // the block goes up when either would refuse, and the caption reports the tailoring one
-  // because that is what the button spends.
+  // The CTA spends a TAILORING session — a different feature from the fit analysis, with a
+  // ceiling of its own. Both stand between the button and a result, so the block goes up
+  // when either would refuse and names the one that did; tailoring wins the tie, being what
+  // the button actually spends.
   const tailorAllowance = $derived(data?.tailor_allowance ?? null);
   const tailorRefused = $derived(refuses(tailorAllowance));
   const allowanceRefused = $derived(refuses(allowance) || tailorRefused);
-  // Which ceiling the block names. Tailoring wins the tie: it is what the button spends,
-  // and the analysis only stands in front of it.
-  const refusedName = $derived(tailorRefused ? "CV tailorings" : 'job analyses');
+  const refusedName = $derived(tailorRefused ? 'CV tailorings' : 'job analyses');
   const refusedAllowance = $derived(tailorRefused ? tailorAllowance : allowance);
 
   const toneText: Record<Tone, string> = {

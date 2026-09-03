@@ -177,21 +177,27 @@ func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
-	allowance := h.allowanceView(c.Context(), userID)
-	tailorAllowance := h.tailorAllowanceView(c.Context(), userID)
+	// The standings are the same either way, so they are read once and the analysis is
+	// filled in below when there is one.
+	resp := matchAnalysisResponse{
+		HasCV:           true,
+		Allowance:       h.allowanceView(c.Context(), userID),
+		TailorAllowance: h.tailorAllowanceView(c.Context(), userID),
+	}
 	analysis, stored, err := h.fit.Cached(c.Context(), userID, job.ID)
 	if err != nil {
 		return err
 	}
 	if analysis == nil {
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Allowance: allowance, TailorAllowance: tailorAllowance}})
+		return c.JSON(fiber.Map{"data": resp})
 	}
 	// Recompute the hard-constraint ceiling from the current job/résumé/dictionary and
 	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
 	// change takes effect without marking the cache stale.
 	h.capServedAnalysis(c.Context(), userID, job, analysis)
-	stale := !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
-	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Allowance: allowance, TailorAllowance: tailorAllowance}})
+	resp.Analysis = analysis
+	resp.Stale = !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
+	return c.JSON(fiber.Map{"data": resp})
 }
 
 // allowanceView reports where the caller stands on the fit-analysis allowance today, or nil
