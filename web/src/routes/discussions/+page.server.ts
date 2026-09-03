@@ -3,10 +3,14 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch }) => {
   const api = serverApi(fetch);
-  // An unreachable feed renders the empty state rather than an error page: the
-  // section is a browsing surface, and nothing here is the reader's own data.
-  const { threads, nextCursor } = await api
-    .listRecentThreads()
-    .catch(() => ({ threads: [], nextCursor: undefined }));
-  return { threads, nextCursor };
+  // An unreachable feed is reported as a failure, not as an empty one. Catching into
+  // `threads: []` renders "No discussions yet." — which is a measurement, and with a
+  // handful of threads live an outage is indistinguishable from the truth. Same rule
+  // the catalogue figures follow: a zero must not reach a page as if it were counted.
+  try {
+    const { threads, nextCursor } = await api.listRecentThreads();
+    return { threads, nextCursor, failed: false };
+  } catch {
+    return { threads: [], nextCursor: undefined, failed: true };
+  }
 };

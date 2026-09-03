@@ -61,6 +61,31 @@ topic, which requires a subject.
 - **WHEN** the listing contains a thread whose subject no longer exists
 - **THEN** the row renders the stored subject slug in place of a display name and still links to the thread
 
+#### Scenario: Every row states which kind of subject it is about
+
+- **WHEN** a reader scans the listing
+- **THEN** each row is marked as being about a vacancy or about a company — on both kinds, so the marker reads as the row's type rather than as a remark about one of them
+
+#### Scenario: A stored slug is not presented as a name
+
+- **WHEN** a row falls back to the stored subject slug
+- **THEN** it is presented as an identifier rather than in the styling a resolved employer name is given, and no company logo is resolved from it
+
+#### Scenario: A vacancy with no recorded employer is not called unresolved
+
+- **WHEN** the listing includes a thread on an existing vacancy whose employer name is absent
+- **THEN** the row names the posting and marks the employer as unknown, and does NOT fall back to the slug — the subject resolved
+
+#### Scenario: An unreachable feed is not reported as an empty one
+
+- **WHEN** the page cannot fetch the listing
+- **THEN** it says the discussions could not be loaded, distinctly from the message shown when the catalogue genuinely holds none
+
+#### Scenario: A failed continuation can be retried
+
+- **WHEN** fetching a further page fails
+- **THEN** the failure is shown and the continuation remains available, rather than the list appearing to have ended
+
 ## MODIFIED Requirements
 
 ### Requirement: List threads for a subject

@@ -87,6 +87,20 @@ column would have to be denormalised and maintained on every reply, and there
 are zero replies in the catalogue — the two orders are currently identical. The
 seam is the column; it is not added here.
 
+## What the cursor rule still gets wrong
+
+"Cursor only on a full page" fixes the case that prompted this — 1 row, cursor
+emitted, "Load more" fetches nothing — but not its boundary. A listing holding
+exactly `pageSize` rows returns a full page that is also the last page, so the
+button appears once and then fetches an empty continuation.
+
+Closing it properly means fetch-ahead: ask the repository for `pageSize + 1`,
+trim to `pageSize`, and report whether the extra row existed. That changes what
+the domain's three listing methods return (items plus a has-more flag), so it is
+a change to the port, not to the handler. Left as the seam, and recorded here so
+the residual is a known limit rather than a quiet lie: the frequency drops from
+"any single-thread subject" to "a count that is an exact multiple of 30".
+
 ## Scope held back
 
 - **No global "Start a topic."** A thread requires a subject, and a feed-level

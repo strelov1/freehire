@@ -5,35 +5,50 @@
   import { feedSubjectLine } from '$lib/feedSubject';
   import { companyLogoUrl } from '$lib/logo';
   import type { CommunityFeedThread } from '$lib/types';
-  import { Badge, Button, EntityLogo } from '$lib/ui';
+  import { Badge, EntityLogo, LoadMore } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
 
   let {
     initialThreads,
     initialCursor,
+    failed = false,
   }: {
     initialThreads: CommunityFeedThread[];
     initialCursor?: string;
+    /** The first page could not be fetched. Distinct from an empty feed, which is a
+     *  statement about the catalogue rather than about our reachability. */
+    failed?: boolean;
   } = $props();
 
   let threads = $state<CommunityFeedThread[]>([...initialThreads]);
   let cursor = $state<string | undefined>(initialCursor);
   let loadingMore = $state(false);
+  let loadFailed = $state(false);
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
     loadingMore = true;
+    loadFailed = false;
     try {
       const res = await api.listRecentThreads(cursor);
       threads = [...threads, ...res.threads];
       cursor = res.nextCursor;
+    } catch {
+      // Surfaced through LoadMore's error state and the cursor is left in place, so
+      // the button stays and the same page can be retried. Swallowing this silently
+      // (which the first cut did) makes a failed fetch look like the end of the list.
+      loadFailed = true;
     } finally {
       loadingMore = false;
     }
   }
 </script>
 
-{#if threads.length === 0}
+{#if failed}
+  <p class="text-muted-foreground">
+    Discussions couldn't be loaded just now. Please try again in a moment.
+  </p>
+{:else if threads.length === 0}
   <p class="text-muted-foreground">No discussions yet.</p>
 {:else}
   <ul class="flex flex-col gap-1.5">
@@ -62,9 +77,13 @@
               })}
           class="flex gap-3 rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:bg-muted/50"
         >
+          <!-- Keyed on the raw employer name, never on `subject.employer`: that one
+               may be the "Unknown company" stand-in or a slug, and the proxy would
+               resolve a mark for the literal. Empty here is the nameless tile, which
+               is the honest answer for both an absent employer and a gone subject. -->
           <EntityLogo
-            name={subject.resolved ? subject.employer : ''}
-            src={subject.resolved ? (companyLogoUrl(subject.employer) ?? undefined) : undefined}
+            name={t.subject_company}
+            src={t.subject_company ? (companyLogoUrl(t.subject_company) ?? undefined) : undefined}
             shape="square"
             size="sm"
             class="mt-0.5 shrink-0"
@@ -123,10 +142,6 @@
   </ul>
 
   {#if cursor}
-    <div class="mt-4 flex justify-center">
-      <Button variant="ghost" onclick={loadMore} disabled={loadingMore}>
-        {loadingMore ? 'Loading…' : 'Load more'}
-      </Button>
-    </div>
+    <LoadMore loading={loadingMore} error={loadFailed} onclick={loadMore} />
   {/if}
 {/if}

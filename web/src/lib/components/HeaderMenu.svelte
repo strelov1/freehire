@@ -23,6 +23,7 @@
     Layers,
     ChartColumn,
     TrendingUp,
+    MessagesSquare,
     Info,
     LogOut,
     LogIn,
@@ -85,6 +86,7 @@
     { href: '/collections', label: 'Collections', icon: Layers },
     { href: '/analytics', label: 'Analytics', icon: ChartColumn },
     { href: '/trends', label: 'Trends', icon: TrendingUp },
+    { href: '/discussions', label: 'Discussions', icon: MessagesSquare },
   ] as const;
 
   // Personal account items — what the signed-in user owns/reads, in the same order

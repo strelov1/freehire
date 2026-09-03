@@ -52,6 +52,17 @@ describe('feedSubjectLine', () => {
     expect(feedSubjectLine(companyThread).kind).toBe('Company');
   });
 
+  // A posting with an empty jobs.company is a real state in this catalogue, and it is
+  // NOT an unresolved subject: the vacancy is there, only its employer name is missing.
+  it('names an employerless vacancy without calling the subject unresolved', () => {
+    expect(feedSubjectLine(thread({ subject_company: '' }))).toEqual({
+      kind: 'Vacancy',
+      employer: 'Unknown company',
+      posting: 'Senior Go Engineer',
+      resolved: true,
+    });
+  });
+
   it('falls back to the slug when the subject no longer resolves, and says so', () => {
     // A thread outlives its subject: no FK binds them and cmd/prune hard-deletes
     // vacancies, so the server returns the row with both names empty. `resolved:

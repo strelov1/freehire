@@ -39,5 +39,9 @@
     </p>
   </header>
 
-  <DiscussionFeed initialThreads={data.threads} initialCursor={data.nextCursor} />
+  <DiscussionFeed
+    initialThreads={data.threads}
+    initialCursor={data.nextCursor}
+    failed={data.failed}
+  />
 </div>
