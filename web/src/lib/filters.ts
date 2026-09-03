@@ -23,6 +23,7 @@ import {
   facetAdd,
   facetRemove,
   filtersWithRole,
+  filtersWithParts,
 } from './facetModel';
 
 export * from './facetModel';
@@ -163,6 +164,13 @@ export class FilterStore {
    *  commitQuery — so that race is now only reachable from another caller.) */
   applyRole(slug: string) {
     this.#url.setNow(filtersWithRole(this.#url.value, slug));
+  }
+
+  /** Header completion picked: apply every facet value it names AND its free text in
+   *  one discrete write. setNow, like applyRole — one filter change, one reload, and
+   *  no intermediate state where the list is filtered by half a phrase. */
+  applyParts(parts: readonly (readonly [string, string])[], q: string) {
+    this.#url.setNow(filtersWithParts(this.#url.value, parts, q));
   }
 
   /** Remove a value from a facet entirely (both sets). */

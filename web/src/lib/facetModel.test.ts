@@ -6,7 +6,6 @@ import {
   filtersFromParams,
   activeFilterCount,
   canonicalQuery,
-  generalCountsCoverRole,
   savedSearchQuery,
   signOf,
   facetSetSign,
@@ -435,22 +434,3 @@ describe('filtersWithRole', () => {
   });
 });
 
-describe('generalCountsCoverRole', () => {
-  it('covers role when the scope carries no text query', () => {
-    expect(generalCountsCoverRole(new URLSearchParams('regions=latam,global'))).toBe(true);
-  });
-
-  it('covers role for the bare, unfiltered scope', () => {
-    expect(generalCountsCoverRole(new URLSearchParams())).toBe(true);
-  });
-
-  it('does not cover role once a text query narrows the scope', () => {
-    expect(generalCountsCoverRole(new URLSearchParams('regions=latam,global&q=python'))).toBe(
-      false,
-    );
-  });
-
-  it('treats an empty q the way filtersToParams does — as no query at all', () => {
-    expect(generalCountsCoverRole(new URLSearchParams('q='))).toBe(true);
-  });
-});

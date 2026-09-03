@@ -8,10 +8,10 @@
   import { dropdownRows, namedCompanies } from '$lib/dropdownRows';
   import { companyLogoUrl } from '$lib/logo';
   import { EntityLogo } from '$lib/ui';
-  import type { Job, CompanyListItem } from '$lib/types';
+  import type { Job, CompanyListItem, ApiSuggestionPart } from '$lib/types';
   import { listSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
-  import { suggestRoles } from '$lib/roleSuggest';
+  import { fromApi, applyParams } from '$lib/apiSuggestions';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
   import { starterSuggestions, type Suggestion } from '$lib/suggestions';
   import { cn } from '$lib/ui';
@@ -41,6 +41,7 @@
   // Section caps. The dropdown is a shortcut, not a results page: past a handful each
   // section stops being scannable and the whole thing stops fitting on a phone.
   const jobsLimit = 5;
+  const completionsLimit = 5;
   const companiesLimit = 3;
   // Asked for, before the relevance filter takes its cut.
   const companiesFetch = 12;
@@ -104,17 +105,21 @@
     return () => clearTimeout(timer);
   });
 
-  // An empty box offers the catalogue's shape; a typed one offers what matches. The
-  // empty case is the whole point of opening on focus: "I don't know what I can type
-  // here" is the state the dropdown exists to answer, and a box that stays silent
-  // until the second keystroke never reaches it.
-  const suggestions = $derived.by((): Suggestion[] => {
-    if (!suggest) return [];
-    if (settledQuery.trim() === '') return starterSuggestions(suggest.counts());
-    return suggestRoles(settledQuery, suggest.roleCounts(), suggest.activeRoles()).map(
-      (r): Suggestion => ({ kind: 'role', slug: r.slug, label: r.label, count: r.count }),
-    );
-  });
+  // An empty box offers the catalogue's shape; a typed one offers what matches.
+  //
+  // The empty case is the whole point of opening on focus, and it is answered LOCALLY:
+  // the curated group order lives in the filter modal's own grouping, checked there
+  // against the category vocabulary at compile time, so asking a server for it would
+  // be a second copy of that order. The typed case is the endpoint's — it completes a
+  // phrase against the catalogue's real vocabulary, which no dictionary shipped to the
+  // browser can do.
+  const starters = $derived(suggest ? starterSuggestions(suggest.counts()) : []);
+  let completions = $state.raw<Suggestion[]>([]);
+  const suggestions = $derived(settledQuery.trim() === '' ? starters : completions);
+  // The parts each completion applies, by row key — kept beside the rows rather than
+  // inside them because a Suggestion is what the dropdown RENDERS, and these are what
+  // choosing it DOES.
+  let completionParts = $state.raw(new Map<string, ApiSuggestionPart[]>());
   // Postings and companies for the typed text, fetched exactly the way the launcher
   // dropdown (HeaderSearch) fetches them — same endpoints, same stale-response token,
   // same row rendering below. A second implementation of "show me matching jobs" is
@@ -132,14 +137,20 @@
     const q = settledQuery.trim();
     const mine = ++previewToken;
     if (q === '' || !suggest) {
+      completions = [];
+      completionParts = new Map();
       jobs = [];
       companies = [];
       return;
     }
     void (async () => {
-      // allSettled, not all: the two sections are independent, so one endpoint failing
-      // still shows the section that succeeded instead of blanking both.
-      const [j, c] = await Promise.allSettled([
+      // allSettled, not all: the three sections are independent, so one endpoint
+      // failing still shows the sections that succeeded instead of blanking all of
+      // them. The completions in particular sit behind a dictionary that is rebuilt on
+      // a schedule — a cold or missing one must cost the box its completions, not its
+      // postings.
+      const [s, j, c] = await Promise.allSettled([
+        api.suggest(q, completionsLimit),
         api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0),
         // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
         // asking for exactly three would leave the section empty whenever the fourth
@@ -147,6 +158,9 @@
         api.listCompanies(q, companiesFetch, 0),
       ]);
       if (mine !== previewToken) return;
+      const rows = s.status === 'fulfilled' ? s.value : [];
+      completions = fromApi(rows);
+      completionParts = new Map(completions.map((row, i) => [row.slug, rows[i]?.parts ?? []]));
       jobs = j.status === 'fulfilled' ? j.value.items : [];
       companies =
         c.status === 'fulfilled' ? namedCompanies(c.value.items, q, companiesLimit) : [];
@@ -197,12 +211,20 @@
       void goto(resolve('/companies/[slug]', { slug: row.company.slug }));
       return;
     }
-    suggest?.apply(row.suggestion);
-    // A role pick drops `q` from the filters (`applyRole`), so the box must drop it
-    // too. Reconcile cannot see this: on a feed with no committed query the value does
-    // not MOVE (already `''`), and an unchanged value is exactly what it reads as "no
-    // news" — leaving the typed text sitting over a list no longer running it.
-    // A category pick comes from the empty box, so this clears nothing.
+    // A completion carries the parts the endpoint composed — the recognised prefix plus
+    // what this row adds — and every one of them is applied. Applying a subset would
+    // silently discard what the visitor typed, which is the composed search this whole
+    // feature exists to make possible.
+    //
+    // A starter row (the empty box) has no parts: it IS its own facet, applied below.
+    const parts = completionParts.get(row.suggestion.slug);
+    if (parts?.length) suggest?.applyParts(applyParams(parts));
+    else suggest?.apply(row.suggestion);
+    // The box is cleared because the filters now carry what was in it — the parts
+    // above include the free text a `title` row names. Reconcile cannot see this on a
+    // feed with no committed query: `q` does not MOVE (already `''`), and an unchanged
+    // value is exactly what it reads as "no news", leaving the typed text sitting over
+    // a list no longer running it.
     draft = commit(edit(draft, ''));
     close();
   }
@@ -408,10 +430,20 @@
             class={cn(rowClass(activeIndex === i), row.kind === 'text' && 'border-t border-border')}
           >
             {#if row.kind === 'suggestion'}
-              <!-- The glyph says which axis the row filters on, which is the only thing
-                   the two suggestion kinds do differently. -->
-              {#if row.suggestion.kind === 'category'}
+              <!-- The glyph says which vocabulary the row comes from. A company gets its
+                   own mark, the same one the postings below carry, because a logo is
+                   what makes an employer scannable; everything else is a glyph. -->
+              {#if row.suggestion.kind === 'company'}
+                <EntityLogo
+                  name={row.suggestion.label}
+                  src={companyLogoUrl(row.suggestion.label) ?? undefined}
+                  shape="square"
+                  size="xs"
+                />
+              {:else if row.suggestion.kind === 'category'}
                 <LayoutGrid class="size-4 shrink-0 text-muted-foreground" />
+              {:else if row.suggestion.kind === 'title'}
+                <Search class="size-4 shrink-0 text-muted-foreground" />
               {:else}
                 <Tag class="size-4 shrink-0 text-muted-foreground" />
               {/if}

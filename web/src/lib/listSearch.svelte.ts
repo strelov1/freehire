@@ -6,6 +6,7 @@
 // that logic in the header.
 
 import type { FacetStore } from './facets';
+import type { ApplyPlan } from './apiSuggestions';
 import type { Suggestion } from './suggestions';
 import type { FacetCounts } from './types';
 
@@ -43,18 +44,20 @@ export interface ListSearchTarget {
    *
    *  Every member is a getter so the distributions stay reactive across the bridge.
    *
-   *  `roleCounts` is the role distribution measured WITHOUT the text query: scoped by
-   *  `q` the numbers beside the suggestions would answer "jobs matching what you typed
-   *  AND this role" rather than "jobs in this role". `counts` is the ordinary scoped
-   *  distribution, which is what an EMPTY box reads its categories from — empty means
-   *  no text query is narrowing it, and the visitor's location and other filters
-   *  SHOULD be reflected there. `activeRoles` is the roles already applied, which are
-   *  not offered again. */
+   *  `counts` is the ordinary scoped distribution, and it serves the EMPTY box only —
+   *  empty means no text query is narrowing it, and the visitor's location and other
+   *  filters SHOULD be reflected in what they are offered as a starting point. What a
+   *  TYPED box offers comes from the suggestions endpoint, which reads the catalogue's
+   *  own vocabulary rather than any distribution shipped to the browser. */
   readonly suggest?: {
-    roleCounts(): FacetCounts | null;
     counts(): FacetCounts | null;
-    activeRoles(): readonly string[];
+    /** Apply a locally-built starter row: one facet, named by its own kind. */
     apply(suggestion: Suggestion): void;
+    /** Apply a completion from the suggestions endpoint, which composes SEVERAL
+     *  values at once — a role plus a company, or a free-text title. They go in one
+     *  write, because applying them one at a time would reload the list per part and
+     *  leave it briefly filtered by half a query. */
+    applyParts(plan: ApplyPlan): void;
   };
 
   /** Opens the page's own filter modal, and reports its active-filter count, so the

@@ -26,7 +26,6 @@
     sortOptionsFor,
     type JobSort,
     activeFilterCount,
-    generalCountsCoverRole,
   } from '$lib/filters';
   import { freshnessOptions } from '$lib/filterControls';
   import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
@@ -175,39 +174,9 @@
   // suggestion list keyed off that would rank by "jobs matching what you have typed so
   // far", lag it by one debounce, and drop roles in and out mid-word. Same filters, no
   // `q` — so the figure still answers what a click would give.
-  const roleScopeParams = () => {
-    const p = scopedParams();
-    p.delete('q');
-    return p;
-  };
-  let roleCounts = $state.raw<FacetCounts | null>(null);
-
   const refreshCounts = latestOnly(
-    () => {
-      // Whether THIS request's scope covers the role distribution is captured with the
-      // request, not read when it lands: the filters can move while it is in flight,
-      // and the answer belongs to the scope that was actually asked for.
-      const scope = scopedParams();
-      const coversRole = generalCountsCoverRole(scope);
-      return api.facetCounts(scope).then((facets) => ({ facets, coversRole }));
-    },
-    ({ facets, coversRole }) => {
-      counts = facets;
-      // One scope, one measurement: with no text query separating them, this response
-      // already IS the role distribution, `role` included and identical (see
-      // generalCountsCoverRole). Publishing it here is what lets the dedicated request
-      // below be skipped on the load every visitor pays for — and it leaves the
-      // suggestions populated, so the first keystroke has them in hand instead of
-      // waiting on a fetch.
-      if (coversRole) roleCounts = facets;
-    },
-  );
-
-  // The dedicated measurement, for the one case the general response cannot answer: a
-  // scope that moved while a query was narrowing `counts`. One facet, no `q`.
-  const refreshRoleCounts = latestOnly(
-    () => api.facetCounts(roleScopeParams(), { facets: ['role'] }),
-    (c) => (roleCounts = c),
+    () => api.facetCounts(scopedParams()),
+    (facets) => (counts = facets),
   );
 
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
@@ -270,12 +239,6 @@
   // how anyone paged; the page links made it visible.
   let lastSearchKey = untrack(() => filtersToParams(filters.applied).toString());
 
-  // The filter scope the role distribution was last measured under, minus the text
-  // query it deliberately ignores. `null` rather than '' because '' is a REAL key —
-  // it is what an unfiltered feed serializes to, which is the commonest first paint
-  // of all, and seeding with it made the first measurement look like a repeat and
-  // never fire.
-  let lastRoleScopeKey: string | null = null;
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -392,9 +355,7 @@
       commitQuery: (q) => filters.commitQuery(q),
       filterScope: { store: filters, counts: () => counts, variant: 'jobs', inferred: () => scopeInferred },
       suggest: {
-        roleCounts: () => roleCounts,
         counts: () => counts,
-        activeRoles: () => filters.facet('role').include,
         apply: (suggestion) => {
           // Its own event, not a flag on `search`: the question this answers is how
           // often the dropdown is what puts a facet on, and the role facet measured
@@ -405,6 +366,13 @@
           // A category comes from the EMPTY box, so there is no typed text to drop —
           // this is an ordinary facet write, the same one the filter modal makes.
           else filters.setSign('category', suggestion.slug, 'include');
+        },
+        applyParts: (plan) => {
+          track('role_suggestion', {
+            role: plan.facets.map(([, v]) => v).join('+') || plan.q,
+            kind: 'completion',
+          });
+          filters.applyParts(plan.facets, plan.q ?? '');
         },
       },
       openFilters: () => (modalOpen = true),
@@ -522,17 +490,6 @@
     if (geoGuessPending) return;
     untrack(() => {
       refreshCounts();
-      // The role distribution ignores the text query, so refetch it only when the rest
-      // of the scope moves — otherwise every settled keystroke would spend a request
-      // re-measuring something that did not change. And when the scope carries no
-      // query, `refreshCounts` above is already measuring exactly this, so the request
-      // is skipped outright: that is the whole cold-load case, where the two calls
-      // returned the same `role` map twice.
-      const roleScopeKey = roleScopeParams().toString();
-      if (roleScopeKey !== lastRoleScopeKey) {
-        lastRoleScopeKey = roleScopeKey;
-        if (!generalCountsCoverRole(scopedParams())) refreshRoleCounts();
-      }
     });
   });
 

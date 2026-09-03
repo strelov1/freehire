@@ -99,6 +99,7 @@ import type {
   TalentNetworkVisibility,
   TalentNetworkProfile,
   ExperienceEmployment,
+  ApiSuggestion,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -482,6 +483,19 @@ export function createApi(
     params.set('limit', String(limit));
     params.set('offset', String(offset));
     return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`), offset);
+  }
+
+  /** Complete a partly-typed query against the catalogue's own vocabulary: the
+   *  posting titles it actually carries, plus roles, skills, specializations and
+   *  companies.
+   *
+   *  It completes a PHRASE, so a row can name more than one thing — "Senior Software
+   *  Engineer Google" carries the role AND the company, and applying only one of them
+   *  discards what was typed. An empty query returns nothing: what an empty box offers
+   *  is a curated starting point the client owns (see starterSuggestions). */
+  async function suggest(q: string, limit: number): Promise<ApiSuggestion[]> {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`);
   }
 
   /** Turn a written description of a job search into filter values (the AI filter).
@@ -2105,6 +2119,7 @@ export function createApi(
     runMatchAnalysis,
     matchAnalysisStreamUrl,
     searchJobs,
+    suggest,
     interpretSearch,
     swipeDeck,
     facetCounts,

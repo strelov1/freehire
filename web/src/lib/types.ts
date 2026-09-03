@@ -1249,3 +1249,23 @@ export interface ScheduledInterview {
   role_title?: string;
   job_slug?: string;
 }
+
+/** One row the suggestions endpoint offers. It completes a PHRASE, so `parts` can
+ *  name more than one thing at once — "Senior Software Engineer Google" carries the
+ *  role and the company, and applying only one of them discards what was typed. */
+export interface ApiSuggestion {
+  /** The whole phrase: the recognised prefix plus the completion. */
+  text: string;
+  parts: ApiSuggestionPart[];
+  /** Open postings behind it. Never zero — a suggestion leading to an empty page is
+   *  withheld server-side. */
+  jobs: number;
+}
+
+export interface ApiSuggestionPart {
+  kind: 'title' | 'role' | 'skill' | 'category' | 'company';
+  /** The facet value to apply. Absent for a `title`, which names no facet and is
+   *  applied as the free-text query instead. */
+  slug?: string;
+  text: string;
+}

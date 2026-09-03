@@ -11,10 +11,12 @@
 import { CATEGORY_GROUPS } from './filterSections';
 import type { FacetCounts } from './types';
 
-/** One row of the dropdown. `kind` decides which facet a pick applies, which is the
- *  only thing the two kinds do differently. */
+/** One row of the dropdown. `kind` is the vocabulary the row comes from, which decides
+ *  its glyph — and, for the locally-built starter rows, which facet a pick applies.
+ *  Rows from the suggestions endpoint carry their own parts and are applied from
+ *  those, so there `kind` is presentation only. */
 export interface Suggestion {
-  kind: 'role' | 'category';
+  kind: 'title' | 'role' | 'skill' | 'category' | 'company';
   slug: string;
   label: string;
   /** Open postings behind it. Absent when the distribution has not been measured yet

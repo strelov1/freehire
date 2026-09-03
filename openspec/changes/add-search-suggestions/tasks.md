@@ -32,10 +32,10 @@
 
 ## 5. Stage 2 — the client moves onto the endpoint
 
-- [ ] 5.1 Point the dropdown's completions at `/api/v1/suggest` with a debounce and a stale-response token; cache the empty-state response for the session
-- [ ] 5.2 Apply every part a chosen suggestion names — role plus `company_slug` together — and keep the typed text instead of clearing it. **Two halves that must flip together**: `facetModel.filtersWithRole` sets `q: ''`, and `HeaderListSearch.choose` clears the draft to match it. Either one alone leaves the box and the list disagreeing about what is being searched
-- [ ] 5.3 Apply a `title` suggestion as the free-text query rather than a facet
-- [ ] 5.4 Delete `web/src/lib/roleSuggest.ts`, its tests, and the now-unused `roleSuggest` bridge in `JobsView.svelte`/`listSearch.svelte.ts`; confirm `pnpm check:dead` stays clean
+- [x] 5.1 Point the dropdown's completions at `/api/v1/suggest` with a debounce and a stale-response token; cache the empty-state response for the session
+- [x] 5.2 Apply every part a chosen suggestion names — role plus `company_slug` together — and keep the typed text instead of clearing it. **Two halves that must flip together**: `facetModel.filtersWithRole` sets `q: ''`, and `HeaderListSearch.choose` clears the draft to match it. Either one alone leaves the box and the list disagreeing about what is being searched
+- [x] 5.3 Apply a `title` suggestion as the free-text query rather than a facet
+- [x] 5.4 Delete `web/src/lib/roleSuggest.ts`, its tests, and the now-unused `roleSuggest` bridge in `JobsView.svelte`/`listSearch.svelte.ts`; confirm `pnpm check:dead` stays clean
 - [ ] 5.5 Verify in the browser: `java developer`, `nodejs developer`, `backedn`, `senior software engineer go`, `google`
 
 ## 6. Stage 3 — search frequency
