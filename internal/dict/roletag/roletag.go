@@ -579,6 +579,22 @@ func Derive(seniority, category, title string) []string {
 // Catalog returns the full role catalog — every derivable slug mapped to its
 // human label: the bare category roles, the seniority × category composites, and
 // the curated named roles. It is the source of truth for picker labels.
+// BaseRole strips the seniority grade a composite slug carries, so
+// `senior_data_analytics` and `data_analytics` answer as the same role.
+//
+// It lives here because this package OWNS the slug grammar — Derive is what builds
+// `{seniority}_{category}` — so anything reading a grade back out of a slug must read
+// the same table Derive wrote it from. A seniority-only slug (`senior`) is its own
+// base: there is no role underneath it to uncover.
+func BaseRole(slug string) string {
+	for sen := range seniorityLabel {
+		if rest, ok := strings.CutPrefix(slug, sen+"_"); ok {
+			return rest
+		}
+	}
+	return slug
+}
+
 func Catalog() map[string]string {
 	cat := make(map[string]string, len(categoryNoun)*(len(seniorityLabel)+1)+len(seniorityLabel)+len(namedLabel))
 	// addGraded registers a role and every seniority-graded variant of it (the

@@ -2905,6 +2905,20 @@ type Querier interface {
 	// yields no row exactly like a concurrent delete already did, and the caller reports both
 	// the same way — reload and retry — rather than pretending a still-present row vanished.
 	MergeExperienceAtoms(ctx context.Context, arg MergeExperienceAtomsParams) (MergeExperienceAtomsRow, error)
+	// Raw posting titles with their counts, the source of the suggestion dictionary
+	// (cmd/build-suggestions).
+	//
+	// Grouped HERE rather than streamed row by row: the open catalogue is ~1.8M postings
+	// written with far fewer distinct titles, so aggregating in Postgres keeps the wire
+	// and the worker's memory proportional to the vocabulary rather than to the
+	// catalogue.
+	//
+	// Normalisation is deliberately NOT done here, and neither is the frequency floor.
+	// `suggest.Title` is one function shared with the query path — a SQL copy would drift
+	// — and the floor has to be applied AFTER it: "Product Owner", "product owner" and
+	// "PRODUCT OWNER" are three rows here and one suggestion, so a floor applied to these
+	// counts would drop a title that clears it comfortably once merged.
+	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
 	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
 	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
 	// the source is the MINIMUM cosine distance across every (source chunk, candidate
@@ -3920,6 +3934,14 @@ type Querier interface {
 	// about this application explicitly, suggested_job_id holds one value, and a proposal
 	// nobody has confirmed costs nothing to lose.
 	SuggestJobForEmail(ctx context.Context, arg SuggestJobForEmailParams) (int64, error)
+	// Companies worth offering as a suggestion, busiest first. Reads the denormalized
+	// companies.job_count (maintained by cmd/recount-companies), so this does not join
+	// jobs.
+	//
+	// The floor is what keeps the long tail of one-posting slugs — many of them job
+	// titles that landed in an employer column — out of a dictionary meant to name real
+	// employers.
+	SuggestibleCompanies(ctx context.Context, minJobs int32) ([]SuggestibleCompaniesRow, error)
 	// The batched slice of the cross-source aggregator suppression, driven over a CHUNK of
 	// companies (cmd/reindex's forCompanyBatches) rather than one call per company — see
 	// RecomputeRoleDuplicatesForCompanies' doc comment for the prod measurement that
