@@ -15,7 +15,7 @@ import type { SavedSearch } from './types';
 
 // The facets whose value most identifies a search, in name order. A new saved search
 // is named from the first few; dedupe-by-query means the exact string is not critical.
-const NAME_FACETS = ['category', 'seniority', 'role', 'work_mode', 'regions', 'skills'];
+const NAME_FACETS = ['category', 'seniority', 'work_mode', 'regions', 'skills'];
 
 function labelFor(param: string, value: string): string {
   const def = FACETS.find((f) => f.param === param);

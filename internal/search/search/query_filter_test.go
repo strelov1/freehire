@@ -198,7 +198,7 @@ func TestFilterFromValues_ExperienceYearsMaxZero(t *testing.T) {
 // never below zero — so it is a typo, not a query. The contract declares the param
 // non-negative; honouring the sign would turn that typo into an empty result page
 // that looks like a legitimately narrow search.
-// role_type is derived at index time and carried top-level, like `roles` and
+// role_type is derived at index time and carried top-level, like `is_tech` and
 // `ai_archetype`, so it filters on the bare attribute rather than an enrichment.*
 // dot path. Excluding it is how a caller asks for postings with no management
 // marker — which is not the same as asking for individual-contributor postings.

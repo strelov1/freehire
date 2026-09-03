@@ -12,7 +12,6 @@ import { RAIL } from './filterSections';
 // An entry here is a claim that the facet IS reachable, just not from its own rail row.
 // `source` is the one facet that is deliberately not offered at all.
 const HOSTED_ELSEWHERE: Record<string, string> = {
-  role: 'category pane (the role picker)',
   category: 'category pane (specialization chips)',
   ai_archetype: 'category pane (AI specialization)',
   seniority: 'experience pane',

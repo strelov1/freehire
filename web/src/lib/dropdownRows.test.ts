@@ -8,7 +8,7 @@ import type { Job, CompanyListItem } from './types';
 // arrow navigation lives here, so the flattening is a function rather than three
 // index offsets computed in the template.
 
-const suggestion = (slug: string): Suggestion => ({ kind: 'role', slug, label: slug });
+const suggestion = (slug: string): Suggestion => ({ kind: 'category', slug, label: slug });
 const job = (slug: string): Job => ({ public_slug: slug, title: slug }) as unknown as Job;
 const company = (slug: string): CompanyListItem => ({ slug, name: slug }) as unknown as CompanyListItem;
 

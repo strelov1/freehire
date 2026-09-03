@@ -166,16 +166,13 @@ export const COMPANY_RAIL_GROUPS: CompanyRailGroup[] = [
 ];
 
 export const RAIL: RailEntry[] = [
-  // One "Role" pane holds the whole "what role" concept: the role picker
-  // (natural/named/composite roles), the specialization chips, and the AI
-  // Specialization facet. The picker is the natural-language entry, the chips and
-  // AI-specialization the browse-by-axis entry.
+  // One "Role" pane holds the whole "what job" concept: the specialization chips and
+  // the AI Specialization facet. It once also held a `role` picker, whose values were
+  // specialization × seniority; that facet is retired and its two axes are these.
   //
-  // Seniority used to sit here too, because a role slug can carry a grade prefix
-  // (`senior_backend`) and the two read as one thought. It moved to Experience: a
-  // grade states how much experience a posting wants, which is the question that
-  // pane answers, and it sits there next to the years ceiling that qualifies it.
-  // The two params stay independent, as they already were.
+  // Seniority sits under Experience rather than here: a grade states how much
+  // experience a posting wants, which is the question that pane answers, and it sits
+  // next to the years ceiling that qualifies it.
   { key: 'category', label: 'Role', section: 'ROLE', kind: 'category' },
   { key: 'experience', label: 'Experience', section: 'ROLE', kind: 'experience' },
   // How old a posting is, and whether it looks permanently open, both describe the

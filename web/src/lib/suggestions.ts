@@ -16,7 +16,7 @@ import type { FacetCounts } from './types';
  *  Rows from the suggestions endpoint carry their own parts and are applied from
  *  those, so there `kind` is presentation only. */
 export interface Suggestion {
-  kind: 'title' | 'role' | 'skill' | 'category' | 'company';
+  kind: 'title' | 'skill' | 'category' | 'company';
   slug: string;
   label: string;
   /** Open postings behind it. Absent when the distribution has not been measured yet

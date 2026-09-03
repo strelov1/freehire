@@ -399,29 +399,6 @@ export function facetRemove(st: FacetState, v: string): FacetState {
   return facetSetSign(st, v, 'off');
 }
 
-/** Choosing a role suggestion under the header search box: turn that role on and drop
- *  the typed text, as ONE new state.
- *
- *  The two belong together. The role tag is derived from the title by a deterministic
- *  dictionary, so it is already the more precise of the two filters — keeping the text
- *  as well would AND a half-typed query against it and return fewer jobs than either
- *  filter alone, which reads as the suggestion breaking the page. Committing them as
- *  one state also means the caller writes once (setNow), which cancels the debounce
- *  the last keystroke left pending instead of racing it.
- *
- *  facetSetSign, not facetAdd: a role sitting in the EXCLUDE set is still offered as a
- *  suggestion — only INCLUDED roles are withheld — and facetAdd treats a value already
- *  in either set as a no-op. Picking such a role would then clear the typed text and
- *  change nothing else, a click that visibly does half its job. Choosing a role you had
- *  excluded is an unambiguous change of mind, so it flips the sign. */
-export function filtersWithRole(f: JobFilters, slug: string): JobFilters {
-  return {
-    ...f,
-    q: '',
-    facets: { ...f.facets, role: facetSetSign(f.facets.role ?? emptyFacet(), slug, 'include') },
-  };
-}
-
 /** Apply everything a chosen suggestion names, in ONE filter change.
  *
  *  A completion from the suggestions endpoint composes a phrase, so it can name a role

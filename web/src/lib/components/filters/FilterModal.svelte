@@ -164,7 +164,7 @@
 
   function entryCount(e: RailEntry): number {
     const f = staged.value;
-    if (e.kind === 'category') return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'ai_archetype');
+    if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'ai_archetype');
     if (e.kind === 'experience')
       return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
@@ -340,10 +340,6 @@
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
-    {@const roleDef = facetDefFor('role')}
-    {#if roleDef && !exclude.includes('role')}
-      <div class="mb-6"><FacetSection def={roleDef} store={staged} counts={c} expand /></div>
-    {/if}
     <CategoryPane store={staged} {plain} counts={c} />
     {#if !exclude.includes('ai_archetype')}
       {@const aiArchetypeDef = facetDefFor('ai_archetype')}

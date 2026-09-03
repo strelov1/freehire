@@ -42,7 +42,7 @@ info:
 
     ## Resolve values before filtering
 
-    `skills`, `countries`, `cities`, `category`, `role`, `source`,
+    `skills`, `countries`, `cities`, `category`, `source`,
     `company_slug` and `collections` are open or large vocabularies. Call
     `getJobFacets` (or `searchCities` for a city) to get canonical values with
     live counts before filtering on them — an unknown value is not an error, it
@@ -162,7 +162,6 @@ paths:
         - $ref: "#/components/parameters/Cities"
         - $ref: "#/components/parameters/WorkMode"
         - $ref: "#/components/parameters/Category"
-        - $ref: "#/components/parameters/Role"
         - $ref: "#/components/parameters/Seniority"
         - $ref: "#/components/parameters/Skills"
         - $ref: "#/components/parameters/SkillsMode"
@@ -234,7 +233,6 @@ paths:
         - $ref: "#/components/parameters/Cities"
         - $ref: "#/components/parameters/WorkMode"
         - $ref: "#/components/parameters/Category"
-        - $ref: "#/components/parameters/Role"
         - $ref: "#/components/parameters/Seniority"
         - $ref: "#/components/parameters/Skills"
         - $ref: "#/components/parameters/SkillsMode"
@@ -319,7 +317,6 @@ paths:
         - $ref: "#/components/parameters/Cities"
         - $ref: "#/components/parameters/WorkMode"
         - $ref: "#/components/parameters/Category"
-        - $ref: "#/components/parameters/Role"
         - $ref: "#/components/parameters/Seniority"
         - $ref: "#/components/parameters/Skills"
         - $ref: "#/components/parameters/SkillsMode"
@@ -375,8 +372,8 @@ paths:
         it names, and applying only one of them discards what the caller typed.
 
         A `title` part names no facet — apply it as `q`. Every other kind carries
-        a `slug` for its own facet (`role`, `skills`, `category`,
-        `company_slug`), and those combine with AND.
+        a `slug` for its own facet (`skills`, `category`, `company_slug`), and
+        those combine with AND.
 
         Typos are forgiven in the fragment, not in the recognised phrases: a
         misspelled phrase falls through to the fragment, where the match is
@@ -898,20 +895,6 @@ components:
         items:
           type: string
       description: Role category slug from `getJobFacets`.
-    Role:
-      name: role
-      in: query
-      style: form
-      explode: true
-      schema:
-        type: array
-        items:
-          type: string
-      description: |
-        Fine-grained role slug from `getJobFacets` (e.g. `backend`,
-        `android_developer`, and seniority-qualified variants). Much narrower
-        than `category`; the vocabulary is large and generated, so always read it
-        from the facets endpoint.
     Seniority:
       name: seniority
       in: query

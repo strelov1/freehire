@@ -33,9 +33,7 @@ export function browseQuery(plan: ApplyPlan): string {
 
 /** The plan a locally-built starter row applies.
  *
- *  Only categories reach here — the empty box offers nothing else — but a role would
- *  apply `role`, and saying so keeps the mapping honest rather than assuming the
- *  caller's one kind. */
+ *  Only categories reach here — the empty box offers nothing else. */
 export function planForSuggestion(s: Suggestion): ApplyPlan {
-  return { facets: [[s.kind === 'role' ? 'role' : 'category', s.slug]] };
+  return { facets: [['category', s.slug]] };
 }

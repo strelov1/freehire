@@ -1289,7 +1289,7 @@ export interface ApiSuggestion {
 }
 
 export interface ApiSuggestionPart {
-  kind: 'title' | 'role' | 'skill' | 'category' | 'company';
+  kind: 'title' | 'skill' | 'category' | 'company';
   /** The facet value to apply. Absent for a `title`, which names no facet and is
    *  applied as the free-text query instead. */
   slug?: string;

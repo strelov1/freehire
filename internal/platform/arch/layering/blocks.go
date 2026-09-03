@@ -46,7 +46,7 @@ var blocks = map[string][]string{
 	},
 	"dict": {
 		"classify", "companyname", "industrytag", "lang", "location", "normalize",
-		"roletag", "roletype", "skilladjacency", "skillbundle", "skilltag",
+		"roletype", "skilladjacency", "skillbundle", "skilltag",
 		// skillvec/gen is the registry generator — a main package that reads skilltag
 		// and writes skillvec's source. It never ships in a binary, but it is a package
 		// in the repo, so it needs a block like any other.
