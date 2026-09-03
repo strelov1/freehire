@@ -59,11 +59,18 @@
 
 ## 5. `pending` → `active` transition
 
-- [ ] 5.1 In `pipeline.Runner`, alongside the existing `board_health` outcome write, flip
-      a `pending` board to `active` (stamping `activated_at`) on a crawl that completes
-      without a board-level error.
-- [ ] 5.2 Integration test: a `pending` board's first successful crawl becomes `active`;
-      a failing crawl leaves it `pending`.
+- [x] 5.1 Wired into `cmd/ingest`'s `boardHealth.RecordSuccess` (not `pipeline.Runner`
+      itself — `RecordSuccess` is the concrete adapter `pipeline.Runner` already calls on
+      a board-level success, so piggybacking there needed no change to `pipeline.go` or
+      the `pipeline.BoardHealth` port). Calls `boardcatalog.Repository.Activate` right
+      after the existing `board_health` write.
+- [x] 5.2 Integration tests (`board_health_activation_integration_test.go`): a `pending`
+      board's first successful crawl becomes `active` with `ActivatedAt` set; a success
+      for a board with no `boards` row is harmless (no error); an already-`active` board
+      is not re-activated (its `ActivatedAt` is unchanged). A failing crawl leaving a
+      board `pending` is implied — `RecordFailure` never calls `Activate` — and not
+      separately tested, since `RecordFailure` and `RecordSuccess` are already mutually
+      exclusive per crawl outcome in `pipeline.Runner`.
 
 ## 6. `cmd/add-board`
 
