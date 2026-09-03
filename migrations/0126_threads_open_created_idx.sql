@@ -1,5 +1,3 @@
--- migrate: no-transaction
---
 -- The global discussions feed (GET /api/v1/threads/recent, /discussions): every open
 -- thread across every subject, newest first, keyset-paged on (created_at, id).
 --
@@ -11,9 +9,35 @@
 -- Partial on status = 'open' for the same reason as the subject index: a closed thread
 -- is hidden from every default listing, so it never belongs in the hot index.
 --
--- CONCURRENTLY (hence the no-transaction marker) is the convention this repo settled on
--- for an index a running prod will build — it costs a second pass and no exclusive lock.
--- The table is tiny today, so the cost is nil either way and the habit is what matters.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS threads_open_created_idx
+-- NOT concurrently, and the DROP above it is why. The first version of this file used
+-- CREATE INDEX CONCURRENTLY — the shape this repo settled on for an index a running
+-- prod builds — and it failed the release on 2026-09-03 with SQLSTATE 55P03, a lock
+-- timeout. CONCURRENTLY does not merely take a weaker lock: before building, it WAITS
+-- for every transaction holding an older snapshot to finish, and migrate's 5s
+-- lock_timeout applies to that wait. Two similar-jobs backfill transactions were six
+-- minutes into their run, so the wait could never complete inside five seconds. The
+-- release aborted correctly and left the live colour untouched, but a failed
+-- CONCURRENTLY leaves the index behind with indisvalid = false, and prod is carrying
+-- exactly that carcass now.
+--
+-- `threads` holds three rows. A plain CREATE INDEX takes ACCESS EXCLUSIVE on it for as
+-- long as indexing three rows takes, and nothing else contends for that table — which
+-- makes CONCURRENTLY here pure cost: it buys no availability worth having and imports
+-- a dependency on how long an unrelated backfill's transaction happens to be. The
+-- concurrent shape is right for jobs (7.4M rows, read on every request); it is the
+-- wrong reflex on a table this size, and reaching for it out of habit is what cost a
+-- release. Revisit if this table ever grows.
+--
+-- No `migrate: no-transaction` marker, so the two statements are one transaction: the
+-- invalid index cannot be dropped without its replacement landing.
+
+-- Drops the invalid index the failed CONCURRENTLY left on prod. Unconditional rather
+-- than guarded, because an IF NOT EXISTS on the CREATE alone would find that carcass,
+-- skip, and leave an index nothing can use. A no-op on a fresh volume.
+-- squawk-ignore require-concurrent-index-deletion -- three rows, and a concurrent drop cannot run inside this file's transaction
+DROP INDEX IF EXISTS threads_open_created_idx;
+
+-- squawk-ignore require-concurrent-index-creation -- three rows; CONCURRENTLY here is what failed the 2026-09-03 release, see above
+CREATE INDEX IF NOT EXISTS threads_open_created_idx
     ON public.threads (created_at DESC, id DESC)
     WHERE status = 'open';
