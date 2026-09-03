@@ -53,6 +53,10 @@ func TestMaxPerRun(t *testing.T) {
 		{name: "zero keeps the default", raw: "0", want: maxPerRunDefault},
 		{name: "negative keeps the default", raw: "-5", want: maxPerRunDefault},
 		{name: "nonsense keeps the default", raw: "lots", want: maxPerRunDefault},
+		// Parsed at the width it is used at. Read as a platform int and converted, this
+		// would WRAP to a negative limit — a query error, not a big batch — and the
+		// "not a positive number" log line would be a lie.
+		{name: "beyond a batch size keeps the default", raw: "3000000000", want: maxPerRunDefault},
 	}
 
 	for _, tc := range cases {

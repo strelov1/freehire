@@ -135,14 +135,21 @@ func refreshNearExpiry(ctx context.Context, svc *billing.Service, max int32) (re
 // maxPerRun reads the per-run bound. An unreadable value keeps the default and says so: a
 // typo resolving to zero would make every run a silent no-op, which looks exactly like a
 // backlog that has already been drained.
+//
+// ParseInt at 32 bits rather than Atoi, because the value ends up as the int32 the query
+// takes as its LIMIT. Atoi parses at the platform's int width, so a figure above
+// MaxInt32 would not be rejected here — it would WRAP on conversion, and a wrapped
+// negative limit is a query error rather than a large batch. Parsing at the width the
+// value is actually used at makes an out-of-range figure a rejection, which is what the
+// log line below already claims to be doing.
 func maxPerRun() int32 {
 	raw := os.Getenv("BILLING_SYNC_MAX_PER_RUN")
 	if raw == "" {
 		return maxPerRunDefault
 	}
-	n, err := strconv.Atoi(raw)
+	n, err := strconv.ParseInt(raw, 10, 32)
 	if err != nil || n <= 0 {
-		log.Printf("billing-sync: BILLING_SYNC_MAX_PER_RUN=%q is not a positive number — keeping %d", raw, maxPerRunDefault)
+		log.Printf("billing-sync: BILLING_SYNC_MAX_PER_RUN=%q is not a positive number that fits a batch size — keeping %d", raw, maxPerRunDefault)
 		return maxPerRunDefault
 	}
 	return int32(n)
