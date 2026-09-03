@@ -99,6 +99,35 @@ func TestRetireBoardRetiresWithoutDeleting(t *testing.T) {
 	}
 }
 
+func TestRenameBoardCorrectsThePlaceholder(t *testing.T) {
+	pool := testdb.Pool(t)
+	repo := boardcatalog.NewQueriesRepository(db.New(pool))
+	in := boardcatalog.InsertInput{Provider: "greenhouse", Board: "acme-corp", Company: boardcatalog.PlaceholderCompany("acme-corp")}
+	if code := addBoard(context.Background(), pool, in, sources.Taxonomy()); code != 0 {
+		t.Fatalf("seed addBoard: exit = %d", code)
+	}
+
+	if code := renameBoard(context.Background(), pool, "greenhouse", "acme-corp", "", "Acme Corporation Inc."); code != 0 {
+		t.Fatalf("renameBoard exit = %d, want 0", code)
+	}
+
+	rows, err := repo.ListActiveForProvider(context.Background(), "greenhouse")
+	if err != nil {
+		t.Fatalf("ListActiveForProvider: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Company != "Acme Corporation Inc." {
+		t.Fatalf("rows = %+v, want the renamed company", rows)
+	}
+}
+
+func TestRenameBoardReportsNotFound(t *testing.T) {
+	pool := testdb.Pool(t)
+
+	if code := renameBoard(context.Background(), pool, "greenhouse", "no-such-board", "", "New Name"); code == 0 {
+		t.Fatal("renameBoard on a nonexistent board exit = 0, want nonzero")
+	}
+}
+
 func TestRetireBoardReportsNotFound(t *testing.T) {
 	pool := testdb.Pool(t)
 

@@ -34,6 +34,15 @@ SELECT * FROM boards
 WHERE provider = sqlc.arg(provider) AND status IN ('pending', 'active')
 ORDER BY id;
 
+-- name: UpdateBoardCompany :execrows
+-- Correct a board's company name — for a crowdsourced row seeded with
+-- boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status
+-- (a placeholder is worth fixing whether the board is still pending or already active).
+UPDATE boards
+SET company = sqlc.arg(company)
+WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
+  AND region = sqlc.arg(region) AND status IN ('pending', 'active');
+
 -- name: ListBoardsBySubmitter :many
 -- One user's crowdsourced boards, newest first — half of the "my contributions" list
 -- (board_submissions holds the other half, the unclassified-URL rows).

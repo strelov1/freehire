@@ -23,6 +23,9 @@ func (f *fakeRepo) Activate(context.Context, string, string, string) (bool, erro
 func (f *fakeRepo) Retire(context.Context, string, string, string) (bool, error) {
 	panic("not used by loader tests")
 }
+func (f *fakeRepo) Rename(context.Context, string, string, string, string) (bool, error) {
+	panic("not used by loader tests")
+}
 func (f *fakeRepo) ListActiveForProvider(_ context.Context, provider string) ([]Board, error) {
 	return f.byProvider[provider], nil
 }

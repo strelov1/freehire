@@ -78,7 +78,16 @@
       (`--provider --board --company [--region] [--hub] [--tenants=k:v,...]`) inserts at
       `status='active'` through `boardcatalog.Insert`/`Validate` (same as §2). Retire mode
       (`--retire --provider --board [--region]`) sets an existing live row's status to
-      `retired` without deleting it.
+      `retired` without deleting it. Also added `--rename` mode
+      (`--rename --provider --board --company [--region]`) — needed because of a design
+      gap found while starting §7: a crowdsourced board (no network fetch, see
+      `link-contributions`) has no real company name, yet board-based adapters
+      (greenhouse/lever/ashby) write the catalog's company verbatim as every crawled
+      job's employer. Resolved (user decision) as: seed with
+      `boardcatalog.PlaceholderCompany(board)` (a humanized slug, e.g. "acme-corp" ->
+      "Acme Corp") and let a curator fix it via `--rename` once they see the pending
+      board. New `Repository.Rename` + `UpdateBoardCompany` query; recorded as its own
+      requirement in `specs/board-catalog/spec.md`.
 - [x] 6.2 Tests: `addBoard`/`retireBoard` (the DB-touching cores, split out from the
       `worker.Bootstrap`-calling `runAdd`/`runRetire` CLI wrappers — a test needs to hand
       them a throwaway `testdb.Pool`, not the environment's real `DATABASE_URL`, which

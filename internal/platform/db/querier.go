@@ -4090,6 +4090,10 @@ type Querier interface {
 	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
 	// guaranteed to exist (EnsureBalance ran first).
 	UpdateBalance(ctx context.Context, arg UpdateBalanceParams) error
+	// Correct a board's company name — for a crowdsourced row seeded with
+	// boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status
+	// (a placeholder is worth fixing whether the board is still pending or already active).
+	UpdateBoardCompany(ctx context.Context, arg UpdateBoardCompanyParams) (int64, error)
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)

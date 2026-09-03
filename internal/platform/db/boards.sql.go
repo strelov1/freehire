@@ -206,3 +206,33 @@ func (q *Queries) RetireBoard(ctx context.Context, arg RetireBoardParams) (int64
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateBoardCompany = `-- name: UpdateBoardCompany :execrows
+UPDATE boards
+SET company = $1
+WHERE provider = $2 AND lower(board) = lower($3)
+  AND region = $4 AND status IN ('pending', 'active')
+`
+
+type UpdateBoardCompanyParams struct {
+	Company  string `json:"company"`
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+// Correct a board's company name — for a crowdsourced row seeded with
+// boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status
+// (a placeholder is worth fixing whether the board is still pending or already active).
+func (q *Queries) UpdateBoardCompany(ctx context.Context, arg UpdateBoardCompanyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateBoardCompany,
+		arg.Company,
+		arg.Provider,
+		arg.Board,
+		arg.Region,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

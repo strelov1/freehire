@@ -84,6 +84,27 @@ at status `rejected` with a recorded reason, rather than not existing.
 - **THEN** a row is inserted at status `rejected` carrying the validation failure as its
   reason
 
+### Requirement: A crowdsourced board's company name starts as a placeholder
+
+A board recognized from a submitted URL (see `link-contributions`) carries no real
+company display name — recognition is network-free — yet a board-based provider writes
+the catalog's company name verbatim as every crawled job's employer. Such a board SHALL
+be inserted with a placeholder company name derived from its board id, and SHALL be
+correctable later without affecting its identity, status, or crawl eligibility.
+
+#### Scenario: A crowdsourced insert gets a placeholder company
+
+- **WHEN** a board is inserted from a recognized contribution with board id `acme-corp`
+  and no company name supplied
+- **THEN** the stored row's company is a humanized placeholder derived from the board id
+  (e.g. "Acme Corp"), not empty and not the raw board id verbatim
+
+#### Scenario: A curator corrects the placeholder without touching status or identity
+
+- **WHEN** a curator renames a live board's company
+- **THEN** the row's company changes and its `provider`, `board`, `region`, and `status`
+  are unchanged
+
 ### Requirement: A curator adds or retires a board through a dedicated worker
 
 The system SHALL provide `cmd/add-board`, a report-by-default worker that requires

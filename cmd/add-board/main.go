@@ -7,10 +7,16 @@
 // unproven pending period to model, unlike a crowdsourced contribution). Retiring a board
 // sets its status to 'retired' rather than deleting the row, preserving history.
 //
+// A crowdsourced board is seeded with a company placeholder derived from the board slug
+// (boardcatalog.PlaceholderCompany) — a URL-only submission never carries the real
+// display name. --rename corrects it once a curator, reviewing the pending list, knows
+// the real one.
+//
 // Usage:
 //
 //	go run ./cmd/add-board --provider=greenhouse --board=acme --company="Acme" [--apply]
 //	go run ./cmd/add-board --retire --provider=greenhouse --board=acme [--apply]
+//	go run ./cmd/add-board --rename --provider=greenhouse --board=acme --company="Acme, Inc." [--apply]
 package main
 
 import (
@@ -32,6 +38,7 @@ func main() { worker.Main(run) }
 func run() int {
 	apply := flag.Bool("apply", false, "actually write; without it the run only reports")
 	retire := flag.Bool("retire", false, "retire an existing board instead of adding one")
+	rename := flag.Bool("rename", false, "correct an existing board's company name instead of adding one")
 	provider := flag.String("provider", "", "provider key (required)")
 	board := flag.String("board", "", "board id (required unless the provider is boardless)")
 	region := flag.String("region", "", "region, for a provider with regional hosts (optional)")
@@ -45,10 +52,18 @@ func run() int {
 		return 1
 	}
 
-	if *retire {
+	switch {
+	case *retire:
 		return runRetire(*provider, *board, *region, *apply)
+	case *rename:
+		if *company == "" {
+			log.Print("add-board: --company is required with --rename")
+			return 1
+		}
+		return runRename(*provider, *board, *region, *company, *apply)
+	default:
+		return runAdd(*provider, *board, *region, *company, *hub, *tenantsFlag, *apply)
 	}
-	return runAdd(*provider, *board, *region, *company, *hub, *tenantsFlag, *apply)
 }
 
 // runAdd is the CLI entry point for adding a board: it reports the candidate, and under
@@ -119,6 +134,40 @@ func runRetire(provider, board, region string, apply bool) int {
 	}
 	defer cleanup()
 	return retireBoard(ctx, pool, provider, board, region)
+}
+
+// runRename mirrors runAdd/runRetire's split: it reports, then under apply opens a real
+// database connection and delegates to renameBoard.
+func runRename(provider, board, region, company string, apply bool) int {
+	log.Printf("add-board: would rename provider=%s board=%s region=%q to company=%q", provider, board, region, company)
+	if !apply {
+		log.Print("add-board: dry run, nothing written. Re-run with --apply to rename.")
+		return 0
+	}
+
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+	return renameBoard(ctx, pool, provider, board, region, company)
+}
+
+func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region, company string) int {
+	repo := boardcatalog.NewQueriesRepository(db.New(pool))
+	found, err := repo.Rename(ctx, provider, board, region, company)
+	if err != nil {
+		log.Printf("add-board: rename: %v", err)
+		return 1
+	}
+	if !found {
+		log.Printf("add-board: no live (pending/active) board matches provider=%s board=%s region=%q — nothing renamed",
+			provider, board, region)
+		return 1
+	}
+	log.Printf("add-board: renamed provider=%s board=%s region=%q to company=%q", provider, board, region, company)
+	return 0
 }
 
 func retireBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region string) int {
