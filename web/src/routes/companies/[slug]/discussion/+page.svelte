@@ -27,6 +27,7 @@
   <div class="mb-4 flex items-center gap-2">
     <SubjectHeader
       subject={data.subject}
+      absence={data.absence}
       subjectType="company"
       subjectSlug={data.slug}
       class="min-w-0 flex-1"

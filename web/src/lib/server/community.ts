@@ -23,7 +23,7 @@ export async function loadDiscussionIndex(
     api.listThreads(subjectType, slug).catch(() => ({ threads: [], nextCursor: undefined })),
     loadDiscussionSubject(fetchImpl, subjectType, slug),
   ]);
-  return { slug, threads, nextCursor, subject };
+  return { slug, threads, nextCursor, ...subject };
 }
 
 /** Fetch a community thread for its detail page, scoped to the subject the route
@@ -49,7 +49,7 @@ export async function loadThread(
       loadDiscussionSubject(fetchImpl, subjectType, params.slug),
     ]);
     if (!threadMatchesSubject(thread, subjectType, params.slug)) error(404, 'Thread not found');
-    return { slug: params.slug, thread, replies, nextCursor, subject };
+    return { slug: params.slug, thread, replies, nextCursor, ...subject };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) error(404, 'Thread not found');
     throw e;

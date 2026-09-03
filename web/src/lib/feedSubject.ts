@@ -18,8 +18,10 @@ export interface FeedSubjectLine {
 
 /** Shown when the subject resolved but carries no employer name — a posting whose
  *  `jobs.company` is empty. Matches the wording JobRow already uses for the same gap,
- *  so one absent company reads the same way wherever it surfaces. */
-const UNKNOWN_EMPLOYER = 'Unknown company';
+ *  so one absent company reads the same way wherever it surfaces. Exported because the
+ *  discussion page's own header answers the same gap and must not invent a second
+ *  phrasing for it. */
+export const UNKNOWN_EMPLOYER = 'Unknown company';
 
 /** What a feed row prints above its title.
  *
