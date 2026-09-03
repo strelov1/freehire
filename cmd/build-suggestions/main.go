@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"log"
+	"math"
 
 	"github.com/strelov1/freehire/internal/dict/roletag"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -93,7 +94,7 @@ func gather(ctx context.Context, q *db.Queries, client *search.Client, floors co
 		raw[t.Title] = int(t.Count)
 	}
 
-	companies, err := q.SuggestibleCompanies(ctx, int32(floors.CompanyFloor))
+	companies, err := q.SuggestibleCompanies(ctx, narrow(floors.CompanyFloor))
 	if err != nil {
 		return suggest.Input{}, err
 	}
@@ -133,6 +134,26 @@ func gather(ctx context.Context, q *db.Queries, client *search.Client, floors co
 		Companies:  firms,
 		Searches:   demand,
 	}, nil
+}
+
+// narrow converts a floor to the int32 Postgres takes, checking the bound HERE rather
+// than trusting it from the config.
+//
+// Two guards for one value, and they answer different questions: config.LoadSuggest
+// decides whether the floor is a usable NUMBER (its `int` is what the builder filters
+// titles with), while this decides whether it survives the TYPE it crosses into. The
+// second is not implied by the first — narrowing a wider value wraps, and a wrapped
+// floor can come out negative, which admits every row instead of excluding the tail.
+// Keeping it at the conversion is also what makes the check visible to a reader (and
+// to a static analyser) standing at the line where the risk is.
+func narrow(n int) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < 1 {
+		return 1
+	}
+	return int32(n)
 }
 
 func ints(m map[string]int64) map[string]int {
