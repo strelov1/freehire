@@ -164,18 +164,23 @@ func (h *communityHandlers) ListThreads(c *fiber.Ctx) error {
 	for i, t := range threads {
 		out[i] = toThreadResponse(t)
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": h.threadPageMeta(threads)})
+	return c.JSON(fiber.Map{"data": out, "meta": pageMeta(threads, h.community.PageSize())})
 }
 
-// threadPageMeta carries the continuation cursor for a page of threads, and only when
-// the page came back FULL. A partial page is the last one, and a cursor on it tells the
-// client a further page exists — which is how a single-thread subject rendered a "Load
-// more" that fetched nothing.
-func (h *communityHandlers) threadPageMeta(threads []community.Thread) fiber.Map {
+// pageMeta carries a listing's continuation cursor, and only when the page came back
+// FULL. A partial page is the last one, and a cursor on it tells the client a further
+// page exists — which is how a single-thread subject rendered a "Load more" that
+// fetched nothing.
+//
+// One function for all three community listings (subject threads, replies, the feed):
+// the rule is one rule, and each row type reports its own keyset position. The page
+// size is a parameter rather than read off the handler because a method cannot carry a
+// type parameter in Go.
+func pageMeta[T interface{ Position() community.Cursor }](items []T, pageSize int32) fiber.Map {
 	meta := fiber.Map{}
-	if n := len(threads); n > 0 && int32(n) == h.community.PageSize() {
-		last := threads[n-1]
-		meta["next_cursor"] = encodeCursor(last.CreatedAt, last.ID)
+	if n := len(items); n > 0 && int32(n) == pageSize {
+		pos := items[n-1].Position()
+		meta["next_cursor"] = encodeCursor(pos.CreatedAt, pos.ID)
 	}
 	return meta
 }
@@ -209,13 +214,7 @@ func (h *communityHandlers) ListRecentThreads(c *fiber.Ctx) error {
 			SubjectCompany: t.SubjectCompany,
 		}
 	}
-	// Same full-page rule as the subject listing — see threadPageMeta.
-	meta := fiber.Map{}
-	if n := len(threads); n > 0 && int32(n) == h.community.PageSize() {
-		last := threads[n-1]
-		meta["next_cursor"] = encodeCursor(last.CreatedAt, last.ID)
-	}
-	return c.JSON(fiber.Map{"data": out, "meta": meta})
+	return c.JSON(fiber.Map{"data": out, "meta": pageMeta(threads, h.community.PageSize())})
 }
 
 // CountThreads returns a subject's open-thread count — the detail-page badge. Public.
@@ -250,13 +249,10 @@ func (h *communityHandlers) GetThread(c *fiber.Ctx) error {
 	for i, r := range replies {
 		out[i] = toReplyResponse(r)
 	}
-	// Same full-page rule as the thread listing — see threadPageMeta.
-	meta := fiber.Map{}
-	if n := len(replies); n > 0 && int32(n) == h.community.PageSize() {
-		last := replies[n-1]
-		meta["next_cursor"] = encodeCursor(last.CreatedAt, last.ID)
-	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"thread": toThreadResponse(thread), "replies": out}, "meta": meta})
+	return c.JSON(fiber.Map{
+		"data": fiber.Map{"thread": toThreadResponse(thread), "replies": out},
+		"meta": pageMeta(replies, h.community.PageSize()),
+	})
 }
 
 // CreateThread opens a thread on a company or job. RequireAuth; 400/404/422/429.

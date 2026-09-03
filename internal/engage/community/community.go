@@ -131,6 +131,13 @@ type Cursor struct {
 // IsZero reports whether the cursor is the first-page sentinel.
 func (c Cursor) IsZero() bool { return c.ID == 0 && c.CreatedAt.IsZero() }
 
+// Position is where this row sits in its listing's keyset order — what a caller
+// paging past it needs. ThreadWithSubject inherits it through the embedded Thread.
+func (t Thread) Position() Cursor { return Cursor{CreatedAt: t.CreatedAt, ID: t.ID} }
+
+// Position is where this reply sits in its thread's chronological order.
+func (r Reply) Position() Cursor { return Cursor{CreatedAt: r.CreatedAt, ID: r.ID} }
+
 // CreateThreadInput is a request to open a thread. SubjectSlug is the subject's
 // public slug; the service validates it against SubjectType.
 type CreateThreadInput struct {

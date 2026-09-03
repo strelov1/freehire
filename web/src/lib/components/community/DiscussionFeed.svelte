@@ -44,8 +44,9 @@
              JobRow): a quiet subject rail on top, the title as the hero, a body
              preview, then the reply/author footer. The one departure is the logo,
              which sits in a left rail spanning the card rather than inline in the
-             rail, so a column of rows scans by employer down the left edge. -->
-        <!-- The row links to the thread's page under its OWN subject, so the feed adds
+             rail, so a column of rows scans by employer down the left edge.
+
+             The row links to the thread's page under its OWN subject, so the feed adds
              no second reading surface. Resolved inline rather than in a helper (as
              DiscussionIndex does) because both the typed-route check and the
              no-navigation-without-resolve lint rule read the href expression itself. -->
