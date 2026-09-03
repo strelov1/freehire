@@ -78,6 +78,7 @@ func TestScalarFilters_EachOneStillNarrowsAQuery(t *testing.T) {
 		"experience_years_min": "3",
 		"experience_years_max": "8",
 		"posted_within_days":   "7",
+		"open_within_days":     "7",
 	}
 
 	for _, param := range scalarFilters {

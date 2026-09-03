@@ -3,43 +3,43 @@
 Already implemented in the worktree, uncommitted — it is the first commit of this
 change because the `filter-modal` and `jobs-list-controls` specs currently forbid it.
 
-- [ ] 1.1 Drop the standalone `Posting reality` rail entry from `RAIL`
+- [x] 1.1 Drop the standalone `Posting reality` rail entry from `RAIL`
       (`web/src/lib/filterSections.ts`); record `reality` in `HOSTED_ELSEWHERE` in
       `filterSections.test.ts` and assert it has no rail entry of its own
-- [ ] 1.2 Render the `reality` ChipFacet in the `posted` pane of
+- [x] 1.2 Render the `reality` ChipFacet in the `posted` pane of
       `FilterModal.svelte`, and include `selCount(f, 'reality')` in the pane's badge
-- [ ] 1.3 Remove the `Hide evergreen` toggle from `JobsView.svelte` (with its
+- [x] 1.3 Remove the `Hide evergreen` toggle from `JobsView.svelte` (with its
       `EyeOff`/`signOf` imports) and update the `ListToolbar.svelte` comments that
       name it
-- [ ] 1.4 Commit: pane + toolbar, tests green
+- [x] 1.4 Commit: pane + toolbar, tests green
 
 ## 2. `created_ts` reaches the index
 
-- [ ] 2.1 Add `CreatedTS int64 \`json:"created_ts"\`` to `JobDocument`
+- [x] 2.1 Add `CreatedTS int64 \`json:"created_ts"\`` to `JobDocument`
       (`internal/search/search/document.go`), documenting it as document-only like
       `PostedTS`, and set it unconditionally in `FromJob` from `j.CreatedAt`
-- [ ] 2.2 Test: a document built by `FromJob` carries `created_ts` equal to the row's
+- [x] 2.2 Test: a document built by `FromJob` carries `created_ts` equal to the row's
       `created_at` in unix seconds, and carries it even when `posted_at` is absent
       (where `posted_ts` falls back to the same instant)
-- [ ] 2.3 Declare `created_ts` in `FilterableAttributes`
+- [x] 2.3 Declare `created_ts` in `FilterableAttributes`
       (`internal/search/search/client.go`) with a comment recording the
       settings-before-binary ordering
 
 ## 3. The `open_within_days` filter
 
-- [ ] 3.1 Test first: `filterFromValues` with `open_within_days=7` emits
+- [x] 3.1 Test first: `filterFromValues` with `open_within_days=7` emits
       `Gte("created_ts", now-7*86400)` against the injected clock
-- [ ] 3.2 Test: absent, empty, `0`, negative and non-numeric values each impose no
+- [x] 3.2 Test: absent, empty, `0`, negative and non-numeric values each impose no
       restriction
-- [ ] 3.3 Test: `open_within_days` and `posted_within_days` together emit both bounds
+- [x] 3.3 Test: `open_within_days` and `posted_within_days` together emit both bounds
       as a conjunction
-- [ ] 3.4 Implement the bound in `internal/search/search/query_filter.go`, mirroring
+- [x] 3.4 Implement the bound in `internal/search/search/query_filter.go`, mirroring
       the `posted_within_days` block
-- [ ] 3.5 Add `open_within_days` to `scalarFilters`
+- [x] 3.5 Add `open_within_days` to `scalarFilters`
       (`internal/search/search/query_params.go`) so `UnknownParams` stops reporting a
       working filter as unread; confirm the existing "each scalar filter narrows a
       query" test covers it
-- [ ] 3.6 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`
+- [x] 3.6 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`
 
 ## 4. The web filter state
 

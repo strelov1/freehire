@@ -617,6 +617,18 @@ func facetSettings() *meilisearch.Settings {
 			// field the "posted within N days" range filter needs (Meili range operators
 			// require a number; the string posted_at below is sort-only).
 			"posted_ts",
+			// created_ts is the first-seen date in unix seconds, backing the second date
+			// bound ("open within N days"). created_at is already on the document as a
+			// sortable string, but a range filter needs the number.
+			//
+			// The settings-before-binary warning applies here in both directions: this
+			// declaration must reach the LIVE index before a binary that filters on it
+			// (an undeclared attribute is a 400 that the handler maps to 500), and a full
+			// rebuild must follow, because the incremental drain only pushes documents
+			// whose content_hash moved and this field is not in that hash. Until then the
+			// filter matches almost nothing — a thin feed nothing alerts on, which is why
+			// the SPA control ships behind a flag. See AGENTS.md in this package.
+			"created_ts",
 			// reality.class is the job-reality signal (fresh/stale/likely-evergreen),
 			// nested under the served reality object; the "hide likely-evergreen" filter
 			// matches on this dot path.

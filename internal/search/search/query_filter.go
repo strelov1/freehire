@@ -196,6 +196,20 @@ func filterFromValues(v url.Values, now time.Time) any {
 		groups = append(groups, []string{Gte("posted_ts", int(cutoff))})
 	}
 
+	// How long the posting has been open: open_within_days=N restricts to jobs whose
+	// created_ts (the instant ingest first wrote the row) is at or after now - N*86400.
+	// Same shape and same lenient parse as the bound above, and independent of it — a
+	// request may carry both, and they AND.
+	//
+	// The two are NOT interchangeable, which is why both exist. posted_ts follows the
+	// date the SOURCE states, and some boards restate it every crawl, so a posting open
+	// for months passes a three-day posted bound. created_ts is the system's own
+	// observation and cannot be rewritten from outside.
+	if n, ok := atoiOK(v.Get("open_within_days")); ok && n > 0 {
+		cutoff := now.Add(-time.Duration(n) * 24 * time.Hour).Unix()
+		groups = append(groups, []string{Gte("created_ts", int(cutoff))})
+	}
+
 	return Filter(groups...)
 }
 
