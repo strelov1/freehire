@@ -108,12 +108,16 @@ export interface UsageHistoryEntry {
  *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
  *  block then offers a recompute); `allowance` reports where the caller stands today on
- *  reads (omitted on the no-CV read and on compute responses). */
+ *  reads (omitted on the no-CV read and on compute responses). `tailor_allowance` rides
+ *  along on the same reads because the sidebar this feeds offers TAILORING off the fit
+ *  summary, and the two features carry their own daily ceilings — reading only the fit one
+ *  puts an analysis count under a "Tailor my CV" button. */
 export interface MatchAnalysisResponse {
   has_cv: boolean;
   stale: boolean;
   analysis: MatchAnalysisContract | null;
   allowance?: Allowance;
+  tailor_allowance?: Allowance;
 }
 
 /** One row of the Activity → Matches tab: a compact projection of a cached match analysis

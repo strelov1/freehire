@@ -248,7 +248,7 @@ Combine free-text `q` with any of the filter params below. Repeated facet params
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
-| `sort` | string | no | One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
+| `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
@@ -280,7 +280,7 @@ Same query and filters as `/jobs/search`, but each result carries the `descripti
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
 | `description_format` | string | no | One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`. (e.g. `markdown`) |
-| `sort` | string | no | One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
+| `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
@@ -489,7 +489,7 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $F
 
 The cached AI match analysis for the job (never runs the LLM).
 
-Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance` reports how much of today you have used against what the day allows, and when it resets.
+Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance` reports how much of today you have used against what the day allows, and when it resets. `tailor_allowance` reports the same for CV tailoring, which carries its own daily ceiling — the job page offers tailoring from this response.
 
 **Path parameters**
 
@@ -515,7 +515,8 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match-analysis" -H "Authorization: 
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" },
+    "tailor_allowance": { "feature": "tailor", "used": 0, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }
 ```
@@ -3664,7 +3665,7 @@ curl "https://freehire.me/api/v1/me/contributions" -H "Authorization: Bearer fhk
 ```
 
 ```json
-{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "onboarded", "created_at": "2026-07-20T12:00:00Z" } ] }
+{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "active", "created_at": "2026-07-20T12:00:00Z" } ] }
 ```
 
 ### `POST /me/jd/resolve`

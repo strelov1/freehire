@@ -412,7 +412,9 @@ export const GROUPS: Group[] = [
           'Returns the cached analysis, flagged `stale` when your CV or the job ' +
           'changed since it was computed, or a null analysis when none is cached. ' +
           '`has_cv` is false when you have no stored CV. `allowance` reports how much of ' +
-          'today you have used against what the day allows, and when it resets.',
+          'today you have used against what the day allows, and when it resets. ' +
+          '`tailor_allowance` reports the same for CV tailoring, which carries its own ' +
+          'daily ceiling — the job page offers tailoring from this response.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl "${BASE_URL}/jobs/<slug>/match-analysis" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -428,7 +430,8 @@ export const GROUPS: Group[] = [
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" },
+    "tailor_allowance": { "feature": "tailor", "used": 0, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }`,
       },

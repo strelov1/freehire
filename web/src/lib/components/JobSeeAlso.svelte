@@ -35,7 +35,9 @@
 {#if cards.length > 0}
   <section class="mt-8">
     <h2 class="mb-3 text-sm font-semibold text-muted-foreground">See also</h2>
-    <div class="flex gap-3 overflow-x-auto pb-1">
+    <div
+      class="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {#each cards as card (card.slug)}
         <a
           href={resolve('/collections/[slug]', { slug: card.slug })}

@@ -48,7 +48,17 @@
   // server still runs the analysis, and hiding the CTA on the count alone would refuse
   // somebody the server was about to serve.
   const allowance = $derived(data?.allowance ?? null);
-  const allowanceRefused = $derived(refuses(allowance));
+  // The CTA starts TAILORING, which draws on its own daily ceiling — a separate feature from
+  // the fit analysis, with its own number. Both stand between the button and a result, so
+  // the block goes up when either would refuse, and the caption reports the tailoring one
+  // because that is what the button spends.
+  const tailorAllowance = $derived(data?.tailor_allowance ?? null);
+  const tailorRefused = $derived(refuses(tailorAllowance));
+  const allowanceRefused = $derived(refuses(allowance) || tailorRefused);
+  // Which ceiling the block names. Tailoring wins the tie: it is what the button spends,
+  // and the analysis only stands in front of it.
+  const refusedName = $derived(tailorRefused ? "CV tailorings" : 'job analyses');
+  const refusedAllowance = $derived(tailorRefused ? tailorAllowance : allowance);
 
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
@@ -98,7 +108,9 @@
       </span>
     </a>
   {:else if allowanceRefused}
-    <p class="text-sm text-muted-foreground">You've used today's job analyses. More at {resetsAtLabel(allowance)}.</p>
+    <p class="text-sm text-muted-foreground">
+      You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
+    </p>
   {:else}
     <Button
       variant="primary"
@@ -112,11 +124,11 @@
     </Button>
     <!-- The one line kept under the button: what today still allows. A guest is told
          nothing here — the button opens sign-in, which says it better than a caption.
-         Nothing left and no refusal is the shadow run — the analysis still goes, so it
+         Nothing left and no refusal is the shadow run — the tailoring still goes, so it
          says nothing rather than "0 left" beside a button that works. -->
-    {#if remaining(allowance)}
+    {#if remaining(tailorAllowance)}
       <p class="text-xs text-muted-foreground">
-        {remaining(allowance)} of today's job analyses left
+        {remaining(tailorAllowance)} of today's CV tailorings left
       </p>
     {/if}
   {/if}
