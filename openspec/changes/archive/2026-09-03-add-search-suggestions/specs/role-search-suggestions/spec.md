@@ -28,31 +28,10 @@ against a shipped catalogue of its own.
 - **WHEN** a user focuses the header search on the jobs feed without typing
 - **THEN** the dropdown opens with the curated specialization suggestions
 
-### Requirement: Choosing a suggestion applies its facets and keeps the typed text
+#### Scenario: One character offers nothing
+- **WHEN** the query is a single character
+- **THEN** no completions are offered — one letter names nothing, and the starting points are what an EMPTY box answers, not a barely-started one
 
-Choosing a suggestion SHALL apply every facet part it names, through the list's
-existing filter store, so the URL, the filter chips, the result list and the facet
-counts update the way any other facet selection does.
-
-The typed text SHALL NOT be cleared. Progressive completion reads the recognised
-prefix back out of the box on the next keystroke: clearing it would discard the
-part of the query the visitor has already resolved, and `senior software engineer`
-followed by `go` could never reach Google.
-
-A suggestion of kind `title` names no facet and SHALL be applied as the free-text
-query instead.
-
-#### Scenario: Selecting a role applies the facet and keeps the text
-- **WHEN** the user chooses `Data Analyst` from the dropdown
-- **THEN** `role=data_analytics` is applied and the typed text remains in the input
-
-#### Scenario: The role reads as a normal filter afterwards
-- **WHEN** a role has been applied from a suggestion
-- **THEN** it appears as an active filter chip and can be removed like any other facet
-
-#### Scenario: A composed suggestion applies both of its parts
-- **WHEN** the user chooses a row naming a role and a company
-- **THEN** both the role facet and `company_slug` are applied
 
 ### Requirement: Free-text search is never taken away
 
@@ -85,7 +64,7 @@ dropdown while leaving the typed text intact. Clicking outside the dropdown SHAL
 close it. The dropdown SHALL expose its state to assistive technology using the
 combobox/listbox roles and `aria-activedescendant`.
 
-#### Scenario: Arrow keys and Enter select a suggestion
+#### Scenario: Arrow keys and Enter select a role
 - **WHEN** the user presses Down until `Data Analyst` is highlighted and presses Enter
 - **THEN** the `data_analytics` role facet is applied
 
@@ -102,6 +81,33 @@ combobox/listbox roles and `aria-activedescendant`.
 - **THEN** the dropdown closes
 
 ## ADDED Requirements
+
+### Requirement: Choosing a suggestion applies its facets and keeps the typed text
+
+Choosing a suggestion SHALL apply every facet part it names, through the list's
+existing filter store, so the URL, the filter chips, the result list and the facet
+counts update the way any other facet selection does.
+
+The typed text SHALL NOT be cleared. Progressive completion reads the recognised
+prefix back out of the box on the next keystroke: clearing it would discard the
+part of the query the visitor has already resolved, and `senior software engineer`
+followed by `go` could never reach Google.
+
+A suggestion of kind `title` names no facet and SHALL be applied as the free-text
+query instead.
+
+#### Scenario: Selecting a role applies the facet and keeps the text
+- **WHEN** the user chooses `Data Analyst` from the dropdown
+- **THEN** `role=data_analytics` is applied and the typed text remains in the input
+
+#### Scenario: The role reads as a normal filter afterwards
+- **WHEN** a role has been applied from a suggestion
+- **THEN** it appears as an active filter chip and can be removed like any other facet
+
+#### Scenario: A composed suggestion applies both of its parts
+- **WHEN** the user chooses a row naming a role and a company
+- **THEN** both the role facet and `company_slug` are applied
+
 
 ### Requirement: The dropdown shows completions, postings and companies
 
@@ -173,3 +179,14 @@ text. The `backedn` case is kept as an explicit scenario there.
 
 **Migration**: Restated in the `search-suggestions` capability as a property of
 the suggest endpoint, with the same measurement and the same scenarios.
+
+### Requirement: Choosing a suggestion replaces the text query with the role facet
+
+**Reason**: Reversed, not amended. It required the box to be CLEARED on a pick; the
+replacement requires the text to stay, because progressive completion reads the
+recognised prefix back out of it on the next keystroke — `senior software engineer`
+followed by `go` could never reach Google if choosing had emptied the box.
+
+**Migration**: Replaced by "Choosing a suggestion applies its facets and keeps the
+typed text" above, which also covers the composed case a single-facet requirement
+could not express.

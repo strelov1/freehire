@@ -1,7 +1,7 @@
 ## Context
 
 The brainstormed design this change implements is committed at
-[docs/superpowers/specs/2026-09-02-search-suggestions-service-design.md](../../../docs/superpowers/specs/2026-09-02-search-suggestions-service-design.md).
+[docs/superpowers/specs/2026-09-02-search-suggestions-service-design.md](../../../../docs/superpowers/specs/2026-09-02-search-suggestions-service-design.md).
 That document carries the production measurements behind every number quoted
 here; this one records the decisions and their alternatives.
 
