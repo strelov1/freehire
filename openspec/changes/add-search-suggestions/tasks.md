@@ -47,6 +47,6 @@
 
 ## 7. Finish
 
-- [ ] 7.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...`
+- [x] 7.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...`
 - [x] 7.2 Update `internal/search/AGENTS.md` with the new package, and the root `CLAUDE.md` worker list with `cmd/build-suggestions` and its env
 - [ ] 7.3 Verify the whole flow on production data, then finish the branch
