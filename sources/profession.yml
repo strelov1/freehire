@@ -4,6 +4,15 @@
 # reads that category's sitemap (the hh professional_role shape). company is a display label
 # only — the real employer is read from each posting.
 #
+# THIS FILE NO LONGER TELLS cmd/ingest WHAT TO CRAWL. The board catalog moved into Postgres
+# (#2357): `cmd/ingest <provider>` reads the `boards` table, and a board is added with
+# `cmd/add-board --provider=profession --board=<category> --company=… --apply`. These two
+# entries are here because the file's EXISTENCE is still load-bearing on the crawl host —
+# `deploy`'s gen-ingest-timers.sh generates one systemd timer per sources/*.yml, so a
+# provider with no file is never scheduled, however many rows it has in the table. Whoever
+# retires sources/ must move timer generation off it first, or every provider silently
+# stops crawling on the next run of that script.
+#
 # The platform publishes 23 categories holding ~12k postings, and only these two are IT. That
 # is deliberate, not a partial onboarding: freehire's non-technical gate was written against
 # tech-company ATS boards and leaks on a general-population board, so the platform's own facet
