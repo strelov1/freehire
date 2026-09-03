@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const mineJobTitles = `-- name: MineJobTitles :many
@@ -53,6 +55,31 @@ func (q *Queries) MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneSearchQueries = `-- name: PruneSearchQueries :execrows
+DELETE FROM search_queries
+WHERE count = 1
+  AND last_seen < $1::timestamptz
+`
+
+// Drop the demand rows that have stopped being vocabulary: asked for only once, and
+// not since the cut-off. Run at the end of a dictionary build.
+//
+// Retention, not cleanup. The write path already refuses anything that is not a search
+// phrase, so what accumulates here is real but transient — a one-off typo, a phrase
+// from a job title that no longer exists. Keeping it forever grows the table for
+// ranking that will never use it, and the honest bound on a public-input table is that
+// it forgets.
+//
+// The `count = 1` condition is what makes this safe: a phrase two people have searched
+// survives however old it is, so a seasonal query does not vanish between seasons.
+func (q *Queries) PruneSearchQueries(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneSearchQueries, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const recordSearchQuery = `-- name: RecordSearchQuery :exec

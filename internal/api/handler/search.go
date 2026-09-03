@@ -214,13 +214,14 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 //   - It CANNOT delay the response. It runs on its own goroutine with its own bounded
 //     context, because c.Context() is released when the handler returns.
 //   - It identifies nobody. The row is the phrase and a counter; no user, no session,
-//     no address.
+//     no address — and `Recordable` refuses text that is not a search phrase at all,
+//     so a pasted email address or job description never reaches the table.
 //
 // The key is the same normalisation the builder applies to mined titles, so a typed
 // query and the title it names land on one row.
 func (h *searchHandlers) recordQuery(raw string) {
 	q := suggest.Title(raw)
-	if q == "" || h.queries == nil {
+	if !suggest.Recordable(q) || h.queries == nil {
 		return
 	}
 	go func() {

@@ -23,6 +23,9 @@ import (
 	"context"
 	"log"
 	"math"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/dict/roletag"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -77,7 +80,31 @@ func run() int {
 	}
 	log.Printf("suggestions: %d documents (title floor %d, company floor %d)",
 		len(docs), floors.TitleFloor, floors.CompanyFloor)
+
+	// Retention runs AFTER the swap, and after the build has already read the table:
+	// a failure here costs the sweep, never the dictionary.
+	pruneDemand(ctx, q)
 	return 0
+}
+
+// demandRetention is how long a phrase searched exactly once is kept.
+//
+// The write path already refuses anything that is not a search phrase, so what
+// accumulates is real but transient — a one-off typo, a title that no longer exists.
+// Ninety days is long enough that a quarterly hiring phrase is still there when it
+// comes round, and the `count = 1` condition means a phrase two people searched is
+// never swept at all.
+const demandRetention = 90 * 24 * time.Hour
+
+func pruneDemand(ctx context.Context, q *db.Queries) {
+	n, err := q.PruneSearchQueries(ctx, pgtype.Timestamptz{Time: time.Now().Add(-demandRetention), Valid: true})
+	if err != nil {
+		log.Printf("prune demand: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("demand: pruned %d one-off phrases older than %s", n, demandRetention)
+	}
 }
 
 // gather collects everything the dictionary is built from. The titles and companies

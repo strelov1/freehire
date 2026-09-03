@@ -48,6 +48,34 @@ func (p Parsed) ExcludedKinds() []Kind {
 	return out
 }
 
+// kindRank orders the kinds a fully-typed phrase could resolve to, lowest wins.
+//
+// The reasoning is which reading of a WHOLE phrase is strongest, and it follows the
+// same doctrine Build uses to drop a category that shares a role's slug:
+//
+//   - a role names a job, which is what somebody typing a whole phrase is naming;
+//   - a title is what a posting is actually CALLED, so it beats anything merely
+//     mentioned inside it;
+//   - a company names an employer, and rarely collides with the rest at all;
+//   - a skill is one technology inside a job, not the job;
+//   - a category names a department, the weakest reading of a phrase.
+var kindRank = map[Kind]int{
+	KindRole:     0,
+	KindTitle:    1,
+	KindCompany:  2,
+	KindSkill:    3,
+	KindCategory: 4,
+}
+
+// rank is kindRank with a defined answer for a kind added later: last, so a new kind
+// never silently outranks the ones whose precedence was reasoned about.
+func rank(k Kind) int {
+	if r, ok := kindRank[k]; ok {
+		return r
+	}
+	return len(kindRank)
+}
+
 // Phrases is the in-process view of the dictionary used to RECOGNISE what a visitor
 // has already typed. It is deliberately a second mechanism beside the index query,
 // and each has one job:
@@ -86,11 +114,16 @@ func (p *Phrases) Replace(docs []Document) {
 		if text == "" {
 			continue
 		}
-		// First writer wins per phrase. Two kinds CAN spell the same phrase — `backend`
-		// is a role and a skill — and the parse has to pick one; Build's ordering makes
-		// that deterministic, and the choice only decides which facet a fully-typed
-		// phrase applies, not whether it is recognised.
-		if _, ok := byText[text]; ok {
+		// Two kinds CAN spell the same phrase — `backend` is a role, a skill and a
+		// category — and the parse must pick ONE, because that choice decides which
+		// facet a fully-typed phrase applies.
+		//
+		// By PRECEDENCE, not by arrival. First-writer-wins looks equivalent and is not:
+		// this set is loaded from the index, whose empty-query order is
+		// `searches:desc, jobs:desc`, so the winner would move as demand and posting
+		// counts move. The same query would apply a different filter on different days
+		// and nothing would look broken.
+		if cur, ok := byText[text]; ok && rank(cur.Kind) <= rank(d.Kind) {
 			continue
 		}
 		byText[text] = Part{Kind: d.Kind, Slug: d.Slug, Text: d.Text}

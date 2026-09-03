@@ -49,3 +49,19 @@ SET count = search_queries.count + 1,
 SELECT query, count
 FROM search_queries
 ORDER BY count DESC;
+
+-- name: PruneSearchQueries :execrows
+-- Drop the demand rows that have stopped being vocabulary: asked for only once, and
+-- not since the cut-off. Run at the end of a dictionary build.
+--
+-- Retention, not cleanup. The write path already refuses anything that is not a search
+-- phrase, so what accumulates here is real but transient — a one-off typo, a phrase
+-- from a job title that no longer exists. Keeping it forever grows the table for
+-- ranking that will never use it, and the honest bound on a public-input table is that
+-- it forgets.
+--
+-- The `count = 1` condition is what makes this safe: a phrase two people have searched
+-- survives however old it is, so a seasonal query does not vanish between seasons.
+DELETE FROM search_queries
+WHERE count = 1
+  AND last_seen < @before::timestamptz;

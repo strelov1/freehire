@@ -14,7 +14,15 @@ Description=timer: freehire-build-suggestions
 # the market calls a job moves over weeks, and a title that appeared this morning is
 # not yet a suggestion anybody would recognise.
 OnCalendar=*-*-* 06:45:00
-Persistent=true
+# NOT Persistent. Catch-up is what makes the slot above meaningless: a missed firing
+# would start at boot, or the moment the timer is re-enabled, and neither of those is
+# 06:45 — so the run that must not collide with freehire-reindexw would begin at
+# whatever hour the host came back. Nothing here holds a lock, so the collision is a
+# swap queued behind a 2.5h rebuild holding a oneshot unit open.
+#
+# Skipping a day costs nothing: the dictionary is a vocabulary, and what the market
+# calls a job does not move overnight. The previous one keeps serving.
+Persistent=false
 RandomizedDelaySec=300
 
 [Install]

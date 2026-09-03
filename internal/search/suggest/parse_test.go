@@ -121,3 +121,44 @@ func TestParsed_ExcludedKinds(t *testing.T) {
 		t.Errorf("excluded = %v, want both", got)
 	}
 }
+
+// Two kinds CAN spell the same phrase — `backend` is a role, a skill and a category —
+// and the parse has to pick ONE, because that choice decides which facet a
+// fully-typed phrase applies.
+//
+// First-writer-wins is not enough: the recognition set is loaded from the index, whose
+// empty-query order is `searches:desc, jobs:desc`, so the winner would change as
+// posting counts and demand move. The same query would apply a different filter on
+// different days, and nothing would look broken. Hence an explicit precedence, tested
+// with the input reversed.
+func TestPhrases_DuplicatePhraseResolvesByKindNotByOrder(t *testing.T) {
+	role := Document{Kind: KindRole, Slug: "backend", Text: "Backend", Jobs: 1}
+	skill := Document{Kind: KindSkill, Slug: "backend", Text: "Backend", Jobs: 1}
+	category := Document{Kind: KindCategory, Slug: "backend", Text: "Backend", Jobs: 1}
+
+	for _, order := range [][]Document{
+		{role, skill, category},
+		{category, skill, role},
+		{skill, category, role},
+	} {
+		got := NewPhrases(order).Parse("backend")
+		if len(got.Recognised) != 1 {
+			t.Fatalf("recognised = %v", got.Recognised)
+		}
+		if got.Recognised[0].Kind != KindRole {
+			t.Errorf("kind = %q, want role regardless of input order", got.Recognised[0].Kind)
+		}
+	}
+}
+
+func TestPhrases_PrecedenceOrdersEveryKind(t *testing.T) {
+	// A title beats a skill: a phrase somebody's posting is actually CALLED is a
+	// stronger reading of the whole phrase than one technology named inside it.
+	title := Document{Kind: KindTitle, Text: "Data Engineer", Jobs: 1}
+	skill := Document{Kind: KindSkill, Slug: "data-engineer", Text: "Data Engineer", Jobs: 1}
+
+	got := NewPhrases([]Document{skill, title}).Parse("data engineer")
+	if len(got.Recognised) != 1 || got.Recognised[0].Kind != KindTitle {
+		t.Errorf("recognised = %v, want the title", got.Recognised)
+	}
+}

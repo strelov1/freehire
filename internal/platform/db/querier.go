@@ -3146,6 +3146,18 @@ type Querier interface {
 	// out that it was ever indexed. search_delete_outbox deliberately carries no foreign key to
 	// jobs, which is what lets this entry outlive the row it names — see migration 0113.
 	PruneJobs(ctx context.Context, arg PruneJobsParams) ([]int64, error)
+	// Drop the demand rows that have stopped being vocabulary: asked for only once, and
+	// not since the cut-off. Run at the end of a dictionary build.
+	//
+	// Retention, not cleanup. The write path already refuses anything that is not a search
+	// phrase, so what accumulates here is real but transient — a one-off typo, a phrase
+	// from a job title that no longer exists. Keeping it forever grows the table for
+	// ranking that will never use it, and the honest bound on a public-input table is that
+	// it forgets.
+	//
+	// The `count = 1` condition is what makes this safe: a phrase two people have searched
+	// survives however old it is, so a seasonal query does not vanish between seasons.
+	PruneSearchQueries(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// One row per company with its current open-count and the open-count as of @prev_ts,
 	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
 	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
