@@ -78,7 +78,8 @@ CREATE TABLE boards (
 );
 
 CREATE UNIQUE INDEX boards_identity_key
-    ON boards (provider, lower(board), region);
+    ON boards (provider, lower(board), region)
+    WHERE status IN ('pending', 'active');
 ```
 
 `(provider, board, region)` is exactly `board_health`'s key — no new join concept, just
@@ -122,10 +123,14 @@ the row's job is already done.
 1. **Crowdsourced, `(provider, board)` known at submission time** (today:
    `Repository.Record`) → validate against the adapter registry (the same checks
    `cmd/validate-sources`/`Config.Validate` run today: provider exists in
-   `sources.Taxonomy()`, required fields present, not a case-insensitive duplicate of an
-   existing non-`retired` row) → valid: `INSERT ... status='pending'`; invalid:
-   `INSERT ... status='rejected', rejected_reason=...` (so the submitter sees why,
-   instead of the row silently not existing).
+   `sources.Taxonomy()`, required fields present) → valid: `INSERT ... status='pending'`;
+   invalid: `INSERT ... status='rejected', rejected_reason=...` (so the submitter sees
+   why, instead of the row silently not existing). A duplicate of an existing `pending`
+   or `active` row (the unique index) is refused outright — an error to the caller, the
+   same way it is today — rather than stored as a second row of any status: a `rejected`
+   or `retired` row does NOT occupy the identity, so a corrected resubmission of a
+   previously-rejected `(provider, board, region)` is never permanently blocked by its
+   own earlier typo.
 2. **First successful crawl of a `pending` board** — `pending` boards ARE crawled by
    `cmd/ingest` (unproven, not untested), same as `active` ones. `pipeline.Runner`, right
    where it already resolves company identity per board, flips `pending → active` and

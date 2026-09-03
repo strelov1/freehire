@@ -56,12 +56,17 @@ CREATE TABLE boards (
 );
 
 CREATE UNIQUE INDEX boards_identity_key ON boards (provider, lower(board), region)
-    WHERE status <> 'retired';
+    WHERE status IN ('pending', 'active');
 ```
 
-(The unique index is filtered on `status <> 'retired'` — narrower than the exploratory
-doc's plain index — so a retired board's identity can be resubmitted as a fresh row, per
-the "board-catalog" spec's "A duplicate of a retired board is accepted" scenario.)
+The unique index covers only `pending`/`active` — not `rejected` or `retired` — so
+neither a retired board nor a previously-rejected one permanently occupies its identity.
+Found during implementation: a first draft filtered only `status <> 'retired'`, which
+meant a validation failure (say, a typo'd provider) stored at `status='rejected'` would
+then block every future correct resubmission of that same `(provider, board, region)`
+forever, since a `rejected` row would collide with itself under that narrower filter. The
+"board-catalog" spec's duplicate scenarios reflect the corrected `pending`/`active`-only
+filter.
 
 `url` (added during spec-writing, absent from the exploratory doc): the submitted link,
 `NULL` for a `cmd/add-board` row. Needed because "My contributions view" shows the

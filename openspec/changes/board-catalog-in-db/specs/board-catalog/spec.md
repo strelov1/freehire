@@ -13,9 +13,10 @@ into the catalog — whether the insert originates from a recognized crowdsource
 contribution or from a curator's manual addition. A `provider` with no registered adapter
 SHALL cause the insert to be rejected rather than stored as a live row. A `board` value
 SHALL be required to be non-empty unless the provider declares itself `boardless`, in
-which case an empty `board` SHALL be accepted. A row that collides on `(provider,
-lower(board), region)` with an existing row whose status is not `retired` SHALL be
-rejected as a duplicate.
+which case an empty `board` SHALL be accepted. An insert that collides on `(provider,
+lower(board), region)` with an existing `pending` or `active` row SHALL be refused
+outright (an error to the caller), never stored as a second row of any status —
+`rejected` and `retired` rows do not occupy the identity.
 
 #### Scenario: Unknown provider is rejected
 
@@ -34,17 +35,19 @@ rejected as a duplicate.
 - **WHEN** a board is submitted with an empty `board` for a provider declared `boardless`
 - **THEN** the insert succeeds
 
-#### Scenario: A duplicate of a live board is rejected
+#### Scenario: A duplicate of a live board is refused
 
 - **WHEN** a board is submitted matching the `(provider, board, region)` of an existing
-  row whose status is `pending`, `active`, or `rejected`
-- **THEN** the insert is rejected as a duplicate
+  row whose status is `pending` or `active`
+- **THEN** the insert is refused as a duplicate and no new row is stored
 
-#### Scenario: A duplicate of a retired board is accepted
+#### Scenario: A duplicate of a rejected or retired board is accepted
 
 - **WHEN** a board is submitted matching the `(provider, board, region)` of an existing
-  `retired` row
-- **THEN** the insert succeeds as a new row, independent of the retired one
+  `rejected` or `retired` row
+- **THEN** the insert succeeds as a new row, independent of the earlier one — so a
+  corrected resubmission after a validation failure is never blocked by its own earlier
+  attempt
 
 ### Requirement: A crowdsourced board starts pending and is proven by its first crawl
 
