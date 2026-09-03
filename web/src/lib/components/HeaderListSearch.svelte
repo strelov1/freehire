@@ -1,7 +1,14 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import { LayoutGrid, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
+  import { api } from '$lib/api';
+  import { dropdownRows, namedCompanies } from '$lib/dropdownRows';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
+  import type { Job, CompanyListItem } from '$lib/types';
   import { listSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
   import { suggestRoles } from '$lib/roleSuggest';
@@ -30,6 +37,13 @@
   // to read as instant, long enough that a fast typist pays for it once rather than
   // per letter.
   const SUGGEST_DEBOUNCE_MS = 120;
+
+  // Section caps. The dropdown is a shortcut, not a results page: past a handful each
+  // section stops being scannable and the whole thing stops fitting on a phone.
+  const jobsLimit = 5;
+  const companiesLimit = 3;
+  // Asked for, before the relevance filter takes its cut.
+  const companiesFetch = 12;
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
@@ -101,14 +115,49 @@
       (r): Suggestion => ({ kind: 'role', slug: r.slug, label: r.label, count: r.count }),
     );
   });
-  const suggestOpen = $derived(suggestions.length > 0 && !dismissed);
-  // The last row runs the typed text as a free-text search. It used to only dismiss
-  // the dropdown, because the list below was already showing those results as you
-  // typed; now that typing commits nothing, that row IS how free text gets searched.
-  // An empty box has no text to offer, so the row is absent there rather than
-  // proposing to search for nothing.
-  const textRow = $derived(draft.text.trim() !== '');
-  const rowCount = $derived(suggestOpen ? suggestions.length + (textRow ? 1 : 0) : 0);
+  // Postings and companies for the typed text, fetched exactly the way the launcher
+  // dropdown (HeaderSearch) fetches them — same endpoints, same stale-response token,
+  // same row rendering below. A second implementation of "show me matching jobs" is
+  // how the two would drift.
+  //
+  // These matter MORE now than before, not less: the list below no longer narrows as
+  // you type, so these rows are the only live evidence the query finds anything.
+  let jobs = $state.raw<Job[]>([]);
+  let companies = $state.raw<CompanyListItem[]>([]);
+  // Bumped on every fetch; a response for an older token is stale and dropped, so a
+  // slow request cannot overwrite a fresher one.
+  let previewToken = 0;
+
+  $effect(() => {
+    const q = settledQuery.trim();
+    const mine = ++previewToken;
+    if (q === '' || !suggest) {
+      jobs = [];
+      companies = [];
+      return;
+    }
+    void (async () => {
+      // allSettled, not all: the two sections are independent, so one endpoint failing
+      // still shows the section that succeeded instead of blanking both.
+      const [j, c] = await Promise.allSettled([
+        api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0),
+        // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
+        // asking for exactly three would leave the section empty whenever the fourth
+        // was the only real match.
+        api.listCompanies(q, companiesFetch, 0),
+      ]);
+      if (mine !== previewToken) return;
+      jobs = j.status === 'fulfilled' ? j.value.items : [];
+      companies =
+        c.status === 'fulfilled' ? namedCompanies(c.value.items, q, companiesLimit) : [];
+    })();
+  });
+
+  const rows = $derived(
+    dropdownRows({ suggestions, jobs, companies, text: draft.text }),
+  );
+  const suggestOpen = $derived(rows.length > 0 && !dismissed);
+  const rowCount = $derived(suggestOpen ? rows.length : 0);
 
   function close() {
     dismissed = true;
@@ -129,10 +178,26 @@
     close();
   }
 
+  /** Activate a row. Each section does its own thing: a suggestion applies a facet, a
+   *  posting or a company navigates to it, the last row searches the typed text. */
   function choose(index: number) {
-    const picked = suggestions[index];
-    if (!picked) return;
-    suggest?.apply(picked);
+    const row = rows[index];
+    if (!row) return;
+    if (row.kind === 'text') {
+      runSearch();
+      return;
+    }
+    if (row.kind === 'job') {
+      close();
+      void goto(resolve('/jobs/[slug]', { slug: row.job.public_slug }));
+      return;
+    }
+    if (row.kind === 'company') {
+      close();
+      void goto(resolve('/companies/[slug]', { slug: row.company.slug }));
+      return;
+    }
+    suggest?.apply(row.suggestion);
     // A role pick drops `q` from the filters (`applyRole`), so the box must drop it
     // too. Reconcile cannot see this: on a feed with no committed query the value does
     // not MOVE (already `''`), and an unchanged value is exactly what it reads as "no
@@ -153,11 +218,8 @@
     // which is the free-text one) searches the text.
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (suggestOpen && activeIndex >= 0 && activeIndex < suggestions.length) {
-        choose(activeIndex);
-      } else {
-        runSearch();
-      }
+      if (suggestOpen && activeIndex >= 0) choose(activeIndex);
+      else runSearch();
       return;
     }
     // Every other key belongs to the dropdown, so with it closed this handler owns
@@ -310,60 +372,91 @@
     {/if}
   </div>
 
-  <!-- Suggestions. Rendered only where the list published the capability, so
-       /companies needs no exclusion here. Each row applies its own facet — `role` for a
-       typed match, `category` for the empty box's starting points; the last row runs
-       the typed text as a free-text search. -->
+  <!-- Three sections and a free-text row, flattened by `dropdownRows` into the single
+       list the keyboard walks. Rendered only where the list published the capability,
+       so /companies needs no exclusion here.
+
+       Section headings ride on the row (`first`) rather than living in a second
+       structure: one list means one set of indices, and the arrow keys cross a section
+       boundary without knowing there was one. -->
   {#if suggestOpen}
     <ul
       id="role-suggestions"
       role="listbox"
-      aria-label={textRow ? 'Matching roles' : 'Where to start'}
-      class="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-md border border-border bg-background py-1 shadow-lg"
+      aria-label="Search suggestions"
+      class="absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-background py-1 shadow-lg"
     >
-      {#each suggestions as suggestion, i (`${suggestion.kind}:${suggestion.slug}`)}
+      {#each rows as row, i (row.key)}
+        {#if row.first && row.kind !== 'text'}
+          <li
+            class="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {#if row.kind === 'suggestion'}
+              {draft.text.trim() === '' ? 'Where to start' : 'Filter by'}
+            {:else if row.kind === 'job'}
+              Jobs
+            {:else}
+              Companies
+            {/if}
+          </li>
+        {/if}
         <li role="option" id="role-suggestion-{i}" aria-selected={activeIndex === i}>
           <button
             type="button"
             onmouseenter={() => (activeIndex = i)}
             onclick={() => choose(i)}
-            class={rowClass(activeIndex === i)}
+            class={cn(rowClass(activeIndex === i), row.kind === 'text' && 'border-t border-border')}
           >
-            <!-- The glyph says which axis the row filters on, which is the only thing
-                 the two kinds do differently. -->
-            {#if suggestion.kind === 'category'}
-              <LayoutGrid class="size-4 shrink-0 text-muted-foreground" />
+            {#if row.kind === 'suggestion'}
+              <!-- The glyph says which axis the row filters on, which is the only thing
+                   the two suggestion kinds do differently. -->
+              {#if row.suggestion.kind === 'category'}
+                <LayoutGrid class="size-4 shrink-0 text-muted-foreground" />
+              {:else}
+                <Tag class="size-4 shrink-0 text-muted-foreground" />
+              {/if}
+              <span class="min-w-0 flex-1 truncate">{row.suggestion.label}</span>
+              {#if row.suggestion.count !== undefined}
+                <span class="shrink-0 text-xs text-muted-foreground"
+                  >{row.suggestion.count.toLocaleString()}</span
+                >
+              {/if}
+            {:else if row.kind === 'job'}
+              <!-- Same mark the launcher dropdown renders, from the same resolver: the
+                   recognisable logo is what makes a row scannable at a glance. -->
+              <EntityLogo
+                name={row.job.company || 'Unknown company'}
+                src={companyLogoUrl(row.job.company) ?? undefined}
+                shape="square"
+                size="xs"
+              />
+              <span class="min-w-0 flex-1">
+                <span class="block truncate">{row.job.title}</span>
+                <span class="block truncate text-xs text-muted-foreground">
+                  {row.job.company}{#if row.job.location}&nbsp;·&nbsp;{row.job.location}{/if}
+                </span>
+              </span>
+            {:else if row.kind === 'company'}
+              <EntityLogo
+                name={row.company.name}
+                src={companyLogoUrl(row.company.name) ?? undefined}
+                shape="square"
+                size="xs"
+              />
+              <span class="min-w-0 flex-1 truncate">{row.company.name}</span>
+              <span class="shrink-0 text-xs text-muted-foreground">
+                {row.company.job_count}
+                {row.company.job_count === 1 ? 'job' : 'jobs'}
+              </span>
             {:else}
-              <Tag class="size-4 shrink-0 text-muted-foreground" />
-            {/if}
-            <span class="min-w-0 flex-1 truncate">{suggestion.label}</span>
-            {#if suggestion.count !== undefined}
-              <span class="shrink-0 text-xs text-muted-foreground"
-                >{suggestion.count.toLocaleString()}</span
+              <Search class="size-4 shrink-0 text-muted-foreground" />
+              <span class="min-w-0 flex-1 truncate text-muted-foreground"
+                >Search “{row.text}” as text</span
               >
             {/if}
           </button>
         </li>
       {/each}
-      {#if textRow}
-        <li
-          role="option"
-          id="role-suggestion-{suggestions.length}"
-          aria-selected={activeIndex === suggestions.length}
-        >
-          <button
-            type="button"
-            onmouseenter={() => (activeIndex = suggestions.length)}
-            onclick={runSearch}
-            class={cn(rowClass(activeIndex === suggestions.length), 'border-t border-border')}
-          >
-            <Search class="size-4 shrink-0 text-muted-foreground" />
-            <span class="min-w-0 flex-1 truncate text-muted-foreground"
-              >Search “{draft.text.trim()}” as text</span
-            >
-          </button>
-        </li>
-      {/if}
     </ul>
   {/if}
 </div>
