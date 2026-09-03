@@ -108,8 +108,16 @@
   // reality signal earns none, because on those surfaces the posting date alone would
   // vouch for a job the signal was written to distrust. Thresholds and wording are the
   // shared rule's — the same one the job's own page renders.
+  //
+  // Closed jobs are excluded here as they are there: a closed posting is never worth
+  // hurrying to. Today no listing can reach this branch (every surface that serves a
+  // closed job also carries no reality), so this states the rule rather than relying on
+  // that staying true — the two surfaces must not disagree if a projection ever gains
+  // the signal.
   const freshness = $derived(
-    cardFreshnessBadges(job.posted_at, reality, 'applied_count' in job ? job.applied_count : 0),
+    job.closed_at
+      ? []
+      : cardFreshnessBadges(job.posted_at, reality, 'applied_count' in job ? job.applied_count : 0),
   );
 
   const MAX_SKILLS = 5;
@@ -278,7 +286,11 @@
              card. The exact number is on the job's own page. -->
         <span class="flex items-center gap-1 text-xs tabular-nums">
           <Eye class="size-3.5" aria-hidden="true" />
-          {formatCount(views)}<span class="sr-only"> views</span>
+          <!-- The abbreviation exists only for the rail's width, which is not a
+               constraint a screen reader has — so it announces the exact figure, the
+               same one the job's own page shows. -->
+          <span aria-hidden="true">{formatCount(views)}</span>
+          <span class="sr-only">{views} views</span>
         </span>
       {/if}
       {#if posted}
@@ -321,9 +333,14 @@
            "be an early applicant" counts the people who told US they applied, and the
            tooltip is where that limit is stated. -->
       {#each freshness as badge (badge.label)}
-        <Badge variant="brand" class="shrink-0">
-          <span title={badge.tooltip}>{badge.label}</span>
-        </Badge>
+        <!-- The tooltip rides a wrapper, not the Badge: the primitive takes only
+             variant/class/children, so a `title` passed to it would be dropped
+             silently and the badge would state a claim with its evidence gone. The
+             wrapper (rather than a span inside) also makes the badge's own padding
+             hoverable — the same shape the job's own page uses. -->
+        <span title={badge.tooltip} class="inline-flex shrink-0">
+          <Badge variant="brand">{badge.label}</Badge>
+        </span>
       {/each}
       {#each tags as tag (tag)}
         <Badge variant="outline">{tag}</Badge>

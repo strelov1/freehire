@@ -110,13 +110,23 @@
 
 ## 9. Rollout
 
+`release.sh` builds the Go binary and the SvelteKit app in ONE blue/green flip, so
+9.3 and 9.4 are a single release. 9.2 is therefore a hard gate, not a step to do
+"around the same time": if the release lands first, every caller who picks the new
+ordering — or opens a shared `?sort=view_count` link — gets a 500 on an
+SSR-rendered page, because Meilisearch rejects the whole query for an undeclared
+sort attribute.
+
 - [ ] 9.1 Confirm the in-flight rebuild has landed and the Meilisearch task queue
   is clear before touching index settings.
 - [ ] 9.2 Make `view_count` sortable on the live index — via a rebuild, or by
-  patching with the **complete** five-attribute list — then read the setting back
-  to confirm it applied. A partial patch would drop `posted_at` and break the
-  feed's default ordering.
-- [ ] 9.3 Deploy the Go change and verify `/jobs/search?sort=view_count` returns
-  200 with a plausibly ordered page on production.
-- [ ] 9.4 Deploy the frontend change and verify the card and the sort option on
-  production.
+  patching with the **complete** five-attribute list — then read
+  `sortableAttributes` back and confirm all five are present. A partial patch
+  would drop `posted_at` and break the feed's default ordering for everyone. A
+  200 on the patch means the task was accepted, not that it ran.
+- [ ] 9.3 Only after 9.2 reads back clean, run the release (it carries the Go
+  change and the card together). Verify `/jobs/search?sort=view_count` returns 200
+  with a plausibly ordered page on production.
+- [ ] 9.4 Verify on production: the count and badges on a browse card, no badges
+  on the company page and tracking board, the detail page unchanged, and the
+  signal row on a phone-width viewport.

@@ -87,6 +87,14 @@ breaking changes.
   / `match`. It gains `views`, serialized as `sort=view_count`, always offered.
 - `job-search`: the endpoint's accepted `sort` values and the index's sortable
   attributes both gain `view_count`.
+- `saved-searches`: the canonical query that identifies a saved set stops
+  carrying the ordering. This closes a pre-existing hole that this change would
+  otherwise make routine: `savedSearchQuery` included `sort` while the comment
+  above its call site said it did not and the digest matcher ignored it, so
+  choosing an ordering marked a saved search dirty and saving again created a
+  duplicate set that mailed identical jobs. `views` is never a contextual
+  default, so it always serializes — and the sort control, previously hidden on
+  a signed-out browse, is now always rendered.
 
 ## Impact
 

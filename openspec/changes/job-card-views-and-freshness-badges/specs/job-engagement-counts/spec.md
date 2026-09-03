@@ -15,7 +15,7 @@ zero-omission rule applies: a card whose `view_count` is `0` SHALL render no
 count at all rather than a "0".
 
 Counts of a thousand or more SHALL be abbreviated on the card (for example
-`1.2k`), because the rail shares its width with the company name and the
+`1.2K`), because the rail shares its width with the company name and the
 timestamp and an unabbreviated five-digit figure crowds both out. The detail
 page, which has the room, keeps the exact figure.
 
@@ -51,7 +51,7 @@ projections — SHALL render no count, the same way they already render no salar
 #### Scenario: Large counts are abbreviated on the card
 
 - **WHEN** a job card is rendered for a job whose `view_count` is 1240
-- **THEN** the card shows an abbreviated figure such as `1.2k`
+- **THEN** the card shows an abbreviated figure such as `1.2K`
 
 #### Scenario: A listing card projection without the counter renders nothing
 

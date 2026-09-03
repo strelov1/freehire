@@ -90,6 +90,13 @@ the control and the serializer so the two cannot disagree.
 - **THEN** the resolved selection is `relevance` and the serialized parameters
   carry no `sort` key
 
+#### Scenario: A typed query still matches the saved search it came from
+
+- **WHEN** the saved search `q=go` is compared against a filter state reached by
+  typing `go` with no ordering chosen
+- **THEN** the two serialize identically, so the saved search reads as active
+  rather than dirty and saving again does not create a duplicate
+
 ### Requirement: The sort control is shown whenever it offers a choice
 
 The jobs list SHALL render its sort control whenever the control holds more than

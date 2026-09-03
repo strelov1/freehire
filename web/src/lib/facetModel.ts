@@ -331,12 +331,22 @@ export function canonicalQuery(query: string): string {
   return savedSearchQuery(filtersFromParams(new URLSearchParams(query)));
 }
 
-/** The saved-search / alert target: the filters as a canonical query string. A thin,
- *  named wrapper over filtersToParams so the saved-search call sites (SavedSearches,
- *  FilterSummary, CompanyFollowButton) express intent ("the comparable query for this
- *  filter set") rather than reaching for the raw serializer. */
+/** The saved-search / alert target: the filters as a canonical query string, WITHOUT
+ *  the ordering. A named wrapper over filtersToParams so the saved-search call sites
+ *  (SavedSearches, FilterSummary, CompanyFollowButton) express intent ("the comparable
+ *  query for this filter set") rather than reaching for the raw serializer.
+ *
+ *  The ordering is dropped because a saved search is about WHICH jobs are in the set,
+ *  and the ordering does not change that. The digest matcher agrees already: it reads a
+ *  stored query for `q` and the filter only and orders by its own clock
+ *  (internal/engage/notify/match.go), so two sets differing only by sort mail the same
+ *  jobs. Keeping the sort in the key made them compare unequal anyway, so choosing an
+ *  ordering marked the saved search it came from as dirty and saving again created a
+ *  duplicate that delivered identical digests. */
 export function savedSearchQuery(f: JobFilters): string {
-  return filtersToParams(f).toString();
+  const p = filtersToParams(f);
+  p.delete('sort');
+  return p.toString();
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----

@@ -200,6 +200,31 @@ describe('canonicalQuery', () => {
   });
 });
 
+// The ordering is a view preference, not part of WHICH jobs a saved search is about.
+// The digest matcher already reads a stored query for `q` and the filter only and
+// orders by its own clock (internal/engage/notify/match.go), so two sets differing
+// only by sort deliver identical mail — they are duplicates, and the key must say so.
+describe('savedSearchQuery', () => {
+  it('drops the ordering from the saved-search key', () => {
+    expect(new URLSearchParams(savedSearchQuery(withQuery('go', 'views'))).get('sort')).toBeNull();
+    expect(new URLSearchParams(savedSearchQuery(withQuery('go', 'newest'))).get('sort')).toBeNull();
+    expect(new URLSearchParams(savedSearchQuery(withQuery('go', 'match'))).get('sort')).toBeNull();
+  });
+
+  it('keeps every filter that decides which jobs are in the set', () => {
+    const q = savedSearchQuery({ ...withSkills({ include: ['go'] }), sort: 'views' });
+    expect(new URLSearchParams(q).getAll('skills')).toEqual(['go']);
+    expect(new URLSearchParams(q).get('sort')).toBeNull();
+  });
+
+  // The point of the fix: picking an ordering must not fork the saved search it came
+  // from into a second set that mails the same jobs.
+  it('makes two orderings of one filter set the same saved search', () => {
+    expect(savedSearchQuery(withQuery('go', 'views'))).toBe(savedSearchQuery(withQuery('go', 'newest')));
+    expect(canonicalQuery('q=go&sort=view_count')).toBe(canonicalQuery('q=go'));
+  });
+});
+
 describe('activeFilterCount', () => {
   it('counts included and excluded values plus scalar filters', () => {
     const f = withSkills({ include: ['a', 'b'], exclude: ['c'] });

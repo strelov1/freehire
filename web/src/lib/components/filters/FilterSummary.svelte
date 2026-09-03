@@ -14,7 +14,8 @@
   // tab drives the same control.
   let { store, exclude = [], onOpen, canSave = false, description }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean; description?: string } = $props();
 
-  // The current filters as the saved-search / alert target (view-only sort dropped).
+  // The current filters as the saved-search / alert target. The ordering is view-only
+  // and savedSearchQuery drops it, so reordering the feed never marks this dirty.
   const current = $derived(savedSearchQuery(store.value));
 
   function valueLabel(param: string, value: string): string {

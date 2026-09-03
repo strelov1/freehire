@@ -275,19 +275,37 @@ verification.
 
 No data migration. Deploy order is load-bearing:
 
-1. Make `view_count` sortable on the **live** index and confirm it by reading the
-   setting back. Either let a rebuild carry it (it builds settings from the
-   binary) or patch by hand with the complete five-attribute list. Not during a
-   rebuild window.
-2. Ship the Go change (`searchSortable`) — safe only after step 1 is confirmed.
-3. Ship the frontend change. The card additions (count, glyph, badges) are
-   independent of steps 1-2 and could ship first; the `Most viewed` option must
-   not ship before step 2, or selecting it breaks search for that caller.
+**There are two deploys, not three.** `deploy/bin/release.sh` builds `cmd/server`
+and the SvelteKit app in the same blue/green flip, so the handler's new
+`searchSortable` entry and the visible `Most viewed` option go live together.
+Treating them as separately shippable would be planning against a release path
+that does not exist.
 
-Rollback: remove the `views` option from the client vocabulary. The URL parameter
-degrades on its own — an unrecognised `sort` resolves to the contextual default —
-so a stale link or saved search never errors. Leaving the sortable attribute
-declared is harmless.
+1. Make `view_count` sortable on the **live** index, and confirm it by reading
+   `sortableAttributes` back and seeing all five. Either let a rebuild carry it
+   (a rebuild builds settings from the binary) or patch by hand with the complete
+   list. Not during a rebuild window — Meili's queue is serial, so the task would
+   wait behind it and the setting would appear not to have applied. A 200 on the
+   patch means the task was accepted, not that it ran.
+2. Only once step 1 is confirmed, run the release. It carries the handler entry
+   and the card together.
+
+The card additions (count, glyph, badges) depend on neither step and cannot fail
+this way; they are simply carried by the same release.
+
+**No feature flag.** `sort=match` shipped dark behind `PUBLIC_MATCH_SORT` because
+declaring its embedder did not retro-fill 1.36M documents — the ordering was
+genuinely thin until a rebuild landed, a window nothing could shorten. There is no
+equivalent window here: the counter is already on every document, so the ordering
+is correct the instant the setting applies. The only exposure is step 1 not having
+been done, which is a single verifiable read rather than a condition to wait out.
+A permanent runtime flag to guard a one-time ordering would be complexity that
+outlives its reason.
+
+Rollback: remove the `views` option from the client vocabulary and release. The URL
+parameter degrades on its own — an unrecognised `sort` resolves to the contextual
+default — so a stale link or saved search never errors. Leaving the sortable
+attribute declared is harmless.
 
 ## Open Questions
 
