@@ -41,11 +41,12 @@ func (r *QueriesRepository) Get(ctx context.Context, userID int64) (Profile, err
 }
 
 // Upsert creates or replaces the user's profile.
-func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error) {
+func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error) {
 	row, err := r.q.UpsertUserProfile(ctx, db.UpsertUserProfileParams{
 		UserID:              userID,
 		Specializations:     specializations,
 		Skills:              skills,
+		Seniorities:         seniorities,
 		ExcludedSkills:      excludedSkills,
 		LocationPreferences: locationPreferences,
 	})
@@ -57,11 +58,12 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 
 // UpsertIfUnchanged behaves like Upsert but only writes when the row's updated_at still
 // matches expectedUpdatedAt, mapping no matching row to ErrConflict.
-func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
+func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
 	row, err := r.q.UpsertUserProfileIfUnchanged(ctx, db.UpsertUserProfileIfUnchangedParams{
 		UserID:              userID,
 		Specializations:     specializations,
 		Skills:              skills,
+		Seniorities:         seniorities,
 		ExcludedSkills:      excludedSkills,
 		LocationPreferences: locationPreferences,
 		UpdatedAt:           pgtype.Timestamptz{Time: expectedUpdatedAt, Valid: true},
@@ -82,6 +84,7 @@ func profileFromRow(row db.UserProfile) Profile {
 		UserID:              row.UserID,
 		Specializations:     row.Specializations,
 		Skills:              row.Skills,
+		Seniorities:         row.Seniorities,
 		ExcludedSkills:      row.ExcludedSkills,
 		LocationPreferences: row.LocationPreferences,
 		CreatedAt:           pgconv.TimePtr(row.CreatedAt),

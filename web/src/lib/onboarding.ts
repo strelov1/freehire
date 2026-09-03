@@ -1,50 +1,16 @@
-// Onboarding: the pure glue between the /jobs onboarding wizard and the existing
-// job filters, plus the local "have we nudged this visitor yet?" lifecycle. The
-// wizard captures coarse feed preferences; here they map onto the SAME facet
-// filter query the standard filter UI produces, so the wizard is a front-door to
-// existing filters, not a parallel system. No Svelte here (mirrors facetModel.ts /
-// filterStorage.ts), so it's unit-testable in plain Node and every storage access
-// is best-effort — private mode / SSR must never break the feed.
+// Onboarding: what's left of the local "have we nudged this visitor yet?" nudge for
+// the /jobs feed, now that the wizard it used to gate (a coarse role/seniority/work-
+// mode/region/stack picker writing straight to the filter query) has been retired in
+// favor of sending visitors to /onboarding (see onboardingGate.svelte.ts) — that flow
+// writes a real server profile, not a local filter query, so there is nothing here for
+// it to reuse. `narrowestFacet` and the lifecycle (bannerVisible/loadOnboardingState/
+// markSeen) are still live: JobsView reads them directly for the empty-state "relax
+// narrowest facet" action and the onboarding banner's own dismiss/re-show rule. No
+// Svelte here (mirrors facetModel.ts / filterStorage.ts), so it's unit-testable in
+// plain Node and every storage access is best-effort — private mode / SSR must never
+// break the feed.
 
-import { emptyFilters, filtersToParams, type JobFilters } from './facetModel';
-import { must } from './utils';
-
-// The wizard's captured preferences. Every field is optional: the wizard is
-// skippable per field, and an empty field contributes no filter constraint.
-// Each maps to one existing job facet param (see selectionsToQuery).
-export interface OnboardingSelection {
-  /** Specializations → the `category` facet (Backend, Frontend, ML/AI, …). Multi-select:
-   *  a person can be several (a CV upload can pre-fill more than one). */
-  specializations: string[];
-  /** Seniorities → the `seniority` facet. Multi-select: a search can span a grade range
-   *  (Middle + Senior), though a CV pre-fills the single current grade. */
-  seniorities: string[];
-  /** → the `work_mode` facet. */
-  workMode?: string;
-  /** → the `regions` facet (macro region code). */
-  region?: string;
-  /** Free-text stack tokens → the `skills` facet. */
-  stack: string[];
-}
-
-export function emptySelection(): OnboardingSelection {
-  return { specializations: [], seniorities: [], stack: [] };
-}
-
-/** Map the wizard's selection onto the existing filter query string, via the same
- *  `filtersToParams` the standard filter UI uses — so an empty selection yields an
- *  empty query and a full one yields exactly what the equivalent facet clicks would.
- *  No hand-written param strings: the facet-param contract stays in facetModel. */
-export function selectionsToQuery(sel: OnboardingSelection): string {
-  const f = emptyFilters();
-  if (sel.specializations.length) must(f.facets.category, 'category facet').include = [...sel.specializations];
-  if (sel.seniorities.length) must(f.facets.seniority, 'seniority facet').include = [...sel.seniorities];
-  if (sel.workMode) must(f.facets.work_mode, 'work_mode facet').include = [sel.workMode];
-  if (sel.region) must(f.facets.regions, 'regions facet').include = [sel.region];
-  const stack = sel.stack.map((s) => s.trim()).filter(Boolean);
-  if (stack.length) must(f.facets.skills, 'skills facet').include = stack;
-  return filtersToParams(f).toString();
-}
+import type { JobFilters } from './facetModel';
 
 // The facets the narrow-feed "relax" action peels off, narrowest (most specific)
 // first. The role/specialization is deliberately absent — it's the visitor's
@@ -66,8 +32,10 @@ export function narrowestFacet(f: JobFilters): string | null {
 
 export const ONBOARDING_KEY = 'hire.onboarding';
 
-/** unseen = never nudged (banner may show); seen = dismissed without completing
- *  (banner suppressed); done = completed the wizard (banner suppressed for good). */
+/** unseen = never nudged (banner may show); seen = dismissed (banner suppressed).
+ *  'done' is a legacy third value: the retired wizard used to write it on completion,
+ *  and a browser that stored it before this change must keep reading it correctly
+ *  (same suppression as 'seen') — nothing writes it going forward. */
 export type OnboardingLifecycle = 'unseen' | 'seen' | 'done';
 
 /** The banner shows only to a visitor we've never nudged AND who has no active
@@ -97,13 +65,9 @@ function save(state: OnboardingLifecycle): void {
   }
 }
 
-/** Record that the visitor dismissed the nudge without completing it. Never
- *  downgrades a completed onboarding (done outranks seen). */
+/** Record that the visitor dismissed the nudge. Never downgrades a legacy 'done'
+ *  value (a completed run of the retired wizard) back to 'seen' — both suppress the
+ *  banner identically, so this only matters for not losing information on re-save. */
 export function markSeen(): void {
   if (loadOnboardingState() !== 'done') save('seen');
-}
-
-/** Record that the visitor completed the wizard — the banner won't show again. */
-export function markDone(): void {
-  save('done');
 }

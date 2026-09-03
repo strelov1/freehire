@@ -33,6 +33,8 @@ var (
 	ErrEmptySkills = errors.New("userprofile: at least one skill is required")
 	// ErrTooManySkills is a wanted or avoided skill set past maxSkills (mapped to 400).
 	ErrTooManySkills = errors.New("userprofile: too many skills")
+	// ErrInvalidSeniority is a seniority outside the seniority vocabulary (mapped to 400).
+	ErrInvalidSeniority = errors.New("userprofile: seniority is not a known level")
 	// ErrNotFound is the caller having no profile yet (mapped to a null payload on GET,
 	// 404 on the verdict/ATS sub-resources).
 	ErrNotFound = errors.New("userprofile: not found")
@@ -80,6 +82,7 @@ type Profile struct {
 	UserID              int64
 	Specializations     []string
 	Skills              []string
+	Seniorities         []string
 	ExcludedSkills      []string
 	LocationPreferences json.RawMessage
 	CreatedAt           *time.Time
@@ -92,13 +95,13 @@ type Profile struct {
 // generated db row to Profile, so the use case never sees db.*.
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Profile, error)
-	Upsert(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error)
+	Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error)
 	// UpsertIfUnchanged behaves like Upsert but writes only when the row's updated_at
 	// still equals expectedUpdatedAt — the guard MergeSkills needs because its merge is
 	// computed from a prior Get outside any transaction, so a Save() landing in that
 	// gap must not be silently overwritten by a write built from a now-stale snapshot.
 	// No matching row (updated_at moved, or the profile was deleted) maps to ErrConflict.
-	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
+	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
 	Delete(ctx context.Context, userID int64) error
 }
 
@@ -119,17 +122,22 @@ func (s *Service) Get(ctx context.Context, userID int64) (Profile, error) {
 
 // Save validates and upserts the user's single profile. The specializations are
 // normalized (each a known category, deduped, non-empty, capped); the skills are
-// normalized and must be non-empty; the excluded skills are normalized (deduped, may be
-// empty) and any that also appear in skills are dropped — a skill cannot be both wanted
-// and avoided, and the wanted set wins; the optional location block is validated and
-// normalized (or stored NULL when nil/empty). It is a create-or-replace: the first save
-// inserts, later saves overwrite.
-func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, loc *LocationPreferences) (Profile, error) {
+// normalized and must be non-empty; the seniorities are normalized (each a known level,
+// deduped, may be empty); the excluded skills are normalized (deduped, may be empty) and
+// any that also appear in skills are dropped — a skill cannot be both wanted and avoided,
+// and the wanted set wins; the optional location block is validated and normalized (or
+// stored NULL when nil/empty). It is a create-or-replace: the first save inserts, later
+// saves overwrite.
+func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, loc *LocationPreferences) (Profile, error) {
 	specs, err := normalizeSpecializations(specializations)
 	if err != nil {
 		return Profile{}, err
 	}
 	normalized, err := normalizeSkills(skills)
+	if err != nil {
+		return Profile{}, err
+	}
+	levels, err := normalizeSeniorities(seniorities)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -142,7 +150,7 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	if err != nil {
 		return Profile{}, err
 	}
-	return s.repo.Upsert(ctx, userID, specs, normalized, excluded, locJSON)
+	return s.repo.Upsert(ctx, userID, specs, normalized, levels, excluded, locJSON)
 }
 
 // Delete removes the user's profile. It is idempotent — deleting when none exists is not
@@ -197,10 +205,10 @@ func (s *Service) mergeSkillsOnce(ctx context.Context, userID int64, skills []st
 		// this fix. A profile read from the real Repository always carries a non-nil
 		// UpdatedAt (updated_at is NOT NULL); this only happens against a Repository
 		// fake that leaves it unset.
-		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.ExcludedSkills, profile.LocationPreferences)
+		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.LocationPreferences)
 		return err
 	}
-	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.ExcludedSkills, profile.LocationPreferences, *profile.UpdatedAt)
+	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.LocationPreferences, *profile.UpdatedAt)
 	return err
 }
 
@@ -268,6 +276,30 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 	}
 	if len(out) > maxSpecializations {
 		return nil, ErrTooManySpecializations
+	}
+	return out, nil
+}
+
+// normalizeSeniorities trims each value, drops blanks, deduplicates (preserving
+// first-seen order), and checks membership in the controlled seniority vocabulary.
+// Unlike normalizeSpecializations, an empty result is valid — a profile need not state a
+// level — and there is no cap: the vocabulary itself only has 8 values.
+func normalizeSeniorities(seniorities []string) ([]string, error) {
+	out := make([]string, 0, len(seniorities))
+	seen := make(map[string]struct{}, len(seniorities))
+	for _, raw := range seniorities {
+		level := strings.TrimSpace(raw)
+		if level == "" {
+			continue
+		}
+		if _, dup := seen[level]; dup {
+			continue
+		}
+		if !slices.Contains(vocab.SeniorityValues, level) {
+			return nil, ErrInvalidSeniority
+		}
+		seen[level] = struct{}{}
+		out = append(out, level)
 	}
 	return out, nil
 }

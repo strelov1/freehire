@@ -4356,9 +4356,9 @@ type Querier interface {
 	UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error
 	// Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 	// idempotent upsert: first save inserts, later saves overwrite specializations/skills/
-	// excluded_skills/location_preferences and bump updated_at. All fields are already
-	// normalized by the service; excluded_skills may be empty; location_preferences is a
-	// validated JSONB block or NULL (no preferences).
+	// seniorities/excluded_skills/location_preferences and bump updated_at. All fields are
+	// already normalized by the service; seniorities and excluded_skills may be empty;
+	// location_preferences is a validated JSONB block or NULL (no preferences).
 	UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error)
 	// Same write as UpsertUserProfile, guarded on the row's updated_at still matching what the
 	// caller read. Used by MergeSkills, whose merge (which fields to keep, which skills to add)

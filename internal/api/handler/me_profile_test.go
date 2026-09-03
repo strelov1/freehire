@@ -24,6 +24,7 @@ type profileUpsert struct {
 	UserID              int64
 	Specializations     []string
 	Skills              []string
+	Seniorities         []string
 	ExcludedSkills      []string
 	LocationPreferences json.RawMessage
 }
@@ -39,15 +40,15 @@ type fakeProfileRepo struct {
 func (f *fakeProfileRepo) Get(context.Context, int64) (userprofile.Profile, error) {
 	return f.getRet, f.getErr
 }
-func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
+func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 
 // UpsertIfUnchanged is exercised by userprofile's own tests (MergeSkills' retry loop);
 // no handler here calls MergeSkills, so this fake just satisfies the interface.
-func (f *fakeProfileRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, _ time.Time) (userprofile.Profile, error) {
-	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
+func (f *fakeProfileRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage, _ time.Time) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 func (f *fakeProfileRepo) Delete(context.Context, int64) error { return f.delErr }
@@ -277,6 +278,60 @@ func TestGetProfile_ReturnsProfile(t *testing.T) {
 	}
 	if strings.Join(got.Data.Skills, ",") != "go" {
 		t.Errorf("skills = %v, want [go]", got.Data.Skills)
+	}
+}
+
+func TestPutProfile_SavesAndEchoesSeniorities(t *testing.T) {
+	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, Seniorities: []string{"middle", "senior"}}
+	repo := &fakeProfileRepo{upsertRet: ret}
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut,
+		`{"specializations":["backend"],"skills":["go"],"seniorities":["middle","senior"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if strings.Join(repo.upserted.Seniorities, ",") != "middle,senior" {
+		t.Errorf("seniorities upserted = %v, want [middle senior]", repo.upserted.Seniorities)
+	}
+	var got struct {
+		Data profileResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if strings.Join(got.Data.Seniorities, ",") != "middle,senior" {
+		t.Errorf("seniorities in response = %v, want [middle senior]", got.Data.Seniorities)
+	}
+}
+
+func TestPutProfile_RejectsUnknownSeniority(t *testing.T) {
+	repo := &fakeProfileRepo{}
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut,
+		`{"specializations":["backend"],"skills":["go"],"seniorities":["wizard"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	if repo.upserted.UserID != 0 {
+		t.Error("repo.Upsert should not be called on an unknown seniority")
+	}
+}
+
+func TestPutProfile_OmittedSeniorityDefaultsToEmpty(t *testing.T) {
+	repo := &fakeProfileRepo{upsertRet: userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}}}
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut, `{"specializations":["backend"],"skills":["go"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if repo.upserted.Seniorities == nil {
+		t.Error("seniorities upserted = nil, want non-nil empty set")
+	}
+	if len(repo.upserted.Seniorities) != 0 {
+		t.Errorf("seniorities upserted = %v, want empty", repo.upserted.Seniorities)
 	}
 }
 

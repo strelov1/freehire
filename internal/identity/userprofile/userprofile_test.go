@@ -18,6 +18,7 @@ type upsertArgs struct {
 	UserID              int64
 	Specializations     []string
 	Skills              []string
+	Seniorities         []string
 	ExcludedSkills      []string
 	LocationPreferences json.RawMessage
 }
@@ -61,15 +62,15 @@ func (f *fakeRepo) Get(_ context.Context, userID int64) (userprofile.Profile, er
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
+func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	f.upsertCalled = true
 	return f.upsertRet, f.upsertErr
 }
 
-func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
+func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
 	f.guardedUpserted = guardedUpsertArgs{
-		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences},
+		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences},
 		expectedUpdatedAt,
 	}
 	idx := f.guardedUpsertCalls
@@ -90,7 +91,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 	svc := userprofile.New(repo)
 
 	_, err := svc.Save(context.Background(), 7,
-		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil, nil)
+		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -112,7 +113,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 
 func TestSave_RejectsUnknownSpecialization(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrInvalidSpecialization) {
 		t.Errorf("err = %v, want ErrInvalidSpecialization", err)
 	}
@@ -285,7 +286,7 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil, nil)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil, nil, nil)
 			if !errors.Is(err, userprofile.ErrEmptySpecializations) {
 				t.Errorf("err = %v, want ErrEmptySpecializations", err)
 			}
@@ -299,7 +300,7 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 func TestSave_RejectsTooManySpecializations(t *testing.T) {
 	repo := &fakeRepo{}
 	six := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre"}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"}, nil, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"}, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySpecializations) {
 		t.Errorf("err = %v, want ErrTooManySpecializations", err)
 	}
@@ -320,7 +321,7 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil, nil)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil, nil, nil)
 			if !errors.Is(err, userprofile.ErrEmptySkills) {
 				t.Errorf("err = %v, want ErrEmptySkills", err)
 			}
@@ -346,7 +347,7 @@ func manySkills(n int) []string {
 func TestSave_RejectsTooManySkills(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, manySkills(201), nil, nil)
+		[]string{"backend"}, manySkills(201), nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySkills) {
 		t.Errorf("err = %v, want ErrTooManySkills", err)
 	}
@@ -358,7 +359,7 @@ func TestSave_RejectsTooManySkills(t *testing.T) {
 func TestSave_AcceptsSkillsAtTheCap(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, manySkills(200), nil, nil)
+		[]string{"backend"}, manySkills(200), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save at the cap: %v", err)
 	}
@@ -370,7 +371,7 @@ func TestSave_AcceptsSkillsAtTheCap(t *testing.T) {
 func TestSave_RejectsTooManyExcludedSkills(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, manySkills(201), nil)
+		[]string{"backend"}, []string{"go"}, nil, manySkills(201), nil)
 	if !errors.Is(err, userprofile.ErrTooManySkills) {
 		t.Errorf("err = %v, want ErrTooManySkills", err)
 	}
@@ -384,7 +385,7 @@ func TestSave_RejectsTooManyExcludedSkills(t *testing.T) {
 func TestSave_DropsOverlongSkills(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go", strings.Repeat("x", 200)}, nil, nil)
+		[]string{"backend"}, []string{"go", strings.Repeat("x", 200)}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -397,7 +398,7 @@ func TestSave_DropsOverlongSkills(t *testing.T) {
 func TestSave_NormalizesExcludedSkills(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, []string{" PHP ", "php", "WordPress"}, nil)
+		[]string{"backend"}, []string{"go"}, nil, []string{" PHP ", "php", "WordPress"}, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -410,7 +411,7 @@ func TestSave_NormalizesExcludedSkills(t *testing.T) {
 func TestSave_DropsExcludedSkillAlsoInSkills(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"Go", "php"}, []string{"go", "wordpress"}, nil)
+		[]string{"backend"}, []string{"Go", "php"}, nil, []string{"go", "wordpress"}, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -424,7 +425,7 @@ func TestSave_DropsExcludedSkillAlsoInSkills(t *testing.T) {
 func TestSave_EmptyExcludedSkillsStoresEmptySet(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -433,6 +434,59 @@ func TestSave_EmptyExcludedSkillsStoresEmptySet(t *testing.T) {
 	}
 	if len(repo.upserted.ExcludedSkills) != 0 {
 		t.Errorf("ExcludedSkills = %v, want empty", repo.upserted.ExcludedSkills)
+	}
+}
+
+func TestSave_RejectsUnknownSeniority(t *testing.T) {
+	repo := &fakeRepo{}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, []string{"senior", "wizard"}, nil, nil)
+	if !errors.Is(err, userprofile.ErrInvalidSeniority) {
+		t.Errorf("err = %v, want ErrInvalidSeniority", err)
+	}
+	if repo.upsertCalled {
+		t.Error("repo.Upsert should not be called on an unknown seniority")
+	}
+}
+
+func TestSave_SenioritiesAreDeduplicated(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, []string{"senior", "middle", "senior"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	want := []string{"senior", "middle"}
+	if strings.Join(repo.upserted.Seniorities, ",") != strings.Join(want, ",") {
+		t.Errorf("Seniorities = %v, want deduplicated, first-seen order %v", repo.upserted.Seniorities, want)
+	}
+}
+
+func TestSave_SenioritiesMayBeEmpty(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if repo.upserted.Seniorities == nil {
+		t.Error("Seniorities = nil, want non-nil empty set (persists as '{}', not NULL)")
+	}
+	if len(repo.upserted.Seniorities) != 0 {
+		t.Errorf("Seniorities = %v, want empty", repo.upserted.Seniorities)
+	}
+}
+
+func TestSave_AcceptsMultipleSeniorities(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, []string{"middle", "senior"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	want := []string{"middle", "senior"}
+	if strings.Join(repo.upserted.Seniorities, ",") != strings.Join(want, ",") {
+		t.Errorf("Seniorities = %v, want %v", repo.upserted.Seniorities, want)
 	}
 }
 

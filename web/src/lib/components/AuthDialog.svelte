@@ -2,21 +2,25 @@
   import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { login, register } from '$lib/auth.svelte';
+  import { login } from '$lib/auth.svelte';
   import { authDialog } from '$lib/auth-dialog.svelte';
+  import { onboardingUrl } from '$lib/onboardingGate.svelte';
+  import { loadOAuthProviders, PROVIDER_LABELS } from '$lib/oauthProviders';
+  import { credentialErrorMessage } from '$lib/credentialErrorMessage';
   import { api, ApiError } from '$lib/api';
   import { Button, Dialog } from '$lib/ui';
   import { ProviderIcon } from '$lib/ui';
 
-  // `mode` is bindable so the in-dialog toggle can switch between sign in and
-  // register without the parent re-opening it. `initialError` lets the layout
-  // surface a failed OAuth callback (the ?auth_error redirect) in the dialog.
+  // `mode` is bindable so the recovery sub-steps (forgot/reset) can advance without
+  // the parent re-opening the dialog. `initialError` lets the layout surface a failed
+  // OAuth callback (the ?auth_error redirect) in the dialog. Registration is not a
+  // mode here — see auth-dialog.svelte.ts's doc comment.
   let {
     mode = $bindable(),
     onClose,
     initialError = null,
   }: {
-    mode: 'login' | 'register' | 'forgot' | 'reset';
+    mode: 'login' | 'forgot' | 'reset';
     onClose: () => void;
     initialError?: string | null;
   } = $props();
@@ -41,31 +45,18 @@
   let error = $state<string | null>(initialError);
   let submitting = $state(false);
 
-  const providerLabels: Record<string, string> = {
-    google: 'Google',
-    github: 'GitHub',
-    linkedin: 'LinkedIn',
-    apple: 'Apple',
-  };
-
-  // Enabled OAuth providers; an unreachable endpoint just means no provider
-  // buttons — the email/password form must keep working either way.
+  const providerLabels = PROVIDER_LABELS;
   let providers = $state<string[]>([]);
-  api.oauthProviders()
-    .then((names) => {
-      providers = names.filter((n) => n in providerLabels);
-    })
-    .catch(() => {});
+  void loadOAuthProviders().then((names) => (providers = names));
 
   const titles = {
     login: 'Sign in',
-    register: 'Create account',
     forgot: 'Reset your password',
     reset: 'Set a new password',
   } as const;
   const title = $derived(titles[mode]);
-  // The provider buttons and the sign-in/register toggle belong to the credential
-  // modes only; the recovery steps are a linear flow.
+  // The provider buttons and the "Create one" link belong to sign-in only; the
+  // recovery steps are a linear flow.
   const isRecovery = $derived(mode === 'forgot' || mode === 'reset');
 
   // The page the visitor is standing on, read from the ADDRESS BAR rather than
@@ -92,19 +83,15 @@
   // unfiltered feed — the redirect is a full page load, so nothing restores it.
   const returnTo = $derived(authDialog.redirectTo ?? currentAddress());
 
+  // 409 (email already registered) is not handled here: that error only comes from
+  // registration, which no longer happens in this dialog — see auth-dialog.svelte.ts.
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
-      if (e.status === 401) return 'Invalid email or password.';
-      if (e.status === 409) return 'That email is already registered.';
       if (e.status === 429) return 'A code was just sent — check your inbox.';
       if (e.status === 503) return 'Email delivery is unavailable right now.';
-      if (e.status === 400) {
-        return isRecovery
-          ? 'That code is not valid or has expired, or the password is too short.'
-          : 'Enter a valid email and a password of at least 8 characters.';
-      }
+      if (isRecovery && e.status === 400) return 'That code is not valid or has expired, or the password is too short.';
     }
-    return 'Something went wrong. Please try again.';
+    return credentialErrorMessage(e) ?? 'Something went wrong. Please try again.';
   }
 
   // Ask for a reset code. The server answers the same way whether or not the address
@@ -148,7 +135,7 @@
     // Capture before onClose(), which clears the dialog's redirectTo.
     const target = returnTo;
     try {
-      await (mode === 'login' ? login : register)(email, password);
+      await login(email, password);
       onClose();
       // Same source as `returnTo` on purpose: an in-place prompt (Save, Follow)
       // has nowhere to go, and comparing against a different reading of "where we
@@ -171,6 +158,17 @@
     mode = next;
     error = null;
     notice = null;
+  }
+
+  // "No account? Create one" leaves the dialog entirely for /onboarding, carrying the
+  // same returnTo this dialog itself would have used — a visitor who started signing
+  // up from a deep link (or an in-place prompt) lands back there once onboarding is
+  // done, not on the home page.
+  function goToOnboarding() {
+    const target = returnTo;
+    onClose();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
+    void goto(onboardingUrl(target));
   }
 </script>
 
@@ -271,13 +269,13 @@
       </p>
     {:else}
       <p class="mt-4 text-center text-sm text-muted-foreground">
-        {mode === 'login' ? 'No account?' : 'Already have an account?'}
+        No account?
         <button
           type="button"
-          onclick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+          onclick={goToOnboarding}
           class="font-medium text-foreground underline-offset-4 hover:underline"
         >
-          {mode === 'login' ? 'Create one' : 'Sign in'}
+          Create one
         </button>
       </p>
     {/if}

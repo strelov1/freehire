@@ -235,7 +235,7 @@
     busy = true;
     formError = null;
     try {
-      await profileStore.save(specializations, skills, excludedSkills, location);
+      await profileStore.save(specializations, skills, profile?.seniorities ?? [], excludedSkills, location);
       onSaved?.();
     } catch (err) {
       formError =

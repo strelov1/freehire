@@ -12,6 +12,7 @@ function mkProfile(
   return {
     specializations,
     skills,
+    seniorities: [],
     excluded_skills: excludedSkills,
     location_preferences: location,
     derived_location: null,

@@ -31,16 +31,9 @@
   import { freshnessOptions } from '$lib/filterControls';
   import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
   import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '$lib/geoScope';
-  import {
-    bannerVisible,
-    loadOnboardingState,
-    markDone,
-    markSeen,
-    narrowestFacet,
-    type OnboardingLifecycle,
-  } from '$lib/onboarding';
+  import { bannerVisible, loadOnboardingState, markSeen, narrowestFacet, type OnboardingLifecycle } from '$lib/onboarding';
+  import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { consumePendingAlert } from '$lib/saveSearchAlert';
-  import OnboardingWizard from './onboarding/OnboardingWizard.svelte';
   import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
   import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
@@ -281,8 +274,9 @@
   // lives in localStorage (client-only); seed it at init on the client so a returning
   // (dismissed/completed) visitor never flashes a banner before mount. The banner is
   // the sole entry — once dismissed or completed it retires; there is no persistent
-  // re-open control.
-  let wizardOpen = $state(false);
+  // re-open control. "Set up" now navigates to /onboarding (registration is a step
+  // there, and it carries straight on into role/skills/level) rather than opening a
+  // local wizard that wrote to the anonymous filter query.
   // Starts 'unseen' on both sides so the hydrated markup matches the server's; the
   // stored value arrives on mount, by which point app.css has already hidden the
   // banner for anyone who dismissed or completed it. Reading localStorage here
@@ -311,20 +305,13 @@
     markSeen();
     onboardingState = 'seen';
   }
-  function cancelWizard() {
-    wizardOpen = false;
+  function openOnboarding() {
+    // The nudge has done its job whether or not the visitor follows through — it
+    // retires the same way dismissing it does, just via a different exit.
     markSeen();
-    onboardingState = loadOnboardingState(); // markSeen never downgrades a completed run
-  }
-  function completeWizard(query: string) {
-    // Apply through the same store path as a saved search — feed, counts, and
-    // localStorage all reconfigure via the existing effect; then the banner retires.
-    filters.apply(query);
-    markDone();
-    onboardingState = 'done';
-    wizardOpen = false;
-    // Peak intent: offer to keep this feed as a Telegram alert.
-    alertBanner = { query, autostart: false };
+    onboardingState = 'seen';
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
+    void goto(onboardingUrl(page.url.pathname + page.url.search));
   }
   // Narrow-feed relief: the single narrowest applied facet to drop (skills → regions →
   // seniority; never the role), or null if none. Shared by the empty-state guard and
@@ -833,7 +820,7 @@
     {#if showBanner || alertBanner}
       <div class="mt-3">
         {#if showBanner}
-          <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
+          <OnboardingBanner onOpen={openOnboarding} onDismiss={dismissBanner} />
         {/if}
         {#if alertBanner}
           <OnboardingAlertBanner
@@ -937,7 +924,3 @@
   {minMatch}
   onMinMatchChange={(v) => (minMatch = v)}
 />
-
-{#if standalone}
-  <OnboardingWizard open={wizardOpen} {counts} onComplete={completeWizard} onCancel={cancelWizard} />
-{/if}

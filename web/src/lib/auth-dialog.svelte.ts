@@ -7,7 +7,11 @@
 // module-level $state singleton is safe under SSR (it stays closed on the
 // server and never leaks across requests).
 
-type Mode = 'login' | 'register';
+// Registration moved out of this dialog entirely — it now happens on /onboarding, so a
+// visitor gets it as a step to carry them through (CV, role, location) rather than a
+// modal they can dismiss. This dialog is sign-in (plus the password-recovery sub-steps)
+// only; its own "No account?" link navigates to /onboarding instead of switching mode.
+type Mode = 'login' | 'forgot' | 'reset';
 
 let open = $state(false);
 let mode = $state<Mode>('login');

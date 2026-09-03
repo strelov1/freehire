@@ -957,6 +957,8 @@ export interface DerivedLocation {
 export interface UserProfile {
   specializations: string[];
   skills: string[];
+  /** Desired seniority levels (drawn from the seniority vocabulary). Empty when the user has stated none. */
+  seniorities: string[];
   /** Canonical skill tokens the user wants to avoid; seeded into the jobs filter's skills exclude set by "Apply my profile". Empty when the user excludes nothing. */
   excluded_skills: string[];
   location_preferences: LocationPreferences | null;

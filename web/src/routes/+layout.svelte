@@ -1,9 +1,13 @@
 <script lang="ts">
   import { navigating, page, updated } from '$app/state';
-  import { afterNavigate, beforeNavigate } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import { onMount, untrack } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { onboardingGate, onboardingUrl } from '$lib/onboardingGate.svelte';
+  import { safeRedirect } from '$lib/safeRedirect';
+  import { resumeStore } from '$lib/resume.svelte';
   import { resetUserStores } from '$lib/userResource.svelte';
   import {
     capturePageview,
@@ -29,12 +33,62 @@
   let { children } = $props();
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav —
-  // the marketing footer with its link columns doesn't belong there.
+  // the marketing footer with its link columns doesn't belong there. /onboarding is its
+  // own full-screen page (a fixed inset-0 overlay covers TopBar too) — no footer either.
   const hideFooter = $derived(
     page.url.pathname === '/my' ||
       page.url.pathname.startsWith('/my/') ||
-      page.url.pathname.startsWith('/tailor/'),
+      page.url.pathname.startsWith('/tailor/') ||
+      page.url.pathname === '/onboarding',
   );
+
+  // The onboarding gate. /onboarding is now the one place BOTH registration (an
+  // anonymous visitor's step 1) AND the post-registration CV/profile wizard live — so
+  // "should this visit be there" has two independent ways to become true: signed out
+  // (has an auth step to do), or signed in with no CV yet. Auto-redirect only covers
+  // the second: an anonymous visitor reaches /onboarding only by an explicit link
+  // (AuthDialog's "Create one", a signed-out gate's "Sign up"), never a background
+  // redirect — there is no page to bounce a stranger off of.
+  $effect(() => {
+    // GET /me/resume needs a session — an anonymous visitor's request would just 401,
+    // so this waits for isAuthenticated() rather than firing unconditionally on every
+    // page load site-wide. Re-runs once a visitor signs in mid-visit (on /onboarding's
+    // own auth step), since isAuthenticated() is read reactively here too.
+    if (isAuthenticated()) void resumeStore.ensureLoaded();
+  });
+  $effect(() => {
+    if (!resumeStore.loaded) return;
+    const shouldBeThere = isAuthenticated() && !resumeStore.present && !onboardingGate.dismissed;
+    if (shouldBeThere && page.url.pathname !== '/onboarding') {
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
+      void goto(onboardingUrl(page.url.pathname + page.url.search));
+    }
+  });
+
+  // The other direction — bounce AWAY from /onboarding once there is truly nothing to
+  // do there (signed in AND a CV already exists) — is checked only at arrival (a
+  // direct/bookmarked/stale visit; the page itself always navigates elsewhere on its
+  // own way out), not reactively for the rest of the visit. `resumeStore.loaded` is
+  // read OUTSIDE untrack() so this effect re-runs once the CV-status fetch settles
+  // (it is almost always still in flight the instant this effect first runs, right at
+  // hydration) — without that, a signed-in visitor who already has a CV and lands
+  // directly on /onboarding would see the whole wizard, permanently: the one run this
+  // effect got fired before `loaded` flipped true, and nothing would ever re-trigger
+  // it. `isAuthenticated()`/`resumeStore.present` stay inside untrack() so THEIR later
+  // changes don't retrigger it — the page's OWN CV upload flips resumeStore.present
+  // mid-visit on purpose (so a later visit skips the gate), and reacting to that live
+  // would yank the user off the page before they ever reached the confirm/location
+  // steps. Honors the same `returnTo` the page itself would have used, so a stale link
+  // at least lands the visitor back where they started rather than home.
+  $effect(() => {
+    if (page.url.pathname !== '/onboarding' || !resumeStore.loaded) return;
+    untrack(() => {
+      if (isAuthenticated() && resumeStore.present) {
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- the returnTo branch is a validated same-origin path (safeRedirect), not a typed route; the fallback branch already uses resolve()
+        void goto(safeRedirect(page.url.searchParams.get('returnTo')) ?? resolve('/'));
+      }
+    });
+  });
 
   // Re-apply the persisted theme once mounted (the singleton may have been
   // constructed on the server, defaulting to light). A no-FOUC inline script
@@ -88,7 +142,10 @@
   // from the always-mounted root layout so it covers every route; idempotent while
   // signed out.
   $effect(() => {
-    if (!isAuthenticated()) resetUserStores();
+    if (!isAuthenticated()) {
+      resetUserStores();
+      onboardingGate.reset();
+    }
   });
 
   // A tab open across a deploy still holds the old build's route manifest, naming

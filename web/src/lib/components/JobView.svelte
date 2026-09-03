@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
   import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
@@ -190,11 +193,13 @@
     if (!applied) showApplyPrompt = true;
   }
 
-  // Gate — "Sign up" routes to the register dialog; "View without signing in"
-  // opens the posting in a new tab (the navigation the click was holding back).
+  // Gate — "Sign up" routes to /onboarding (registration is a step there now, not a
+  // dialog — see auth-dialog.svelte.ts); "View without signing in" opens the posting
+  // in a new tab (the navigation the click was holding back).
   function signUpFromGate() {
     showSignInPrompt = false;
-    openAuthDialog('register');
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
+    void goto(onboardingUrl(page.url.pathname + page.url.search));
   }
 
   function viewWithoutSignIn() {

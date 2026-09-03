@@ -60,17 +60,19 @@ class ProfileStore extends UserResource<UserProfile | null> {
     }
   }
 
-  /** Create-or-replace the profile. `excludedSkills` are the skills to avoid (may be empty).
-   *  `location` is the optional location-preferences block (null clears it). Throws on a bad
-   *  specialization, empty skills, or an out-of-vocabulary location value (the caller shows
-   *  the error). */
+  /** Create-or-replace the profile. `seniorities` are the desired experience levels (may be
+   *  empty). `excludedSkills` are the skills to avoid (may be empty). `location` is the
+   *  optional location-preferences block (null clears it). Throws on a bad specialization,
+   *  empty skills, an unknown seniority, or an out-of-vocabulary location value (the caller
+   *  shows the error). */
   async save(
     specializations: string[],
     skills: string[],
+    seniorities: string[],
     excludedSkills: string[],
     location: LocationPreferences | null,
   ): Promise<UserProfile> {
-    const row = await api.saveProfile(specializations, skills, excludedSkills, location);
+    const row = await api.saveProfile(specializations, skills, seniorities, excludedSkills, location);
     this.#profile = row;
     this.markLoaded();
     return row;
@@ -99,7 +101,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
       const current = this.#profile;
       if (!current) return Promise.reject(new Error('No profile to edit.'));
       const sets = withSkills(current, newSkills);
-      return this.save(specializations, sets.skills, sets.excluded_skills, current.location_preferences);
+      return this.save(specializations, sets.skills, current.seniorities, sets.excluded_skills, current.location_preferences);
     });
   }
 
@@ -126,7 +128,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
     return this.#queue(() => {
       const current = this.#profile;
       if (!current) return Promise.reject(new Error('No profile to edit.'));
-      return this.save(specializations, current.skills, current.excluded_skills, current.location_preferences);
+      return this.save(specializations, current.skills, current.seniorities, current.excluded_skills, current.location_preferences);
     });
   }
 
@@ -136,7 +138,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
     return this.#queue(() => {
       const current = this.#profile;
       if (!current) return Promise.reject(new Error('No profile to edit.'));
-      return this.save(current.specializations, current.skills, current.excluded_skills, location);
+      return this.save(current.specializations, current.skills, current.seniorities, current.excluded_skills, location);
     });
   }
 
@@ -150,6 +152,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
     return this.save(
       current.specializations,
       next.skills,
+      current.seniorities,
       next.excluded_skills,
       current.location_preferences,
     );
