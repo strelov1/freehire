@@ -10,13 +10,20 @@
 
 ## 2. Insert-time validation
 
-- [ ] 2.1 Add a validation function in `internal/ingest/sources` taking a candidate
-      `(provider, board, region)` plus the adapter registry, returning nil or a typed
-      reason: unknown provider, empty board on a non-`boardless` provider, or duplicate
-      of an existing non-`retired` row.
-- [ ] 2.2 Unit tests: unknown provider rejected, empty board rejected for a board-based
-      provider, empty board accepted for a `boardless` provider, duplicate of a live row
-      rejected, duplicate of a `retired` row accepted.
+- [x] 2.1 Add `boardcatalog.Validate` (new package `internal/ingest/boardcatalog`, not
+      `internal/ingest/sources` — it needs the boards-table concept, which `sources`
+      doesn't have) taking a candidate plus the adapter registry, reusing
+      `sources.Config.Validate` for the unknown-provider/empty-board checks. Duplicate
+      detection is NOT a pure check — it's the `boards_identity_key` unique index,
+      enforced by `boardcatalog.Insert`/`Repository.InsertRow` (see 2.2).
+- [x] 2.2 Tests: unit tests for `Validate` (unknown provider rejected, empty board
+      rejected for a board-based provider, empty board accepted for `boardless`,
+      valid entry accepted); integration tests for `Repository`
+      (`repository_integration_test.go`) covering duplicate-of-live-row rejected
+      (`ErrDuplicateBoard`) and resubmission accepted after `rejected` or `retired` —
+      the latter is why `boards_identity_key` filters on `status IN ('pending',
+      'active')` rather than `status <> 'retired'` (see the spec fix committed
+      alongside this change).
 
 ## 3. Backfill
 

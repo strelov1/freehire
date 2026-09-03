@@ -50,6 +50,26 @@ func IntPtr(n pgtype.Int4) *int {
 	return &v
 }
 
+// Int8 maps an optional int64 to the pgtype the generated params expect: nil becomes
+// the zero (NULL) value, a non-nil pointer a valid int64. The write-side adapter for a
+// nullable bigint FK such as boards.submitted_by.
+func Int8(n *int64) pgtype.Int8 {
+	if n == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *n, Valid: true}
+}
+
+// Int8Ptr maps a nullable DB bigint to an optional int64: an invalid (NULL) value
+// becomes nil, a valid one a pointer to its value. The read-side inverse of Int8.
+func Int8Ptr(n pgtype.Int8) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Int64
+	return &v
+}
+
 // Bool maps an optional bool to the pgtype the generated params expect: nil becomes
 // the zero (NULL) value, a non-nil pointer a valid bool. It is the write-side
 // adapter for a tri-state (true/false/NULL) column such as jobs.is_tech.
