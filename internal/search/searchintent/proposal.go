@@ -56,7 +56,7 @@ type proposal struct {
 	SalaryMin          *flexInt `json:"salary_min"`
 	PostedWithinDays   *flexInt `json:"posted_within_days"`
 	ExperienceYearsMax *flexInt `json:"experience_years_max"`
-	VisaSponsorship    bool     `json:"visa_sponsorship"`
+	VisaSponsorship    flexBool `json:"visa_sponsorship"`
 }
 
 // exclusions are the filters people phrase negatively. It is deliberately a subset of
@@ -114,7 +114,7 @@ func (p proposal) intent() intent {
 		SalaryMin:          p.SalaryMin.plain(),
 		PostedWithinDays:   p.PostedWithinDays.plain(),
 		ExperienceYearsMax: p.ExperienceYearsMax.plain(),
-		VisaSponsorship:    p.VisaSponsorship,
+		VisaSponsorship:    p.VisaSponsorship.plain(),
 	}
 }
 

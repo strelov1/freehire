@@ -118,3 +118,57 @@ func (f *flexInt) plain() *int {
 	n := f.value
 	return &n
 }
+
+// flexBool is the proposal's one boolean, read however the model writes it. It exists
+// for the same reason flexStrings does: asked for false, the gateway has answered
+// "false", and encoding/json abandons the whole object on that first mismatch — so one
+// quoted word discarded an interpretation that was otherwise perfectly usable.
+//
+// Unlike the others, this one gates a filter that HIDES postings. Sponsorship is asked
+// for by people who need it; switching it on when nobody asked strips every posting
+// that does not mention sponsorship, and they cannot tell it happened. So an answer
+// this cannot read must leave the filter OFF, never on.
+type flexBool bool
+
+func (f *flexBool) UnmarshalJSON(b []byte) error {
+	*f = false
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
+		return nil
+	}
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return nil
+		}
+		*f = flexBool(readsAsTrue(s))
+		return nil
+	}
+	var v bool
+	if err := json.Unmarshal(b, &v); err != nil {
+		return nil
+	}
+	*f = flexBool(v)
+	return nil
+}
+
+// plain hands the flag on as an ordinary bool, so nothing past the decode boundary has
+// to know this type exists.
+func (f *flexBool) plain() bool {
+	return f != nil && bool(*f)
+}
+
+// readsAsTrue decides which written answers mean yes.
+//
+// A closed list rather than a rule, because the two mistakes are not symmetrical: a yes
+// misread as no widens the search, which the person can see and correct; a no misread as
+// yes strips every posting that does not mention sponsorship, which they cannot. So this
+// knows a handful of spellings and calls everything else no — "maybe", "required" and
+// "depends" are all answers the model has no business turning into a filter.
+func readsAsTrue(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "true", "yes", "y", "1":
+		return true
+	}
+	return false
+}
