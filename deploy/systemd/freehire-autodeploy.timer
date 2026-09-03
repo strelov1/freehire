@@ -1,0 +1,13 @@
+[Unit]
+Description=timer: freehire release-on-green check every 10 min
+[Timer]
+# Not on boot minute zero: the machine has just come up, the API may still be starting,
+# and a release is the last thing that should race that.
+OnBootSec=5min
+OnUnitActiveSec=10min
+# Deliberately NOT Persistent=true, unlike the alert timers. A missed tick is not work
+# to catch up on — the script reads the world fresh every run, so a downed machine that
+# comes back simply sees whatever main is at now. Replaying skipped ticks would only
+# stack releases.
+[Install]
+WantedBy=timers.target

@@ -9,8 +9,8 @@ Snapshot taken 2026-09-01 from `/etc/systemd/system/freehire-*` and `/opt/freehi
 ## What is here
 
 ```
-systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
-bin/        13 operator scripts (release, backups, alerting, ingest slotting)
+systemd/   350 files — 48 .service, 297 .timer, 5 drop-in directories
+bin/        14 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 ```
 
 `systemd/freehire-ingest@.service` is one template; the 255 `freehire-ingest@<board>.timer`
@@ -38,6 +38,25 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   `10-skip-if-reindexing.conf` adjust one setting. A drop-in's directives apply after the
   unit's own, which is what makes `EnvironmentFile=` ordering come out right — the later
   file wins on a key both define (`AWS_REGION` is in both).
+- **Production releases itself from a timer, and the host is the one doing the polling.**
+  `freehire-autodeploy.timer` runs `bin/autodeploy.sh` every 10 minutes: it compares
+  `origin/main` against the commit `hire-current` is serving, requires every check run on
+  that commit to have COMPLETED and passed, and then calls `release.sh`. Nothing reaches
+  in from GitHub — deliberately, because a self-hosted runner on a repository this public
+  (105 forks) would let any fork's pull request execute on this box. The only credential
+  that leaves the host is `GITHUB_STATUS_TOKEN`, a fine-grained token whose whole power is
+  writing a commit status.
+  **It is armed by `AUTODEPLOY=1` in `/opt/freehire/.env`** and does nothing but log
+  without it, so the timer can be installed and watched before it is trusted. Outcomes go
+  to the same Telegram channel as `site-alert.sh` — which is not decoration: a release
+  path with no workflow run behind it is invisible otherwise, and this project's recurring
+  failure is the thing that exits 0 unnoticed. A commit that fails twice is left alone
+  until main moves; the count lives in `/var/lib/freehire/autodeploy.state`, which survives
+  a reboot on purpose.
+- **`release.sh` now takes a file lock (`/var/lock/freehire-release.lock`) and exits 3 when
+  it cannot get it.** Until the timer existed, "a person is running it" was the only lock
+  there was. Exit 3 is distinct so `autodeploy.sh` reads a hand-run release as "not my
+  turn" rather than as a failure worth alerting on.
 - **The release fetches over SSH, and the two pieces that make that work are not in git.**
   `origin` is `git@github.com:strelov1/freehire.git` in both `/opt/freehire/src/hire-blue`
   and `hire-green`, and `~freehire/.ssh/config` (the account's home is `/var/lib/freehire`,

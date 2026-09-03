@@ -4,6 +4,24 @@
 # rebuilds the worker binaries, and repoints the `hire-current` symlink (workers
 # follow the active release). Old color stays warm for rollback.
 set -euo pipefail
+# One release at a time, enforced here rather than by convention.
+#
+# Until autodeploy.sh existed, "a person is running it" WAS the lock: nothing on this
+# host holds a file lock, and systemd's refusal to start a second instance of a oneshot
+# unit only ever protected the timer path. A timer that releases on its own introduces
+# the collision that could not happen before — a scheduled run starting while an
+# operator is mid-flip — and two releases sharing one inactive color would build over
+# each other's checkout and flip nginx at whichever finished first.
+#
+# `flock -n` so this fails immediately with something readable instead of a script that
+# appears to hang. Exit 3 is a distinct code on purpose: autodeploy.sh reads it as "not
+# my turn, try the next tick" rather than as a failed release, so a hand-run deploy does
+# not raise an alert. /var/lock is tmpfs, so a reboot mid-release cannot leave it held.
+exec 9>/var/lock/freehire-release.lock
+if ! flock -n 9; then
+  echo "release: another release is already running; refusing to start a second." >&2
+  exit 3
+fi
 app="${1:-freehire}"
 case "$app" in
   freehire) snip=freehire-upstream; apisvc=freehire-api; websvc=freehire-web; dir=hire; bin=hire-api; b_api=8081; b_web=8083; g_api=8082; g_web=8084 ;;
