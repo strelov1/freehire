@@ -118,19 +118,20 @@ findings are in the design's "The provider contract, as verified".
 
 ## 6. Ops
 
-- [ ] 6.1 `deploy/`: the `freehire-billing-sync` service and timer (hourly), and the entry
-      in `deploy/AGENTS.md`. **Copy them to the host** — `release.sh` does not. Hourly is
+- [x] 6.1 `deploy/`: the `freehire-billing-sync` service and timer (hourly), and the entry
+      in `deploy/AGENTS.md`. **Copy them to the host, and build the binary there** —
+      `release.sh` builds the API, not every command in `cmd/`. Hourly is
       chosen against the provider's retry ceiling: it gives up after five attempts over
       about two and a half hours, and after that this timer is the only path left
-- [ ] 6.2 Record the manual dashboard steps (register the webhook URL, enable HMAC signing
+- [x] 6.2 Record the manual dashboard steps (register the webhook URL, enable HMAC signing
       and capture the secret, mint the `sk_` key, create the `pro` entitlement and the Web
       Billing paywall, capture the paywall token) where the other manual host steps live
 - [ ] 6.3 Add the four variables to `/opt/freehire/.env` on the host. Confirm which env
       file the worker unit actually reads before assuming — a variable in the wrong file
       degrades silently
-- [ ] 6.4 Confirm `.gitleaks.toml` needs no new allowlist entry, and that no key reached a
+- [x] 6.4 Confirm `.gitleaks.toml` needs no new allowlist entry, and that no key reached a
       tracked file
-- [ ] 6.5 Do **not** add billing to `docker-compose`'s default services
+- [x] 6.5 Do **not** add billing to `docker-compose`'s default services
 
 ## 7. Verification
 

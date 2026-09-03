@@ -24,6 +24,21 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   half is copying it to the host and running `systemctl daemon-reload`. Treat git as the
   truth and the host as the copy, not the other way round, or this snapshot rots into
   fiction within a month.
+- **Billing has three manual dashboard steps, and the units are useless without them.**
+  `freehire-billing-sync` and the webhook route both read `REVENUECAT_API_KEY`,
+  `REVENUECAT_WEBHOOK_SECRET`, `REVENUECAT_ENTITLEMENT` and `BILLING_CHECKOUT_URL` from
+  `/opt/freehire/.env`. Getting them means, in the provider's dashboard: registering the
+  webhook at `https://freehire.me/api/v1/billing/revenuecat/webhook` and **enabling HMAC
+  signing** on it (the handler refuses an unsigned delivery — there is no fallback);
+  minting a **secret** `sk_` key, since a public one is refused on the subscriber
+  endpoint; and creating the `pro` entitlement and the Web Billing paywall, whose token is
+  what `BILLING_CHECKOUT_URL` holds. With none of them set every billing route is simply
+  not mounted and the timer is a no-op that never opens the pool, so the units are safe to
+  install before the dashboard is ready — they are just inert.
+- **A new worker needs its binary built on the host.** `release.sh` builds the API, not
+  every command in `cmd/`. `billing-sync` is the first addition since that was last true;
+  build it where the other worker binaries live before enabling the timer, or the unit
+  fails on a missing executable every hour.
 - **The environment is split across two files, and the split is a trap.** Every unit reads
   `/opt/freehire/.env`; the mail credentials (`NOTIFY_EMAIL_FROM` plus the SES keys) live
   ONLY in `/opt/freehire/.env.notify`. A worker that sends mail and reads just the first
