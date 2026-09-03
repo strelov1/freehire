@@ -1,11 +1,13 @@
-// Command ingest is the standalone source-ingest worker. It loads one board file
-// (sources/<provider>.yml, or a mixed sources/custom.yml — passed as the first argument
-// or via SOURCES_FILE), fetches each board through its adapter, normalizes the postings,
-// and upserts them — enqueuing new ones for enrichment in the same write. A file's
-// entries usually share the file-name provider, but an entry may name its own, so one
-// file can cover several single-source providers. After the run each provider that
-// ingested at least one job has its stale jobs swept. Run on a schedule (e.g. cron); it
-// processes its boards once and exits.
+// Command ingest is the standalone source-ingest worker. It takes a provider name
+// (passed as the first argument or via INGEST_PROVIDER), loads that provider's
+// pending/active boards from the boards table, fetches each through its adapter,
+// normalizes the postings, and upserts them — enqueuing new ones for enrichment in the
+// same write. After the run the provider (if it ingested at least one job) has its stale
+// jobs swept. Run on a schedule (e.g. cron); it processes its boards once and exits.
+//
+// A board's insert-time validation (provider registered, board id present unless
+// boardless) already happened when it entered the boards table — see
+// internal/ingest/boardcatalog — so this worker does not re-validate before crawling.
 //
 // Each crawl's new or content-changed jobs are queued (search_outbox, atomically
 // with their write) for the live facet search index; cmd/search-drain builds and
@@ -28,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -46,39 +49,33 @@ func main() {
 }
 
 func run() int {
-	// The board file is usually one provider's list (sources/<provider>.yml, provider =
-	// file name), but an entry may name its own provider, so it may be a mixed file
-	// (sources/custom.yml). Accept it as the first positional argument (cron passes the
-	// file) or via SOURCES_FILE. An optional --shard=i/n (or the SHARD env) crawls only a
-	// round-robin slice of the file, so a provider with too many boards to finish in one
-	// timeout (workday) is spread across several staggered runs.
-	var path, shardSpec string
+	// The provider to crawl. Accept it as the first positional argument (cron passes the
+	// provider name) or via INGEST_PROVIDER. An optional --shard=i/n (or the SHARD env)
+	// crawls only a round-robin slice of that provider's boards, so a provider with too
+	// many boards to finish in one timeout (workday) is spread across several staggered
+	// runs.
+	var provider, shardSpec string
 	for _, a := range os.Args[1:] {
 		switch {
 		case strings.HasPrefix(a, "--shard="):
 			shardSpec = strings.TrimPrefix(a, "--shard=")
 		case a == "--shard":
 			// The value must be attached (--shard=i/n); a space-separated form would
-			// otherwise swallow the next arg (the board path) as the selector's value.
+			// otherwise swallow the next arg (the provider name) as the selector's value.
 			log.Print("config: --shard needs an attached value, e.g. --shard=2/6")
 			return 1
-		case a != "" && !strings.HasPrefix(a, "-") && path == "":
-			path = a
+		case a != "" && !strings.HasPrefix(a, "-") && provider == "":
+			provider = a
 		}
 	}
-	if path == "" {
-		path = os.Getenv("SOURCES_FILE")
+	if provider == "" {
+		provider = os.Getenv("INGEST_PROVIDER")
 	}
 	if shardSpec == "" {
 		shardSpec = os.Getenv("SHARD")
 	}
-	if path == "" {
-		log.Print("config: no board file given (pass sources/<provider>.yml as an argument or set SOURCES_FILE)")
-		return 1
-	}
-	sourceCfg, err := sources.LoadConfig(path)
-	if err != nil {
-		log.Printf("config: %v", err)
+	if provider == "" {
+		log.Print("config: no provider given (pass it as an argument or set INGEST_PROVIDER)")
 		return 1
 	}
 
@@ -89,27 +86,6 @@ func run() int {
 	if err := sources.ApplyProxyEgress(registry); err != nil {
 		log.Printf("config: %v", err)
 		return 1
-	}
-	// Fail fast before touching the DB: a misconfigured board should not start a run.
-	// Validate the WHOLE file (not just this shard's slice) so a config error anywhere is
-	// caught on every shard's run, not only when its shard happens to include the bad entry.
-	if err := sourceCfg.Validate(registry); err != nil {
-		log.Printf("config: %v", err)
-		return 1
-	}
-
-	// Narrow to this shard's slice, if requested. Applied after validation, so the run
-	// crawls only its share of a large board file while the stale-job sweep below stays
-	// safe (it already scopes closes to the companies actually crawled this run).
-	if shardSpec != "" {
-		i, n, err := sources.ParseShard(shardSpec)
-		if err != nil {
-			log.Printf("config: %v", err)
-			return 1
-		}
-		full := len(sourceCfg.Sources)
-		sourceCfg = sourceCfg.Shard(i, n)
-		log.Printf("ingest: shard %d/%d — crawling %d of %d boards in %s", i, n, len(sourceCfg.Sources), full, path)
 	}
 
 	// Resolved before the DB is touched, like every other config read here: a bad value should
@@ -138,6 +114,25 @@ func run() int {
 		return 1
 	}
 	defer cleanup()
+
+	boards, err := boardcatalog.LoadForProvider(ctx, boardcatalog.NewQueriesRepository(db.New(pool)), provider)
+	if err != nil {
+		log.Printf("config: load boards for %s: %v", provider, err)
+		return 1
+	}
+	sourceCfg := sources.Config{Provider: provider, Sources: boards}
+
+	// Narrow to this shard's slice, if requested.
+	if shardSpec != "" {
+		i, n, err := sources.ParseShard(shardSpec)
+		if err != nil {
+			log.Printf("config: %v", err)
+			return 1
+		}
+		full := len(sourceCfg.Sources)
+		sourceCfg = sourceCfg.Shard(i, n)
+		log.Printf("ingest: shard %d/%d — crawling %d of %d boards for %s", i, n, len(sourceCfg.Sources), full, provider)
+	}
 
 	// crawled records the company slugs each provider actually wrote this run, so the
 	// post-run sweep scopes its closes to them (see the sweep below and crawledSet).
@@ -171,13 +166,13 @@ func run() int {
 	logUnhealthyBoards(ctx, db.New(pool))
 
 	total := runStats.Total()
-	log.Printf("ingest done: file=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d",
-		path, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d",
+		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected)
 
 	// A provider at 0% took the cheap write for nothing all run — a hashed field is churning
 	// between crawls, which costs a full row rewrite AND a pointless index push every pass.
 	if s := tally.summary(); s != "" {
-		log.Printf("ingest writes: file=%s %s", path, s)
+		log.Printf("ingest writes: provider=%s %s", provider, s)
 	}
 
 	// A failed board is counted in total.Failed; surface it (and any sweep failure

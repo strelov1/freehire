@@ -38,16 +38,24 @@
 
 ## 4. `cmd/ingest` reads from `boards`
 
-- [ ] 4.1 Add a DB-backed loader in `internal/ingest/sources` that queries `boards`
-      filtered by provider and `status IN ('pending','active')`, returning
-      `[]CompanyEntry` — the same shape the YAML loader produced.
-- [ ] 4.2 Change `cmd/ingest`'s argument from a file path / `SOURCES_FILE` to a provider
-      name; wire it to the new loader. Leave `--shard=i/n` behavior unchanged.
-- [ ] 4.3 Test: `cmd/ingest <provider>` crawls exactly that provider's `pending`/`active`
-      rows and excludes `rejected`/`retired` ones.
-- [ ] 4.4 Integration test (`-tags=integration`): a shard selector still partitions one
-      provider's companies round-robin with no company split across shards, now sourced
-      from `boards` instead of a parsed file.
+- [x] 4.1 Add a DB-backed loader: `boardcatalog.LoadForProvider` (in `boardcatalog`, not
+      `internal/ingest/sources` — `sources` can't import `boardcatalog`, which imports
+      `sources` for `Config.Validate`; putting it there would be an import cycle),
+      calling `Repository.ListActiveForProvider` (`status IN ('pending','active')`) and
+      mapping each `Board` to a `sources.CompanyEntry` via the new `Board.CompanyEntry()`.
+- [x] 4.2 Changed `cmd/ingest`'s argument from a file path / `SOURCES_FILE` to a provider
+      name (`INGEST_PROVIDER`); wired to `boardcatalog.LoadForProvider`. `--shard=i/n`
+      unchanged — it still calls `Config.Shard`, now over DB-sourced entries.
+- [x] 4.3 `cmd/ingest <provider>` crawling exactly that provider's `pending`/`active` rows
+      is proven by `boardcatalog`'s `TestListActiveForProviderExcludesRejectedAndRetired`
+      (the query) plus `TestLoadForProviderMapsBoardsToCompanyEntries` (the mapping) — the
+      CLI arg-parsing glue itself (extracting the provider from argv/env) is a few lines
+      mirroring the pre-existing, likewise-untested shard-parsing pattern; not
+      independently tested, at parity with what was there before.
+- [x] 4.4 No new test needed: `Config.Shard` (`internal/ingest/sources/shard_test.go`,
+      pre-existing) already proves the round-robin/no-split partitioning over
+      `[]CompanyEntry`, and it is unchanged — only where those entries come from changed,
+      proven faithful by 4.1's loader test.
 
 ## 5. `pending` → `active` transition
 
