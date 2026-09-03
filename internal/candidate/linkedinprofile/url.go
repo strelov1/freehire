@@ -95,6 +95,10 @@ func isProfileHost(host string) bool {
 // non-ASCII ones for non-Latin names), digits, hyphens and underscores. Rejecting
 // everything else is what stops a hostname, a path or a query from being mistaken
 // for an id when the input arrived with no host at all.
+//
+// The id comes back lowercased. LinkedIn issues them lowercase and treats them
+// case-insensitively, so folding here is what makes "one profile, one request" true of a
+// user who typed their own name with a capital.
 func checkedID(id string) (string, error) {
 	if id == "" || len(id) > maxPublicIDLen {
 		return "", ErrNotAProfileURL
@@ -105,7 +109,7 @@ func checkedID(id string) (string, error) {
 		}
 		return "", ErrNotAProfileURL
 	}
-	return id, nil
+	return strings.ToLower(id), nil
 }
 
 func isASCIILetters(s string) bool {

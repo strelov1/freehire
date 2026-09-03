@@ -79,6 +79,15 @@ func TestFetchRejectsABadURLWithoutARequest(t *testing.T) {
 	}
 }
 
+// blockUntilClientGivesUp returns a handler that answers nothing until the caller hangs up,
+// so the client's timeout is what ends the request. Sleeping a fixed span instead would make
+// srv.Close() wait out that span for real; waiting on a channel the test closes deadlocks,
+// because srv.Close() runs first and blocks on this very handler. The request's own context
+// is the one signal that arrives at the right moment, and it is also what really happens.
+func blockUntilClientGivesUp() http.HandlerFunc {
+	return func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() }
+}
+
 func TestFetchFailures(t *testing.T) {
 	t.Parallel()
 
@@ -109,10 +118,8 @@ func TestFetchFailures(t *testing.T) {
 			},
 		},
 		{
-			name: "a server that never answers",
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				time.Sleep(2 * time.Second)
-			},
+			name:    "a server that never answers",
+			handler: blockUntilClientGivesUp(),
 			client: func(base string) *Client {
 				c := testClient(base)
 				c.httpClient = &http.Client{Timeout: 50 * time.Millisecond}
@@ -161,8 +168,61 @@ func TestFetchSeparatesAnUnreadablePageFromAFailedFetch(t *testing.T) {
 	}
 }
 
-// The production client must refuse to be pointed at the network it runs inside,
-// which is what stops a redirect from turning this into an SSRF gadget.
+// A body exactly at the cap is a whole page and must succeed; the cap is a bound, not a
+// budget. This pins the boundary against a future >= where a > belongs.
+func TestFetchAcceptsABodyExactlyAtTheCap(t *testing.T) {
+	t.Parallel()
+
+	const node = `{"@type":"Person","name":"Dana Okonkwo"}`
+	body := `<html><script type="application/ld+json">` + node + `</script><!--`
+	body += strings.Repeat("x", 1024-len(body)-3) + "-->"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := testClient(srv.URL)
+	c.maxBody = int64(len(body))
+
+	got, err := c.Fetch(context.Background(), "danaokonkwo")
+	if err != nil {
+		t.Fatalf("a body exactly at the cap was rejected: %v", err)
+	}
+	if got.Name != "Dana Okonkwo" {
+		t.Errorf("Name = %q", got.Name)
+	}
+}
+
+// LinkedIn treats public ids case-insensitively, so a user who typed their own name with a
+// capital must reach the same one page as everyone else.
+func TestFetchFoldsTheIDToOneCanonicalRequest(t *testing.T) {
+	t.Parallel()
+
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write(fixture(t, "profile.html"))
+	}))
+	defer srv.Close()
+
+	c := testClient(srv.URL)
+	for _, in := range []string{"Istrelov", "https://www.linkedin.com/in/ISTRELOV"} {
+		if _, err := c.Fetch(context.Background(), in); err != nil {
+			t.Fatalf("Fetch(%q): %v", in, err)
+		}
+	}
+	for _, p := range paths {
+		if p != "/in/istrelov" {
+			t.Errorf("requested %q, want %q", p, "/in/istrelov")
+		}
+	}
+}
+
+// The production client must refuse to be pointed at the network it runs inside — the
+// guard sits in the transport's dialer, so it applies to every hop, not just the first.
+// This exercises the first hop; a redirect hop is the same dial through the same Control
+// hook, and testing it hermetically would need hop one to resolve publicly.
 func TestNewClientRefusesPrivateAddressSpace(t *testing.T) {
 	t.Parallel()
 

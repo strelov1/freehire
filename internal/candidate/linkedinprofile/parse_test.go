@@ -22,9 +22,9 @@ func fixture(t *testing.T, name string) []byte {
 func TestParseRealShape(t *testing.T) {
 	t.Parallel()
 
-	got, err := Parse(fixture(t, "profile.html"))
+	got, err := parse(fixture(t, "profile.html"), "danaokonkwo")
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
 
 	if got.Name != "Dana Okonkwo" {
@@ -48,20 +48,32 @@ func TestParseRealShape(t *testing.T) {
 	}
 }
 
-// The one failure that would actually reach a user's profile: a masked run written
-// into a field as if it were a value.
-func TestParseNeverEmitsAMaskedRun(t *testing.T) {
+// The one failure that would actually reach a user's profile: a withheld value written
+// into a field as if it were one.
+//
+// The contract is per value, not per character: a field is dropped when the WHOLE of it is
+// withheld. An asterisk inside real text stays, deliberately — "Senior Engineer*" is a
+// footnote marker on a real title, and scrubbing it would be inventing a value rather than
+// declining one. LinkedIn withholds whole strings, so this is the shape that matches the
+// source.
+func TestParseNeverEmitsAWithheldValue(t *testing.T) {
 	t.Parallel()
 
-	got, err := Parse(fixture(t, "profile.html"))
+	got, err := parse(fixture(t, "profile.html"), "danaokonkwo")
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
 
 	fields := append([]string{got.Name, got.Headline, got.Location, got.Company}, got.Languages...)
 	for _, f := range fields {
+		if masked(f) {
+			t.Errorf("field %q is a withheld run", f)
+		}
+		// The fixture carries no partially-masked strings, so on this input the stronger
+		// property happens to hold too — asserting it here would pin a promise the
+		// contract does not make.
 		if strings.Contains(f, "*") {
-			t.Errorf("field %q carries a masked run", f)
+			t.Errorf("fixture regression: field %q now carries an asterisk", f)
 		}
 	}
 }
@@ -72,12 +84,12 @@ func TestParseNeverEmitsAMaskedRun(t *testing.T) {
 func TestParseIgnoresANestedPersonInADecoyNode(t *testing.T) {
 	t.Parallel()
 
-	got, err := Parse(fixture(t, "profile.html"))
+	got, err := parse(fixture(t, "profile.html"), "danaokonkwo")
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
 	if got.Name == "Not The Profile Owner" {
-		t.Fatal("Parse picked up the Person nested inside a DiscussionForumPosting")
+		t.Fatal("parse picked up the Person nested inside a DiscussionForumPosting")
 	}
 }
 
@@ -106,7 +118,7 @@ func TestParseFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := Parse([]byte(tt.page))
+			got, err := parse([]byte(tt.page), "danaokonkwo")
 			if !errors.Is(err, ErrNoProfile) {
 				t.Fatalf("err = %v, want ErrNoProfile", err)
 			}
@@ -123,7 +135,7 @@ func TestParseFailures(t *testing.T) {
 func TestParseFullyMaskedPersonIsNotAProfile(t *testing.T) {
 	t.Parallel()
 
-	got, err := Parse(fixture(t, "profile_fully_masked.html"))
+	got, err := parse(fixture(t, "profile_fully_masked.html"), "danaokonkwo")
 	if !errors.Is(err, ErrNoProfile) {
 		t.Fatalf("err = %v, want ErrNoProfile", err)
 	}
@@ -143,9 +155,9 @@ func TestParsePartiallyMaskedPersonSucceeds(t *testing.T) {
 		"address":{"addressLocality":"Lisbon, Portugal"},
 		"worksFor":[{"name":"**********"}]}]}</script></html>`
 
-	got, err := Parse([]byte(page))
+	got, err := parse([]byte(page), "danaokonkwo")
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
 	if got.Name != "Dana Okonkwo" {
 		t.Errorf("Name = %q", got.Name)
@@ -170,9 +182,9 @@ func TestParseAcceptsABarePersonDocument(t *testing.T) {
 		{"@context":"http://schema.org","@type":"Person","name":"Dana Okonkwo",
 		 "description":"Staff Frontend Engineer"}</script></html>`
 
-	got, err := Parse([]byte(page))
+	got, err := parse([]byte(page), "danaokonkwo")
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
 	if got.Name != "Dana Okonkwo" || got.Headline != "Staff Frontend Engineer" {
 		t.Errorf("got %+v", got)

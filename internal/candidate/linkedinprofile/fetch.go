@@ -27,6 +27,9 @@ const (
 	// measured, not assumed: LinkedIn serves the same public page, with the same
 	// JSON-LD, to this string as it does to Chrome.
 	userAgent = "freehire/1.0 (+https://freehire.me)"
+	// LinkedIn normalises a profile to one canonical page in a hop or two; more than
+	// this is a loop or a redirector, neither of which leads to a profile.
+	maxRedirects = 5
 )
 
 // Client reads public LinkedIn member profiles. The zero value is not usable; call
@@ -42,12 +45,23 @@ type Client struct {
 // NewClient returns a reader that fetches over the platform's guarded HTTP client —
 // which refuses private address space, including across a redirect, so a profile URL
 // cannot be turned into a request against our own network.
+//
+// It additionally refuses to follow a redirect off LinkedIn. The guarded dialer already
+// stops the dangerous case (a hop into our own network); this stops the merely wrong one,
+// where a redirect to some public host would have that page's JSON-LD read and staged into
+// a user's profile as if it were theirs.
 func NewClient() *Client {
-	return &Client{
-		httpClient: safehttp.NewClient(fetchTimeout),
-		base:       profileBase,
-		maxBody:    defaultMaxBody,
+	c := safehttp.NewClient(fetchTimeout)
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		if !isProfileHost(req.URL.Hostname()) {
+			return fmt.Errorf("refusing redirect off LinkedIn to %q", req.URL.Hostname())
+		}
+		return nil
 	}
+	return &Client{httpClient: c, base: profileBase, maxBody: defaultMaxBody}
 }
 
 // Fetch reads the public profile named by input — a profile URL in any of the forms a
@@ -93,5 +107,5 @@ func (c *Client) Fetch(ctx context.Context, input string) (Profile, error) {
 		return Profile{}, fmt.Errorf("%w: body exceeds %d bytes", ErrFetch, c.maxBody)
 	}
 
-	return Parse(body)
+	return parse(body, id)
 }

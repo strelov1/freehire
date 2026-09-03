@@ -50,6 +50,8 @@ The fetch carries no credentials, goes out through `safehttp`'s guarded client (
 
 **Alternative rejected:** fetching from the browser. CORS blocks reading `linkedin.com` cross-origin, and the dictionaries are server-side regardless.
 
+**Alternative rejected: asking LinkedIn.** The repository already ships a LinkedIn OIDC provider (`internal/identity/auth/oauth/oidc.go`), so the obvious question is why the import does not simply use it. Its scopes are `openid, email` and its `userinfo` endpoint returns identity — who you are — not profile: no positions, no headline, not even the vanity URL. Asking for more is not a configuration change; the full-profile scopes live behind LinkedIn's Partner Program.
+
 ### The endpoint returns the CV path's shape plus location, and stores nothing
 
 `POST /api/v1/me/linkedin/import` returns `{skills, categories, seniority?}` — byte-identical in shape to `/me/resume/extract` — plus the derived location and the display fields (name, headline, company) the UI shows as "here is what we recognised".
