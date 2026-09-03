@@ -74,13 +74,20 @@
 
 ## 6. `cmd/add-board`
 
-- [ ] 6.1 `cmd/add-board`: report-by-default, `--apply` to write. Add mode inserts at
-      `status='active'` through the same validation function as §2. Retire mode
-      (`--retire provider/board[/region]`) sets an existing row's status to `retired`
-      without deleting it.
-- [ ] 6.2 Tests: dry run writes nothing; `--apply` inserts/retires; re-running add is a
-      no-op via the unique index; an invalid add reports the same validation reason as a
-      crowdsourced submission would.
+- [x] 6.1 `cmd/add-board`: report-by-default, `--apply` to write. Add mode
+      (`--provider --board --company [--region] [--hub] [--tenants=k:v,...]`) inserts at
+      `status='active'` through `boardcatalog.Insert`/`Validate` (same as §2). Retire mode
+      (`--retire --provider --board [--region]`) sets an existing live row's status to
+      `retired` without deleting it.
+- [x] 6.2 Tests: `addBoard`/`retireBoard` (the DB-touching cores, split out from the
+      `worker.Bootstrap`-calling `runAdd`/`runRetire` CLI wrappers — a test needs to hand
+      them a throwaway `testdb.Pool`, not the environment's real `DATABASE_URL`, which
+      `worker.Bootstrap` would otherwise read; found by a first version of these tests
+      failing with "relation boards does not exist" against a real dev database) cover:
+      `--apply` inserts/retires, retire doesn't delete the row, re-running add is a no-op
+      via `ErrDuplicateBoard`, retiring a nonexistent board reports not-found. The dry-run
+      and invalid-candidate paths are covered on the real `runAdd`/`runRetire` (they never
+      reach the database either way, so the environment's real one is harmless to touch).
 
 ## 7. Contribution flow moves to `boards`/`board_submissions`
 
