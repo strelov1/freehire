@@ -30,6 +30,18 @@ const (
 	// held steadily by a single third-party client, so this leaves that caller room
 	// to grow by two thirds before it ever sees a 429.
 	agentSearchPerMinute = 300
+
+	// suggestPerMinute covers the search box's completions. The split here is by
+	// FREQUENCY rather than by cost: each call is cheap — a query against a
+	// dictionary of tens of thousands of documents, not the 8M-document catalogue —
+	// but the box issues one per settled keystroke, so a visitor composing a query
+	// spends ten of these where the same visitor spends one ordinary read. Sharing
+	// the public-read budget would mean typing a query throttles the page that
+	// answers it.
+	//
+	// 1200/min is 20 r/s per caller, which is faster than anybody types and far
+	// short of what a scraper would want from an endpoint that returns no postings.
+	suggestPerMinute = 1200
 )
 
 // publicReadLimiter throttles the cheap public reads as one shared budget.
@@ -45,4 +57,10 @@ func publicReadLimiter(throttler ratelimit.Throttler) fiber.Handler {
 // exhausting it leaves the ordinary search endpoints serving.
 func agentSearchLimiter(throttler ratelimit.Throttler) fiber.Handler {
 	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("agentsearch"), agentSearchPerMinute, time.Minute)
+}
+
+// suggestLimiter throttles the search box's completions on their own budget, so a
+// visitor typing quickly cannot exhaust the allowance the rest of the site reads on.
+func suggestLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("suggest"), suggestPerMinute, time.Minute)
 }

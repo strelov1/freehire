@@ -354,6 +354,58 @@ paths:
                 $ref: "#/components/schemas/FacetsEnvelope"
         default:
           $ref: "#/components/responses/Error"
+  /suggest:
+    get:
+      operationId: getSuggestions
+      tags:
+        - Jobs
+      summary: Complete what is being typed into a search box
+      description: |
+        Complete a partly-typed query against the catalogue's own vocabulary:
+        the posting titles it actually carries, plus roles, skills,
+        specializations and companies.
+
+        It completes a PHRASE, not a word. The query is split into the leading
+        phrases already recognised and the trailing fragment still being typed,
+        so `senior software engineer go` completes to Senior Software Engineer at
+        Google rather than starting over. Each row therefore carries EVERY part
+        it names, and applying only one of them discards what the caller typed.
+
+        A `title` part names no facet — apply it as `q`. Every other kind carries
+        a `slug` for its own facet (`role`, `skills`, `category`,
+        `company_slug`), and those combine with AND.
+
+        Typos are forgiven in the fragment, not in the recognised phrases: a
+        misspelled phrase falls through to the fragment, where the match is
+        typo-tolerant. An empty `q` returns an empty list — what an empty box
+        should offer is a curated starting point, which is a presentation
+        decision this endpoint does not make.
+      x-openai-isConsequential: false
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: The partly-typed query. Empty returns no suggestions.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+          description: |
+            Rows to return. Clamped rather than rejected: this endpoint is typed
+            into, so an out-of-range value falls back to the default.
+      responses:
+        "200":
+          description: Completions for the typed query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuggestionsEnvelope"
+        default:
+          $ref: "#/components/responses/Error"
   /jobs/{slug}:
     get:
       operationId: getJob
@@ -1557,6 +1609,61 @@ components:
             $ref: "#/components/schemas/Job"
         meta:
           $ref: "#/components/schemas/PaginationMeta"
+    SuggestionsEnvelope:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Suggestion"
+        meta:
+          type: object
+          additionalProperties: true
+    Suggestion:
+      type: object
+      required:
+        - text
+        - parts
+        - jobs
+      properties:
+        text:
+          type: string
+          description: |
+            The whole phrase this row names — the recognised prefix plus the
+            completion, e.g. "Senior Software Engineer Google".
+        parts:
+          type: array
+          description: |
+            Every part the row applies. Apply ALL of them: a row naming a role and
+            a company that is applied as only one of the two silently discards
+            what the caller typed.
+          items:
+            type: object
+            required:
+              - kind
+              - text
+            properties:
+              kind:
+                type: string
+                enum: [title, role, skill, category, company]
+                description: |
+                  Which vocabulary the part comes from, and so which parameter it
+                  applies to: `role` → `role`, `skill` → `skills`, `category` →
+                  `category`, `company` → `company_slug`. A `title` names no facet
+                  and is applied as `q`.
+              slug:
+                type: string
+                description: The facet value to apply. Absent for a `title`.
+              text:
+                type: string
+                description: How this part reads on its own.
+        jobs:
+          type: integer
+          description: |
+            Open postings behind the completion. Never zero — a suggestion that
+            leads to an empty page is withheld.
     FacetsEnvelope:
       type: object
       required:

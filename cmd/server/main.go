@@ -33,6 +33,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 	"github.com/strelov1/freehire/internal/search/search"
+	"github.com/strelov1/freehire/internal/search/suggest"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -164,8 +165,14 @@ func main() {
 	// write path and the Meili semantic index it fed were both removed, see
 	// openspec/changes/drop-hybrid-search-pgvector-similar).
 	var searchClient *search.Client
+	// suggestSvc answers the search box's completions. It carries an in-process
+	// recognition set — the phrases a visitor may have already typed — which is why it
+	// is a long-lived object here rather than something built per request.
+	var suggestSvc *suggest.Service
 	if cfg.MeiliKey != "" {
 		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+		suggestSvc = suggest.New(suggest.NewIndex(searchClient))
+		startSuggestRefresh(ctx, suggestSvc)
 	}
 
 	// Résumé storage is optional: only when all four S3 settings are present does
@@ -299,6 +306,7 @@ func main() {
 		GmailCipher:                 gmailCipher,
 		MailboxDomain:               cfg.MailboxDomain,
 		Search:                      searchClient,
+		Suggest:                     suggestSvc,
 		Blob:                        blobStore,
 		TypstBin:                    cfg.TypstBin,
 		CVEditAllowBulletTruncation: cfg.CVEditAllowBulletTruncation,
@@ -367,4 +375,35 @@ func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) 
 		return nil, nil
 	}
 	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher
+}
+
+// suggestRefreshInterval is how often the completion service reloads the phrases it
+// recognises. The dictionary behind it is rebuilt once a day by
+// cmd/build-suggestions, so this only has to be shorter than that — and a phrase the
+// process has not learned yet is not an error: it simply falls into the fragment,
+// where the index completes it. That is the whole reason a ticker is enough and a
+// build notification is not worth its plumbing.
+const suggestRefreshInterval = time.Hour
+
+// startSuggestRefresh keeps the recognition set current in the background.
+//
+// The first load runs inline-ish (in the goroutine, immediately) rather than blocking
+// boot: an unreachable or not-yet-built dictionary must not stop the server from
+// serving everything else. Until it lands, nothing is recognised and every query is
+// one fragment — which is the plain completion behaviour, not a failure.
+func startSuggestRefresh(ctx context.Context, svc *suggest.Service) {
+	go func() {
+		t := time.NewTicker(suggestRefreshInterval)
+		defer t.Stop()
+		for {
+			if err := svc.Refresh(ctx); err != nil {
+				log.Printf("suggest: refresh: %v", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 }

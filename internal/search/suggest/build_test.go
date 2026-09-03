@@ -35,20 +35,34 @@ func TestBuild_Titles(t *testing.T) {
 
 	// The three spellings are one job. Merging them is what a floor of 10 has to see:
 	// each spelling alone is under it, and together they are 12.
-	if !slices.Contains(texts(docs), "product owner") {
+	if !slices.Contains(texts(docs), "Product Owner") {
 		t.Fatalf("merged spellings must clear the floor together, got %v", texts(docs))
 	}
-	if slices.Contains(texts(docs), "java developer") {
+	if slices.Contains(texts(docs), "Java Developer") {
 		t.Error("a title under the floor must not be offered")
 	}
-	if slices.Contains(texts(docs), "one off role") {
+	if slices.Contains(texts(docs), "One Off Role") {
 		t.Error("a one-off title is noise, not a suggestion")
 	}
 
 	for _, d := range docs {
-		if d.Text == "product owner" && d.Jobs != 12 {
+		if d.Text == "Product Owner" && d.Jobs != 12 {
 			t.Errorf("merged count = %d, want 12", d.Jobs)
 		}
+	}
+}
+
+// A mined title is normalised to lowercase so its spellings merge. That is the KEY,
+// not the label: "product owner" in a dropdown among "Backend Engineer" and "Google"
+// reads as a bug. The document carries the display form and merges on the normalised
+// one.
+func TestBuild_ATitleIsOfferedTheWayItIsWritten(t *testing.T) {
+	docs := Build(Input{Titles: map[string]int{"PRODUCT OWNER": 20}, TitleFloor: 1})
+	if len(docs) != 1 {
+		t.Fatalf("got %v", texts(docs))
+	}
+	if docs[0].Text != "Product Owner" {
+		t.Errorf("text = %q, want %q", docs[0].Text, "Product Owner")
 	}
 }
 
@@ -57,10 +71,10 @@ func TestBuild_DropsATitleThatNamesNoCraft(t *testing.T) {
 		Titles:     map[string]int{"Manager": 500, "Engineering Manager": 500},
 		TitleFloor: 10,
 	})
-	if slices.Contains(texts(docs), "manager") {
+	if slices.Contains(texts(docs), "Manager") {
 		t.Error("a bare generic clears any floor and answers nothing")
 	}
-	if !slices.Contains(texts(docs), "engineering manager") {
+	if !slices.Contains(texts(docs), "Engineering Manager") {
 		t.Error("the same noun qualified by a craft is a real suggestion")
 	}
 }

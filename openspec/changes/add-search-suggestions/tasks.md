@@ -23,12 +23,12 @@
 
 ## 4. Stage 2 — the endpoint
 
-- [ ] 4.1 Implement the in-process phrase set: load the normalised phrases from the index at startup, refresh on a ticker, expose the exact longest-prefix parse
-- [ ] 4.2 Implement the fragment query against the index, excluding the kinds the prefix already filled (roles and companies once, skills unbounded)
-- [ ] 4.3 Implement ranking — relevance, then recorded demand, then open-posting count, then shorter text — and withhold any suggestion whose count is zero
-- [ ] 4.4 Implement the empty-`q` response: the curated category order, never the highest-count values
-- [ ] 4.5 Wire `GET /api/v1/suggest` in `internal/api/handler` with the standard list response shape, and give it its own rate-limit bucket
-- [ ] 4.6 Document the endpoint in `web/static/openapi.yaml`
+- [x] 4.1 Implement the in-process phrase set: load the normalised phrases from the index at startup, refresh on a ticker, expose the exact longest-prefix parse
+- [x] 4.2 Implement the fragment query against the index, excluding the kinds the prefix already filled (roles and companies once, skills unbounded)
+- [x] 4.3 Implement ranking — relevance, then recorded demand, then open-posting count, then shorter text — and withhold any suggestion whose count is zero
+- [x] 4.4 Implement the empty-`q` response: the curated category order, never the highest-count values
+- [x] 4.5 Wire `GET /api/v1/suggest` in `internal/api/handler` with the standard list response shape, and give it its own rate-limit bucket
+- [x] 4.6 Document the endpoint in `web/static/openapi.yaml`
 
 ## 5. Stage 2 — the client moves onto the endpoint
 

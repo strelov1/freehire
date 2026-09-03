@@ -101,10 +101,12 @@ func Build(in Input) []Document {
 		if n < in.TitleFloor || !Offerable(text) {
 			continue
 		}
-		// A title names no facet, so its slug is empty and its id is the text itself —
-		// the text IS its identity.
+		// A title names no facet, so its slug is empty and its id is the normalised
+		// text — the text IS its identity. The DISPLAY form is title-cased: the
+		// lowercase is what merges the spellings, and "product owner" sitting in a
+		// dropdown between "Backend Engineer" and "Google" reads as a bug.
 		docs = append(docs, Document{
-			ID: string(KindTitle) + ":" + text, Text: text, Kind: KindTitle, Jobs: n,
+			ID: string(KindTitle) + ":" + text, Text: displayTitle(text), Kind: KindTitle, Jobs: n,
 		})
 	}
 
@@ -156,9 +158,21 @@ func categoryText(slug string) string { return titleWords(slug) }
 func skillText(slug string) string    { return titleWords(slug) }
 
 func titleWords(slug string) string {
-	words := strings.FieldsFunc(slug, func(r rune) bool { return r == '_' || r == '-' })
+	return capitalise(strings.FieldsFunc(slug, func(r rune) bool { return r == '_' || r == '-' }))
+}
+
+// displayTitle renders a normalised posting title the way it is written. It splits on
+// WHITESPACE only, unlike titleWords: a hyphen inside a mined title is part of the
+// name, so splitting there turns "front-end developer" into "Front End Developer".
+func displayTitle(title string) string { return capitalise(strings.Fields(title)) }
+
+// capitalise upper-cases each word's first rune and leaves the rest alone. Leaving the
+// rest alone is the point: "c#" becomes "C#" and "node.js" becomes "Node.js", where
+// title-casing the whole word would produce "Node.Js".
+func capitalise(words []string) string {
 	for i, w := range words {
-		words[i] = strings.ToUpper(w[:1]) + w[1:]
+		r := []rune(w)
+		words[i] = strings.ToUpper(string(r[0])) + string(r[1:])
 	}
 	return strings.Join(words, " ")
 }

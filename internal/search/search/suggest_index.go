@@ -99,6 +99,22 @@ func (c *Client) primaryKeyFor(uid string) string {
 	return primaryKey
 }
 
+// maxDictionary bounds the whole-dictionary read behind the recognition set. The
+// dictionary is tens of thousands of rows by construction — a floor keeps it there —
+// so this is a guard against a misconfigured floor rather than a paging limit: reading
+// a dictionary that large into a long-lived process is a memory problem, and silently
+// truncating it is better than the alternative of holding all of it.
+const maxDictionary = 200_000
+
+// AllSuggestions reads the dictionary whole, for the in-process recognition set.
+//
+// An empty query with the engine's default ranking, which for this index is
+// `searches:desc, jobs:desc` — so a truncation keeps the phrases people ask for and
+// drops the tail nobody has typed.
+func AllSuggestions[T any](ctx context.Context, c *Client) ([]T, error) {
+	return SearchSuggestions[T](ctx, c, "", "", maxDictionary)
+}
+
 // SearchSuggestions runs a query against the dictionary and decodes the hits into the
 // caller's document type.
 //

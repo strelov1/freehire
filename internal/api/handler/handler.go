@@ -58,6 +58,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 	"github.com/strelov1/freehire/internal/search/search"
+	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
 const (
@@ -257,6 +258,11 @@ type Config struct {
 	AppleNative         *appleauth.Client
 	AppleGrantKeys      *appleauth.KeyRing
 	Search              *search.Client
+	// Suggest answers the search box's completions from the dictionary index
+	// (cmd/build-suggestions writes it). Nil disables /suggest with a 503, the same
+	// shape as an unconfigured search — the rest of the site is unaffected, and the
+	// box falls back to offering nothing rather than to erroring.
+	Suggest *suggest.Service
 	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
@@ -529,6 +535,14 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies)
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
+	// The completion dictionary. Left nil when search is unconfigured — same reason as
+	// jobSearch above: a nil *suggest.Service wrapped in the interface would be a
+	// non-nil interface, and the handler's "not configured" check would pass straight
+	// into a nil dereference.
+	suggestH := &suggestHandlers{}
+	if cfg.Suggest != nil {
+		suggestH.suggest = cfg.Suggest
+	}
 	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
 	// search and a profile-aware conversation cannot disagree about what it says.
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
@@ -668,6 +682,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
 	searchH.register(api, mw)
+	suggestH.register(api, mw)
 	// Beside the search it builds a filter for, though it shares none of its
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.
