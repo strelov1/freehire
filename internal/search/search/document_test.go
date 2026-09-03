@@ -309,6 +309,59 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	}
 }
 
+func TestFromJob_CreatedTSIsFirstSeenEpoch(t *testing.T) {
+	// created_ts is when INGEST first wrote the row, which is the one date no source
+	// can rewrite — that is the whole reason it is filterable separately from
+	// posted_ts. Unlike posted_ts it has no fallback rule: created_at is written on
+	// insert and is never absent, so the field is set unconditionally.
+	created := pgtype.Timestamptz{Time: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC), Valid: true}
+
+	// The case the two dates exist to tell apart: a posting first seen months ago
+	// whose source restates its date as today. posted_ts follows the source; created_ts
+	// must not.
+	rewritten := pgtype.Timestamptz{Time: time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC), Valid: true}
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: rewritten})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if doc.CreatedTS != created.Time.Unix() {
+		t.Errorf("created_ts = %d, want %d (first-seen date)", doc.CreatedTS, created.Time.Unix())
+	}
+	if doc.PostedTS == doc.CreatedTS {
+		t.Errorf("created_ts must not follow a rewritten posted_at: both are %d", doc.CreatedTS)
+	}
+
+	// An undated source: posted_ts falls back to created_at, so the two agree. That is
+	// not a bug to guard against — it is the same instant, honestly reported twice.
+	docUndated, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created})
+	if err != nil {
+		t.Fatalf("FromJob undated: %v", err)
+	}
+	if docUndated.CreatedTS != created.Time.Unix() {
+		t.Errorf("created_ts = %d with no posted_at, want %d", docUndated.CreatedTS, created.Time.Unix())
+	}
+
+	// Index-only, exactly like posted_ts: present on the document JSON so Meilisearch
+	// can range-filter it, absent from the public wire shape (which already serves the
+	// same instant as the RFC3339 created_at).
+	rawDoc, _ := json.Marshal(doc)
+	var docMap map[string]json.RawMessage
+	if err := json.Unmarshal(rawDoc, &docMap); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := docMap["created_ts"]; !ok {
+		t.Errorf("created_ts missing from index document: %s", rawDoc)
+	}
+	rawView, _ := json.Marshal(jobview.Job{PublicSlug: "s"})
+	var viewMap map[string]json.RawMessage
+	if err := json.Unmarshal(rawView, &viewMap); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	if _, ok := viewMap["created_ts"]; ok {
+		t.Errorf("created_ts leaked into the public job wire shape: %s", rawView)
+	}
+}
+
 func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	// The search document caps the description so the inverted index (and a full
 	// rebuild's transient disk footprint) stays small; the detail endpoint still

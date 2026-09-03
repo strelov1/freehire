@@ -207,6 +207,20 @@ type Querier interface {
 	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
 	// FROM) so the platform identity comes back without a second query.
 	ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBatchParams) ([]ClaimApplyFormBatchRow, error)
+	// Claim a batch of live, unleased submission attempts by stamping claimed_at. Mirrors
+	// ClaimApplyFormBatch: FOR UPDATE OF q locks only queue rows (a bare FOR UPDATE would also
+	// lock jobs, making concurrent claim waves contend), SKIP LOCKED lets concurrent workers
+	// take disjoint rows, and the lease predicate reclaims entries whose worker died, so no
+	// separate reaper process is needed. failed_at/blocked_at excluded so a dead-lettered or
+	// parked attempt is never reclaimed by this query — auto_apply_queue_claimable_idx exists
+	// for exactly this predicate.
+	//
+	// Returns job.source, job.external_id and job.url because the caller builds the sidecar
+	// request from the row alone — source doubles as the ATS provider name, the same vocabulary
+	// internal/applyform's Provider field already uses, and external_id (board:posting-id) is
+	// what internal/applyform's own schema fetchers need to reuse their existing per-provider
+	// API calls rather than re-deriving them.
+	ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBatchParams) ([]ClaimAutoApplyBatchRow, error)
 	// Lease a batch of pending nudges, oldest first. FOR UPDATE OF n + SKIP LOCKED
 	// lets overlapping worker passes take disjoint rows so a nudge fires at most
 	// once; the lease predicate reclaims rows whose sender died (stale claimed_at).
@@ -887,6 +901,10 @@ type Querier interface {
 	// Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
 	// affected rows for a foreign or missing id.
 	DeleteAssistantSession(ctx context.Context, arg DeleteAssistantSessionParams) (int64, error)
+	// Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
+	// the same transaction, alongside LockJobForApply) is the durable record; the queue entry
+	// has nothing left to say. Mirrors DeleteApplyFormEntry.
+	DeleteAutoApplyEntry(ctx context.Context, id int64) error
 	// Remove a submission once triage has resolved its (provider, board) and inserted the
 	// corresponding boards row.
 	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
@@ -2790,6 +2808,12 @@ type Querier interface {
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.
 	MarkAllNotificationsRead(ctx context.Context, userID int64) (int64, error)
+	// Park an attempt the sidecar could not fully resolve: record which fields stopped it and
+	// why, and leave the lease in place. Unlike RecordAutoApplyFailure this is not a retry
+	// countdown — a parked attempt needs new data, not another try — so attempts is left
+	// untouched and blocked_at, not failed_at, is what excludes it from
+	// auto_apply_queue_claimable_idx from here on.
+	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
@@ -3234,6 +3258,11 @@ type Querier interface {
 	// place — its expiry gates the retry to a later run and doubles as the crash reaper, so a
 	// failed entry is never reprocessed within the same run. Mirrors RecordSemanticFailure.
 	RecordApplyFormFailure(ctx context.Context, arg RecordApplyFormFailureParams) (RecordApplyFormFailureRow, error)
+	// Count a transient failure: bump attempts, record the error, and dead-letter (set
+	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left in
+	// place — its expiry gates the retry to a later run, so a failed entry is never
+	// reprocessed within the same run. Mirrors RecordApplyFormFailure.
+	RecordAutoApplyFailure(ctx context.Context, arg RecordAutoApplyFailureParams) (RecordAutoApplyFailureRow, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.

@@ -47,6 +47,16 @@ type JobDocument struct {
 	// (Meili range operators need a number, not a string); it is declared on the
 	// document, not on jobview.Job, so it is filterable but never served to clients.
 	PostedTS int64 `json:"posted_ts"`
+	// CreatedTS is when ingest first wrote the row, in unix seconds — the numeric
+	// encoding of the same instant jobview.Job.CreatedAt renders as RFC3339, declared
+	// on the document for the same reason as PostedTS.
+	//
+	// It backs a SECOND date bound ("open within N days") because the two dates are
+	// not interchangeable: PostedTS follows what the source states, and some boards
+	// restate it on every crawl, so a posting open for months reads as posted today
+	// (jobreality calls this fake_freshness). CreatedTS is the system's own
+	// observation and no source can rewrite it.
+	CreatedTS int64 `json:"created_ts"`
 	// Roles are the job's natural role slugs derived at index time by roletag from
 	// its seniority, category, and title. Like PostedTS, Roles is declared on the
 	// document (not jobview.Job), so it backs the `roles` facet but is never part
@@ -118,6 +128,12 @@ func FromJob(j db.Job) (JobDocument, error) {
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
+	}
+	// No fallback rule to apply, unlike PostedTS: created_at is written on insert and
+	// is never absent. The Valid guard is for the zero db.Job a test may build, not for
+	// a row this could meet in production.
+	if j.CreatedAt.Valid {
+		doc.CreatedTS = j.CreatedAt.Time.Unix()
 	}
 	// ALWAYS set the key. With the embedder declared, Meilisearch REJECTS any document
 	// that omits it — "no vectors provided for document" — so an omission is not a

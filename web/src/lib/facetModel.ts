@@ -43,8 +43,19 @@ export interface JobFilters {
   salaryMin: number | null;
   /** Freshness: keep only jobs posted within the last N days (null = any age).
    *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
-   *  range filter relative to request time. */
+   *  range filter relative to request time.
+   *
+   *  This bounds the date the SOURCE states. Some boards restate it on every crawl,
+   *  so a posting open for months can satisfy a three-day bound here — see
+   *  `openWithinDays`, which is the bound that cannot be rewritten from outside. */
   postedWithinDays: number | null;
+  /** Keep only jobs first seen within the last N days (null = any age). Serialized as
+   *  `open_within_days`; the backend turns it into a created_ts range filter.
+   *
+   *  Independent of `postedWithinDays` and not a substitute for it: one asks how long
+   *  the posting has been in the catalogue, the other what date the board claims. Both
+   *  may be set, and they narrow the list together. */
+  openWithinDays: number | null;
   /** Keep only jobs asking for at most this many years of experience (null = any).
    *  `0` is a real bound — the jobs stating no prior experience is required — so
    *  every read of this field must test for null, never for falsiness. */
@@ -168,6 +179,7 @@ export function emptyFilters(): JobFilters {
     clearance: 'any',
     salaryMin: null,
     postedWithinDays: null,
+    openWithinDays: null,
     experienceYearsMax: null,
     sort: null,
   };
@@ -192,6 +204,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.clearance === 'only') p.set('requires_clearance', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
+  if (f.openWithinDays != null) p.set('open_within_days', String(f.openWithinDays));
   if (f.experienceYearsMax != null) p.set('experience_years_max', String(f.experienceYearsMax));
   // The default is written as the ABSENCE of the param, which is how the endpoint
   // spells both of its own defaults — so a browse feed and a relevance-ranked search
@@ -222,6 +235,34 @@ export function generalCountsCoverRole(scope: URLSearchParams): boolean {
   return !scope.get('q');
 }
 
+/** The furthest back either date bound reaches, mirroring `maxWithinDays` in
+ *  internal/search/search. A century is past anything in the catalogue; the ceiling is
+ *  there because Go's day-to-duration arithmetic wraps above ~106,751 days, and a bound
+ *  the server drops must not leave a chip here claiming it applied. */
+const MAX_WITHIN_DAYS = 36500;
+
+/** Matches exactly what Go's `strconv.Atoi` accepts: an optional sign, then digits.
+ *
+ *  `Number()` is more generous — it reads `1e2` as 100, `1.0` as 1 and `0x10` as 16,
+ *  none of which Atoi accepts. Reading a param one way here and another way on the
+ *  server is how `?open_within_days=1e2` came to show an active "Last 100 days" chip
+ *  over a list the server had never bounded. Leading zeros and a leading `+` DO parse
+ *  in Go, so they parse here too: agreement is the point, not strictness. */
+const ATOI = /^[+-]?\d+$/;
+
+/** A raw param read as a whole number of days the search will actually honour, or null
+ *  for "no bound".
+ *
+ *  Shared by the two date bounds so the rule is written once. A value that cannot be a
+ *  day count — absent, blank, mis-spelled, zero, negative, or further back than the
+ *  server reaches — imposes NO restriction rather than narrowing the list to nothing,
+ *  which is what the backend does with the same params. */
+function positiveDays(raw: string | null): number | null {
+  if (raw === null || !ATOI.test(raw)) return null;
+  const days = Number(raw);
+  return days > 0 && days <= MAX_WITHIN_DAYS ? days : null;
+}
+
 /** Parse filters back from URL query params. Include and exclude are independent
  *  sets; if a value appears in both (a malformed or legacy link), exclude wins and
  *  it is dropped from include so a value carries exactly one sign. */
@@ -244,10 +285,10 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.clearance = clearance === 'false' ? 'hide' : clearance === 'true' ? 'only' : 'any';
   const salary = Number(p.get('salary_min'));
   f.salaryMin = p.get('salary_min') && !Number.isNaN(salary) ? salary : null;
-  // Freshness is a positive whole number of days; anything else (absent, zero,
-  // negative, non-numeric) reads as "any age", matching the backend's own guard.
-  const days = Number(p.get('posted_within_days'));
-  f.postedWithinDays = Number.isInteger(days) && days > 0 ? days : null;
+  // Both date bounds are a positive whole number of days; anything else (absent,
+  // zero, negative, non-numeric) reads as "any age", matching the backend's own guard.
+  f.postedWithinDays = positiveDays(p.get('posted_within_days'));
+  f.openWithinDays = positiveDays(p.get('open_within_days'));
   // Zero IS a bound here — it selects the postings stating no prior experience is
   // required — so the guard admits it and rejects only what cannot be a year count.
   // The presence test is on the TRIMMED string, not the raw one: `Number('')` and
@@ -277,6 +318,7 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.clearance !== 'any') n += 1;
   if (f.salaryMin != null) n += 1;
   if (f.postedWithinDays != null) n += 1;
+  if (f.openWithinDays != null) n += 1;
   if (f.experienceYearsMax != null) n += 1;
   return n;
 }

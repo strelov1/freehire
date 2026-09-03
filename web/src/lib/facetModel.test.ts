@@ -454,3 +454,94 @@ describe('generalCountsCoverRole', () => {
     expect(generalCountsCoverRole(new URLSearchParams('q='))).toBe(true);
   });
 });
+
+describe('the two date bounds', () => {
+  // They are two questions, not two spellings of one: `posted_within_days` bounds the
+  // date the SOURCE states (which some boards restate every crawl) and
+  // `open_within_days` bounds when we first saw the posting. A test that only checked
+  // the round trip would pass with the two wired to the same field.
+  it('serializes each bound under its own param', () => {
+    const f = emptyFilters();
+    f.openWithinDays = 30;
+    f.postedWithinDays = 3;
+    const p = filtersToParams(f);
+    expect(p.get('open_within_days')).toBe('30');
+    expect(p.get('posted_within_days')).toBe('3');
+  });
+
+  it('reads each bound back independently', () => {
+    const f = filtersFromParams(new URLSearchParams('open_within_days=30&posted_within_days=3'));
+    expect(f.openWithinDays).toBe(30);
+    expect(f.postedWithinDays).toBe(3);
+  });
+
+  it('leaves the other bound null when only one is given', () => {
+    expect(filtersFromParams(new URLSearchParams('open_within_days=7')).postedWithinDays).toBeNull();
+    expect(filtersFromParams(new URLSearchParams('posted_within_days=7')).openWithinDays).toBeNull();
+  });
+
+  it('writes nothing for an unset open bound', () => {
+    expect(filtersToParams(emptyFilters()).has('open_within_days')).toBe(false);
+  });
+
+  // The same guard the backend applies: a value that cannot be a positive day count
+  // imposes no bound, rather than narrowing the list to nothing.
+  it('reads a non-positive or non-integer open bound as no bound', () => {
+    for (const raw of ['', '0', '-3', 'soon', '2.5', ' ']) {
+      const f = filtersFromParams(new URLSearchParams(`open_within_days=${encodeURIComponent(raw)}`));
+      expect(f.openWithinDays, `open_within_days=${JSON.stringify(raw)}`).toBeNull();
+    }
+  });
+
+  // The two parsers must agree on what a day count LOOKS like, not just on what it
+  // means. Go reads these params with strconv.Atoi, which rejects exponent, decimal and
+  // hex forms; Number() accepts all three. A link carrying ?open_within_days=1e2 would
+  // otherwise show an active "Last 100 days" chip over a list the server never bounded.
+  it('rejects the forms strconv.Atoi rejects, so the two ends cannot disagree', () => {
+    for (const raw of ['1e2', '1.0', '0x10', '7 ', ' 7', '007.0', 'Infinity']) {
+      const p = new URLSearchParams();
+      p.set('open_within_days', raw);
+      p.set('posted_within_days', raw);
+      const f = filtersFromParams(p);
+      expect(f.openWithinDays, `open_within_days=${JSON.stringify(raw)}`).toBeNull();
+      expect(f.postedWithinDays, `posted_within_days=${JSON.stringify(raw)}`).toBeNull();
+    }
+  });
+
+  // ...while the forms Atoi DOES accept keep working: leading zeros and a leading `+`
+  // both parse in Go, so rejecting them here would be the same divergence mirrored.
+  it('keeps the integer forms strconv.Atoi accepts', () => {
+    for (const [raw, want] of [
+      ['007', 7],
+      ['+7', 7],
+      ['7', 7],
+    ] as const) {
+      const p = new URLSearchParams();
+      p.set('open_within_days', raw);
+      expect(filtersFromParams(p).openWithinDays, raw).toBe(want);
+    }
+  });
+
+  // The Go side drops a bound past a century because the day-to-duration arithmetic
+  // wraps above ~106,751 days (see maxWithinDays). The parser mirrors it so the chip
+  // never claims a bound the server refused.
+  it('drops a bound further back than the server will honour', () => {
+    for (const raw of ['36501', '106752', '200000', '2147483647']) {
+      const p = new URLSearchParams();
+      p.set('open_within_days', raw);
+      expect(filtersFromParams(p).openWithinDays, raw).toBeNull();
+    }
+    const at = new URLSearchParams();
+    at.set('open_within_days', '36500');
+    expect(filtersFromParams(at).openWithinDays).toBe(36500);
+  });
+
+  it('counts each bound toward the filter badge', () => {
+    const none = activeFilterCount(emptyFilters());
+    const f = emptyFilters();
+    f.openWithinDays = 30;
+    expect(activeFilterCount(f)).toBe(none + 1);
+    f.postedWithinDays = 3;
+    expect(activeFilterCount(f)).toBe(none + 2);
+  });
+});

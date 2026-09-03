@@ -43,7 +43,7 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 		c.Context(),
 		caller,
 		autofillagent.LLMPlanner{Client: h.llm.bind(c.Context(), userID, llm.Feature(tagAutofill))},
-		profileFields(profile),
+		autofillagent.Profile(profile.Fields()),
 	)
 	if err != nil {
 		// The run needs the caller's browser attached, a form on the page, and a
@@ -52,27 +52,4 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, err.Error())
 	}
 	return c.JSON(fiber.Map{"data": report})
-}
-
-// profileFields flattens the canonical profile into the keyed values the agent
-// grounds its plan in.
-func profileFields(p autofillProfile) autofillagent.Profile {
-	return autofillagent.Profile{
-		"full_name":  p.FullName,
-		"first_name": p.FirstName,
-		"last_name":  p.LastName,
-		"email":      p.Email,
-		"phone":      p.Phone,
-		"location":   p.Location,
-		"linkedin":   p.LinkedIn,
-		"github":     p.GitHub,
-		"portfolio":  p.Portfolio,
-
-		"authorized_countries":    p.AuthorizedCountries,
-		"visa_sponsorship_needed": p.VisaSponsorshipNeeded,
-		"desired_salary":          p.DesiredSalary,
-		"notice_period":           p.NoticePeriod,
-		"willing_to_relocate":     p.WillingToRelocate,
-		"age_18_or_older":         p.Age18OrOlder,
-	}
 }

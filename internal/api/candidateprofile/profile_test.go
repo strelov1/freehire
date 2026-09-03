@@ -1,4 +1,4 @@
-package handler
+package candidateprofile
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 )
 
-func TestBuildAutofillProfile(t *testing.T) {
+func TestBuildProfile(t *testing.T) {
 	header := cv.Header{
 		FullName: "Ilya Strelov",
 		Email:    "",
@@ -15,7 +15,7 @@ func TestBuildAutofillProfile(t *testing.T) {
 		Links:    []string{"https://linkedin.com/in/ilya", "https://github.com/ilya", "https://ilya.dev"},
 	}
 
-	got := buildAutofillProfile(header, "account@example.com")
+	got := BuildProfile(header, "account@example.com")
 
 	if got.FirstName != "Ilya" || got.LastName != "Strelov" {
 		t.Errorf("name split = %q / %q, want Ilya / Strelov", got.FirstName, got.LastName)
@@ -37,9 +37,20 @@ func TestBuildAutofillProfile(t *testing.T) {
 	}
 }
 
-func TestBuildAutofillProfile_PrefersHeaderEmail(t *testing.T) {
-	got := buildAutofillProfile(cv.Header{FullName: "A B", Email: "cv@example.com"}, "account@example.com")
+func TestBuildProfile_PrefersHeaderEmail(t *testing.T) {
+	got := BuildProfile(cv.Header{FullName: "A B", Email: "cv@example.com"}, "account@example.com")
 	if got.Email != "cv@example.com" {
 		t.Errorf("email = %q, want the CV header email when present", got.Email)
+	}
+}
+
+func TestProfileFields(t *testing.T) {
+	p := Profile{FullName: "Ada Lovelace", Email: "ada@example.com", AuthorizedCountries: "US, UK"}
+	fields := p.Fields()
+	if fields["full_name"] != "Ada Lovelace" || fields["email"] != "ada@example.com" {
+		t.Errorf("fields = %+v, want identity carried through", fields)
+	}
+	if fields["authorized_countries"] != "US, UK" {
+		t.Errorf("authorized_countries = %q", fields["authorized_countries"])
 	}
 }

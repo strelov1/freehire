@@ -26,19 +26,19 @@ Base URL: `https://freehire.me/api/v1`
 - [Job reports](#job-reports)
 - [Ghost job reports](#ghost-job-reports)
 - [Moderator jobs](#moderator-jobs)
-- [Profile & résumé](#profile-r-sum)
+- [Profile & résumé](#profile--rsum)
 - [Screening answers](#screening-answers)
-- [Activity & shared boards](#activity-shared-boards)
-- [Saved searches & subscriptions](#saved-searches-subscriptions)
-- [Push notifications & alerts](#push-notifications-alerts)
-- [Account, credits & extension](#account-credits-extension)
-- [Link intake & discovery](#link-intake-discovery)
-- [Votes, notifications & discussions](#votes-notifications-discussions)
-- [Market insights & stats](#market-insights-stats)
+- [Activity & shared boards](#activity--shared-boards)
+- [Saved searches & subscriptions](#saved-searches--subscriptions)
+- [Push notifications & alerts](#push-notifications--alerts)
+- [Account, plan & extension](#account-plan--extension)
+- [Link intake & discovery](#link-intake--discovery)
+- [Votes, notifications & discussions](#votes-notifications--discussions)
+- [Market insights & stats](#market-insights--stats)
 - [Market pulse](#market-pulse)
 - [Employee referrals](#employee-referrals)
 - [Talent Network](#talent-network)
-- [CV builder & tailoring](#cv-builder-tailoring)
+- [CV builder & tailoring](#cv-builder--tailoring)
 - [Photo](#photo)
 - [Experience bank](#experience-bank)
 - [Application mail](#application-mail)
@@ -108,7 +108,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
 | `role` | Role | Open vocabulary — call /jobs/facets for live values |
-| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
+| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, product, project_management, management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
 | `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
 | `role_type` | Role type | people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means "no marker", not "IC" |
@@ -134,11 +134,13 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | Param | Filter | Values |
 | --- | --- | --- |
 | `visa_sponsorship` | Visa sponsorship | true, false |
+| `requires_clearance` | Security clearance required | true, false |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |
 | `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all |
-| `posted_within_days` | Posted within | integer — jobs whose effective posting date falls in the last N days |
+| `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |
+| `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |
 
 ### Recipes
 
@@ -148,6 +150,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`
 - **Exclude outstaff companies** — `company_type_exclude=outstaff`
 - **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`
+- **Excluding jobs that need a security clearance** — `requires_clearance=false`
+- **Only jobs that need a security clearance** — `requires_clearance=true`
 
 ## Jobs
 
@@ -445,7 +449,7 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/apply-form"
 
 ## AI analysis
 
-Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the match-analysis endpoints run the LLM chain and cost AI credits. All take the same facet filter params as search where they narrow a market or candidate set.
+Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the match-analysis endpoints run the LLM chain and draw on your daily allowance. All take the same facet filter params as search where they narrow a market or candidate set.
 
 ### `GET /jobs/{slug}/match`
 
@@ -485,7 +489,7 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $F
 
 The cached AI match analysis for the job (never runs the LLM).
 
-Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `credits` reports your AI-points balance and when it resets.
+Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance` reports how much of today you have used against what the day allows, and when it resets.
 
 **Path parameters**
 
@@ -511,7 +515,7 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match-analysis" -H "Authorization: 
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "credits": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }
 ```
@@ -522,7 +526,7 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match-analysis" -H "Authorization: 
 
 Run the three-stage AI match analysis and cache it.
 
-Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh (no `credits` on this response). Analysing a new job costs one AI credit; if you have none left it is a `402`, and recomputing an already-analyzed job is free. `has_cv` is false when no CV is stored; a failing or unconfigured LLM returns a null analysis (200).
+Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh (no `allowance` on this response). Analysing a new job draws on your daily analysis allowance; with none left it is a `402`, and recomputing an already-analyzed job is free. `has_cv` is false when no CV is stored; a failing or unconfigured LLM returns a null analysis (200).
 
 **Path parameters**
 
@@ -1669,7 +1673,7 @@ curl "https://freehire.me/api/v1/me/tracking/viewed" -H "Authorization: Bearer $
 
 Jobs you have run the AI match analysis on.
 
-Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.credits` reports your AI-points balance. Never runs the LLM.
+Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.allowance` reports where you stand on the day’s analyses. Never runs the LLM.
 
 ```bash
 curl "https://freehire.me/api/v1/me/tracking/analyses" -H "Authorization: Bearer $FREEHIRE_API_KEY"
@@ -1689,25 +1693,32 @@ curl "https://freehire.me/api/v1/me/tracking/analyses" -H "Authorization: Bearer
       "stale": false
     }
   ],
-  "meta": { "credits": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" } }
+  "meta": { "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" } }
 }
 ```
 
-### `GET /me/credits`
+### `GET /me/plan`
 
 **Auth:** Session or API key
 
-Your current AI-credits balance.
+Your plan and what it allows today.
 
-The points left this month (`remaining`) and when the monthly grant renews (`resets_at`). AI credits are spent on the match analysis (1) and CV tailoring (3), topped up by the monthly grant and by accepted board contributions. Never runs the LLM.
+Which plan you are on and, for every metered AI feature, how much of today you have used against what the day allows. Every plan offers every feature; what differs is the daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM.
 
 ```bash
-curl "https://freehire.me/api/v1/me/credits" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
 {
-  "data": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" }
+  "data": {
+    "plan": "free",
+    "resets_at": "2026-09-01T00:00:00Z",
+    "allowances": [
+      { "feature": "tailor", "used": 1, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" },
+      { "feature": "match", "used": 0, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+    ]
+  }
 }
 ```
 
@@ -2059,6 +2070,35 @@ Re-runs the loop over the existing history (no body) — the same SSE shape as `
 curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/retry" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+### `POST /assistant/sessions/{id}/extend`
+
+**Auth:** Session or API key
+
+Buy a CV editing session another ceiling’s worth of turns.
+
+A CV editing session is bounded by a turn ceiling as well as by the daily session allowance, and a turn past the ceiling is a `402` naming the session. This spends another of the day’s CV editing sessions to raise it (no body), and is idempotent under a double click — two calls in flight buy one ceiling, not two. `409` on any preset other than a CV editing session: a chat is bounded by the daily assistant allowance, and a day cannot be topped up. `402` when there is no session left to spend, with the same body every refusal carries.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/extend" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "turns": 15,
+    "ceiling": 30,
+    "unlimited": false,
+    "allowance": { "feature": "tailor", "used": 2, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+  }
+}
+```
+
 ### `POST /assistant/sessions/{id}/voice-token`
 
 **Auth:** Session or API key
@@ -2166,7 +2206,7 @@ curl -X POST "https://freehire.me/api/v1/submissions" \
 
 Parse a job URL into a draft submission for review before posting.
 
-Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no credit. An unrecognized URL returns an empty object rather than an error. Rate-limited (shares the outbound-fetch budget).
+Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. Rate-limited (shares the outbound-fetch budget).
 
 **Body**
 
@@ -3344,9 +3384,9 @@ curl -X POST "https://freehire.me/api/v1/me/notifications/read-all" -b cookies.t
 { "data": { "marked": 3 } }
 ```
 
-## Account, credits & extension
+## Account, plan & extension
 
-The rest of the account surface: the password, deleting the account, the AI-credit ledger, and the two endpoints the browser extension runs on. Password and deletion are session-only — an API key must not be able to change or destroy the credential it would outlive.
+The rest of the account surface: the password, deleting the account, the plan and what it allows today, and the two endpoints the browser extension runs on. Password and deletion are session-only — an API key must not be able to change or destroy the credential it would outlive.
 
 ### `POST /me/password`
 
@@ -3382,43 +3422,36 @@ Delete your account and everything under it.
 curl -X DELETE "https://freehire.me/api/v1/me" -b cookies.txt
 ```
 
-### `GET /me/credits/history`
+### `GET /me/plan/history`
 
 **Auth:** Session or API key
 
-Your AI-credit ledger, newest first.
+What you spent your allowances on, newest first.
 
-Each debit is labelled with what it bought — the job a match analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.
-
-**Query parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `limit` | integer | no | Page size. |
-| `offset` | integer | no | Page offset. |
+Each entry is labelled with what it bought — the job an analysis was run on, the vacancy a CV editing session was opened for — rather than an opaque reference. A `release` entry is one that was given back because the work produced nothing.
 
 ```bash
-curl "https://freehire.me/api/v1/me/credits/history" -H "Authorization: Bearer fhk_…"
+curl "https://freehire.me/api/v1/me/plan/history" -H "Authorization: Bearer fhk_…"
 ```
 
 ```json
-{ "data": [ { "delta": -1, "reason": "match_analysis", "label": "Senior Backend Engineer at Acme", "created_at": "2026-07-28T09:00:00Z" } ] }
+{ "data": [ { "feature": "match", "day": "2026-08-31", "kind": "consume", "label": "Job analysis", "subtitle": "Senior Backend Engineer at Acme", "created_at": "2026-08-31T09:00:00Z" } ] }
 ```
 
 ### `GET /me/usage`
 
 **Auth:** Session or API key
 
-Your AI request activity this billing period.
+Your AI request activity today.
 
-Counts and token usage, not cost — the gateway’s dollar figure is a list price against a mixed upstream pool, not what you pay; your price is credits, reported by `/me/credits`. Never fails for a reason you could act on: no usage yet, or an unreachable gateway, both answer 200 with zeroes.
+Counts and token usage, not cost — the gateway’s dollar figure is a list price against a mixed upstream pool, not what you pay; what you spend is a plan allowance, reported by `/me/plan` over this same day. Never fails for a reason you could act on: no usage yet, or an unreachable gateway, both answer 200 with zeroes.
 
 ```bash
 curl "https://freehire.me/api/v1/me/usage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
-{ "data": { "requests": 42, "failed": 1, "tokens": 118000, "period": "2026-08", "resets_at": "2026-09-01T00:00:00Z" } }
+{ "data": { "requests": 42, "failed": 1, "tokens": 118000, "period": "2026-08-31", "resets_at": "2026-09-01T00:00:00Z" } }
 ```
 
 ### `GET /me/tracking/{slug}`
@@ -3474,7 +3507,7 @@ curl "https://freehire.me/api/v1/me/tracking/dismissed" -H "Authorization: Beare
 
 Score any job text against your profile.
 
-The same deterministic skill coverage as `GET /jobs/{slug}/match`, but for a page that need not be in the catalogue — this is what lets the extension show a match on any job page. A caller with no profile is a 404. No LLM, no credits.
+The same deterministic skill coverage as `GET /jobs/{slug}/match`, but for a page that need not be in the catalogue — this is what lets the extension show a match on any job page. A caller with no profile is a 404. No LLM, and it draws on no allowance.
 
 **Body**
 

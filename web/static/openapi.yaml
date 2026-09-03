@@ -190,6 +190,7 @@ paths:
         - $ref: "#/components/parameters/ExperienceYearsMin"
         - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/PostedWithinDays"
+        - $ref: "#/components/parameters/OpenWithinDays"
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
         - $ref: "#/components/parameters/WorkModeExclude"
@@ -261,6 +262,7 @@ paths:
         - $ref: "#/components/parameters/ExperienceYearsMin"
         - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/PostedWithinDays"
+        - $ref: "#/components/parameters/OpenWithinDays"
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
         - $ref: "#/components/parameters/WorkModeExclude"
@@ -345,6 +347,7 @@ paths:
         - $ref: "#/components/parameters/ExperienceYearsMin"
         - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/PostedWithinDays"
+        - $ref: "#/components/parameters/OpenWithinDays"
       responses:
         "200":
           description: Facet distribution for matching jobs.
@@ -1235,7 +1238,26 @@ components:
       schema:
         type: integer
         minimum: 1
-      description: Restrict to postings published within the last N days. Omit for no freshness restriction.
+        maximum: 36500
+      description: >-
+        Restrict to postings whose SOURCE states a publication date within the last N
+        days. Omit for no restriction. Some boards restate this date on every crawl, so
+        a posting that has been open for months can satisfy a narrow bound here — see
+        `open_within_days` for the date that cannot be rewritten from outside. The two
+        are independent and AND together.
+    OpenWithinDays:
+      name: open_within_days
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 36500
+      description: >-
+        Restrict to postings first recorded by this system within the last N days — how
+        long the posting has been in the catalogue, regardless of what date its source
+        states. Omit for no restriction. This is the bound to use for "nothing that has
+        been sitting here for months"; `posted_within_days` answers the different
+        question of what the board claims.
     RegionsExclude:
       name: regions_exclude
       in: query

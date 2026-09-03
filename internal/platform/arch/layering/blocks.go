@@ -88,8 +88,8 @@ var blocks = map[string][]string{
 		"outboundurl", "privatejob", "silence", "verdict", "ycdir",
 	},
 	"application": {
-		"appevent", "apptimeline", "calmatch", "calsync", "deliverywindow", "followup",
-		"gmailsync", "ical", "inbox", "jobtracking", "mailbox", "mailclassify",
+		"appevent", "apptimeline", "autoapply", "calmatch", "calsync", "deliverywindow",
+		"followup", "gmailsync", "ical", "inbox", "jobtracking", "mailbox", "mailclassify",
 		"mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl", "userjob",
 		"viewlog",
 	},
@@ -113,7 +113,14 @@ var blocks = map[string][]string{
 		"mailpreview", "notify", "nudge", "onboarding", "pushnotify", "referral",
 		"reminder", "report", "subscription", "telegramnotify", "vote",
 	},
-	"api": {"handler", "ogimage", "ratelimit", "realtime"},
+	// atsapply and candidateprofile sit here, not lower, because both need to reach
+	// ingest (applyform, screeninganswers) as well as candidate (experience, cv,
+	// resumeextract) — the only layer above ingest is api. candidateprofile was carved
+	// out of handler itself (the extension-autofill path and cmd/auto-apply share one
+	// assembler), so it keeps handler's own reach; atsapply is cmd/auto-apply's
+	// counterpart to handler — the orchestration layer a cron entrypoint composes
+	// ingest+candidate+ai through, the same role handler plays for an HTTP request.
+	"api": {"atsapply", "candidateprofile", "handler", "ogimage", "ratelimit", "realtime"},
 }
 
 // Assignment is the flattened package → block view the move script drives from.

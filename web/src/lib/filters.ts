@@ -98,6 +98,16 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, postedWithinDays: n });
   }
 
+  // The first-seen bound, in the same two flavours and for the same reasons: dragged
+  // on the modal's slider, chosen from the select above the list.
+  setOpenWithinDays(n: number | null) {
+    this.#url.setSoon({ ...this.#url.value, openWithinDays: n });
+  }
+
+  pickOpenWithinDays(n: number | null) {
+    this.#url.setNow({ ...this.#url.value, openWithinDays: n });
+  }
+
   setExperienceYearsMax(n: number | null) {
     this.#url.setSoon({ ...this.#url.value, experienceYearsMax: n });
   }

@@ -12,4 +12,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`handler` `ogimage` `ratelimit` `realtime`
+`atsapply` `candidateprofile` `handler` `ogimage` `ratelimit` `realtime`

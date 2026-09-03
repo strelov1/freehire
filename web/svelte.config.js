@@ -52,9 +52,9 @@ export default {
     // The anti-FOUC script in app.html is author-written, so SvelteKit does NOT
     // nonce it — it is allowed by the SHA-256 of its exact contents below. WARNING:
     // editing that <script> in app.html changes its hash and will silently break
-    // BOTH no-flash passes it carries (the theme and the Product Hunt strip): the
-    // browser blocks the whole block, nothing errors, and the only symptom is a
-    // flash of the wrong theme. Recompute whenever you touch it —
+    // EVERY no-flash pass it carries (the theme, the CLI strip, the onboarding
+    // nudge): the browser blocks the whole block, nothing errors, and the only
+    // symptom is a flash of the wrong theme. Recompute whenever you touch it —
     //
     //   python3 -c "import re,hashlib,base64;b=re.findall(r'<script>(.*?)</script>',
     //     open('src/app.html').read(),re.S)[0];
@@ -66,9 +66,9 @@ export default {
       directives: {
         'script-src': [
           'self',
-          // Anti-FOUC script in app.html — theme + Product Hunt strip + onboarding
+          // Anti-FOUC script in app.html — theme + CLI promo strip + onboarding
           // nudge (see WARNING above).
-          'sha256-u3FGDCCLNrppO+D5gI/BmV8qq0wTVlA/OoPesWqF1Ts=',
+          'sha256-XzpvTj5An+qqyOVKFw/Nx2EXOf7n+4PKeNTsOpg+68g=',
           // Google Analytics: the gtag.js host. GA now loads from the same-origin
           // bundle ($lib/analytics, consent-gated), so no inline-script hash is
           // needed — only the external host it injects.

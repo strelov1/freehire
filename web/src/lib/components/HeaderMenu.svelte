@@ -46,8 +46,8 @@
   //
   // Two layouts from one markup: on mobile the panel is a full-screen drawer
   // (own top bar · scrollable sectioned links · pinned bottom action bar); on
-  // desktop it stays the small anchored dropdown. The theme+auth actions live in
-  // one snippet, rendered in the mobile bottom bar and inline for desktop.
+  // desktop it stays the small anchored dropdown. The theme toggle lives inside
+  // the dropdown for both layouts — the bar itself only carries profile/sign-in.
 
   let open = $state(false);
   let root = $state<HTMLElement | null>(null);
@@ -61,7 +61,8 @@
     'flex items-center gap-2 rounded-md px-4 min-h-11 text-base transition-colors hover:bg-accent hover:text-accent-foreground sm:min-h-0 sm:rounded-none sm:px-3 sm:py-2 sm:text-sm';
   const linkClass = (href: string) =>
     cn(rowBase, isActive(href) ? 'font-medium text-foreground' : 'text-muted-foreground');
-  // Shared icon-button treatment for the bar controls (menu + theme toggle).
+  // Shared icon-button treatment for the bar controls (Discord, profile/sign-in,
+  // menu).
   const iconButton =
     'size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -137,10 +138,9 @@
   onkeydown={(e) => e.key === 'Escape' && (open = false)}
 />
 
-<!-- Theme toggle and auth action: defined once, reused across layouts. On mobile
-     both live deep in the drawer's bottom bar; on desktop the theme toggle is
-     pulled up to the header bar (see the inline cluster below) and only auth
-     stays in the dropdown. -->
+<!-- Theme toggle and auth action: defined once, reused across layouts. Both live
+     inside the dropdown — theme in the mobile bottom bar and, on desktop, inline
+     at the end of the link list alongside auth. -->
 {#snippet themeButton()}
   <button
     type="button"
@@ -179,9 +179,9 @@
 {/snippet}
 
 <div class="relative flex items-center gap-1" bind:this={root}>
-  <!-- Desktop bar order: GitHub stars, then the theme toggle (second), then the
-       menu button pinned to the far right. On mobile both GitHub and theme collapse
-       into the drawer (below), leaving just the menu button here. -->
+  <!-- Desktop bar order: GitHub stars, Discord, then profile/sign-in (second to
+       last), then the menu button pinned to the far right. On mobile all of these
+       collapse into the drawer (below), leaving just the menu button here. -->
   <GithubStars class="hidden sm:inline-flex" />
 
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
@@ -195,19 +195,27 @@
     <ProviderIcon provider="discord" />
   </a>
 
-  <!-- Desktop only: theme toggle sits second, before the menu button. -->
-  <button
-    type="button"
-    aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-    onclick={() => themeStore.toggle()}
-    class={cn('hidden sm:inline-flex', iconButton)}
-  >
-    {#if isDark}
-      <Moon class="size-5" />
-    {:else}
-      <Sun class="size-5" />
-    {/if}
-  </button>
+  <!-- Desktop only: profile (signed in) or sign-in (signed out) sits before the
+       menu button. -->
+  {#if isAuthenticated()}
+    <a
+      href={resolve('/my/profile')}
+      aria-label="Profile"
+      title={email}
+      class={cn('hidden sm:inline-flex', iconButton)}
+    >
+      <CircleUser class="size-5" />
+    </a>
+  {:else}
+    <button
+      type="button"
+      aria-label="Sign in"
+      onclick={signIn}
+      class={cn('hidden sm:inline-flex', iconButton)}
+    >
+      <LogIn class="size-5" />
+    </button>
+  {/if}
 
   <button
     type="button"
@@ -322,10 +330,10 @@
           About
         </a>
 
-        <!-- Desktop-only: auth inline at the end of the dropdown (theme lives on
-             the bar). -->
+        <!-- Desktop-only: theme toggle + auth inline at the end of the dropdown. -->
         <div class="hidden sm:block">
           <div class="my-1 h-px bg-border"></div>
+          {@render themeButton()}
           {@render authButton()}
         </div>
       </div>

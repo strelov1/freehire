@@ -776,7 +776,7 @@ func (h *assistantHandlers) streamSSE(
 // would believe it has a model and dereference it on the first round. That is a panic in
 // the stream goroutine, after the response has already begun.
 func (h *assistantHandlers) boundRunner(ctx context.Context, sess assistant.Session) *assistant.Runner {
-	bound := userLLM(ctx, h.keys, h.llm, sess.UserID, llm.Feature(tagAssistant), llm.Dimension{Name: "preset", Value: sess.Preset})
+	bound := llmkey.Bind(ctx, h.keys, h.llm, sess.UserID, llm.Feature(tagAssistant), llm.Dimension{Name: "preset", Value: sess.Preset})
 	if bound == nil {
 		return h.runner
 	}

@@ -1,45 +1,21 @@
-// Open-source support toast: the show condition and the dismissal, kept free of Svelte
+// Open-source support toast: the route rules and the dismissal, kept free of Svelte
 // runes and SvelteKit imports so it unit-tests in the plain-node vitest environment. The
 // markup lives in components/SupportToast.svelte.
 //
-// `./productHunt` is imported by relative path on purpose: the project's vitest setup
-// does not resolve `$lib`, and an aliased import fails at module load rather than inside
-// a test body.
+// Unlike the CLI strip this surface never renders on the server. The strip needs SSR plus
+// a pre-paint class because it sits in the document flow; a fixed toast moves nothing, so
+// it can appear on mount — which is why `app.html` and the SHA-256 CSP hash over its
+// inline script do not concern it.
 //
-// Unlike the Product Hunt strip this surface never renders on the server. The strip needs
-// SSR plus a pre-paint class because it sits in the document flow; a fixed toast moves
-// nothing, so it can appear on mount — which is why `app.html` stays untouched and the
-// SHA-256 CSP hash over its inline script stays intact.
-
-import { launchPhase } from './productHunt';
+// It used to queue behind the Product Hunt launch strip, which was a strip with an end
+// date: waiting for it cost the toast a few weeks. The CLI strip that replaced it never
+// expires, so the same rule would have retired this ask for good. The two surfaces are
+// now independent — the strip is a band under the header, the toast a card in the bottom
+// corner, and they do not overlap. What the toast still yields to is the consent banner,
+// which shares its corner, and a page's own sticky call to action; both rules are below.
 
 /** localStorage key holding the visitor's answer to the star request. */
 export const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
-
-/** What the show condition needs to know. Passed in rather than read inside, so the rule
- *  itself is pure and the storage reads stay at the edge. */
-export type SupportToastState = {
-  /** Now, in epoch milliseconds. */
-  now: number;
-  /** Whether the visitor has closed the Product Hunt strip. */
-  phBannerDismissed: boolean;
-  /** Whether the visitor has already answered this toast. */
-  selfDismissed: boolean;
-};
-
-/**
- * Whether the site may ask for a star right now.
- *
- * Two rules meet here. An answered toast never returns. And the ask queues behind the
- * Product Hunt strip, which stops asking in two different ways: the visitor closes it, or
- * the launch day passes and it retires itself. Only the first leaves a key behind — after
- * the launch day the strip does not render and can never be closed, so gating on the key
- * alone would hide this toast from everyone who arrives later.
- */
-export function shouldShow({ now, phBannerDismissed, selfDismissed }: SupportToastState): boolean {
-  if (selfDismissed) return false;
-  return phBannerDismissed || launchPhase(now) === 'over';
-}
 
 /** Pages that make this exact case at length already, where a toast repeating it is
  *  noise. */

@@ -19,6 +19,7 @@ hire
 /add-board
 /apple-revoke
 /auth-cleanup
+/auto-apply
 /backfill-application-events
 /backfill-applications
 /backfill-blank-company

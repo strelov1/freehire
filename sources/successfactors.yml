@@ -2079,39 +2079,63 @@
   board: jobsearch.alstom.com
 # A Bertelsmann hub: one host and one shared job_sitemap.xml for 40 employers, which the site
 # names only as the job URL's first path segment. Contributed as a link, validated live
-# 2026-09-02 (973 postings in the sitemap). The 17 tenants missing below are the ones the
-# platform does not name — their /<tenant>/ landing page is empty, serves the platform's own
-# "Create Your Own Career" boilerplate, or shows a page heading — so their postings fall back
-# to Bertelsmann rather than get a name invented from the key.
+# 2026-09-02 (973 postings in the sitemap).
 #
-# Each name below is that tenant's own landing-page title, read verbatim rather than expanded
-# from the key; "Penguin Random House" is PRH_US because that is what its title says, which is
-# why its three siblings are the qualified ones. The keys are matched EXACTLY, so transcribe
-# them from the sitemap: a re-cased or mistyped key is a silent fallback, not an error.
+# Every name below is read verbatim from something the site itself states, never expanded from
+# the key, and there were two places to read it. First the tenant's own landing page at
+# /<tenant>/, whose <title> names 23 of them — that is why "Penguin Random House" is PRH_US and
+# its three siblings are the qualified ones, which is what their titles say. The rest came from
+# the postings: a recruiter often opens the body with "Unternehmen: <legal entity>", and where
+# there is no such line the entity still appears in the text (Broadcasting Center Europe, Hay
+# House LLC, RISER ID Services GmbH). Note that is prose, NOT a field — the page's structured
+# properties are title/description/date/location only, so it cannot be parsed and the map has to
+# exist.
+#
+# Four tenants are still absent and their postings fall back to Bertelsmann, which is true of
+# all of them: Bertelsmann_Corporate IS Bertelsmann SE & Co. KGaA, so a key would be a no-op;
+# Alliant and Finance say nothing beyond "part of the Bertelsmann group"; and Arvato_Financial
+# is the brand that became Riverty, so naming it either way would assert something the site does
+# not. Four sitemap entries carry no tenant segment at all and land there too.
+#
+# The keys are matched EXACTLY, so transcribe them from the sitemap: a re-cased or mistyped key
+# is a silent fallback, not an error.
 - company: Bertelsmann
   board: jobsearch.createyourowncareer.com
   hub: true
   tenants:
     ARVATO: Arvato
     Arvato_Systems: Arvato Systems
+    BCE: Broadcasting Center Europe
+    BFS_Health_Finance: BFS health finance
     BMG: BMG
     BertelsmannStiftung: Bertelsmann Stiftung
     Bertelsmann_Investments: Bertelsmann Investments
+    CHE: CHE Centrum für Hochschulentwicklung
+    Campaign: direct services Gütersloh
     DK_UK: Dorling Kindersley UK
+    Digital_Marketing_IT: direct services Gütersloh
     FREMANTLE: Fremantle
     GBS: Bertelsmann Global Business Services
+    GGP_Media: GGP Media
+    HayHouse: Hay House
+    Mohn_Media: Mohn Media
+    PRH_ANZ: Penguin Random House Australia
     PRH_DEU: Penguin Random House Verlagsgruppe
     PRH_GRUPO: Penguin Random House Grupo Editorial
     PRH_UK: Penguin Random House UK
     PRH_US: Penguin Random House
-    PostAdress: PostAdress
     Playaway: Playaway
+    PostAdress: PostAdress
     RTL: RTL
     Relias_Learning: Relias
+    Relias_Learning_DE: Relias
+    Riser: RISER ID Services
     Riverty: Riverty
     SDSH: Stiftung Deutsche Schlaganfallhilfe
+    Sonopress: Sonopress
     TERRITORY: TERRITORY
     VIVENO_Group: VIVENO Group
+    beDirect: bedirect
     bfs_finance: bfs finance
     smartclip: smartclip
     weareera: We Are Era

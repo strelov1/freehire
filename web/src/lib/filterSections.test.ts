@@ -29,6 +29,7 @@ const HOSTED_ELSEWHERE: Record<string, string> = {
   posting_language: 'language pane',
   relocation: 'relocation pane',
   salary_currency: 'salary pane, beside the minimum',
+  reality: 'posted pane, beneath the age bound',
 };
 
 // Not offered anywhere, on purpose. Which job board a posting was crawled from is
@@ -101,12 +102,13 @@ describe('the Posted pane', () => {
   });
 });
 
-describe('the Posting reality pane', () => {
-  it('has a rail entry rendering the reality facet', () => {
-    const entry = RAIL.find((e) => e.facetParam === 'reality');
-
-    expect(entry).toBeDefined();
-    expect(entry?.kind).toBe('facet');
-    expect(entry?.section).toBe('ROLE');
+// The reality classes and the age bound answer one question, so they share one pane.
+// A standalone row would split "is this posting real" across two tabs — and the facet
+// only ever reached the rail because it had been invisible entirely, not because it
+// wanted a row of its own.
+describe('the reality facet', () => {
+  it('has no standalone rail entry — the Posted pane hosts it', () => {
+    expect(RAIL.find((e) => e.key === 'reality')).toBeUndefined();
+    expect(RAIL.find((e) => e.facetParam === 'reality')).toBeUndefined();
   });
 });
