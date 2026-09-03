@@ -130,8 +130,14 @@ func gather(ctx context.Context, q *db.Queries, client *search.Client, floors co
 		firms = append(firms, suggest.Company{Slug: c.Slug, Name: c.Name, Jobs: int(c.JobCount)})
 	}
 
+	// The INDEX attribute names, not the query-parameter names. They differ — the
+	// `role` filter reads the `roles` attribute — and asking for the parameter name is
+	// a 400 from the engine, which is how the first production build failed. Reading
+	// them out of the same table the filter builder uses is what stops the two drifting
+	// again.
+	roleAttr, skillAttr, categoryAttr := search.StringFacets["role"], search.StringFacets["skills"], search.StringFacets["category"]
 	counts, err := client.FacetCounts(ctx, search.FacetParams{
-		Facets: []string{"role", "skills", "enrichment.category"},
+		Facets: []string{roleAttr, skillAttr, categoryAttr},
 	})
 	if err != nil {
 		return suggest.Input{}, err
@@ -152,12 +158,12 @@ func gather(ctx context.Context, q *db.Queries, client *search.Client, floors co
 	return suggest.Input{
 		Titles:     raw,
 		TitleFloor: floors.TitleFloor,
-		Roles:      ints(counts.Facets["role"]),
+		Roles:      ints(counts.Facets[roleAttr]),
 		// The catalogue's own slug→label map, so a suggestion reads exactly as the
 		// filter chip it applies. A second label table would drift from the picker's.
 		RoleLabels: roletag.Catalog(),
-		Skills:     ints(counts.Facets["skills"]),
-		Categories: ints(counts.Facets["enrichment.category"]),
+		Skills:     ints(counts.Facets[skillAttr]),
+		Categories: ints(counts.Facets[categoryAttr]),
 		Companies:  firms,
 		Searches:   demand,
 	}, nil
