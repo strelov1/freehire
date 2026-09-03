@@ -43,24 +43,24 @@ change because the `filter-modal` and `jobs-list-controls` specs currently forbi
 
 ## 4. The web filter state
 
-- [ ] 4.1 Test first: `filtersToParams` writes `open_within_days` and the parser reads
+- [x] 4.1 Test first: `filtersToParams` writes `open_within_days` and the parser reads
       it back, rejecting zero, negative and non-integer values as `null`
       (`web/src/lib/facetModel.ts`)
-- [ ] 4.2 Add `openWithinDays` to `JobFilters` + `emptyFilters`, serialize, parse, and
+- [x] 4.2 Add `openWithinDays` to `JobFilters` + `emptyFilters`, serialize, parse, and
       count it in `activeFilterCount`
-- [ ] 4.3 Add the setter to `FilterStore` (`filters.ts`) and `StagedFilters`
+- [x] 4.3 Add the setter to `FilterStore` (`filters.ts`) and `StagedFilters`
       (`stagedFilters.svelte.ts`), matching how `postedWithinDays` is written
-- [ ] 4.4 Add `openWithinEnabled(env)` to `web/src/lib/features.ts` reading
+- [x] 4.4 Add `openWithinEnabled(env)` to `web/src/lib/features.ts` reading
       `PUBLIC_OPEN_WITHIN`, default OFF, with a test for the unparseable-is-off rule
 
 ## 5. The controls
 
-- [ ] 5.1 Render the `Open within` slider above `Posted within` in the `posted` pane,
+- [x] 5.1 Render the `Open within` slider above `Posted within` in the `posted` pane,
       gated on the flag, each labelled for whose date it bounds; include
       `openWithinDays` in the pane's badge count
-- [ ] 5.2 Point the above-list select at `openWithinDays` and label it `Open` when the
+- [x] 5.2 Point the above-list select at `openWithinDays` and label it `Open` when the
       flag is on; keep it on `postedWithinDays` labelled `Posted` when off
-- [ ] 5.3 Show the new bound in `FilterSummary.svelte` as its own removable chip,
+- [x] 5.3 Show the new bound in `FilterSummary.svelte` as its own removable chip,
       distinct from the posted one
 - [ ] 5.4 Verify in the browser: both bounds, the off-preset stop, and a shared link
       carrying the bound with the flag off

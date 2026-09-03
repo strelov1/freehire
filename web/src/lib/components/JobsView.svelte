@@ -9,7 +9,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import { env } from '$env/dynamic/public';
-  import { matchSortEnabled } from '$lib/features';
+  import { matchSortEnabled, openWithinEnabled } from '$lib/features';
   import { computeClientMatch } from '$lib/jobMatch';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
@@ -249,6 +249,10 @@
   // A one-option select is a label wearing a control's clothes: there is nothing to
   // choose, and the feed already IS that ordering.
   const sortSelectVisible = $derived(sortOptions.length > 1);
+
+  // Which date the above-list select bounds. Not $derived: the flag is a runtime env
+  // value read once at module load, and it cannot change while the page is mounted.
+  const openWithinAvailable = openWithinEnabled(env);
 
   let modalOpen = $state(false);
   let started = false;
@@ -735,19 +739,33 @@
   </label>
 {/snippet}
 
-<!-- The freshness bound, the same one the modal's slider drags. This is the control the
-     complaint that prompted it asked for: years-old postings in the feed, with the only
-     way to bound them buried in the modal's third section. -->
+<!-- A date bound, the same one a modal slider drags. This is the control the complaint
+     that prompted it asked for: years-old postings in the feed, with the only way to
+     bound them buried in the modal's third section.
+
+     WHICH date it bounds is the flag's decision, and there is deliberately only ever
+     one select here. Once `created_ts` is in the index it bounds how long the posting
+     has been open, because that is the question this control's placement implies and
+     the one the source-stated date was quietly failing: a board that restates its date
+     every crawl passes a three-day bound while its own card reads "Open 72d". Until
+     then it bounds the source's date exactly as before — never absent, so there is no
+     state in which the reader loses the ability to bound the feed by date at all. The
+     other bound stays reachable in the modal either way. -->
 {#snippet postedSelect()}
+  {@const openBound = openWithinAvailable}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-    <span class="hidden sm:inline">Posted</span>
+    <span class="hidden sm:inline">{openBound ? 'Open' : 'Posted'}</span>
     <select
-      aria-label="Posted within"
+      aria-label={openBound ? 'Open within' : 'Posted within'}
       class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
-      value={String(filters.value.postedWithinDays ?? '')}
-      onchange={(e) => filters.pickPostedWithinDays(Number(e.currentTarget.value) || null)}
+      value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
+      onchange={(e) => {
+        const days = Number(e.currentTarget.value) || null;
+        if (openBound) filters.pickOpenWithinDays(days);
+        else filters.pickPostedWithinDays(days);
+      }}
     >
-      {#each freshnessOptions(filters.value.postedWithinDays) as preset (preset.label)}
+      {#each freshnessOptions(openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) as preset (preset.label)}
         <option value={String(preset.days ?? '')}>{preset.label}</option>
       {/each}
     </select>

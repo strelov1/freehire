@@ -86,6 +86,12 @@
           remove: () => store.setClearance('any'),
         },
       ]);
+    // Two chips under two headings, never merged: they are separate bounds, and a
+    // reader who set only one must be able to see which. `Open` is not gated on the
+    // feature flag — a bound arriving from a shared link applies whether or not the
+    // control that writes it is revealed, and a filter narrowing the list with no chip
+    // to remove it is the untruth this summary exists to prevent.
+    if (f.openWithinDays != null) push('Open', [{ key: 'open_within_days', text: freshnessLabel(f.openWithinDays), exclude: false, remove: () => store.setOpenWithinDays(null) }]);
     if (f.postedWithinDays != null) push('Posted', [{ key: 'posted_within_days', text: freshnessLabel(f.postedWithinDays), exclude: false, remove: () => store.setPostedWithinDays(null) }]);
     // `!= null`, not truthiness: a zero bound is the entry-level filter, and hiding
     // its chip would leave the narrowest experience filter with no way to remove it.

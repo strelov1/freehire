@@ -93,6 +93,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, postedWithinDays: n };
   }
 
+  setOpenWithinDays(n: number | null): void {
+    this.#f = { ...this.#f, openWithinDays: n };
+  }
+
   setExperienceYearsMax(n: number | null): void {
     this.#f = { ...this.#f, experienceYearsMax: n };
   }
