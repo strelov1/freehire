@@ -22,7 +22,7 @@ findings are in the design's "The provider contract, as verified".
 
 ## 1. Schema
 
-- [x] 1.1 Migration `0123_billing_events.sql`: `billing_events` (id, provider, event_id,
+- [x] 1.1 Migration `0128_billing_events.sql`: `billing_events` (id, provider, event_id,
       user_id, event_type, payload jsonb, received_at, processed_at NULL) with
       `UNIQUE (provider, event_id)` and an index serving "unprocessed, oldest first"
 - [x] 1.2 `user_id` references `users` with the same on-delete behaviour the rest of the
@@ -106,15 +106,15 @@ findings are in the design's "The provider contract, as verified".
 
 ## 5. SPA
 
-- [ ] 5.1 An upgrade entry point on the usage surface and from the 402 body's pointer,
+- [x] 5.1 An upgrade entry point on the usage surface and from the 402 body's pointer,
       calling `GET /api/v1/billing/checkout` and navigating to the returned URL
-- [ ] 5.2 "You are on Pro until <date>" on the usage surface when `pro_until` is in force
-- [ ] 5.3 With billing disabled the upgrade entry point is absent, not broken — the 404
+- [x] 5.2 "You are on Pro until <date>" on the usage surface when `pro_until` is in force
+- [x] 5.3 With billing disabled the upgrade entry point is absent, not broken — the 404
       must never reach a user as an error
-- [ ] 5.4 The delete-account surface states that deletion does not cancel the subscription
+- [x] 5.4 The delete-account surface states that deletion does not cancel the subscription
       and links to the `management_url` the provider reports for that subscriber — not to
       a URL we composed
-- [ ] 5.5 `pnpm check:dead` and eslint over the touched files
+- [x] 5.5 eslint over the touched files (clean). `pnpm check:dead` flags nothing of ours; its other findings are pre-existing and locally unreliable — the worktree has no `extension/` or `design-system/` dependencies installed, which is why CLAUDE.md calls that check CI-only
 
 ## 6. Ops
 
@@ -135,9 +135,9 @@ findings are in the design's "The provider contract, as verified".
 
 ## 7. Verification
 
-- [ ] 7.1 `gofmt -l .` prints nothing; `go vet ./...`; `go test ./...`
-- [ ] 7.2 `go vet -tags=integration ./...` before pushing
-- [ ] 7.3 `go test -tags=integration ./internal/identity/billing/ ./internal/api/handler/`
-- [ ] 7.4 `pnpm check:links` — this design links to files by path
+- [x] 7.1 `gofmt -l .` prints nothing; `go vet ./...`; `go test ./...`
+- [x] 7.2 `go vet -tags=integration ./...` before pushing
+- [x] 7.3 `go test -tags=integration ./internal/identity/billing/ ./internal/api/handler/`
+- [x] 7.4 `pnpm check:links` — this design links to files by path
 - [ ] 7.5 End-to-end on prod with a real purchase of the live product, then a refund:
       assert `pro_until` is set, then cleared, and that `billing_events` records both

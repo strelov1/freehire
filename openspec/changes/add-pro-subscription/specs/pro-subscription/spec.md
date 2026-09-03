@@ -73,6 +73,52 @@ events received. Applying the same provider state twice SHALL leave the column u
   non-NULL `pro_until`, so that reading state can never bring a subscriber record into
   existence at the provider for a user who has never transacted
 
+### Requirement: The upgrade offer is absent when there is nothing to sell
+
+The system SHALL show an upgrade entry point only when a checkout can actually be issued.
+When billing is unconfigured, or no paywall is configured, the surface SHALL omit the
+entry point rather than render it as failing.
+
+#### Scenario: A free-plan user on a deployment with billing configured
+
+- **WHEN** a free-plan user opens the plan surface
+- **THEN** an upgrade entry point is shown, leading to the checkout URL issued for them
+
+#### Scenario: A deployment with no billing
+
+- **WHEN** a free-plan user opens the plan surface and billing is unconfigured
+- **THEN** no upgrade entry point is shown, and no error is presented
+
+#### Scenario: A subscriber sees when their plan runs to
+
+- **WHEN** a pro-plan user opens the plan surface
+- **THEN** it states the date the subscription runs until, read from stored state without
+  calling the billing provider
+
+### Requirement: Where to cancel comes from the provider
+
+The system SHALL obtain the subscription management destination from the billing provider
+rather than composing one, and SHALL request it only when a surface is about to show it.
+When it cannot be obtained, the surface SHALL omit the link while still stating that
+deleting an account does not cancel a subscription.
+
+#### Scenario: A subscriber opens the delete-account surface
+
+- **WHEN** a member with a subscription opens the delete-account surface
+- **THEN** the management destination is requested from the provider and offered as a link
+
+#### Scenario: The provider cannot be reached
+
+- **WHEN** the management destination cannot be obtained
+- **THEN** the surface still states that deletion does not cancel the subscription, and
+  simply shows no link
+
+#### Scenario: The destination is not composed locally
+
+- **WHEN** a management destination is shown
+- **THEN** it is the value the provider reported for that subscriber, not a URL derived
+  from configuration
+
 ### Requirement: The plan column has exactly two writers
 
 The system SHALL write `users.pro_until` only from the webhook handler and the
