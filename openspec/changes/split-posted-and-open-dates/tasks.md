@@ -67,10 +67,10 @@ change because the `filter-modal` and `jobs-list-controls` specs currently forbi
 
 ## 6. The contract
 
-- [ ] 6.1 Document `open_within_days` in `web/static/openapi.yaml` beside
+- [x] 6.1 Document `open_within_days` in `web/static/openapi.yaml` beside
       `posted_within_days`, stating which date each bounds
-- [ ] 6.2 Mirror it in `web/src/lib/docs/api-spec.ts`
-- [ ] 6.3 `pnpm check:links`, and confirm the OpenAPI document still validates
+- [x] 6.2 Mirror it in `web/src/lib/docs/api-spec.ts`
+- [x] 6.3 `pnpm check:links`, and confirm the OpenAPI document still validates
       (the `artifacts` CI job)
 
 ## 7. Ship

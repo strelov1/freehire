@@ -90,7 +90,14 @@ export const FILTER_EXTRAS: FilterRow[] = [
   {
     param: 'posted_within_days',
     label: 'Posted within',
-    values: 'integer — jobs whose effective posting date falls in the last N days',
+    values:
+      'integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside',
+  },
+  {
+    param: 'open_within_days',
+    label: 'Open within',
+    values:
+      'integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together',
   },
 ];
 
