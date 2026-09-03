@@ -1,28 +1,33 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
   import { listSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
   import { suggestRoles } from '$lib/roleSuggest';
+  import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
   import { cn } from '$lib/ui';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 
   // The header's list-mode input: on /jobs and /companies it IS the page's text
-  // search, proxying straight into the active list store (registered by the view).
-  // Reuses the store's URL sync + debounce, so this stays a thin remote control.
+  // search, proxying into the active list store (registered by the view).
+  //
+  // Typing does NOT run the search. What you type is a draft; Enter or choosing a
+  // suggestion commits it. The box used to push every keystroke into the store, so
+  // the feed refetched while the visitor was still composing the query — and the
+  // half-typed word it searched for was rarely the one they meant.
   //
   // It shows ONE dropdown, and only where the registered target published a
   // `roleSuggest` capability — the jobs-backed lists. Free text is otherwise the
-  // whole interaction here (the page's own list is the live result), but most of
-  // what people type into this box names a role the `role` facet already tags, and
-  // the facet is otherwise only reachable through the filter modal.
+  // whole interaction here, but most of what people type into this box names a role
+  // the `role` facet already tags, and the facet is otherwise only reachable through
+  // the filter modal.
   let { placeholder }: { placeholder: string } = $props();
 
-  // How long the query must sit still before the suggestions are recomputed. The
-  // filter store does NOT debounce this path — setSoon updates `value` immediately
-  // and debounces only `applied` — and a pass costs ~10 ms over the catalogue on a
-  // warm desktop, more on a phone. Short enough to read as instant, long enough that
-  // a fast typist pays for it once rather than per letter.
+  // How long the draft must sit still before the suggestions are recomputed. A pass
+  // costs ~10 ms over the catalogue on a warm desktop, more on a phone. Short enough
+  // to read as instant, long enough that a fast typist pays for it once rather than
+  // per letter.
   const SUGGEST_DEBOUNCE_MS = 120;
 
   let inputEl = $state<HTMLInputElement | null>(null);
@@ -37,6 +42,25 @@
   // Fall back to the URL's `q` before the view registers (SSR + first paint), so a
   // shared /jobs?q=… link shows its query immediately.
   const q = $derived(target?.value.q ?? page.url.searchParams.get('q') ?? '');
+
+  // What the box shows, which is only the committed query until someone types.
+  //
+  // Seeded from `q` rather than from an empty string: `$effect` does not run during
+  // SSR, so an empty seed would render `/jobs?q=java` with an empty box on the server
+  // and only fill it once the client hydrated. Capturing just the initial value is
+  // the intent — every later move of `q` arrives through the reconcile below.
+  // svelte-ignore state_referenced_locally
+  let draft = $state<SearchDraft>(emptyDraft(q));
+
+  // Fold the committed query back in whenever it moves on its own: history
+  // navigation, a filter chip removed, a suggestion applied. `untrack` reads the
+  // current draft without subscribing to it — this effect writes `draft`, so
+  // tracking the read would make it re-run itself forever.
+  $effect(() => {
+    const committed = q;
+    draft = reconcile(untrack(() => draft), committed);
+  });
+
   // The All-filters trigger: shown (with its active-filter badge) only on list pages
   // that published `openFilters`; the count getter is called inside this $derived so
   // the badge tracks the view's live filter state.
@@ -46,8 +70,10 @@
   // stays null there — the header never asks which page it is on.
   const roleSuggest = $derived(target?.roleSuggest ?? null);
 
+  // Suggestions follow the DRAFT, not the committed query — they are what helps the
+  // visitor decide what to commit, so waiting for the commit would be circular.
   $effect(() => {
-    const typed = q;
+    const typed = draft.text;
     const timer = setTimeout(() => (settledQuery = typed), SUGGEST_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   });
@@ -56,13 +82,23 @@
     roleSuggest ? suggestRoles(settledQuery, roleSuggest.counts(), roleSuggest.active()) : [],
   );
   const suggestOpen = $derived(suggestions.length > 0 && !dismissed);
-  // The last row dismisses the dropdown and keeps the typed text. It is not a second
-  // way to search: this page's list is already showing those results as you type.
+  // The last row runs the typed text as a free-text search. It used to only dismiss
+  // the dropdown, because the list below was already showing those results as you
+  // typed; now that typing commits nothing, that row IS how free text gets searched.
   const rowCount = $derived(suggestOpen ? suggestions.length + 1 : 0);
 
   function close() {
     dismissed = true;
     activeIndex = -1;
+  }
+
+  /** Run what is in the box, and close over it. The store owns the URL write and the
+   *  reload from here. Every path that searches free text goes through this — Enter,
+   *  the dropdown's last row, and the clear button, which is a search for nothing. */
+  function runSearch() {
+    draft = commit(draft);
+    target?.setQuery(draft.committed);
+    close();
   }
 
   function choose(index: number) {
@@ -72,8 +108,21 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    // With the dropdown closed this handler owns no keys at all, which is what keeps
-    // the input behaving exactly as it did on every page that offers no suggestions.
+    // Enter is handled whether or not the dropdown is open — it is the only way typing
+    // reaches the list now, so it cannot sit behind the dropdown's guard. A highlighted
+    // ROLE row applies its facet; anything else (nothing highlighted, or the last row,
+    // which is the free-text one) searches the text.
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestOpen && activeIndex >= 0 && activeIndex < suggestions.length) {
+        choose(activeIndex);
+      } else {
+        runSearch();
+      }
+      return;
+    }
+    // Every other key belongs to the dropdown, so with it closed this handler owns
+    // nothing — which keeps the input behaving as it does where no suggestions exist.
     if (!suggestOpen) return;
     if (e.key === 'Escape') {
       e.preventDefault(); // keep the typed text; only the dropdown closes
@@ -89,17 +138,6 @@
       e.preventDefault();
       activeIndex = activeIndex > 0 ? activeIndex - 1 : rowCount - 1;
       return;
-    }
-    // Enter is captured ONLY on a highlighted role. With nothing highlighted, or on
-    // the dismiss row, it does what it does today — the feature is additive for
-    // anyone who ignores the dropdown.
-    if (e.key === 'Enter' && activeIndex >= 0) {
-      if (activeIndex < suggestions.length) {
-        e.preventDefault();
-        choose(activeIndex);
-      } else {
-        close();
-      }
     }
   }
 
@@ -160,11 +198,11 @@
     <Search class="size-4 shrink-0 text-muted-foreground" />
     <input
       bind:this={inputEl}
-      value={q}
+      value={draft.text}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
-        target?.setQuery(e.currentTarget.value);
+        draft = edit(draft, e.currentTarget.value);
       }}
       onkeydown={onKeydown}
       type="text"
@@ -178,10 +216,15 @@
       aria-activedescendant={activeIndex >= 0 ? `role-suggestion-${activeIndex}` : undefined}
       class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
     />
-    {#if q}
+    {#if draft.text}
+      <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor
+           asked for the unfiltered list, not for an empty box over the old results. -->
       <button
         type="button"
-        onclick={() => target?.setQuery('')}
+        onclick={() => {
+          draft = edit(draft, '');
+          runSearch();
+        }}
         aria-label="Clear search"
         class="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
       >
@@ -222,9 +265,8 @@
   </div>
 
   <!-- Role suggestions. Rendered only where the list published the capability, so
-       /companies needs no exclusion here. Each row applies the `role` facet and
-       clears the text; the last row just closes this, since the page's list is
-       already showing the free-text results as they type. -->
+       /companies needs no exclusion here. Each row applies the `role` facet; the last
+       row runs the typed text as a free-text search. -->
   {#if suggestOpen}
     <ul
       id="role-suggestions"
@@ -258,12 +300,12 @@
         <button
           type="button"
           onmouseenter={() => (activeIndex = suggestions.length)}
-          onclick={close}
+          onclick={runSearch}
           class={cn(rowClass(activeIndex === suggestions.length), 'border-t border-border')}
         >
           <Search class="size-4 shrink-0 text-muted-foreground" />
           <span class="min-w-0 flex-1 truncate text-muted-foreground"
-            >Keep searching “{q}” as text</span
+            >Search “{draft.text}” as text</span
           >
         </button>
       </li>
