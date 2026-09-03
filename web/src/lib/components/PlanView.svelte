@@ -32,6 +32,20 @@
       .catch(() => (usage = null));
   });
 
+  // Where this caller buys Pro. Null means there is nowhere to send them — billing is not
+  // configured on this deployment, or no paywall is set up — and the upgrade entry point is
+  // then ABSENT rather than broken. Both cases answer 404, which is not an error to show a
+  // candidate: it is the honest statement that there is nothing to buy here.
+  let checkoutUrl = $state<string | null>(null);
+
+  $effect(() => {
+    if (!isAuthenticated()) return;
+    api
+      .billingCheckout()
+      .then(({ url }) => (checkoutUrl = url))
+      .catch(() => (checkoutUrl = null));
+  });
+
   $effect(() => {
     if (!isAuthenticated()) return;
     status = 'loading';
@@ -77,6 +91,28 @@
     </div>
 
     {#if plan}
+      <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers
+           the upgrade — but only once we know there is somewhere to send them. -->
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+      >
+        <div class="flex flex-col gap-0.5">
+          <span class="text-sm font-semibold">{plan.plan === 'pro' ? 'Pro' : 'Free'}</span>
+          {#if plan.plan === 'pro' && plan.pro_until}
+            <span class="text-xs text-muted-foreground">Runs until {fmtDate(plan.pro_until)}</span>
+          {:else if plan.plan === 'free'}
+            <span class="text-xs text-muted-foreground">Same features, daily limits</span>
+          {/if}
+        </div>
+        {#if plan.plan === 'free' && checkoutUrl}
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's hosted paywall, not a SvelteKit route -->
+          <a
+            class="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+            href={checkoutUrl}>Upgrade to Pro</a
+          ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+        {/if}
+      </div>
+
       <div class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
           <h2 class="text-sm font-medium text-muted-foreground">Today</h2>

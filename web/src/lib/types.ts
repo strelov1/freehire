@@ -76,6 +76,11 @@ export interface Allowance {
 export interface PlanState {
   plan: 'free' | 'pro';
   resets_at: string;
+  /** When the Pro plan lapses. Absent on the free plan, and absent once it has lapsed —
+   *  the server omits a past value, so a date here is always still in force. Read from the
+   *  stored column, never from the billing provider, so this endpoint keeps answering when
+   *  the provider does not. */
+  pro_until?: string;
   allowances: Allowance[];
 }
 

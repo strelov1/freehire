@@ -179,6 +179,28 @@ func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
+// ManagementURL is where this subscriber cancels or changes their subscription.
+//
+// It is the provider's own answer, fetched when asked for, not a URL we composed: a
+// destination we built ourselves is wrong the first time they change theirs, and "where do
+// I cancel" is exactly the question nobody wants to get a stale answer to.
+//
+// It is a NETWORK CALL, which is why it lives on its own endpoint and not on the plan
+// surface. Plan resolution must stay free of the provider — see internal/ai/plan.
+func (s *Service) ManagementURL(ctx context.Context, appUserID string) (string, error) {
+	if !s.Enabled() {
+		return "", ErrDisabled
+	}
+	if _, ok := userIDFromAppUserID(appUserID); !ok {
+		return "", fmt.Errorf("%w: %q", ErrUnknownSubscriber, appUserID)
+	}
+	sub, err := s.client.subscriberState(ctx, appUserID)
+	if err != nil {
+		return "", err
+	}
+	return sub.ManagementURL, nil
+}
+
 // Sync reads the provider's current state for one subscriber and writes users.pro_until
 // from it.
 //

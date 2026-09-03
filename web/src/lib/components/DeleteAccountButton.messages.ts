@@ -19,6 +19,7 @@ export const messages = defineMessages(
       "Discussions you started stay up so other members don't lose their replies, but your handle is removed from them — they are shown as written by a deleted member.",
     subscriptionNote:
       'If you pay for Pro, deleting your account here does not cancel that subscription — cancel it where you bought it, or you will keep being charged for an account that no longer exists.',
+    manageSubscription: 'Manage subscription',
     confirmPrefix: 'Type',
     confirmSuffix: 'to confirm',
     passwordLabel: 'Confirm your password',
@@ -51,6 +52,7 @@ export const messages = defineMessages(
       'Начатые вами обсуждения останутся видны, чтобы другие участники не потеряли свои ответы, но ваш ник будет из них убран — они будут показаны как написанные удалённым участником.',
     subscriptionNote:
       'Если у вас оплачен Pro, удаление аккаунта здесь не отменяет подписку — отмените её там, где оформляли, иначе списания продолжатся за уже несуществующий аккаунт.',
+    manageSubscription: 'Управление подпиской',
     confirmPrefix: 'Введите',
     confirmSuffix: 'для подтверждения',
     passwordLabel: 'Подтвердите пароль',

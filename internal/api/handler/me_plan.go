@@ -33,8 +33,12 @@ func (h *planHandlers) register(api fiber.Router, mw middleware) {
 // planResponse is the whole plan surface: which plan, every metered feature's standing
 // today, and the instant they all reset.
 type planResponse struct {
-	Plan       string          `json:"plan"`
-	ResetsAt   time.Time       `json:"resets_at"`
+	Plan     string    `json:"plan"`
+	ResetsAt time.Time `json:"resets_at"`
+	// ProUntil is when the Pro plan lapses, absent on the free plan. It is read from the
+	// stored column, never from the billing provider — this endpoint must keep answering
+	// when the provider does not.
+	ProUntil   *time.Time      `json:"pro_until,omitempty"`
 	Allowances []allowanceView `json:"allowances"`
 }
 
@@ -54,6 +58,12 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 		return err
 	}
 	out := planResponse{Plan: string(tier), ResetsAt: resets, Allowances: make([]allowanceView, 0, len(usage))}
+	// One extra column read, not a call to the provider. A lapsed or absent value simply
+	// leaves the field out, which is what a free-plan caller should see.
+	if proUntil, err := h.queries.GetProUntil(c.Context(), userID); err == nil && proUntil.Valid && proUntil.Time.After(time.Now()) {
+		when := proUntil.Time
+		out.ProUntil = &when
+	}
 	for _, u := range usage {
 		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, u.Enforced, resets))
 	}

@@ -1020,6 +1020,26 @@ export function createApi(
     return requestData<PlanState>('/api/v1/me/plan');
   }
 
+  /** Where this caller buys Pro: a link to the provider's hosted paywall, carrying their
+   *  own account id. We never see a card.
+   *
+   *  Throws when billing is not configured on this deployment, or when no paywall is set
+   *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
+   *  entry point, never as an error to show. */
+  async function billingCheckout(): Promise<{ url: string }> {
+    return requestData<{ url: string }>('/api/v1/billing/checkout');
+  }
+
+  /** Where this caller cancels or changes their subscription — the provider's own
+   *  management URL, fetched from them rather than composed here, because a destination we
+   *  built is wrong the first time they change theirs.
+   *
+   *  404 when there is no subscription, or the provider is unreachable. Either way the
+   *  surface omits the link rather than rendering a broken one. */
+  async function billingManageUrl(): Promise<{ url: string }> {
+    return requestData<{ url: string }>('/api/v1/billing/manage');
+  }
+
   /** What the caller's account did this period: model calls, failures and tokens, read
    *  from the LLM gateway. Never fails for anything the caller can act on — an account
    *  that has never used AI, and a gateway that is down, both answer zeroes. */
@@ -2198,6 +2218,8 @@ export function createApi(
     myInterviews,
     myAnalyses,
     myPlan,
+    billingCheckout,
+    billingManageUrl,
     myPlanHistory,
     myUsage,
     listViewedSlugs,
