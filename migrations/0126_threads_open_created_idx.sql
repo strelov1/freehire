@@ -1,3 +1,13 @@
+-- SUPERSEDED ON ANY DATABASE THAT RECORDED THIS FILE — see 0127.
+--
+-- This file was rewritten after it had already been recorded as applied on prod, which
+-- is the one thing the migration rule forbids. The rewrite is honest about what went
+-- wrong and useless where it matters: a recorded version row means this file is never
+-- read again, so everything below about dropping a carcass fixes only databases that
+-- never had one. 0127 is what actually repaired prod, and it carries the full account.
+-- Read this file for the index's shape and the CONCURRENTLY reasoning; read 0127 for
+-- what ran.
+--
 -- The global discussions feed (GET /api/v1/threads/recent, /discussions): every open
 -- thread across every subject, newest first, keyset-paged on (created_at, id).
 --

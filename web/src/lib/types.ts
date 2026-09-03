@@ -1119,7 +1119,11 @@ export interface PhotoMeta {
  *  is a pseudonymous persona handle — the backend never sends the real user id. */
 export interface CommunityThread {
   id: number;
-  subject_type: string;
+  /** The schema's own discriminator, and a closed set: the CHECK constraint on
+   *  `threads.subject_type` admits exactly these two. Typed as the union rather than
+   *  `string` because every consumer narrows to it anyway, and one that forgot would
+   *  have compiled. */
+  subject_type: 'company' | 'job';
   subject_slug: string;
   title: string;
   body: string;

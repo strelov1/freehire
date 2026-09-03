@@ -43,6 +43,48 @@ empty rather than removing the thread from the listing.
 - **WHEN** an unauthenticated client requests the cross-subject listing
 - **THEN** the request succeeds and no response field identifies any author beyond their persona handle
 
+### Requirement: A discussion page names the subject it is about
+
+Every discussion surface scoped to one subject — the thread list and a single
+thread, on both subject kinds — SHALL open with that subject: its logo, its
+name, and for a vacancy its employer and whether the posting has closed. The
+header SHALL be the way back to the subject, replacing any separate breadcrumb.
+
+The subject SHALL be resolved independently of the threads, since a subject
+with no threads still has a header to draw. When it cannot be resolved the page
+SHALL still render the discussion, and SHALL distinguish a subject that is gone
+from one it merely failed to read.
+
+#### Scenario: A vacancy's discussion names the posting
+
+- **WHEN** a reader opens a vacancy's thread list or one of its threads
+- **THEN** the page opens with the vacancy's title, its employer and its logo, as a single link to the posting
+
+#### Scenario: A closed vacancy says so
+
+- **WHEN** the vacancy the discussion hangs off has closed
+- **THEN** the header marks it closed, without the reader having to follow the link
+
+#### Scenario: A company's discussion names the company
+
+- **WHEN** a reader opens a company's thread list or one of its threads
+- **THEN** the page opens with the company's name and logo, as a single link to the company, and does not print its slug
+
+#### Scenario: An absent subject is stated, not linked
+
+- **WHEN** the subject cannot be resolved
+- **THEN** the header renders the stored slug as an identifier and is NOT a link, since the destination is the page that could not be read
+
+#### Scenario: Unreachable is not reported as gone
+
+- **WHEN** the subject could not be fetched for a reason other than it being absent
+- **THEN** the header says it could not be loaded, distinctly from saying it is no longer listed
+
+#### Scenario: A merged company slug still names its company
+
+- **WHEN** the subject is a company whose slug a merge has retired
+- **THEN** the header names the company that absorbed it, and the discussion stays at the url it is under — threads record the retired slug, so the canonical url would not resolve them
+
 ### Requirement: A discussions section on the web client
 
 The web client SHALL serve a `/discussions` page rendering the cross-subject
@@ -93,10 +135,16 @@ topic, which requires a subject.
 The system SHALL return the threads attached to a given subject, newest first,
 each carrying its persona handle, title, reply count, and timestamps.
 
-Paged listings SHALL signal a further page only when one exists: a
-continuation cursor SHALL be returned only when the page returned is full, and
-SHALL be absent on the final page. This applies to both the subject thread
-listing and a thread's reply listing.
+Paged listings SHALL return a continuation cursor only when the page came back
+full, and SHALL omit it on a partial page. This applies to both the subject
+thread listing and a thread's reply listing.
+
+A full page is not proof that another exists: a listing holding exactly a
+multiple of the page size still ends on a full one. That residue is deliberate
+and bounded — see the design note — and closing it needs a fetch-ahead the
+domain's listing methods do not do. The requirement is therefore stated as
+"full page", not as "a further page exists"; the two differ only in that case,
+and stating the stronger one would describe behaviour nothing implements.
 
 #### Scenario: List a company's threads
 

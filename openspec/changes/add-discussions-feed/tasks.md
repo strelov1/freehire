@@ -13,6 +13,10 @@
   `threads (created_at DESC, id DESC) WHERE status = 'open'`, with a comment
   saying why the existing subject-prefixed index cannot serve the feed
 - [x] 2.2 `pnpm check:sql` passes on the new file
+- [x] 2.3 Migration `0127_repair_threads_open_created_idx.sql`: repairs any
+  database that recorded 0126 while the index it built was invalid. Needed
+  because the host's autodeploy recorded 0126 between its failed release and
+  the fix, so the edited 0126 can never run there
 
 ## 3. SQL queries (sqlc)
 
@@ -68,3 +72,24 @@
   resolved subject names and logos, and the single-thread subject page no
   longer draws "Load more". Took three releases — see 0126/0127 for the
   CONCURRENTLY lock timeout and the invalid index it left behind.
+
+## 8. Subject header (added after the feed shipped, on request)
+
+- [x] 8.1 `discussionSubject.ts`: the pure mapping from a `Job`/`Company` to
+  what the header prints — title, logo key, employer label, closed state
+- [x] 8.2 `server/discussionSubject.ts`: fetch it, never throw, and tell a gone
+  subject apart from an unreachable one; follow a merged company slug by hand
+- [x] 8.3 `SubjectHeader.svelte`: one link when the subject resolved, a plain
+  box when it did not
+- [x] 8.4 Wire into all four subject-scoped discussion pages, replacing the
+  breadcrumbs (the company ones printed a raw slug)
+- [x] 8.5 `loadDiscussionIndex` shared by both index routes, as `loadThread`
+  already was by both thread routes
+- [x] 8.6 Unit tests for the mapping, including the employerless vacancy
+
+## 9. Closing out
+
+- [ ] 9.1 Archive the change (`opsx:archive`) and sync the delta into
+  `openspec/specs/community-threads/spec.md`. Deliberately last: the header in
+  section 8 arrived after the rest had shipped, so archiving earlier would have
+  closed a change that was still growing

@@ -41,9 +41,15 @@ listing code, so they ship together.
 
 ## Impact
 
-- **New migration**: a partial index on `threads (created_at DESC, id DESC)
-  WHERE status = 'open'`. The existing index leads with the subject, so it
-  cannot serve an unfiltered newest-first scan.
+- **Two migrations**, both building the same partial index on
+  `threads (created_at DESC, id DESC) WHERE status = 'open'` — the existing
+  index leads with the subject, so it cannot serve an unfiltered newest-first
+  scan. Each is a `DROP INDEX IF EXISTS` followed by a **plain** `CREATE INDEX`,
+  in one transaction. Not `CONCURRENTLY`: on a three-row table it buys no
+  availability and waits for unrelated transactions' snapshots, which is what
+  failed the first release. There are two because the first (0126) was recorded
+  as applied on prod while the index it left was invalid, so the repair had to
+  be its own file (0127). Both files carry the full account.
 - **New sqlc queries** in `internal/platform/db/queries/community.sql` — the
   unfiltered keyset pair, each LEFT JOINing `jobs` and `companies` to resolve
   the subject's display name.
@@ -53,8 +59,14 @@ listing code, so they ship together.
 - **`internal/api/handler/community.go`**: `GET /api/v1/threads/recent`
   (public), registered before `/threads/:id`; the cursor fix in `ListThreads`
   and `GetThread`.
-- **Frontend** (`web/`): a `/discussions` route, a `DiscussionFeed` component, a
-  footer link, and the page added to `sitemap-pages.xml`.
+- **Frontend** (`web/`): a `/discussions` route, a `DiscussionFeed` component,
+  a footer and header-menu link, and the page added to `sitemap-pages.xml`.
+- **Frontend, added after the feed shipped**: a `SubjectHeader` on every
+  subject-scoped discussion page (`web/src/lib/components/community/`), with
+  `discussionSubject.ts` mapping a `Job`/`Company` to what the header prints and
+  `server/discussionSubject.ts` fetching it. It replaces the bare breadcrumbs
+  those pages carried; the company ones had been printing a raw slug where the
+  company's name belongs.
 - Reuses the existing thread-detail routes: a feed row links to the subject's
   own thread page, so no new thread-reading surface is added.
 - **Not in this change**: `web/static/openapi.yaml` documents no discussion

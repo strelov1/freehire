@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// subjectRow is what the feed query's two LEFT JOINs would have resolved for one
+// subject: the display title and the employer, which are separate columns and are
+// separately absent.
+type subjectRow struct{ title, company string }
+
 // fakeRepo is an in-memory Repository for exercising the service without a DB.
 type fakeRepo struct {
 	personas    map[int64]Persona
@@ -20,7 +25,11 @@ type fakeRepo struct {
 	replyTimes  []time.Time
 	// subjectNames stands in for the jobs/companies joins in the feed query, keyed
 	// "<subject_type>:<subject_ref>". A missing key is a subject that no longer exists.
-	subjectNames map[string]string
+	// Title and company are held APART because the query resolves them from different
+	// columns (jobs.title vs jobs.company) and they genuinely diverge — a posting whose
+	// employer column is empty has a title and no company. A fake that fills both from
+	// one string cannot express the case its consumer exists to handle.
+	subjectNames map[string]subjectRow
 
 	failHandleOnce bool // simulate one handle collision then succeed
 }
@@ -29,7 +38,7 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		personas: map[int64]Persona{}, handles: map[string]int64{},
 		threads: map[int64]Thread{}, replies: map[int64][]Reply{},
-		subjectNames: map[string]string{},
+		subjectNames: map[string]subjectRow{},
 	}
 }
 
@@ -92,10 +101,11 @@ func (f *fakeRepo) ListRecentOpenThreads(_ context.Context, _ Cursor, limit int3
 		if t.Status != StatusOpen {
 			continue
 		}
+		row := f.subjectNames[t.SubjectType+":"+t.SubjectRef]
 		out = append(out, ThreadWithSubject{
 			Thread:         t,
-			SubjectTitle:   f.subjectNames[t.SubjectType+":"+t.SubjectRef],
-			SubjectCompany: f.subjectNames[t.SubjectType+":"+t.SubjectRef],
+			SubjectTitle:   row.title,
+			SubjectCompany: row.company,
 		})
 	}
 	// The map iteration above is unordered; the real query orders by (created_at DESC,
@@ -354,8 +364,8 @@ func TestListRecentThreadsEmpty(t *testing.T) {
 // The feed spans subject types — that is its whole point — and names each subject.
 func TestListRecentThreadsSpansSubjectTypes(t *testing.T) {
 	repo := newFakeRepo()
-	repo.subjectNames["company:acme"] = "Acme Inc."
-	repo.subjectNames["job:senior-go-acme-abc123"] = "Senior Go Engineer"
+	repo.subjectNames["company:acme"] = subjectRow{title: "Acme Inc.", company: "Acme Inc."}
+	repo.subjectNames["job:senior-go-acme-abc123"] = subjectRow{title: "Senior Go Engineer", company: "Acme Inc."}
 	svc := newService(repo, "company/acme", "job/senior-go-acme-abc123")
 	ctx := context.Background()
 
@@ -418,7 +428,7 @@ func TestListRecentThreadsKeepsThreadWithMissingSubject(t *testing.T) {
 // A closed thread is hidden from every default listing, the feed included.
 func TestListRecentThreadsExcludesClosed(t *testing.T) {
 	repo := newFakeRepo()
-	repo.subjectNames["company:acme"] = "Acme Inc."
+	repo.subjectNames["company:acme"] = subjectRow{title: "Acme Inc.", company: "Acme Inc."}
 	svc := newService(repo, "company/acme")
 	ctx := context.Background()
 	th, err := svc.CreateThread(ctx, CreateThreadInput{
@@ -436,5 +446,35 @@ func TestListRecentThreadsExcludesClosed(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("want closed thread excluded, got %d rows", len(got))
+	}
+}
+
+// A posting whose employer column is empty still RESOLVED — the vacancy is there, only
+// its company name is missing. The feed must report the title it found and the absent
+// company separately, because the client decides "is the subject gone?" from the title:
+// keying that on the company would call a live posting pruned.
+func TestListRecentThreadsSeparatesTitleFromCompany(t *testing.T) {
+	repo := newFakeRepo()
+	repo.subjectNames["job:platform-eng-k8s-e9"] = subjectRow{title: "Platform Engineer", company: ""}
+	svc := newService(repo, "job/platform-eng-k8s-e9")
+	ctx := context.Background()
+	if _, err := svc.CreateThread(ctx, CreateThreadInput{
+		UserID: 1, SubjectType: SubjectJob, SubjectSlug: "platform-eng-k8s-e9",
+		Title: "Who is hiring for this?", Body: "No company name at all.",
+	}); err != nil {
+		t.Fatalf("CreateThread: %v", err)
+	}
+	got, err := svc.ListRecentThreads(ctx, Cursor{})
+	if err != nil {
+		t.Fatalf("ListRecentThreads: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 thread, got %d", len(got))
+	}
+	if got[0].SubjectTitle != "Platform Engineer" {
+		t.Fatalf("want the title the join found, got %q", got[0].SubjectTitle)
+	}
+	if got[0].SubjectCompany != "" {
+		t.Fatalf("want the absent company reported absent, got %q", got[0].SubjectCompany)
 	}
 }

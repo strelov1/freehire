@@ -178,7 +178,9 @@ func (h *communityHandlers) ListThreads(c *fiber.Ctx) error {
 // type parameter in Go.
 func pageMeta[T interface{ Position() community.Cursor }](items []T, pageSize int32) fiber.Map {
 	meta := fiber.Map{}
-	if n := len(items); n > 0 && int32(n) == pageSize {
+	// >= not ==: a page longer than asked for is still a full one, and equality would
+	// drop the cursor on it — the same silence, from the other side.
+	if n := len(items); n > 0 && int32(n) >= pageSize {
 		pos := items[n-1].Position()
 		meta["next_cursor"] = encodeCursor(pos.CreatedAt, pos.ID)
 	}
