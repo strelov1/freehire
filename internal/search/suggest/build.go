@@ -1,6 +1,7 @@
 package suggest
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"sort"
 	"strings"
@@ -167,20 +168,28 @@ func Build(in Input) []Document {
 // documentID builds the identifier Meilisearch dedupes on.
 //
 // The engine accepts letters, digits, hyphens and underscores and nothing else, up to
-// 511 bytes. That rules out the readable separator this used to carry: the first
-// production build failed on its very first document, `company:01-tech`. It also rules
-// out characters the VALUES legitimately hold — `node.js`, `c++`, `at&t` — so the id
-// cannot simply be the value with a prefix glued on.
+// 511 bytes, and two production builds failed here in turn:
 //
-// So it is hex, which is legal by construction rather than by a list of the characters
-// seen so far. That costs readability in the engine's own UI and buys an id that
-// cannot be broken by a company registering a name nobody anticipated.
+//   - `company:01-tech` — the readable separator was an illegal character, and so are
+//     characters the VALUES legitimately hold (`node.js`, `c++`, `at&t`), so no
+//     prefix-plus-value scheme survives this dictionary's own vocabulary;
+//   - then a 340-byte company slug — a transliterated college name — which the hex
+//     encoding that fixed the first failure doubled past the ceiling.
+//
+// So: a fixed-width hash. Legal by construction, and its length does not follow the
+// value at all — which is the property the second failure was really about. A slug
+// arrives from a feed and nobody promised its length; bounding the values we mine
+// ourselves could never have covered that.
 //
 // The kind stays in front, unencoded, because it is a closed vocabulary of plain
 // words: `backend` is a plausible role, skill AND category, and the whole reason an id
 // is namespaced is that those three must not collide.
+//
+// Readability in the engine's own UI is the cost. The document carries `kind`, `slug`
+// and `text` as fields, so nothing that has to be looked up is only in the id.
 func documentID(kind Kind, value string) string {
-	return string(kind) + "_" + hex.EncodeToString([]byte(value))
+	sum := sha256.Sum256([]byte(value))
+	return string(kind) + "_" + hex.EncodeToString(sum[:])
 }
 
 // categoryText and skillText render a slug as a person would write it. Neither

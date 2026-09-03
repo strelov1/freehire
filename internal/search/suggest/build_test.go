@@ -303,3 +303,24 @@ func TestBuild_ARunawayTitleIsNotVocabulary(t *testing.T) {
 		t.Fatalf("got %v", texts(docs))
 	}
 }
+
+// The id must not depend on how long the VALUE is.
+//
+// Hex was legal but proportional, and the second production build failed on a company
+// slug 340 bytes long — a transliterated Russian college name — which hex doubled past
+// the engine's 511-byte ceiling. Bounding titles was not enough: a slug arrives from a
+// feed, and nobody promised its length.
+func TestBuild_IdLengthIsIndependentOfTheValue(t *testing.T) {
+	short := Build(Input{Companies: []Company{{Slug: "ibm", Name: "IBM", Jobs: 5}}})
+	long := Build(Input{Companies: []Company{{Slug: strings.Repeat("a-very-long-transliterated-name", 20), Name: "Long", Jobs: 5}}})
+
+	if len(short) != 1 || len(long) != 1 {
+		t.Fatalf("built %d and %d", len(short), len(long))
+	}
+	if len(short[0].ID) != len(long[0].ID) {
+		t.Errorf("ids are %d and %d bytes — length must not follow the value", len(short[0].ID), len(long[0].ID))
+	}
+	if len(long[0].ID) > 511 {
+		t.Errorf("id is %d bytes, over the engine's ceiling", len(long[0].ID))
+	}
+}
