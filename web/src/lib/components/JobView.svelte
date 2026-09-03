@@ -65,7 +65,7 @@
   // Set after the user confirms "Yes" on the apply prompt: surfaces a one-tap
   // link to the Tracking board where the job now sits. Reset when the job changes.
   let justApplied = $state(false);
-  // Signed-out gate: the "Show" click offers sign-in before opening the posting.
+  // Signed-out gate: the "Apply" click offers sign-in before opening the posting.
   let showSignInPrompt = $state(false);
   // The report dialog (a problem-with-this-job complaint) opens over the page.
   let showReport = $state(false);
@@ -288,12 +288,12 @@
     onclick={onApplyClick}
     class={className}
   >
-    Show <ArrowRight class="size-4" />
+    Apply <ArrowRight class="size-4" />
   </Button>
 {/snippet}
 
 <!-- Save, a quiet peer of the apply CTA rather than the full-width button it was in the
-     sidebar: it belongs beside "Show", because keeping a job and opening it are the two
+     sidebar: it belongs beside "Apply", because keeping a job and opening it are the two
      things a reader does with one. The filled bookmark is the state.
      `iconOnly` is for the pinned header, whose one line already holds the company, the
      title and the CTA; aria-label and the tooltip name the button either way. -->
@@ -335,9 +335,9 @@
      single edge across the column: the strip and the TabStrip beside it are aligned on
      their bottoms, and each draws its own half of it.
      Rendered in two places, one visible at a time (the caller passes the display class):
-     the tab row on lg, and the company line below it, where the sidebar stacks between
-     the title and the description and a strip left on the tab row would put Save a whole
-     screen away from the job it saves. Only the apply CTA drops out below lg — the sticky
+     the tab row on lg, and directly under the title below it, where the sidebar stacks
+     between the title and the description and a strip left on the tab row would put Save
+     a whole screen away from the job it saves. Only the apply CTA drops out below lg — the sticky
      bottom bar carries it there, which is also what leaves the phone room for the labels. -->
 {#snippet actionStrip(className: string)}
   <div class={`shrink-0 items-center gap-1.5 ${className}`}>
@@ -385,23 +385,34 @@
 <article
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <div class="flex flex-wrap items-center justify-between gap-3 lg:col-start-2 lg:row-start-1">
-    <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-      <EntityLogo
-        name={job.company || 'Unknown company'}
-        src={companyLogoUrl(job.company) ?? undefined}
-        shape="square"
-        size="sm"
-      />
-      <p class="text-sm text-muted-foreground">
-        {#if job.company_slug}
-          <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
-            {job.company || 'Unknown company'}
-          </a>
-        {:else}
+  <!-- One line on a phone, wrapping only from lg: a badge alone on its own row reads as
+       a second heading rather than as a note about the line above it. What gives instead
+       is the company name — it alone carries `min-w-0`, so it ellipses to make room, and
+       the page title, the logo's alt and the pinned bar all still spell it out in full.
+       The badges need their own `shrink-0` group rather than the default `min-width:
+       auto`, whose floor for text is the longest WORD: a squeezed chip does not stay one
+       line, it wraps "Be an early / applicant" inside itself and grows taller than the
+       row. -->
+  <div
+    class="flex min-w-0 items-center gap-x-2 gap-y-2 max-lg:overflow-hidden lg:col-start-2 lg:row-start-1 lg:flex-wrap lg:gap-x-3"
+  >
+    <EntityLogo
+      name={job.company || 'Unknown company'}
+      src={companyLogoUrl(job.company) ?? undefined}
+      shape="square"
+      size="sm"
+    />
+    <p class="min-w-0 text-sm text-muted-foreground max-lg:truncate">
+      {#if job.company_slug}
+        <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
           {job.company || 'Unknown company'}
-        {/if}
-      </p>
+        </a>
+      {:else}
+        {job.company || 'Unknown company'}
+      {/if}
+    </p>
+
+    <div class="flex shrink-0 items-center gap-x-2 gap-y-2 lg:flex-wrap lg:gap-x-3">
       <!-- Who backed the employer. The page has room the feed card does not, so the
            badge carries the brand name too and links to that collection's roles. -->
       <BackerBadge collections={job.collections} withLabel />
@@ -414,23 +425,11 @@
       {#if !supersedesReality(job.ghost)}
         <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
       {/if}
-    </div>
 
-    <!-- Below lg the strip belongs here, not on the tab row: the sidebar stacks between
-         the title and the description on a phone, so a strip left down there would put
-         Save a full screen of match card and metadata away from the job it saves.
-         `-mr-2` cancels the last button's own padding, so the label's right edge lines
-         up with the column's rather than sitting a hair inside it. -->
-    {@render actionStrip('-mr-2 flex w-full justify-end border-b border-border pb-2 lg:hidden')}
-  </div>
-
-  <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
-    <div class="flex flex-wrap items-center gap-2.5">
-      <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
-      <!-- Freshness sits beside the title rather than in the metadata sidebar: it is the
-           one fact that changes whether the posting is worth reading at all, so the
-           reader meets it in the same glance as the role. Closed jobs are excluded — a
-           closed posting is never worth hurrying to. -->
+      <!-- Freshness rides the same provenance line: like the backer and the reality
+           badge it describes the POSTING, not the role, so the title keeps a single
+           voice and the reader still meets all of it in one glance. Closed jobs are
+           excluded — a closed posting is never worth hurrying to. -->
       {#if !job.closed_at}
         {#each freshness as badge (badge.label)}
           <!-- The tooltip rides a wrapper, not the Chip: the primitive takes only
@@ -441,12 +440,30 @@
           </span>
         {/each}
       {/if}
+    </div>
+  </div>
+
+  <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
+    <div class="flex flex-wrap items-center gap-2.5">
+      <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
+      <!-- Applied stays with the title: it is a fact about THIS READER, not about the
+           posting, so it does not belong on the provenance line above. -->
       {#if applied}
         <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
           <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
         </Chip>
       {/if}
     </div>
+
+    <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
+         between the title and the description on a phone, so a strip left down there
+         would put Save a full screen of match card and metadata away from the job it
+         saves. Under the title and not above it — these are the quiet things a reader
+         does WITH a posting, and above the title they wedged three tertiary controls
+         between the employer and the role. Right-aligned like the lg copy beside the
+         tabs, so the strip reads the same on both; `-mr-2` cancels the last button's
+         own padding, lining its right edge up with the column's. -->
+    {@render actionStrip('-mr-2 flex w-full justify-end border-b border-border pb-2 lg:hidden')}
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
          once for the whole page: a gauge and the hedged wording here, the criteria and
@@ -461,46 +478,6 @@
 
     {#if job.referral_available && job.company_slug}
       <ReferralBlock companySlug={job.company_slug} companyName={job.company} />
-    {/if}
-
-    {#if showApplyPrompt && !applied}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
-      >
-        <span class="text-sm">Did you apply to this job?</span>
-        <div class="flex items-center gap-2">
-          <Button variant="primary" size="sm" onclick={confirmApplied}>Yes, save</Button>
-          <Button variant="ghost" size="sm" onclick={dismissApplyPrompt}>No</Button>
-        </div>
-      </div>
-    {/if}
-
-    {#if justApplied}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
-      >
-        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
-        </span>
-        <a
-          href={resolve('/my/tracking')}
-          class="text-sm font-medium text-brand-strong underline underline-offset-4"
-        >
-          View on your board →
-        </a>
-      </div>
-    {/if}
-
-    {#if showSignInPrompt}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
-      >
-        <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>
-        <div class="flex items-center gap-2">
-          <Button variant="primary" size="sm" onclick={signUpFromGate}>Sign up</Button>
-          <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>View without signing in</Button>
-        </div>
-      </div>
     {/if}
   </header>
 
@@ -701,6 +678,52 @@
       {/if}
       {@render actionStrip('hidden border-b border-border pb-2 lg:flex')}
     </div>
+
+    <!-- The three states of one exchange, below the action strip because that strip is
+         what raised the question: Apply was clicked there, so the answer belongs under
+         the hand that asked rather than back up beside the title. They share one slot so
+         that answering "Yes, save" replaces the question in place — split across the
+         page, the confirmation would read as a second, unrelated banner appearing
+         somewhere the reader was not looking. -->
+    {#if showApplyPrompt && !applied}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
+      >
+        <span class="text-sm">Did you apply to this job?</span>
+        <div class="flex items-center gap-2">
+          <Button variant="primary" size="sm" onclick={confirmApplied}>Yes, save</Button>
+          <Button variant="ghost" size="sm" onclick={dismissApplyPrompt}>No</Button>
+        </div>
+      </div>
+    {/if}
+
+    {#if justApplied}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
+      >
+        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
+        </span>
+        <a
+          href={resolve('/my/tracking')}
+          class="text-sm font-medium text-brand-strong underline underline-offset-4"
+        >
+          View on your board →
+        </a>
+      </div>
+    {/if}
+
+    {#if showSignInPrompt}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
+      >
+        <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>
+        <div class="flex items-center gap-2">
+          <Button variant="primary" size="sm" onclick={signUpFromGate}>Sign up</Button>
+          <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>View without signing in</Button>
+        </div>
+      </div>
+    {/if}
 
     {#if contentTabs.length > 1}
       <!-- One panel for every tab, its contents toggled by class rather than {#if}.
