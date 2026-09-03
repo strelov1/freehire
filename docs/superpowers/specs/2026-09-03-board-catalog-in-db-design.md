@@ -66,6 +66,7 @@ CREATE TABLE boards (
     company         text NOT NULL,
     hub             boolean NOT NULL DEFAULT false,
     tenants         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    url             text,
     status          text NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending', 'active', 'rejected', 'retired')),
     submitted_by    bigint REFERENCES users(id) ON DELETE SET NULL,
@@ -83,7 +84,10 @@ CREATE UNIQUE INDEX boards_identity_key
 `(provider, board, region)` is exactly `board_health`'s key — no new join concept, just
 a second table keyed the same way. `tenants` moves from `map[string]string` YAML to
 `jsonb` (same shape, `internal/ingest/sources`'s `CompanyEntry.Tenants` decodes it the
-same way it decodes YAML today, just from a `[]byte` instead of a YAML node).
+same way it decodes YAML today, just from a `[]byte` instead of a YAML node). `url` is
+the submitted link for a crowdsourced row (what "My contributions" shows back to the
+submitter) and is `NULL` for a curator-added row (`cmd/add-board` has no submitted URL to
+record).
 
 ### New table: `board_submissions`
 
