@@ -132,7 +132,9 @@ func runRetire(provider, board, region string, apply bool) int {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to retire.")
 		return 0
 	}
-	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int { return retireBoard(ctx, pool, provider, board, region) })
+	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int {
+		return retireBoard(ctx, pool, provider, board, region)
+	})
 }
 
 // runRename mirrors runAdd/runRetire's split: it reports, then under apply delegates to
@@ -143,7 +145,9 @@ func runRename(provider, board, region, company string, apply bool) int {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to rename.")
 		return 0
 	}
-	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int { return renameBoard(ctx, pool, provider, board, region, company) })
+	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int {
+		return renameBoard(ctx, pool, provider, board, region, company)
+	})
 }
 
 func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region, company string) int {
