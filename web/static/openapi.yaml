@@ -1238,6 +1238,7 @@ components:
       schema:
         type: integer
         minimum: 1
+        maximum: 36500
       description: >-
         Restrict to postings whose SOURCE states a publication date within the last N
         days. Omit for no restriction. Some boards restate this date on every crawl, so
@@ -1250,6 +1251,7 @@ components:
       schema:
         type: integer
         minimum: 1
+        maximum: 36500
       description: >-
         Restrict to postings first recorded by this system within the last N days — how
         long the posting has been in the catalogue, regardless of what date its source

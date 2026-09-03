@@ -81,5 +81,13 @@ change because the `filter-modal` and `jobs-list-controls` specs currently forbi
 - [ ] 7.3 Patch the live index settings, then confirm `/api/v1/jobs/facets` still
       answers 200
 - [ ] 7.4 Confirm ≥45 GB free, stop the reindex timer, run the full rebuild
-- [ ] 7.5 Verify `?open_within_days=3` excludes a posting known to carry a rewritten
-      posting date, then set `PUBLIC_OPEN_WITHIN=1`, restart web, re-enable the timer
+- [ ] 7.5 Verify the rebuild POSITIVELY before revealing anything: a posting created in
+      the last day must be RETURNED by `?open_within_days=3`, and the hit count must be
+      of catalogue scale rather than a handful. Exclusion alone proves nothing — a
+      document still missing `created_ts` fails `created_ts >= …` exactly as a genuinely
+      old one does, so "the stale posting is gone" is equally consistent with "the
+      rebuild never ran"
+- [ ] 7.6 Then confirm the negative case too — a posting known to carry a rewritten
+      posting date is excluded by `?open_within_days=3` while `?posted_within_days=3`
+      still returns it. That pair is the whole point of the change
+- [ ] 7.7 Set `PUBLIC_OPEN_WITHIN=1`, restart web, re-enable the reindex timer

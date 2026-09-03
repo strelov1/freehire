@@ -2,6 +2,7 @@ package search
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"reflect"
 	"sort"
@@ -403,6 +404,28 @@ func TestFilterFromValues_OpenWithinDaysInvalidIgnored(t *testing.T) {
 	for _, q := range []string{"open_within_days=", "open_within_days=0", "open_within_days=-3", "open_within_days=soon"} {
 		if got := filterFromValues(vals(q), now); got != nil {
 			t.Errorf("filterFromValues(%q) = %v, want nil (no date filter)", q, got)
+		}
+	}
+}
+
+func TestFilterFromValues_AbsurdDayCountsImposeNoBound(t *testing.T) {
+	// A day count large enough to overflow time.Duration used to WRAP: the cutoff
+	// landed in the future and the query matched nothing, so the most permissive input
+	// anyone could type produced the most restrictive result. Both bounds share the
+	// arithmetic, so both are checked.
+	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+	for _, param := range []string{"open_within_days", "posted_within_days"} {
+		for _, n := range []int{maxWithinDays + 1, 106752, 200000, math.MaxInt32} {
+			q := fmt.Sprintf("%s=%d", param, n)
+			if got := filterFromValues(vals(q), now); got != nil {
+				t.Errorf("filterFromValues(%q) = %v, want nil (bound beyond the catalogue is no bound)", q, got)
+			}
+		}
+		// The largest honoured value still produces a cutoff in the PAST — the guard
+		// must sit below the wrap, not at it.
+		q := fmt.Sprintf("%s=%d", param, maxWithinDays)
+		if got := filterFromValues(vals(q), now); got == nil {
+			t.Errorf("filterFromValues(%q) = nil, want the bound at the documented maximum", q)
 		}
 	}
 }

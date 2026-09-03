@@ -235,15 +235,32 @@ export function generalCountsCoverRole(scope: URLSearchParams): boolean {
   return !scope.get('q');
 }
 
-/** A raw param read as a positive whole number of days, or null for "no bound".
+/** The furthest back either date bound reaches, mirroring `maxWithinDays` in
+ *  internal/search/search. A century is past anything in the catalogue; the ceiling is
+ *  there because Go's day-to-duration arithmetic wraps above ~106,751 days, and a bound
+ *  the server drops must not leave a chip here claiming it applied. */
+const MAX_WITHIN_DAYS = 36500;
+
+/** Matches exactly what Go's `strconv.Atoi` accepts: an optional sign, then digits.
  *
- *  Shared by the two date bounds so the rule is written once: a value that cannot be a
- *  day count imposes NO restriction rather than narrowing the list to nothing, which
- *  is what the backend does with the same params. `Number(null)` and `Number(' ')` are
- *  both 0, so absent, empty and blank all fall out through the `> 0` test. */
+ *  `Number()` is more generous — it reads `1e2` as 100, `1.0` as 1 and `0x10` as 16,
+ *  none of which Atoi accepts. Reading a param one way here and another way on the
+ *  server is how `?open_within_days=1e2` came to show an active "Last 100 days" chip
+ *  over a list the server had never bounded. Leading zeros and a leading `+` DO parse
+ *  in Go, so they parse here too: agreement is the point, not strictness. */
+const ATOI = /^[+-]?\d+$/;
+
+/** A raw param read as a whole number of days the search will actually honour, or null
+ *  for "no bound".
+ *
+ *  Shared by the two date bounds so the rule is written once. A value that cannot be a
+ *  day count — absent, blank, mis-spelled, zero, negative, or further back than the
+ *  server reaches — imposes NO restriction rather than narrowing the list to nothing,
+ *  which is what the backend does with the same params. */
 function positiveDays(raw: string | null): number | null {
+  if (raw === null || !ATOI.test(raw)) return null;
   const days = Number(raw);
-  return Number.isInteger(days) && days > 0 ? days : null;
+  return days > 0 && days <= MAX_WITHIN_DAYS ? days : null;
 }
 
 /** Parse filters back from URL query params. Include and exclude are independent
