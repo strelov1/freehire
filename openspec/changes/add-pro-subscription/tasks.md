@@ -14,7 +14,7 @@ findings are in the design's "The provider contract, as verified".
       id is unknown**
 - [x] 0.4 Checkout confirmed — `https://pay.rev.cat/<token>/<url-encoded app_user_id>`, a
       **path segment**, not a query parameter
-- [ ] 0.5 Copy the findings into `internal/identity/billing/AGENTS.md` with the date read
+- [x] 0.5 Copy the findings into `internal/identity/billing/AGENTS.md` with the date read
 - [ ] 0.6 Confirm in the RevenueCat dashboard that HMAC signing is offered on this
       integration. **If it is not**, fall back to the shared `Authorization` value and say
       so in the package's `AGENTS.md` — the freshness window and replay scenario then do
@@ -37,36 +37,36 @@ findings are in the design's "The provider contract, as verified".
 
 ## 2. The billing package
 
-- [ ] 2.1 Create `internal/identity/billing` and add it to the `identity` list in
+- [x] 2.1 Create `internal/identity/billing` and add it to the `identity` list in
       `internal/platform/arch/layering/blocks.go`; confirm `golangci-lint run` and the
       layering test pass with it in the table
-- [ ] 2.2 Configuration from the environment: `REVENUECAT_API_KEY` (the `sk_` secret key),
+- [x] 2.2 Configuration from the environment: `REVENUECAT_API_KEY` (the `sk_` secret key),
       `REVENUECAT_WEBHOOK_SECRET` (HMAC signing secret), `REVENUECAT_ENTITLEMENT` (default
       `pro`), `BILLING_CHECKOUT_URL` (everything up to and including the paywall token).
       An absent API key or webhook secret means billing is disabled; assert by test that
       construction succeeds and reports disabled rather than failing
-- [ ] 2.3 The provider client: `GET /v1/subscribers/{url-encoded id}` over
+- [x] 2.3 The provider client: `GET /v1/subscribers/{url-encoded id}` over
       `platform/safehttp` with `Authorization: Bearer sk_…`, a short timeout and no retry
       of its own (the reconciler is the retry). Parse `entitlements`, `management_url`
-- [ ] 2.4 `proUntilFrom(state) time.Time` as a **pure function** of the provider's parsed
+- [x] 2.4 `proUntilFrom(state) time.Time` as a **pure function** of the provider's parsed
       state: across entitlements conferring Pro, take the later of `expires_date` and
       `grace_period_expires_date`, then the latest across entitlements; zero when there is
       none. Table test with no network and no database, covering active, lapsed, refunded,
       transferred, several entitlements, an unknown entitlement, **an entitlement in its
       grace period**, and **a null `expires_date`, which means never-expiring and must not
       read as expired**
-- [ ] 2.5 `Sync(ctx, userID)`: read state, derive, write `users.pro_until`. Idempotent —
+- [x] 2.5 `Sync(ctx, userID)`: read state, derive, write `users.pro_until`. Idempotent —
       a test applies the same state twice and asserts the second write changes nothing.
       **Callers must already hold an event or a non-NULL `pro_until` for the user**, since
       the provider's GET creates a subscriber for an unknown id
-- [ ] 2.6 `RecordEvent(ctx, event)`: insert-if-new, returning whether it was new. A test
+- [x] 2.6 `RecordEvent(ctx, event)`: insert-if-new, returning whether it was new. A test
       delivers the same event twice and asserts one row
-- [ ] 2.7 `verifySignature(raw []byte, header, secret, now)` as a pure function: parse
+- [x] 2.7 `verifySignature(raw []byte, header, secret, now)` as a pure function: parse
       `t=<unix>,v1=<hex>`, recompute HMAC-SHA256 over `"<t>.<raw>"`, compare with
       `crypto/subtle`, and reject a `t` outside the freshness window. Tests: valid, wrong
       secret, absent header, malformed header, **stale timestamp**, and **a body that
       round-tripped through a JSON parse must still verify from the raw bytes**
-- [ ] 2.8 `AGENTS.md` for the package: what it is, that it is freehire.me's hosted
+- [x] 2.8 `AGENTS.md` for the package: what it is, that it is freehire.me's hosted
       billing and unsupported for self-hosting, that it is inert without configuration,
       and the ownership rule for `users.pro_until`
 
