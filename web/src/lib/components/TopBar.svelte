@@ -5,7 +5,6 @@
   import { authDialog, openAuthDialog, closeAuthDialog } from '$lib/auth-dialog.svelte';
   import AuthDialog from './AuthDialog.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
-  import HeaderListSearch from './HeaderListSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
   import NotificationBell from './NotificationBell.svelte';
   import BrandMark from './BrandMark.svelte';
@@ -16,22 +15,15 @@
   // viewport. Nav links, the account items, the theme toggle, and the auth
   // action all live in HeaderMenu.
   //
-  // The middle slot is one text field that adapts to context: on the list pages
-  // (the homepage feed `/`, /companies, and a company's own /companies/:slug jobs
-  // list) it IS that page's filter (HeaderListSearch drives the list, so there's no
-  // duplicate box); everywhere else it's the global launcher with the instant
-  // dropdown (HeaderSearch). A company detail page and a collection landing page are
-  // both jobs lists scoped to that entity, so the header search filters their postings
-  // (and hosts the All-filters trigger) — hence they share the 'company' jobs proxy.
-  const listKind = $derived(
-    page.url.pathname === '/'
-      ? 'jobs'
-      : page.url.pathname === '/companies'
-        ? 'companies'
-        : /^\/(companies|collections)\/[^/]+$/.test(page.url.pathname)
-          ? 'company'
-          : null,
-  );
+  // The middle slot is ONE search box, on every page. Where a list has registered
+  // itself (the homepage feed `/`, /companies, and a company's or collection's own
+  // scoped jobs list) it filters that list in place and hosts the All-filters trigger;
+  // everywhere else the same box navigates to the feed carrying the same filter.
+  //
+  // `listKind` survives only to word the placeholder — the box asks the page nothing
+  // else. It used to select between two components that shared everything but that one
+  // behaviour and drifted apart in the parts they shared.
+  const listKind = $derived(page.url.pathname === '/companies' ? 'companies' : 'jobs');
 
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
@@ -106,13 +98,9 @@
          a 48rem basis so it lands at that width instead of an even third of the row; the
          cap then hands the rest back to the side slots, which keeps it on the axis. -->
     <div class={['flex min-w-0 flex-1', fullBleed && 'max-w-3xl basis-3xl']}>
-      {#if listKind === 'jobs' || listKind === 'company'}
-        <HeaderListSearch placeholder="Search jobs…" />
-      {:else if listKind === 'companies'}
-        <HeaderListSearch placeholder="Search companies…" />
-      {:else}
-        <HeaderSearch />
-      {/if}
+      <HeaderSearch
+        placeholder={listKind === 'companies' ? 'Search companies…' : 'Search jobs…'}
+      />
     </div>
 
     <div class={['flex shrink-0 items-center gap-1', fullBleed && 'flex-1 basis-0 justify-end']}>
