@@ -4,6 +4,28 @@ import { serverApi } from './api';
 import { loadDiscussionSubject } from './discussionSubject';
 import { threadMatchesSubject } from './threadSubject';
 
+/** First page of a subject's discussion threads, server-rendered so the list is in the
+ *  initial HTML, plus the subject itself for the header above it. Both discussion index
+ *  routes (companies/ and jobs/) share this, as their thread pages share loadThread.
+ *
+ *  The subject is fetched alongside rather than read off the threads: a subject with no
+ *  threads still needs a header, so an empty list cannot be the source. Both degrade
+ *  instead of breaking the page — a failed list renders empty and an unreadable subject
+ *  falls back to its slug. Neither is the reader's own data, and the discussion is
+ *  still worth showing without them. */
+export async function loadDiscussionIndex(
+  fetchImpl: typeof fetch,
+  subjectType: 'company' | 'job',
+  slug: string,
+) {
+  const api = serverApi(fetchImpl);
+  const [{ threads, nextCursor }, subject] = await Promise.all([
+    api.listThreads(subjectType, slug).catch(() => ({ threads: [], nextCursor: undefined })),
+    loadDiscussionSubject(fetchImpl, subjectType, slug),
+  ]);
+  return { slug, threads, nextCursor, subject };
+}
+
 /** Fetch a community thread for its detail page, scoped to the subject the route
  *  actually names — a thread that resolves to the wrong subject 404s the same as
  *  an id that resolves to nothing at all. Both discussion/[threadId] routes
