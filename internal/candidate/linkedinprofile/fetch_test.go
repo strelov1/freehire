@@ -168,6 +168,39 @@ func TestFetchSeparatesAnUnreadablePageFromAFailedFetch(t *testing.T) {
 	}
 }
 
+// Production reaches LinkedIn only through the egress proxy — the datacenter IP is answered
+// with 999 and no JSON-LD. A misconfigured value must therefore be visible as a failed
+// import, never as a silent direct fetch that always fails for a reason nobody can see.
+func TestEgressProxy(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want string
+	}{
+		{"unset means direct", "", ""},
+		{"blank means direct", "   ", ""},
+		{"a proxy is used", "http://user:pw@proxy.example:8080", "proxy.example:8080"},
+		{"a value with no host degrades to direct", "not-a-url", ""},
+		{"an unparseable value degrades to direct", "http://[::1", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SOURCES_PROXY_URL", tt.env)
+			got := egressProxy()
+			if tt.want == "" {
+				if got != nil {
+					t.Fatalf("egressProxy() = %v, want nil", got)
+				}
+				return
+			}
+			if got == nil || got.Host != tt.want {
+				t.Fatalf("egressProxy() = %v, want host %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // A body exactly at the cap is a whole page and must succeed; the cap is a bound, not a
 // budget. This pins the boundary against a future >= where a > belongs.
 func TestFetchAcceptsABodyExactlyAtTheCap(t *testing.T) {

@@ -76,6 +76,7 @@ import type {
   UsageHistoryEntry,
   MyAnalysisItem,
   ResumeProfile,
+  LinkedInImport,
   PhotoMeta,
   ResumeMeta,
   CandidateContacts,
@@ -1388,6 +1389,21 @@ export function createApi(
     );
   }
 
+  /** Read a public LinkedIn profile and derive the same facets `extractResumeProfile`
+   *  derives, for the user who has no CV file to hand. Nothing is stored: this does not
+   *  create a CV and does not change the onboarding gate, which is CV presence.
+   *
+   *  Accepts any form the user is likely to paste — a profile URL with tracking parameters,
+   *  a country subdomain, or the bare public id. Validation lives on the server, so this
+   *  sends what was typed rather than pre-judging it.
+   *
+   *  Rejects with 400 (not a profile link), 502 (LinkedIn did not answer) or 422 (the page
+   *  carried no readable profile) — three situations the caller should not flatten into one
+   *  message. */
+  async function importLinkedInProfile(url: string): Promise<LinkedInImport> {
+    return requestData<LinkedInImport>('/api/v1/me/linkedin/import', jsonBody('POST', { url }));
+  }
+
   /** The caller's résumé status, including the read-only structured résumé parsed from
    *  the CV (null when none is current). Session-scoped; always 200 (an absent/disabled
    *  résumé is a normal state the profile renders). */
@@ -2248,6 +2264,7 @@ export function createApi(
     getTalentNetworkProfile,
     deleteAccount,
     extractResumeProfile,
+    importLinkedInProfile,
     getResume,
     deleteResume,
     putResumeContacts,

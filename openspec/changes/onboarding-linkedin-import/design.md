@@ -89,7 +89,16 @@ The new package must be added to the `candidate` list in `internal/platform/arch
 
 `web/static/openapi.yaml` and `docs/API.md` are part of the published contract and carry no ratchet, so they are updated in the same change rather than after it.
 
+## Resolved during implementation
+
+- **The fetch needs the crawl proxy — it is not optional.** Measured from the production host on 2026-09-03: a direct request returns **999** (LinkedIn's block status) with no JSON-LD at all, while the same request through the configured egress proxy returns **200, 631 KB, `ld+json` present**. Without the proxy this feature does not work in production, in a way that would have looked from the outside like LinkedIn quietly changing its page.
+
+  `NewClient` therefore routes through `SOURCES_PROXY_URL` when set. That is the crawl fleet's variable and it is read deliberately rather than introducing a second name: there is one proxy on the host, and a second variable beside it is a second thing to rotate and a silent inconsistency waiting to happen. A value that does not parse degrades to a direct fetch with a logged reason rather than failing startup — unlike the crawl fleet, the mistake here surfaces immediately and in words on the next import.
+
+  This makes the redirect policy load-bearing rather than merely tidy. `safehttp` vets the **proxy's** address on a proxied transport, not the target's, because the proxy resolves the target itself — so the two things keeping a proxied fetch safe are that `publicID` admits exactly one host and that `CheckRedirect` keeps it that way.
+
+- **The rate limit is the shared outbound-fetch budget, not a new one.** `mw.outboundFetch` already exists for exactly this — "throttles every endpoint that makes the server fetch a caller-supplied URL, so one user's budget is spent across them rather than granted once per route" — at 20/hour keyed by user. A dedicated limiter would have handed the same user a fresh allowance on every such endpoint, which is the opposite of what that middleware is for.
+
 ## Open Questions
 
-- **Does the fetch need the crawl proxy?** The ingest fleet routes through rotating exit IPs because several sources block datacenter ranges. LinkedIn answered the spike from a residential connection; whether it answers the production host the same way is unmeasured. Resolve by trying the plain path first from the production host and adding proxy egress only if it is actually refused — `safehttp` already has a proxy-aware constructor, so this is a configuration decision, not a redesign.
-- **What rate limit?** The spec requires per-account throttling but does not fix a number. A small allowance per hour is enough for the intended use (a user imports their own profile once, maybe retries a typo) and leaves no room for enumeration.
+None outstanding.

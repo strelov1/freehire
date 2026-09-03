@@ -1060,6 +1060,27 @@ export interface ResumeProfile {
   seniority?: string;
 }
 
+/** What a public LinkedIn profile yielded (`POST /me/linkedin/import`). The facet half is
+ *  `ResumeProfile` exactly, because it comes from the same dictionaries a CV goes through —
+ *  so the wizard merges both sources into one staged set without caring which arrived.
+ *
+ *  The rest is what LinkedIn releases about the member themselves. `location` is a
+ *  `DerivedLocation` for the reason that type exists: an address read off a profile is
+ *  something we WORKED OUT about the user, not something they asserted, and it seeds an
+ *  unstated field rather than overwriting a stated one.
+ *
+ *  There is deliberately no employment history here. LinkedIn withholds every job title and
+ *  position description from an anonymous reader, so the import cannot fill the experience
+ *  bank and the UI must say so rather than appear to have lost it. */
+export interface LinkedInImport extends ResumeProfile {
+  location?: DerivedLocation;
+  /** The member's display name, headline and current employer — shown back as "here is
+   *  what we recognised", never saved anywhere on their own. */
+  name?: string;
+  headline?: string;
+  company?: string;
+}
+
 /** The read-only structured résumé parsed from the uploaded CV by the LLM. */
 /** @public */
 export type {

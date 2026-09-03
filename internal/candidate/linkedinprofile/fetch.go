@@ -5,7 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/platform/safehttp"
@@ -46,12 +50,18 @@ type Client struct {
 // which refuses private address space, including across a redirect, so a profile URL
 // cannot be turned into a request against our own network.
 //
-// It additionally refuses to follow a redirect off LinkedIn. The guarded dialer already
-// stops the dangerous case (a hop into our own network); this stops the merely wrong one,
-// where a redirect to some public host would have that page's JSON-LD read and staged into
-// a user's profile as if it were theirs.
+// It additionally refuses to follow a redirect off LinkedIn. That began as defence against
+// a merely wrong outcome — another public host's JSON-LD read as the user's profile — and
+// became load-bearing when the proxy went in: safehttp's guard vets the PROXY's address on
+// a proxied transport, not the target's, because the proxy resolves the target itself. The
+// two things that make a proxied fetch safe here are that publicID admits one host and this
+// policy keeps it that way.
+//
+// Measured on 2026-09-03: LinkedIn answers a residential connection with 200 and answers the
+// production host with 999 (its block status) and no JSON-LD, so the proxy is not an
+// optimisation — without it this feature does not work in production at all.
 func NewClient() *Client {
-	c := safehttp.NewClient(fetchTimeout)
+	c := safehttp.NewClientWithProxy(fetchTimeout, egressProxy())
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
@@ -62,6 +72,33 @@ func NewClient() *Client {
 		return nil
 	}
 	return &Client{httpClient: c, base: profileBase, maxBody: defaultMaxBody}
+}
+
+// egressProxy reads the host's outbound proxy, or nil to go direct.
+//
+// It reads SOURCES_PROXY_URL — the crawl fleet's variable — deliberately, rather than
+// introducing a second name. There is one proxy, configured once on the host; a
+// LINKEDIN_PROXY_URL beside it would be a second thing to set, a second thing to rotate,
+// and the day they disagree is the day one of them is silently wrong. The name is
+// historical, not a scope: it says which subscription pays for the egress, not who may use
+// it.
+//
+// A value that does not parse degrades to a direct fetch rather than failing startup. The
+// crawl fleet fails fast on this because a worker that quietly crawls from the blocked IP
+// looks like a source with no jobs; here the same mistake surfaces immediately and in
+// words, as "LinkedIn didn't answer" on the very next import, with the reason logged.
+func egressProxy() *url.URL {
+	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		// Never log raw: the value carries the proxy's credentials.
+		log.Printf("linkedinprofile: SOURCES_PROXY_URL is not a URL; reading LinkedIn directly, which production is blocked from")
+		return nil
+	}
+	return u
 }
 
 // Fetch reads the public profile named by input — a profile URL in any of the forms a

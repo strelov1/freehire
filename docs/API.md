@@ -2695,6 +2695,30 @@ curl -X POST "https://freehire.me/api/v1/me/resume/extract" \
 { "data": { "skills": ["go", "postgresql"], "categories": ["backend"], "seniority": "senior" } }
 ```
 
+### `POST /me/linkedin/import`
+
+**Auth:** Session only
+
+Derive the same profile from a public LinkedIn profile link.
+
+Reads the profile page anonymously — no LinkedIn account, cookie or token is sent or accepted — and runs its headline and address through the same dictionaries `/me/resume/extract` uses, so the facet half of the response is identical in shape. Accepts a profile URL in any form (tracking parameters, a country subdomain, a sub-page path) or the bare public id. **Work history is not available**: LinkedIn withholds every job title and position description from a reader who is not signed in, so only the headline, address, languages, name and current employer come back. Nothing is stored, and this does not create a CV. Errors are distinct on purpose: `400` the link names no profile, `502` LinkedIn did not answer, `422` the page carried no readable profile.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | no | Profile URL or bare public id, e.g. `linkedin.com/in/your-name`. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/linkedin/import" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"url":"https://www.linkedin.com/in/your-name"}'
+```
+
+```json
+{ "data": { "skills": ["typescript", "go"], "categories": ["backend"], "seniority": "senior", "location": { "countries": ["br"], "regions": ["latam"], "cities": ["Florianópolis"] }, "name": "Dana Okonkwo", "headline": "Senior Backend Engineer…", "company": "Northwind Systems" } }
+```
+
 ### `PUT /me/resume`
 
 **Auth:** Session only

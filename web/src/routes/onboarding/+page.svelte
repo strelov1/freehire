@@ -30,7 +30,8 @@
   import { profileStore } from '$lib/profile.svelte';
   import { resumeStore } from '$lib/resume.svelte';
   import { safeRedirect } from '$lib/safeRedirect';
-  import type { LocationPreferences } from '$lib/types';
+  import type { DerivedLocation, LocationPreferences } from '$lib/types';
+  import { mergeFacets } from '$lib/onboardingImport';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { pillClass, pillTitle } from '$lib/components/facets/pill';
   import BrandMark from '$lib/components/BrandMark.svelte';
@@ -169,14 +170,12 @@
       // fires on a fresh navigation, not on this in-place state change).
       resumeStore.noteUpload();
       if (gen !== cvGen) return; // superseded by another pick or a page reset
-      const resolved = cv.categories.length > 0 || !!cv.seniority || cv.skills.length > 0;
-      specializations = cv.categories.length
-        ? [...new Set([...specializations, ...cv.categories])]
-        : specializations;
-      seniorities = cv.seniority ? [...new Set([...seniorities, cv.seniority])] : seniorities;
-      skills = cv.skills.length ? [...new Set([...skills, ...cv.skills])] : skills;
+      const merged = mergeFacets({ specializations, seniorities, skills }, cv);
+      ({ specializations, seniorities, skills } = merged);
       cvState = 'idle';
-      cvNote = resolved ? 'Filled in what we found — review on the next step.' : 'Couldn’t read details from that CV — pick below.';
+      cvNote = merged.resolved
+        ? 'Filled in what we found — review on the next step.'
+        : 'Couldn’t read details from that CV — pick below.';
     } catch (err) {
       track('cv_upload', {
         ok: false,
@@ -186,6 +185,64 @@
       if (gen !== cvGen) return;
       cvState = 'error';
       cvError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
+    }
+  }
+
+  // ---- Step "cv", second entry point: import from a public LinkedIn profile ----
+  //
+  // For the user who keeps their history on LinkedIn and has no PDF to hand. It fills the
+  // same four fields a CV does, from the profile headline and address, through the same
+  // dictionaries — see api.importLinkedInProfile.
+  //
+  // What it does NOT fill is work history, and that is a property of the source, not a gap
+  // here: LinkedIn withholds every job title and position description from an anonymous
+  // reader. The step says so out loud (see the markup), because "Import from LinkedIn" that
+  // quietly imports no jobs reads as a bug rather than as a limit.
+
+  let liUrl = $state('');
+  let liState = $state<'idle' | 'loading' | 'error'>('idle');
+  let liError = $state<string | null>(null);
+  let liNote = $state<string | null>(null);
+  let liGen = 0;
+
+  // Where the import's reading of the profile's address goes. It is handed to the location
+  // step as a DERIVED location, not written into the staged preferences: that component
+  // already seeds an unstated base from a derivation and lets a stated one win, which is
+  // exactly the precedence this needs — and an address we read off a page is something we
+  // worked out about the user, not something they told us.
+  let importedLocation = $state<DerivedLocation | null>(null);
+
+  async function importLinkedIn() {
+    if (!isAuthenticated()) {
+      step = 1;
+      return;
+    }
+    const url = liUrl.trim();
+    if (!url || liState === 'loading') return;
+
+    const gen = ++liGen;
+    liState = 'loading';
+    liError = null;
+    liNote = null;
+    try {
+      const li = await api.importLinkedInProfile(url);
+      track('linkedin_import', { ok: true, origin: 'onboarding_gate' });
+      if (gen !== liGen) return; // superseded by another import or a page reset
+      // Literally the same fold the CV path runs — a profile is one more source of evidence
+      // about the user, not a different kind of thing, so it must not merge by different
+      // rules.
+      const merged = mergeFacets({ specializations, seniorities, skills }, li);
+      ({ specializations, seniorities, skills } = merged);
+      if (li.location) importedLocation = li.location;
+      liState = 'idle';
+      liNote = merged.resolved
+        ? 'Filled in what we found — review on the next step.'
+        : 'Couldn’t read details from that profile — pick below.';
+    } catch (err) {
+      track('linkedin_import', { ok: false, origin: 'onboarding_gate' });
+      if (gen !== liGen) return;
+      liState = 'error';
+      liError = err instanceof ApiError ? err.message : 'Could not read that profile. Please try again.';
     }
   }
 
@@ -558,6 +615,54 @@
           {:else}
             <p class="mt-2 text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB.</p>
           {/if}
+
+          <!-- The second entry point. Co-equal with the dropzone, not a fallback under it:
+               a user with no PDF should not have to work out that the greyed-out half of
+               the step is the one meant for them. -->
+          <div class="mt-5 flex items-center gap-3">
+            <div class="h-px flex-1 bg-border"></div>
+            <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">or</span>
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
+
+          <form class="mt-4 flex gap-2" onsubmit={(e) => { e.preventDefault(); void importLinkedIn(); }}>
+            <input
+              bind:value={liUrl}
+              type="text"
+              inputmode="url"
+              autocomplete="url"
+              placeholder="linkedin.com/in/your-name"
+              aria-label="Your LinkedIn profile link"
+              disabled={liState === 'loading'}
+              class="min-w-0 flex-1 rounded-xl border border-input bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={liState === 'loading' || liUrl.trim() === ''}
+              class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:border-brand hover:bg-accent disabled:opacity-60"
+            >
+              {#if liState === 'loading'}
+                <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Reading…
+              {:else}
+                Import
+              {/if}
+            </button>
+          </form>
+
+          {#if liState === 'error'}
+            <p class="mt-2 text-xs text-destructive">{liError}</p>
+          {:else if liNote}
+            <p class="mt-2 text-xs text-muted-foreground">{liNote}</p>
+          {/if}
+
+          <!-- Said before anyone tries it, not after it disappoints them. LinkedIn does not
+               release work history to a reader who is not signed in, so this fills your role,
+               skills, level and location and nothing else. The PDF route below is the honest
+               way to get the rest in, and it lands on the dropzone above. -->
+          <p class="mt-2 text-xs text-muted-foreground">
+            LinkedIn only shares your headline and location publicly — not your work history.
+            To bring that in, open your profile on LinkedIn, choose <span class="font-medium text-foreground">More → Save to PDF</span>, and upload the file above.
+          </p>
         {:else if currentKind === 'confirm'}
           <h2 class="text-xl font-semibold tracking-tight">Confirm your details</h2>
           <p class="mt-1 text-sm text-muted-foreground">Everything's optional — pick as many as apply.</p>
@@ -631,7 +736,7 @@
           <div class="mt-5">
             <LocationPreferencesFields
               value={location}
-              derivedLocation={profileStore.profile?.derived_location}
+              derivedLocation={importedLocation ?? profileStore.profile?.derived_location}
               onChange={onLocationChange}
             />
           </div>
