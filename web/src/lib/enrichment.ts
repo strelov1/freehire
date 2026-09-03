@@ -60,9 +60,13 @@ export function filterHref(param: string, value: string): string {
   return `/?${param}=${encodeURIComponent(value)}`;
 }
 
-/** Group thousands with thin spaces, matching the salary line in the design. */
-function groupThousands(n: number): string {
-  return n.toLocaleString('en-US').replace(/,/g, ' ');
+/** Compact an amount the way companyDetails.ts's funding figures already read:
+ *  1_200_000 → "1.2M", 30_000 → "30K", below a thousand printed in full. */
+function compactAmount(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(n % 1_000_000_000 ? 1 : 0)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return n.toLocaleString('en-US');
 }
 
 /**
@@ -82,11 +86,11 @@ export function formatSalary(e: Enrichment): string | null {
 
   let amount: string;
   if (salary_min != null && salary_max != null) {
-    amount = `${groupThousands(salary_min)} – ${groupThousands(salary_max)}`;
+    amount = `${compactAmount(salary_min)} – ${compactAmount(salary_max)}`;
   } else if (salary_min != null) {
-    amount = `from ${groupThousands(salary_min)}`;
+    amount = `from ${compactAmount(salary_min)}`;
   } else {
-    amount = `up to ${groupThousands(salary_max as number)}`;
+    amount = `up to ${compactAmount(salary_max as number)}`;
   }
 
   return tail ? `${amount} ${tail}` : amount;
