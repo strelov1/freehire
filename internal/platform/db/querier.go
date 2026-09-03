@@ -905,6 +905,10 @@ type Querier interface {
 	// the same transaction, alongside LockJobForApply) is the durable record; the queue entry
 	// has nothing left to say. Mirrors DeleteApplyFormEntry.
 	DeleteAutoApplyEntry(ctx context.Context, id int64) error
+	// Erase one user's billing events. Account deletion calls this; the foreign key cascades,
+	// but deletion states what it erases explicitly rather than relying on a constraint to
+	// mean it.
+	DeleteBillingEventsForUser(ctx context.Context, userID pgtype.Int8) error
 	// Remove a submission once triage has resolved its (provider, board) and inserted the
 	// corresponding boards row.
 	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
@@ -1831,6 +1835,18 @@ type Querier interface {
 	// that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
 	HideCompanyFeedback(ctx context.Context, id int64) (string, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
+	// Record a received webhook event, once. See the add-pro-subscription change.
+	//
+	// ON CONFLICT DO NOTHING against the (provider, event_id) unique index is the whole of the
+	// idempotency: the provider retries a delivery it did not get a 200 for and reuses the
+	// same event id, and says outright that duplicates are possible and delivery is unordered.
+	// A redelivery therefore returns NO ROWS, which the caller reads as "already recorded" and
+	// answers 200 to — not as an error.
+	//
+	// user_id is passed already resolved and may be NULL: a dashboard TEST event, an event for
+	// an account since deleted, and an identifier that was never one of ours all still get
+	// recorded. A row we cannot attribute is evidence; a row we refused to write is nothing.
+	InsertBillingEvent(ctx context.Context, arg InsertBillingEventParams) (int64, error)
 	// Insert a board row. Callers that pass status='active' also pass a non-null
 	// activated_at (curator additions via cmd/add-board, and the one-off
 	// cmd/backfill-board-catalog); every other caller passes NULL for both status='pending'
@@ -2647,6 +2663,22 @@ type Querier interface {
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
 	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]ListSubmissionsByUserRow, error)
+	// The reconciler's second pass: subscribers whose plan expiry falls inside a window around
+	// now, so a renewal whose webhook was never delivered is repaired within an hour.
+	//
+	// IT WALKS billing_events, NOT users. Two reasons, and the second is the one that matters.
+	//
+	// Cheapness: only an account that has actually transacted appears here, so the candidate
+	// set is the subscriber base rather than the 8M-row users table, and it is reached through
+	// an index that already exists. A predicate on users.pro_until would want an index on
+	// users, and building one on a table that size means either blocking writes to the account
+	// table or a CONCURRENTLY build with its own failure mode.
+	//
+	// Correctness: reading a subscriber's state from the provider CREATES that subscriber if
+	// the identifier is unknown to them — a GET with a write's consequences. Starting from
+	// events makes "we only ever ask about someone who has transacted" a property of the
+	// query rather than a rule the worker has to remember.
+	ListSubscribersNearProExpiry(ctx context.Context, arg ListSubscribersNearProExpiryParams) ([]ListSubscribersNearProExpiryRow, error)
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
@@ -2688,6 +2720,13 @@ type Querier interface {
 	// boards are broken without a second round trip and without naming them all. Ask this table
 	// directly for the rest.
 	ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error)
+	// The reconciler's first pass: events recorded but never applied, oldest first, served by
+	// the partial index on (received_at) WHERE processed_at IS NULL.
+	//
+	// Rows with a NULL user_id come back too. They are not skipped in SQL because "an event we
+	// could not attribute" is a decision the worker should make visibly and log, not something
+	// a WHERE clause silently disposes of.
+	ListUnprocessedBillingEvents(ctx context.Context, maxRows int32) ([]ListUnprocessedBillingEventsRow, error)
 	// Every feature's consumption for one user on one day, for the usage surface. A feature
 	// the user has not touched today simply does not come back, and the caller reports it as
 	// untouched rather than as absent.
@@ -2830,6 +2869,9 @@ type Querier interface {
 	// untouched and blocked_at, not failed_at, is what excludes it from
 	// auto_apply_queue_claimable_idx from here on.
 	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
+	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
+	// same fact, and the reconciler's own query no longer returns it.
+	MarkBillingEventProcessed(ctx context.Context, id int64) error
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)

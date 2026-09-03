@@ -184,6 +184,18 @@ type AutoApplyQueue struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type BillingEvent struct {
+	ID          int64              `json:"id"`
+	Provider    string             `json:"provider"`
+	EventID     string             `json:"event_id"`
+	AppUserID   string             `json:"app_user_id"`
+	UserID      pgtype.Int8        `json:"user_id"`
+	EventType   string             `json:"event_type"`
+	Payload     []byte             `json:"payload"`
+	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
 // Board catalog (replaces sources/*.yml). status: pending (unproven, still crawled) -> active (first crawl succeeded); or rejected (failed insert-time validation) / retired (curator-removed). submitted_by/surface/url are set for a crowdsourced row and NULL/"curator" for one added by cmd/add-board.
 type Board struct {
 	ID             int64              `json:"id"`

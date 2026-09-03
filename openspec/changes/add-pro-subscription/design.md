@@ -100,8 +100,14 @@ A `Type=oneshot` cron worker, hourly, in the same mould as the rest of `cmd/`. I
 2. re-reads the subscriber state for users whose `pro_until` sits within a window around
    now, catching a renewal whose webhook never arrived.
 
-Candidates come from users who appear in `billing_events` or who have a non-NULL
-`pro_until`. **A user who has never produced a stored event is invisible to the worker**,
+Both passes start from `billing_events`, never from `users`: the second joins the event
+table to `users` and filters on `pro_until`, so the candidate set is the subscriber base
+rather than an 8M-row scan, and no index on `users` has to be built to support it. It also
+makes the "never ask the provider about a stranger" rule structural — the provider's GET
+creates a subscriber for an unknown id, and a query that can only reach accounts which
+have transacted cannot trip that.
+
+**A user who has never produced a stored event is invisible to the worker**,
 and this is an accepted limit rather than an oversight: a purchase always produces an
 event, we store events before processing them, and RevenueCat retries undelivered
 webhooks for days. A purchase that produces no event at all within that window is a

@@ -22,15 +22,18 @@ findings are in the design's "The provider contract, as verified".
 
 ## 1. Schema
 
-- [ ] 1.1 Migration `0123_billing_events.sql`: `billing_events` (id, provider, event_id,
+- [x] 1.1 Migration `0123_billing_events.sql`: `billing_events` (id, provider, event_id,
       user_id, event_type, payload jsonb, received_at, processed_at NULL) with
       `UNIQUE (provider, event_id)` and an index serving "unprocessed, oldest first"
-- [ ] 1.2 `user_id` references `users` with the same on-delete behaviour the rest of the
+- [x] 1.2 `user_id` references `users` with the same on-delete behaviour the rest of the
       user-owned tables use, so account deletion erases these rows by cascade
-- [ ] 1.3 `pnpm check:sql` over the added file
-- [ ] 1.4 sqlc queries: insert-event-if-new, list-unprocessed, mark-processed,
-      set-pro-until, list-users-near-expiry, list-users-with-events; then `make sqlc` and
-      commit the regenerated output
+- [x] 1.3 `pnpm check:sql` over the added file
+- [x] 1.4 sqlc queries: insert-event-if-new, list-unprocessed, mark-processed,
+      list-subscribers-near-expiry, delete-for-user; then `make sqlc` and commit the
+      regenerated output. `SetProUntil` already exists from `add-plan-limits`, and the
+      near-expiry query walks `billing_events` rather than `users` — it is cheaper, and it
+      makes "we only ask the provider about someone who has transacted" a property of the
+      query instead of a rule the worker must remember
 
 ## 2. The billing package
 
