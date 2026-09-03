@@ -305,8 +305,10 @@ export interface User {
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
  *  not crawl yet. The unit is the board — `source` (ATS) + `board` (company slug) — not a
- *  single vacancy; the ingest side later scrapes all its vacancies. */
-type ContributionStatus = 'pending' | 'onboarded' | 'rejected' | 'review';
+ *  single vacancy; the ingest side later scrapes all its vacancies. `pending` means
+ *  recorded but not yet proven by a crawl; `active` means its first crawl succeeded —
+ *  there is no separate manual onboarding step. */
+type ContributionStatus = 'pending' | 'active' | 'rejected' | 'review';
 
 export interface Contribution {
   id: number;

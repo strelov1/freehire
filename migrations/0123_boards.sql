@@ -19,8 +19,11 @@ CREATE TABLE boards (
     status          text NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending', 'active', 'rejected', 'retired')),
     submitted_by    bigint REFERENCES public.users(id) ON DELETE SET NULL,
+    -- Mirrors internal/ingest/contribution's surface vocabulary (web/telegram/discord/
+    -- extension/cli/unknown) plus 'curator' for a row cmd/add-board inserted directly.
     surface         text NOT NULL DEFAULT 'curator'
-                        CHECK (surface IN ('web', 'telegram', 'extension', 'cli', 'curator')),
+                        CHECK (surface IN ('web', 'telegram', 'discord', 'extension', 'cli',
+                                            'unknown', 'curator')),
     rejected_reason text,
     created_at      timestamptz NOT NULL DEFAULT now(),
     activated_at    timestamptz

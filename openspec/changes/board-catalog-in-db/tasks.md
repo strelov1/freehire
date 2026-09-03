@@ -100,20 +100,40 @@
 
 ## 7. Contribution flow moves to `boards`/`board_submissions`
 
-- [ ] 7.1 Rewrite `internal/ingest/contribution`'s `Record` to insert into `boards` at
-      `status='pending'` (via the §2 validation function) instead of `link_contributions`,
-      preserving the existing reward/idempotency behavior.
-- [ ] 7.2 Rewrite `RecordReview` to insert into `board_submissions` instead of
-      `link_contributions` with `source IS NULL`.
-- [ ] 7.3 Rewrite `ListByUser` to read a caller's rows from `boards` (mapping
-      `pending`/`active`/`rejected`) unioned with their `board_submissions` rows (status
-      `review`), newest first.
-- [ ] 7.4 Update existing `internal/ingest/contribution` tests for the new backing
-      tables; add a triage helper (or document the manual `psql` step) that deletes a
-      `board_submissions` row and inserts the resolved `(provider, board)` into `boards`.
-- [ ] 7.5 Confirm the "board already in the catalogue" and "board already contributed"
-      checks (existing requirements, unmodified) now read `boards` instead of
-      `link_contributions`/`jobs`.
+- [x] 7.1 Rewrote `internal/ingest/contribution`'s `Record` to insert into `boards` at
+      `status='pending'` via `boardcatalog.Insert` (validation + `PlaceholderCompany`
+      seeding), instead of `link_contributions`. Reward/idempotency behavior unchanged —
+      `boardcatalog.ErrDuplicateBoard` maps to the same `ErrBoardAlreadyContributed` the
+      caller already handles.
+- [x] 7.2 Rewrote `RecordReview` to insert into `board_submissions` (`InsertBoardSubmission`)
+      instead of `link_contributions` with `source IS NULL`; its unique `url` index maps a
+      duplicate the same way.
+- [x] 7.3 Rewrote `ListByUser` to merge `boardcatalog.Repository.ListBySubmitter` (mapped
+      to `pending`/`active`/`rejected`) with `board_submissions` rows for that user
+      (mapped to `review`), sorted newest-first in Go (two tables, no single query).
+- [x] 7.4 `Service`/`contribution_test.go` (the fake-`Repository` unit tests) needed no
+      changes — they were already decoupled from the backing store. Rewrote
+      `repository_integration_test.go` in full against real Postgres: duplicate-of-a-live-board
+      rejected, resubmission accepted after `rejected`/`active` (renamed from
+      `onboarded`), the concurrent-duplicate race, `RecordReview` + its own dedup, and
+      `ListByUser` merging both tables while staying scoped to the caller. No triage
+      helper added — today's flow is a manual `psql` step either way (delete the
+      `board_submissions` row, `INSERT` into `boards`), same shape as before.
+- [x] 7.5 `BoardTracked`/`CompanyForBoard`/`BoardByGreenhouseJobID`/`BoardByAshbyJobID` are
+      unchanged — they always read `jobs`/`companies`, never `link_contributions`, so
+      "already in the catalogue" was never affected by this migration. "Already
+      contributed" now reads through `boardcatalog`'s `boards_identity_key` (§7.1) instead
+      of `link_contributions`' unique index — same semantics, different table.
+- [x] Also fixed along the way: `boards`/`board_submissions`' `surface` CHECK was missing
+      `discord`/`unknown` (contribution's actual surface vocabulary) — caught by these
+      tests failing on `boards_surface_check`, not by inspection. Both unreleased
+      migrations edited in place (not re-migrated anywhere yet). Also updated the
+      module-layering block table (`boardcatalog` → `ingest`) and `.gitignore`
+      (`/add-board`, `/backfill-board-catalog`) — two repo-wide guard tests caught these
+      on a full `go test ./...` run. Also updated `web/src/lib/types.ts`'s
+      `ContributionStatus` and one `api-spec.ts` doc example from `'onboarded'` to
+      `'active'` (frontend type-check not run — no `node_modules` in this worktree; the
+      change is a single literal in a union type with no other references).
 
 ## 8. Cutover
 

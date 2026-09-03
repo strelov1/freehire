@@ -2655,7 +2655,7 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie-or-key',
         summary: 'The boards you contributed, and their onboarding state.',
         curl: `curl "${BASE_URL}/me/contributions" -H "Authorization: Bearer fhk_…"`,
-        responseExample: `{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "onboarded", "created_at": "2026-07-20T12:00:00Z" } ] }`,
+        responseExample: `{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "active", "created_at": "2026-07-20T12:00:00Z" } ] }`,
       },
       {
         method: 'POST',

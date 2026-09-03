@@ -49,7 +49,7 @@ CREATE TABLE boards (
                         CHECK (status IN ('pending', 'active', 'rejected', 'retired')),
     submitted_by    bigint REFERENCES users(id) ON DELETE SET NULL,
     surface         text NOT NULL DEFAULT 'curator'
-                        CHECK (surface IN ('web', 'telegram', 'extension', 'cli', 'curator')),
+                        CHECK (surface IN ('web', 'telegram', 'discord', 'extension', 'cli', 'unknown', 'curator')),
     rejected_reason text,
     created_at      timestamptz NOT NULL DEFAULT now(),
     activated_at    timestamptz
@@ -86,7 +86,7 @@ CREATE TABLE board_submissions (
     url          text NOT NULL,
     submitted_by bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     surface      text NOT NULL DEFAULT 'unknown'
-                     CHECK (surface IN ('web', 'telegram', 'extension', 'cli', 'unknown')),
+                     CHECK (surface IN ('web', 'telegram', 'discord', 'extension', 'cli', 'unknown')),
     created_at   timestamptz NOT NULL DEFAULT now()
 );
 
