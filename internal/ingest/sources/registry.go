@@ -305,6 +305,11 @@ func All(c HTTPClient) map[string]Source {
 		// schema.org block. The board is a job type and not a district on purpose — see
 		// edjoin.go.
 		NewEdjoin(c),
+		// Profession.hu: Hungary's dominant job board, multi-company aggregator enumerated
+		// by the platform's own category sitemap (board) and hydrating each posting page.
+		// The board is a category and not an employer on purpose — the two IT categories
+		// are the technical slice of a general-population board. See profession.go.
+		NewProfession(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),

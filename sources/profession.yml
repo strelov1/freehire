@@ -1,0 +1,19 @@
+# Profession.hu, Hungary's dominant job board. One central catalogue, so there is no
+# per-employer board: each entry's board is a CATEGORY, named as it appears in the platform's
+# own sitemap index (https://www.profession.hu/sitemap-listings-index-hu.xml), and the crawl
+# reads that category's sitemap (the hh professional_role shape). company is a display label
+# only — the real employer is read from each posting.
+#
+# The platform publishes 23 categories holding ~12k postings, and only these two are IT. That
+# is deliberate, not a partial onboarding: freehire's non-technical gate was written against
+# tech-company ATS boards and leaks on a general-population board, so the platform's own facet
+# picks the slice. Measured over 128 live postings from these two categories,
+# classify.ConfirmedNonTech rejected none — see internal/ingest/sources/profession.go.
+#
+# Add a board only after validating it live: the category must appear in the sitemap index and
+# its sitemap must list postings. A category the index does not name fails the board rather
+# than crawling nothing, so a typo is loud.
+- company: Profession.hu — IT development
+  board: itdev # IT programozás, Fejlesztés
+- company: Profession.hu — IT operations
+  board: itops # IT üzemeltetés, Telekommunikáció

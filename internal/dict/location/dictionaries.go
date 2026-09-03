@@ -182,7 +182,7 @@ var nameToCountry = map[string]string{
 	// production strings. (Names already keyed above are not repeated.)
 	"china": "cn", "greece": "gr", "brasil": "br", "philippines": "ph",
 	"colombia": "co", "cyprus": "cy", "taiwan": "tw", "malaysia": "my",
-	"romania": "ro", "hungary": "hu", "bulgaria": "bg", "thailand": "th",
+	"romania": "ro", "hungary": "hu", "magyarország": "hu", "bulgaria": "bg", "thailand": "th",
 	"indonesia": "id", "vietnam": "vn", "south korea": "kr", "korea": "kr",
 	"turkey": "tr", "türkiye": "tr", "egypt": "eg", "saudi arabia": "sa",
 	"lebanon": "lb", "hong kong": "hk", "qatar": "qa", "kuwait": "kw",
