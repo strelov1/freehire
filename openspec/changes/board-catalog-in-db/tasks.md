@@ -27,12 +27,14 @@
 
 ## 3. Backfill
 
-- [ ] 3.1 `cmd/backfill-board-catalog`: parse every `sources/*.yml` entry (reusing the
+- [x] 3.1 `cmd/backfill-board-catalog`: parse every `sources/*.yml` entry (reusing the
       existing YAML parsing one last time) and insert each into `boards` at
       `status='active', activated_at=now()`, idempotent via the unique index.
-- [ ] 3.2 Test: running the backfill twice inserts no duplicate rows.
-- [ ] 3.3 Run it against prod once (`DATABASE_URL` only); confirm row count matches the
-      current YAML entry count.
+- [x] 3.2 Test: running the backfill twice inserts no duplicate rows.
+- [ ] 3.3 MANUAL/OPERATOR STEP — not run from this workspace: run it against prod once
+      (`DATABASE_URL` only); confirm row count matches the current YAML entry count.
+      Do this only once §4-§7 are also deployed (design.md's Migration Plan step 2-3 are
+      adjacent deploys), and before §9's YAML deletion.
 
 ## 4. `cmd/ingest` reads from `boards`
 
