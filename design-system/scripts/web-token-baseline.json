@@ -62,7 +62,6 @@
   "web/src/lib/components/NotificationBell.svelte": 2,
   "web/src/lib/components/NotificationCard.svelte": 1,
   "web/src/lib/components/NotificationsLandingView.svelte": 3,
-  "web/src/lib/components/onboarding/OnboardingWizard.svelte": 1,
   "web/src/lib/components/pipeline/DedupCard.svelte": 3,
   "web/src/lib/components/pipeline/EnrichCard.svelte": 1,
   "web/src/lib/components/pipeline/IngestCard.svelte": 1,

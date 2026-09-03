@@ -23,6 +23,7 @@ func insertUserProfileForExcludedSkillsTest(t *testing.T, q *Queries, email stri
 		UserID:          userID,
 		Specializations: []string{"backend"},
 		Skills:          []string{"go"},
+		Seniorities:     []string{},
 		ExcludedSkills:  excludedSkills,
 	}); err != nil {
 		t.Fatalf("seed profile for %s: %v", email, err)

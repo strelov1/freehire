@@ -379,7 +379,7 @@
     {@attach focusTrap()}
   >
     <!-- Brand panel: hidden on narrow viewports (the form is what matters there). -->
-    <div class="relative hidden w-[42%] shrink-0 flex-col justify-between overflow-hidden bg-foreground p-10 text-background lg:flex">
+    <div class="relative hidden w-5/12 shrink-0 flex-col justify-between overflow-hidden bg-foreground p-10 text-background lg:flex">
       {@render brandLink()}
       <div class="max-w-sm">
         <p class="text-2xl font-semibold leading-snug tracking-tight">
