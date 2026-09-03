@@ -130,7 +130,7 @@ var (
 // requestSchema derives the model's response format from proposal and pins every
 // closed vocabulary to its enum.
 //
-// The open vocabularies — skills, cities, countries, and the role catalogue — are left
+// The open vocabularies — skills, cities and countries — are left
 // as free strings deliberately: each runs to thousands of values, and spending that
 // many tokens on every request to constrain what the dictionaries already check after
 // the fact would buy nothing. The values the model invents there are dropped and

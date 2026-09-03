@@ -2,7 +2,7 @@
 
 - [x] 1.1 Replace `searchintent`'s `role` enum with `category` + `seniority`, built from the same vocabularies the rest of the request uses
 - [x] 1.2 Update the interpreter's tests, including the contradiction cases — a grade and a specialization are now two fields, so a proposal can disagree with itself in a way one slug could not
-- [ ] 1.3 Verify against real prompts before anything else lands: "senior backend in Berlin", "junior QA remote", "staff data engineer" must each still produce the search they name
+- [x] 1.3 Verify against real prompts before anything else lands: "senior backend in Berlin", "junior QA remote", "staff data engineer" must each still produce the search they name
 
 ## 2. Stop serving the facet
 
