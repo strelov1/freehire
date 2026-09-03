@@ -151,10 +151,24 @@ A run-once-and-exit cron worker, the `worker.Main` / `worker.Bootstrap` shape of
 `cmd/rollup-facets`. Needs `DATABASE_URL`, `MEILI_URL`, `MEILI_MASTER_KEY`.
 
 1. Walk the catalogue's open postings, normalise each title (lowercase, collapse
-   whitespace, strip a trailing location or seniority suffix where the existing
-   `roletag`/`classify` vocabularies already name one), and count. Keep titles
-   above a minimum-occurrence floor — a title carried by one posting is noise, not
-   a suggestion.
+   whitespace, cut at the first separator — `|`, `(`, `,`, `/`, an em dash, or a
+   literal " at "), and count. Keep titles above a minimum-occurrence floor — a
+   title carried by one posting is noise, not a suggestion.
+
+   **Measured before committing to this design**, over a 2,000-title sample from
+   the live catalogue: 1,251 distinct normalised titles (62.5%), but the 204 that
+   occur twice or more already cover 47.6% of the sample. The distribution is
+   concentrated enough that a floor bounds the dictionary to the tens of thousands
+   the index sizing assumes. The head is exactly what a suggestion should be:
+   `senior software engineer` (60), `software engineer` (43), `data engineer` (32),
+   `full stack developer` (17).
+
+   **A frequency floor is necessary but not sufficient.** The same sample puts
+   bare `manager` at 44 and `director` at 18 — frequent, and useless as a
+   suggestion, because they name no craft. Titles that reduce to a bare seniority
+   word or a bare generic (the `vocab.SeniorityValues` surface forms, plus
+   `manager`/`director`/`consultant` alone) are dropped regardless of count. The
+   role and category dictionaries already carry those axes properly.
 2. Add the dictionary suggestions: roles (`roletag.Catalog`), skills
    (`skilltag`), categories (`vocab.CategoryValues`), each with the live facet
    count from `search.FacetCounts` — the same source `cmd/rollup-facets` reads, so
