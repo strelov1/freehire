@@ -481,6 +481,30 @@ jobs:
       - name: Type check
         run: pnpm run check
 
+      # docs/API.md is generated from web/src/lib/docs/api-spec.ts and says so in its
+      # first line — and until this step nothing checked it. Adding `sort=view_count`
+      # to the endpoint updated api-spec.ts and openapi.yaml but not the generated
+      # file, so the published API reference sat contradicting the handler's own
+      # allowlist with every check green. Same ratchet as the `sqlc` and `contracts`
+      # jobs, and it lives here rather than in its own job because the generator loads
+      # the TypeScript through Vite: the toolchain is exactly this job's, already
+      # installed, and a second job would buy a clearer check name for a second full
+      # pnpm install.
+      #
+      # It runs after the type check on purpose. A broken api-spec.ts fails the
+      # generator too, but as a Vite SSR error — the type check says what is actually
+      # wrong first.
+      - name: Assert docs/API.md matches its source
+        run: |
+          pnpm run gen:api-docs
+          if [ -n "$(git status --porcelain -- ../docs/API.md)" ]; then
+            git --no-pager diff -- ../docs/API.md
+            echo
+            echo 'docs/API.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result.'
+            exit 1
+          fi
+          echo 'docs/API.md matches web/src/lib/docs/api-spec.ts.'
+
       - name: Unit tests with coverage
         run: pnpm run test:coverage
 
