@@ -89,7 +89,7 @@
 
 ## 9. Closing out
 
-- [ ] 9.1 Archive the change (`opsx:archive`) and sync the delta into
+- [x] 9.1 Archive the change (`opsx:archive`) and sync the delta into
   `openspec/specs/community-threads/spec.md`. Deliberately last: the header in
   section 8 arrived after the rest had shipped, so archiving earlier would have
   closed a change that was still growing
