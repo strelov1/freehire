@@ -158,10 +158,15 @@ go run ./cmd/ingest greenhouse
 which becomes `SELECT ... FROM boards WHERE provider = $1 AND status IN ('pending', 'active')`
 in place of `sources.LoadConfig(path)`. Everything downstream — `Config.Validate`
 against the registry, `pipeline.Runner` — is unchanged; both already consume
-`[]CompanyEntry`. One cron timer per provider, same as one file per provider today
-(the `custom.yml` multi-provider file has no single equivalent already, since each of
-its rows already names its own provider — those rows just become normal `boards` rows
-under their own provider, crawled by that provider's own `cmd/ingest <provider>` run).
+`[]CompanyEntry`. One cron timer per provider — for every provider-only file, the same
+count as one file per provider today. **Not** for `custom.yml`: its ~27 rows already each
+name their own provider, but today they all crawl in ONE cron-triggered process
+(`cmd/ingest sources/custom.yml`), spanning ~25 distinct providers. Since a
+provider-filtered query can only ever return one provider's rows, that becomes ~25
+separate `cmd/ingest <provider>` invocations — ~25 cron timers where there is one today.
+(Corrected during implementation; an earlier draft of this paragraph claimed "same
+count" for `custom.yml` too, reasoning only about the per-row provider field and missing
+that today's single cron timer crawls them all in one process.)
 
 ### What is retired
 

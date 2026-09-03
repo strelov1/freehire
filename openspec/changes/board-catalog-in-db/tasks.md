@@ -142,7 +142,11 @@ this coding session has no access to (a sibling ops repo, SSH to prod hosts, and
 itself) and is sequenced across real deploys, not something to execute speculatively:
 
 - [ ] 8.1 Update deployment cron/systemd units (in `freehire-ops`) from
-      one-timer-per-file to one-timer-per-provider-name (same count).
+      one-timer-per-file to one-timer-per-provider-name. **Not the same count**: found
+      during implementation — `sources/custom.yml` bundles ~25 distinct providers into
+      ONE cron timer today (each row already names its own provider, but they all crawl
+      in a single `cmd/ingest sources/custom.yml` process); splitting by provider means
+      ~25 separate timers for what is one timer now. Every other file is a 1:1 rename.
 - [ ] 8.2 Deploy §4-§7 together (per design.md's Migration Plan step 3 — `cmd/ingest`
       cannot read two sources at once), after §3.3's backfill has run.
 - [ ] 8.3 Confirm a full crawl cycle of every provider completes clean against `boards`

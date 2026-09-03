@@ -111,10 +111,18 @@ no separate CI-time validation pass, because there is no file for CI to see.
 `SOURCES_FILE`/positional-path parsing is removed. The binary's argument becomes a
 provider name; it runs `SELECT ... FROM boards WHERE provider = $1 AND status IN
 ('pending','active')` in place of `sources.LoadConfig(path)`. The `--shard=i/n` selector
-is otherwise unchanged (see the modified `source-ingest` requirement). Deployment cron
-units switch from "one timer per file" to "one timer per provider name" — the same count
-today, since every file except `custom.yml` already names exactly one provider, and
-`custom.yml`'s rows already each name their own provider individually.
+is otherwise unchanged (see the modified `source-ingest` requirement).
+
+**Corrected during implementation** (the exploratory doc and an earlier draft of this
+section both claimed "same count" — wrong): a query filtered on one `provider` can only
+ever return that one provider's rows, so one `cmd/ingest <provider>` invocation now
+crawls exactly one provider, always. That is a no-op for every file that already held one
+provider — but `sources/custom.yml` is a single file whose ~27 entries span **25 distinct
+providers** (each row already names its own, but today's ONE cron timer crawls all of
+them together in one process). Splitting that into one invocation per provider means
+splitting it into **~25 cron timers**, not one. Task 8.1 (updating deployment cron units)
+needs to account for this — it is a real increase for `custom.yml`'s providers
+specifically, not a rename of an existing unit.
 
 ### `pending → active` transition lives in `pipeline.Runner`
 

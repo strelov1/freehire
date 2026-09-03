@@ -67,15 +67,19 @@ no PR, no separate onboarding step.
   `internal/ingest/sources/config.go`'s YAML parsing (`LoadConfig`, `ParseConfig`,
   `ParseRawEntries`, `dedupeBoards`), the "Validate sources" CI step, the
   `onboard-contributions` skill.
-- **Code added**: `boards`/`board_submissions` migrations, a DB-backed loader in
-  `internal/ingest/sources` replacing the YAML loader, `cmd/add-board`,
-  `cmd/backfill-board-catalog`, the `pending → active` transition in
-  `internal/ingest/pipeline`.
+- **Code added**: `boards`/`board_submissions` migrations, new package
+  `internal/ingest/boardcatalog` (validation, the `boards` repository, and the DB-backed
+  loader `cmd/ingest` uses in place of the YAML loader — not `internal/ingest/sources`
+  itself, which `boardcatalog` imports and so cannot import back), `cmd/add-board`,
+  `cmd/backfill-board-catalog`, the `pending → active` transition (piggybacked on
+  `cmd/ingest`'s existing board-health success write, not a `pipeline.go` change).
 - **Code changed**: `cmd/ingest` (provider-name argument instead of file path),
   `internal/ingest/contribution` (`Record`/`RecordReview`/`ListByUser` rewritten against
   `boards`/`board_submissions`), deployment cron/systemd units (one timer per provider
-  name instead of per file — same count, since today's files are already one-per-provider
-  except `custom.yml`, whose rows already each name their own provider).
+  name instead of per file). **Not** the same count: every provider-only file is a no-op
+  rename, but `sources/custom.yml` bundles ~25 distinct providers into one cron timer
+  today — splitting it into one invocation per provider means ~25 timers, not one (see
+  design.md, corrected during implementation).
 - **Data migration**: `cmd/backfill-board-catalog` runs once in prod before the
   YAML-removal deploy; `link_contributions` is dropped in a later migration once
   `internal/ingest/contribution` no longer references it.

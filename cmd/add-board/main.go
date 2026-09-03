@@ -66,10 +66,23 @@ func run() int {
 	}
 }
 
+// withDB opens a real database connection (worker.Bootstrap, i.e. DATABASE_URL) and
+// hands it to action, closing the connection afterward. The one thing runAdd, runRetire,
+// and runRename each do once they decide to actually write.
+func withDB(action func(ctx context.Context, pool *pgxpool.Pool) int) int {
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+	return action(ctx, pool)
+}
+
 // runAdd is the CLI entry point for adding a board: it reports the candidate, and under
-// apply opens a real database connection (worker.Bootstrap, i.e. DATABASE_URL) and
-// delegates to addBoard. Split out so a test can exercise addBoard directly against a
-// throwaway database instead of the environment's real one.
+// apply delegates to addBoard over a real database connection. Split from addBoard so a
+// test can exercise addBoard directly against a throwaway database instead of the
+// environment's real one.
 func runAdd(provider, board, region, company string, hub bool, tenantsFlag string, apply bool) int {
 	if company == "" {
 		log.Print("add-board: --company is required when adding")
@@ -93,14 +106,7 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to add.")
 		return 0
 	}
-
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
-	if err != nil {
-		log.Printf("database: %v", err)
-		return 1
-	}
-	defer cleanup()
-	return addBoard(ctx, pool, in, registry)
+	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int { return addBoard(ctx, pool, in, registry) })
 }
 
 func addBoard(ctx context.Context, pool *pgxpool.Pool, in boardcatalog.InsertInput, registry map[string]sources.Source) int {
@@ -118,40 +124,26 @@ func addBoard(ctx context.Context, pool *pgxpool.Pool, in boardcatalog.InsertInp
 	return 0
 }
 
-// runRetire mirrors runAdd's split: it reports, then under apply opens a real database
-// connection and delegates to retireBoard.
+// runRetire mirrors runAdd's split: it reports, then under apply delegates to
+// retireBoard over a real database connection.
 func runRetire(provider, board, region string, apply bool) int {
 	log.Printf("add-board: would retire provider=%s board=%s region=%q", provider, board, region)
 	if !apply {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to retire.")
 		return 0
 	}
-
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
-	if err != nil {
-		log.Printf("database: %v", err)
-		return 1
-	}
-	defer cleanup()
-	return retireBoard(ctx, pool, provider, board, region)
+	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int { return retireBoard(ctx, pool, provider, board, region) })
 }
 
-// runRename mirrors runAdd/runRetire's split: it reports, then under apply opens a real
-// database connection and delegates to renameBoard.
+// runRename mirrors runAdd/runRetire's split: it reports, then under apply delegates to
+// renameBoard over a real database connection.
 func runRename(provider, board, region, company string, apply bool) int {
 	log.Printf("add-board: would rename provider=%s board=%s region=%q to company=%q", provider, board, region, company)
 	if !apply {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to rename.")
 		return 0
 	}
-
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
-	if err != nil {
-		log.Printf("database: %v", err)
-		return 1
-	}
-	defer cleanup()
-	return renameBoard(ctx, pool, provider, board, region, company)
+	return withDB(func(ctx context.Context, pool *pgxpool.Pool) int { return renameBoard(ctx, pool, provider, board, region, company) })
 }
 
 func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region, company string) int {
