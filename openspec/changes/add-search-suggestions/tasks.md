@@ -17,9 +17,9 @@
 
 ## 3. Stage 2 — the builder worker
 
-- [ ] 3.1 Add `cmd/build-suggestions` on the `worker.Main`/`worker.Bootstrap` shape of `cmd/rollup-facets`, taking the floors as env with documented defaults
+- [x] 3.1 Add `cmd/build-suggestions` on the `worker.Main`/`worker.Bootstrap` shape of `cmd/rollup-facets`, taking the floors as env with documented defaults
 - [ ] 3.2 Run it against production data, inspect the resulting dictionary, and set the title floor and company floor from what it shows
-- [ ] 3.3 Add the systemd unit and timer under `deploy/`, scheduled so it cannot overlap `freehire-reindexw`, and record that it must be copied to the host
+- [x] 3.3 Add the systemd unit and timer under `deploy/`, scheduled so it cannot overlap `freehire-reindexw`, and record that it must be copied to the host
 
 ## 4. Stage 2 — the endpoint
 

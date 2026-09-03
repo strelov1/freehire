@@ -167,6 +167,7 @@ extension/*.zip
 /reindex-companies
 /reslug
 /rollup-facets
+/build-suggestions
 /rollup-stats
 /server
 /tg-extract

@@ -1,0 +1,21 @@
+[Unit]
+Description=timer: freehire-build-suggestions
+
+[Timer]
+# Daily at 06:45 UTC, and the slot is the whole point.
+#
+# Meilisearch runs ONE serial task queue. This unit ends in an index SWAP, so a run
+# started while freehire-reindexw is rebuilding does not merely wait — it holds a
+# oneshot unit open for hours and looks like a hang. reindexw fires at 03:15 and every
+# 6h after, and a run measures 2h23m-2h30m, so 03:15 clears around 05:45 and the next
+# starts at 09:15. 06:45 sits in the middle of that window with room either side.
+#
+# Daily rather than hourly because the dictionary is a vocabulary, not a feed: what
+# the market calls a job moves over weeks, and a title that appeared this morning is
+# not yet a suggestion anybody would recognise.
+OnCalendar=*-*-* 06:45:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
