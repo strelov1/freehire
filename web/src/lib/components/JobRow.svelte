@@ -136,6 +136,13 @@
       : null,
   );
 
+  // One copy of the invitation, shared by the sighted line under the blurred strip and
+  // the sr-only span that stands in for it — so the two can't drift into different
+  // wording for the same call to action.
+  const matchInvite = $derived(
+    matchState === 'guest' ? 'Sign in to see your match' : 'Upload your CV to see your match',
+  );
+
   // A chip is red when the viewer's own profile lacks the skill, or — under the teaser —
   // when the teaser marked it missing. Both tints come from the same source as the strip
   // below, so the chips and the percentage can never tell different stories.
@@ -375,11 +382,10 @@
     >
       {#if matchState === 'guest'}
         <Lock class="size-3.5 shrink-0" />
-        Sign in to see your match
       {:else}
         <FileText class="size-3.5 shrink-0" />
-        Upload your CV to see your match
       {/if}
+      {matchInvite}
     </div>
   {/if}
 </a>
@@ -390,11 +396,7 @@
        outside the card link deliberately: `sr-only` is clip-based, not display:none, so
        inside the <a> it would join the link's accessible name and every card in the feed
        would announce a sign-in instruction that the link doesn't carry out. -->
-  <span class="sr-only">
-    {matchState === 'guest'
-      ? 'Sign in to see how this job matches your profile'
-      : 'Add your skills to see how this job matches your profile'}
-  </span>
+  <span class="sr-only">{matchInvite}</span>
 {/if}
 
 {#if footer}
