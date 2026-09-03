@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   import DiscussionIndex from '$lib/components/community/DiscussionIndex.svelte';
+  import SubjectHeader from '$lib/components/community/SubjectHeader.svelte';
   let { data } = $props();
 </script>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <a class="crumb" href={resolve('/jobs/[slug]', { slug: data.slug })}>← Back to vacancy</a>
+  <SubjectHeader subject={data.subject} subjectType="job" subjectSlug={data.slug} class="mb-4" />
   <DiscussionIndex
     subjectType="job"
     subjectSlug={data.slug}
@@ -13,13 +13,3 @@
     initialCursor={data.nextCursor}
   />
 </div>
-
-<style>
-  .crumb {
-    display: inline-block;
-    margin-bottom: 1rem;
-    color: var(--muted-foreground, #6b7280);
-    text-decoration: none;
-    font-size: 0.85rem;
-  }
-</style>

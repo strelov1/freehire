@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import CompanyFeedbackDialog from '$lib/components/CompanyFeedbackDialog.svelte';
   import DiscussionIndex from '$lib/components/community/DiscussionIndex.svelte';
+  import SubjectHeader from '$lib/components/community/SubjectHeader.svelte';
   import { Button } from '$lib/ui';
 
   let { data } = $props();
@@ -22,9 +22,16 @@
 </script>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <div class="top-row">
-    <a class="crumb" href={resolve('/companies/[slug]', { slug: data.slug })}>← {data.slug}</a>
-    <Button variant="outline" onclick={openFeedback}>Leave feedback</Button>
+  <!-- The header is a link and the feedback button is an action, so they are
+       siblings: nesting a button inside the link would swallow its click. -->
+  <div class="mb-4 flex items-center gap-2">
+    <SubjectHeader
+      subject={data.subject}
+      subjectType="company"
+      subjectSlug={data.slug}
+      class="min-w-0 flex-1"
+    />
+    <Button variant="outline" class="shrink-0" onclick={openFeedback}>Leave feedback</Button>
   </div>
   <DiscussionIndex
     subjectType="company"
@@ -37,19 +44,3 @@
 {#if showFeedback}
   <CompanyFeedbackDialog slug={data.slug} onClose={() => (showFeedback = false)} />
 {/if}
-
-<style>
-  .top-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-  .crumb {
-    display: inline-block;
-    color: var(--muted-foreground, #6b7280);
-    text-decoration: none;
-    font-size: 0.85rem;
-  }
-</style>
