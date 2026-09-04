@@ -63,28 +63,44 @@ SELECT unnest(sqlc.arg(subscription_ids)::bigint[]) AS subscription_id,
 ON CONFLICT (subscription_id, job_id) DO NOTHING;
 
 -- name: ClaimSubscriptionMatches :many
--- Lease a batch of pending, live matches for active subscriptions by stamping
--- claimed_at, oldest-claimable first, ordered by subscription so the worker can
--- group a subscription's matches into one digest. FOR UPDATE OF m locks only match
--- rows; SKIP LOCKED lets overlapping passes take disjoint rows so a digest is sent
--- at most once; the lease predicate reclaims rows whose sender died (stale
--- claimed_at), so no separate reaper is needed. The digest is sent OUTSIDE this
--- claim's transaction, so no network call is held inside a row lock.
+-- Lease pending, live matches for active subscriptions by stamping claimed_at,
+-- AT MOST per_subscription of them per subscription, so one busy subscription cannot
+-- starve the rest. FOR UPDATE OF the match rows with SKIP LOCKED lets overlapping passes
+-- take disjoint rows so a digest is sent at most once; the lease predicate reclaims rows
+-- whose sender died (stale claimed_at), so no separate reaper is needed. The digest is
+-- sent OUTSIDE this claim's transaction, so no network call is held inside a row lock.
+--
+-- The per-subscription cap is the whole point. This used to be one flat
+-- `ORDER BY subscription_id, matched_at LIMIT batch_size` over every pending row, which
+-- reads as "oldest first" but is really "lowest subscription id first": a subscription
+-- whose filter matches most of the catalogue fills the batch every pass and every
+-- higher id is never reached. Measured on prod 2026-09-04 — one subscription with an
+-- EMPTY query held 248k pending matches, the queue was 1.14M deep, and subscriptions
+-- above it had attempts=0 since the day they were created. Nothing was broken; they were
+-- simply never in a batch.
+--
+-- A LATERAL per subscription, rather than a window function, because FOR UPDATE cannot
+-- be used with window functions — and the row lock is what makes concurrent passes safe.
 WITH claimable AS (
     SELECT m.subscription_id, m.job_id
-    FROM subscription_matches m
-    JOIN subscriptions s ON s.id = m.subscription_id
-    WHERE m.notified_at IS NULL
-      AND m.failed_at IS NULL
-      AND (m.claimed_at IS NULL
-           OR m.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
-      AND s.active
-    -- Grouped by subscription so the delivery loop can build one digest each.
-    -- The matched_at/job_id tiebreak makes a batch_size cut deterministic (oldest
-    -- matches land in this batch); a subscription with more than batch_size pending
-    -- matches splits across passes into multiple digests — an accepted rare case.
-    ORDER BY m.subscription_id, m.matched_at, m.job_id
-    FOR UPDATE OF m SKIP LOCKED
+    FROM subscriptions s
+    CROSS JOIN LATERAL (
+        SELECT mm.subscription_id, mm.job_id
+        FROM subscription_matches mm
+        WHERE mm.subscription_id = s.id
+          AND mm.notified_at IS NULL
+          AND mm.failed_at IS NULL
+          AND (mm.claimed_at IS NULL
+               OR mm.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+        -- Oldest first WITHIN the subscription: a digest that splits across passes sends
+        -- the matches in the order they were found.
+        ORDER BY mm.matched_at, mm.job_id
+        LIMIT sqlc.arg(per_subscription)
+        FOR UPDATE SKIP LOCKED
+    ) m
+    WHERE s.active
+    -- A backstop, not the working bound: per_subscription x active subscriptions is what
+    -- a pass normally claims. This only caps a pathological subscription count.
     LIMIT sqlc.arg(batch_size)
 )
 UPDATE subscription_matches m

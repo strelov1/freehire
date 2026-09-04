@@ -20,7 +20,10 @@ import (
 func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	claimed, err := r.store.ClaimSubscriptionMatches(ctx, db.ClaimSubscriptionMatchesParams{
 		LeaseSeconds: r.cfg.LeaseSeconds,
-		BatchSize:    r.cfg.ClaimBatch,
+		// One digest's worth per subscription, so a pass serves every subscription
+		// that has anything pending rather than the lowest ids only.
+		PerSubscription: int32(r.cfg.SnapshotCap),
+		BatchSize:       r.cfg.ClaimBatch,
 	})
 	if err != nil {
 		return err

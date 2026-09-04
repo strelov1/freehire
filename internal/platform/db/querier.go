@@ -329,13 +329,24 @@ type Querier interface {
 	// join is over just the claimed batch (batch_size rows), not the whole claimable set —
 	// cheap, unlike the ordering join this replaces above.
 	ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatchParams) ([]ClaimSemanticBatchRow, error)
-	// Lease a batch of pending, live matches for active subscriptions by stamping
-	// claimed_at, oldest-claimable first, ordered by subscription so the worker can
-	// group a subscription's matches into one digest. FOR UPDATE OF m locks only match
-	// rows; SKIP LOCKED lets overlapping passes take disjoint rows so a digest is sent
-	// at most once; the lease predicate reclaims rows whose sender died (stale
-	// claimed_at), so no separate reaper is needed. The digest is sent OUTSIDE this
-	// claim's transaction, so no network call is held inside a row lock.
+	// Lease pending, live matches for active subscriptions by stamping claimed_at,
+	// AT MOST per_subscription of them per subscription, so one busy subscription cannot
+	// starve the rest. FOR UPDATE OF the match rows with SKIP LOCKED lets overlapping passes
+	// take disjoint rows so a digest is sent at most once; the lease predicate reclaims rows
+	// whose sender died (stale claimed_at), so no separate reaper is needed. The digest is
+	// sent OUTSIDE this claim's transaction, so no network call is held inside a row lock.
+	//
+	// The per-subscription cap is the whole point. This used to be one flat
+	// `ORDER BY subscription_id, matched_at LIMIT batch_size` over every pending row, which
+	// reads as "oldest first" but is really "lowest subscription id first": a subscription
+	// whose filter matches most of the catalogue fills the batch every pass and every
+	// higher id is never reached. Measured on prod 2026-09-04 — one subscription with an
+	// EMPTY query held 248k pending matches, the queue was 1.14M deep, and subscriptions
+	// above it had attempts=0 since the day they were created. Nothing was broken; they were
+	// simply never in a batch.
+	//
+	// A LATERAL per subscription, rather than a window function, because FOR UPDATE cannot
+	// be used with window functions — and the row lock is what makes concurrent passes safe.
 	ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error)
 	// Claim a batch of pending posts by stamping claimed_at. SKIP LOCKED lets
 	// concurrent workers take disjoint rows; the lease predicate reclaims posts whose
