@@ -17,7 +17,7 @@
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
-  import { formatDate, formatDateTime } from '$lib/utils';
+  import { formatDate, formatDateOrAgo, formatDateTime } from '$lib/utils';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
@@ -73,12 +73,15 @@
   const saved = $derived(interaction?.saved_at != null);
 
   // Presentational values derived from the (server-rendered) job.
-  const posted = $derived(formatDate(job.posted_at));
+  // Both read as an age for their first day ("20 minutes ago") and as a date after it —
+  // the same label the feed's card already gives a posting, so a reader arriving from
+  // the list meets the answer in the form they just left.
+  const posted = $derived(formatDateOrAgo(job.posted_at));
   // When the posting's own content last changed. `jobs.updated_at` is deliberately left
   // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
   // means "the words moved", not "the crawler came back" — which is the only reading that
   // earns a line beside the posting date.
-  const updated = $derived(formatDate(job.updated_at));
+  const updated = $derived(formatDateOrAgo(job.updated_at));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
@@ -337,10 +340,13 @@
      so they ride the provenance line with the company and the badges rather than the
      sidebar's source row, where a reader comparing freshness had to look past the match
      score and the salary to find them.
-     "Updated" is dropped when it lands on the posting's own day: a job written once and
-     never touched would otherwise print the same date twice and say nothing with it.
-     The visible label is a date; the exact clock time rides the `title`, since an hour is
-     what a reader wants only when they are already suspicious of the day.
+     "Updated" is dropped when it renders to the same label as the posting date: a job
+     written once and never touched would otherwise say the same thing twice. Comparing
+     the LABELS rather than the timestamps is the point — two edits an hour apart on one
+     day are a real difference while both read as ages, and stop being one the day they
+     both collapse into that date.
+     The exact clock time rides the `title` either way, since a reader who has read "2
+     hours ago" off a server-rendered page may want to know how old the page is.
      Rendered twice, one visible at a time (the caller passes the display class): to the
      right of the provenance line from lg, and under the title below it, where that line is
      a single non-wrapping row whose company name is already truncating to fit. -->
