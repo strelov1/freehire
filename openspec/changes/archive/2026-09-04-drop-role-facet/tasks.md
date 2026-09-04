@@ -25,7 +25,7 @@
 - [x] 4.2 Remove `roles` from `search.JobDocument` and from `document.go`'s derivation
 - [x] 4.3 Remove `ROLE_LABELS` / `ROLE_ALIASES` from `cmd/gen-contracts`, regenerate the contracts, and delete `web/src/lib/roleRelated.ts` with `relatedOptions` if nothing else uses it
 - [x] 4.4 Confirm `internal/dict/classify`, `internal/ai/aiarchetype` and `internal/dict/roletype` compile untouched — all three name roletag only in comments
-- [ ] 4.5 `pnpm check:dead` stays clean, and `go test ./...` plus `go vet -tags=integration ./...` pass
+- [x] 4.5 `pnpm check:dead` stays clean, and `go test ./...` plus `go vet -tags=integration ./...` pass
 
 ## 5. Ship
 
