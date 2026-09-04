@@ -16,6 +16,9 @@
 //
 //   - review    — an unclassified URL nobody has resolved into (provider, board). Goes to
 //     board_submissions, which is exactly that inbox.
+//
+// A refusal is not carried whether or not it was ever classified: 190 of the 204 on prod
+// are refused REVIEW rows, which keep a NULL source.
 //   - pending   — a recognized board waiting to be onboarded. Goes to boards at
 //     status='pending', which is crawled, so onboarding happens by itself.
 //   - onboarded — already a catalog row, but the YAML backfill carried no attribution, so
@@ -159,14 +162,15 @@ func run() int {
 			"catalog does not carry — they are boards nothing crawls, not history. "+
 			"Resolve them before dropping link_contributions.", orphaned)
 	}
-	if !*apply {
+	if *apply {
+		log.Printf("backfill-link-contributions: %d writable rows were already carried", already)
+	} else {
 		log.Print("backfill-link-contributions: dry run, nothing written. Re-run with --apply.")
-		return 0
 	}
-	log.Printf("backfill-link-contributions: %d writable rows were already carried", already)
 	// A row the run could not place is a per-item failure, and worker/AGENTS.md wants the
 	// exit code to say so: a partially-failed run that returns 0 looks successful to cron,
-	// and this one would be followed by a DROP.
+	// and this one would be followed by a DROP. It applies to the dry run too — that is
+	// the run whose whole job is to say whether the drop is safe yet.
 	if counts[unplaceable] > 0 || orphaned > 0 {
 		return 1
 	}
@@ -176,25 +180,34 @@ func run() int {
 // destinationOf classifies one contribution. It reads the row and nothing else, so the
 // rules below are testable without a database — which matters, because they are the part
 // a mistake would silently misplace data through.
+//
+// The status decides first, and only the two that name a board need one. That order is
+// what the real data forced: 190 of the 204 refusals carry a NULL source, because a
+// refusal during triage leaves an unclassified URL exactly as it was (migration 0037 made
+// the column nullable for that case). Checking for a board first read all 190 as
+// "needs a human" when a refusal is simply not carried, classified or not.
 func destinationOf(row db.ListLinkContributionsForBackfillRow) (destination, error) {
-	// 'review' is the only status the schema lets carry a NULL source, and its
-	// destination needs no board at all.
-	if row.Status == "review" {
-		return toSubmission, nil
-	}
-	if !row.Source.Valid || !row.Board.Valid || row.Source.String == "" || row.Board.String == "" {
-		// A recognized status with no board names nothing that can be carried. Counted
-		// rather than dropped silently: a nonzero here means the schema's own assumption
-		// no longer holds and the row needs a human.
-		return unplaceable, nil
-	}
 	switch row.Status {
-	case "onboarded":
-		return toAttribution, nil
-	case "pending":
-		return toPendingBoard, nil
+	case "review":
+		// Unclassified by definition — the partial unique index on (url) WHERE source IS
+		// NULL is what makes that the status's meaning.
+		return toSubmission, nil
 	case "rejected":
 		return dropRefusal, nil
+	case "onboarded", "pending":
+		// These two mean a board WAS recognized, so a missing provider contradicts the
+		// status itself. Counted rather than dropped silently: it needs a human.
+		if !row.Source.Valid || row.Source.String == "" {
+			return unplaceable, nil
+		}
+		// An empty board is NOT missing data: a boardless provider crawls one company's
+		// own API and has no board id (prod carries one such contribution, on amazon).
+		// boardcatalog.Validate is what knows which providers those are, so the decision
+		// is left to it rather than guessed here.
+		if row.Status == "onboarded" {
+			return toAttribution, nil
+		}
+		return toPendingBoard, nil
 	}
 	return "", fmt.Errorf("unknown status %q", row.Status)
 }
