@@ -14,12 +14,14 @@ import (
 // jobleadsFake is a test jobleadsHTTP: it answers each search page with the next canned
 // response in order, serves one detail body per posting id (matched on the URL), and
 // records every search request so tests can assert the request shape. failPage makes that
-// page's search fail, exercising the walk's page-1-vs-later split.
+// page's search fail, exercising the walk's page-1-vs-later split; detailCalls counts the
+// detail requests issued.
 type jobleadsFake struct {
-	pages    []string
-	details  map[string]string
-	failPage int
-	reqs     []jobleadsSearchReq
+	pages       []string
+	details     map[string]string
+	failPage    int
+	reqs        []jobleadsSearchReq
+	detailCalls int
 }
 
 func (f *jobleadsFake) PostJSON(_ context.Context, _ string, body, v any) error {
@@ -38,6 +40,7 @@ func (f *jobleadsFake) PostJSON(_ context.Context, _ string, body, v any) error 
 }
 
 func (f *jobleadsFake) GetJSON(_ context.Context, url string, v any) error {
+	f.detailCalls++
 	for id, body := range f.details {
 		if strings.Contains(url, id) {
 			return json.Unmarshal([]byte(body), v)
@@ -279,6 +282,47 @@ func TestJobleadsFetchNewDetailFailureKeepsListOnly(t *testing.T) {
 
 // jobleadsP1ID is the ExternalID of jobleadsP1.
 const jobleadsP1ID = "external-4964a963929486ed633123177efa3b2f"
+
+// TestJobleadsMaxPagesCapsWalk pins the safety bound: an edge that never answers an empty
+// page (every page full) must still terminate the walk at jobleadsMaxPages instead of
+// looping forever — the failure adp.go's MaxPages exists for.
+func TestJobleadsMaxPagesCapsWalk(t *testing.T) {
+	pages := make([]string, jobleadsMaxPages+10)
+	for i := range pages {
+		pages[i] = jobleadsSearchPage(jobleadsP1)
+	}
+	fake := &jobleadsFake{pages: pages}
+	jobs, err := NewJobleads(fake).Fetch(context.Background(), CompanyEntry{Board: "x"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(fake.reqs) != jobleadsMaxPages {
+		t.Errorf("walked %d pages, want the cap at %d", len(fake.reqs), jobleadsMaxPages)
+	}
+	if len(jobs) != jobleadsMaxPages {
+		t.Errorf("got %d jobs, want %d (one per capped page)", len(jobs), jobleadsMaxPages)
+	}
+}
+
+// TestJobleadsFetchNewSkipsDetailWithoutHash pins the doc's promise: a posting whose link
+// carries no extractable hash is kept list-only WITHOUT issuing a detail request.
+func TestJobleadsFetchNewSkipsDetailWithoutHash(t *testing.T) {
+	noHash := `{"id":"external-nohash","companyName":"NoLink","jobTitle":"No Hash Role","jobLink":"/it/job/no-hash-at-all","cityName":["Roma"],"regionName":["Lazio"],"alpha2Country":"IT","validFrom":1767319685,"jobLocationType":["hybrid"],"jobDescription":null}`
+	fake := &jobleadsFake{pages: []string{jobleadsSearchPage(noHash)}}
+	jobs, err := NewJobleads(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "x"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if fake.detailCalls != 0 {
+		t.Errorf("issued %d detail calls, want 0 (no extractable hash)", fake.detailCalls)
+	}
+	if jobs[0].Description != "" {
+		t.Error("description set on a posting whose detail was never fetched")
+	}
+}
 
 func toJSON(t *testing.T, v any) string {
 	t.Helper()
