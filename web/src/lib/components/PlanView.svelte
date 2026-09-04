@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import { formatMinorUnits } from '$lib/money';
   import type { AiUsage, BillingOverview, PlanState, UsageHistoryEntry } from '$lib/types';
   import States from './States.svelte';
 
@@ -42,26 +43,18 @@
   // section that cannot show the money is worse than none.
   let billing = $state<BillingOverview | null>(null);
 
+  // Only for a plan that could have a subscription behind it. A free account has none by
+  // definition, and asking anyway spends a provider round-trip per page view to be told 404
+  // — the answer `plan` already gave us.
   $effect(() => {
-    if (!isAuthenticated()) return;
+    if (plan?.plan !== 'pro') return;
     api
       .billingSubscription()
       .then((b) => (billing = b))
       .catch(() => (billing = null));
   });
 
-  // The provider sends minor units, and how many of them make one unit DEPENDS ON THE
-  // CURRENCY: 100 for dollars and euros, 1 for yen, 1000 for dinars. Dividing by 100
-  // unconditionally would render ¥1000 as ¥10 — an error in the customer's favour by a
-  // factor of a hundred, on a screen about their money.
-  //
-  // Intl already knows each currency's exponent, so it is asked rather than tabulated here.
-  const money = (minor: number, currency: string) => {
-    const code = (currency || 'usd').toUpperCase();
-    const fmt = new Intl.NumberFormat(undefined, { style: 'currency', currency: code });
-    const exponent = fmt.resolvedOptions().maximumFractionDigits ?? 2;
-    return fmt.format(minor / 10 ** exponent);
-  };
+  const money = formatMinorUnits;
 
   // The provider's status words, in the reader's language. `past_due` is the one worth
   // spelling out: it is not "cancelled", it is "your card needs attention and you still
@@ -75,7 +68,7 @@
   };
 
   $effect(() => {
-    if (!isAuthenticated()) return;
+    if (plan?.plan !== 'pro') return;
     api
       .billingManageUrl()
       .then(({ url }) => (manageUrl = url))
@@ -185,7 +178,7 @@
 
             {#if billing.invoices.length > 0}
               <ul class="flex flex-col divide-y divide-border/60 border-t border-border/60">
-                {#each billing.invoices as inv (inv.date)}
+                {#each billing.invoices as inv (inv.id)}
                   <li class="flex items-center justify-between gap-3 py-2 text-sm">
                     <span class="text-muted-foreground">{fmtDate(inv.date)}</span>
                     <span class="flex items-center gap-3">

@@ -61,7 +61,7 @@ func ConfigFromEnv() Config {
 // priceList parses the comma-separated price identifiers.
 //
 // There is no default, and an unset value yields an EMPTY list rather than a guess. An
-// empty list confers Pro on nobody (see subscription.coversAny), which is the right way for
+// empty list confers Pro on nobody (see subscription.entitles), which is the right way for
 // a misconfiguration to fail: a guessed default would either match nothing — the same
 // outcome, less honestly — or, worse, match a price we did not mean.
 func priceList(raw string) []string {

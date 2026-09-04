@@ -11,7 +11,7 @@ EnvironmentFile=/opt/freehire/.env
 # candidate, bounded by BILLING_SYNC_MAX_PER_RUN.
 CPUWeight=20
 IOWeight=20
-# A run with no REVENUECAT_* in the environment exits 0 without opening the pool, so a
+# A run with no STRIPE_* in the environment exits 0 without opening the pool, so a
 # host where billing is not configured yet runs this timer harmlessly rather than
 # failing every hour.
 ExecStart=/opt/freehire/src/hire-current/billing-sync

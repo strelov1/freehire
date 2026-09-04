@@ -10,6 +10,7 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -341,6 +342,54 @@ func TestARenewalWithNoWebhookIsRepaired(t *testing.T) {
 	got := proUntil(t, pool, userID)
 	if got == nil || got.UTC().Format(time.RFC3339) != "2027-01-01T00:00:00Z" {
 		t.Fatalf("want the renewal picked up, got %v", got)
+	}
+}
+
+// TestApplyResolvesFromTheStoredUserWhenNoBindingExists is the reconciler's replay path,
+// and the bug it guards is the most expensive one this package can have.
+//
+// A first purchase arrives as a checkout completion carrying our account id but no binding
+// yet. If the binding write then fails, the stored row still knows whose event it is — but a
+// replay rebuilt from the customer id alone would resolve to nobody, and the worker treats
+// "nobody" as unattributable and stamps the row processed. A real, paid subscription, marked
+// done forever, silently.
+func TestApplyResolvesFromTheStoredUserWhenNoBindingExists(t *testing.T) {
+	s, pool := newService(t, subscriptionsWith("2026-10-01T00:00:00Z"))
+	ctx := context.Background()
+	userID := insertUser(t, pool, "unbound@example.com")
+
+	ev := event("evt_unbound", "cus_unbound", fmt.Sprint(userID))
+	rowID, _, err := s.Record(ctx, ev)
+	if err != nil {
+		t.Fatalf("record: %v", err)
+	}
+
+	// Simulate the binding never having been written.
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET stripe_customer_id = NULL WHERE id = $1`, userID); err != nil {
+		t.Fatalf("clear binding: %v", err)
+	}
+
+	// FIRST, the failure the fix removes: a replay built from the customer alone resolves to
+	// nobody, and "nobody" is exactly what the worker stamps as unattributable. Asserted
+	// before the repair, because the repair is what makes it stop happening.
+	bare := Event{ID: ev.ID, CustomerID: ev.CustomerID, Type: ev.Type}
+	if err := s.Apply(ctx, rowID, bare); !errors.Is(err, ErrUnknownSubscriber) {
+		t.Fatalf("want ErrUnknownSubscriber without the stored user, got %v", err)
+	}
+
+	// THEN the replay the worker actually builds: the customer from the row, plus the user
+	// the row already stored. It repairs the binding on the way through, so the sync it needs
+	// can happen at all.
+	replay := Event{ID: ev.ID, CustomerID: ev.CustomerID, Type: ev.Type, UserRef: fmt.Sprint(userID)}
+	if err := s.Apply(ctx, rowID, replay); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if got := proUntil(t, pool, userID); got == nil {
+		t.Fatal("a paid subscription was not applied on replay")
+	}
+	if bound := customerOf(t, pool, userID); bound == nil || *bound != ev.CustomerID {
+		t.Fatalf("the replay did not repair the binding: %v", bound)
 	}
 }
 

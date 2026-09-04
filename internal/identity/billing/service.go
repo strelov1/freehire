@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -122,12 +123,17 @@ func (s *Service) Record(ctx context.Context, ev Event) (rowID int64, recorded b
 	}
 
 	if hasUser && ev.CustomerID != "" {
-		// A failed binding is deliberately not an error: the event IS stored, which is all
-		// the acknowledgement claims, and the cost is that the reconciler cannot reach this
-		// account until the next event — not the money.
-		_ = s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
+		// A failed binding does not fail the delivery: the event IS stored, which is all the
+		// acknowledgement claims. But it is not nothing either — the binding is how a
+		// scheduled re-check reaches this account, so losing it silently is how an account
+		// stops being reconcilable without anyone noticing. Logged, and the recorded row
+		// still carries the user, so the reconciler can work without it.
+		if err := s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
 			ID: userID, StripeCustomerID: ev.CustomerID,
-		})
+		}); err != nil {
+			log.Printf("billing: event %s recorded but user %d not bound to customer %s: %v",
+				ev.ID, userID, ev.CustomerID, err)
+		}
 	}
 	return rowID, true, nil
 }
@@ -160,6 +166,22 @@ func (s *Service) Apply(ctx context.Context, rowID int64, ev Event) error {
 	if !ok {
 		return fmt.Errorf("%w: customer %q, ref %q", ErrUnknownSubscriber, ev.CustomerID, ev.UserRef)
 	}
+
+	// REPAIR THE BINDING BEFORE SYNCING, because the sync needs it and the event has it.
+	//
+	// Without this the replay is worse than useless: the user resolves from the event, then
+	// SyncUser looks the customer up in a column nothing ever wrote, gets ErrNoSubscription,
+	// and the worker reads that as "nothing to apply" and stamps the row. A paid subscription
+	// marked done, forever. Binding here makes the retry self-healing — which is what a retry
+	// is for.
+	if ev.CustomerID != "" {
+		if err := s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
+			ID: userID, StripeCustomerID: ev.CustomerID,
+		}); err != nil {
+			return fmt.Errorf("billing: binding user %d to customer %s: %w", userID, ev.CustomerID, err)
+		}
+	}
+
 	if err := s.SyncUser(ctx, userID); err != nil {
 		return err
 	}

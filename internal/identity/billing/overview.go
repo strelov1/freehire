@@ -2,7 +2,7 @@ package billing
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -36,6 +36,11 @@ type Overview struct {
 
 // Invoice is one charge as a receipt list shows it.
 type Invoice struct {
+	// ID is the provider's own invoice identifier, carried for ONE reason: it is what a list
+	// in the SPA keys on. A date is not a key — two invoices can share a second (a proration
+	// beside a cycle charge on an upgrade) — and a duplicate key in a Svelte {#each} throws
+	// and takes the whole block down. That has happened in this repository before.
+	ID          string    `json:"id"`
 	Date        time.Time `json:"date"`
 	AmountCents int64     `json:"amount_cents"`
 	Currency    string    `json:"currency"`
@@ -78,15 +83,9 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 
 	out := Overview{Invoices: []Invoice{}}
 
-	// The subscription that decides the plan is the one that reaches furthest — the same
-	// rule proUntilFrom applies, so the section cannot describe a different subscription
-	// from the one the plan came from.
-	var best subscription
-	for _, candidate := range sub.Subscriptions {
-		if candidate.entitles(s.cfg.Prices) && candidate.CurrentPeriodEnd.After(best.CurrentPeriodEnd) {
-			best = candidate
-		}
-	}
+	// The same selection the plan derivation makes, called rather than repeated: this
+	// section must describe the subscription the plan came from, not another one.
+	best := bestEntitling(sub, s.cfg.Prices)
 
 	// No eligible subscription: a free account, or a former subscriber whose last one has
 	// ended. Both must read as "no section", not as a section full of zeroes — the surface
@@ -132,7 +131,7 @@ func (s *Service) priceOf(ctx context.Context, sub subscription) (int64, string,
 		lastErr = err
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("billing: subscription carries no price we could read")
+		lastErr = errors.New("billing: subscription carries no price we could read")
 	}
 	return 0, "", "", lastErr
 }
@@ -149,6 +148,7 @@ func (c *client) invoices(ctx context.Context, customerID string) []Invoice {
 
 	var raw struct {
 		Data []struct {
+			ID               string `json:"id"`
 			Created          int64  `json:"created"`
 			AmountPaid       int64  `json:"amount_paid"`
 			AmountDue        int64  `json:"amount_due"`
@@ -170,6 +170,7 @@ func (c *client) invoices(ctx context.Context, customerID string) []Invoice {
 			amount = in.AmountDue
 		}
 		out = append(out, Invoice{
+			ID:          in.ID,
 			Date:        time.Unix(in.Created, 0).UTC(),
 			AmountCents: amount,
 			Currency:    in.Currency,

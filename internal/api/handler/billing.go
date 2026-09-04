@@ -165,7 +165,7 @@ func (h *billingHandlers) Subscription(c *fiber.Ctx) error {
 	out, err := h.billing.SubscriptionOverview(ctx, userID)
 	if err != nil {
 		if !errors.Is(err, billing.ErrNoSubscription) {
-			log.Printf("billing: no subscription overview for user %d: %v", userID, err)
+			log.Printf("billing: could not read the subscription of user %d: %v", userID, err)
 		}
 		return fiber.NewError(fiber.StatusNotFound, "no subscription")
 	}

@@ -85,7 +85,17 @@ func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied
 	}
 
 	for _, ev := range pending {
-		err := svc.Apply(ctx, ev.ID, billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType})
+		// The stored row already knows whose event this is — it was resolved when the
+		// delivery was recorded. Rebuilding the event without it would make the retry
+		// WEAKER than the first attempt: with only a customer id, an account whose binding
+		// never got written resolves to nobody, and the branch below would stamp a real paid
+		// subscription as unattributable. Forever, because a stamped row is never retried.
+		replay := billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType}
+		if ev.UserID.Valid {
+			replay.UserRef = strconv.FormatInt(ev.UserID.Int64, 10)
+		}
+
+		err := svc.Apply(ctx, ev.ID, replay)
 		switch {
 		case err == nil:
 			applied++

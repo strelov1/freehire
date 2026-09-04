@@ -78,13 +78,23 @@ var entitlingStatuses = map[string]bool{
 // A CANCELLED-BUT-NOT-YET-ENDED subscription still confers. The customer paid for the
 // period they are in; cancelling says "do not renew", not "refund me".
 func proUntilFrom(sub subscriber, proPrices []string) time.Time {
-	var out time.Time
+	return bestEntitling(sub, proPrices).CurrentPeriodEnd
+}
+
+// bestEntitling is the subscription that decides the plan: of the ones that entitle, the one
+// reaching furthest. The zero subscription when none does.
+//
+// One function because two callers need the SAME answer — the plan derivation and the
+// billing section — and a subscriber whose plan came from one subscription while the price
+// on screen came from another would be looking at a contradiction we published.
+func bestEntitling(sub subscriber, proPrices []string) subscription {
+	var best subscription
 	for _, s := range sub.Subscriptions {
-		if s.entitles(proPrices) && s.CurrentPeriodEnd.After(out) {
-			out = s.CurrentPeriodEnd
+		if s.entitles(proPrices) && s.CurrentPeriodEnd.After(best.CurrentPeriodEnd) {
+			best = s
 		}
 	}
-	return out
+	return best
 }
 
 // entitles reports whether this subscription grants Pro right now: a status that entitles,

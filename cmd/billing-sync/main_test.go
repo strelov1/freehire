@@ -11,8 +11,8 @@ import (
 // spec asks for — an unconfigured deployment must run without touching the database — and
 // it is also what makes this binary harmless in a checkout that is not freehire.me.
 func TestRunIsANoOpWithoutCredentials(t *testing.T) {
-	t.Setenv("REVENUECAT_API_KEY", "")
-	t.Setenv("REVENUECAT_WEBHOOK_SECRET", "")
+	t.Setenv("STRIPE_SECRET_KEY", "")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
 	t.Setenv("DATABASE_URL", "")
 
 	if code := run(); code != 0 {
@@ -29,8 +29,8 @@ func TestRunIsANoOpWithHalfCredentials(t *testing.T) {
 		{name: "webhook secret only", secret: "whsec_test"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("REVENUECAT_API_KEY", tc.apiKey)
-			t.Setenv("REVENUECAT_WEBHOOK_SECRET", tc.secret)
+			t.Setenv("STRIPE_SECRET_KEY", tc.apiKey)
+			t.Setenv("STRIPE_WEBHOOK_SECRET", tc.secret)
 			t.Setenv("DATABASE_URL", "")
 
 			if code := run(); code != 0 {

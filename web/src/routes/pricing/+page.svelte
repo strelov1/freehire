@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { formatMinorUnits } from '$lib/money';
   import { isAuthenticated } from '$lib/auth.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import type { PublicPrice } from '$lib/types';
@@ -20,17 +21,7 @@
   let interval = $state<'month' | 'year'>('month');
   const chosen = $derived(interval === 'year' ? annual : monthly);
 
-  // Minor units, and how many make one unit depends on the currency: 100 for dollars,
-  // 1 for yen. Dividing by 100 unconditionally would advertise ¥1000 as ¥10 — a wrong
-  // price on the page a customer can hold us to. Intl knows each exponent, so it is asked.
-  const money = (p: PublicPrice) => {
-    const fmt = new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: p.currency.toUpperCase(),
-    });
-    const exponent = fmt.resolvedOptions().maximumFractionDigits ?? 2;
-    return fmt.format(p.amount_cents / 10 ** exponent);
-  };
+  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
 
   // What the annual price saves against twelve monthly ones, as a whole percentage. Shown
   // only when both prices exist and the saving is real — a "save 0%" badge is worse than

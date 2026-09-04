@@ -102,6 +102,9 @@ export interface PlansMatrix {
 
 /** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`). */
 export interface BillingInvoice {
+  /** The provider's invoice id. Carried so a list can key on it: two invoices can share a
+   *  second, and a duplicate key in an `{#each}` throws and kills the block. */
+  id: string;
   date: string;
   amount_cents: number;
   currency: string;
