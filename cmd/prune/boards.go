@@ -25,19 +25,18 @@ import (
 // the board.
 type boardKey struct{ Provider, Board string }
 
-// boards is the set of boards a crawl still visits, read from the boards table.
+// boards is the set of boards a crawl still visits, read from the boards table:
+// provider → board → every region that board is listed under.
+//
+// Indexing by provider first is what keeps resolving a posting's board off a scan of the
+// whole set. The regions sit at the leaf because the catalog's identity is
+// (provider, board, region) while a posting's external_id carries only the board: one
+// board is one crawl target but may be several rows, and retiring it means naming each.
+// One map rather than four parallel ones — "is it listed", "how many rows has this
+// provider" and "which regions" are the same fact asked three ways, and separate maps
+// could answer them differently.
 type boards struct {
-	listed map[boardKey]bool
-	// byProvider indexes the boards of one provider, so resolving a job's board from
-	// its external_id does not scan the whole set.
-	byProvider map[string]map[string]bool
-	// regions records every region a board is listed under, because retiring one means
-	// naming (provider, board, region) — the catalog's own identity — and an aggregator
-	// board exists once per region it covers.
-	regions map[boardKey][]string
-	// liveByProvider counts a provider's live rows, so the retire path can refuse to
-	// take its last one.
-	liveByProvider map[string]int
+	byProvider map[string]map[string][]string
 }
 
 // boardLister is the read cmd/prune needs from the catalog.
@@ -56,26 +55,33 @@ func loadBoards(ctx context.Context, q boardLister) (boards, error) {
 	if err != nil {
 		return boards{}, fmt.Errorf("prune: list live boards: %w", err)
 	}
-	b := boards{
-		listed:         map[boardKey]bool{},
-		byProvider:     map[string]map[string]bool{},
-		regions:        map[boardKey][]string{},
-		liveByProvider: map[string]int{},
-	}
+	b := boards{byProvider: map[string]map[string][]string{}}
 	for _, row := range rows {
-		key := boardKey{Provider: row.Provider, Board: row.Board}
-		b.listed[key] = true
 		if b.byProvider[row.Provider] == nil {
-			b.byProvider[row.Provider] = map[string]bool{}
+			b.byProvider[row.Provider] = map[string][]string{}
 		}
-		b.byProvider[row.Provider][row.Board] = true
-		b.regions[key] = append(b.regions[key], row.Region)
-		b.liveByProvider[row.Provider]++
+		b.byProvider[row.Provider][row.Board] = append(b.byProvider[row.Provider][row.Board], row.Region)
 	}
-	if len(b.listed) == 0 {
+	if len(b.byProvider) == 0 {
 		return boards{}, fmt.Errorf("prune: no live boards in the catalog")
 	}
 	return b, nil
+}
+
+// regionsOf returns every region a board is listed under — the catalog rows retiring it
+// has to name. Empty for a board the catalog does not carry.
+func (b boards) regionsOf(k boardKey) []string {
+	return b.byProvider[k.Provider][k.Board]
+}
+
+// liveRows counts a provider's catalog rows, which is what the retire path compares
+// against to refuse taking its last one. Rows, not boards: a regional board is several.
+func (b boards) liveRows(provider string) int {
+	n := 0
+	for _, regions := range b.byProvider[provider] {
+		n += len(regions)
+	}
+	return n
 }
 
 // knownProvider reports whether a source is a crawled board platform at all.
@@ -123,7 +129,7 @@ func (b boards) boardOf(provider, externalID string) (string, bool) {
 		return "", false
 	}
 	for i, r := range externalID {
-		if r == ':' && byBoard[externalID[:i]] {
+		if r == ':' && byBoard[externalID[:i]] != nil {
 			return externalID[:i], true
 		}
 	}

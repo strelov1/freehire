@@ -94,27 +94,11 @@ func run() int {
 		existing[strings.ToLower(cfg)] = true
 		fmt.Printf("%s — %s — %d offers\n", cfg, in.company, offers)
 		kept++
-		if !*apply {
-			continue
-		}
-		b, err := boardcatalog.Insert(ctx, repo, boardcatalog.InsertInput{
-			Provider: provider,
-			Board:    cfg,
-			Company:  in.company,
-			Surface:  "cli",
-		}, boardcatalog.StatusPending, registry)
-		switch {
-		case errors.Is(err, boardcatalog.ErrDuplicateBoard):
-			// Another run landed it between the read above and this insert.
-			log.Printf("harvest-erecruiter: %s: cfg %s already in the catalog", in.company, cfg)
-		case err != nil:
-			log.Printf("harvest-erecruiter: add %s: %v", cfg, err)
-			return 1
-		case b.Status == boardcatalog.StatusRejected:
-			// Validation refused a cfg that just answered with offers: a bug here, not
-			// a bad input.
-			log.Printf("harvest-erecruiter: cfg %s rejected by validation: %s", cfg, b.RejectedReason)
-			return 1
+		if *apply {
+			if err := addBoard(ctx, repo, registry, cfg, in.company); err != nil {
+				log.Printf("harvest-erecruiter: %v", err)
+				return 1
+			}
 		}
 	}
 	log.Printf("harvest-erecruiter: %d input(s), %d new live board(s)", len(inputs), kept)
@@ -122,6 +106,29 @@ func run() int {
 		log.Printf("harvest-erecruiter: re-run with --apply to add them")
 	}
 	return 0
+}
+
+// addBoard persists one validated cfg at status='pending'. A duplicate is not an error:
+// another run may have landed the same cfg between the catalog read and this insert, and
+// the run should still onboard the rest.
+func addBoard(ctx context.Context, repo boardcatalog.Repository, registry map[string]sources.Source, cfg, company string) error {
+	b, err := boardcatalog.Insert(ctx, repo, boardcatalog.InsertInput{
+		Provider: provider,
+		Board:    cfg,
+		Company:  company,
+		Surface:  "cli",
+	}, boardcatalog.StatusPending, registry)
+	switch {
+	case errors.Is(err, boardcatalog.ErrDuplicateBoard):
+		return nil
+	case err != nil:
+		return fmt.Errorf("add %s: %w", cfg, err)
+	case b.Status == boardcatalog.StatusRejected:
+		// Validation refused a cfg that just answered with offers: a bug here, not a
+		// bad input.
+		return fmt.Errorf("cfg %s rejected by validation: %s", cfg, b.RejectedReason)
+	}
+	return nil
 }
 
 // input is one company to probe: its display name and the careers URL to scan for a cfg.

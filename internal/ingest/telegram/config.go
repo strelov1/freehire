@@ -50,12 +50,12 @@ func LoadChannels(ctx context.Context, q ChannelLister) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("telegram: list channels: %w", err)
 	}
+	if len(rows) == 0 {
+		return Config{}, fmt.Errorf("telegram: no active channels configured")
+	}
 	cfg := Config{Channels: make([]ChannelEntry, len(rows))}
 	for i, row := range rows {
 		cfg.Channels[i] = ChannelEntry{Channel: row.Channel, Kind: Kind(row.Kind)}
-	}
-	if len(cfg.Channels) == 0 {
-		return Config{}, fmt.Errorf("telegram: no active channels configured")
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err

@@ -33,41 +33,32 @@ func retireBoards(ctx context.Context, q boardRetirer, brd boards, retire []boar
 	// decided on the whole list rather than emerging halfway through it.
 	losing := map[string]int{}
 	for _, k := range retire {
-		losing[k.Provider] += len(brd.regions[k])
+		losing[k.Provider] += len(brd.regionsOf(k))
 	}
 	held := map[string]bool{}
+	var heldNames []string
 	for provider, n := range losing {
-		if n >= brd.liveByProvider[provider] {
+		if n >= brd.liveRows(provider) {
 			held[provider] = true
+			heldNames = append(heldNames, provider)
 		}
 	}
+	sort.Strings(heldNames)
 
 	retired := 0
 	for _, k := range retire {
 		if held[k.Provider] {
 			continue
 		}
-		for _, region := range brd.regions[k] {
+		for _, region := range brd.regionsOf(k) {
 			n, err := q.RetireBoard(ctx, db.RetireBoardParams{
 				Provider: k.Provider, Lower: k.Board, Region: region,
 			})
 			if err != nil {
-				return retired, sortedKeys(held), fmt.Errorf("prune: retire %s/%s: %w", k.Provider, k.Board, err)
+				return retired, heldNames, fmt.Errorf("prune: retire %s/%s: %w", k.Provider, k.Board, err)
 			}
 			retired += int(n)
 		}
 	}
-	return retired, sortedKeys(held), nil
-}
-
-func sortedKeys(m map[string]bool) []string {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
+	return retired, heldNames, nil
 }

@@ -37,6 +37,25 @@ func liveBoard(provider, board string, region ...string) db.ListLiveBoardsRow {
 	return r
 }
 
+// catalogOf builds a boards set from "provider/board" pairs, each region-less — the
+// shape every report fixture below wants.
+func catalogOf(t *testing.T, pairs ...string) boards {
+	t.Helper()
+	rows := make([]db.ListLiveBoardsRow, len(pairs))
+	for i, p := range pairs {
+		provider, board, ok := strings.Cut(p, "/")
+		if !ok {
+			t.Fatalf("catalogOf: %q is not provider/board", p)
+		}
+		rows[i] = liveBoard(provider, board)
+	}
+	b, err := loadBoards(context.Background(), &fakeCatalog{rows: rows})
+	if err != nil {
+		t.Fatalf("catalogOf: %v", err)
+	}
+	return b
+}
+
 // The company-scoped rules have no ingest counterpart, so a deletion under one is undone
 // by the next hourly crawl unless the board leaves the catalog. The worker therefore has
 // to know which boards are still live, and match a posting to its board the same way the
@@ -54,8 +73,8 @@ func TestLoadBoardsMatchesPostingsToTheirBoard(t *testing.T) {
 	for _, want := range []boardKey{
 		{"greenhouse", "acme"}, {"greenhouse", "beta"}, {"lever", "gamma"},
 	} {
-		if !b.listed[want] {
-			t.Errorf("%+v not listed; got %v", want, b.listed)
+		if len(b.regionsOf(want)) != 1 {
+			t.Errorf("%+v not listed; got %v", want, b.byProvider)
 		}
 	}
 	// A posting is matched to its board through the namespaced external_id.
@@ -112,11 +131,12 @@ func TestLoadBoardsCountsLiveRowsPerProvider(t *testing.T) {
 	}
 	// One board under two regions is two catalog rows but one crawl target by
 	// external_id, which is what the retire path has to know to name both.
-	if got := b.regions[boardKey{"whatjobs", "developer"}]; len(got) != 2 {
-		t.Errorf("regions = %v, want both regional rows", got)
+	if got := b.regionsOf(boardKey{"whatjobs", "developer"}); len(got) != 2 {
+		t.Errorf("regionsOf = %v, want both regional rows", got)
 	}
-	if b.liveByProvider["whatjobs"] != 2 || b.liveByProvider["greenhouse"] != 1 {
-		t.Errorf("liveByProvider = %v, want whatjobs=2 greenhouse=1", b.liveByProvider)
+	if b.liveRows("whatjobs") != 2 || b.liveRows("greenhouse") != 1 {
+		t.Errorf("liveRows = whatjobs %d, greenhouse %d; want 2 and 1",
+			b.liveRows("whatjobs"), b.liveRows("greenhouse"))
 	}
 }
 
@@ -142,15 +162,8 @@ func boolp(v bool) *bool { return &v }
 // the report, had no verdict on a single posting, against 10.6% among the boards the
 // same report kept. Absence of a signal was doing the work of evidence.
 func TestReportBoardsWithholdsBoardsWithNoVerdict(t *testing.T) {
-	brd := boards{
-		listed: map[boardKey]bool{
-			{"greenhouse", "determined"}: true, {"greenhouse", "unknown"}: true,
-			{"greenhouse", "technical"}: true, {"greenhouse", "skilled"}: true,
-		},
-		byProvider: map[string]map[string]bool{"greenhouse": {
-			"determined": true, "unknown": true, "technical": true, "skilled": true,
-		}},
-	}
+	brd := catalogOf(t, "greenhouse/determined", "greenhouse/unknown",
+		"greenhouse/technical", "greenhouse/skilled")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		// Classified, and the verdict was "not technical": the report may act on it.
 		boardRow(1, "greenhouse", "determined:1", boolp(false), nil),
@@ -183,10 +196,7 @@ func TestReportBoardsWithholdsBoardsWithNoVerdict(t *testing.T) {
 // come back into view. The scan already reports what its source gate turned down, and
 // this gate owes the same accounting.
 func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "unknown"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"unknown": true}},
-	}
+	brd := catalogOf(t, "greenhouse/unknown")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		boardRow(1, "greenhouse", "unknown:1", nil, nil),
 	}}
@@ -210,14 +220,7 @@ func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
 // Measured on a 0.5% prod sample: of the postings the classifier calls non-technical
 // yet that still carry skills, 37% carry nothing but non-engineering ones.
 func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
-	brd := boards{
-		listed: map[boardKey]bool{
-			{"greenhouse", "staffing"}: true, {"greenhouse", "software"}: true,
-		},
-		byProvider: map[string]map[string]bool{"greenhouse": {
-			"staffing": true, "software": true,
-		}},
-	}
+	brd := catalogOf(t, "greenhouse/staffing", "greenhouse/software")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		// Classified non-technical, and every tag on it names a non-engineering craft.
 		boardRow(1, "greenhouse", "staffing:1", boolp(false),
@@ -252,18 +255,8 @@ func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
 // The boards are still listed — they are genuine candidates — but the report names the
 // providers it would empty, so the entry that empties one is moved last, deliberately.
 func TestReportBoardsNamesProvidersItWouldEmpty(t *testing.T) {
-	brd := boards{
-		listed: map[boardKey]bool{
-			// Every board this provider has is about to be retired.
-			{"tinyats", "one"}: true, {"tinyats", "two"}: true,
-			// This one keeps a board, so it is not emptied.
-			{"greenhouse", "dead"}: true, {"greenhouse", "alive"}: true,
-		},
-		byProvider: map[string]map[string]bool{
-			"tinyats":    {"one": true, "two": true},
-			"greenhouse": {"dead": true, "alive": true},
-		},
-	}
+	// Every board tinyats has is about to be retired; greenhouse keeps one.
+	brd := catalogOf(t, "tinyats/one", "tinyats/two", "greenhouse/dead", "greenhouse/alive")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		boardRow(1, "tinyats", "one:1", boolp(false), nil),
 		boardRow(2, "tinyats", "two:1", boolp(false), nil),
