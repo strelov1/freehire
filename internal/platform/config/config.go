@@ -224,21 +224,6 @@ type Settings struct {
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
 
-	// Discord bot for slash-command board contributions, mirroring the Telegram bot's
-	// role. All four values are required together: the feature is disabled unless
-	// DiscordBotToken, DiscordApplicationID, DiscordPublicKey, and DiscordGuildID are
-	// ALL set — see newDiscordHandlers/discordEnabled in internal/api/handler/discord.go.
-	// DiscordApplicationID and DiscordPublicKey are the app's identity and the key
-	// used to verify inbound interaction signatures. DiscordGuildID scopes the
-	// one-time slash-command registration (cmd/discord-register-commands, not
-	// cmd/server) to a single guild — that command is the only place commands are
-	// ever registered, and it too requires a guild id; there is no global-registration
-	// code path.
-	DiscordBotToken      string
-	DiscordApplicationID string
-	DiscordPublicKey     string
-	DiscordGuildID       string
-
 	// Email notifications for filter subscriptions, sent via AWS SES by the notify
 	// worker. Optional: the email channel is registered only when both AWSRegion and
 	// NotifyEmailFrom are set — either empty and the worker still delivers Telegram
@@ -397,11 +382,6 @@ func Load() Settings {
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
-
-		DiscordBotToken:      os.Getenv("DISCORD_BOT_TOKEN"),
-		DiscordApplicationID: os.Getenv("DISCORD_APPLICATION_ID"),
-		DiscordPublicKey:     os.Getenv("DISCORD_PUBLIC_KEY"),
-		DiscordGuildID:       os.Getenv("DISCORD_GUILD_ID"),
 
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),

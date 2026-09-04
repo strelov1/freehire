@@ -80,7 +80,7 @@ Endpoints marked “Session or API key” accept either; endpoints marked “Ses
 
 ## What is not here
 
-This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook and the Discord interaction webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
+This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
 
 The `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.
 
@@ -3204,50 +3204,6 @@ Unlink your Telegram account.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/telegram" -b cookies.txt
-```
-
-```json
-(204 No Content)
-```
-
-### `GET /me/discord`
-
-**Auth:** Session only
-
-Your Discord link status (for the `/contribute` bot command).
-
-```bash
-curl "https://freehire.me/api/v1/me/discord" -b cookies.txt
-```
-
-```json
-{ "data": { "enabled": true, "linked": true, "discord_id": 123456789 } }
-```
-
-### `POST /me/discord/link`
-
-**Auth:** Session only
-
-Mint a one-time token to link your Discord account.
-
-Discord has no deep-link URL equivalent to Telegram’s — paste the returned token into the bot’s `/link` slash command.
-
-```bash
-curl -X POST "https://freehire.me/api/v1/me/discord/link" -b cookies.txt
-```
-
-```json
-{ "data": { "token": "abc123...", "instructions": "In the freehire Discord server, run /link token:abc123..." } }
-```
-
-### `DELETE /me/discord`
-
-**Auth:** Session only
-
-Unlink your Discord account. Idempotent.
-
-```bash
-curl -X DELETE "https://freehire.me/api/v1/me/discord" -b cookies.txt
 ```
 
 ```json

@@ -128,7 +128,7 @@ export const OVERVIEW: Overview[] = [
         'deliberately left out because calling them directly is meaningless: the ' +
         'Gmail and calendar consent redirects (`/me/gmail/connect`, ' +
         '`/me/calendar/connect`, and their callbacks), which only a browser can ' +
-        'complete; the Telegram bot webhook and the Discord interaction webhook; the ' +
+        'complete; the Telegram bot webhook; the ' +
         'browser-tool websocket relay; the sitemap-cursor helpers behind ' +
         '`/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an ' +
         'image rather than answer with JSON.',
@@ -2346,33 +2346,6 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie',
         summary: 'Unlink your Telegram account.',
         curl: `curl -X DELETE "${BASE_URL}/me/telegram" -b cookies.txt`,
-        responseExample: `(204 No Content)`,
-      },
-      {
-        method: 'GET',
-        path: '/me/discord',
-        auth: 'cookie',
-        summary: 'Your Discord link status (for the `/contribute` bot command).',
-        curl: `curl "${BASE_URL}/me/discord" -b cookies.txt`,
-        responseExample: `{ "data": { "enabled": true, "linked": true, "discord_id": 123456789 } }`,
-      },
-      {
-        method: 'POST',
-        path: '/me/discord/link',
-        auth: 'cookie',
-        summary: 'Mint a one-time token to link your Discord account.',
-        description:
-          'Discord has no deep-link URL equivalent to Telegram’s — paste the ' +
-          'returned token into the bot’s `/link` slash command.',
-        curl: `curl -X POST "${BASE_URL}/me/discord/link" -b cookies.txt`,
-        responseExample: `{ "data": { "token": "abc123...", "instructions": "In the freehire Discord server, run /link token:abc123..." } }`,
-      },
-      {
-        method: 'DELETE',
-        path: '/me/discord',
-        auth: 'cookie',
-        summary: 'Unlink your Discord account. Idempotent.',
-        curl: `curl -X DELETE "${BASE_URL}/me/discord" -b cookies.txt`,
         responseExample: `(204 No Content)`,
       },
     ],

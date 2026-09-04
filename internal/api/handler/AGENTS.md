@@ -197,20 +197,6 @@ empty profile the model would read as "no preferences".
   Both render 404, and keeping them distinguishable is the point: "this employer asks
   nothing" and "we cannot read this platform" are different statements.
 
-## Discord bot (`discord.go`)
-
-- The bot mirrors Telegram's role but has one on/off switch, not two: `newDiscordHandlers`
-  wires the client only when all four env vars are set (`DISCORD_BOT_TOKEN`,
-  `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_GUILD_ID` — documented on the
-  `Config` fields in `handler.go`, read from env in `internal/platform/config/config.go`). Missing any one, the bot is fully inert: `POST /me/discord/link` answers
-  503, `GET /me/discord` reports `enabled: false`, and `POST /api/v1/discord/interactions`
-  404s instead of attempting Ed25519 verification.
-- One-time setup once those four are set: point Discord's Interactions Endpoint URL at
-  `POST /api/v1/discord/interactions`, then run `go run ./cmd/discord-register-commands`
-  to register `/link` and `/contribute` with the guild. Discord caches guild command
-  definitions server-side, so the running server never re-registers them itself — rerun the
-  command only when a command's shape changes.
-
 ## Error Convention
 
 - Genuinely domain-specific status choices (e.g. `Me` returning 401 for a gone user token) stay in the handler.

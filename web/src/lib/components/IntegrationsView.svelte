@@ -2,11 +2,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { resolve } from '$app/paths';
-  import { env } from '$env/dynamic/public';
   import { api, ApiError } from '$lib/api';
   import type { GmailStatus } from '$lib/api';
-  import type { DiscordLinkResult, DiscordStatus } from '$lib/types';
   import { notifications } from '$lib/notifications.svelte';
   import { Badge, Button, ConfirmDialog, ProviderIcon } from '$lib/ui';
   import { Mail, CalendarDays } from '@lucide/svelte';
@@ -14,11 +11,10 @@
   import GmailConnectDialog from './GmailConnectDialog.svelte';
 
   // The account-level home for every third-party connection: Google (Gmail +
-  // Calendar, two separate consents on the same grant), Telegram (the alert bot,
-  // connected here independently of any one saved search) and Discord (the
-  // /contribute reward link). Each connection's own page (Inbox, Tracking →
-  // Calendar, Contributions) keeps only a short status line pointing back here —
-  // this is the one place that owns connect/disconnect.
+  // Calendar, two separate consents on the same grant) and Telegram (the alert
+  // bot, connected here independently of any one saved search). Each connection's
+  // own page (Inbox, Tracking → Calendar) keeps only a short status line pointing
+  // back here — this is the one place that owns connect/disconnect.
 
   // --- Google: Mail ---
   let gmail = $state<GmailStatus | null>(null);
@@ -155,91 +151,13 @@
     }
   }
 
-  // --- Discord ---
-  let discord = $state<DiscordStatus | null>(null);
-  let discordBusy = $state(false);
-  let discordError = $state<string | null>(null);
-  // Shown only right after a successful link mint — the token is short-TTL and a
-  // status refetch never returns it again, so this is never restored from anywhere.
-  let discordLinkResult = $state.raw<DiscordLinkResult | null>(null);
-  let discordCopied = $state(false);
-
-  const discordCommand = $derived(discordLinkResult ? `/link token:${discordLinkResult.token}` : '');
-  // The operator's own Discord server URL, set once at deploy time (optional — the
-  // card still works without it, just without the shortcut link).
-  const discordChannelUrl = env.PUBLIC_DISCORD_CHANNEL_URL;
-
-  async function loadDiscord() {
-    try {
-      discord = await api.discordStatus();
-    } catch {
-      // Left null — the card stays hidden; Contributions' own load surfaces the
-      // same failure if the user goes looking there.
-    }
-  }
-
-  async function copyDiscordCommand() {
-    if (!discordCommand) return;
-    try {
-      await navigator.clipboard.writeText(discordCommand);
-      discordCopied = true;
-    } catch {
-      discordCopied = false;
-    }
-  }
-
-  async function linkDiscord() {
-    discordCopied = false;
-    if (discordBusy) return;
-    discordBusy = true;
-    discordError = null;
-    try {
-      discordLinkResult = await api.discordLink();
-    } catch (e) {
-      discordError = e instanceof ApiError ? e.message : 'Could not start Discord linking. Please try again.';
-    } finally {
-      discordBusy = false;
-    }
-  }
-
-  async function recheckDiscord() {
-    if (discordBusy) return;
-    discordBusy = true;
-    discordError = null;
-    try {
-      discord = await api.discordStatus();
-      if (discord.linked) discordLinkResult = null;
-      else discordError = 'Not linked yet — run the command above, then retry.';
-    } catch (e) {
-      discordError = e instanceof ApiError ? e.message : 'Could not check the link. Please try again.';
-    } finally {
-      discordBusy = false;
-    }
-  }
-
-  async function unlinkDiscord() {
-    if (discordBusy) return;
-    discordBusy = true;
-    discordError = null;
-    try {
-      await api.discordUnlink();
-      discord = discord ? { ...discord, linked: false, discord_id: undefined } : null;
-      discordLinkResult = null;
-    } catch (e) {
-      discordError = e instanceof ApiError ? e.message : 'Could not unlink Discord. Please try again.';
-    } finally {
-      discordBusy = false;
-    }
-  }
-
   onMount(() => {
     readGoogleVerdict();
     void loadGmail();
     void notifications.ensureLoaded();
-    void loadDiscord();
   });
 
-  // Shared by every "already connected" badge below (Mail, Calendar, Telegram, Discord).
+  // Shared by every "already connected" badge below (Mail, Calendar, Telegram).
   const CONNECTED_BADGE_CLASS = 'border-brand-ring/40 text-brand-strong';
 </script>
 
@@ -387,77 +305,6 @@
       {/if}
       {#if tgError}
         <p class="mt-2 text-xs text-destructive">{tgError}</p>
-      {/if}
-    </div>
-  {/if}
-
-  <!-- Discord -->
-  {#if discord?.enabled}
-    <div class="rounded-xl border border-border bg-card p-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2 text-sm font-medium">
-            <ProviderIcon provider="discord" class="h-4 w-4" /> Discord
-            {#if discord.linked}
-              <Badge variant="outline" class={CONNECTED_BADGE_CLASS}>Linked</Badge>
-            {/if}
-          </div>
-          <p class="mt-1 text-xs text-muted-foreground">
-            Link your account to run <code class="rounded bg-secondary px-1 py-0.5 font-mono text-xs">/contribute</code>
-            in the freehire Discord server — the same reward as pasting a link on
-            <a href={resolve('/my/contributions')} class="font-medium underline underline-offset-2 hover:opacity-80">
-              Contributions
-            </a>.
-            {#if discordChannelUrl}
-              <!-- eslint-disable svelte/no-navigation-without-resolve -- external Discord channel URL, not an internal route -->
-              <a
-                href={discordChannelUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="font-medium underline underline-offset-2 hover:opacity-80"
-              >
-                Open the channel
-              </a>
-              <!-- eslint-enable svelte/no-navigation-without-resolve -->
-            {/if}
-          </p>
-        </div>
-        <div class="shrink-0">
-          {#if discord.linked}
-            <Button variant="outline" size="sm" onclick={unlinkDiscord} disabled={discordBusy}>
-              {discordBusy ? 'Unlinking…' : 'Unlink'}
-            </Button>
-          {:else}
-            <Button variant="outline" size="sm" onclick={linkDiscord} disabled={discordBusy}>
-              {discordBusy ? 'Starting…' : 'Link'}
-            </Button>
-          {/if}
-        </div>
-      </div>
-
-      {#if discordLinkResult}
-        <div class="mt-3 rounded-md bg-secondary/40 p-3 text-xs">
-          <p>Paste this command in the freehire Discord server:</p>
-          <div class="mt-1 flex items-center gap-2">
-            <code class="flex-1 overflow-x-auto rounded bg-background px-2 py-1.5 font-mono text-xs"
-              >{discordCommand}</code
-            >
-            <Button variant="secondary" size="sm" onclick={copyDiscordCommand}>
-              {discordCopied ? 'Copied' : 'Copy'}
-            </Button>
-          </div>
-          <button
-            type="button"
-            onclick={recheckDiscord}
-            disabled={discordBusy}
-            class="mt-2 font-medium text-foreground underline underline-offset-2 hover:opacity-80"
-          >
-            I've linked it
-          </button>
-        </div>
-      {/if}
-      {#if discordError}
-        <p class="mt-2 text-xs text-destructive">{discordError}</p>
       {/if}
     </div>
   {/if}

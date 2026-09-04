@@ -68,7 +68,8 @@ form, the Telegram bot, the browser extension, the CLI — posts to `POST /api/v
 whose sequence lives in `handler/intake.go`: catalog lookup, then import, then record. A second
 door onto the same flow is a second behaviour waiting to drift. `GET /api/v1/me/contributions`
 still lists the caller's own, now carrying the `surface` each row came through
-(`web` | `telegram` | `discord` | `extension` | `cli` | `unknown`).
+(`web` | `telegram` | `discord` | `extension` | `cli` | `unknown`). `discord` is a closed
+door kept in the vocabulary: the bot is gone, its rows are not.
 
 The intake answers with five outcomes, all of them about the BOARD: `found` (already carried),
 `tracked` (imported, and we already crawl this board), `imported` (imported, board queued for

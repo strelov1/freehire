@@ -960,8 +960,6 @@ type Querier interface {
 	// took one away — a double release, or a release of a charge someone else already voided,
 	// removes nothing and returns 0.
 	DeleteDebit(ctx context.Context, arg DeleteDebitParams) (int64, error)
-	// Unlink Discord. Returns the affected row count: 0 means there was no link.
-	DeleteDiscordLink(ctx context.Context, userID int64) (int64, error)
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Consume the code (on success) or burn it (on too many attempts). Idempotent: deleting
 	// an absent code is a no-op, so a double submit cannot fail the request.
@@ -1547,8 +1545,6 @@ type Querier interface {
 	// language stamp is checked against the VACANCY, not the caller's profile, unlike
 	// GetUserJobAnalysis.
 	GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (GetCoverLetterRow, error)
-	// The caller's linked Discord account (link-status endpoint + delivery resolution).
-	GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
 	// The outstanding code for a purpose. No row means nothing was issued or it was consumed;
 	// the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
@@ -1820,9 +1816,6 @@ type Querier interface {
 	// Whether interactive atom creates require a non-empty context. Kept off /auth/me on
 	// purpose — only the experience write path and get_profile's bank summary need it.
 	GetUserExperienceRequireContext(ctx context.Context, id int64) (bool, error)
-	// Reverse lookup: the user linked to an inbound Discord account, for contribution-from-Discord. If a
-	// Discord account somehow linked more than once, the most recently linked user wins.
-	GetUserIDByDiscordID(ctx context.Context, discordID int64) (int64, error)
 	// Resolve a provider customer back to one of our accounts. This is the direction a webhook
 	// needs: a delivery names the customer, never the user.
 	//
@@ -4522,9 +4515,6 @@ type Querier interface {
 	// re-ages itself on every redraft would silently break any future rule that did — the same
 	// trap the fit-analysis quota documents on its own upsert.
 	UpsertCoverLetter(ctx context.Context, arg UpsertCoverLetterParams) error
-	// Link (or relink) a user's Discord account, captured from the inbound /link command. One
-	// row per user; relinking from a different Discord account overwrites the discord_id.
-	UpsertDiscordLink(ctx context.Context, arg UpsertDiscordLinkParams) error
 	// Store a Gmail message, idempotent by (user_id, source, external_id) with
 	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error

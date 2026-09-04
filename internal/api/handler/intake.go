@@ -176,14 +176,15 @@ func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surfa
 
 // renderIntakeOutcome puts one intake outcome into words. A readable vacancy now comes back as
 // a link to the posting — before, a Telegram user was only ever told about the board, even when
-// we could have handed them the job. Shared across every surface that calls intakeService.Resolve
-// and reports the result back to the submitter (Telegram's chat reply, Discord's deferred
-// response), so the wording does not drift between them.
+// we could have handed them the job. Shared by every surface that calls intakeService.Resolve
+// and reports the result back to the submitter in a chat, so the wording does not drift between
+// them. Telegram is the only such surface today; Discord was the second until its bot was
+// removed, the search box having taken over what it did.
 //
 // emphasize renders the one span of emphasis this wording needs (a board name), in whatever
-// markup the calling surface actually understands: Telegram sends parse_mode "HTML", Discord
-// interaction responses are Markdown — hardcoding either here would render as literal markup on
-// the other surface.
+// markup the calling surface actually understands — Telegram sends parse_mode "HTML". The
+// parameter stays because the markup is the caller's property, not this function's, and
+// hardcoding one surface's is what made the wording drift the first time.
 func renderIntakeOutcome(out intakeOutcome, frontendOrigin string, emphasize func(string) string) string {
 	switch out.Status {
 	case outcomeFound:

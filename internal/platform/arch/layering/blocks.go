@@ -122,7 +122,7 @@ var blocks = map[string][]string{
 		"moderation", "pipeline", "screeninganswers", "sources", "submission", "telegram",
 	},
 	"engage": {
-		"broadcast", "community", "companyfeedback", "discordbot", "emailnotify",
+		"broadcast", "community", "companyfeedback", "emailnotify",
 		"mailpreview", "notify", "nudge", "onboarding", "pushnotify", "referral",
 		"reminder", "report", "subscription", "telegramnotify", "vote",
 	},

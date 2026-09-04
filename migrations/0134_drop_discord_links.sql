@@ -1,0 +1,25 @@
+-- Drop discord_links. The Discord bot it existed for is removed in this same change:
+-- its one job was the /contribute slash command, and pasting a job link into the search
+-- box now does that from every page, signed in or not.
+--
+-- The table held nothing but a mapping — user_id -> discord_id, plus when it was made.
+-- No content, nothing derived from it, and nothing else reads it: the three queries that
+-- did are deleted here.
+--
+-- 2 rows in prod on 2026-09-04, archived on the host at
+-- /opt/freehire/backups/discord_links-20260904.sql (column-inserts), because a DROP is
+-- the one step nothing else can undo.
+--
+-- The `surface` vocabulary in boards/board_submissions KEEPS 'discord'. Rows recorded
+-- through the bot are still in there, and narrowing the constraint would either fail on
+-- them or leave a value the schema calls impossible sitting in the column. The door is
+-- closed; what came through it stays legible.
+--
+-- CASCADE is deliberately NOT used: if something still depends on this table, the drop
+-- should fail and say so rather than quietly take the dependant with it.
+--
+-- The rule below fires on every DROP TABLE, because dropping one breaks existing clients.
+-- Its only clients are the endpoints removed in this change, and its rows are archived
+-- above.
+-- squawk-ignore ban-drop-table
+DROP TABLE IF EXISTS public.discord_links;

@@ -330,11 +330,6 @@ func main() {
 		Billing:     billing.ConfigFromEnv(),
 		ServedHosts: cfg.ServedHosts,
 
-		DiscordBotToken:      cfg.DiscordBotToken,
-		DiscordApplicationID: cfg.DiscordApplicationID,
-		DiscordPublicKey:     cfg.DiscordPublicKey,
-		DiscordGuildID:       cfg.DiscordGuildID,
-
 		Plan: planConfig,
 
 		AWSRegion:       cfg.AWSRegion,

@@ -34,10 +34,10 @@ export const accountNav = [
   // The notification center: delivery history, saved-search alerts, and the
   // account-level reminder/nudge settings, as three tabs of one section.
   { href: '/my/notifications', label: 'Notifications' },
-  // Connect/disconnect surface for third-party accounts: Google (Gmail + Calendar),
-  // Telegram (the alert bot, decoupled from any one saved search) and Discord (the
-  // /contribute reward link). Each connection's own domain page keeps a short status
-  // line pointing here instead of duplicating the connect/disconnect UI.
+  // Connect/disconnect surface for third-party accounts: Google (Gmail + Calendar)
+  // and Telegram (the alert bot, decoupled from any one saved search). Each
+  // connection's own domain page keeps a short status line pointing here instead of
+  // duplicating the connect/disconnect UI.
   { href: '/my/integrations', label: 'Integrations' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },

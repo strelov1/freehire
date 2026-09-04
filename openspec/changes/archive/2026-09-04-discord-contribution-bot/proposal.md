@@ -1,3 +1,8 @@
+> **Shipped, then withdrawn on 2026-09-04.** The bot and its account link are removed: the
+> search box now takes a pasted job link from every page, signed in or not, which is the
+> friction this was buying down. Nothing described below is in the codebase — read it as
+> history. The Discord SERVER is unaffected; only the integration is gone.
+
 ## Why
 
 freehire already channels URL contributions through one shared pipeline from four surfaces

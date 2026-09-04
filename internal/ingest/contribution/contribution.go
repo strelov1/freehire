@@ -42,8 +42,12 @@ const (
 // abusive use is visible in the data rather than only in logs. SurfaceUnknown covers a client
 // that sends no tag (or one we do not know): an intake is served, never refused, for it.
 const (
-	SurfaceWeb       = "web"
-	SurfaceTelegram  = "telegram"
+	SurfaceWeb      = "web"
+	SurfaceTelegram = "telegram"
+	// SurfaceDiscord names a door that is CLOSED: the bot was removed once pasting a link
+	// into the search box did the same job from every page. The tag stays because rows
+	// recorded through it are still in the catalog, and a stored value the vocabulary no
+	// longer admits is a row nothing can explain. Nothing writes it any more.
 	SurfaceDiscord   = "discord"
 	SurfaceExtension = "extension"
 	SurfaceCLI       = "cli"

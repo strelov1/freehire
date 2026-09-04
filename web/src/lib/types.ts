@@ -1101,22 +1101,6 @@ export interface TelegramStatus {
   chat_id?: number;
 }
 
-/** Discord link status for the current user (the `/contribute` bot, not a
- *  notification channel). `enabled` is whether the feature is configured
- *  server-side at all; `linked` is whether this user has connected their account. */
-export interface DiscordStatus {
-  enabled: boolean;
-  linked: boolean;
-  discord_id?: number;
-}
-
-/** A one-time token to run `/link token:<token>` in the freehire Discord server,
- *  plus the exact instruction text to show the user. */
-export interface DiscordLinkResult {
-  token: string;
-  instructions: string;
-}
-
 /** What a résumé yields through the deterministic dictionaries: canonical skills and
  *  every specialization the résumé spans, plus the seniority grade. `skills` and
  *  `categories` are always arrays (empty when nothing resolved); `seniority` is omitted

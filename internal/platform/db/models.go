@@ -417,12 +417,6 @@ type CvTracerLink struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
-type DiscordLink struct {
-	UserID    int64              `json:"user_id"`
-	DiscordID int64              `json:"discord_id"`
-	LinkedAt  pgtype.Timestamptz `json:"linked_at"`
-}
-
 type Email struct {
 	ID                  int64              `json:"id"`
 	UserID              int64              `json:"user_id"`
