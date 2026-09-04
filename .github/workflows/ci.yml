@@ -90,9 +90,6 @@ jobs:
           version: v2.12.2
           args: --new-from-merge-base=origin/main
 
-      - name: Validate sources
-        run: go run ./cmd/validate-sources
-
       - name: Unit tests
         run: |
           mkdir -p coverage

@@ -117,10 +117,10 @@ func publish(ctx context.Context, redisURL string, q *db.Queries) {
 	}
 	defer closeCache()
 
-	// A missing or unreadable channel file costs one stat, not the snapshot. The
-	// counts are why this exists; publishing them with a zero channel count beats
-	// publishing nothing and leaving every surface on the estimate.
-	channels, err := configuredTelegramChannels()
+	// An unreadable channel list costs one stat, not the snapshot. The counts are why
+	// this exists; publishing them with a zero channel count beats publishing nothing
+	// and leaving every surface on the estimate.
+	channels, err := configuredTelegramChannels(ctx, q)
 	if err != nil {
 		log.Printf("rollup-stats: telegram channel count unavailable, publishing without it: %v", err)
 	}

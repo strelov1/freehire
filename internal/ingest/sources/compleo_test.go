@@ -45,16 +45,6 @@ func TestCompleoRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestCompleoBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/compleo.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/compleo.yml fails validation: %v", err)
-	}
-}
-
 // Compleo publishes one sitemap for the whole platform, so a board is a slice of it: only the
 // postings under this tenant's path segment belong to the configured company.
 func TestCompleoFetchTakesOnlyTheBoardsPostings(t *testing.T) {

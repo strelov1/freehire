@@ -31,16 +31,6 @@ func TestSolidJobsRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestSolidJobsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/solidjobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/solidjobs.yml fails validation: %v", err)
-	}
-}
-
 func TestSolidJobsFetchRejectsBlankBoard(t *testing.T) {
 	_, err := NewSolidJobs(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{Company: "SolidJobs"})
 	if err == nil {

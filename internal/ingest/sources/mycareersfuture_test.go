@@ -34,16 +34,6 @@ func TestMyCareersFutureRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestMyCareersFutureBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/mycareersfuture.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/mycareersfuture.yml fails validation: %v", err)
-	}
-}
-
 func TestMyCareersFutureFetchMapsAndPaginationStops(t *testing.T) {
 	// One result (< page size) ends pagination after the first page.
 	page := `{"results":[

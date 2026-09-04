@@ -2031,6 +2031,9 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
+	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
+	// name so a run's channel order is stable and its log diffable.
+	ListActiveTelegramChannels(ctx context.Context) ([]ListActiveTelegramChannelsRow, error)
 	// Greeted a while ago: an introduction to the filter panel (role, region, skills,
 	// and how to exclude a value). Sent to everyone regardless of alert status, unlike
 	// no_alert below — this is background on a feature, not a nudge toward one missing
@@ -2558,6 +2561,10 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
+	// Every board a crawl still visits, across all providers — the identity cmd/prune needs
+	// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
+	// whole row: the guard asks a set-membership question and nothing else.
+	ListLiveBoards(ctx context.Context) ([]ListLiveBoardsRow, error)
 	// All of the caller's own feedback on a company, across every category they've
 	// reviewed it under — the write dialog's "which categories have I already
 	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.

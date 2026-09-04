@@ -185,6 +185,41 @@ func (q *Queries) ListBoardsBySubmitter(ctx context.Context, submittedBy pgtype.
 	return items, nil
 }
 
+const listLiveBoards = `-- name: ListLiveBoards :many
+SELECT provider, board, region FROM boards
+WHERE status IN ('pending', 'active')
+ORDER BY provider, board, region
+`
+
+type ListLiveBoardsRow struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+// Every board a crawl still visits, across all providers — the identity cmd/prune needs
+// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
+// whole row: the guard asks a set-membership question and nothing else.
+func (q *Queries) ListLiveBoards(ctx context.Context) ([]ListLiveBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listLiveBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLiveBoardsRow{}
+	for rows.Next() {
+		var i ListLiveBoardsRow
+		if err := rows.Scan(&i.Provider, &i.Board, &i.Region); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retireBoard = `-- name: RetireBoard :execrows
 UPDATE boards
 SET status = 'retired'

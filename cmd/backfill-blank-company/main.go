@@ -1,9 +1,9 @@
 // Command backfill-blank-company fills jobs.company for postings whose provider sets Company
-// statically per board (sources/<provider>.yml), but landed empty because of a since-fixed
+// statically per board (the board catalog), but landed empty because of a since-fixed
 // ingest bug — e.g. #1699, where ukg.go never set Job.Company at all. Unlike
 // cmd/backfill-company-names (which resolves a REAL name over the network for a squished-slug
-// company), this needs no network call: the correct name already sits in the board file the
-// affected job was ingested from, so this is a pure config-to-database backfill.
+// company), this needs no network call: the correct name already sits in the catalog row the
+// affected job was ingested from, so this is a pure catalog-to-jobs backfill.
 //
 // A re-crawl of a still-live board would have self-healed via UpsertJob's ON CONFLICT, so what
 // survives here is postings that closed or dropped off their board's listing before the ingest
@@ -25,7 +25,7 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
-	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -48,16 +48,17 @@ func run() int {
 	defer cleanup()
 
 	queries := db.New(pool)
+	repo := boardcatalog.NewQueriesRepository(queries)
 
 	var boards, updated, enqueued, failed int
 	for _, provider := range staticCompanyProviders {
-		cfg, err := sources.LoadConfig("sources/" + provider + ".yml")
+		entries, err := boardcatalog.LoadForProvider(ctx, repo, provider)
 		if err != nil {
 			log.Printf("load %s: %v", provider, err)
 			failed++
 			continue
 		}
-		for _, e := range cfg.Sources {
+		for _, e := range entries {
 			if e.Company == "" || e.Board == "" {
 				continue // Validate already guarantees this in production; defensive only
 			}

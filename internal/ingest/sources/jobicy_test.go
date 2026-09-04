@@ -31,16 +31,6 @@ func TestJobicyRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestJobicyBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/jobicy.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/jobicy.yml fails validation: %v", err)
-	}
-}
-
 func TestJobicyFetchMaps(t *testing.T) {
 	feed := `{"jobs":[
 {"id":147014,"url":"https://jobicy.com/jobs/147014-service-tech","jobTitle":"Service Technician","companyName":"Municipal Emergency Services","jobGeo":"USA","jobDescription":"<p>Fix gear.</p>","pubDate":"2026-06-17T11:05:11+00:00"},

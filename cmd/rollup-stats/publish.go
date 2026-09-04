@@ -44,10 +44,11 @@ func snapshotCache(redisURL string) (cache.Cache, func(), error) {
 }
 
 // configuredTelegramChannels counts the channels the crawler is configured to read.
-// Resolving it means reading sources/telegram.yml relative to the worker's working
-// directory, which is why catalogstats takes the count rather than finding it itself.
-func configuredTelegramChannels() (int, error) {
-	cfg, err := telegram.LoadChannels()
+// catalogstats takes the count rather than finding it itself: the channel list is not
+// part of the catalogue it measures, and reaching for it there would put a second,
+// unrelated query behind Compute.
+func configuredTelegramChannels(ctx context.Context, q telegram.ChannelLister) (int, error) {
+	cfg, err := telegram.LoadChannels(ctx, q)
 	if err != nil {
 		return 0, err
 	}

@@ -53,28 +53,27 @@ A separate, operator-driven campaign that permanently removes jobs which do not 
 
 **The loop.** `cmd/mine-titles` reports the word groups still carrying no `is_tech` signal, an operator picks the next real cluster, its anchored terms go into `classify.nonTechTitleTerms` by PR, and `cmd/prune` removes what the dictionary now recognises. Ingest applies the same dictionary, so what is removed does not come back.
 
-**Three rules, and the boolean that gates them.** A posting's board is either still in `sources/*.yml` or not, and the two rule families read that in opposite directions:
+**Three rules, and the boolean that gates them.** A posting's board is either still live in the `boards` catalog (`pending`/`active`) or not, and the two rule families read that in opposite directions:
 
 | rule | needs the board | why |
 |---|---|---|
-| `title` — the non-tech dictionary recognises it | **listed** | a listed board is re-crawled, so withdrawing an over-broad term brings the postings back; an unlisted board makes the same deletion permanent |
+| `title` — the non-tech dictionary recognises it | **live** | a live board is re-crawled, so withdrawing an over-broad term brings the postings back; a retired board makes the same deletion permanent |
 | `business_at_nontech_company` | **absent** | no counterpart at crawl time, so what it removes returns within the hour unless the board is gone |
 | `unknown_at_empty_company` | **absent** | same |
 
-The board is resolved from `external_id` (`"<board>:<native id>"`), never from the company slug: many adapters take the company name from the posting payload, so on `jazzhr` only 2453 of 3940 companies match their board file and on `careerplug` only 71 of 8014.
+The board is resolved from `external_id` (`"<board>:<native id>"`), never from the company slug: many adapters take the company name from the posting payload, so on `jazzhr` only 2453 of 3940 companies match their catalog row and on `careerplug` only 71 of 8014.
 
 **Gates.** `--apply` is required to delete anything and demands an explicit `--limit`. A dry run prints a random sample of matched titles plus a breakdown by rule and by source — a batch dominated by one board is a broken board title, not a real cluster. Every removal is archived to `pruned_jobs` with the rule that matched.
 
-**Retiring a board.** A board is retired by MOVING its entry from
-`sources/<provider>.yml` to `sources/retired/<provider>.yml`, never by deleting the
-line. Ingest takes one board file by path and `cmd/prune` globs `sources/*.y*ml` without
-descending, so an entry there is neither crawled nor counted as live — the retirement is
-expressed by where the line lives, and a mistake is undone by moving it back. See
-`sources/retired/README.md`.
+**Retiring a board.** A board is retired by flipping its catalog row to
+`status='retired'`, never by deleting it — `cmd/prune --retire` for a wave, `cmd/add-board
+--retire` for one. Ingest crawls only `pending`/`active` rows and `cmd/prune`'s guard
+reads the same set, so a retired board is neither crawled nor counted as live, its
+history survives, and a mistake is undone by re-adding the board.
 
 **Operational notes.**
 - Migration `0041_pruned_jobs.sql` must be applied to prod by hand before the first run.
 - `--apply` refuses to start without Meili configured: deleting rows the index keeps serving would 404 every result. Both the facet and the semantic index are mirrored.
 - A run that fails partway leaves earlier batches committed. `SELECT rule, count(*) FROM pruned_jobs WHERE pruned_at > $since GROUP BY rule` is the durable record; re-running is safe, since deleted rows no longer match.
-- Prune a provider's boards *before* moving its last entry to `sources/retired/`. Once a provider has no entries left in `sources/`, none of its jobs are re-crawlable and every rule refuses them — the dead weight becomes permanent.
+- Prune a provider's boards *before* retiring its last live one. Once a provider has no live board, none of its jobs are re-crawlable and every rule refuses them — the dead weight becomes permanent. `retireBoards` holds such a provider back and says so, but the order is still the operator's to get right.
 - End of campaign: one `cmd/backfill-derive` to resynchronise `is_tech` on survivors, then one `make reindex`. `is_tech` is absent from `content_hash`, so a flip on a surviving row does not reach the index on its own.

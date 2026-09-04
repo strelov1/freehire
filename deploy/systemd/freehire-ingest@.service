@@ -11,4 +11,4 @@ IOWeight=40
 # 2400s of crawl budget plus the semaphore's 600s worst-case wait for a free slot,
 # so capping concurrency can't quietly shorten a board's time to finish.
 TimeoutStartSec=3000
-ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest /opt/freehire/src/hire-current/sources/%i.yml
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest %i

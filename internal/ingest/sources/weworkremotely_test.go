@@ -31,16 +31,6 @@ func TestWeWorkRemotelyRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestWeWorkRemotelyBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/weworkremotely.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/weworkremotely.yml fails validation: %v", err)
-	}
-}
-
 func TestWeWorkRemotelyJobID(t *testing.T) {
 	cases := map[string]string{
 		"https://weworkremotely.com/remote-jobs/proxify-ab-senior-fullstack-developer-python-3": "proxify-ab-senior-fullstack-developer-python-3",

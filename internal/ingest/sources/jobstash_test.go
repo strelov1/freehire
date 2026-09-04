@@ -51,16 +51,6 @@ func TestJobStashRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestJobStashBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/jobstash.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig(sources/jobstash.yml): %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/jobstash.yml fails registry validation: %v", err)
-	}
-}
-
 func TestJobStashFetchPaginatesAndMaps(t *testing.T) {
 	// total=300 with page size 200: page 1 then page 2 (after which len(all)=2... the
 	// loop stops on the empty page 3). Each posting's body is inline — no detail call.

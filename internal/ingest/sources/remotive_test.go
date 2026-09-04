@@ -31,16 +31,6 @@ func TestRemotiveRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestRemotiveBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/remotive.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/remotive.yml fails validation: %v", err)
-	}
-}
-
 func TestRemotiveFetchSingleRequestAndMaps(t *testing.T) {
 	feed := `{"jobs":[
 {"id":2090991,"url":"https://remotive.com/remote-jobs/software-development/frontend-developer-2090991","title":"Frontend Developer","company_name":"Quinncia Inc","category":"Software Development","job_type":"full_time","publication_date":"2026-06-16T06:59:30","candidate_required_location":"Worldwide","description":"<p>Build UIs.</p>"},

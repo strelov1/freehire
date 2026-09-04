@@ -561,13 +561,3 @@ func TestAijobsRegisteredAndFilterable(t *testing.T) {
 		t.Error("FilterableProviders() should include aijobs")
 	}
 }
-
-func TestAijobsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/aijobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/aijobs.yml fails validation: %v", err)
-	}
-}

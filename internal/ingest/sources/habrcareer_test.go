@@ -109,16 +109,6 @@ func jobByID(jobs []Job, id string) (Job, bool) {
 	return Job{}, false
 }
 
-func TestHabrCareerBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/habrcareer.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig(sources/habrcareer.yml): %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/habrcareer.yml fails registry validation: %v", err)
-	}
-}
-
 func TestHabrCareerProvider(t *testing.T) {
 	if got := NewHabrCareer(nil).Provider(); got != "habr_career" {
 		t.Errorf("Provider() = %q, want habr_career", got)

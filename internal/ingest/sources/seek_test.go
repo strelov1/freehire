@@ -531,8 +531,10 @@ func TestSeekIsRegisteredAndItsBoardsValidate(t *testing.T) {
 		t.Fatalf("board entries must validate against the registry: %v", err)
 	}
 	// Region is part of the board dedupe key, so the same slice in two markets is two crawl targets.
-	if dups := DuplicateBoards(cfg.Sources); len(dups) != 0 {
-		t.Errorf("same board id across markets must not collide: %v", dups)
+	au, _ := BoardDedupeKey(cfg.Sources[0])
+	nz, _ := BoardDedupeKey(cfg.Sources[1])
+	if au == nz {
+		t.Errorf("same board id across markets must not collide: both key to %q", au)
 	}
 }
 

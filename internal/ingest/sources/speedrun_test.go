@@ -149,16 +149,6 @@ func TestSpeedrunEmploymentType(t *testing.T) {
 	}
 }
 
-func TestSpeedrunBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/speedrun.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/speedrun.yml fails validation: %v", err)
-	}
-}
-
 func TestSpeedrunRegisteredInAll(t *testing.T) {
 	s, ok := All(nil)["speedrun"]
 	if !ok {

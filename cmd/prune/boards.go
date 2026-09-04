@@ -1,79 +1,79 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
-	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// notBoardFiles are files under sources/ that are not board lists. telegram.yml is the
-// channel list cmd/tg-ingest crawls — a `channels:` mapping, not a list of companies —
-// so parsing it as a board file fails outright. Named explicitly rather than skipped on
-// parse error: tolerating parse errors would re-open the fail-open hole this function
-// exists to close, since a malformed board file would then read as a directory of
-// retired boards.
-var notBoardFiles = map[string]bool{"telegram.yml": true}
-
-// boardKey is the identity the source files and the catalogue agree on exactly.
+// boardKey is the identity the catalog and the job rows agree on exactly.
 //
 // The company slug is NOT that identity, though it looks like it. Many adapters take
 // the company name from the posting payload rather than from the board entry —
 // icims, jazzhr, careerplug, careerspage, jibe, geekjob and others all prefer
-// HiringOrganization.Name — so jobs.company_slug and normalize.Slug(yaml.company)
+// HiringOrganization.Name — so jobs.company_slug and normalize.Slug(board.company)
 // diverge wherever the payload spells the company differently. Measured on prod: of
-// jazzhr's 3940 companies only 2453 match the board file, and of careerplug's 8014
+// jazzhr's 3940 companies only 2453 match the catalog, and of careerplug's 8014
 // only 71. A guard keyed on the slug reads all the rest as "retired" while their
 // boards are crawled hourly.
 //
 // The board does not have that problem. The write path namespaces every crawled
-// posting's external_id as "<board>:<native id>", and the board files are keyed on
-// (provider, board), so the join is exact.
+// posting's external_id as "<board>:<native id>", and the catalog is keyed on
+// (provider, board, region), so the join is exact. Region is not part of this key: it
+// separates two catalog rows, never two postings, since the external_id carries only
+// the board.
 type boardKey struct{ Provider, Board string }
 
-// boards is the set of boards a crawl still visits.
+// boards is the set of boards a crawl still visits, read from the boards table.
 type boards struct {
 	listed map[boardKey]bool
 	// byProvider indexes the boards of one provider, so resolving a job's board from
 	// its external_id does not scan the whole set.
 	byProvider map[string]map[string]bool
+	// regions records every region a board is listed under, because retiring one means
+	// naming (provider, board, region) — the catalog's own identity — and an aggregator
+	// board exists once per region it covers.
+	regions map[boardKey][]string
+	// liveByProvider counts a provider's live rows, so the retire path can refuse to
+	// take its last one.
+	liveByProvider map[string]int
 }
 
-// loadBoards reads every board file under dir.
+// boardLister is the read cmd/prune needs from the catalog.
+type boardLister interface {
+	ListLiveBoards(ctx context.Context) ([]db.ListLiveBoardsRow, error)
+}
+
+// loadBoards reads every live (pending or active) board from the catalog.
 //
-// It fails closed. An unreadable directory, a file that will not parse, or a directory
-// holding no board entries at all is an error rather than a short listing — a missing
-// entry reads as "this board is retired", and an empty listing would read as "every
-// board is retired", which arms the irreversible company-scoped rules on the entire
-// catalogue at once.
-func loadBoards(dir string) (boards, error) {
-	paths, err := filepath.Glob(filepath.Join(dir, "*.y*ml"))
+// It fails closed. A query error, or a catalog holding no live board at all, is an
+// error rather than a short listing — a missing entry reads as "this board is retired",
+// and an empty listing would read as "every board is retired", which arms the
+// irreversible company-scoped rules on the entire catalogue at once.
+func loadBoards(ctx context.Context, q boardLister) (boards, error) {
+	rows, err := q.ListLiveBoards(ctx)
 	if err != nil {
-		return boards{}, fmt.Errorf("prune: scan %s: %w", dir, err)
+		return boards{}, fmt.Errorf("prune: list live boards: %w", err)
 	}
-	b := boards{listed: map[boardKey]bool{}, byProvider: map[string]map[string]bool{}}
-	for _, path := range paths {
-		if notBoardFiles[filepath.Base(path)] {
-			continue
+	b := boards{
+		listed:         map[boardKey]bool{},
+		byProvider:     map[string]map[string]bool{},
+		regions:        map[boardKey][]string{},
+		liveByProvider: map[string]int{},
+	}
+	for _, row := range rows {
+		key := boardKey{Provider: row.Provider, Board: row.Board}
+		b.listed[key] = true
+		if b.byProvider[row.Provider] == nil {
+			b.byProvider[row.Provider] = map[string]bool{}
 		}
-		cfg, err := sources.LoadConfig(path)
-		if err != nil {
-			return boards{}, err
-		}
-		for _, e := range cfg.Sources {
-			b.listed[boardKey{Provider: e.Provider, Board: e.Board}] = true
-			if b.byProvider[e.Provider] == nil {
-				b.byProvider[e.Provider] = map[string]bool{}
-			}
-			b.byProvider[e.Provider][e.Board] = true
-		}
+		b.byProvider[row.Provider][row.Board] = true
+		b.regions[key] = append(b.regions[key], row.Region)
+		b.liveByProvider[row.Provider]++
 	}
 	if len(b.listed) == 0 {
-		if _, statErr := os.Stat(dir); statErr != nil {
-			return boards{}, fmt.Errorf("prune: source directory %s: %w", dir, statErr)
-		}
-		return boards{}, fmt.Errorf("prune: no board entries under %s", dir)
+		return boards{}, fmt.Errorf("prune: no live boards in the catalog")
 	}
 	return b, nil
 }

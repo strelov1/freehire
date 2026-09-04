@@ -31,16 +31,6 @@ func TestRemoteOKRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestRemoteOKBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/remoteok.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/remoteok.yml fails validation: %v", err)
-	}
-}
-
 func TestRemoteOKFetchSkipsLegalNoticeAndMaps(t *testing.T) {
 	// The /api feed's first element is a legal notice (no id); it must be dropped.
 	feed := `[

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -51,10 +52,50 @@ type Repository interface {
 // Insert never surfaces a validation failure as an error — only ErrDuplicateBoard (a
 // collision with an existing pending/active row) or a genuine persistence error.
 func Insert(ctx context.Context, repo Repository, in InsertInput, wantStatus Status, registry map[string]sources.Source) (Board, error) {
+	// A board id never legitimately carries surrounding whitespace, and one that does is
+	// a board that 404s: the adapters paste it into a URL and the pipeline namespaces
+	// external_id with the literal string. It also hides a duplicate from both checks
+	// below — a harvested UKG board once arrived with a trailing space and so did not
+	// collide with the same board already listed.
+	in.Board = strings.TrimSpace(in.Board)
 	if err := Validate(in, registry); err != nil {
 		return repo.InsertRow(ctx, in, StatusRejected, err.Error())
 	}
+	dup, err := foldsOntoLiveBoard(ctx, repo, in)
+	if err != nil {
+		return Board{}, err
+	}
+	if dup {
+		return Board{}, ErrDuplicateBoard
+	}
 	return repo.InsertRow(ctx, in, wantStatus, "")
+}
+
+// foldsOntoLiveBoard reports whether the candidate addresses a board the provider
+// already crawls under a different SPELLING — the half of sources.BoardDedupeKey the
+// unique index cannot express, because the fold is Go and the index is SQL. See that
+// function for what a second spelling costs (a false-close, not just a wasted crawl).
+//
+// It runs only for a candidate that passed validation, and costs one query per insert:
+// a curator addition, a crowdsourced submission, or a harvested board. None of those is
+// on a hot path.
+func foldsOntoLiveBoard(ctx context.Context, repo Repository, in InsertInput) (bool, error) {
+	entry := sources.CompanyEntry{Provider: in.Provider, Board: in.Board, Region: in.Region}
+	key, ok := sources.BoardDedupeKey(entry)
+	if !ok {
+		// A boardless entry has no tenant id and is never a duplicate of anything.
+		return false, nil
+	}
+	live, err := repo.ListActiveForProvider(ctx, in.Provider)
+	if err != nil {
+		return false, err
+	}
+	for _, b := range live {
+		if k, ok := sources.BoardDedupeKey(b.CompanyEntry()); ok && k == key {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Compile-time proof that QueriesRepository satisfies Repository.

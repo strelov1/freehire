@@ -7,8 +7,8 @@
 //
 // --boards is the report the company-scoped rules depend on. Those rules have no
 // counterpart at crawl time, so a deletion under one is undone by the next hourly crawl
-// unless the board leaves sources/ in the same step. This lists the candidates: boards
-// still listed whose postings were classified and none of them came out technical.
+// unless the board leaves the catalog in the same step. This lists the candidates:
+// boards still live whose postings were classified and none of them came out technical.
 //
 // Boards nothing of which has been classified are withheld and counted, not listed. Most
 // of the catalogue carries no is_tech verdict — 62% of rows when this was measured — and
@@ -16,10 +16,10 @@
 // for want of any signal at all. Reading that as "never posted anything technical" struck
 // live IT employers on the first run of this report.
 //
-// Retiring a board means MOVING its entry to sources/retired/<provider>.yml, not
-// deleting it. Ingest takes one file by path and a glob does not descend, so an entry
-// there is neither crawled nor seen by this guard — the retirement is expressed by where
-// the line lives, and a board retired by mistake is restored by moving it back.
+// Retiring a board means flipping its catalog row to status='retired', not deleting it.
+// Ingest crawls only 'pending' and 'active' rows, so a retired board is neither crawled
+// nor seen by this guard — and a board retired by mistake is restored by re-adding it
+// (cmd/add-board), with its history intact.
 //
 // Without --apply the worker scans, reports what it would remove, and exits. --apply is
 // the only way to delete anything, and --limit caps how much a single run takes: the
@@ -30,12 +30,12 @@
 //	go run ./cmd/prune                       # dry run: what would go, and why
 //	go run ./cmd/prune --apply --limit=50000 # remove at most 50k rows
 //	go run ./cmd/prune --boards              # board-retirement report
-//	go run ./cmd/prune --retire              # perform the move the report describes
+//	go run ./cmd/prune --retire              # retire the boards the report describes
 //
-// --retire edits the board files rather than the database, and the edit is line-based
-// so the files keep their comments and the diff stays reviewable. It never moves a
-// provider's last entry: that is the one irreversible step here, because a job nobody
-// can re-crawl can never be pruned either.
+// --retire flips those catalog rows to 'retired'; it deletes nothing, so the step is
+// undone by re-adding the board. It never retires a provider's last live board: that is
+// the one irreversible step here, because a job nobody can re-crawl can never be pruned
+// either.
 //
 // Needs DATABASE_URL; MEILI_URL/MEILI_MASTER_KEY when applying, so the search index
 // loses the documents in the same step.
@@ -90,8 +90,7 @@ const (
 
 func run() int {
 	boardReport := flag.Bool("boards", false, "report board entries whose company has never posted anything technical")
-	retire := flag.Bool("retire", false, "move the boards --boards lists into sources/retired/ (edits the source files; review the diff)")
-	sourcesDir := flag.String("sources", "sources", "directory holding the board files")
+	retire := flag.Bool("retire", false, "retire the boards --boards lists (flips their catalog rows to 'retired')")
 	apply := flag.Bool("apply", false, "actually delete; without it the run only reports")
 	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply is what deletes")
 	limit := flag.Int("limit", 0, "stop after this many target rows; required with --apply, -1 to run uncapped")
@@ -112,15 +111,6 @@ func run() int {
 		return 1
 	}
 
-	// Read the board files before touching the database. They gate the irreversible
-	// rules, and an unreadable directory must stop the run before anything is removed
-	// rather than yield an empty listing that reads as "every board is retired".
-	brd, err := loadBoards(*sourcesDir)
-	if err != nil {
-		log.Printf("prune: %v", err)
-		return 1
-	}
-
 	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -128,6 +118,15 @@ func run() int {
 	}
 	defer cleanup()
 	q := db.New(pool)
+
+	// Read the catalog before anything is removed. It gates the irreversible rules, and
+	// a failed read must stop the run rather than yield an empty listing that reads as
+	// "every board is retired".
+	brd, err := loadBoards(ctx, q)
+	if err != nil {
+		log.Printf("prune: %v", err)
+		return 1
+	}
 
 	// Company evidence is computed once, before any deletion, so a single run cannot
 	// reclassify a company underneath itself as its own rows disappear.
@@ -145,10 +144,9 @@ func run() int {
 		return 0
 	}
 
-	// --retire performs the move the report describes. It edits source files, not the
-	// database, and it is reversible by moving a line back — but it is still the step
-	// that stops a board being crawled, so it prints the whole list before acting and
-	// leaves the review to the diff.
+	// --retire performs the retirement the report describes. It flips catalog rows and
+	// deletes nothing, so it is reversible by re-adding the board — but it is still the
+	// step that stops a board being crawled, so it prints the whole count before acting.
 	if *retire {
 		list, withheld, err := boardsToRetire(ctx, q, brd)
 		if err != nil {
@@ -159,17 +157,17 @@ func run() int {
 		if len(list) == 0 {
 			return 0
 		}
-		moved, held, err := retireBoards(*sourcesDir, list)
+		retired, held, err := retireBoards(ctx, q, brd, list)
 		if err != nil {
-			log.Printf("prune: retire: %v (files already written stay written)", err)
+			log.Printf("prune: retire: %v (rows already retired stay retired)", err)
 			return 1
 		}
-		log.Printf("prune: moved %d entries into %s/retired/", moved, *sourcesDir)
+		log.Printf("prune: retired %d catalog rows", retired)
 		if len(held) > 0 {
-			// Not a failure: the entries are real candidates whose turn has not come.
-			log.Printf("prune: held back every entry of %s — moving them would leave the provider "+
+			// Not a failure: the boards are real candidates whose turn has not come.
+			log.Printf("prune: held back every board of %s — retiring them would leave the provider "+
 				"with no board at all, and a job that cannot be re-crawled can never be pruned. "+
-				"Prune their jobs first, then move these deliberately.", strings.Join(held, ", "))
+				"Prune their jobs first, then retire these deliberately.", strings.Join(held, ", "))
 		}
 		return 0
 	}
@@ -466,11 +464,11 @@ func boardsToRetire(ctx context.Context, q candidateSource, brd boards) ([]board
 	return retire, withheld, nil
 }
 
-// reportBoards lists the boards still in the source files whose postings were classified
-// and none of them came out technical — no technical title or category, and not one
-// tagged engineering skill. Each is a candidate for the retirement PR — move the entry to
-// sources/retired/<provider>.yml — which is the precondition for pruning its jobs under
-// a company-scoped rule.
+// reportBoards lists the live catalog boards whose postings were classified and none of
+// them came out technical — no technical title or category, and not one tagged
+// engineering skill. Each is a candidate for retirement (--retire, or cmd/add-board
+// --retire for one), which is the precondition for pruning its jobs under a
+// company-scoped rule.
 //
 // A board no posting of which has been classified is WITHHELD, not listed. The report's
 // premise is "this board has never posted anything technical", and absence of a
@@ -481,8 +479,8 @@ func boardsToRetire(ctx context.Context, q candidateSource, brd boards) ([]board
 // the boards the same run kept. Retiring on that basis would have struck live IT
 // employers whose only fault was a title the dictionary does not carry.
 //
-// It groups by BOARD rather than by company because that is the identity the source
-// files and the catalogue share exactly; the company slug diverges wherever an adapter
+// It groups by BOARD rather than by company because that is the identity the catalog
+// and the job rows share exactly; the company slug diverges wherever an adapter
 // takes the name from the posting payload, which on some providers is most of them.
 func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd boards) error {
 	retire, withheld, err := boardsToRetire(ctx, q, brd)
@@ -504,7 +502,7 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprint(w, "move these entries to sources/retired/<provider>.yml:\n\n"); err != nil {
+	if _, err := fmt.Fprint(w, "retire these boards (--retire, or cmd/add-board --retire):\n\n"); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(tw, "PROVIDER\tBOARD"); err != nil {
@@ -521,16 +519,15 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 	return warnDrainedProviders(w, retire, brd)
 }
 
-// warnDrainedProviders names the providers the list above would leave with no boards at
-// all. Those entries are still genuine candidates, but the order in which they move is
-// load-bearing and irreversible: cmd/ingest takes one board file by path, so a provider
-// with nothing left in sources/ is never crawled again — and the company-scoped rules
-// refuse a job they cannot re-crawl, so its postings can never be pruned either. Move
-// such an entry and the dead weight is permanent.
+// warnDrainedProviders names the providers the list above would leave with no live
+// boards at all. Those boards are still genuine candidates, but the order in which they
+// retire is load-bearing and irreversible: cmd/ingest crawls only live catalog rows, so
+// a provider with none is never crawled again — and the company-scoped rules refuse a
+// job they cannot re-crawl, so its postings can never be pruned either. Retire such a
+// board and the dead weight is permanent.
 //
-// sources/retired/README.md states the rule (prune the provider's jobs first, move its
-// last entry after), but a rule that lives only in prose is enforced by whoever happens
-// to read it. The report is the thing an operator actually has in front of them.
+// retireBoards enforces this too — it holds those providers back. The warning exists so
+// the operator reads the reason before the run, rather than a silent short count after.
 func warnDrainedProviders(w io.Writer, retire []boardKey, brd boards) error {
 	retiring := map[string]int{}
 	for _, k := range retire {
@@ -547,12 +544,12 @@ func warnDrainedProviders(w io.Writer, retire []boardKey, brd boards) error {
 	}
 	sort.Strings(drained)
 	_, err := fmt.Fprintf(w,
-		"\nCAUTION — every listed board of these providers is above, so moving them all "+
+		"\nCAUTION — every live board of these providers is above, so retiring them all "+
 			"empties the provider: %s\n"+
-			"Prune their jobs FIRST. A provider with no entry in sources/ is never crawled "+
+			"Prune their jobs FIRST. A provider with no live board is never crawled "+
 			"again, and the company-scoped rules refuse a job they cannot re-crawl — its\n"+
-			"postings would become permanently un-prunable. Move the last entry of each only "+
-			"after its jobs are gone.\n",
+			"postings would become permanently un-prunable. Retire the last board of each "+
+			"only after its jobs are gone.\n",
 		strings.Join(drained, ", "))
 	return err
 }

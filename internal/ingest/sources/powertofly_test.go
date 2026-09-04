@@ -32,16 +32,6 @@ func TestPowerToFlyRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestPowerToFlyBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/powertofly.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/powertofly.yml fails validation: %v", err)
-	}
-}
-
 func TestPowerToFlyFetchPaginatesAndMaps(t *testing.T) {
 	page1 := `{"data":[
 {"id":1691729,"title":"Senior Go Engineer","description":"<p>Build &amp; ship.</p>","location":"Remote","location_regions":["USA"],"employment_type":"Full Time","company":{"name":"NASCAR"},"country":{"title":"United States"},"state":{"title":"Alabama"},"city":{"title":"Talladega"}},

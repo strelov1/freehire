@@ -1,6 +1,0 @@
-# emagine Consulting A/S — the European freelance-contract portal (portal.emagine.org).
-# Boardless: one public API (portal-api.emagine.org/api/JobAds/Search), so the entry carries no
-# board. The portal never names the end client, so emagine is the employer on every posting, not
-# a placeholder.
-- company: emagine
-  provider: emagine

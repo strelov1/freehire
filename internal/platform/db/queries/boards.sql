@@ -34,6 +34,14 @@ SELECT * FROM boards
 WHERE provider = sqlc.arg(provider) AND status IN ('pending', 'active')
 ORDER BY id;
 
+-- name: ListLiveBoards :many
+-- Every board a crawl still visits, across all providers — the identity cmd/prune needs
+-- to decide whether a posting is re-crawlable. Only (provider, board, region), not the
+-- whole row: the guard asks a set-membership question and nothing else.
+SELECT provider, board, region FROM boards
+WHERE status IN ('pending', 'active')
+ORDER BY provider, board, region;
+
 -- name: UpdateBoardCompany :execrows
 -- Correct a board's company name — for a crowdsourced row seeded with
 -- boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status

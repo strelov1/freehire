@@ -32,16 +32,6 @@ func TestFourDayWeekRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestFourDayWeekBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/4dayweek.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/4dayweek.yml fails validation: %v", err)
-	}
-}
-
 func TestFourDayWeekFetchHydratesUnlockedDropsLocked(t *testing.T) {
 	page1 := `{"jobs":[
 {"id":"abc-1","slug":"senior-backend-at-acme-1","title":"Senior Backend Engineer","company_name":"Acme","work_arrangement":"remote","level":"senior","category":"devops","posted":1784307599,"locations":[{"city":"Berlin","country":"Germany","is_primary":true}],"stack":[{"name":"Go"},{"name":"Kubernetes"}]},

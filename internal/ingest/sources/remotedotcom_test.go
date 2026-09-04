@@ -103,16 +103,6 @@ func TestRemotedotcomRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestRemotedotcomBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/remotedotcom.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/remotedotcom.yml fails validation: %v", err)
-	}
-}
-
 // remotedotcomTwoPageFake serves a two-page board whose first page carries the mapping cases
 // (a remote posting hired by country, a hybrid one with a desk, a title full of braces, and a
 // draft that must be dropped) and whose second is the last per totalPages.

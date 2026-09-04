@@ -9,4 +9,4 @@ EnvironmentFile=/opt/freehire/.env
 CPUWeight=40
 IOWeight=40
 TimeoutStartSec=3000
-ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest /opt/freehire/src/hire-current/sources/join.yml --shard=%i/5
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest join --shard=%i/5
