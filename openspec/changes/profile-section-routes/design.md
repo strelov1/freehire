@@ -30,14 +30,30 @@ that convention, not a new one.
 
 ## Decisions
 
-- **Shared state via Svelte context, not props drilling or per-page refetch.**
-  `+layout.svelte` owns `profileStore`/`resumeStore` loading, `screeningAnswers`,
-  `actionError`, and the mutation callbacks (`handleSaved`, `handleCvUploaded`,
-  `handleCvDeleted`, `offerRefreshAfterBankEdit`), and exposes them to leaf pages
-  via `setContext`. Alternative considered: give each leaf page its own
-  `+page.ts`/`+page.svelte` load logic — rejected, since the shared profile/CV
-  data is read by most sections and refetching it per navigation would be both
-  slower and a behavior change (today it loads once).
+- **Shared state via the existing singleton-store convention, not Svelte
+  context.** `profileStore`/`resumeStore` (`$lib/profile.svelte`,
+  `$lib/resume.svelte`) are already app-wide `.svelte.ts` singletons, imported
+  directly wherever a `profile`/`resumeMeta` value is needed — no plumbing
+  through the layout is needed for those two at all. This codebase has no
+  existing use of Svelte's Context API anywhere; introducing it here for the
+  first time was rejected in favor of the pattern already used throughout
+  (`profileStore`, `resumeStore`, `savedSearches`).
+  `+layout.svelte` keeps owning only what's genuinely layout-scoped: the
+  initial `status` load gate and the setup-vs-tabs decision. The mutation
+  callbacks (`handleSaved`/`syncProfileAlert`/`handleCvUploaded`/
+  `handleCvDeleted`) touch only those singleton stores, not any local
+  component state, so they become plain functions in a new
+  `web/src/routes/my/profile/actions.ts`, imported directly by whichever leaf
+  page needs them (Profile, Location) — same "import a shared module"
+  shape as the stores, no props drilling and no context.
+  Two pieces of state that used to be layout-level lose that scope entirely
+  now that each section is its own component instance: `screeningAnswers`
+  (read/refreshed only by the Screening section) moves into
+  `screening/+page.svelte`; the bank-edit `actionError` banner (only ever
+  shown for Experience, per the original code's own comment that it "must
+  not keep showing" once the visitor leaves) moves into
+  `experience/+page.svelte` as local state — leaving that page naturally
+  clears it, no manual `$effect` reset required.
 - **Tab strip becomes `<a href>` + `page.url.pathname`, not a client-side
   `goto()` on click.** Matches Tracking/Activity; gives real browser
   navigation (back/forward, open-in-new-tab) for free.
