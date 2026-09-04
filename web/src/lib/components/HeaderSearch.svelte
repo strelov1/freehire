@@ -13,6 +13,7 @@
   import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '$lib/types';
   import { listSearchTarget, type ListSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
+  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
   import { fromApi, applyParams, type ApplyPlan } from '$lib/apiSuggestions';
   import { pastedJobLink, type PastedJobLink } from '$lib/jobLink';
   import { runLinkIntake, type LinkIntakeStep } from '$lib/linkIntake';
@@ -389,6 +390,14 @@
     dismissed = true;
     activeIndex = -1;
   }
+
+  // Close whatever other header overlay (the bell dropdown, the hamburger menu)
+  // was open, and let them close this one back — see headerOverlay.ts.
+  $effect(() => {
+    if (!suggestOpen) return;
+    openedOverlay(close);
+    return () => closedOverlay(close);
+  });
 
   /** Run what is in the box, and close over it. The store owns the URL write and the
    *  reload from here. Every path that searches free text goes through this — Enter,

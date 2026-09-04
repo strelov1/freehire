@@ -25,6 +25,7 @@
   import { promptSignIn } from '$lib/signin';
   import { themeStore } from '$lib/theme.svelte';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
+  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
   import { cn } from '$lib/ui';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
@@ -126,6 +127,18 @@
     if (window.matchMedia('(min-width: 640px)').matches) return;
     lockScroll();
     return () => unlockScroll();
+  });
+
+  function closeSelf() {
+    open = false;
+  }
+
+  // Close whatever other header overlay (the bell dropdown, search suggestions)
+  // was open, and let them close this one back — see headerOverlay.ts.
+  $effect(() => {
+    if (!open) return;
+    openedOverlay(closeSelf);
+    return () => closedOverlay(closeSelf);
   });
 
   afterNavigate(() => {
