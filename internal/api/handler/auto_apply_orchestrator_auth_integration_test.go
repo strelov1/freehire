@@ -169,9 +169,11 @@ func TestPostAutoApplyTailor_HumanCredentialUnaffectedByExhaustedOrchestratorLim
 	spentQueueID := insertAutoApplyQueueRow(t, pool, spentOwner, spentJob)
 	spendReq := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(spentQueueID, 10)+"/tailor", nil)
 	spendReq.Header.Set(fiber.HeaderAuthorization, "Bearer "+testOrchestratorSecret)
-	if _, err := app.Test(spendReq, 10_000); err != nil {
+	spendResp, err := app.Test(spendReq, 10_000)
+	if err != nil {
 		t.Fatalf("spend request: %v", err)
 	}
+	spendResp.Body.Close()
 
 	// A cookie-authenticated request for its OWNER's own entry must still be refused only
 	// for the reasons ownership-scoped auth already enforces (foreign entry → 404), never
