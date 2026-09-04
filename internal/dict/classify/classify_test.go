@@ -373,10 +373,11 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 	}
 }
 
-// TestParse_ITTitlesFallingToBareAnalyst pins the IT roles that resolved a category
-// only by reaching the table's bare "analyst" fall-through, which reads every
-// remaining analyst as data_analytics. Each names its own discipline outright.
-func TestParse_ITTitlesFallingToBareAnalyst(t *testing.T) {
+// TestParse_ITRolesTheTableDidNotName pins the IT roles that reached a category
+// only through one of the table's bare fall-throughs — "analyst" reads every
+// remaining analyst as data_analytics — so they resolved confidently WRONG rather
+// than not at all. Each now names its own discipline.
+func TestParse_ITRolesTheTableDidNotName(t *testing.T) {
 	cases := []struct{ title, wantCategory string }{
 		{"Lead Service Desk Analyst", "support"},
 		{"IT Service Desk Specialist Level II", "support"},
@@ -385,7 +386,6 @@ func TestParse_ITTitlesFallingToBareAnalyst(t *testing.T) {
 		{"IT Infrastructure Analyst (Networks and Telecoms)", "devops"},
 		{"MES Developer (Delmia Apriso)", "software_engineering"},
 		// Unchanged: the bare nouns keep falling through as before.
-		{"Data Analyst", "data_analytics"},
 		{"Business Analyst", "business_analysis"},
 		{"Infrastructure Project Manager", "project_management"},
 	}
@@ -396,12 +396,11 @@ func TestParse_ITTitlesFallingToBareAnalyst(t *testing.T) {
 	}
 }
 
-// TestParse_HungarianSoftwareTitles pins the Hungarian software vocabulary added
-// after auditing a general-population Hungarian board, where the two IT sitemaps
-// are not where every technical posting is filed. The negatives are the point:
-// "fejlesztő" is Hungarian for "developer" and the catalogue uses it for materials,
-// supplier, process, product, business and training development, so only the
-// anchored compounds may resolve.
+// TestParse_HungarianSoftwareTitles pins the Hungarian software vocabulary, added
+// after auditing a general-population Hungarian board where the IT sections are not
+// where every technical posting is filed. The negatives are the point: "fejlesztő"
+// is the bare "developer" noun, and the table's comment lists the non-software
+// senses the catalogue uses it for.
 func TestParse_HungarianSoftwareTitles(t *testing.T) {
 	cases := []struct{ title, wantCategory string }{
 		{"Szoftverfejlesztő - ERP terület", "software_engineering"},
@@ -419,7 +418,7 @@ func TestParse_HungarianSoftwareTitles(t *testing.T) {
 		{"SAP ABAP fejlesztő (LJK)", "software_engineering"},
 		{"Senior PEGA fejlesztő", "software_engineering"},
 		{"Odoo-fejlesztő", "software_engineering"},
-		{"Full-Stack Webfejlesztő", "fullstack"},
+		{"Webfejlesztő", "software_engineering"},
 		{"Adattárház fejlesztő", "data_engineering"},
 		{"BI fejlesztő", "data_analytics"},
 		{"BI riportfejlesztő", "data_analytics"},

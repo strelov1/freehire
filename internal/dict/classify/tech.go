@@ -66,8 +66,7 @@ var techTitleTerms = []string{
 	// — reactive, ticket-driven — and wrong about the craft: a help desk runs an IT
 	// estate. The bare nouns stay out. "support" alone is the whole customer-service
 	// population (226k open postings), and only "desk" and the IT-anchored analyst
-	// form are specific enough to carry the claim. Spaced and closed spellings are
-	// separate terms for the same reason the category table lists both.
+	// form are specific enough to carry the claim.
 	"service desk", "help desk", "helpdesk", "technical support analyst",
 	// Architects (never bare "architect")
 	"software architect", "solutions architect", "cloud architect", "data architect",

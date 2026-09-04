@@ -931,15 +931,14 @@ var categoryTable = []aliasEntry{
 	// every language's gendered and inclusive spellings is future work, not done
 	// here.
 	//
-	// Hungarian. "fejlesztő" is the bare noun and prod titles show it is the most
-	// dangerous one yet: on the open catalogue it names materials, supplier,
-	// process, product, business, operations and training development
-	// ("Anyagfejlesztő", "Beszállítófejlesztő mérnök", "Folyamatfejlesztő",
-	// "Termékfejlesztő szakértő", "Üzletfejlesztési menedzser", "Működésfejlesztési
-	// szakértő", "Képzés-fejlesztési gyakornok") alongside the software roles. Every
-	// entry below therefore carries a software or language anchor. Hungarian writes
-	// closed compounds where English writes two words, so a compound spelling never
-	// contains its spaced twin on a word boundary and both are listed.
+	// Hungarian. The bare noun is "fejlesztő", and on the open catalogue it names
+	// materials, supplier, process, product, business, operations and training
+	// development ("Anyagfejlesztő", "Beszállítófejlesztő mérnök",
+	// "Folyamatfejlesztő", "Termékfejlesztő szakértő", "Üzletfejlesztési menedzser",
+	// "Működésfejlesztési szakértő", "Képzés-fejlesztési gyakornok") alongside the
+	// software roles. Hungarian also writes closed compounds where English writes two
+	// words, so a compound never contains its spaced twin on a word boundary and both
+	// spellings are listed.
 	{"szoftverfejlesztő", "software_engineering"},
 	{"szoftver fejlesztő", "software_engineering"},
 	{"szoftvermérnök", "software_engineering"},
