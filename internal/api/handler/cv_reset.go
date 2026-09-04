@@ -129,7 +129,13 @@ func (h *cvHandlers) reseedBaseFromSeed(c *fiber.Ctx, userID int64, seeded cv.Do
 		return err
 	}
 	if !ok {
-		meta, err := h.cvStore.Create(c.Context(), userID, "My CV", cv.DefaultTemplateID, seeded)
+		defaults, _, err := h.cvStore.GetAppearanceDefaults(c.Context(), userID)
+		if err != nil {
+			return err
+		}
+		seeded.Style = defaults.Style
+		seeded.Margins = defaults.Margins
+		meta, err := h.cvStore.Create(c.Context(), userID, "My CV", defaults.TemplateID, seeded)
 		if err != nil {
 			return err
 		}

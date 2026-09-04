@@ -1,0 +1,15 @@
+[Unit]
+Description=timer: freehire-billing-sync hourly
+[Timer]
+# Hourly is chosen against the provider's retry ceiling, not picked for tidiness: it
+# retries a webhook five times over about two and a half hours and then stops for good.
+# Past that point this timer is the only path by which a paid subscription becomes Pro,
+# so the interval bounds how long a lost delivery can leave someone unpaid-for.
+OnBootSec=10min
+OnUnitActiveSec=1h
+# Persistent=true, unlike the metrics timers. A missed window here is not a gap in a
+# graph — it is a subscriber still on the free plan — and the work is idempotent, so
+# replaying one on boot costs a few provider reads and can only ever correct state.
+Persistent=true
+[Install]
+WantedBy=timers.target

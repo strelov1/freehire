@@ -190,7 +190,7 @@
   function close() {
     const qs = toSearchString(deckParams());
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
-    goto(resolve('/') + (qs ? `?${qs}` : ''));
+    goto(resolve('/jobs') + (qs ? `?${qs}` : ''));
   }
 
   // --- Pointer drag on the active card (touch + mouse) ---------------------

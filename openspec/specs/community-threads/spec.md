@@ -1,7 +1,12 @@
 # community-threads Specification
 
 ## Purpose
-TBD - created by archiving change add-community-threads. Update Purpose after archive.
+An anonymous discussion primitive: a signed-in user opens a topic attached to a
+subject — a company or a vacancy — and any signed-in user replies, everyone
+shown only through a stable pseudonymous handle. The subject is polymorphic and
+deliberately unconstrained by a foreign key, so a thread outlives what it is
+about and a future subject kind needs no schema change. Threads are readable by
+anyone; writing needs a session, and is rate-limited per user.
 ## Requirements
 ### Requirement: Create a discussion thread on a subject
 
@@ -82,11 +87,38 @@ count.
 The system SHALL return the threads attached to a given subject, newest first,
 each carrying its persona handle, title, reply count, and timestamps.
 
+Paged listings SHALL return a continuation cursor only when the page came back
+full, and SHALL omit it on a partial page. This applies to both the subject
+thread listing and a thread's reply listing.
+
+A full page is not proof that another exists: a listing holding exactly a
+multiple of the page size still ends on a full one. That residue is deliberate
+and bounded — see
+[the design note](../../changes/archive/2026-09-03-add-discussions-feed/design.md)
+— and closing it needs a fetch-ahead the domain's listing methods do not do. The requirement is therefore stated as
+"full page", not as "a further page exists"; the two differ only in that case,
+and stating the stronger one would describe behaviour nothing implements.
+
 #### Scenario: List a company's threads
 
 - **WHEN** a client requests threads for a `company` subject by slug
 - **THEN** the server returns that company's threads newest first, without any
   author `user_id`
+
+#### Scenario: A partial page reports no continuation
+
+- **WHEN** a listing returns fewer rows than one page holds
+- **THEN** the response omits the continuation cursor
+
+#### Scenario: A full page reports a continuation
+
+- **WHEN** a listing returns exactly as many rows as one page holds
+- **THEN** the response carries a continuation cursor positioned at the last returned row
+
+#### Scenario: A thread's replies report the end of the list
+
+- **WHEN** a client reads a thread whose replies fit in fewer rows than one page holds
+- **THEN** the response omits the continuation cursor for replies
 
 ### Requirement: Read a thread with its replies
 
@@ -148,3 +180,131 @@ Deleting an account SHALL NOT remove discussion other members contributed to.
 
 - **WHEN** a member's account is deleted
 - **THEN** their persona handle no longer appears on any of their surviving threads or replies, and the handle carries no link back to them
+
+### Requirement: List open threads across all subjects
+
+The system SHALL return every open discussion thread, regardless of subject,
+newest first, keyset-paged, via `GET /api/v1/threads/recent`. The endpoint SHALL
+be public — like the other thread read paths it exposes only persona handles —
+and each row SHALL carry its subject's display name in addition to the thread's
+own fields, so a client can name the subject without a further request.
+
+A vacancy subject resolves to the posting's title and its company; a company
+subject resolves to the company's name. The subject reference is a slug with no
+foreign key, so a subject that no longer exists SHALL leave the display name
+empty rather than removing the thread from the listing.
+
+#### Scenario: Threads from different subjects appear in one listing
+
+- **WHEN** a client requests the cross-subject listing and open threads exist on both a company and a vacancy
+- **THEN** the response contains threads of both subject types, ordered newest first, each carrying its `subject_type`, `subject_slug`, and resolved display name
+
+#### Scenario: A vacancy thread names its posting and company
+
+- **WHEN** the listing includes a thread whose subject is an existing vacancy
+- **THEN** that row carries the vacancy's title and the vacancy's company name
+
+#### Scenario: A company thread names the company
+
+- **WHEN** the listing includes a thread whose subject is an existing company
+- **THEN** that row carries the company's name
+
+#### Scenario: A thread whose subject was deleted still appears
+
+- **WHEN** the listing includes a thread whose subject slug no longer resolves to any vacancy or company
+- **THEN** the thread is still returned, with an empty display name, and is not filtered out
+
+#### Scenario: Closed threads are excluded
+
+- **WHEN** a moderator has closed a thread
+- **THEN** that thread does not appear in the cross-subject listing
+
+#### Scenario: Reading the listing requires no session
+
+- **WHEN** an unauthenticated client requests the cross-subject listing
+- **THEN** the request succeeds and no response field identifies any author beyond their persona handle
+
+### Requirement: A discussion page names the subject it is about
+
+Every discussion surface scoped to one subject — the thread list and a single
+thread, on both subject kinds — SHALL open with that subject: its logo, its
+name, and for a vacancy its employer and whether the posting has closed. The
+header SHALL be the way back to the subject, replacing any separate breadcrumb.
+
+The subject SHALL be resolved independently of the threads, since a subject
+with no threads still has a header to draw. When it cannot be resolved the page
+SHALL still render the discussion, and SHALL distinguish a subject that is gone
+from one it merely failed to read.
+
+#### Scenario: A vacancy's discussion names the posting
+
+- **WHEN** a reader opens a vacancy's thread list or one of its threads
+- **THEN** the page opens with the vacancy's title, its employer and its logo, as a single link to the posting
+
+#### Scenario: A closed vacancy says so
+
+- **WHEN** the vacancy the discussion hangs off has closed
+- **THEN** the header marks it closed, without the reader having to follow the link
+
+#### Scenario: A company's discussion names the company
+
+- **WHEN** a reader opens a company's thread list or one of its threads
+- **THEN** the page opens with the company's name and logo, as a single link to the company, and does not print its slug
+
+#### Scenario: An absent subject is stated, not linked
+
+- **WHEN** the subject cannot be resolved
+- **THEN** the header renders the stored slug as an identifier and is NOT a link, since the destination is the page that could not be read
+
+#### Scenario: Unreachable is not reported as gone
+
+- **WHEN** the subject could not be fetched for a reason other than it being absent
+- **THEN** the header says it could not be loaded, distinctly from saying it is no longer listed
+
+#### Scenario: A merged company slug still names its company
+
+- **WHEN** the subject is a company whose slug a merge has retired
+- **THEN** the header names the company that absorbed it, and the discussion stays at the url it is under — threads record the retired slug, so the canonical url would not resolve them
+
+### Requirement: A discussions section on the web client
+
+The web client SHALL serve a `/discussions` page rendering the cross-subject
+listing, server-rendered on first load and paged from the client thereafter.
+Each row SHALL link to that thread's existing page under its own subject. The
+page SHALL be reachable from site navigation and SHALL NOT offer starting a
+topic, which requires a subject.
+
+#### Scenario: The section lists threads and links to them
+
+- **WHEN** a reader opens `/discussions`
+- **THEN** the page lists open threads newest first, names each thread's subject, and each row links to that thread's page under its subject's route
+
+#### Scenario: A thread with an unresolvable subject is readable
+
+- **WHEN** the listing contains a thread whose subject no longer exists
+- **THEN** the row renders the stored subject slug in place of a display name and still links to the thread
+
+#### Scenario: Every row states which kind of subject it is about
+
+- **WHEN** a reader scans the listing
+- **THEN** each row is marked as being about a vacancy or about a company — on both kinds, so the marker reads as the row's type rather than as a remark about one of them
+
+#### Scenario: A stored slug is not presented as a name
+
+- **WHEN** a row falls back to the stored subject slug
+- **THEN** it is presented as an identifier rather than in the styling a resolved employer name is given, and no company logo is resolved from it
+
+#### Scenario: A vacancy with no recorded employer is not called unresolved
+
+- **WHEN** the listing includes a thread on an existing vacancy whose employer name is absent
+- **THEN** the row names the posting and marks the employer as unknown, and does NOT fall back to the slug — the subject resolved
+
+#### Scenario: An unreachable feed is not reported as an empty one
+
+- **WHEN** the page cannot fetch the listing
+- **THEN** it says the discussions could not be loaded, distinctly from the message shown when the catalogue genuinely holds none
+
+#### Scenario: A failed continuation can be retried
+
+- **WHEN** fetching a further page fails
+- **THEN** the failure is shown and the continuation remains available, rather than the list appearing to have ended

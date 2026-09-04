@@ -1,5 +1,0 @@
-# The Muse job aggregator (well-known brands, US-heavy). Boardless: one public API
-# (themuse.com/api/public/jobs), so the entry carries no board; each job's company comes
-# from the posting, not this placeholder.
-- company: The Muse
-  provider: themuse

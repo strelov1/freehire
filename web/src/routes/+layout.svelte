@@ -33,27 +33,26 @@
   let { children } = $props();
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav —
-  // the marketing footer with its link columns doesn't belong there. /onboarding is its
-  // own full-screen page (a fixed inset-0 overlay covers TopBar too) — no footer either.
+  // the marketing footer with its link columns doesn't belong there. /onboarding and
+  // /signin are both their own full-screen pages (a fixed inset-0 overlay covers
+  // TopBar too) — no footer either.
   const hideFooter = $derived(
     page.url.pathname === '/my' ||
       page.url.pathname.startsWith('/my/') ||
       page.url.pathname.startsWith('/tailor/') ||
-      page.url.pathname === '/onboarding',
+      page.url.pathname === '/onboarding' ||
+      page.url.pathname === '/signin',
   );
 
-  // The onboarding gate. /onboarding is now the one place BOTH registration (an
-  // anonymous visitor's step 1) AND the post-registration CV/profile wizard live — so
-  // "should this visit be there" has two independent ways to become true: signed out
-  // (has an auth step to do), or signed in with no CV yet. Auto-redirect only covers
-  // the second: an anonymous visitor reaches /onboarding only by an explicit link
-  // (AuthDialog's "Create one", a signed-out gate's "Sign up"), never a background
-  // redirect — there is no page to bounce a stranger off of.
+  // The onboarding gate: auto-redirect a signed-in visitor with no CV yet to
+  // /onboarding (which bounces an anonymous visitor there straight on to /signin —
+  // see that page's own gate). Reappears every visit until a CV exists, no separate
+  // "completed" flag.
   $effect(() => {
     // GET /me/resume needs a session — an anonymous visitor's request would just 401,
     // so this waits for isAuthenticated() rather than firing unconditionally on every
-    // page load site-wide. Re-runs once a visitor signs in mid-visit (on /onboarding's
-    // own auth step), since isAuthenticated() is read reactively here too.
+    // page load site-wide. Re-runs once a visitor signs in mid-visit, since
+    // isAuthenticated() is read reactively here too.
     if (isAuthenticated()) void resumeStore.ensureLoaded();
   });
   $effect(() => {

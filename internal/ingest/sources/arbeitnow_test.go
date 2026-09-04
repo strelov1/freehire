@@ -32,16 +32,6 @@ func TestArbeitnowRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestArbeitnowBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/arbeitnow.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/arbeitnow.yml fails validation: %v", err)
-	}
-}
-
 func TestArbeitnowFetchPaginatesAndMaps(t *testing.T) {
 	page1 := `{"data":[
 {"slug":"data-engineer-berlin-1","company_name":"Passerelle","title":"Data Engineer","description":"<p>Build &amp; ship.</p>","remote":true,"url":"https://www.arbeitnow.com/jobs/companies/passerelle/data-engineer-berlin-1","location":"Berlin","created_at":1781713837},

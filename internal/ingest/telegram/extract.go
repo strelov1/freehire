@@ -98,7 +98,7 @@ const (
 type ExtractRunner struct {
 	Extractor Extractor
 	Store     ExtractStore
-	Kinds     map[string]Kind // channel → kind, from sources/telegram.yml
+	Kinds     map[string]Kind // channel → kind, from telegram_channels
 	Links     LinkResolver    // optional; resolves outbound job links to full vacancies
 }
 
@@ -247,7 +247,7 @@ func (r ExtractRunner) resolveLinks(ctx context.Context, post PendingPost) ([]Re
 }
 
 // kind resolves a channel's configured kind, defaulting to board for a post
-// whose channel has since left sources/telegram.yml (the safer, single-vacancy prompt).
+// whose channel has since left telegram_channels (the safer, single-vacancy prompt).
 func (r ExtractRunner) kind(channel string) Kind {
 	if k, ok := r.Kinds[channel]; ok {
 		return k

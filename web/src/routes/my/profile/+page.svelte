@@ -218,7 +218,11 @@
        way collapsed; the row scrolls horizontally on narrow viewports rather than wrapping,
        same as the account nav's own mobile strip in my/+layout.svelte. -->
   <div class="mb-6 flex items-end justify-between gap-4 border-b border-border text-sm">
-    <div class="flex min-w-0 gap-4 overflow-x-auto" role="tablist" aria-label="Profile sections">
+    <div
+      class="no-scrollbar flex min-w-0 gap-4 overflow-x-auto"
+      role="tablist"
+      aria-label="Profile sections"
+    >
       {#each VIEWS as v (v.id)}
         {@const Icon = v.icon}
         <button

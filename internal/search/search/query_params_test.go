@@ -199,3 +199,40 @@ func TestCompanyFacetParams_MatchesTheFilterVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// A saved search or a shared link still carrying the retired facet must SAY the filter
+// was dropped rather than quietly widening. `role` was a cross-product of `category` and
+// `seniority`; both remain, and a stale link naming the product now reads as ignored.
+func TestUnknownParams_ReportsTheRetiredRoleFacet(t *testing.T) {
+	v := url.Values{
+		"role":         {"senior_backend"},
+		"role_exclude": {"qa"},
+		"role_mode":    {"and"},
+	}
+
+	got := UnknownParams(v, nil)
+	if len(got) != 3 {
+		t.Fatalf("UnknownParams = %#v, want all three reported", got)
+	}
+	for _, p := range got {
+		if p.DidYouMean != "" {
+			t.Errorf("%s suggested %q — there is no near-miss to point at, the facet is gone",
+				p.Param, p.DidYouMean)
+		}
+	}
+}
+
+// role_type is a DIFFERENT facet — whether the posting manages people — and it stays.
+// The two names differ by a suffix, which is exactly the shape a careless removal takes
+// with it.
+func TestUnknownParams_KeepsRoleTypeWhenRoleGoes(t *testing.T) {
+	v := url.Values{
+		"role_type":         {"people_manager"},
+		"role_type_exclude": {"people_manager"},
+		"role_type_mode":    {"or"},
+	}
+
+	if got := UnknownParams(v, nil); len(got) != 0 {
+		t.Errorf("UnknownParams = %#v, want none — role_type is its own facet", got)
+	}
+}

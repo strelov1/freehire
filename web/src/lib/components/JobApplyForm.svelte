@@ -21,50 +21,106 @@
   // Renders bare, with no card or heading of its own: it sits inside the job page's
   // tab panel, where the tab is the heading and a second one under it would say the
   // same thing twice.
+  import { BrandMark } from '$lib/ui';
+  import { applyFormModel, type GroupKey } from '$lib/applyFormGroups';
+  import { ATS_MARKS } from '$lib/atsmarks';
+
   let { form }: { form: Display | null } = $props();
+
+  // What each group of questions is called. Kept here rather than in the model: the
+  // model decides which questions belong together and in what order, which is logic
+  // worth testing; these are the words that decision is shown in.
+  const GROUP_LABELS: Record<GroupKey, string> = {
+    short: 'Short answers',
+    choice: 'Pick from a list',
+    written: 'Written answers',
+    upload: 'Attachments',
+  };
+
+  const model = $derived(applyFormModel(form?.questions ?? []));
+  const mark = $derived(ATS_MARKS[form?.provider ?? '']);
 </script>
 
 {#if applyFormWorthShowing(form)}
-  <section class="flex flex-col gap-3">
-    <!-- The provider is the whole caption here. It was a chip beside a heading before
-         this block moved into a tab; the tab now says what it is, so what is left worth
-         saying is whose form it is, verbatim from the ATS. -->
-    <p class="text-xs text-muted-foreground">
-      As published by <span class="capitalize">{form.provider}</span>
+  <section class="flex flex-col gap-4">
+    <!-- The caption says whose form this is and how much of it there is — the second
+         being the fact that decides whether anyone applies, and the one a flat list of
+         fifteen identical rows made the reader count for themselves.
+         The mark sits BESIDE the provider's name, never instead of it: simple-icons
+         carries one for Greenhouse and none for the other four platforms we capture
+         (see atsmarks.ts), so a mark-only caption would leave most postings unattributed. -->
+    <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {#if mark}
+        <!-- Hidden from the reader who is being read to: BrandMark labels itself with
+             the brand's name, which the sentence right beside it already says. -->
+        <span class="contents" aria-hidden="true">
+          <BrandMark path={mark.path} hex={mark.hex} title={mark.title} class="size-3.5 shrink-0" />
+        </span>
+      {/if}
+      <span>
+        As published by <span class="capitalize">{form.provider}</span>
+        {#if model.total > 0}
+          &middot; {model.total}
+          {model.total === 1 ? 'question' : 'questions'}
+          <!-- A zero is never printed. "0 written answers" states a cost that does not
+               exist; the model counts it honestly and the decision not to say it is here. -->
+          {#if model.written > 0}
+            &middot; {model.written}
+            {model.written === 1 ? 'written answer' : 'written answers'}
+          {/if}
+        {/if}
+      </span>
     </p>
 
     {#if form.basics?.length}
       <!-- The controls every application demands, said once. Listed rather than dropped:
-           a form that does NOT want a CV is worth knowing too. -->
-      <p class="max-w-3xl text-sm text-muted-foreground">
-        {form.basics.join(', ')}
-      </p>
+           a form that does NOT want a CV is worth knowing too. Headed only when the
+           questions below are headed, so it is never the one labelled block on the page. -->
+      <div class="flex max-w-3xl flex-col gap-1">
+        {#if model.headed}
+          <h2 class="text-xs font-medium text-muted-foreground">Basics</h2>
+        {/if}
+        <p class="text-sm text-muted-foreground">{form.basics.join(', ')}</p>
+      </div>
     {/if}
 
-    {#if form.questions?.length}
-      <!-- The hint follows the question rather than being pinned to the right edge. On a
-           wide viewport that pinning left ~900px of empty space between a question and the
-           word describing its answer, which is a long way to travel to read one line. -->
-      <!-- Keyed on index, not on the question text. The text is the employer's, verbatim, and
-           real ATS forms repeat it — Greenhouse and Workable both publish the same screening
-           question twice on some postings. A duplicate key throws each_key_duplicate during
-           Svelte 5 hydration rather than warning, which took the whole job page down. The list
-           is inert (replaced wholesale when `form` changes, never reordered or filtered), so
-           position is a sound identity here. -->
-      <ul class="flex max-w-3xl flex-col gap-2">
-        {#each form.questions as question, i (i)}
-          <li class="text-sm">
-            <span>{question.text}</span>
-            {#if question.answer || !question.required}
-              <span class="ml-2 whitespace-nowrap text-xs text-muted-foreground">
-                {#if question.answer}{question.answer}{/if}
-                {#if question.answer && !question.required}&middot;{/if}
-                {#if !question.required}optional{/if}
-              </span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <!-- Grouped by what answering one costs, cheapest first, so a reader meets the
+         one-line questions before the essays and can stop as soon as the form is more
+         than they will spend. The kind of answer is stated once by the heading instead
+         of once per row, which is what used to wrap onto a second line and read as a
+         list item of its own.
+         Ordering within a group is the employer's, as served. Between groups it is
+         ours — a deliberate trade, since the form is actually filled on the platform's
+         own site where the platform's order governs. -->
+    {#each model.groups as group (group.key)}
+      <div class="flex max-w-3xl flex-col gap-1">
+        {#if model.headed}
+          <h2 class="text-xs font-medium text-muted-foreground">
+            {GROUP_LABELS[group.key]} ({group.questions.length})
+          </h2>
+        {/if}
+        <!-- Keyed on index, not on the question text. The text is the employer's, verbatim, and
+             real ATS forms repeat it — Greenhouse and Workable both publish the same screening
+             question twice on some postings. A duplicate key throws each_key_duplicate during
+             Svelte 5 hydration rather than warning, which took the whole job page down. The list
+             is inert (rebuilt wholesale when `form` changes, never reordered or filtered in
+             place), so position is a sound identity here — in each group as it was in the one
+             list this replaced. -->
+        <ul class="flex flex-col gap-2">
+          {#each group.questions as question, i (i)}
+            <li class="text-sm">
+              <span>{question.text}</span>
+              <!-- The kind of answer is the heading's to say. What is left is whether the
+                   platform will take the application without one; a required question is
+                   the ordinary case and marking it would put a word on nearly every row
+                   to report that nothing unusual is true of it. -->
+              {#if !question.required}
+                <span class="ml-2 whitespace-nowrap text-xs text-muted-foreground">optional</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/each}
   </section>
 {/if}

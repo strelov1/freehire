@@ -371,7 +371,7 @@ freehire <span class="text-foreground">inbox list --link unlinked</span>    <spa
       </p>
       <div class="flex flex-wrap gap-3">
         <Button href={resolve('/my/inbox')} variant="primary" size="lg">Open your inbox</Button>
-        <Button href={resolve('/')} variant="outline" size="lg">Find jobs to apply to</Button>
+        <Button href={resolve('/jobs')} variant="outline" size="lg">Find jobs to apply to</Button>
       </div>
     </div>
   </section>

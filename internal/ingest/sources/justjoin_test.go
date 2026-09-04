@@ -78,16 +78,6 @@ func TestJustJoinRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestJustJoinBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/justjoin.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/justjoin.yml fails validation: %v", err)
-	}
-}
-
 func TestJustJoinFetchNewHydratesOnlyUnseen(t *testing.T) {
 	list := `{"data":[
 {"guid":"new-1","slug":"acme-go-dev--krakow","title":"Go Developer","companyName":"Acme","city":"Kraków","workplaceType":"remote","publishedAt":"2026-05-18T10:00:00.000Z"},

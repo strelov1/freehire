@@ -30,7 +30,6 @@ type proposal struct {
 	Query string `json:"query"`
 
 	Category       flexStrings `json:"category"`
-	Role           flexStrings `json:"role"`
 	Seniority      flexStrings `json:"seniority"`
 	RoleType       flexStrings `json:"role_type"`
 	Skills         flexStrings `json:"skills"`
@@ -57,7 +56,7 @@ type proposal struct {
 	SalaryMin          *flexInt `json:"salary_min"`
 	PostedWithinDays   *flexInt `json:"posted_within_days"`
 	ExperienceYearsMax *flexInt `json:"experience_years_max"`
-	VisaSponsorship    bool     `json:"visa_sponsorship"`
+	VisaSponsorship    flexBool `json:"visa_sponsorship"`
 }
 
 // exclusions are the filters people phrase negatively. It is deliberately a subset of
@@ -82,7 +81,6 @@ func (p proposal) intent() intent {
 	return intent{
 		Facets: map[string][]string{
 			"category":        p.Category,
-			"role":            p.Role,
 			"seniority":       p.Seniority,
 			"role_type":       p.RoleType,
 			"skills":          p.Skills,
@@ -116,7 +114,7 @@ func (p proposal) intent() intent {
 		SalaryMin:          p.SalaryMin.plain(),
 		PostedWithinDays:   p.PostedWithinDays.plain(),
 		ExperienceYearsMax: p.ExperienceYearsMax.plain(),
-		VisaSponsorship:    p.VisaSponsorship,
+		VisaSponsorship:    p.VisaSponsorship.plain(),
 	}
 }
 
@@ -132,7 +130,7 @@ var (
 // requestSchema derives the model's response format from proposal and pins every
 // closed vocabulary to its enum.
 //
-// The open vocabularies — skills, cities, countries, and the role catalogue — are left
+// The open vocabularies — skills, cities and countries — are left
 // as free strings deliberately: each runs to thousands of values, and spending that
 // many tokens on every request to constrain what the dictionaries already check after
 // the fact would buy nothing. The values the model invents there are dropped and

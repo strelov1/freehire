@@ -1,5 +1,0 @@
-# Landing.jobs EU tech job board. Boardless: one public API (landing.jobs/api/v1/jobs), so
-# the entry carries no board, and each job's company comes from the posting URL rather than
-# this placeholder — the feed carries no company field of its own.
-- company: Landing.jobs
-  provider: landingjobs

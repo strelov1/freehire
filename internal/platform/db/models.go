@@ -184,6 +184,18 @@ type AutoApplyQueue struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type BillingEvent struct {
+	ID          int64              `json:"id"`
+	Provider    string             `json:"provider"`
+	EventID     string             `json:"event_id"`
+	AppUserID   string             `json:"app_user_id"`
+	UserID      pgtype.Int8        `json:"user_id"`
+	EventType   string             `json:"event_type"`
+	Payload     []byte             `json:"payload"`
+	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
 // Board catalog (replaces sources/*.yml). status: pending (unproven, still crawled) -> active (first crawl succeeded); or rejected (failed insert-time validation) / retired (curator-removed). submitted_by/surface/url are set for a crowdsourced row and NULL/"curator" for one added by cmd/add-board.
 type Board struct {
 	ID             int64              `json:"id"`
@@ -356,6 +368,14 @@ type Cv struct {
 	LastClickAt        pgtype.Timestamptz `json:"last_click_at"`
 }
 
+type CvAppearanceDefault struct {
+	UserID     int64              `json:"user_id"`
+	TemplateID string             `json:"template_id"`
+	Style      []byte             `json:"style"`
+	Margins    []byte             `json:"margins"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CvLinkClick struct {
 	ID           int64              `json:"id"`
 	TracerLinkID pgtype.UUID        `json:"tracer_link_id"`
@@ -501,6 +521,32 @@ type GmailConnection struct {
 	ConnectedAt     pgtype.Timestamptz `json:"connected_at"`
 	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
 	Scopes          []string           `json:"scopes"`
+}
+
+// Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
+type IngestRunState struct {
+	Provider       string             `json:"provider"`
+	Shard          int32              `json:"shard"`
+	NextDueAt      pgtype.Timestamptz `json:"next_due_at"`
+	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
+	LastStartedAt  pgtype.Timestamptz `json:"last_started_at"`
+	LastFinishedAt pgtype.Timestamptz `json:"last_finished_at"`
+	LastExitCode   pgtype.Int4        `json:"last_exit_code"`
+	LastError      pgtype.Text        `json:"last_error"`
+}
+
+// Per-provider ingest scheduling OVERRIDES. The roster is boards; a provider absent from this table is scheduled on the column defaults. enabled=false requires a disabled_reason. managed is rollout-only and is dropped once every provider is cut over — see openspec/changes/ingest-scheduler-in-db/tasks.md task 8.5.
+type IngestSchedule struct {
+	Provider       string             `json:"provider"`
+	Shards         int32              `json:"shards"`
+	CadenceSec     int32              `json:"cadence_sec"`
+	TimeoutSec     int32              `json:"timeout_sec"`
+	Enabled        bool               `json:"enabled"`
+	DisabledReason pgtype.Text        `json:"disabled_reason"`
+	Notes          pgtype.Text        `json:"notes"`
+	Managed        bool               `json:"managed"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type InsightsCompanyGrowth struct {
@@ -724,17 +770,6 @@ type LearnedAtsDomain struct {
 	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
 }
 
-type LinkContribution struct {
-	ID          int64              `json:"id"`
-	SubmittedBy int64              `json:"submitted_by"`
-	URL         string             `json:"url"`
-	Source      pgtype.Text        `json:"source"`
-	Board       pgtype.Text        `json:"board"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Surface     string             `json:"surface"`
-}
-
 type Mailbox struct {
 	ID        int64              `json:"id"`
 	UserID    int64              `json:"user_id"`
@@ -948,6 +983,14 @@ type SubscriptionMatch struct {
 	LastError      string             `json:"last_error"`
 }
 
+type TelegramChannel struct {
+	ID        int64              `json:"id"`
+	Channel   string             `json:"channel"`
+	Kind      string             `json:"kind"`
+	Active    bool               `json:"active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type TelegramLink struct {
 	UserID   int64              `json:"user_id"`
 	ChatID   int64              `json:"chat_id"`
@@ -1046,6 +1089,7 @@ type User struct {
 	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 	Username                   pgtype.Text        `json:"username"`
 	UsernameUpdatedAt          pgtype.Timestamptz `json:"username_updated_at"`
+	StripeCustomerID           pgtype.Text        `json:"stripe_customer_id"`
 }
 
 type UserEmailCode struct {

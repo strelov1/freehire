@@ -8,7 +8,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/aiarchetype"
 	"github.com/strelov1/freehire/internal/ai/enrich"
-	"github.com/strelov1/freehire/internal/dict/roletag"
 	"github.com/strelov1/freehire/internal/dict/roletype"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -57,15 +56,10 @@ type JobDocument struct {
 	// (jobreality calls this fake_freshness). CreatedTS is the system's own
 	// observation and no source can rewrite it.
 	CreatedTS int64 `json:"created_ts"`
-	// Roles are the job's natural role slugs derived at index time by roletag from
-	// its seniority, category, and title. Like PostedTS, Roles is declared on the
-	// document (not jobview.Job), so it backs the `roles` facet but is never part
-	// of the served public wire shape.
-	Roles []string `json:"roles"`
 	// AIArchetype is the job's skill-signature AI archetype, derived at index
 	// time by aiarchetype from its already-resolved skills and category (empty
 	// for categories outside its ai_engineering/ml_ai scope, or when no rule
-	// matches). Like Roles, it is declared on the document, not jobview.Job, so
+	// matches). Like PostedTS, it is declared on the document, not jobview.Job, so
 	// it backs the `ai_archetype` facet but is never part of the served public
 	// wire shape.
 	AIArchetype string `json:"ai_archetype"`
@@ -122,7 +116,6 @@ func FromJob(j db.Job) (JobDocument, error) {
 	doc := JobDocument{
 		ID:          j.ID,
 		Job:         view,
-		Roles:       roletag.Derive(j.Seniority, j.Category, j.Title),
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
 		RoleType:    roletype.Derive(j.Title),
 	}

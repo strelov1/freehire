@@ -41,7 +41,7 @@ func TestInsertRejectsDuplicateOfALiveBoard(t *testing.T) {
 	ctx := context.Background()
 	in := InsertInput{Provider: "ashby", Board: "blitzy", Company: "Blitzy"}
 
-	first, err := Insert(ctx, repo, in, StatusPending, sources.Taxonomy())
+	first, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusPending)
 	if err != nil {
 		t.Fatalf("first Insert: %v", err)
 	}
@@ -49,9 +49,46 @@ func TestInsertRejectsDuplicateOfALiveBoard(t *testing.T) {
 		t.Fatalf("first Insert status = %q, want pending", first.Status)
 	}
 
-	_, err = Insert(ctx, repo, in, StatusPending, sources.Taxonomy())
+	_, err = NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusPending)
 	if !errors.Is(err, ErrDuplicateBoard) {
 		t.Fatalf("second Insert err = %v, want ErrDuplicateBoard", err)
+	}
+}
+
+// The two spellings of one iCIMS board — a bare slug and the full host — address the same
+// site, which the unique index cannot see: it folds case, and the FORM fold is Go. One
+// Inserter must catch the pair even when BOTH arrive inside the same run, which is what a
+// harvest does: it reads the live set once, so a second spelling is only ever refused
+// because the first one it wrote went into that set.
+//
+// This is the case a live set read once and never updated would miss, and the cost of
+// missing it is not a wasted crawl: external_id is namespaced by the literal board
+// string, so both spellings store the same postings under one company_slug, and the
+// unseen sweep closes whichever a run did not refresh.
+func TestInserterCatchesASecondSpellingWithinOneRun(t *testing.T) {
+	repo := newRepo(t)
+	ctx := context.Background()
+	ins := NewInserter(repo, sources.Taxonomy())
+
+	if _, err := ins.Insert(ctx, InsertInput{
+		Provider: "icims", Board: "vet", Company: "Vet",
+	}, StatusPending); err != nil {
+		t.Fatalf("first Insert: %v", err)
+	}
+
+	_, err := ins.Insert(ctx, InsertInput{
+		Provider: "icims", Board: "careers-vet.icims.com", Company: "Vet Again",
+	}, StatusPending)
+	if !errors.Is(err, ErrDuplicateBoard) {
+		t.Fatalf("second spelling err = %v, want ErrDuplicateBoard", err)
+	}
+
+	// And the refusal is about that board, not about the provider: an unrelated iCIMS
+	// board still goes in through the same Inserter.
+	if _, err := ins.Insert(ctx, InsertInput{
+		Provider: "icims", Board: "other", Company: "Other",
+	}, StatusPending); err != nil {
+		t.Fatalf("unrelated board Insert: %v", err)
 	}
 }
 
@@ -62,7 +99,7 @@ func TestInsertAcceptsResubmissionAfterRejection(t *testing.T) {
 	ctx := context.Background()
 	bad := InsertInput{Provider: "no-such-provider", Board: "acme", Company: "Acme"}
 
-	rejected, err := Insert(ctx, repo, bad, StatusPending, sources.Taxonomy())
+	rejected, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, bad, StatusPending)
 	if err != nil {
 		t.Fatalf("Insert with unknown provider: %v (want stored as rejected, not an error)", err)
 	}
@@ -71,7 +108,7 @@ func TestInsertAcceptsResubmissionAfterRejection(t *testing.T) {
 	}
 
 	good := InsertInput{Provider: "greenhouse", Board: "acme", Company: "Acme"}
-	reopened, err := Insert(ctx, repo, good, StatusPending, sources.Taxonomy())
+	reopened, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, good, StatusPending)
 	if err != nil {
 		t.Fatalf("resubmission after rejection: %v, want it recorded", err)
 	}
@@ -86,7 +123,7 @@ func TestInsertAcceptsResubmissionAfterRetirement(t *testing.T) {
 	ctx := context.Background()
 	in := InsertInput{Provider: "lever", Board: "dormant", Company: "Dormant Co"}
 
-	first, err := Insert(ctx, repo, in, StatusActive, sources.Taxonomy())
+	first, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusActive)
 	if err != nil {
 		t.Fatalf("first Insert: %v", err)
 	}
@@ -94,7 +131,7 @@ func TestInsertAcceptsResubmissionAfterRetirement(t *testing.T) {
 		t.Fatalf("Retire = %v,%v, want found", found, err)
 	}
 
-	again, err := Insert(ctx, repo, in, StatusActive, sources.Taxonomy())
+	again, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusActive)
 	if err != nil {
 		t.Fatalf("resubmission after retirement: %v, want it recorded", err)
 	}
@@ -107,7 +144,7 @@ func TestRenameCorrectsAPlaceholderCompany(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
 	in := InsertInput{Provider: "greenhouse", Board: "acme-corp", Company: PlaceholderCompany("acme-corp")}
-	b, err := Insert(ctx, repo, in, StatusPending, sources.Taxonomy())
+	b, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusPending)
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
 	}
@@ -132,7 +169,7 @@ func TestRenameCorrectsAPlaceholderCompany(t *testing.T) {
 func TestRenameReportsNotFoundForARetiredBoard(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
-	b, err := Insert(ctx, repo, InsertInput{Provider: "greenhouse", Board: "gone", Company: "Gone"}, StatusActive, sources.Taxonomy())
+	b, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "greenhouse", Board: "gone", Company: "Gone"}, StatusActive)
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
 	}
@@ -153,7 +190,7 @@ func TestActivateTransitionsPendingToActive(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
 	in := InsertInput{Provider: "workable", Board: "acme", Company: "Acme"}
-	b, err := Insert(ctx, repo, in, StatusPending, sources.Taxonomy())
+	b, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusPending)
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
 	}
@@ -189,19 +226,19 @@ func TestListActiveForProviderExcludesRejectedAndRetired(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
 
-	if _, err := Insert(ctx, repo, InsertInput{Provider: "gem", Board: "a", Company: "A"}, StatusActive, sources.Taxonomy()); err != nil {
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "gem", Board: "a", Company: "A"}, StatusActive); err != nil {
 		t.Fatalf("insert active: %v", err)
 	}
-	if _, err := Insert(ctx, repo, InsertInput{Provider: "gem", Board: "b", Company: "B"}, StatusPending, sources.Taxonomy()); err != nil {
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "gem", Board: "b", Company: "B"}, StatusPending); err != nil {
 		t.Fatalf("insert pending: %v", err)
 	}
-	if _, err := Insert(ctx, repo, InsertInput{Provider: "gem", Board: "c", Company: "C"}, StatusActive, sources.Taxonomy()); err != nil {
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "gem", Board: "c", Company: "C"}, StatusActive); err != nil {
 		t.Fatalf("insert to-retire: %v", err)
 	}
 	if _, err := repo.Retire(ctx, "gem", "c", ""); err != nil {
 		t.Fatalf("retire: %v", err)
 	}
-	if _, err := Insert(ctx, repo, InsertInput{Provider: "no-such-provider", Board: "d", Company: "D"}, StatusActive, sources.Taxonomy()); err != nil {
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "no-such-provider", Board: "d", Company: "D"}, StatusActive); err != nil {
 		t.Fatalf("insert rejected: %v", err)
 	}
 
@@ -221,10 +258,10 @@ func TestListBySubmitterReturnsOnlyThatUsersBoards(t *testing.T) {
 	alice := insertUser(t, pool, "alice@example.test")
 	bob := insertUser(t, pool, "bob@example.test")
 
-	if _, err := Insert(ctx, repo, InsertInput{Provider: "recruitee", Board: "a", Company: "A", SubmittedBy: &alice}, StatusPending, sources.Taxonomy()); err != nil {
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "recruitee", Board: "a", Company: "A", SubmittedBy: &alice}, StatusPending); err != nil {
 		t.Fatalf("insert for alice: %v", err)
 	}
-	if _, err := Insert(ctx, repo, InsertInput{Provider: "recruitee", Board: "b", Company: "B", SubmittedBy: &bob}, StatusPending, sources.Taxonomy()); err != nil {
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "recruitee", Board: "b", Company: "B", SubmittedBy: &bob}, StatusPending); err != nil {
 		t.Fatalf("insert for bob: %v", err)
 	}
 

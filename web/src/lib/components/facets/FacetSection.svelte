@@ -81,7 +81,6 @@
       excludable={def.excludable}
       placeholder={def.placeholder}
       cap={def.cap}
-      related={def.related}
       searchAliases={def.searchAliases}
       techIcons={def.techIcons}
       {onToggle}

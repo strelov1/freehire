@@ -9,15 +9,20 @@ import (
 	"github.com/strelov1/freehire/internal/job/collections"
 )
 
-func TestGenVocabEmitsRoleLabels(t *testing.T) {
+// The role catalogue is retired, so the generated contracts must stop carrying its
+// label map — a label table for a facet nothing serves is exactly the kind of dead
+// vocabulary a picker keeps offering long after the filter behind it went away.
+func TestGenVocabNoLongerEmitsRoleLabels(t *testing.T) {
 	got := genVocab()
-	if !strings.Contains(got, "export const ROLE_LABELS = {") {
-		t.Errorf("genVocab() missing ROLE_LABELS map:\n%s", got)
+	if strings.Contains(got, "export const ROLE_LABELS") {
+		t.Error("genVocab() still emits ROLE_LABELS")
 	}
-	// The catalog is the source of truth for picker labels — a named role must
-	// carry its human label.
-	if !strings.Contains(got, "'founding_engineer': 'Founding Engineer'") {
-		t.Errorf("genVocab() ROLE_LABELS missing founding_engineer label")
+	if strings.Contains(got, "founding_engineer") {
+		t.Error("genVocab() still emits a named role slug")
+	}
+	// The specialization labels that answer the same question stay.
+	if !strings.Contains(got, "export const CATEGORY_VALUES") {
+		t.Errorf("genVocab() lost the category vocabulary:\n%s", got)
 	}
 }
 

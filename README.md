@@ -144,12 +144,12 @@ likely to run:
 
 ```bash
 go run ./cmd/migrate       # apply pending migrations (run before deploying code that reads new schema)
-go run ./cmd/ingest sources/greenhouse.yml  # crawl one board file and upsert jobs (path also via SOURCES_FILE)
+go run ./cmd/ingest greenhouse  # crawl one provider's catalog boards and upsert jobs (also via INGEST_PROVIDER)
 go run ./cmd/enrich        # drain the enrichment queue (LLM); needs LLM_* config
 go run ./cmd/embed         # drain the semantic queue into pgvector chunks
 go run ./cmd/search-drain  # push queued job writes into the live search index (run every 1-2 min)
 go run ./cmd/reindex       # rebuild the Meilisearch index from Postgres (full swap)
-go run ./cmd/tg-ingest     # crawl the Telegram channels in sources/telegram.yml
+go run ./cmd/tg-ingest     # crawl the active channels in telegram_channels
 go run ./cmd/tg-extract    # LLM-extract vacancies from crawled Telegram posts
 go run ./cmd/capture-apply-form  # fetch queued postings' ATS application forms
 go run ./cmd/backfill-derive     # re-derive every deterministic column — facets, fingerprints,
@@ -163,8 +163,6 @@ only hard-delete path in the system, and it is dry-run by default.
 
 ```
 cmd/                 entry points: server + the standalone workers above
-sources/             board files, one per provider (e.g. greenhouse.yml = company + board id),
-                     plus a mixed custom.yml and telegram.yml (Telegram channels to crawl)
 migrations/          SQL schema (source for both sqlc and initdb)
 web/                 the SvelteKit frontend
 extension/           the Chrome side-panel extension
@@ -175,6 +173,7 @@ internal/            ~130 domain packages; the load-bearing ones:
   handler/           HTTP handlers
   auth/              auth primitives (JWT cookie, API keys) + OAuth sign-in
   sources/           source adapters (greenhouse / lever / adzuna / …) + registry
+  boardcatalog/      the board catalog: which company crawls on which ATS, under what board id
   pipeline/          ingest runner (fetch → normalize → dedup → upsert)
   linksource/        resolves outbound job links found in Telegram posts
   telegram/          Telegram-channel crawl + LLM vacancy extraction
@@ -240,16 +239,16 @@ count — lives on its own page: [docs/sources.md](docs/sources.md).
 
 ## Adding a source
 
-Adding a company is one entry in the provider's board file (`sources/<provider>.yml`,
-or the mixed `sources/custom.yml`) — `company` + `board` (and `provider` when an
-entry overrides the file's). Adding an ATS platform is a new adapter in
-`internal/ingest/sources` plus one line in `sources.All` — every adapter speaks the same
-`Source` interface, and `cmd/ingest` validates the file against the registry before
-any crawl.
+Adding a company is one row in the `boards` catalog — `company` + `provider` +
+`board` — added through the "contribute a board" form on the site, or by a curator
+with `go run ./cmd/add-board --provider=… --board=… --company=… --apply`. Adding an
+ATS platform is a new adapter in `internal/ingest/sources` plus one line in
+`sources.All` — every adapter speaks the same `Source` interface, and a board is
+validated against the registry when it enters the catalog, before any crawl.
 
 For most companies the platform is already supported, so adding them is just one
-line in the board file. Only when a company runs on an ATS we don't cover yet does
-it need a new provider (a new adapter). Either way, if you want a source added,
+catalog row. Only when a company runs on an ATS we don't cover yet does it need a
+new provider (a new adapter). Either way, if you want a source added,
 **start by [opening an issue](https://github.com/strelov1/freehire/issues)** — name
 the company and its careers URL, and we'll confirm whether it's a one-line add or a
 new provider before any code.
@@ -277,9 +276,10 @@ fill the application form for you. Source lives under `extension/`
 **Contributions are welcome, and issues and PRs are open to everyone.** No
 allowlist, no approval step — open one.
 
-The easiest way to help is to **add a source**: one entry in a `sources/` board
-file, or a new adapter in `internal/ingest/sources`. Missing a company you would apply
-to? That is a one-line PR, and it is the single most useful thing you can send.
+The easiest way to help is to **add a source**: submit a board through the
+"contribute a board" form on the site, or send a new adapter in
+`internal/ingest/sources`. Missing a company you would apply to? Contributing its
+board takes a URL, and it is the single most useful thing you can send.
 
 Questions and half-formed ideas are equally welcome in
 [Discussions](https://github.com/strelov1/freehire/discussions) — no need to

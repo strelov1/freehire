@@ -59,10 +59,9 @@ type InsertBoardParams struct {
 }
 
 // Insert a board row. Callers that pass status='active' also pass a non-null
-// activated_at (curator additions via cmd/add-board, and the one-off
-// cmd/backfill-board-catalog); every other caller passes NULL for both status='pending'
-// and status='rejected'. A collision with an existing 'pending'/'active' row on
-// (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
+// activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
+// for both status='pending' and status='rejected'. A collision with an existing
+// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 // the caller maps that to a duplicate-board error.
 func (q *Queries) InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error) {
 	row := q.db.QueryRow(ctx, insertBoard,
@@ -175,6 +174,41 @@ func (q *Queries) ListBoardsBySubmitter(ctx context.Context, submittedBy pgtype.
 			&i.CreatedAt,
 			&i.ActivatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveBoards = `-- name: ListLiveBoards :many
+SELECT provider, board, region FROM boards
+WHERE status IN ('pending', 'active')
+ORDER BY provider, board, region
+`
+
+type ListLiveBoardsRow struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+// Every board a crawl still visits, across all providers — the identity cmd/prune needs
+// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
+// whole row: the guard asks a set-membership question and nothing else.
+func (q *Queries) ListLiveBoards(ctx context.Context) ([]ListLiveBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listLiveBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLiveBoardsRow{}
+	for rows.Next() {
+		var i ListLiveBoardsRow
+		if err := rows.Scan(&i.Provider, &i.Board, &i.Region); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

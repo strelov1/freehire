@@ -412,7 +412,9 @@ export const GROUPS: Group[] = [
           'Returns the cached analysis, flagged `stale` when your CV or the job ' +
           'changed since it was computed, or a null analysis when none is cached. ' +
           '`has_cv` is false when you have no stored CV. `allowance` reports how much of ' +
-          'today you have used against what the day allows, and when it resets.',
+          'today you have used against what the day allows, and when it resets. ' +
+          '`tailor_allowance` reports the same for CV tailoring, which carries its own ' +
+          'daily ceiling — the job page offers tailoring from this response.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl "${BASE_URL}/jobs/<slug>/match-analysis" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -428,7 +430,8 @@ export const GROUPS: Group[] = [
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" },
+    "tailor_allowance": { "feature": "tailor", "used": 0, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }`,
       },
@@ -1985,6 +1988,31 @@ data: {"type":"result","stop_reason":"completed"}
   -H 'Content-Type: application/json' -b cookies.txt \\
   -d '{"text":"Senior Go engineer, 6 years..."}'`,
         responseExample: `{ "data": { "skills": ["go", "postgresql"], "categories": ["backend"], "seniority": "senior" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/linkedin/import',
+        auth: 'cookie',
+        summary: 'Derive the same profile from a public LinkedIn profile link.',
+        description:
+          'Reads the profile page anonymously — no LinkedIn account, cookie or token is ' +
+          'sent or accepted — and runs its headline and address through the same ' +
+          'dictionaries `/me/resume/extract` uses, so the facet half of the response is ' +
+          'identical in shape. Accepts a profile URL in any form (tracking parameters, a ' +
+          'country subdomain, a sub-page path) or the bare public id. ' +
+          '**Work history is not available**: LinkedIn withholds every job title and ' +
+          'position description from a reader who is not signed in, so the facets are ' +
+          'derived from the headline and the location from the stated address. Nothing is ' +
+          'stored, and this does not create a CV. ' +
+          'Errors are distinct on purpose: `400` the link names no profile, `502` LinkedIn ' +
+          'did not answer, `422` the page carried no readable profile.',
+        body: [
+          { name: 'url', type: 'string', description: 'Profile URL or bare public id, e.g. `linkedin.com/in/your-name`.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/linkedin/import" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"url":"https://www.linkedin.com/in/your-name"}'`,
+        responseExample: `{ "data": { "skills": ["typescript", "go"], "categories": ["backend"], "seniority": "senior", "location": { "countries": ["br"], "regions": ["latam"], "cities": ["Florianópolis"] }, "name": "Dana Okonkwo", "headline": "Senior Backend Engineer…", "company": "Northwind Systems" } }`,
       },
       {
         method: 'PUT',

@@ -1,37 +1,46 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { afterNavigate, replaceState } from '$app/navigation';
-  import { authDialog, openAuthDialog, closeAuthDialog } from '$lib/auth-dialog.svelte';
-  import AuthDialog from './AuthDialog.svelte';
+  import { afterNavigate, goto } from '$app/navigation';
+  import { signinUrl } from '$lib/signin';
   import HeaderSearch from './HeaderSearch.svelte';
-  import HeaderListSearch from './HeaderListSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
-  import NotificationBell from './NotificationBell.svelte';
   import BrandMark from './BrandMark.svelte';
-  import { safeRedirect } from '$lib/safeRedirect';
   import { isFullBleedRoute } from '$lib/shellLayout';
+  import { HEADER_LINKS } from '$lib/siteNav';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
   // action all live in HeaderMenu.
   //
-  // The middle slot is one text field that adapts to context: on the list pages
-  // (the homepage feed `/`, /companies, and a company's own /companies/:slug jobs
-  // list) it IS that page's filter (HeaderListSearch drives the list, so there's no
-  // duplicate box); everywhere else it's the global launcher with the instant
-  // dropdown (HeaderSearch). A company detail page and a collection landing page are
-  // both jobs lists scoped to that entity, so the header search filters their postings
-  // (and hosts the All-filters trigger) — hence they share the 'company' jobs proxy.
-  const listKind = $derived(
-    page.url.pathname === '/'
-      ? 'jobs'
-      : page.url.pathname === '/companies'
-        ? 'companies'
-        : /^\/(companies|collections)\/[^/]+$/.test(page.url.pathname)
-          ? 'company'
-          : null,
-  );
+  // The middle slot is ONE search box, on every page but one. Where a list has
+  // registered itself (the feed at /jobs, /companies, and a company's or collection's
+  // own scoped jobs list) it filters that list in place and hosts the All-filters
+  // trigger; everywhere else the same box navigates to the feed carrying the same
+  // filter.
+  //
+  // `listKind` survives only to word the placeholder — the box asks the page nothing
+  // else. It used to select between two components that shared everything but that one
+  // behaviour and drifted apart in the parts they shared.
+  const listKind = $derived(page.url.pathname === '/companies' ? 'companies' : 'jobs');
+
+  // The homepage is the one exception: its whole content is a large centred copy of
+  // this same box, so the header renders none. Two identical fields on one screen make
+  // the visitor choose between them for no reason, and the hero is the focused one.
+  // The brand and the menu stay — sign-in and notifications live in the menu's own
+  // control strip, and both have to remain reachable.
+  const bareHeader = $derived(page.url.pathname === '/');
+
+  /** How many of HEADER_LINKS the bare header carries below `lg`, taken from the FRONT of
+   *  that list — so its order is the contract, and reordering it changes what a narrow
+   *  screen gets. Today that is Jobs and Companies.
+   *
+   *  Two, because that is what fits at the narrow end (33px to spare at 320px, labels
+   *  only — see the nav below). `lg` rather than a width nearer the 800px where all five
+   *  do begin to fit, because Tailwind's own breakpoints are what the rest of this header
+   *  is written in and one more arbitrary query is a second answer to the same question.
+   *  Under `lg` the burger lists all five anyway, which is where they were until now. */
+  const LINKS_BELOW_LG = 2;
 
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
@@ -39,39 +48,25 @@
   // width and centers itself in the gap rather than stretching across the monitor.
   const fullBleed = $derived(isFullBleedRoute(page.url.pathname));
 
-  // The auth dialog lives at the layout level but its open state is a shared
-  // singleton (see auth-dialog.svelte), so deep components — like a job's Save
-  // button — can prompt sign-in through the same dialog this header renders.
-
-  // Surface auth prompts carried in the URL on the client, then clean it.
-  // ?auth_error: a failed OAuth callback. ?auth=required: a guarded page (e.g.
-  // /my/tracking, /jobs/swipe) bounced a signed-out visitor here to sign in. Runs in
-  // afterNavigate — not onMount — because this header lives in the persistent root
-  // layout: a guard that redirects here via client-side navigation never remounts
-  // it, so onMount would fire only on a cold load and miss the in-app bounce.
-  // afterNavigate covers both the initial load and every later navigation, and
-  // stays off the SSR path. The replaceState clean-up below removes the params, so
-  // the immediate re-run sees none and no loop forms.
-  // safeRedirect (in $lib/safeRedirect) accepts only a same-origin rooted path as
-  // the post-login redirect — never a scheme-relative "//host", absolute URL, or a
-  // backslash/control-char trick — mirroring the backend's SafeReturnPath, so a
-  // crafted link can't bounce the user off-site.
-
+  // A failed OAuth callback lands back wherever that attempt's `returnTo` pointed,
+  // carrying `?auth_error` (appended by the backend — see internal/api/handler/oauth.go)
+  // — which could be ANY page, not just one that itself knows about /signin. This is
+  // the one place that catches it regardless of where it landed, and sends the visitor
+  // on to /signin with the failure surfaced there instead of opening the in-place
+  // dialog over whatever page that happened to be. Runs in afterNavigate — not
+  // onMount — because this header lives in the persistent root layout: a redirect
+  // that lands here via client-side navigation never remounts it, so onMount would
+  // fire only on a cold load and miss the in-app bounce. afterNavigate covers both
+  // the initial load and every later navigation, and stays off the SSR path.
   afterNavigate(() => {
-    const params = page.url.searchParams;
-    if (params.has('auth_error')) {
-      // A real failure: seed the dialog's error banner.
-      openAuthDialog('login', 'Sign-in failed. Please try again.');
-    } else if (params.get('auth') === 'required') {
-      // Just a sign-in gate, not an error — open the dialog with no error banner.
-      // ?redirect (set by a guarded page) is the deep link to return to after
-      // sign-in; stash it before the URL is cleaned below.
-      openAuthDialog('login', null, safeRedirect(params.get('redirect')));
-    } else {
-      return;
-    }
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
-    replaceState(page.url.pathname, {});
+    if (!page.url.searchParams.has('auth_error')) return;
+    const query = [...page.url.searchParams]
+      .filter(([key]) => key !== 'auth_error')
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+      .join('&');
+    const returnTo = page.url.pathname + (query ? `?${query}` : '');
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
+    void goto(signinUrl({ returnTo, error: 'oauth' }), { replaceState: true });
   });
 </script>
 
@@ -97,7 +92,11 @@
         class="flex items-center gap-2 text-sm font-semibold tracking-tight"
       >
         <BrandMark />
-        <span class="hidden sm:inline" aria-hidden="true">freehire</span>
+        <!-- Dropped on a phone to leave the middle slot its width for the search box —
+             except on the homepage, which puts no box there (its own hero is the box) and
+             so has the room. What the row spends that room on instead is the nav below,
+             and the two budgets are the same 358px: they are set together. -->
+        <span class={bareHeader ? 'inline' : 'hidden sm:inline'} aria-hidden="true">freehire</span>
       </a>
     </div>
 
@@ -106,22 +105,46 @@
          a 48rem basis so it lands at that width instead of an even third of the row; the
          cap then hands the rest back to the side slots, which keeps it on the axis. -->
     <div class={['flex min-w-0 flex-1', fullBleed && 'max-w-3xl basis-3xl']}>
-      {#if listKind === 'jobs' || listKind === 'company'}
-        <HeaderListSearch placeholder="Search jobs…" />
-      {:else if listKind === 'companies'}
-        <HeaderListSearch placeholder="Search companies…" />
+      {#if bareHeader}
+        <!-- All five do not fit beside the brand and the burger on a phone, but the row
+             they share is otherwise EMPTY on this route — the homepage's search box is its
+             hero, not this slot — so the front of the list rides along and the rest wait
+             for `lg` (see LINKS_BELOW_LG). The cut is by width, not by rank; the burger a
+             thumb away still lists all five with the same glyph and a full label, which is
+             also why bare icons here would trade a legible row for guesses. -->
+        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-6">
+          <!-- Divides the nav from the wordmark, the same rule the search box draws
+               between its Location scope and the field. Without it the first link sat
+               one word-gap from "freehire" and read as part of it. -->
+          <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
+          {#each HEADER_LINKS as link, i (link.href)}
+            {@const Icon = link.icon}
+            <a
+              href={resolve(link.href)}
+              class={[
+                'flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground',
+                i >= LINKS_BELOW_LG && 'hidden lg:flex',
+              ]}
+            >
+              <!-- Label alone on a phone. The glyph is 22px with its gap and both links
+                   carry one, which at 320px pushed "Companies" under the burger; the word
+                   is what names the destination, so the glyph is what gives way. -->
+              <Icon class="hidden size-4 shrink-0 sm:block" aria-hidden="true" />
+              {link.label}
+            </a>
+          {/each}
+        </nav>
       {:else}
-        <HeaderSearch />
+        <HeaderSearch
+          placeholder={listKind === 'companies' ? 'Search companies…' : 'Search jobs…'}
+        />
       {/if}
     </div>
 
+    <!-- One cluster, not two: the bell lives inside HeaderMenu beside the profile it
+         notifies about, so this slot is just the menu. -->
     <div class={['flex shrink-0 items-center gap-1', fullBleed && 'flex-1 basis-0 justify-end']}>
-      <NotificationBell />
       <HeaderMenu />
     </div>
   </div>
 </header>
-
-{#if authDialog.open}
-  <AuthDialog bind:mode={authDialog.mode} initialError={authDialog.error} onClose={closeAuthDialog} />
-{/if}

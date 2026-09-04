@@ -709,14 +709,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  /* Tab rail scrolls horizontally on narrow screens without a visible scrollbar. */
-  .no-scrollbar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-</style>

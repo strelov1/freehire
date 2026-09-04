@@ -12,6 +12,7 @@
 
 import type { Answers, Display, RevisionView } from '$lib/generated/contracts';
 import type {
+  CvAppearanceDefaults,
   CvAtsDelta,
   CvJobMatch,
   CvMeta,
@@ -58,6 +59,7 @@ import type {
   SubmissionInput,
   PrefillResult,
   Contribution,
+  FoundJob,
   ResolvedLink,
   ReferralOffer,
   ReferralRequestInput,
@@ -72,10 +74,13 @@ import type {
   MatchAnalysisResponse,
   Allowance,
   AiUsage,
+  BillingOverview,
+  PlansMatrix,
   PlanState,
   UsageHistoryEntry,
   MyAnalysisItem,
   ResumeProfile,
+  LinkedInImport,
   PhotoMeta,
   ResumeMeta,
   CandidateContacts,
@@ -1020,6 +1025,42 @@ export function createApi(
     return requestData<PlanState>('/api/v1/me/plan');
   }
 
+  /** Where this caller buys Pro: a link to the provider's hosted paywall, carrying their
+   *  own account id. We never see a card.
+   *
+   *  Throws when billing is not configured on this deployment, or when no paywall is set
+   *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
+   *  entry point, never as an error to show. */
+  async function billingCheckout(priceID?: string): Promise<{ url: string }> {
+    const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
+    return requestData<{ url: string }>(`/api/v1/billing/checkout${q}`);
+  }
+
+  /** What the caller is paying and what has been charged. 404 when there is no
+   *  subscription, which is the ordinary state for a free account — the surface renders
+   *  nothing rather than an error. */
+  async function billingSubscription(): Promise<BillingOverview> {
+    return requestData<BillingOverview>('/api/v1/billing/subscription');
+  }
+
+  /** What each plan allows and what Pro costs. Public: no session needed. Powers /pricing.
+   *
+   *  The allowances come from the same configuration the metering path reads, so the
+   *  comparison cannot drift from the limits actually enforced. */
+  async function plans(): Promise<PlansMatrix> {
+    return requestData<PlansMatrix>('/api/v1/plans');
+  }
+
+  /** Where this caller manages their subscription — the payment provider's own page, where
+   *  they change their card or cancel. Generated per visit and short-lived, so it is fetched
+   *  when a surface is about to show it rather than stored.
+   *
+   *  404 when there is no subscription, or the provider is unreachable. Either way the
+   *  surface omits the link rather than rendering a broken one. */
+  async function billingManageUrl(): Promise<{ url: string }> {
+    return requestData<{ url: string }>('/api/v1/billing/manage');
+  }
+
   /** What the caller's account did this period: model calls, failures and tokens, read
    *  from the LLM gateway. Never fails for anything the caller can act on — an account
    *  that has never used AI, and a gateway that is down, both answer zeroes. */
@@ -1378,6 +1419,21 @@ export function createApi(
     );
   }
 
+  /** Read a public LinkedIn profile and derive the same facets `extractResumeProfile`
+   *  derives, for the user who has no CV file to hand. Nothing is stored: this does not
+   *  create a CV and does not change the onboarding gate, which is CV presence.
+   *
+   *  Accepts any form the user is likely to paste — a profile URL with tracking parameters,
+   *  a country subdomain, or the bare public id. Validation lives on the server, so this
+   *  sends what was typed rather than pre-judging it.
+   *
+   *  Rejects with 400 (not a profile link), 502 (LinkedIn did not answer) or 422 (the page
+   *  carried no readable profile) — three situations the caller should not flatten into one
+   *  message. */
+  async function importLinkedInProfile(url: string): Promise<LinkedInImport> {
+    return requestData<LinkedInImport>('/api/v1/me/linkedin/import', jsonBody('POST', { url }));
+  }
+
   /** The caller's résumé status, including the read-only structured résumé parsed from
    *  the CV (null when none is current). Session-scoped; always 200 (an absent/disabled
    *  résumé is a normal state the profile renders). */
@@ -1496,6 +1552,14 @@ export function createApi(
    *  not an error. */
   async function prefillSubmission(url: string): Promise<PrefillResult> {
     return requestData<PrefillResult>('/api/v1/submissions/prefill', jsonBody('POST', { url }));
+  }
+
+  /** Ask whether a job page in the wild is one the catalog already carries. Public and
+   *  read-only — it writes nothing, records no contribution, and fetches no page, so it is
+   *  the half of the link intake a signed-out visitor may run. `null` means the URL names
+   *  no posting we hold, which is an answer rather than an error. */
+  async function findJobByUrl(url: string): Promise<FoundJob | null> {
+    return requestData<FoundJob | null>(`/api/v1/jobs/find?url=${encodeURIComponent(url)}`);
   }
 
   /** Hand a job link to freehire. One sequence serves every surface: the catalog is checked,
@@ -1844,6 +1908,21 @@ export function createApi(
   /** Switch a CV's template only (title + document untouched). */
   async function setCvTemplate(id: string, templateId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/template`, jsonBody('PUT', { template_id: templateId }));
+  }
+
+  /** The caller's saved defaults for a NEW CV's template/typography/margins — or the system's
+   *  standard defaults when they have never saved any. */
+  async function getCvAppearanceDefaults(): Promise<CvAppearanceDefaults> {
+    return requestData<CvAppearanceDefaults>('/api/v1/me/cv-appearance-defaults');
+  }
+
+  /** Replace the caller's saved CV appearance defaults wholesale. Only seeds CVs created
+   *  afterward — never touches an existing CV. */
+  async function setCvAppearanceDefaults(defaults: CvAppearanceDefaults): Promise<CvAppearanceDefaults> {
+    return requestData<CvAppearanceDefaults>(
+      '/api/v1/me/cv-appearance-defaults',
+      jsonBody('PUT', defaults),
+    );
   }
 
   /** List the caller's TAILORED CVs (the re-open list): each with its vacancy slug + bound
@@ -2198,6 +2277,10 @@ export function createApi(
     myInterviews,
     myAnalyses,
     myPlan,
+    plans,
+    billingCheckout,
+    billingManageUrl,
+    billingSubscription,
     myPlanHistory,
     myUsage,
     listViewedSlugs,
@@ -2237,6 +2320,7 @@ export function createApi(
     getTalentNetworkProfile,
     deleteAccount,
     extractResumeProfile,
+    importLinkedInProfile,
     getResume,
     deleteResume,
     putResumeContacts,
@@ -2256,6 +2340,7 @@ export function createApi(
     submitJob,
     listMySubmissions,
     prefillSubmission,
+    findJobByUrl,
     resolveJobLink,
     listMyContributions,
     createReferralRequest,
@@ -2306,6 +2391,8 @@ export function createApi(
     listCvFonts,
     setCvTemplate,
     getCv,
+    getCvAppearanceDefaults,
+    setCvAppearanceDefaults,
     getCvAtsDelta,
     getCvJobMatch,
     updateCv,

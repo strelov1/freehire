@@ -29,7 +29,6 @@ type Parsed struct {
 // Skills are absent on purpose: several skills narrow a search sensibly, which is the
 // whole reason `java` and `kubernetes` are separate facet values.
 var singular = map[Kind]bool{
-	KindRole:     true,
 	KindCompany:  true,
 	KindCategory: true,
 	KindTitle:    true,
@@ -51,17 +50,14 @@ func (p Parsed) ExcludedKinds() []Kind {
 
 // kindRank orders the kinds a fully-typed phrase could resolve to, lowest wins.
 //
-// The reasoning is which reading of a WHOLE phrase is strongest, and it follows the
-// same doctrine Build uses to drop a category that shares a role's slug:
+// The reasoning is which reading of a WHOLE phrase is strongest:
 //
-//   - a role names a job, which is what somebody typing a whole phrase is naming;
 //   - a title is what a posting is actually CALLED, so it beats anything merely
-//     mentioned inside it;
+//     mentioned inside it, and it is what somebody typing a whole phrase is naming;
 //   - a company names an employer, and rarely collides with the rest at all;
 //   - a skill is one technology inside a job, not the job;
 //   - a category names a department, the weakest reading of a phrase.
 var kindRank = map[Kind]int{
-	KindRole:     0,
 	KindTitle:    1,
 	KindCompany:  2,
 	KindSkill:    3,

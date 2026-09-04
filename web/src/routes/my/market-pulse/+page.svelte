@@ -55,7 +55,7 @@
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: builds an href string once, never stored as reactive state
     const params = filters ? filtersToParams(filters.applied) : new URLSearchParams();
     params.append('skills', skill);
-    return `/?${params}`;
+    return `/jobs?${params}`;
   }
 
   // (Re)load the profile once the session resolves.

@@ -497,6 +497,13 @@ anonymous (signed-out) visitors no card SHALL be dimmed. Surfaces where every
 listed job is by definition already viewed (the My Jobs history and board) SHALL
 NOT dim their cards.
 
+Alongside the dimming, the card's header rail carries a glyph marking the card as
+personally viewed. That glyph SHALL NOT be an eye, because the same rail now
+carries the public view count under an eye (see `job-engagement-counts`). Two eyes
+in one rail, one meaning "you opened this" and one meaning "this many people
+opened this", cannot be told apart. The personal marker SHALL therefore be a
+check — read as "seen by you" — leaving the eye to the count.
+
 #### Scenario: Signed-in user sees viewed jobs dimmed
 
 - **WHEN** a signed-in user who has viewed some jobs opens the jobs list or runs
@@ -524,6 +531,19 @@ NOT dim their cards.
 - **WHEN** a signed-in user opens the My Jobs history or board, where every card
   is already viewed
 - **THEN** no card is dimmed
+
+#### Scenario: The personal viewed marker is a check, not an eye
+
+- **WHEN** a signed-in user's already-viewed job card is rendered
+- **THEN** its personal marker is a check glyph
+- **AND** the eye glyph in the same rail carries the public view count
+
+#### Scenario: A viewed card with views shows both marks unambiguously
+
+- **WHEN** a card is rendered for a job the signed-in user has viewed and whose
+  `view_count` is 231
+- **THEN** the rail shows a check for the personal mark and an eye with 231 for
+  the count
 
 ### Requirement: My jobs page
 

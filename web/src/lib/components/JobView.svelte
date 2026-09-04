@@ -5,8 +5,8 @@
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
   import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
@@ -193,9 +193,10 @@
     if (!applied) showApplyPrompt = true;
   }
 
-  // Gate — "Sign up" routes to /onboarding (registration is a step there now, not a
-  // dialog — see auth-dialog.svelte.ts); "View without signing in" opens the posting
-  // in a new tab (the navigation the click was holding back).
+  // Gate — "Sign up" routes to /onboarding, which bounces an anonymous visitor to
+  // /signin to register before continuing into the CV/profile wizard; "View without
+  // signing in" opens the posting in a new tab (the navigation the click was holding
+  // back).
   function signUpFromGate() {
     showSignInPrompt = false;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
@@ -224,33 +225,31 @@
     showApplyPrompt = false;
   }
 
-  // Saving requires an account: a signed-out click opens the sign-in dialog
-  // instead (no auto-save afterwards — once signed in they can click again).
+  // Saving requires an account.
   function onSaveClick() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     toggleSave();
   }
 
-  // Reporting also requires an account (the report is attributed to the user); a
-  // signed-out click opens sign-in instead of the dialog.
+  // Reporting also requires an account (the report is attributed to the user).
   function onReportClick() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     showReport = true;
   }
 
   // The discussion is members-only: a signed-out click is held back (the link
-  // does not navigate) and the sign-in dialog opens instead. The href stays put
+  // does not navigate) and the sign-in page opens instead. The href stays put
   // so the route is still SSR-linkable for signed-in visitors.
   function onDiscussionClick(e: MouseEvent) {
     if (!isAuthenticated()) {
       e.preventDefault();
-      openAuthDialog('login');
+      promptSignIn();
     }
   }
 
@@ -372,6 +371,26 @@
        (internal/enrich), so the body is the only part of this snippet that takes
        the posting's language. -->
   <JobDescription html={job.description} lang={contentLang} />
+
+  {#if job.skills?.length}
+    <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw
+         `enrichment.skills` is kept in the JSONB and never served (see JobRow's same
+         fix), so reading it here always rendered nothing. -->
+    <section class="flex flex-col gap-2 border-t border-border pt-4">
+      <h2 class="text-base font-semibold">Skills</h2>
+      <ul class="flex flex-wrap gap-1.5">
+        {#each job.skills as skill (skill)}
+          <li>
+            <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
+                 filter panel reading "CI/CD" — the same skill spelled two ways on one
+                 screen. SkillChip labels it from the dictionary and, for a skill the
+                 glossary has reached, carries the definition too. -->
+            <SkillChip slug={skill} />
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
 {/snippet}
 
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
@@ -508,7 +527,14 @@
                      flags over one another so a many-country remote role stays a
                      single compact row instead of wrapping. -->
                 <dd class="flex min-w-0 justify-end text-base">
-                  <CountryFlagStack codes={facet.values.map((v) => v.flag ?? '')} link />
+                  <!-- `labelClass` matches the sibling `dd` below (text-sm font-medium,
+                       ordinary foreground) — the component's own default is a muted
+                       caption sized for the browse card and company panel instead. -->
+                  <CountryFlagStack
+                    codes={facet.values.map((v) => v.flag ?? '')}
+                    link
+                    labelClass="text-sm font-medium"
+                  />
                 </dd>
               {:else}
                 <dd class="min-w-0 break-words text-right font-medium"
@@ -521,23 +547,6 @@
             </div>
           {/each}
         </dl>
-      {/if}
-
-      {#if job.skills?.length}
-        <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the
-             raw `enrichment.skills` is kept in the JSONB and never served (see
-             JobRow's same fix), so reading it here always rendered nothing. -->
-        <ul class="flex flex-wrap gap-1.5 border-t border-border pt-4 first:border-t-0 first:pt-0">
-          {#each job.skills as skill (skill)}
-            <li>
-              <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
-                   filter panel reading "CI/CD" — the same skill spelled two ways on one
-                   screen. SkillChip labels it from the dictionary and, for a skill the
-                   glossary has reached, carries the definition too. -->
-              <SkillChip slug={skill} />
-            </li>
-          {/each}
-        </ul>
       {/if}
 
       <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">

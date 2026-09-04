@@ -395,10 +395,13 @@ func TestUpdateManualParams_ContentHashUsesThePersistedSlugNotTheRederivedOne(t 
 // difference — a column that moves without moving the key is one the cheap path would
 // silently leave stale.
 //
-// The key is content_hash AND cities, and this test is the authority on why it needs both.
-// cities is the one column UpsertJob writes that jobhash.Of does not read: a caller's
-// structured city list overrides the location-derived one (jobderive.Derive), so it can move
-// while every hashed field stands still. Folding cities into Of instead would change every
+// The key is content_hash plus the columns UpsertJob writes that jobhash.Of does not read, and
+// this test is the authority on why it needs them. cities is one: a caller's structured city
+// list overrides the location-derived one (jobderive.Derive), so it can move while every hashed
+// field stands still. english_level is another, and became one the day it gained a structured
+// tier of its own — until then it was read out of the hashed description and so could not move
+// on its own. Note that education_level sits on the OTHER side of the same choice: it is hashed,
+// because it was hashed before either had a structured tier. Folding cities into Of instead would change every
 // stored hash at once and make the first crawl after deploy rewrite and re-index the whole
 // catalogue — the write storm this change exists to remove. So the predicate carries it.
 //
@@ -431,8 +434,9 @@ func TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites(t *testing.T) 
 			}
 			if matchKeyHeld(baseParams, got) {
 				t.Errorf("Input.%s moved %v but left RefreshUnchangedJob's match key "+
-					"(content_hash, cities) unchanged: an unchanged re-ingest would skip the "+
-					"row and leave those columns stale", field.Name, moved)
+					"(content_hash, cities, salary_*_source, english_level) unchanged: an "+
+					"unchanged re-ingest would skip the row and leave those columns stale",
+					field.Name, moved)
 			}
 		})
 	}
@@ -446,7 +450,8 @@ func matchKeyHeld(a, b db.UpsertJobParams) bool {
 		a.SalaryMinSource == b.SalaryMinSource &&
 		a.SalaryMaxSource == b.SalaryMaxSource &&
 		a.SalaryCurrencySource == b.SalaryCurrencySource &&
-		a.SalaryPeriodSource == b.SalaryPeriodSource
+		a.SalaryPeriodSource == b.SalaryPeriodSource &&
+		a.EnglishLevel == b.EnglishLevel
 }
 
 // fullDraft populates every jobderive.Input field, including the optional structured signals,

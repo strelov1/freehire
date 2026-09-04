@@ -113,6 +113,7 @@ type professionLDPosting struct {
 	DatePosted         string `json:"datePosted"`
 	EmploymentType     string `json:"employmentType"`
 	ExperienceReqs     string `json:"experienceRequirements"`
+	EducationReqs      string `json:"educationRequirements"`
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
@@ -200,6 +201,7 @@ func (s profession) detail(ctx context.Context, loc, externalID string) (Job, bo
 		return Job{}, false
 	}
 	workMode, place := professionPlace(professionAddressLine(root))
+	education, english := professionEducationAndLanguage(ld.EducationReqs)
 	return Job{
 		ExternalID:         externalID,
 		URL:                loc,
@@ -212,6 +214,8 @@ func (s profession) detail(ctx context.Context, loc, externalID string) (Job, bo
 		Countries:          professionCountries(ld),
 		EmploymentType:     professionEmploymentType(ld.EmploymentType),
 		ExperienceYearsMin: professionExperienceYears(ld.ExperienceReqs),
+		EducationLevel:     education,
+		EnglishLevel:       english,
 		PostedAt:           parseDate(ld.DatePosted),
 	}, true
 }
@@ -390,4 +394,66 @@ func professionAddressLine(root *html.Node) string {
 		return ""
 	}
 	return textContent(n)
+}
+
+// professionSchoolLevels maps the platform's school picklist onto freehire's education
+// vocabulary. The Hungarian pair is the load-bearing part: főiskola (a three-to-four year
+// college programme) is the bachelor's-equivalent and egyetem (the five-year university
+// programme) the master's-equivalent — the distinction the picklist preserves from before
+// Bologna. Everything below them is the platform stating that no degree is required.
+//
+// "Felsőoktatási szakképzés" is deliberately absent. It is a two-year tertiary programme,
+// above secondary school and below a bachelor's, and freehire's four-value vocabulary has
+// no member for it — so it yields nothing rather than rounding to a neighbour, on the
+// jobfacts doctrine that a wrong value in a faceted field is worse than a missing one. It
+// is 28 of the 709 live postings.
+var professionSchoolLevels = map[string]string{
+	"Általános iskola":              "none",
+	"Szakiskola / szakmunkás képző": "none",
+	"Középiskola":                   "none",
+	"Főiskola":                      "bachelor",
+	"Egyetem":                       "master",
+}
+
+// professionEnglishLevels maps the platform's language picklist onto CEFR, for English.
+//
+// THE LEVELS ARE NOT "basic/medium/advanced". alapfok/középfok/felsőfok are Hungary's
+// state-recognised language-exam levels and are defined as B1/B2/C1 (Government Decree
+// 137/2008; the same equivalence every accredited exam centre publishes). Reading them by
+// their everyday sense puts each posting a level off — and the trio has no name for C2 at
+// all, which is why "felsőfok" is so often rendered as one.
+var professionEnglishLevels = map[string]string{
+	"Angol alapfok":          "b1",
+	"Angol középfok":         "b2",
+	"Angol felsőfok":         "c1",
+	"Angol anyanyelvi szint": "native",
+}
+
+// professionNoLanguageRequired is the platform's own way of stating that the posting asks
+// for no language at all — which is a statement about English, unlike naming some other
+// language and staying silent about it.
+const professionNoLanguageRequired = "Nem kell nyelvtudás"
+
+// professionEducationAndLanguage reads the educationRequirements picklist, which
+// comma-joins two different things: zero or more LANGUAGE levels and one SCHOOL level
+// ("Angol középfok, Német középfok, Egyetem"). Each half is resolved independently and a
+// token outside the closed vocabulary — read off all 709 live postings — yields nothing,
+// so a change on the platform's side reads as silence rather than as a wrong facet.
+//
+// Only English answers the English facet. A posting requiring German and saying nothing
+// about English states no English level; a posting requiring no language at all states
+// "none".
+func professionEducationAndLanguage(field string) (education, english string) {
+	for _, token := range strings.Split(field, ",") {
+		token = strings.TrimSpace(token)
+		switch {
+		case token == professionNoLanguageRequired:
+			english = "none"
+		case professionEnglishLevels[token] != "":
+			english = professionEnglishLevels[token]
+		case professionSchoolLevels[token] != "":
+			education = professionSchoolLevels[token]
+		}
+	}
+	return education, english
 }

@@ -4,7 +4,7 @@
 Telegram-channel crawl (web preview → `telegram_posts`) and LLM vacancy extraction into the job catalogue.
 
 ## Always true
-- `sources/telegram.yml` lists channels (each with a `kind` that steers the extraction prompt).
+- The `telegram_channels` table lists channels (each with a `kind` that steers the extraction prompt); `active=false` retires one without losing its posts.
 - `cmd/tg-ingest` crawls each channel's web preview into the `telegram_posts` queue.
 - `cmd/tg-extract` drains pending posts through the LLM into the job catalogue.
 - Both are run-once-and-exit cron workers.

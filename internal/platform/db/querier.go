@@ -246,6 +246,24 @@ type Querier interface {
 	// groups the result into one message per account, listing the jobs in the order it
 	// receives them. Without this the list order is whatever the join produced.
 	ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]int64, error)
+	// Take up to max_runs due runs, exactly once each.
+	//
+	// The CTE resolves each candidate's cadence and timeout through the same LEFT JOIN and
+	// defaults as the listing above, so a claim can never use different numbers from the
+	// report. FOR UPDATE ... SKIP LOCKED is what makes two overlapping scheduler ticks safe:
+	// the second skips the rows the first holds rather than blocking on them or double-claiming.
+	// `OF rs` names only the run-state table, since FOR UPDATE may not be applied to the
+	// nullable side of an outer join.
+	//
+	// A row is claimable when it is due and unclaimed, or when its claim has outlived that
+	// provider's own timeout plus the grace window — a scheduler killed between claiming and
+	// launching, and a run systemd killed at its timeout, both recover through that second arm
+	// with no operator.
+	//
+	// next_due_at advances to now() + cadence, not to next_due_at + cadence. Advancing at
+	// claim stops a 40-minute crawl from halving its own frequency; advancing from now() caps
+	// catch-up at ONE run, so a six-hour outage does not owe six.
+	ClaimDueRuns(ctx context.Context, arg ClaimDueRunsParams) ([]ClaimDueRunsRow, error)
 	// Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
 	// returning the email fields the matcher/classifier need. FOR UPDATE OF o locks only
 	// outbox rows; SKIP LOCKED lets concurrent workers take disjoint rows; the lease
@@ -329,13 +347,24 @@ type Querier interface {
 	// join is over just the claimed batch (batch_size rows), not the whole claimable set —
 	// cheap, unlike the ordering join this replaces above.
 	ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatchParams) ([]ClaimSemanticBatchRow, error)
-	// Lease a batch of pending, live matches for active subscriptions by stamping
-	// claimed_at, oldest-claimable first, ordered by subscription so the worker can
-	// group a subscription's matches into one digest. FOR UPDATE OF m locks only match
-	// rows; SKIP LOCKED lets overlapping passes take disjoint rows so a digest is sent
-	// at most once; the lease predicate reclaims rows whose sender died (stale
-	// claimed_at), so no separate reaper is needed. The digest is sent OUTSIDE this
-	// claim's transaction, so no network call is held inside a row lock.
+	// Lease pending, live matches for active subscriptions by stamping claimed_at,
+	// AT MOST per_subscription of them per subscription, so one busy subscription cannot
+	// starve the rest. FOR UPDATE OF the match rows with SKIP LOCKED lets overlapping passes
+	// take disjoint rows so a digest is sent at most once; the lease predicate reclaims rows
+	// whose sender died (stale claimed_at), so no separate reaper is needed. The digest is
+	// sent OUTSIDE this claim's transaction, so no network call is held inside a row lock.
+	//
+	// The per-subscription cap is the whole point. This used to be one flat
+	// `ORDER BY subscription_id, matched_at LIMIT batch_size` over every pending row, which
+	// reads as "oldest first" but is really "lowest subscription id first": a subscription
+	// whose filter matches most of the catalogue fills the batch every pass and every
+	// higher id is never reached. Measured on prod 2026-09-04 — one subscription with an
+	// EMPTY query held 248k pending matches, the queue was 1.14M deep, and subscriptions
+	// above it had attempts=0 since the day they were created. Nothing was broken; they were
+	// simply never in a batch.
+	//
+	// A LATERAL per subscription, rather than a window function, because FOR UPDATE cannot
+	// be used with window functions — and the row lock is what makes concurrent passes safe.
 	ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error)
 	// Claim a batch of pending posts by stamping claimed_at. SKIP LOCKED lets
 	// concurrent workers take disjoint rows; the lease predicate reclaims posts whose
@@ -766,12 +795,6 @@ type Querier interface {
 	// be inferred from a NULL job_id — an absence cmd/prune also produces. Users may own several of
 	// these. Returns the metadata the list and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
-	// Record a contribution of a novel company board. The unique index on (source, board) over the
-	// live statuses (migration 0049) rejects a second contribution of a board already queued or
-	// onboarded; the repository maps that violation to ErrBoardAlreadyContributed. A board that was
-	// rejected releases its identity, so it can be contributed again. The AI-credits reward is
-	// granted separately by the caller (credits.Reward), idempotent by the contribution id.
-	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error)
 	// File one person's claim that they applied to a posting and were never answered.
 	//
@@ -801,11 +824,6 @@ type Querier interface {
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
 	CreateReport(ctx context.Context, arg CreateReportParams) (JobReport, error)
-	// Record an unrecognized-but-valid link for manual review: source/board unset, status
-	// 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
-	// duplicate submission of the same url; the repository maps that violation to
-	// ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
-	CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error)
 	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
 	// duplicate name; the partial UNIQUE (user_id) WHERE derived_from_profile rejects a
 	// second profile-derived row for the same user (both surfaced by the repository via
@@ -905,6 +923,10 @@ type Querier interface {
 	// the same transaction, alongside LockJobForApply) is the durable record; the queue entry
 	// has nothing left to say. Mirrors DeleteApplyFormEntry.
 	DeleteAutoApplyEntry(ctx context.Context, id int64) error
+	// Erase one user's billing events. Account deletion calls this; the foreign key cascades,
+	// but deletion states what it erases explicitly rather than relying on a constraint to
+	// mean it.
+	DeleteBillingEventsForUser(ctx context.Context, userID pgtype.Int8) error
 	// Remove a submission once triage has resolved its (provider, board) and inserted the
 	// corresponding boards row.
 	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
@@ -1066,6 +1088,15 @@ type Querier interface {
 	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
 	// company_slug) so the member can offer again later (fresh proof, fresh moderation).
 	DeleteReferralOffer(ctx context.Context, arg DeleteReferralOfferParams) (int64, error)
+	// Forget the providers that are no longer eligible — every board retired, or the adapter
+	// gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
+	// it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty
+	// from 18 July).
+	//
+	// A CLAIMED row survives, for the same reason as the surplus-shard delete above: it is the
+	// only record that a crawl is still running, and losing it makes the fleet under-count
+	// itself. A provider disabled mid-crawl keeps its row for one more tick, until the reap.
+	DeleteRunStateForUnlistedProviders(ctx context.Context, providers []string) error
 	// Delete a saved search, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
@@ -1091,6 +1122,13 @@ type Querier interface {
 	// does not exist or is not the caller's (the handler maps that to 404). The match
 	// ledger cascades away with the subscription.
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
+	// Drop the shards left over from a higher shard count.
+	//
+	// A CLAIMED row is left alone. Deleting one would erase the scheduler's only record that a
+	// crawl is still executing, so the fleet would under-count itself and launch past its cap —
+	// and the surviving run would finish with nothing to report to. The row goes on the next
+	// tick after it is reaped, which costs one minute and cannot lose a slot.
+	DeleteSurplusRunStateShards(ctx context.Context, arg DeleteSurplusRunStateShardsParams) error
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
 	// Erase one user's daily counters. See DeleteUsageForUser.
@@ -1199,6 +1237,17 @@ type Querier interface {
 	// Idempotent via the outbox's UNIQUE (job_id). Run in the same transaction as the job's
 	// UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueApplyFormCapture(ctx context.Context, jobID int64) (int64, error)
+	// Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
+	// eligible jobs of the given company_slugs back into enrichment_outbox at the CURRENT
+	// target version, regardless of their existing enrichment_version. Unlike
+	// EnqueuePendingJobs (which only re-queues rows BELOW the target version), this also
+	// picks up a job already enriched under the current version — the case after adding a
+	// company to enrich.CompanyTypeHints, whose existing postings need a second pass with
+	// the new prompt hint, not a version bump that would re-enrich the whole catalogue.
+	// Same eligibility gate as EnqueuePendingJobs, so a re-run never queues work
+	// ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
+	// (not yet claimed) alone, so running this twice in a row costs nothing.
+	EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg EnqueueEnrichmentForCompanySlugsParams) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and confirmed technical), so an already-enriched job is not
@@ -1291,6 +1340,14 @@ type Querier interface {
 	// user is a no-op. The address itself is never stored here; it is always derived
 	// from the account's username (see the add-username-claim change).
 	EnsureMailbox(ctx context.Context, userID int64) error
+	// Materialise the (provider, 1..shards) rows a provider needs. ON CONFLICT DO NOTHING is
+	// load-bearing: an existing shard keeps its next_due_at, which is the fleet's stagger, and
+	// resetting it would bunch a provider's whole cycle onto one minute.
+	//
+	// A new shard is due immediately. That is deliberate — a shard that has never run has no
+	// schedule to respect, and the concurrency cap is what keeps a fresh 24-way provider from
+	// taking the whole fleet at once.
+	EnsureRunStateShards(ctx context.Context, arg EnsureRunStateShardsParams) error
 	// Seed today's counter for (user, feature) so the SELECT ... FOR UPDATE below always has
 	// a row to lock. That lock is what serialises two simultaneous first-ever consumptions,
 	// so an allowance can never be oversold by a race. An existing row is left untouched.
@@ -1429,6 +1486,9 @@ type Querier interface {
 	// repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
 	// other provider passes '' here, matching the column's default.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
+	// The user's saved CV appearance defaults, if any. No row means the user has never saved
+	// any — the caller falls back to the system defaults rather than treating this as an error.
+	GetCVAppearanceDefaults(ctx context.Context, userID int64) (CvAppearanceDefault, error)
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
 	// the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
@@ -1687,6 +1747,9 @@ type Querier interface {
 	// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
 	// error — the handler treats "not backfilled yet" and "computed empty" the same.
 	GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error)
+	// Which customer to ask the provider about for this account. NULL means the account has
+	// never transacted, which is the same answer the provider gives for an id it does not know.
+	GetStripeCustomerID(ctx context.Context, id int64) (pgtype.Text, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -1765,6 +1828,13 @@ type Querier interface {
 	// Reverse lookup: the user linked to an inbound Discord account, for contribution-from-Discord. If a
 	// Discord account somehow linked more than once, the most recently linked user wins.
 	GetUserIDByDiscordID(ctx context.Context, discordID int64) (int64, error)
+	// Resolve a provider customer back to one of our accounts. This is the direction a webhook
+	// needs: a delivery names the customer, never the user.
+	//
+	// No rows means the customer is not ours — a dashboard test object, or a customer created
+	// outside this integration. The caller records the event and reports it rather than
+	// guessing.
+	GetUserIDByStripeCustomer(ctx context.Context, stripeCustomerID string) (int64, error)
 	// Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
 	// chat somehow linked more than once, the most recently linked user wins.
 	GetUserIDByTelegramChat(ctx context.Context, chatID int64) (int64, error)
@@ -1845,11 +1915,22 @@ type Querier interface {
 	// that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
 	HideCompanyFeedback(ctx context.Context, id int64) (string, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
+	// Record a received webhook event, once. See the add-pro-subscription change.
+	//
+	// ON CONFLICT DO NOTHING against the (provider, event_id) unique index is the whole of the
+	// idempotency: the provider retries a delivery it did not get a 200 for and reuses the
+	// same event id, and says outright that duplicates are possible and delivery is unordered.
+	// A redelivery therefore returns NO ROWS, which the caller reads as "already recorded" and
+	// answers 200 to — not as an error.
+	//
+	// user_id is passed already resolved and may be NULL: a dashboard TEST event, an event for
+	// an account since deleted, and an identifier that was never one of ours all still get
+	// recorded. A row we cannot attribute is evidence; a row we refused to write is nothing.
+	InsertBillingEvent(ctx context.Context, arg InsertBillingEventParams) (int64, error)
 	// Insert a board row. Callers that pass status='active' also pass a non-null
-	// activated_at (curator additions via cmd/add-board, and the one-off
-	// cmd/backfill-board-catalog); every other caller passes NULL for both status='pending'
-	// and status='rejected'. A collision with an existing 'pending'/'active' row on
-	// (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
+	// activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
+	// for both status='pending' and status='rejected'. A collision with an existing
+	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 	// the caller maps that to a duplicate-board error.
 	InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error)
 	// Queue an unclassified URL for triage. The unique index on (url) rejects a duplicate
@@ -1977,6 +2058,10 @@ type Querier interface {
 	// detail endpoint still serves it, and leaving it unmarked would make the facet's
 	// meaning depend on lifecycle state.
 	JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error)
+	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
+	// this board, and which board does a pasted job id belong to. Named after
+	// link_contributions for historical reasons — that table is gone (migration 0131), and
+	// these queries read `jobs`.
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -2015,6 +2100,9 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
+	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
+	// name so a run's channel order is stable and its log diffable.
+	ListActiveTelegramChannels(ctx context.Context) ([]ListActiveTelegramChannelsRow, error)
 	// Greeted a while ago: an introduction to the filter panel (role, region, skills,
 	// and how to exclude a value). Sent to everyone regardless of alert status, unlike
 	// no_alert below — this is background on a feature, not a nudge toward one missing
@@ -2280,8 +2368,6 @@ type Querier interface {
 	// The prefix is passed already terminated by the caller (the session id plus '#'), so a
 	// session id that is a prefix of another cannot borrow its charges.
 	ListConsumptionRefsByPrefix(ctx context.Context, arg ListConsumptionRefsByPrefixParams) ([]pgtype.Text, error)
-	// The "my contributions" list: one user's contributions, newest first.
-	ListContributionsByUser(ctx context.Context, submittedBy int64) ([]LinkContribution, error)
 	// Up to $2 (board, region) pairs currently in an active cooldown for a provider,
 	// soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as
 	// cooldowns lapse, so a run does not keep probing the same few boards.
@@ -2402,6 +2488,17 @@ type Querier interface {
 	// silence ladder it reads from, so both channels clear the same bar from the same
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
+	// Every claimed run, with what the scheduler needs to ask the service manager about it.
+	//
+	// Rows, not a count. A transient unit finishes and tells nobody, so claimed_at is set at
+	// claim and cleared by nothing until the scheduler reaps: a plain count would include every
+	// run that ever succeeded, and the fleet's concurrency cap would fill permanently after
+	// Cap launches with every check still green.
+	//
+	// This is what replaces ingest-slot.sh's flock semaphore. 279 independent timers could not
+	// see each other, so the ceiling had to live in a wrapper script; one scheduler can count —
+	// but only if it also notices when a run has ended.
+	ListInFlightRuns(ctx context.Context, defaultTimeoutSec int32) ([]ListInFlightRunsRow, error)
 	// The referrer inbox: open (sent) requests for every company the referrer has an approved
 	// offer for. Joins the request pool to the caller's approved offers on company_slug, and
 	// the catalogue for the company's display name (LEFT so a request survives an unknown
@@ -2542,6 +2639,10 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
+	// Every board a crawl still visits, across all providers — the identity cmd/prune needs
+	// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
+	// whole row: the guard asks a set-membership question and nothing else.
+	ListLiveBoards(ctx context.Context) ([]ListLiveBoardsRow, error)
 	// Candidates for cmd/backfill-username-from-mailbox: every hosted mailbox whose
 	// owner has not yet been backfilled onto users.username. Small by construction —
 	// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
@@ -2652,6 +2753,14 @@ type Querier interface {
 	ListSavedJobSlugs(ctx context.Context, userID int64) ([]string, error)
 	// A user's saved searches, most recently updated first (the "My filters" picker order).
 	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
+	// Every provider the scheduler may run, with its override if it has one.
+	//
+	// The roster is boards, and the LEFT JOIN is what makes ingest_schedule a set of
+	// OVERRIDES rather than the roster: a provider with a live board and no schedule row comes
+	// back with NULLs, which the caller resolves to documented defaults. An INNER JOIN here
+	// would silently unschedule every unconfigured provider, which is the exact failure this
+	// table was built to remove.
+	ListSchedulableProviders(ctx context.Context) ([]ListSchedulableProvidersRow, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
@@ -2662,6 +2771,30 @@ type Querier interface {
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
 	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]ListSubmissionsByUserRow, error)
+	// The reconciler's second pass: subscribers whose plan expiry falls inside a window around
+	// now, so a renewal whose webhook was never delivered is repaired within an hour.
+	//
+	// IT WALKS billing_events, NOT users. Two reasons, and the second is the one that matters.
+	//
+	// Cheapness: only an account that has actually transacted appears here, so the candidate
+	// set is the subscriber base rather than the 8M-row users table, and it is reached through
+	// an index that already exists. A predicate on users.pro_until would want an index on
+	// users, and building one on a table that size means either blocking writes to the account
+	// table or a CONCURRENTLY build with its own failure mode.
+	//
+	// Correctness: reading a subscriber's state from the provider CREATES that subscriber if
+	// the identifier is unknown to them — a GET with a write's consequences. Starting from
+	// events makes "we only ever ask about someone who has transacted" a property of the
+	// query rather than a rule the worker has to remember.
+	ListSubscribersNearProExpiry(ctx context.Context, arg ListSubscribersNearProExpiryParams) ([]ListSubscribersNearProExpiryRow, error)
+	// The reconciler's second pass: accounts bound to a provider customer whose plan expiry
+	// falls inside a window around now, so a renewal whose webhook was never delivered is
+	// repaired on the next run.
+	//
+	// It walks users rather than billing_events because the binding column is what makes the
+	// question answerable at all — and it is indexed, so the scan is over the accounts that
+	// have transacted rather than over all of them.
+	ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error)
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
@@ -2703,6 +2836,13 @@ type Querier interface {
 	// boards are broken without a second round trip and without naming them all. Ask this table
 	// directly for the rest.
 	ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error)
+	// The reconciler's first pass: events recorded but never applied, oldest first, served by
+	// the partial index on (received_at) WHERE processed_at IS NULL.
+	//
+	// Rows with a NULL user_id come back too. They are not skipped in SQL because "an event we
+	// could not attribute" is a decision the worker should make visibly and log, not something
+	// a WHERE clause silently disposes of.
+	ListUnprocessedBillingEvents(ctx context.Context, maxRows int32) ([]ListUnprocessedBillingEventsRow, error)
 	// Every feature's consumption for one user on one day, for the usage surface. A feature
 	// the user has not touched today simply does not come back, and the caller reports it as
 	// untouched rather than as absent.
@@ -2845,6 +2985,9 @@ type Querier interface {
 	// untouched and blocked_at, not failed_at, is what excludes it from
 	// auto_apply_queue_claimable_idx from here on.
 	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
+	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
+	// same fact, and the reconciler's own query no longer returns it.
+	MarkBillingEventProcessed(ctx context.Context, id int64) error
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
@@ -3061,6 +3204,15 @@ type Querier interface {
 	// The display name is the modal `company` across the aggregator rows, since two aggregators
 	// may spell the same employer differently and the name is what the harvest gate compares.
 	OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error)
+	// What ClaimDueRuns WOULD take, without taking it. Shadow mode's read: the first
+	// deployment lands underneath a fleet still driven by the static timers, so a tick that
+	// advanced a due time would desynchronise state the real timers know nothing about.
+	//
+	// The predicate is copied from ClaimDueRuns rather than shared, because sqlc has no way to
+	// share one. A divergence between the two would make the shadow run a measurement of
+	// something other than what apply mode does, so they are asserted equivalent by an
+	// integration test rather than by inspection.
+	PreviewDueRuns(ctx context.Context, arg PreviewDueRunsParams) ([]PreviewDueRunsRow, error)
 	// Domains whose confident-hit count has reached the promotion threshold; the sync
 	// worker unions these into the Gmail search query.
 	PromotedDomains(ctx context.Context, threshold int32) ([]string, error)
@@ -3424,6 +3576,10 @@ type Querier interface {
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
 	RecordReminderDeliveryFailure(ctx context.Context, arg RecordReminderDeliveryFailureParams) error
+	// Store how a run ended and release its claim, so the row is claimable again at its next
+	// due time. Clearing claimed_at here is what keeps the reclaim window for genuinely stuck
+	// runs rather than for every run that took a while.
+	RecordRunFinish(ctx context.Context, arg RecordRunFinishParams) error
 	// Record a failed attempt against one entry, dead-lettering it once it passes max_attempts so
 	// a permanently poisonous entry stops being reclaimed by the lease forever.
 	//
@@ -3562,13 +3718,16 @@ type Querier interface {
 	// and cmd/reindex has no --since flag despite what its comment says), because a column stamped
 	// on every crawl selects the whole catalogue and answers nothing.
 	//
-	// The match key is (content_hash, cities, salary_*_source), not the hash alone. cities and the
-	// four salary_*_source columns are what the upsert writes that jobhash.Of does not read — a
-	// caller's structured city list overrides the location-derived one, and a structured salary
-	// (Lever/Ashby/Recruitee) is a base fact, not something Of hashes, so either can move while
-	// every hashed field stands still. Folding them into the hash instead would change every stored
-	// content_hash at once and make the first crawl after deploy rewrite and re-index the whole
-	// catalogue. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
+	// The match key is (content_hash, cities, salary_*_source, english_level), not the hash alone.
+	// Those are what the upsert writes that jobhash.Of does not read — a caller's structured city
+	// list overrides the location-derived one, a structured salary (Lever/Ashby/Recruitee) is a
+	// base fact rather than something Of hashes, and english_level gained a structured tier of its
+	// own (profession.hu states it as a picklist) so it too can move while every hashed field
+	// stands still. Folding them into the hash instead would change every stored content_hash at
+	// once and make the first crawl after deploy rewrite and re-index the whole catalogue — 6.6M
+	// rows through a queue that drains at ~9 documents a second. Note the asymmetry with
+	// education_level, which IS hashed: it was hashed before either had a structured tier, and
+	// moving it out now would cost exactly the storm this key exists to avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
 	// (both NULL) still match — a plain = would push every non-salary-bearing source off the cheap
 	// path forever. Whether the key still covers every written column is enforced by
 	// TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites (internal/job); add a derived
@@ -3637,6 +3796,15 @@ type Querier interface {
 	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
 	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
 	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
+	// The whole schedule as an operator reads it: every eligible provider, its override if it
+	// has one, and what its runs have actually been doing. Aggregated per provider rather than
+	// per shard, because the question this answers is "is anything not running?" and 24
+	// paylocity rows would bury the answer.
+	//
+	// shards_in_state is counted from run state rather than read from the override, for the
+	// same reason ClaimDueRuns counts it: the rows ARE the shard count, and a report that read
+	// the intended number instead would show a healthy 24 while 12 rows existed.
+	ReportIngestSchedule(ctx context.Context) ([]ReportIngestScheduleRow, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
@@ -3932,6 +4100,26 @@ type Querier interface {
 	// from chunks that no longer exist, and the job's now-current chunks would never be
 	// backfilled until their NEXT content change.
 	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error)
+	// Bind an account to the payment provider's customer, ONCE, when it first transacts.
+	//
+	// IS NULL, so this writes a binding and never REPLACES one. That is a security property,
+	// not a tidiness one. An account's customer is resolved two ways (see Service.resolveUser):
+	// from the stored binding, and — only when there is no binding yet — from the account
+	// reference the provider echoes back. That reference is attacker-supplied on one path: a
+	// Stripe Payment Link takes `?client_reference_id=` from whoever opens it. With a bare
+	// assignment, somebody who paid for their own subscription while naming SOMEBODY ELSE'S
+	// account id would overwrite that account's binding, orphan the subscription it was
+	// actually paying for — nothing reads a customer no user points at, so the reconciler
+	// never touches it again — and then hold the victim's plan hostage to their own card.
+	//
+	// Refusing the write costs nothing the system needs. The self-healing rebind in
+	// Service.Apply is precisely the NULL case, and an account that genuinely has to move to a
+	// new customer is a support ticket and one UPDATE, not a path a webhook should offer.
+	//
+	// Also subsumes the cheaper reason the predicate was here before: the webhook and the
+	// reconciler both take this path and both usually write the value already present, and a
+	// write that changes nothing should not wake a trigger or bloat a row.
+	SetStripeCustomerID(ctx context.Context, arg SetStripeCustomerIDParams) error
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
@@ -4314,6 +4502,9 @@ type Querier interface {
 	// form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
 	// every write so a form's age always describes the payload actually stored.
 	UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error
+	// Replaces the user's CV appearance defaults wholesale — there is exactly one row per user,
+	// so a save always means "this is the new complete set", never a partial patch.
+	UpsertCVAppearanceDefaults(ctx context.Context, arg UpsertCVAppearanceDefaultsParams) (CvAppearanceDefault, error)
 	// Store the grant a calendar consent produced, and record that it now covers the calendar.
 	//
 	// Three things this deliberately does not do. It does not touch `email`: a candidate who
@@ -4383,6 +4574,14 @@ type Querier interface {
 	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
 	// mark connected, preserving the sync cursor on reconnect.
 	UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error
+	// Write one provider's override. Every argument is optional: a NULL means "leave this
+	// alone" on an existing row and "use the documented default" on a new one, so a curator
+	// changing only the shard count does not silently reset the cadence someone measured.
+	//
+	// The CHECK on the table still decides whether the result is legal — disabling without a
+	// reason is refused here exactly as it is in psql, which is the point of putting the rule
+	// in the schema.
+	UpsertIngestSchedule(ctx context.Context, arg UpsertIngestScheduleParams) error
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =
 	// one job" property of the pipeline's write path.

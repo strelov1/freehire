@@ -18,9 +18,18 @@ import (
 // subscription that is not currently deliverable (e.g. Telegram unlinked) has its
 // claim released so it is retried promptly rather than waiting out the lease.
 func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
+	// One digest's worth per subscription, so a pass serves every subscription that has
+	// anything pending rather than the lowest ids only. Floored like the batch size it
+	// sits beside: a zero here is LIMIT 0 in the LATERAL, which claims nothing and
+	// reports no error — the whole worker would go quietly idle.
+	perSubscription := int32(r.cfg.SnapshotCap)
+	if perSubscription < 1 {
+		perSubscription = 1
+	}
 	claimed, err := r.store.ClaimSubscriptionMatches(ctx, db.ClaimSubscriptionMatchesParams{
-		LeaseSeconds: r.cfg.LeaseSeconds,
-		BatchSize:    r.cfg.ClaimBatch,
+		LeaseSeconds:    r.cfg.LeaseSeconds,
+		PerSubscription: perSubscription,
+		BatchSize:       r.cfg.ClaimBatch,
 	})
 	if err != nil {
 		return err

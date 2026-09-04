@@ -1052,6 +1052,8 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical)
 			EmploymentType:     j.EmploymentType,
 			Skills:             j.Skills,
 			ExperienceYearsMin: j.ExperienceYearsMin,
+			EducationLevel:     j.EducationLevel,
+			EnglishLevel:       j.EnglishLevel,
 			SalaryMin:          j.SalaryMin,
 			SalaryMax:          j.SalaryMax,
 			SalaryCurrency:     j.SalaryCurrency,

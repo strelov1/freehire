@@ -16,7 +16,7 @@
 import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
-  COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, ROLE_LABELS, ROLE_ALIASES,
+  COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
   AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
@@ -26,7 +26,6 @@ import {
   RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
-import { ROLE_RELATED } from './roleRelated';
 import { backerBadges } from './backers';
 import { api } from './api';
 
@@ -108,17 +107,10 @@ export interface FacetDef {
    */
   remote?: (query: string) => Promise<FacetOption[]>;
   /**
-   * Curated adjacency map (base slug → related base slugs) driving a "Related"
-   * suggestion row under the picker — for surfacing siblings the text search
-   * can't name (typing "mobile" won't match "iOS Developer"). Only the role facet
-   * sets it; see relatedOptions / ROLE_RELATED.
-   */
-  related?: Record<string, string[]>;
-  /**
-   * Curated slug → shorthand-aliases map letting the picker's search match roles
-   * by abbreviation/synonym, not just the display label — typing "swe"/"sre"/
-   * "devrel" finds the role. Only the role facet sets it; see optionMatches /
-   * ROLE_ALIASES (generated from the same dictionaries that tag titles).
+   * Curated slug → shorthand-aliases map letting the picker's search match a facet
+   * value by abbreviation or synonym, not just the display label — typing "swe" or
+   * "data engineer" finds the specialization. See optionMatches / FACET_ALIASES
+   * (generated from the same dictionaries that tag titles).
    */
   searchAliases?: Record<string, readonly string[]>;
   /**
@@ -220,17 +212,6 @@ export function collapseCities(rows: { value: string; country: string }[]): Face
   return [...byName.values()];
 }
 
-// Role facet values are canonical slugs (senior_backend, founding_engineer); the
-// live distribution carries no display name, so map them through the generated
-// ROLE_LABELS catalog (the roletag dictionary is the source of truth), falling
-// back to a title-cased slug for a value the catalog somehow lacks.
-//
-// Local now: it was exported for the client-side role matcher, which the suggestions
-// endpoint replaced. Its one remaining caller is facetValueLabel below.
-function roleLabel(slug: string): string {
-  return (ROLE_LABELS as Record<string, string>)[slug] ?? titleCase(slug);
-}
-
 // Skill facet values are canonical slugs (postgresql, ci-cd, nodejs); the live
 // distribution carries no display name, so map them through the generated SKILL_LABELS
 // catalog (the skilltag dictionary is the source of truth). The fallback title-cases the
@@ -247,7 +228,6 @@ export function dynamicLabel(param: string, value: string): string {
   if (param === 'posting_language') return languageLabel(value);
   if (param === 'company_slug') return companyLabel(value);
   if (param === 'source') return sourceLabel(value);
-  if (param === 'role') return roleLabel(value);
   // Skills have no static option list, so every surface naming a SELECTED skill — the
   // filter summary chips above all — arrives here. Without this it fell through to the
   // raw slug, and one skill was spelled two ways on one screen: "ci-cd" in the summary,
@@ -282,61 +262,19 @@ export function dynamicOptions(param: string, dist: Record<string, number>, sele
 // related-role map is keyed by the ungraded base (backend), so one entry serves
 // every grade. Longest prefix first is unnecessary — the grades share no
 // prefix among themselves — but drawing them from SENIORITY_VALUES keeps this in
-// lockstep with the roletag vocabulary.
-const gradePrefixes = SENIORITY_VALUES.map((s) => s + '_');
-
-/** Strip a leading seniority grade from a role slug: senior_mobile → mobile. An
- *  ungraded slug (mobile, ios_developer, or a bare seniority like c_level) is
- *  returned unchanged. */
-export function baseRole(slug: string): string {
-  for (const p of gradePrefixes) {
-    if (slug.startsWith(p)) return slug.slice(p.length);
-  }
-  return slug;
-}
-
-/** Suggestions for the role picker's "Related" row: for each currently-surfaced
- *  role (`matched`), look up its base's curated relatives, keep only those that
- *  have jobs in the current distribution (present in `options`) and aren't already
- *  shown or selected, dedupe, and cap at `limit`. Pure so it's unit-testable; the
- *  point is to surface siblings the text search can't ("mobile" never matches
- *  "iOS Developer"). */
-export function relatedOptions(
-  options: FacetOption[],
-  matched: string[],
-  selected: string[],
-  related: Record<string, string[]>,
-  limit = 8,
-): FacetOption[] {
-  const byValue = new Map(options.map((o) => [o.value, o]));
-  const skip = new Set([...matched, ...selected]);
-  const seen = new Set<string>();
-  const out: FacetOption[] = [];
-  for (const v of matched) {
-    for (const slug of related[baseRole(v)] ?? []) {
-      if (skip.has(slug) || seen.has(slug)) continue;
-      const o = byValue.get(slug);
-      if (!o) continue;
-      seen.add(slug);
-      out.push(o);
-      if (out.length >= limit) return out;
-    }
-  }
-  return out;
-}
 
 /** Does a facet option match the picker's search query? Always typo-tolerantly
- *  matches the display label; when `searchAliases` is supplied (role facet), also
- *  matches the option's curated shorthand aliases — keyed by BASE slug, so "swe"
- *  surfaces Software Engineer and its seniority variants, "sre"/"devrel" find
- *  their roles. An empty query matches everything (via the label match). */
+ *  matches the display label; when `searchAliases` is supplied, also matches the
+ *  option's curated shorthand aliases — the same terms that tag titles, so "swe"
+ *  surfaces Software Engineering and "data engineer" finds Data Engineering. An
+ *  empty query matches everything (via the label match). */
 export function optionMatches(
   option: FacetOption,
   query: string,
   searchAliases?: Record<string, readonly string[]>,
 ): boolean {
   if (fuzzyMatch(option.label, query)) return true;
-  const aliases = searchAliases?.[baseRole(option.value)];
+  const aliases = searchAliases?.[option.value];
   return !!aliases && aliases.some((a) => fuzzyMatch(a, query));
 }
 
@@ -649,8 +587,7 @@ export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
-  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 8, related: ROLE_RELATED, searchAliases: ROLE_ALIASES },
-  { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
+  { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations', searchAliases: FACET_ALIASES },
   { param: 'ai_archetype', label: 'AI Specialization', control: 'select', options: AI_ARCHETYPE, excludable: true, placeholder: 'Search AI specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'role_type', label: 'Role type', control: 'pills', options: ROLE_TYPE, excludable: true },

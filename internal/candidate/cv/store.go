@@ -91,6 +91,12 @@ type Repository interface {
 	// SetAutopilotReport.
 	MergeAutopilotEntry(ctx context.Context, id uuid.UUID, userID int64, entry []byte) (int64, error)
 	GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error)
+	// GetAppearanceDefaults returns pgx.ErrNoRows when the user has never saved any —
+	// distinct from a user who saved values equal to the system defaults.
+	GetAppearanceDefaults(ctx context.Context, userID int64) (db.CvAppearanceDefault, error)
+	// UpsertAppearanceDefaults replaces the user's appearance defaults wholesale (there is
+	// exactly one row per user).
+	UpsertAppearanceDefaults(ctx context.Context, userID int64, templateID string, style, margins []byte) (db.CvAppearanceDefault, error)
 }
 
 // Seeder provides the user's extracted résumé, used to seed a base CV when they have none.
@@ -310,8 +316,14 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 		if !hasResume {
 			return Meta{}, Meta{}, false, ErrNoResume
 		}
+		defaults, _, err := s.GetAppearanceDefaults(ctx, userID)
+		if err != nil {
+			return Meta{}, Meta{}, false, err
+		}
 		doc := Seed(st)
-		meta, err := s.Create(ctx, userID, defaultBaseTitle, DefaultTemplateID, doc)
+		doc.Style = defaults.Style
+		doc.Margins = defaults.Margins
+		meta, err := s.Create(ctx, userID, defaultBaseTitle, defaults.TemplateID, doc)
 		if err != nil {
 			return Meta{}, Meta{}, false, err
 		}
@@ -439,5 +451,15 @@ func (r queriesRepository) MergeAutopilotEntry(ctx context.Context, id uuid.UUID
 func (r queriesRepository) GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
 	return r.q.GetTailoredCVForJob(ctx, db.GetTailoredCVForJobParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
+	})
+}
+
+func (r queriesRepository) GetAppearanceDefaults(ctx context.Context, userID int64) (db.CvAppearanceDefault, error) {
+	return r.q.GetCVAppearanceDefaults(ctx, userID)
+}
+
+func (r queriesRepository) UpsertAppearanceDefaults(ctx context.Context, userID int64, templateID string, style, margins []byte) (db.CvAppearanceDefault, error) {
+	return r.q.UpsertCVAppearanceDefaults(ctx, db.UpsertCVAppearanceDefaultsParams{
+		UserID: userID, TemplateID: templateID, Style: style, Margins: margins,
 	})
 }

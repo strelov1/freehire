@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
-  import type { AiUsage, PlanState, UsageHistoryEntry } from '$lib/types';
+  import { formatMinorUnits } from '$lib/money';
+  import type { AiUsage, BillingOverview, PlanState, UsageHistoryEntry } from '$lib/types';
   import States from './States.svelte';
 
   // The plan page: which plan the caller is on, what each metered feature allows today and
@@ -31,6 +33,57 @@
       .then((u) => (usage = u))
       .catch(() => (usage = null));
   });
+
+  // Where a subscriber changes their card or cancels — the provider's own page. Null when
+  // there is no subscription to manage, which is the ordinary state for a free account.
+  let manageUrl = $state<string | null>(null);
+
+  // What is being paid and what has been taken. Null for a free account, and for a provider
+  // we could not reach — in both cases the section is simply absent, because a billing
+  // section that cannot show the money is worse than none.
+  let billing = $state<BillingOverview | null>(null);
+
+  // Both are asked for together, and only for a plan that could have a subscription behind
+  // it: a free account has none by definition, and asking anyway spends two provider
+  // round-trips per page view to be told 404 — the answer `plan` already gave us.
+  //
+  // They are cleared FIRST, on every run. What is on screen belongs to the plan we last
+  // read, so when that changes — a subscription lapses, or another account signs in without
+  // a reload — leaving it there shows one person's invoices and receipt links to the next.
+  // `live` drops a slow response from a plan we have since moved off, which is the same
+  // leak arriving late.
+  $effect(() => {
+    const pro = plan?.plan === 'pro';
+    billing = null;
+    manageUrl = null;
+    if (!pro) return;
+
+    let live = true;
+    api
+      .billingSubscription()
+      .then((b) => live && (billing = b))
+      .catch(() => {});
+    api
+      .billingManageUrl()
+      .then(({ url }) => live && (manageUrl = url))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  });
+
+  const money = formatMinorUnits;
+
+  // The provider's status words, in the reader's language. `past_due` is the one worth
+  // spelling out: it is not "cancelled", it is "your card needs attention and you still
+  // have access" — and a subscriber who reads it as cancelled will not fix the card.
+  const STATUS_LABELS: Record<string, string> = {
+    active: 'Active',
+    trialing: 'Trial',
+    past_due: 'Payment failed — retrying, access continues',
+    canceled: 'Cancelled',
+    unpaid: 'Unpaid',
+  };
 
   $effect(() => {
     if (!isAuthenticated()) return;
@@ -77,6 +130,92 @@
     </div>
 
     {#if plan}
+      <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers
+           the upgrade — but only once we know there is somewhere to send them. -->
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+      >
+        <div class="flex flex-col gap-0.5">
+          <span class="text-sm font-semibold">{plan.plan === 'pro' ? 'Pro' : 'Free'}</span>
+          {#if plan.plan === 'pro' && plan.pro_until}
+            <span class="text-xs text-muted-foreground">Runs until {fmtDate(plan.pro_until)}</span>
+          {:else if plan.plan === 'free'}
+            <span class="text-xs text-muted-foreground">Same features, daily limits</span>
+          {/if}
+        </div>
+        {#if plan.plan === 'free'}
+          <!-- To /pricing rather than straight to checkout: the choice between monthly and
+               annual belongs on a page that can explain it, and sending someone to a payment
+               form without it silently sells them the monthly one. -->
+          <a
+            class="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+            href={resolve('/pricing')}>Upgrade to Pro</a
+          >
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own page, not a SvelteKit route -->
+        {:else if manageUrl}
+          <a
+            class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm font-medium"
+            href={manageUrl}
+            target="_blank"
+            rel="noopener noreferrer">Manage subscription</a
+          ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+        {/if}
+      </div>
+
+      {#if billing}
+        <div class="flex flex-col gap-3">
+          <h2 class="text-sm font-medium text-muted-foreground">Subscription</h2>
+          <div class="flex flex-col gap-3 rounded-lg border border-border px-4 py-3">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <span class="text-sm font-medium">
+                {money(billing.amount_cents, billing.currency)} / {billing.interval}
+              </span>
+              <span class="text-xs text-muted-foreground">
+                {STATUS_LABELS[billing.status] ?? billing.status}
+              </span>
+            </div>
+            <!-- One date or the other, never both: a renewal date beside a cancellation is
+                 the contradiction that generates support mail. -->
+            {#if billing.ends_at}
+              <p class="text-xs text-muted-foreground">
+                Cancelled — access runs until {fmtDate(billing.ends_at)}
+              </p>
+            {:else if billing.renews_at}
+              <p class="text-xs text-muted-foreground">
+                Next charge {fmtDate(billing.renews_at)}
+              </p>
+            {/if}
+
+            {#if billing.invoices.length > 0}
+              <ul class="flex flex-col divide-y divide-border/60 border-t border-border/60">
+                {#each billing.invoices as inv (inv.id)}
+                  <li class="flex items-center justify-between gap-3 py-2 text-sm">
+                    <span class="text-muted-foreground">{fmtDate(inv.date)}</span>
+                    <span class="flex items-center gap-3">
+                      <span class="tabular-nums"
+                        >{money(inv.amount_cents, inv.currency)}</span
+                      >
+                      {#if inv.status !== 'paid'}
+                        <span class="text-xs text-destructive">{inv.status}</span>
+                      {/if}
+                      {#if inv.receipt_url}
+                        <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's hosted invoice, not a SvelteKit route -->
+                        <a
+                          class="text-xs underline"
+                          href={inv.receipt_url}
+                          target="_blank"
+                          rel="noopener noreferrer">Receipt</a
+                        ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+                      {/if}
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
       <div class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
           <h2 class="text-sm font-medium text-muted-foreground">Today</h2>

@@ -9,4 +9,4 @@ EnvironmentFile=/opt/freehire/.env
 CPUWeight=40
 IOWeight=40
 TimeoutStartSec=4500
-ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest /opt/freehire/src/hire-current/sources/paylocity.yml --shard=%i/24
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest paylocity --shard=%i/24

@@ -54,6 +54,9 @@ type matchHandlers struct {
 	// bank supplies the candidate's work history. Nil when there are no queries to build
 	// it over, which reads as an empty bank — and an empty bank means no analysis.
 	bank candidateProfiler
+	// plans answers the tailoring standing reported beside the fit one. Nil in a fixture
+	// assembled without a meter.
+	plans *plan.Store
 }
 
 func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, plans *plan.Store) *matchHandlers {
@@ -64,6 +67,7 @@ func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, res
 		matchAnalysis: analyzer,
 		fit:           fitanalysis.New(queries, meterOrNil(plans), analyzer),
 		bank:          newCandidateProfiler(queries),
+		plans:         plans,
 	}
 }
 
@@ -142,11 +146,17 @@ func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job
 // recompute); Analysis is nil when none is cached or the LLM is unconfigured. Allowance is
 // set on reads (GET) so the SPA can show where the caller stands today and pre-block a
 // new-job analysis that would be refused; it is omitted on the compute responses.
+//
+// TailorAllowance rides along on the same reads because the sidebar this feeds offers
+// TAILORING off the fit summary, and the two features carry their own daily ceilings — a
+// page holding only the fit standing can do nothing but print the wrong number beside a
+// "Tailor my CV" button.
 type matchAnalysisResponse struct {
-	HasCV     bool                    `json:"has_cv"`
-	Stale     bool                    `json:"stale"`
-	Analysis  *matchanalysis.Analysis `json:"analysis"`
-	Allowance *allowanceView          `json:"allowance,omitempty"`
+	HasCV           bool                    `json:"has_cv"`
+	Stale           bool                    `json:"stale"`
+	Analysis        *matchanalysis.Analysis `json:"analysis"`
+	Allowance       *allowanceView          `json:"allowance,omitempty"`
+	TailorAllowance *allowanceView          `json:"tailor_allowance,omitempty"`
 }
 
 // GetMatchAnalysis serves the cached fit analysis for one of the caller's jobs, never calling
@@ -167,20 +177,27 @@ func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
-	allowance := h.allowanceView(c.Context(), userID)
+	// The standings are the same either way, so they are read once and the analysis is
+	// filled in below when there is one.
+	resp := matchAnalysisResponse{
+		HasCV:           true,
+		Allowance:       h.allowanceView(c.Context(), userID),
+		TailorAllowance: h.tailorAllowanceView(c.Context(), userID),
+	}
 	analysis, stored, err := h.fit.Cached(c.Context(), userID, job.ID)
 	if err != nil {
 		return err
 	}
 	if analysis == nil {
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Allowance: allowance}})
+		return c.JSON(fiber.Map{"data": resp})
 	}
 	// Recompute the hard-constraint ceiling from the current job/résumé/dictionary and
 	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
 	// change takes effect without marking the cache stale.
 	h.capServedAnalysis(c.Context(), userID, job, analysis)
-	stale := !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
-	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Allowance: allowance}})
+	resp.Analysis = analysis
+	resp.Stale = !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
+	return c.JSON(fiber.Map{"data": resp})
 }
 
 // allowanceView reports where the caller stands on the fit-analysis allowance today, or nil
@@ -193,6 +210,21 @@ func (h *matchHandlers) allowanceView(ctx context.Context, userID int64) *allowa
 		return nil
 	}
 	v := viewStanding(*st)
+	return &v
+}
+
+// tailorAllowanceView reports where the caller stands on the tailoring-session allowance
+// today, or nil when it cannot be read. Best-effort for the same reason as the fit one: a
+// metering hiccup must cost the reader a caption, not the read.
+func (h *matchHandlers) tailorAllowanceView(ctx context.Context, userID int64) *allowanceView {
+	if h.plans == nil {
+		return nil
+	}
+	st, err := h.plans.Standing(ctx, userID, plan.FeatureTailor)
+	if err != nil {
+		return nil
+	}
+	v := viewStanding(st)
 	return &v
 }
 

@@ -1,5 +1,0 @@
-# Remotli Swiss remote-jobs aggregator. Boardless: one public API
-# (remotli.ch/api/jobs), so the entry carries no board; each job's company comes from
-# the posting, not this placeholder.
-- company: Remotli
-  provider: remotli

@@ -43,6 +43,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
+	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
@@ -335,6 +336,11 @@ type Config struct {
 	// Plan carries what each plan allows per day, per feature, and whether a refusal is
 	// enforced yet. Every metered AI surface draws on it.
 	Plan plan.Config
+	// Billing connects the Pro subscription at the payment provider to users.pro_until,
+	// which is what Plan then reads. Optional and off by default: with no provider
+	// credentials the billing routes are not mounted at all, so a deployment that never
+	// configures it cannot tell they exist.
+	Billing billing.Config
 	// AWSRegion + NotifyEmailFrom enable the SES email channel for referral pings, reusing
 	// the notify worker's config. Both must be set; either empty leaves referral pings
 	// Telegram-only (email disabled). NotifyEmailFrom is the verified SES sender address.
@@ -460,6 +466,10 @@ func Register(app *fiber.App, cfg Config) {
 	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
+	billingSvc := billing.New(cfg.Billing, queries)
+	billingH := newBillingHandlers(billingSvc)
+	// Public: a pricing page that needs an account cannot do a pricing page's job.
+	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
@@ -551,6 +561,7 @@ func Register(app *fiber.App, cfg Config) {
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
+	linkedInH := newLinkedInHandlers()
 	photoH := newPhotoHandlers(photoStore)
 	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
 	// interface would be a non-nil interface, and the handler's "no gateway here"
@@ -741,6 +752,9 @@ func Register(app *fiber.App, cfg Config) {
 	communityH.register(api, mw)
 
 	planH.register(api, mw)
+	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
+	billingH.register(api, mw)
+	plansH.register(api)
 	usageH.register(api, mw)
 
 	// API-key management and the auth surface (see authHandlers).
@@ -766,6 +780,9 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
 	// resumeHandlers).
 	resumeH.register(api, mw)
+	// Importing the onboarding wizard's facets from a public LinkedIn profile — the
+	// alternative to uploading a CV, for the user who has no PDF to hand.
+	linkedInH.register(api, mw)
 	// The headshot the photo-bearing CV templates print (see photoHandlers).
 	photoH.register(api, mw)
 	// Dictation for the assistant composer.

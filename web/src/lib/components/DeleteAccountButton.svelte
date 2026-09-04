@@ -32,6 +32,25 @@
   let error = $state<string | null>(null);
   let reauthRequired = $state(false);
 
+  // Where this member cancels: the payment provider's own page, asked for rather than
+  // composed here. A cancellation flow of our own would be one more thing that can disagree
+  // with what actually happened to the money.
+  //
+  // Fetched when the dialog OPENS, not on page load — it is a call to the provider, the link
+  // it returns is short-lived, and most people opening this settings tab are not deleting
+  // anything. Null (no subscription, billing off, provider unreachable) simply omits the
+  // link: the sentence beside it still says the subscription is not cancelled, and THAT must
+  // never depend on a network call succeeding.
+  let manageUrl = $state<string | null>(null);
+
+  $effect(() => {
+    if (!open) return;
+    api
+      .billingManageUrl()
+      .then(({ url }) => (manageUrl = url))
+      .catch(() => (manageUrl = null));
+  });
+
   const s = $derived(t(messages, locale()));
   const user = $derived(currentUser());
   const email = $derived(user?.email ?? '');
@@ -121,7 +140,15 @@
   <!-- Deleting here erases OUR side. The subscription is held by the payment provider,
        which never hears about this, so somebody who does not cancel there keeps paying
        for an account that no longer exists. -->
-  <p class="mt-3 text-sm text-muted-foreground">{s.subscriptionNote}</p>
+  <p class="mt-3 text-sm text-muted-foreground">
+    {s.subscriptionNote}
+    {#if manageUrl}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own management page, not a SvelteKit route -->
+      <a class="underline" href={manageUrl} target="_blank" rel="noopener noreferrer"
+        >{s.manageSubscription}</a
+      ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+    {/if}
+  </p>
 
   <label class="mt-4 block text-sm font-medium" for="delete-account-confirm">
     {s.confirmPrefix} <span class="font-mono">{email}</span> {s.confirmSuffix}

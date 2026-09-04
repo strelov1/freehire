@@ -2,8 +2,7 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
+	"errors"
 	"strings"
 	"testing"
 
@@ -12,34 +11,61 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-func writeBoardFile(t *testing.T, dir, name, body string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-		t.Fatalf("write %s: %v", name, err)
-	}
+// fakeCatalog is a boardLister/boardRetirer over an in-memory board set, so the guard's
+// properties are tested without a database.
+type fakeCatalog struct {
+	rows    []db.ListLiveBoardsRow
+	listErr error
+	// retired records every (provider, board, region) the run retired, in order.
+	retired []db.RetireBoardParams
 }
 
-// The company-scoped rules have no ingest counterpart, so a deletion under one is
-// undone by the next hourly crawl unless the board is struck from the source files.
-// The worker therefore has to know which companies are still listed — matched by the
-// same slug normalization ingest writes, or the guard would compare different strings.
-func TestListedCompaniesMatchesIngestSlugging(t *testing.T) {
-	dir := t.TempDir()
-	writeBoardFile(t, dir, "greenhouse.yml", `
-- company: "Acme Corp."
-  board: acme
-- company: "Beta & Co"
-  board: beta
-`)
-	writeBoardFile(t, dir, "custom.yml", `
-- company: "Gamma"
-  provider: lever
-  board: gamma
-`)
-	// Not a board file: must not be read as one.
-	writeBoardFile(t, dir, "README.md", "not yaml")
+func (f *fakeCatalog) ListLiveBoards(context.Context) ([]db.ListLiveBoardsRow, error) {
+	return f.rows, f.listErr
+}
 
-	b, err := loadBoards(dir)
+func (f *fakeCatalog) RetireBoard(_ context.Context, arg db.RetireBoardParams) (int64, error) {
+	f.retired = append(f.retired, arg)
+	return 1, nil
+}
+
+func liveBoard(provider, board string, region ...string) db.ListLiveBoardsRow {
+	r := db.ListLiveBoardsRow{Provider: provider, Board: board}
+	if len(region) > 0 {
+		r.Region = region[0]
+	}
+	return r
+}
+
+// catalogOf builds a boards set from "provider/board" pairs, each region-less — the
+// shape every report fixture below wants.
+func catalogOf(t *testing.T, pairs ...string) boards {
+	t.Helper()
+	rows := make([]db.ListLiveBoardsRow, len(pairs))
+	for i, p := range pairs {
+		provider, board, ok := strings.Cut(p, "/")
+		if !ok {
+			t.Fatalf("catalogOf: %q is not provider/board", p)
+		}
+		rows[i] = liveBoard(provider, board)
+	}
+	b, err := loadBoards(context.Background(), &fakeCatalog{rows: rows})
+	if err != nil {
+		t.Fatalf("catalogOf: %v", err)
+	}
+	return b
+}
+
+// The company-scoped rules have no ingest counterpart, so a deletion under one is undone
+// by the next hourly crawl unless the board leaves the catalog. The worker therefore has
+// to know which boards are still live, and match a posting to its board the same way the
+// write path namespaced it.
+func TestLoadBoardsMatchesPostingsToTheirBoard(t *testing.T) {
+	b, err := loadBoards(context.Background(), &fakeCatalog{rows: []db.ListLiveBoardsRow{
+		liveBoard("greenhouse", "acme"),
+		liveBoard("greenhouse", "beta"),
+		liveBoard("lever", "gamma"),
+	}})
 	if err != nil {
 		t.Fatalf("loadBoards: %v", err)
 	}
@@ -47,94 +73,70 @@ func TestListedCompaniesMatchesIngestSlugging(t *testing.T) {
 	for _, want := range []boardKey{
 		{"greenhouse", "acme"}, {"greenhouse", "beta"}, {"lever", "gamma"},
 	} {
-		if !b.listed[want] {
-			t.Errorf("%+v not listed; got %v", want, b.listed)
+		if len(b.regionsOf(want)) != 1 {
+			t.Errorf("%+v not listed; got %v", want, b.byProvider)
 		}
-	}
-	if len(b.listed) != 3 {
-		t.Errorf("listed %d entries, want 3 — README.md is not a board file", len(b.listed))
 	}
 	// A posting is matched to its board through the namespaced external_id.
 	if !b.crawls("greenhouse", "acme:12345") {
-		t.Error("a posting of a listed board must read as crawled")
+		t.Error("a posting of a live board must read as crawled")
 	}
 	// The same board id under another provider is a different board.
 	if b.crawls("workday", "acme:12345") {
-		t.Error("a board listed under greenhouse must not shield the same id under workday")
+		t.Error("a board live under greenhouse must not shield the same id under workday")
 	}
 }
 
-// A slug the source files do not mention is retired, and only those may be deleted
+// A board the catalog does not list is retired, and only its postings may be deleted
 // under a company-scoped rule.
-func TestListedCompaniesOmitsUnlisted(t *testing.T) {
-	dir := t.TempDir()
-	writeBoardFile(t, dir, "greenhouse.yml", "- company: Acme\n  board: acme\n")
-
-	b, err := loadBoards(dir)
+func TestLoadBoardsOmitsUnlisted(t *testing.T) {
+	b, err := loadBoards(context.Background(), &fakeCatalog{rows: []db.ListLiveBoardsRow{
+		liveBoard("greenhouse", "acme"),
+	}})
 	if err != nil {
 		t.Fatalf("loadBoards: %v", err)
 	}
 	if b.crawls("greenhouse", "retired-co:1") {
-		t.Error("a board absent from every file must not read as crawled")
+		t.Error("a board absent from the catalog must not read as crawled")
 	}
-	// A link-source import or a moderator row carries a real provider but no listed
+	// A link-source import or a moderator row carries a real provider but no live
 	// board, and nothing re-crawls it — so it must never read as crawled.
 	if b.crawls("greenhouse", "some-unlisted-board:99") {
 		t.Error("an unlisted board must not read as crawled, whatever its provider")
 	}
 }
 
-// A source directory that cannot be read must stop the run rather than yield an empty
-// set: an empty set reads as "every board is retired", which would let the company
-// rules delete the whole catalogue.
-func TestListedCompaniesFailsClosed(t *testing.T) {
-	if _, err := loadBoards(filepath.Join(t.TempDir(), "missing")); err == nil {
-		t.Fatal("an unreadable source directory must be an error, not an empty listing — empty means every board is retired")
+// A catalog read that fails, or one that comes back empty, must stop the run rather than
+// yield an empty set: an empty set reads as "every board is retired", which would let the
+// company rules delete the whole catalogue.
+func TestLoadBoardsFailsClosed(t *testing.T) {
+	if _, err := loadBoards(context.Background(), &fakeCatalog{listErr: errors.New("connection refused")}); err == nil {
+		t.Error("a failed catalog read must be an error, not an empty listing")
+	}
+	if _, err := loadBoards(context.Background(), &fakeCatalog{}); err == nil {
+		t.Error("an empty catalog must be an error — empty means every board is retired")
 	}
 }
 
-// The guard runs against the real sources/ directory on every invocation, and that
-// directory holds files that are not board lists — telegram.yml is the channel list for
-// cmd/tg-ingest and does not parse as one. A fixture-only test cannot see that, and did
-// not: --boards errored on every real run until this case existed.
-func TestLoadBoardsReadsTheRealSourcesDirectory(t *testing.T) {
-	b, err := loadBoards("../../sources")
-	if err != nil {
-		t.Fatalf("loadBoards on the real directory: %v", err)
-	}
-	if len(b.listed) < 100 {
-		t.Errorf("listed %d entries, want the real catalogue's boards", len(b.listed))
-	}
-	if b.byProvider["greenhouse"] == nil {
-		t.Error("greenhouse must have boards")
-	}
-	for _, notCrawled := range []string{"telegram", "manual", ""} {
-		if b.byProvider[notCrawled] != nil {
-			t.Errorf("%q is not a board provider and must have no boards", notCrawled)
-		}
-	}
-}
-
-// Retired boards live in sources/retired/, and the guard depends on not seeing them: a
-// glob that descended into subdirectories would read them as live, and the rules that
-// require a retired board would quietly stop firing.
-func TestLoadBoardsIgnoresRetiredSubdirectory(t *testing.T) {
-	dir := t.TempDir()
-	writeBoardFile(t, dir, "greenhouse.yml", "- company: Live Co\n  board: live\n")
-	if err := os.MkdirAll(filepath.Join(dir, "retired"), 0o700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	writeBoardFile(t, filepath.Join(dir, "retired"), "greenhouse.yml", "- company: Gone Co\n  board: gone\n")
-
-	b, err := loadBoards(dir)
+// A retired board's row stays in the table, and the guard depends on not seeing it: the
+// query filters to pending/active, so what it returns is exactly what a crawl visits.
+func TestLoadBoardsCountsLiveRowsPerProvider(t *testing.T) {
+	b, err := loadBoards(context.Background(), &fakeCatalog{rows: []db.ListLiveBoardsRow{
+		liveBoard("whatjobs", "developer", "us"),
+		liveBoard("whatjobs", "developer", "gb"),
+		liveBoard("greenhouse", "acme"),
+	}})
 	if err != nil {
 		t.Fatalf("loadBoards: %v", err)
 	}
-	if !b.crawls("greenhouse", "live:1") {
-		t.Error("the live board must still read as crawled")
+	// One board under two regions is two catalog rows but one crawl target by
+	// external_id, which is what the retire path has to know to name both.
+	if got := b.regionsOf(boardKey{"whatjobs", "developer"}); len(got) != 2 {
+		t.Errorf("regionsOf = %v, want both regional rows", got)
 	}
-	if b.crawls("greenhouse", "gone:1") {
-		t.Error("a retired board must not read as crawled — moving it out of sources/ is what retires it")
+	if b.liveRows("whatjobs") != 2 || b.liveRows("greenhouse") != 1 {
+		t.Errorf("liveRows = whatjobs %d, greenhouse %d; want 2 and 1",
+			b.liveRows("whatjobs"), b.liveRows("greenhouse"))
 	}
 }
 
@@ -160,15 +162,8 @@ func boolp(v bool) *bool { return &v }
 // the report, had no verdict on a single posting, against 10.6% among the boards the
 // same report kept. Absence of a signal was doing the work of evidence.
 func TestReportBoardsWithholdsBoardsWithNoVerdict(t *testing.T) {
-	brd := boards{
-		listed: map[boardKey]bool{
-			{"greenhouse", "determined"}: true, {"greenhouse", "unknown"}: true,
-			{"greenhouse", "technical"}: true, {"greenhouse", "skilled"}: true,
-		},
-		byProvider: map[string]map[string]bool{"greenhouse": {
-			"determined": true, "unknown": true, "technical": true, "skilled": true,
-		}},
-	}
+	brd := catalogOf(t, "greenhouse/determined", "greenhouse/unknown",
+		"greenhouse/technical", "greenhouse/skilled")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		// Classified, and the verdict was "not technical": the report may act on it.
 		boardRow(1, "greenhouse", "determined:1", boolp(false), nil),
@@ -201,10 +196,7 @@ func TestReportBoardsWithholdsBoardsWithNoVerdict(t *testing.T) {
 // come back into view. The scan already reports what its source gate turned down, and
 // this gate owes the same accounting.
 func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "unknown"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"unknown": true}},
-	}
+	brd := catalogOf(t, "greenhouse/unknown")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		boardRow(1, "greenhouse", "unknown:1", nil, nil),
 	}}
@@ -228,14 +220,7 @@ func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
 // Measured on a 0.5% prod sample: of the postings the classifier calls non-technical
 // yet that still carry skills, 37% carry nothing but non-engineering ones.
 func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
-	brd := boards{
-		listed: map[boardKey]bool{
-			{"greenhouse", "staffing"}: true, {"greenhouse", "software"}: true,
-		},
-		byProvider: map[string]map[string]bool{"greenhouse": {
-			"staffing": true, "software": true,
-		}},
-	}
+	brd := catalogOf(t, "greenhouse/staffing", "greenhouse/software")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		// Classified non-technical, and every tag on it names a non-engineering craft.
 		boardRow(1, "greenhouse", "staffing:1", boolp(false),
@@ -259,29 +244,21 @@ func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
 	}
 }
 
-// Retiring every board a provider has is a one-way door, and the report is where it
-// has to be caught. Ingest takes one board file by path, so a provider with nothing
-// left in sources/ is never crawled again — and the company-scoped rules refuse a job
-// they cannot re-crawl, so its postings can never be pruned either. The dead weight
-// becomes permanent. sources/retired/README.md states the order (prune the jobs first,
-// move the last entry after), but stating it in prose leaves it to whoever reads the
-// report at 2am.
+// Retiring every board a provider has is a one-way door, and the report is where it has
+// to be caught. Ingest crawls only live catalog rows, so a provider with none is never
+// crawled again — and the company-scoped rules refuse a job they cannot re-crawl, so its
+// postings can never be pruned either. The dead weight becomes permanent.
+//
+// retireBoards enforces the order too (it holds such a provider back), but a refusal
+// discovered after the run reads as "there was nothing to do". The report is what the
+// operator has in front of them beforehand.
 //
 // The boards are still listed — they are genuine candidates — but the report names the
-// providers it would empty, so the entry that empties one is moved last, deliberately.
+// providers it would empty, so the one that empties a provider is retired last,
+// deliberately, after its jobs are gone.
 func TestReportBoardsNamesProvidersItWouldEmpty(t *testing.T) {
-	brd := boards{
-		listed: map[boardKey]bool{
-			// Every board this provider has is about to be retired.
-			{"tinyats", "one"}: true, {"tinyats", "two"}: true,
-			// This one keeps a board, so it is not emptied.
-			{"greenhouse", "dead"}: true, {"greenhouse", "alive"}: true,
-		},
-		byProvider: map[string]map[string]bool{
-			"tinyats":    {"one": true, "two": true},
-			"greenhouse": {"dead": true, "alive": true},
-		},
-	}
+	// Every board tinyats has is about to be retired; greenhouse keeps one.
+	brd := catalogOf(t, "tinyats/one", "tinyats/two", "greenhouse/dead", "greenhouse/alive")
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		boardRow(1, "tinyats", "one:1", boolp(false), nil),
 		boardRow(2, "tinyats", "two:1", boolp(false), nil),
@@ -300,10 +277,10 @@ func TestReportBoardsNamesProvidersItWouldEmpty(t *testing.T) {
 	}
 	// The warning has to name the provider AND say what the hazard is, or it reads as
 	// decoration and gets moved with everything else.
-	if !strings.Contains(got, "every listed board") {
+	if !strings.Contains(got, "every live board") {
 		t.Fatalf("the report must warn that a provider would be left with no boards; got:\n%s", got)
 	}
-	warning := got[strings.Index(got, "every listed board"):]
+	warning := got[strings.Index(got, "every live board"):]
 	if !strings.Contains(warning, "tinyats") {
 		t.Errorf("the warning must name tinyats; got:\n%s", warning)
 	}

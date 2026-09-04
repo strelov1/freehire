@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Layers } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
+  import { formatCount } from '$lib/utils';
 
   // The mobile controls for a list page (jobs, companies, …): an inline toolbar at the
   // top of the list — the results total on the left, and (on the jobs list) a Swipe entry
@@ -12,25 +13,20 @@
   //
   // `total` is null until the list is ready (then the count appears); `unit` is the
   // already-pluralised noun ("jobs" / "companies"). `onSwipe` is optional — pass it only
-  // where a swipe deck exists (the standalone jobs list). `showDesktopTotal` is false when
-  // the desktop layout already surfaces the total elsewhere (the company page's sidebar
-  // stat), so the above-list line isn't shown twice; the mobile toolbar total is unaffected.
-  // `controls` is an optional slot for the list's own controls — however many the view
-  // passes (the jobs feed's sort and freshness selects; the company catalog's sort
-  // select) — rendered in the mobile toolbar and beside the desktop total. It shows even
-  // when `total` is null so the controls stay reachable while the list is empty or
-  // standing in a prompt.
+  // where a swipe deck exists (the standalone jobs list). `controls` is an optional slot
+  // for the list's own controls — however many the view passes (the jobs feed's sort and
+  // freshness selects; the company catalog's sort select) — rendered in the mobile toolbar
+  // and beside the desktop total. It shows even when `total` is null so the controls stay
+  // reachable while the list is empty or standing in a prompt.
   let {
     total,
     unit,
     onSwipe,
-    showDesktopTotal = true,
     controls,
   }: {
     total: number | null;
     unit: string;
     onSwipe?: () => void;
-    showDesktopTotal?: boolean;
     controls?: Snippet;
   } = $props();
 </script>
@@ -44,8 +40,16 @@
      must break onto a second line rather than clip its rightmost control off-screen. -->
 <div class="mb-3 flex flex-wrap items-center gap-2 md:hidden">
   {#if total !== null}
-    <span class="shrink-0 whitespace-nowrap text-sm text-muted-foreground" aria-live="polite">
-      <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
+    <!-- Rounded on this row, spelled out on the desktop one below. The row is 358px on a
+         390px phone and its contents came to 376: the count at full precision was 103px of
+         that and "2.1M" is 60, which is what puts the controls back on one line. The exact
+         figure stays in the title. -->
+    <span
+      class="shrink-0 whitespace-nowrap text-sm text-muted-foreground"
+      aria-live="polite"
+      title="{total.toLocaleString()} {unit}"
+    >
+      <span class="font-semibold tabular-nums text-foreground">{formatCount(total)}</span>
       {unit}
     </span>
   {/if}
@@ -71,13 +75,11 @@
 </div>
 
 <!-- Desktop: the total (and any list controls) sit top-right above the list (filters
-     live in the sidebar). The two are gated INDEPENDENTLY: the total on `showDesktopTotal`
-     (a view that renders its own total elsewhere suppresses this one), the controls on
-     their own presence. Gating both on `showDesktopTotal` is what hid the controls
-     entirely on a company page, where the sidebar carries the count. -->
-{#if (showDesktopTotal && total !== null) || controls}
+     live in the sidebar). The two are gated INDEPENDENTLY — a list standing in a prompt
+     has no total but must keep its controls reachable. -->
+{#if total !== null || controls}
   <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
-    {#if showDesktopTotal && total !== null}
+    {#if total !== null}
       <span class="text-sm text-muted-foreground" aria-live="polite">
         <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
         {unit}

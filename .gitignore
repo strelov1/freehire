@@ -23,9 +23,9 @@ hire
 /backfill-application-events
 /backfill-applications
 /backfill-blank-company
-/backfill-board-catalog
 /backfill-clearance
 /backfill-company-info
+/backfill-company-type-hint
 /backfill-company-names
 /backfill-derive
 /backfill-descriptions
@@ -36,6 +36,7 @@ hire
 /backfill-resume-structured
 /backfill-slug-folded
 /backfill-username-from-mailbox
+/billing-sync
 /broadcast
 /cal-sync
 /capture-apply-form
@@ -51,6 +52,7 @@ hire
 /hydrate-adzuna-description
 /import-company-industries
 /ingest
+/ingest-scheduler
 /liveness
 /mail-ingest
 /mail-preview
@@ -68,10 +70,10 @@ hire
 /resolve-url
 /rollup-company
 /rollup-views
+/schedule-board
 /search-drain
 /seed-adzuna-description-queue
 /similar-backfill
-/validate-sources
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
 /backfill-derive

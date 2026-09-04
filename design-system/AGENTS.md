@@ -117,10 +117,10 @@ rather than here — their census of `web/` was already off by a third.
 
 ## What `Dialog` does not cover
 
-Ten surfaces in `web/` were built by hand before this primitive was reached for. Four are
-now `Dialog` call sites — `AuthDialog`, `ReportDialog`, `RequestReferralModal`,
-`DeleteAccountButton`. The other six are not stragglers; they are two gaps, and forcing
-either onto `Dialog` means re-adding by hand what it deliberately does not do.
+Nine surfaces in `web/` were built by hand before this primitive was reached for. Three are
+now `Dialog` call sites — `ReportDialog`, `RequestReferralModal`, `DeleteAccountButton`. The
+other six are not stragglers; they are two gaps, and forcing either onto `Dialog` means
+re-adding by hand what it deliberately does not do.
 
 - **A sheet.** `JobDrawer` is a full-height drawer, `FilterModalShell` and
   `OnboardingWizard` stretch on mobile and centre above `sm`, `CookieConsent` is a bottom

@@ -59,16 +59,6 @@ func TestInstaffoRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestInstaffoBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/instaffo.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/instaffo.yml fails validation: %v", err)
-	}
-}
-
 // Instaffo lists every posting twice — once per locale — under the same native id. Only the
 // canonical /de/ URL yields an id, so the /en/ twin is dropped before it is ever fetched.
 func TestInstaffoJobIDTakesCanonicalLocaleOnly(t *testing.T) {

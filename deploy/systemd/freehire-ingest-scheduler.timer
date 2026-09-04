@@ -1,0 +1,13 @@
+[Unit]
+Description=timer ingest scheduler
+[Timer]
+OnCalendar=*:*:00
+# Persistent is deliberately OFF, unlike every per-provider timer this replaces. Catch-up
+# lives in the database now: a due time in the past IS the missed run, and the scheduler
+# advances from now() so a long outage owes exactly one run per provider rather than one
+# per minute it was down. Letting systemd also replay a missed tick would add nothing and
+# would fire a burst on boot.
+Persistent=false
+# No RandomizedDelaySec either: the stagger is next_due_at, not the timer.
+[Install]
+WantedBy=timers.target

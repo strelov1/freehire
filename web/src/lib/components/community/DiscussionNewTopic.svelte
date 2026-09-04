@@ -1,9 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { signinUrl } from '$lib/signin';
   import { communityFormError } from '$lib/community';
   import { Button, Input } from '$lib/ui';
 
@@ -76,7 +77,8 @@
   </form>
 {:else}
   <p class="signin-hint">
-    <button class="linklike" onclick={() => openAuthDialog()}>Sign in</button> to start a topic.
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
+    <a class="linklike" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</a> to start a topic.
   </p>
 {/if}
 

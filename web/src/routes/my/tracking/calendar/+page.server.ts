@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { signinUrl } from '$lib/signin';
 import { loadTimeline } from '$lib/server/tracking';
 import type { PageServerLoad } from './$types';
 
@@ -11,8 +12,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
   const { user } = await parent();
   if (!user) {
-    const target = url.pathname + url.search;
-    redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
+    redirect(302, signinUrl({ returnTo: url.pathname + url.search, cancelTo: '/', mode: 'login' }));
   }
   return { prefetched: await loadTimeline(fetch, request.headers.get('cookie')) };
 };

@@ -9,6 +9,7 @@ package subscription
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/engage/notify"
@@ -18,6 +19,13 @@ import (
 var (
 	// ErrInvalidChannel is an unsupported delivery channel (mapped to 400).
 	ErrInvalidChannel = errors.New("subscription: unsupported channel")
+	// ErrUnfilteredSearch is a subscription to a saved search that carries no filter
+	// (mapped to 400). Saving an unfiltered board is legitimate — it is the "show all"
+	// view — but SUBSCRIBING to one asks to be notified about every posting in the
+	// catalogue, which is never what anyone means. On prod 2026-09-04 one such
+	// subscription held 248k undelivered matches and, through a claim that ordered by
+	// subscription id, starved every subscription created after it.
+	ErrUnfilteredSearch = errors.New("subscription: saved search has no filter")
 	// ErrSavedSearchNotFound is a saved_search_id that is missing or not the
 	// caller's (mapped to 404).
 	ErrSavedSearchNotFound = errors.New("subscription: saved search not found")
@@ -65,6 +73,10 @@ type SubscriptionListItem struct {
 type Repository interface {
 	List(ctx context.Context, userID int64) ([]SubscriptionListItem, error)
 	Create(ctx context.Context, userID, savedSearchID int64, channel string) (Subscription, error)
+	// SavedSearchQuery returns the owner-scoped saved search's stored query string, so
+	// the use case can refuse to subscribe to an unfiltered one. A missing or non-owned
+	// id surfaces as ErrSavedSearchNotFound, like Create.
+	SavedSearchQuery(ctx context.Context, userID, savedSearchID int64) (string, error)
 	SetActive(ctx context.Context, userID, id int64, active bool) (Subscription, error)
 	Delete(ctx context.Context, userID, id int64) error
 }
@@ -92,6 +104,13 @@ func (s *Service) List(ctx context.Context, userID int64) ([]SubscriptionListIte
 func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, channel string) (Subscription, error) {
 	if !notify.ValidChannel(channel) {
 		return Subscription{}, ErrInvalidChannel
+	}
+	query, err := s.repo.SavedSearchQuery(ctx, userID, savedSearchID)
+	if err != nil {
+		return Subscription{}, err
+	}
+	if strings.TrimSpace(query) == "" {
+		return Subscription{}, ErrUnfilteredSearch
 	}
 	return s.repo.Create(ctx, userID, savedSearchID, channel)
 }

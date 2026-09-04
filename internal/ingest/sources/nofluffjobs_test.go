@@ -198,13 +198,3 @@ func TestNoFluffJobsProviderRegistered(t *testing.T) {
 		t.Error("FilterableProviders() should include nofluffjobs")
 	}
 }
-
-func TestNoFluffJobsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/nofluffjobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/nofluffjobs.yml fails validation: %v", err)
-	}
-}

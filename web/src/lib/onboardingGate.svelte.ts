@@ -1,8 +1,8 @@
 import { resolve } from '$app/paths';
 
-// Shared "has this visit already been sent through /onboarding and left" flag. Module-
-// level $state singleton (mirrors auth-dialog.svelte.ts) — a client-only UI concern,
-// safe under SSR since it stays false on the server.
+// Shared "has this visit already been sent through /onboarding and left" flag. A
+// module-level $state singleton — a client-only UI concern, safe under SSR since it
+// stays false on the server.
 //
 // Without this, the root layout's redirect effect would bounce a user right back to
 // /onboarding the instant they navigate away after finishing or skipping it, even within
@@ -32,10 +32,9 @@ export const onboardingGate = {
 };
 
 /** The URL for /onboarding carrying `returnTo` — where the wizard sends the visitor
- *  back once they leave it (skip the auth step, or finish/skip the rest). Every entry
- *  point (AuthDialog's "Create one", a signed-out gate's "Sign up", the layout's
- *  no-CV auto-redirect) builds this the same way, so they share one place to change
- *  the query param name or add validation. */
+ *  back once they finish or skip it. Every entry point (a signed-out gate's "Sign up",
+ *  the layout's no-CV auto-redirect) builds this the same way, so they share one place
+ *  to change the query param name or add validation. */
 export function onboardingUrl(returnTo: string): string {
   return `${resolve('/onboarding')}?returnTo=${encodeURIComponent(returnTo)}`;
 }

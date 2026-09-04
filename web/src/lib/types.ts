@@ -73,9 +73,74 @@ export interface Allowance {
 /** The caller's plan and every metered feature's standing today (`GET /api/v1/me/plan`).
  *  Every feature is listed, including untouched ones: the surface shows what the plan IS,
  *  and a feature missing because no row exists yet would read as one they do not have. */
+/** One thing a visitor may buy (`GET /api/v1/plans`). The money comes from the payment
+ *  provider, never from our configuration: a price written beside its id in an env file is a
+ *  second source of truth about what something costs, and the two disagree the first time
+ *  one is changed — on the page a customer can hold us to. */
+export interface PublicPrice {
+  id: string;
+  /** Smallest currency unit, as the provider stores it. Formatting happens in the view. */
+  amount_cents: number;
+  currency: string;
+  interval: 'month' | 'year';
+  /** The price a new subscriber is sold unless they choose otherwise. */
+  default: boolean;
+}
+
+/** What each plan allows and what Pro costs (`GET /api/v1/plans`). Public and
+ *  unauthenticated — a pricing page that needs an account cannot do a pricing page's job.
+ *
+ *  `features` comes from the same configuration the metering path reads, so the comparison
+ *  cannot drift from the limits actually enforced. `enforced` names the features whose
+ *  ceiling really refuses today; while the shadow run is on it is empty, and a page claiming
+ *  otherwise would be selling a limit nobody meets. */
+export interface PlansMatrix {
+  features: { feature: string; free_daily: number; pro_unlimited: boolean }[];
+  prices: PublicPrice[];
+  enforced: string[];
+}
+
+/** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`).
+ *
+ *  Not exported: it is reached through `BillingOverview.invoices`, and nothing outside
+ *  this module names it on its own — which is the line knip.config.js draws. */
+interface BillingInvoice {
+  /** The provider's invoice id. Carried so a list can key on it: two invoices can share a
+   *  second, and a duplicate key in an `{#each}` throws and kills the block. */
+  id: string;
+  date: string;
+  amount_cents: number;
+  currency: string;
+  /** The provider's word: paid, open, void, uncollectible. A failed charge stays visible —
+   *  hiding it leaves a subscriber wondering why their card was declined. */
+  status: string;
+  receipt_url?: string;
+}
+
+/** What the caller is paying and what has been taken. Read through to the payment provider
+ *  on every request rather than mirrored: a receipt list that has quietly missed a refund is
+ *  worse than no receipt list.
+ *
+ *  `ends_at` replaces `renews_at` after a cancellation — "renews on the 4th" beside "you
+ *  cancelled" is the kind of contradiction that generates support mail. */
+export interface BillingOverview {
+  status: string;
+  amount_cents: number;
+  currency: string;
+  interval: string;
+  renews_at?: string;
+  ends_at?: string;
+  invoices: BillingInvoice[];
+}
+
 export interface PlanState {
   plan: 'free' | 'pro';
   resets_at: string;
+  /** When the Pro plan lapses. Absent on the free plan, and absent once it has lapsed —
+   *  the server omits a past value, so a date here is always still in force. Read from the
+   *  stored column, never from the billing provider, so this endpoint keeps answering when
+   *  the provider does not. */
+  pro_until?: string;
   allowances: Allowance[];
 }
 
@@ -108,12 +173,16 @@ export interface UsageHistoryEntry {
  *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
  *  block then offers a recompute); `allowance` reports where the caller stands today on
- *  reads (omitted on the no-CV read and on compute responses). */
+ *  reads (omitted on the no-CV read and on compute responses). `tailor_allowance` rides
+ *  along on the same reads because the sidebar this feeds offers TAILORING off the fit
+ *  summary, and the two features carry their own daily ceilings — reading only the fit one
+ *  puts an analysis count under a "Tailor my CV" button. */
 export interface MatchAnalysisResponse {
   has_cv: boolean;
   stale: boolean;
   analysis: MatchAnalysisContract | null;
   allowance?: Allowance;
+  tailor_allowance?: Allowance;
 }
 
 /** One row of the Activity → Matches tab: a compact projection of a cached match analysis
@@ -331,6 +400,13 @@ export interface Contribution {
  *  - `review`   imported, but its careers site names no board we can crawl, so it went to triage
  *  - `queued`   nothing could read the page, so the link went to manual triage */
 type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
+
+/** A job page in the wild recognised as one the catalog already carries. The lookup that
+ *  produces it is public and read-only, so this is deliberately narrower than ResolvedLink:
+ *  nothing was imported and no board was recorded, so there is no status to report. */
+export interface FoundJob {
+  public_slug: string;
+}
 
 export interface ResolvedLink {
   public_slug: string | null;
@@ -1051,6 +1127,27 @@ export interface ResumeProfile {
   seniority?: string;
 }
 
+/** What a public LinkedIn profile yielded (`POST /me/linkedin/import`). The facet half is
+ *  `ResumeProfile` exactly, because it comes from the same dictionaries a CV goes through —
+ *  so the wizard merges both sources into one staged set without caring which arrived.
+ *
+ *  The rest is what LinkedIn releases about the member themselves. `location` is a
+ *  `DerivedLocation` for the reason that type exists: an address read off a profile is
+ *  something we WORKED OUT about the user, not something they asserted, and it seeds an
+ *  unstated field rather than overwriting a stated one.
+ *
+ *  There is deliberately no employment history here. LinkedIn withholds every job title and
+ *  position description from an anonymous reader, so the import cannot fill the experience
+ *  bank and the UI must say so rather than appear to have lost it. */
+export interface LinkedInImport extends ResumeProfile {
+  location?: DerivedLocation;
+  /** The member's display name, headline and current employer — shown back as "here is
+   *  what we recognised", never saved anywhere on their own. */
+  name?: string;
+  headline?: string;
+  company?: string;
+}
+
 /** The read-only structured résumé parsed from the uploaded CV by the LLM. */
 /** @public */
 export type {
@@ -1284,7 +1381,7 @@ export interface ApiSuggestion {
 }
 
 export interface ApiSuggestionPart {
-  kind: 'title' | 'role' | 'skill' | 'category' | 'company';
+  kind: 'title' | 'skill' | 'category' | 'company';
   /** The facet value to apply. Absent for a `title`, which names no facet and is
    *  applied as the free-text query instead. */
   slug?: string;

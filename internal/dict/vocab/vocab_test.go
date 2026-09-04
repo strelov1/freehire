@@ -165,3 +165,16 @@ func TestDomainGlossCoversVocabulary(t *testing.T) {
 		}
 	}
 }
+
+func TestCompanyTypeGlossCoversVocabulary(t *testing.T) {
+	for _, ct := range CompanyTypeValues {
+		if strings.TrimSpace(CompanyTypeGloss[ct]) == "" {
+			t.Errorf("company_type %q has no gloss for the enrichment prompt", ct)
+		}
+	}
+	for ct := range CompanyTypeGloss {
+		if !slices.Contains(CompanyTypeValues, ct) {
+			t.Errorf("CompanyTypeGloss has %q not in CompanyTypeValues", ct)
+		}
+	}
+}

@@ -8,7 +8,10 @@
   <p class="mt-2 text-sm text-muted-foreground">
     {page.error?.message ?? 'Something went wrong.'}
   </p>
-  <a href={resolve('/')} class="mt-4 inline-block text-sm font-medium text-foreground hover:underline">
+  <a
+    href={resolve('/jobs')}
+    class="mt-4 inline-block text-sm font-medium text-foreground hover:underline"
+  >
     Browse jobs
   </a>
 </div>

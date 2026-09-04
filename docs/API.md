@@ -107,7 +107,6 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor |
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
-| `role` | Role | Open vocabulary — call /jobs/facets for live values |
 | `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, product, project_management, management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
 | `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
@@ -489,7 +488,7 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $F
 
 The cached AI match analysis for the job (never runs the LLM).
 
-Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance` reports how much of today you have used against what the day allows, and when it resets.
+Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance` reports how much of today you have used against what the day allows, and when it resets. `tailor_allowance` reports the same for CV tailoring, which carries its own daily ceiling — the job page offers tailoring from this response.
 
 **Path parameters**
 
@@ -515,7 +514,8 @@ curl "https://freehire.me/api/v1/jobs/<slug>/match-analysis" -H "Authorization: 
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
+    "allowance": { "feature": "match", "used": 1, "limit": 3, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" },
+    "tailor_allowance": { "feature": "tailor", "used": 0, "limit": 2, "unlimited": false, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
   }
 }
 ```
@@ -2692,6 +2692,30 @@ curl -X POST "https://freehire.me/api/v1/me/resume/extract" \
 
 ```json
 { "data": { "skills": ["go", "postgresql"], "categories": ["backend"], "seniority": "senior" } }
+```
+
+### `POST /me/linkedin/import`
+
+**Auth:** Session only
+
+Derive the same profile from a public LinkedIn profile link.
+
+Reads the profile page anonymously — no LinkedIn account, cookie or token is sent or accepted — and runs its headline and address through the same dictionaries `/me/resume/extract` uses, so the facet half of the response is identical in shape. Accepts a profile URL in any form (tracking parameters, a country subdomain, a sub-page path) or the bare public id. **Work history is not available**: LinkedIn withholds every job title and position description from a reader who is not signed in, so the facets are derived from the headline and the location from the stated address. Nothing is stored, and this does not create a CV. Errors are distinct on purpose: `400` the link names no profile, `502` LinkedIn did not answer, `422` the page carried no readable profile.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | no | Profile URL or bare public id, e.g. `linkedin.com/in/your-name`. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/linkedin/import" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"url":"https://www.linkedin.com/in/your-name"}'
+```
+
+```json
+{ "data": { "skills": ["typescript", "go"], "categories": ["backend"], "seniority": "senior", "location": { "countries": ["br"], "regions": ["latam"], "cities": ["Florianópolis"] }, "name": "Dana Okonkwo", "headline": "Senior Backend Engineer…", "company": "Northwind Systems" } }
 ```
 
 ### `PUT /me/resume`

@@ -32,16 +32,6 @@ func TestGetonbrdRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestGetonbrdBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/getonbrd.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/getonbrd.yml fails validation: %v", err)
-	}
-}
-
 func TestGetonbrdWorkMode(t *testing.T) {
 	cases := map[string]string{"fully_remote": "remote", "remote": "remote", "hybrid": "hybrid", "no_remote": "onsite", "weird": ""}
 	for in, want := range cases {

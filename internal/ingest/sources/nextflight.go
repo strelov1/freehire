@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/platform/flexjson"
 )
 
 // Shared Next.js App Router RSC-flight primitives. A Next.js server-rendered page inlines
@@ -62,7 +64,7 @@ func flightJobPosting(flight string, v any) bool {
 	}
 	slices.Sort(ids)
 	for _, id := range ids {
-		msg, ok := jobPostingNode(sanitizeJSONControlChars([]byte(rows[id])))
+		msg, ok := jobPostingNode(flexjson.SanitizeControlChars([]byte(rows[id])))
 		if !ok {
 			continue // not a JobPosting row (most rows are markup or props)
 		}

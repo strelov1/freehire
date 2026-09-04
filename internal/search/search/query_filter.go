@@ -41,7 +41,6 @@ var StringFacets = map[string]string{
 	// settings patch declaring the attribute filterable MUST reach the live index
 	// before a binary carrying this line does — otherwise every facets request 500s.
 	"requires_clearance": "requires_clearance",
-	"role":               "roles",
 	"ai_archetype":       "ai_archetype",
 	// Derived at index time like the two above, so it filters on the bare attribute.
 	// The vocabulary holds one value, which makes `role_type_exclude` the way to ask

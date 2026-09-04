@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/telegram"
 	"github.com/strelov1/freehire/internal/platform/config"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -34,14 +35,6 @@ func run() int {
 		return 1
 	}
 
-	// sources/telegram.yml supplies each channel's kind, steering the extraction prompt.
-	chanCfg, err := telegram.LoadChannels()
-	if err != nil {
-		log.Printf("config: %v", err)
-		return 1
-	}
-	kinds := chanCfg.Kinds()
-
 	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
 	// set, wires tracing (source "telegram"). flush drains buffered traces at run end
 	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
@@ -58,6 +51,14 @@ func run() int {
 		return 1
 	}
 	defer cleanup()
+
+	// telegram_channels supplies each channel's kind, steering the extraction prompt.
+	chanCfg, err := telegram.LoadChannels(ctx, db.New(pool))
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	kinds := chanCfg.Kinds()
 
 	extractor := telegram.NewLangChainExtractor(client)
 

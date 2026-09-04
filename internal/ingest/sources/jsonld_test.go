@@ -2,27 +2,8 @@ package sources
 
 import (
 	"context"
-	"strings"
 	"testing"
 )
-
-func TestSanitizeJSONControlCharsEscapesInsideStringOnly(t *testing.T) {
-	raw := []byte("{\"a\":\"line one\nline two\",\n \"b\":1}")
-	got := sanitizeJSONControlChars(raw)
-	want := "{\"a\":\"line one\\nline two\",\n \"b\":1}"
-	if string(got) != want {
-		t.Errorf("sanitizeJSONControlChars = %q, want %q", got, want)
-	}
-}
-
-func TestSanitizeJSONControlCharsSkipsEscapedBackslash(t *testing.T) {
-	// A literal backslash-quote inside the string must not flip inString off early.
-	raw := []byte(`{"a":"quote: \" then a real newline` + "\n" + `end"}`)
-	got := sanitizeJSONControlChars(raw)
-	if strings.Contains(string(got), "\n") {
-		t.Errorf("sanitizeJSONControlChars left a raw newline unescaped: %q", got)
-	}
-}
 
 // Live-verified on cryptocurrencyjobs.co: its JobPosting ld+json embeds the description with
 // raw, unescaped newlines, which Go's strict json.Unmarshal rejects ("invalid character '\n'

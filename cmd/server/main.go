@@ -25,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
+	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -324,7 +325,10 @@ func main() {
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
-		ServedHosts:           cfg.ServedHosts,
+		// Billing reads its own environment: the credentials are the provider's, nothing
+		// else in the fleet needs them, and an absent one means the subsystem is simply off.
+		Billing:     billing.ConfigFromEnv(),
+		ServedHosts: cfg.ServedHosts,
 
 		DiscordBotToken:      cfg.DiscordBotToken,
 		DiscordApplicationID: cfg.DiscordApplicationID,

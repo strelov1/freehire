@@ -19,6 +19,27 @@ WHERE closed_at IS NULL
   AND description <> ''
 ON CONFLICT (job_id, target_version) DO NOTHING;
 
+-- name: EnqueueEnrichmentForCompanySlugs :execrows
+-- Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
+-- eligible jobs of the given company_slugs back into enrichment_outbox at the CURRENT
+-- target version, regardless of their existing enrichment_version. Unlike
+-- EnqueuePendingJobs (which only re-queues rows BELOW the target version), this also
+-- picks up a job already enriched under the current version — the case after adding a
+-- company to enrich.CompanyTypeHints, whose existing postings need a second pass with
+-- the new prompt hint, not a version bump that would re-enrich the whole catalogue.
+-- Same eligibility gate as EnqueuePendingJobs, so a re-run never queues work
+-- ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
+-- (not yet claimed) alone, so running this twice in a row costs nothing.
+INSERT INTO enrichment_outbox (job_id, target_version)
+SELECT id, sqlc.arg(target_version)::int
+FROM jobs
+WHERE company_slug = ANY(sqlc.arg(company_slugs)::text[])
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND is_tech IS TRUE
+  AND description <> ''
+ON CONFLICT (job_id, target_version) DO NOTHING;
+
 -- name: ClaimEnrichmentBatch :many
 -- Claim a batch of live, unleased entries for OPEN jobs, freshest job first, by
 -- stamping claimed_at. The jobs join lets the claim order by posting freshness and

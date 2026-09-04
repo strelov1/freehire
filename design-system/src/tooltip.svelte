@@ -30,13 +30,36 @@
   const HIDE_DELAY_MS = 150;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function show() {
+  // A row of chips fires mouseenter/mouseleave on each one a gliding pointer passes on
+  // its way to somewhere else. Opening with no delay meant every chip along the way
+  // flashed its tooltip open and immediately queued its own close — a strobe, and a
+  // burst of scheduled work for chips nobody meant to read. Requiring the pointer to
+  // sit still for a beat first ("hover intent") means a glide never arms the timer, so
+  // nothing but the chip actually being read opens. Only the delayed path
+  // (`scheduleShow`, wired to mouseenter) needs this — focus and a touch tap are each
+  // already one deliberate action, so `show` stays immediate for them.
+  const SHOW_DELAY_MS = 300;
+  let showTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function clearTimers() {
+    clearTimeout(showTimer);
     clearTimeout(hideTimer);
+  }
+
+  function show() {
+    clearTimers();
     visible = true;
   }
 
+  function scheduleShow() {
+    clearTimers();
+    showTimer = setTimeout(() => {
+      visible = true;
+    }, SHOW_DELAY_MS);
+  }
+
   function scheduleHide() {
-    clearTimeout(hideTimer);
+    clearTimers();
     hideTimer = setTimeout(() => {
       visible = false;
     }, HIDE_DELAY_MS);
@@ -106,19 +129,85 @@
   }
 
   function hide() {
-    clearTimeout(hideTimer);
+    clearTimers();
     visible = false;
   }
 
-  // A pending hide left running past unmount would set state on a dead component.
-  $effect(() => () => clearTimeout(hideTimer));
+  // A pending show or hide left running past unmount would set state on a dead component.
+  $effect(() => clearTimers);
+
+  // Centering the floating content on the trigger assumes equal room on both sides.
+  // Near the edge of the viewport there isn't — the box spills off screen instead of
+  // staying inside it. `shiftPx` is the correction a "shift" collision strategy would
+  // compute — measured by hand for one axis of one prop rather than pulling in a
+  // positioning library for it.
+  const EDGE_PADDING_PX = 8;
+  let shiftPx = $state(0);
+  // Mirrors `shiftPx` outside `$state` so `measure` below can read back the correction
+  // it last applied without that read becoming a tracked dependency of the effect that
+  // also writes `shiftPx` — reading a $state you write inside the same effect is a loop.
+  let appliedShiftPx = 0;
+
+  // Pulls a box back inside [0 + padding, boundaryFar - padding] along one axis. A box
+  // wider than the viewport itself (long content on a narrow phone) can overflow both
+  // edges at once, and no single shift satisfies both — this keeps the near edge
+  // (left/top, where reading starts) fully visible and accepts the far edge overflowing
+  // rather than a naive far-only correction pushing the near edge out even further.
+  function edgeShift(naturalNear: number, naturalFar: number, boundaryFar: number) {
+    const overflowNear = EDGE_PADDING_PX - naturalNear;
+    if (overflowNear > 0) return overflowNear;
+    const overflowFar = naturalFar - (boundaryFar - EDGE_PADDING_PX);
+    return overflowFar > 0 ? -overflowFar : 0;
+  }
+
+  // `content` resolves async (SkillChip renders a narrower skeleton first), which
+  // commonly changes this box's width after the effect's first measurement — a
+  // ResizeObserver re-measures whenever that happens, the same pattern TabStrip uses
+  // for its own overflow mask. `side` is also a dependency (read inside `measure`,
+  // called synchronously below), so flipping it re-runs this from scratch rather than
+  // reusing a shift measured on the other axis.
+  $effect(() => {
+    if (!visible || !contentEl) {
+      shiftPx = 0;
+      appliedShiftPx = 0;
+      return;
+    }
+    const el = contentEl;
+    appliedShiftPx = 0;
+
+    function measure() {
+      // The rect already carries whatever shift is currently applied (via the `style`
+      // transform on this element), so it's subtracted back out first — otherwise a
+      // resize after the first correction would compound it instead of replacing it.
+      const rect = el.getBoundingClientRect();
+      appliedShiftPx =
+        side === 'top' || side === 'bottom'
+          ? edgeShift(rect.left - appliedShiftPx, rect.right - appliedShiftPx, window.innerWidth)
+          : edgeShift(rect.top - appliedShiftPx, rect.bottom - appliedShiftPx, window.innerHeight);
+      shiftPx = appliedShiftPx;
+    }
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
 
   const positions = {
-    top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-    right: 'left-full top-1/2 -translate-y-1/2 ml-2',
-    bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-    left: 'right-full top-1/2 -translate-y-1/2 mr-2',
+    top: 'bottom-full left-1/2 mb-2',
+    right: 'left-full top-1/2 ml-2',
+    bottom: 'top-full left-1/2 mt-2',
+    left: 'right-full top-1/2 mr-2',
   };
+
+  // Replaces the `-translate-x/y-1/2` utility the classes above used to carry: an
+  // inline style is needed to fold the edge-shift correction into the same transform,
+  // and inline `style` already wins over the class either way.
+  const axisShiftTransform = $derived(
+    side === 'top' || side === 'bottom'
+      ? `translate(calc(-50% + ${shiftPx}px), 0)`
+      : `translate(0, calc(-50% + ${shiftPx}px))`,
+  );
 </script>
 
 <svelte:window
@@ -134,7 +223,7 @@
 <span
   class="relative inline-flex"
   bind:this={triggerEl}
-  onmouseenter={show}
+  onmouseenter={scheduleShow}
   onmouseleave={scheduleHide}
   onfocusin={show}
   onfocusout={hideOnFocusOut}
@@ -161,6 +250,7 @@
         positions[side],
         className,
       )}
+      style="transform: {axisShiftTransform}"
     >
       {@render content()}
     </span>

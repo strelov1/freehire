@@ -1,0 +1,41 @@
+-- Drop link_contributions. The board catalog change (#2357) moved the crowdsourced
+-- contribution lifecycle into `boards` + `board_submissions`, and #2412 carried the rows
+-- it left behind. Nothing has read or written this table since #2357.
+--
+-- The carry ran in prod on 2026-09-04 and was verified before this file existed:
+--
+--     404 contributions
+--       26  unclassified URLs   -> board_submissions (30 rows now, dated from 2026-08-13,
+--                                  original timestamps intact)
+--        2  recognized boards   -> boards, pending (inhire/onsign, quickin/ipm)
+--      172  already onboarded   -> attributed to their submitter (boards rows naming a
+--                                  submitter went from 3 to 169)
+--      204  refusals            -> deliberately not carried
+--
+-- A second --apply run wrote nothing and left both counts unchanged, which is the
+-- idempotence claim tested rather than asserted.
+--
+-- The 8 onboarded contributions whose board the catalog does not carry were each checked
+-- by hand, and none is a board we would lose:
+--   * 4 workday rows recorded `<tenant-host>/en-US` — a LOCALE path, not a site. Every one
+--     of those tenants is in the catalog and active under its real site
+--     (salesforce.wd12…/External_Career_Site, thehartford.wd5…/Careers_External, …).
+--   * `rippling/en-GB` is the same mistake, and `greenhouse/*` is a literal asterisk.
+--   * `instaffo/instaffo` recorded the provider name as the board; instaffo is boardless
+--     and is crawled with board = ''.
+--   * `greenhouse/abbycare` is the one board genuinely absent from the catalog, and its
+--     Greenhouse API answers 404 — the board is dead, not missed.
+--
+-- The table's data is also archived on the host at
+-- /opt/freehire/backups/link_contributions-20260904.sql (404 column-inserts), because a
+-- DROP is the one step in this sequence that nothing else can undo.
+--
+-- CASCADE is deliberately NOT used: if something still depends on this table, the drop
+-- should fail and say so rather than quietly take the dependant with it.
+--
+-- The rule below fires on every DROP TABLE, because dropping one breaks existing clients.
+-- This table has had none since #2357, the last three queries reading it are deleted in
+-- this same change, and its rows were carried and verified before the statement was
+-- written — see the counts above.
+-- squawk-ignore ban-drop-table
+DROP TABLE IF EXISTS public.link_contributions;

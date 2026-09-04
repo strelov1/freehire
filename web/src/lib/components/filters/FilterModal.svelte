@@ -7,7 +7,7 @@
   import { Tooltip } from '$lib/ui';
   import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '$lib/facets';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { profileStore } from '$lib/profile.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '$lib/filters';
@@ -119,6 +119,11 @@
   const showProfileAction = $derived(hasSavedTab && (!isAuthenticated() || profileStore.loaded));
   const profile = $derived(profileStore.profile);
 
+  function applyProfileOrSignIn() {
+    if (profile) staged.applyProfile(profile);
+    else promptSignIn();
+  }
+
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
   const showSaveNudge = $derived(hasSavedTab && notifications.telegram.enabled && staged.active > 0);
@@ -164,7 +169,7 @@
 
   function entryCount(e: RailEntry): number {
     const f = staged.value;
-    if (e.kind === 'category') return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'ai_archetype');
+    if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'ai_archetype');
     if (e.kind === 'experience')
       return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
@@ -293,10 +298,10 @@
 
 {#snippet profileAction()}
   {#if !isAuthenticated() || profile}
-    <!-- Signed-out: click opens the sign-in dialog; signed-in with a profile: applies it. -->
+    <!-- Signed-out: click sends the visitor to /signin; signed-in with a profile: applies it. -->
     <button
       type="button"
-      onclick={() => (profile ? staged.applyProfile(profile) : openAuthDialog('login'))}
+      onclick={applyProfileOrSignIn}
       class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
@@ -340,10 +345,6 @@
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
-    {@const roleDef = facetDefFor('role')}
-    {#if roleDef && !exclude.includes('role')}
-      <div class="mb-6"><FacetSection def={roleDef} store={staged} counts={c} expand /></div>
-    {/if}
     <CategoryPane store={staged} {plain} counts={c} />
     {#if !exclude.includes('ai_archetype')}
       {@const aiArchetypeDef = facetDefFor('ai_archetype')}

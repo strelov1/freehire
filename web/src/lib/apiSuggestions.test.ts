@@ -11,13 +11,13 @@ const api = (...parts: ApiSuggestion['parts']): ApiSuggestion => ({
 describe('fromApi', () => {
   it('shows the whole phrase, not just the completion', () => {
     const got = fromApi([
-      api({ kind: 'role', slug: 'senior_software_engineer', text: 'Senior Software Engineer' }, { kind: 'company', slug: 'google', text: 'Google' }),
+      api({ kind: 'category', slug: 'senior_software_engineer', text: 'Senior Software Engineer' }, { kind: 'company', slug: 'google', text: 'Google' }),
     ]);
     expect(got[0]?.label).toBe('Senior Software Engineer Google');
   });
 
   it('carries the posting count so a row says how big it is', () => {
-    const got = fromApi([api({ kind: 'role', slug: 'backend', text: 'Backend Engineer' })]);
+    const got = fromApi([api({ kind: 'category', slug: 'backend', text: 'Backend Engineer' })]);
     expect(got[0]?.count).toBe(100);
   });
 
@@ -26,14 +26,14 @@ describe('fromApi', () => {
   // typed.
   it('takes its kind from the part being completed', () => {
     const got = fromApi([
-      api({ kind: 'role', slug: 'backend', text: 'Backend Engineer' }, { kind: 'company', slug: 'google', text: 'Google' }),
+      api({ kind: 'category', slug: 'backend', text: 'Backend Engineer' }, { kind: 'company', slug: 'google', text: 'Google' }),
     ]);
     expect(got[0]?.kind).toBe('company');
   });
 
   it('gives rows distinct keys even when they complete to the same word', () => {
     const got = fromApi([
-      api({ kind: 'role', slug: 'backend', text: 'Backend Engineer' }),
+      api({ kind: 'category', slug: 'backend', text: 'Backend Engineer' }),
       api({ kind: 'skill', slug: 'backend', text: 'Backend' }),
     ]);
     expect(got[0]?.slug).not.toBe(got[1]?.slug);
@@ -44,13 +44,13 @@ describe('fromApi', () => {
 // what the visitor typed, which is exactly the composed search this feature exists to
 // make possible.
 describe('applyParams', () => {
-  it('applies a role and a company together', () => {
+  it('applies a specialization and a company together', () => {
     const got = applyParams([
-      { kind: 'role', slug: 'senior_software_engineer', text: 'Senior Software Engineer' },
+      { kind: 'category', slug: 'software_engineering', text: 'Software Engineering' },
       { kind: 'company', slug: 'google', text: 'Google' },
     ]);
     expect(got.facets).toEqual([
-      ['role', 'senior_software_engineer'],
+      ['category', 'software_engineering'],
       ['company_slug', 'google'],
     ]);
     expect(got.q).toBeUndefined();
@@ -76,7 +76,7 @@ describe('applyParams', () => {
   // A part with no slug and a kind that needs one is malformed; dropping it is better
   // than writing `role=undefined` into the URL.
   it('ignores a facet part with no value', () => {
-    const got = applyParams([{ kind: 'role', text: 'Backend Engineer' }]);
+    const got = applyParams([{ kind: 'category', text: 'Backend Engineer' }]);
     expect(got.facets).toEqual([]);
   });
 });

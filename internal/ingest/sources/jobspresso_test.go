@@ -195,13 +195,3 @@ func TestJobspressoRegisteredAndFilterable(t *testing.T) {
 		t.Error("FilterableProviders() should include jobspresso")
 	}
 }
-
-func TestJobspressoBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/jobspresso.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/jobspresso.yml fails validation: %v", err)
-	}
-}

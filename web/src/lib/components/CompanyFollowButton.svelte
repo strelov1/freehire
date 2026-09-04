@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { canonicalQuery } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { notifications } from '$lib/notifications.svelte';
@@ -50,7 +50,7 @@
   async function toggle() {
     if (busy) return;
     if (!isAuthenticated()) {
-      openAuthDialog();
+      promptSignIn();
       return;
     }
     if (!telegram.linked) return; // the button renders as a link to Integrations instead

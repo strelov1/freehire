@@ -46,7 +46,7 @@ var blocks = map[string][]string{
 	},
 	"dict": {
 		"classify", "companyname", "industrytag", "lang", "location", "normalize",
-		"roletag", "roletype", "skilladjacency", "skillbundle", "skilltag",
+		"roletype", "skilladjacency", "skillbundle", "skilltag",
 		// skillvec/gen is the registry generator — a main package that reads skilltag
 		// and writes skillvec's source. It never ships in a binary, but it is a package
 		// in the repo, so it needs a block like any other.
@@ -67,7 +67,15 @@ var blocks = map[string][]string{
 	},
 	"identity": {
 		"accountdelete", "accounts", "auth", "auth/apple", "auth/applejobs",
-		"auth/mobileauth", "auth/oauth", "auth/recentauth", "userprofile", "username",
+		"auth/mobileauth", "auth/oauth", "auth/recentauth",
+		// billing is here and not in ai, where plan lives, because a subscription is an
+		// attribute of the ACCOUNT. The constraint that pushed plan out of this block —
+		// ai and identity share a layer, so ai/assistant could not import it — does not
+		// reach billing: plan reads users.pro_until through platform/db and never imports
+		// this package, and billing's only callers are the webhook handler in api and a
+		// binary in cmd.
+		"billing",
+		"userprofile", "username",
 	},
 	"candidate": {
 		"atscheck",
@@ -80,6 +88,11 @@ var blocks = map[string][]string{
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
+		// linkedinprofile reads the candidate's own public profile page, so it belongs
+		// with the rest of what a candidate is made of. It takes only safehttp from
+		// platform and derives nothing itself — the caller runs the same dictionaries
+		// the CV path runs, which is what keeps one text from resolving two ways.
+		"linkedinprofile",
 		"matchanalysis", "pii", "resume", "resumeextract",
 	},
 	"job": {
@@ -105,8 +118,8 @@ var blocks = map[string][]string{
 	// (load.go), so they cannot be handed over in the snapshot.
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
-		"catalogstats", "contribution", "jdresolve", "linkimport", "linksource", "moderation",
-		"pipeline", "screeninganswers", "sources", "submission", "telegram",
+		"catalogstats", "contribution", "ingestsched", "jdresolve", "linkimport", "linksource",
+		"moderation", "pipeline", "screeninganswers", "sources", "submission", "telegram",
 	},
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordbot", "emailnotify",

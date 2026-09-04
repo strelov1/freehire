@@ -14,4 +14,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`classify` `companyname` `industrytag` `lang` `location` `normalize` `roletag` `roletype` `skilladjacency` `skillbundle` `skilltag` `vocab` `wordmatch`
+`classify` `companyname` `industrytag` `lang` `location` `normalize` `roletype` `skilladjacency` `skillbundle` `skilltag` `vocab` `wordmatch`

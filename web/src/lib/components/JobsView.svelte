@@ -223,7 +223,7 @@
   // funnel event — and, since it also decides `sameQuery`, doesn't reset the page.
   //
   // Seeded with what the route searched with rather than left empty. Empty only
-  // matches an unfiltered feed, so on `/?q=engineer&page=3` the first re-run read
+  // matches an unfiltered feed, so on `/jobs?q=engineer&page=3` the first re-run read
   // as a brand-new search and snapped the reader from page 3 back to page 1 — and
   // logged a search they had not performed. It went unnoticed while scrolling was
   // how anyone paged; the page links made it visible.
@@ -342,14 +342,12 @@
         counts: () => counts,
         apply: (suggestion) => {
           // Its own event, not a flag on `search`: the question this answers is how
-          // often the dropdown is what puts a facet on, and the role facet measured
-          // 1.1% of searches before it existed. The kind rides along, so the empty
-          // box's categories can be told apart from a typed role.
+          // often the dropdown is what puts a facet on. The kind rides along so the
+          // empty box's starters can be told apart from a typed completion.
           track('role_suggestion', { role: suggestion.slug, kind: suggestion.kind });
-          if (suggestion.kind === 'role') filters.applyRole(suggestion.slug);
-          // A category comes from the EMPTY box, so there is no typed text to drop —
+          // A starter comes from the EMPTY box, so there is no typed text to drop —
           // this is an ordinary facet write, the same one the filter modal makes.
-          else filters.setSign('category', suggestion.slug, 'include');
+          filters.setSign('category', suggestion.slug, 'include');
         },
         applyParts: (plan) => {
           track('role_suggestion', {
@@ -739,19 +737,6 @@
          first 32px — here, the "Filters" heading — for the whole scroll. The max-height
          is then what is left of the viewport, less the same 24px at the bottom. -->
     <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
-      {#if !standalone && jobs.status === 'ready'}
-        <!-- Company view: the (filtered) open-job count as the sidebar's lead stat.
-             The inline count above the list is hidden on desktop (shown only on
-             mobile, where there's no sidebar), so it lives here instead. -->
-        <div class="rounded-xl border border-border bg-card px-4 py-3">
-          <p class="text-3xl font-semibold leading-none tracking-tight tabular-nums">
-            {listTotal.toLocaleString()}
-          </p>
-          <p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {listTotal === 1 ? 'open job' : 'open jobs'}
-          </p>
-        </div>
-      {/if}
       {@render sidebarTop?.()}
       <div class="rounded-xl border border-border bg-card p-4">
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
@@ -764,7 +749,6 @@
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
-      showDesktopTotal={standalone}
       controls={listControls}
     />
 

@@ -56,16 +56,6 @@ func TestJobtechRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestJobtechBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/jobtech.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/jobtech.yml fails validation: %v", err)
-	}
-}
-
 func TestJobtechStreamMapsLiveClosesRemovedDropsInvalid(t *testing.T) {
 	// One live ad (mapped + sanitized), one removed ad (emitted as a close), one ad with no
 	// employer (dropped — it would break the company slug).

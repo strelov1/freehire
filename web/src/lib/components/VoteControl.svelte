@@ -2,13 +2,13 @@
   import { ThumbsUp, ThumbsDown } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import type { VoteResult } from '$lib/types';
 
   // Shared thumbs up/down control for a job or a company. The aggregate counters
   // are public (shown to everyone); casting requires a session, so an anonymous
-  // tap opens the sign-in dialog instead of calling the endpoint. The server is the
-  // source of truth — we render its returned counters and my_vote after each write.
+  // tap sends the visitor to sign in instead of calling the endpoint. The server is
+  // the source of truth — we render its returned counters and my_vote after each write.
   //
   // Styling is driven entirely by the design-system tokens (bg-card / border-border /
   // text-muted-foreground / accent / destructive), so the control adapts to the dark
@@ -41,7 +41,7 @@
   async function cast(dir: 'up' | 'down') {
     if (busy) return;
     if (!isAuthenticated()) {
-      openAuthDialog();
+      promptSignIn();
       return;
     }
     if (dir === 'up') popUp = true;
@@ -65,7 +65,7 @@
     } catch (e) {
       // A failed vote leaves the displayed counts untouched (they were never
       // optimistically changed). Re-prompt sign-in if the session lapsed.
-      if (e instanceof ApiError && e.status === 401) openAuthDialog();
+      if (e instanceof ApiError && e.status === 401) promptSignIn();
     } finally {
       busy = false;
     }

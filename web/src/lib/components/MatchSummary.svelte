@@ -5,7 +5,7 @@
   import { refuses, remaining, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MatchAnalysisResponse } from '$lib/types';
@@ -48,7 +48,15 @@
   // server still runs the analysis, and hiding the CTA on the count alone would refuse
   // somebody the server was about to serve.
   const allowance = $derived(data?.allowance ?? null);
-  const allowanceRefused = $derived(refuses(allowance));
+  // The CTA spends a TAILORING session — a different feature from the fit analysis, with a
+  // ceiling of its own. Both stand between the button and a result, so the block goes up
+  // when either would refuse and names the one that did; tailoring wins the tie, being what
+  // the button actually spends.
+  const tailorAllowance = $derived(data?.tailor_allowance ?? null);
+  const tailorRefused = $derived(refuses(tailorAllowance));
+  const allowanceRefused = $derived(refuses(allowance) || tailorRefused);
+  const refusedName = $derived(tailorRefused ? 'CV tailorings' : 'job analyses');
+  const refusedAllowance = $derived(tailorRefused ? tailorAllowance : allowance);
 
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
@@ -98,13 +106,15 @@
       </span>
     </a>
   {:else if allowanceRefused}
-    <p class="text-sm text-muted-foreground">You've used today's job analyses. More at {resetsAtLabel(allowance)}.</p>
+    <p class="text-sm text-muted-foreground">
+      You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
+    </p>
   {:else}
     <Button
       variant="primary"
       size="lg"
       disabled={tailoring}
-      onclick={guest ? () => openAuthDialog('login') : startTailoring}
+      onclick={guest ? promptSignIn : startTailoring}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
       Tailor my CV
@@ -112,11 +122,11 @@
     </Button>
     <!-- The one line kept under the button: what today still allows. A guest is told
          nothing here — the button opens sign-in, which says it better than a caption.
-         Nothing left and no refusal is the shadow run — the analysis still goes, so it
+         Nothing left and no refusal is the shadow run — the tailoring still goes, so it
          says nothing rather than "0 left" beside a button that works. -->
-    {#if remaining(allowance)}
+    {#if remaining(tailorAllowance)}
       <p class="text-xs text-muted-foreground">
-        {remaining(allowance)} of today's job analyses left
+        {remaining(tailorAllowance)} of today's CV tailorings left
       </p>
     {/if}
   {/if}

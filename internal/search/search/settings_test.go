@@ -47,12 +47,13 @@ func TestPostedTSIsFilterableNotSortable(t *testing.T) {
 	}
 }
 
-func TestRolesIsFilterable(t *testing.T) {
-	// The role facet filters on a bare top-level `roles` attribute (derived at
-	// index time), so it must be declared filterable for `role=` to take effect.
+func TestRolesIsNoLongerFilterable(t *testing.T) {
+	// The facet is retired. Declaring the attribute filterable costs index work for
+	// something nothing queries, and leaving it declared is how a retired facet comes
+	// back by accident — a filter written against it would simply start working.
 	s := facetSettings()
-	if !contains(s.FilterableAttributes, "roles") {
-		t.Errorf("roles must be filterable for the role facet, got %v", s.FilterableAttributes)
+	if contains(s.FilterableAttributes, "roles") {
+		t.Errorf("roles is still filterable, got %v", s.FilterableAttributes)
 	}
 }
 

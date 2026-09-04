@@ -17,4 +17,4 @@ IOWeight=40
 # hydrated and the sweep only closes companies it actually crawled, so the backlog shrinks
 # across runs rather than restarting.
 TimeoutStartSec=4500
-ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest /opt/freehire/src/hire-current/sources/workstream.yml --shard=%i/2
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest workstream --shard=%i/2

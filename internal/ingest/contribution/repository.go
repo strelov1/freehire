@@ -97,14 +97,14 @@ func likePrefix(board string) string {
 // ever rewarded. The reward itself is granted by the caller, keyed by the returned id.
 func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contribution, error) {
 	submittedBy := in.SubmittedBy
-	b, err := boardcatalog.Insert(ctx, r.boards, boardcatalog.InsertInput{
+	b, err := boardcatalog.NewInserter(r.boards, sources.Taxonomy()).Insert(ctx, boardcatalog.InsertInput{
 		Provider:    in.Source,
 		Board:       in.Board,
 		Company:     boardcatalog.PlaceholderCompany(in.Board),
 		URL:         in.URL,
 		SubmittedBy: &submittedBy,
 		Surface:     NormalizeSurface(in.Surface),
-	}, boardcatalog.StatusPending, sources.Taxonomy())
+	}, boardcatalog.StatusPending)
 	if err != nil {
 		if errors.Is(err, boardcatalog.ErrDuplicateBoard) {
 			return Contribution{}, ErrBoardAlreadyContributed

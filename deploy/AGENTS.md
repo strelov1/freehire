@@ -10,12 +10,32 @@ Snapshot taken 2026-09-01 from `/etc/systemd/system/freehire-*` and `/opt/freehi
 
 ```
 systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
-bin/        13 operator scripts (release, backups, alerting, ingest slotting)
+bin/        14 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 ```
 
-`systemd/freehire-ingest@.service` is one template; the 255 `freehire-ingest@<board>.timer`
-files beside it are per-source schedules, which is why the timer count dwarfs everything
-else. Nothing generates them — a new board means a new timer file, by hand.
+`systemd/freehire-ingest@.service` is one template; the `freehire-ingest@<provider>.timer`
+files beside it are per-provider schedules, which is why the timer count dwarfs everything
+else. `bin/gen-ingest-timers.sh` writes them from the board catalog
+(`SELECT provider FROM boards WHERE status IN ('pending','active')`) — it is not run by
+anything, so a new provider means running it on the host.
+
+**Both are being retired.** `freehire-ingest-scheduler.timer` runs
+`cmd/ingest-scheduler` once a minute, which reads the same catalog and starts each due run
+as a TRANSIENT unit — so there is no per-provider file to generate and no second spelling
+of a provider key to drift from `boards`. The generator's "not run by anything" above is
+exactly what that fixes: between its manual runs the units were a photograph of a catalog
+that had moved, and two providers died in that gap (see
+[internal/ingest/ingestsched/AGENTS.md](../internal/ingest/ingestsched/AGENTS.md)).
+During the cutover BOTH mechanisms are installed and each provider is driven by exactly one
+of them, decided by `ingest_schedule.managed`; the generated files and
+`bin/gen-ingest-timers.sh` and `bin/ingest-slot.sh` all go once every provider is managed.
+**The scheduler ships in shadow mode** (`INGEST_SCHEDULER_APPLY` unset), so installing it
+changes nothing until an operator turns launches on.
+
+**`bin/autodeploy.sh` is what actually ships main to production**, on a 10-minute timer:
+it waits for the commit to be green and then calls `release.sh`. What "green" means is the
+one thing worth knowing about it — see the comment above its check, which records the day
+a scheduled Dependabot run made every deploy stop, silently, at exit 0.
 
 ## Always true
 
@@ -24,6 +44,31 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   half is copying it to the host and running `systemctl daemon-reload`. Treat git as the
   truth and the host as the copy, not the other way round, or this snapshot rots into
   fiction within a month.
+- **Billing reads four variables from `/opt/freehire/.env`, and is inert without them.**
+  `STRIPE_SECRET_KEY` (`sk_…`), `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_PRICE_IDS`, and
+  `FRONTEND_ORIGIN` — which the fleet already sets, and which is reused rather than given a
+  billing-specific twin that would disagree with it the first time one was changed. With any missing, every billing route is simply not mounted and the timer is a
+  no-op that never opens the pool — so the units are safe to install before the provider is
+  ready, they are just inert.
+
+  **`STRIPE_PRICE_IDS` is a comma-separated list, and the FIRST is what a new subscriber is
+  sold.** The rest stay recognised so that somebody on an older or annual price keeps their
+  plan. An empty list is not a default that sells the obvious thing — it confers Pro on
+  nobody, deliberately, because the alternative to refusing a misconfiguration is granting
+  one.
+
+  Two steps happen in the provider's dashboard and nowhere else: registering the webhook at
+  `https://freehire.me/api/v1/billing/stripe/webhook` (its `whsec_` secret is shown once,
+  on that screen), and creating the price. The rest is API.
+
+  **The webhook secret differs between the dashboard endpoint and `stripe listen`.** Using
+  one to verify the other fails every delivery, and the failure looks exactly like a wrong
+  key rather than a wrong environment.
+
+- **A new worker needs its binary built on the host.** `release.sh` builds the API, not
+  every command in `cmd/`. `billing-sync` is the first addition since that was last true;
+  build it where the other worker binaries live before enabling the timer, or the unit
+  fails on a missing executable every hour.
 - **The environment is split across two files, and the split is a trap.** Every unit reads
   `/opt/freehire/.env`; the mail credentials (`NOTIFY_EMAIL_FROM` plus the SES keys) live
   ONLY in `/opt/freehire/.env.notify`. A worker that sends mail and reads just the first

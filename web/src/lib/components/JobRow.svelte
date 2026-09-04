@@ -7,7 +7,7 @@
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { cardTags, cardTagsFromCard, formatSalary } from '$lib/enrichment';
   import { computeClientMatch, matchTeaser, resolveMatchState } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
@@ -180,7 +180,7 @@
   // never triggers the card's navigation.
   async function toggleSave() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     if (saving) return;
@@ -209,7 +209,7 @@
   // save button, this is an overlay sibling of the card link, so it never navigates.
   async function hide() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     if (hiding) return;

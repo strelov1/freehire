@@ -33,6 +33,18 @@ func TestIsTech(t *testing.T) {
 		// "AI-native" describes the toolchain, not the discipline — still software.
 		{"ai-native engineer", "Senior AI-Native Engineer", true},
 		{"ai native engineer", "AI Native Engineer", true},
+		// The IT service desk: `support` is a non-tech category, so this list is the
+		// only thing that reads the desk as the IT work it is.
+		{"service desk", "Lead Service Desk Analyst", true},
+		{"help desk", "Help Desk Technician (Tier 1)", true},
+		{"helpdesk", "Mitarbeiter IT Support und Helpdesk (m/w/d)", true},
+		{"technical support analyst", "Technical Support Analyst", true},
+		{"it support", "1st Line IT Support Technician", true},
+		{"it supporter", "1st Level IT Supporter (m/w/d)", true},
+		{"desktop support", "Desktop Support Analyst - Tier 1", true},
+		{"deskside support", "Deskside Support Engineer (Osaka)", true},
+		{"end user support", "Analyst, End User Support", true},
+		{"end-user support", "Desktop Support Specialist – SCCM, Intune, End-User Support", true},
 
 		// Trap negatives — non-software engineering / non-tech that carry "engineer"
 		// or other shared words. These MUST stay unflagged (bias: leave in unknown).
@@ -49,6 +61,26 @@ func TestIsTech(t *testing.T) {
 		// (ABB, Howmet Aerospace, Texas Instruments, Flextronics). Not software-anchored,
 		// so it stays unknown — the named role carries it instead.
 		{"product engineer", "Product Engineer", false},
+		// The desk terms above must not broaden into the surrounding nouns: bare
+		// support is the whole customer-service population, and a front desk is a
+		// lobby. (Both still resolve a category — `support` and `administration` —
+		// this only pins that the TITLE detector makes no claim about them.)
+		{"customer support analyst", "Customer Support Analyst", false},
+		{"support specialist", "Support Specialist", false},
+		{"front desk", "Front Desk Agent", false},
+		// Bare "technical support" is deliberately absent: sampled live titles give
+		// AGV, automotive, controls, logistics and instructional support alongside the
+		// office-IT ones, so only the analyst form above is anchored enough.
+		{"technical support engineer", "AGV Technical Support Engineer", false},
+		{"technical support specialist", "Automotive Technical Support Specialist", false},
+		// #2421 asked for these two as negatives. Note what the assertion can and
+		// cannot say: both resolve a category that IS in vocab.TechCategories
+		// (project_management, business_analysis), so both are already technical
+		// EVIDENCE and were before this list existed. All that is pinned here is that
+		// the title detector adds no claim of its own — which is why the IT-prefixed
+		// forms the issue proposed would have changed no outcome.
+		{"project manager", "Project Manager", false},
+		{"business analyst", "Business Analyst", false},
 		{"empty", "", false},
 	}
 	for _, tt := range tests {

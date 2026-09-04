@@ -446,27 +446,17 @@ func TestGustoBoardIdentity(t *testing.T) {
 
 // Two spellings of one board in a board file must collapse to one crawl target: external ids
 // are namespaced by board, so crawling both would store every posting of that employer twice.
-func TestGustoConfigDropsASecondSpellingOfOneBoard(t *testing.T) {
-	data := []byte(`
-- company: Affordable Massage Studios
-  board: affordable-massage-studios-aacf81cf-0249-436a-a514-3014fea74892
-- company: Affordable Massage Company
-  board: affordable-massage-company-aacf81cf-0249-436a-a514-3014fea74892
-- company: Acme Robotics
-  board: ` + gustoTestBoard + `
-`)
-	cfg, err := ParseConfig("gusto", data)
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
+func TestGustoBoardDedupeKeyFoldsASecondSpellingOfOneBoard(t *testing.T) {
+	a, _ := BoardDedupeKey(CompanyEntry{Company: "Affordable Massage Studios", Provider: "gusto",
+		Board: "affordable-massage-studios-aacf81cf-0249-436a-a514-3014fea74892"})
+	b, _ := BoardDedupeKey(CompanyEntry{Company: "Affordable Massage Company", Provider: "gusto",
+		Board: "affordable-massage-company-aacf81cf-0249-436a-a514-3014fea74892"})
+	if a != b {
+		t.Errorf("two spellings of one Gusto board should share a key, got %q and %q", a, b)
 	}
-	if len(cfg.Sources) != 2 {
-		t.Fatalf("len(Sources) = %d, want 2: %+v", len(cfg.Sources), cfg.Sources)
-	}
-	if cfg.Sources[0].Company != "Affordable Massage Studios" {
-		t.Errorf("first entry = %+v, want the first spelling kept", cfg.Sources[0])
-	}
-	if dups := DuplicateBoards(cfg.Sources); len(dups) != 0 {
-		t.Errorf("the deduped config still reports duplicates: %v", dups)
+	other, _ := BoardDedupeKey(CompanyEntry{Company: "Acme Robotics", Provider: "gusto", Board: gustoTestBoard})
+	if other == a {
+		t.Error("a different Gusto board must not fold onto this one")
 	}
 }
 

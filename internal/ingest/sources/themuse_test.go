@@ -31,16 +31,6 @@ func TestTheMuseRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestTheMuseBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/themuse.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/themuse.yml fails validation: %v", err)
-	}
-}
-
 func TestTheMuseFetchPaginatesAndMaps(t *testing.T) {
 	page1 := `{"page_count":2,"results":[
 {"id":123,"name":"Senior Specialist Electrical Engineer","contents":"<p>Build.</p>","publication_date":"2026-03-17T13:37:20Z","locations":[{"name":"Anaheim, CA"}],"levels":[{"name":"Senior Level","short_name":"senior"}],"refs":{"landing_page":"https://www.themuse.com/jobs/acme/senior-ee"},"company":{"name":"L3Harris Technologies"}},

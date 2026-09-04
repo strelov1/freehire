@@ -209,18 +209,18 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		first, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 1})
+		first, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 1})
 		if err != nil || len(first) != 1 {
 			t.Fatalf("first claim: rows=%d err=%v, want 1", len(first), err)
 		}
-		second, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10})
+		second, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 10})
 		if err != nil || len(second) != 1 {
 			t.Fatalf("second claim: rows=%d err=%v, want 1 (the other row)", len(second), err)
 		}
 		if first[0].JobID == second[0].JobID {
 			t.Errorf("both claims returned job %d — not disjoint", first[0].JobID)
 		}
-		third, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10})
+		third, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 10})
 		if err != nil || len(third) != 0 {
 			t.Errorf("third claim: rows=%d, want 0 (all leased)", len(third))
 		}
@@ -233,13 +233,13 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		if _, err := recordMatch(ctx, q, sub, job); err != nil {
 			t.Fatal(err)
 		}
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10}); err != nil || len(c) != 1 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 1 {
 			t.Fatalf("claim: rows=%d err=%v, want 1", len(c), err)
 		}
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10}); err != nil || len(c) != 0 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 0 {
 			t.Fatalf("re-claim within lease: rows=%d, want 0", len(c))
 		}
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, BatchSize: 10}); err != nil || len(c) != 1 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 1 {
 			t.Errorf("re-claim with expired lease: rows=%d err=%v, want 1", len(c), err)
 		}
 	})
@@ -251,7 +251,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		if _, err := recordMatch(ctx, q, sub, job); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10}); err != nil {
+		if _, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 10}); err != nil {
 			t.Fatal(err)
 		}
 		n, err := q.MarkMatchesNotified(ctx, MarkMatchesNotifiedParams{SubscriptionID: sub, JobIds: []int64{job}})
@@ -259,7 +259,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			t.Fatalf("mark notified: rows=%d err=%v, want 1", n, err)
 		}
 		// Even with an expired lease, a notified row is never claimed again.
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, BatchSize: 10}); err != nil || len(c) != 0 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 0 {
 			t.Errorf("claim after notify: rows=%d, want 0", len(c))
 		}
 	})
@@ -276,14 +276,14 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			t.Fatal(err)
 		}
 		// One failure: still retryable (claimable with an expired lease).
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, BatchSize: 10}); err != nil || len(c) != 1 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 1 {
 			t.Fatalf("claim after 1 failure: rows=%d, want 1", len(c))
 		}
 		if err := q.RecordMatchDeliveryFailure(ctx, fail); err != nil {
 			t.Fatal(err)
 		}
 		// Second failure reaches the max → dead-lettered, never claimed again.
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, BatchSize: 10}); err != nil || len(c) != 0 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 0 {
 			t.Errorf("claim after dead-letter: rows=%d, want 0", len(c))
 		}
 	})
@@ -303,7 +303,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		if _, err := q.SetSubscriptionActive(ctx, SetSubscriptionActiveParams{Active: false, ID: sub.ID, UserID: uid}); err != nil {
 			t.Fatal(err)
 		}
-		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, BatchSize: 10}); err != nil || len(c) != 0 {
+		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 0, PerSubscription: 100, BatchSize: 10}); err != nil || len(c) != 0 {
 			t.Errorf("claim for inactive subscription: rows=%d, want 0", len(c))
 		}
 	})

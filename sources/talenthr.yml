@@ -1,9 +1,0 @@
-# talenthr boards. Provider is the filename; each entry is company + board.
-# board = the tenant slug (see internal/sources/talenthr.go); the adapter reads
-# https://jobs.talenthr.io/<board>, enumerates its __NEXT_DATA__ positions, and fetches
-# each position's own detail page. Each board validated live (>0 jobs) before adding.
-
-- company: Dnext Intelligence
-  board: dnext
-- company: HelloWorld PC
-  board: helloworld

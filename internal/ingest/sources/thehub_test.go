@@ -59,16 +59,6 @@ func TestTheHubRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestTheHubBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/thehub.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/thehub.yml fails validation: %v", err)
-	}
-}
-
 func TestTheHubJobID(t *testing.T) {
 	cases := map[string]string{
 		"https://thehub.io/jobs/6a2c0896f67c01342d0fb744": "6a2c0896f67c01342d0fb744",

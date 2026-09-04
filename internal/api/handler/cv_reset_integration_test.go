@@ -157,6 +157,7 @@ func TestResetCVFromResume_CreatesBaseWhenAbsent(t *testing.T) {
 	}
 	app := buildResetApp(h, iss)
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d body = %s", resp.StatusCode, body)
@@ -167,6 +168,66 @@ func TestResetCVFromResume_CreatesBaseWhenAbsent(t *testing.T) {
 	}
 	if base.Document.Header.FullName != "New Ada" {
 		t.Fatalf("new base FullName = %q", base.Document.Header.FullName)
+	}
+	// No saved appearance defaults for this user: the new base must still get the system's
+	// hardcoded defaults, exactly as before the add-cv-appearance-defaults change.
+	if base.TemplateID != cv.DefaultTemplateID {
+		t.Fatalf("new base template = %q, want system default %q", base.TemplateID, cv.DefaultTemplateID)
+	}
+	if base.Document.Margins != cv.DefaultMargins() {
+		t.Fatalf("new base margins = %+v, want system default %+v", base.Document.Margins, cv.DefaultMargins())
+	}
+}
+
+// When the user has no base CV yet, reseedBaseFromSeed's create branch (cv_reset.go) must
+// start the new base from the user's saved appearance defaults — see the
+// add-cv-appearance-defaults change.
+func TestResetCVFromResume_CreatesBaseFromSavedAppearanceDefaults(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "nobase-defaults@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+	blob, _ := json.Marshal(resumeextract.Structured{FullName: "New Ada", Summary: "from seed"})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = now(),
+		 resume_structured = $2, resume_structured_uploaded_at = now() WHERE id = $1`,
+		userID, blob); err != nil {
+		t.Fatalf("seed structured: %v", err)
+	}
+	saved := cv.AppearanceDefaults{
+		TemplateID: "timeline",
+		Style:      cv.Style{FontFamily: "carlito", FontSize: 10, LineHeight: 0.65},
+		Margins:    cv.Margins{Top: 1, Right: 1, Bottom: 1, Left: 1},
+	}
+	if _, err := h.cvStore.SetAppearanceDefaults(ctx, userID, saved); err != nil {
+		t.Fatalf("set appearance defaults: %v", err)
+	}
+	jobID := seedJobSlug(t, pool, "nobase-defaults-"+uuid.NewString()[:8])
+	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "Only Tailored", cv.DefaultTemplateID, cv.Document{
+		Summary: "stale",
+	})
+	if err != nil {
+		t.Fatalf("create tailored: %v", err)
+	}
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d body = %s", resp.StatusCode, body)
+	}
+	base, ok, err := h.cvStore.BaseCV(ctx, userID)
+	if err != nil || !ok {
+		t.Fatalf("expected a base CV after reset: ok=%v err=%v", ok, err)
+	}
+	if base.TemplateID != saved.TemplateID {
+		t.Fatalf("new base template = %q, want saved default %q", base.TemplateID, saved.TemplateID)
+	}
+	if base.Document.Style != saved.Style {
+		t.Fatalf("new base style = %+v, want saved default %+v", base.Document.Style, saved.Style)
+	}
+	if base.Document.Margins != saved.Margins {
+		t.Fatalf("new base margins = %+v, want saved default %+v", base.Document.Margins, saved.Margins)
 	}
 }
 

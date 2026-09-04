@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/platform/flexjson"
 )
 
 // LDJobPosting is the exported form of ldJobPosting, for sibling packages that parse a
@@ -25,7 +27,7 @@ func ldJobPosting(root *html.Node, v any) bool {
 		}
 		if n.Type == html.ElementNode && n.Data == "script" &&
 			attr(n, "type") == "application/ld+json" {
-			if msg, ok := jobPostingNode(sanitizeJSONControlChars([]byte(textContent(n)))); ok &&
+			if msg, ok := jobPostingNode(flexjson.SanitizeControlChars([]byte(textContent(n)))); ok &&
 				json.Unmarshal(msg, v) == nil {
 				found = true
 				return false
@@ -45,7 +47,7 @@ func LDJobPostings(root *html.Node) []json.RawMessage {
 	walk(root, func(n *html.Node) bool {
 		if n.Type == html.ElementNode && n.Data == "script" &&
 			attr(n, "type") == "application/ld+json" {
-			out = append(out, jobPostingNodes(sanitizeJSONControlChars([]byte(textContent(n))))...)
+			out = append(out, jobPostingNodes(flexjson.SanitizeControlChars([]byte(textContent(n))))...)
 		}
 		return true
 	})
@@ -109,48 +111,4 @@ func isJobPosting(raw json.RawMessage) bool {
 		Type string `json:"@type"`
 	}
 	return json.Unmarshal(raw, &probe) == nil && strings.EqualFold(probe.Type, "JobPosting")
-}
-
-// jsonControlCharEscapes maps a raw control byte to the two-byte escape json.Unmarshal
-// accepts in its place; a byte absent here (rare outside \n/\r/\t) falls back to \u00XX.
-var jsonControlCharEscapes = map[byte]string{'\n': `\n`, '\r': `\r`, '\t': `\t`}
-
-const hexDigits = "0123456789abcdef"
-
-// sanitizeJSONControlChars escapes raw control bytes (0x00-0x1F) found INSIDE a JSON string
-// literal. Some sites template-render their JobPosting ld+json by interpolating raw HTML into
-// a string without escaping its newlines, which is invalid JSON — Go's decoder rejects it
-// ("invalid character '\n' in string literal") where a lenient decoder (e.g. Python's
-// json.loads(strict=False)) would accept it; live-verified on cryptocurrencyjobs.co. Control
-// bytes outside a string (insignificant whitespace between tokens) are left untouched.
-func sanitizeJSONControlChars(raw []byte) []byte {
-	out := make([]byte, 0, len(raw))
-	inString, escaped := false, false
-	for _, b := range raw {
-		switch {
-		case !inString:
-			if b == '"' {
-				inString = true
-			}
-			out = append(out, b)
-		case escaped:
-			escaped = false
-			out = append(out, b)
-		case b == '\\':
-			escaped = true
-			out = append(out, b)
-		case b == '"':
-			inString = false
-			out = append(out, b)
-		case b < 0x20:
-			if esc, ok := jsonControlCharEscapes[b]; ok {
-				out = append(out, esc...)
-			} else {
-				out = append(out, '\\', 'u', '0', '0', hexDigits[b>>4], hexDigits[b&0xf])
-			}
-		default:
-			out = append(out, b)
-		}
-	}
-	return out
 }

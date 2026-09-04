@@ -157,7 +157,11 @@ type Config struct {
 	// LeaseSeconds is the delivery lease: a claimed-but-undelivered match is
 	// reclaimable after this, which doubles as the crash reaper.
 	LeaseSeconds int32
-	// ClaimBatch bounds how many pending matches one pass delivers.
+	// ClaimBatch bounds how many pending matches one pass delivers, across all
+	// subscriptions. It is a backstop, not the working bound: what a pass normally
+	// claims is SnapshotCap per subscription with anything pending. Set it above
+	// SnapshotCap x the active subscription count, or the cut falls on whichever
+	// subscriptions the scan reached last — the starvation this replaced.
 	ClaimBatch int32
 	// MaxAttempts dead-letters a match after this many failed deliveries.
 	MaxAttempts int32
@@ -176,8 +180,11 @@ func DefaultConfig() Config {
 	return Config{
 		MatchLimit:   200,
 		LeaseSeconds: 600,
-		ClaimBatch:   500,
-		MaxAttempts:  5,
+		// 200 per subscription x room for 250 active subscriptions. Prod carries 53;
+		// the headroom is deliberate, since hitting this bound is what starvation
+		// looks like.
+		ClaimBatch:  50000,
+		MaxAttempts: 5,
 		// One query cannot match more than MatchLimit jobs in a pass, so the two
 		// agree deliberately: the snapshot is complete for every digest except a
 		// `daily` one that accumulated across many deferred passes.

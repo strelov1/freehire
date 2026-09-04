@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
+  import { FileText, Download, Trash2, ArrowRight, Settings } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { companyLogoUrl } from '$lib/logo';
   import { Button, ConfirmDialog, EntityLogo } from '$lib/ui';
@@ -61,9 +61,16 @@
         new one by opening the tailoring workspace from any vacancy.
       </p>
     </div>
-    <Button variant="outline" class="shrink-0" onclick={() => (showIntake = true)}>
-      Tailor for a job
-    </Button>
+    <div class="flex shrink-0 items-center gap-2">
+      <a
+        href={resolve('/my/cvs/appearance')}
+        class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+      >
+        <Settings class="size-4" />
+        Appearance defaults
+      </a>
+      <Button variant="outline" onclick={() => (showIntake = true)}>Tailor for a job</Button>
+    </div>
   </div>
 
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
@@ -94,7 +101,7 @@
         </ol>
         <div class="mt-6 text-center">
           <a
-            href={resolve('/')}
+            href={resolve('/jobs')}
             class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
             Browse jobs <ArrowRight class="size-4" />

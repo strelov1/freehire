@@ -103,6 +103,47 @@ func TestDerive_StructuredEmploymentTypeWins(t *testing.T) {
 	}
 }
 
+// Education and English level were the last two facets with no structured tier: both
+// were always read out of the description by English-language matchers, so a platform
+// that STATES them — Profession.hu publishes each as a closed picklist — had nowhere to
+// put the answer. They now follow the same precedence as the four facets above.
+func TestDerive_StructuredEducationAndEnglishLevelWin(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Fejlesztő",
+		Company:    "Acme",
+		Source:     "profession",
+		ExternalID: "4",
+		// The description would parse to bachelor and c1 on its own.
+		Description:    "Bachelor's degree required. Fluent English.",
+		EducationLevel: "master",
+		EnglishLevel:   "b2",
+	})
+	if got.EducationLevel != "master" {
+		t.Errorf("EducationLevel = %q, want master (structured wins over the bachelor in the text)", got.EducationLevel)
+	}
+	if got.EnglishLevel != "b2" {
+		t.Errorf("EnglishLevel = %q, want b2 (structured wins over the fluent in the text)", got.EnglishLevel)
+	}
+}
+
+// The description stays the fallback: a source that states neither leaves both to the
+// matchers, which is every adapter but one.
+func TestDerive_EducationAndEnglishLevelFallBackToDescription(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Developer",
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "5",
+		Description: "Bachelor's degree required. English at B2 level.",
+	})
+	if got.EducationLevel != "bachelor" {
+		t.Errorf("EducationLevel = %q, want bachelor from the description", got.EducationLevel)
+	}
+	if got.EnglishLevel != "b2" {
+		t.Errorf("EnglishLevel = %q, want b2 from the description", got.EnglishLevel)
+	}
+}
+
 func TestDerive_StructuredWorkModeWins(t *testing.T) {
 	got := Derive(Input{
 		Title:      "Dev",

@@ -6,7 +6,7 @@
   import { resolve } from '$app/paths';
   import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { signinUrl } from '$lib/signin';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { messages, navLabel } from '$lib/i18n/shell';
   import { t } from '$lib/i18n/t';
@@ -91,7 +91,7 @@
     {#if !isAuthenticated()}
       <div class="flex flex-col items-center gap-3 py-12 text-center">
         <p class="text-sm text-muted-foreground">{s.shell.signInPrompt}</p>
-        <Button variant="primary" onclick={() => openAuthDialog()}>{s.shell.signIn}</Button>
+        <Button variant="primary" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>{s.shell.signIn}</Button>
       </div>
     {:else}
       <!-- Same items, two forms; `extra` carries the per-form item tweaks. When
@@ -116,7 +116,10 @@
       {/snippet}
 
       <!-- Below lg: a horizontal, scrollable strip above the content. -->
-      <nav aria-label={s.shell.accountSections} class="mb-4 flex gap-1 overflow-x-auto lg:hidden">
+      <nav
+        aria-label={s.shell.accountSections}
+        class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
+      >
         {@render navLinks('shrink-0 whitespace-nowrap')}
       </nav>
 

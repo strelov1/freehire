@@ -2,16 +2,25 @@
 // Loxo exposes no public directory of agencies, so the operator gathers footprint URLs
 // (careers pages and /job/<base64> links, e.g. from a `site:app.loxo.co` search) and pipes
 // them in; this tool extracts each board's (host, slug), live-validates it via the loxo
-// adapter, counts how many postings classify as tech, and emits draft sources/loxo.yml
-// entries (all hub: true) for human review — it never edits the board file itself.
+// adapter, and counts how many postings classify as tech.
 //
-//	go run ./cmd/harvest-loxo < footprint-urls.txt > candidates.yml
+// It reports by default and writes only under --apply, the same convention as
+// cmd/add-board: the per-board job and tech counts are printed for review before
+// anything is persisted. A kept board enters the catalog at status='pending' (all
+// hub: true — a Loxo board is an agency's, not one employer's).
+//
+//	go run ./cmd/harvest-loxo < footprint-urls.txt
 //	go run ./cmd/harvest-loxo footprint-urls.txt
+//	go run ./cmd/harvest-loxo --apply footprint-urls.txt
+//
+// Needs DATABASE_URL.
 package main
 
 import (
 	"bufio"
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net/url"
@@ -23,11 +32,14 @@ import (
 
 	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/vocab"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// boardPath is the board file the emitted entries are de-duplicated against.
-const boardPath = "sources/loxo.yml"
+// provider is the catalog provider these boards crawl under.
+const provider = "loxo"
 
 // probeWorkers bounds the concurrent board probes. The shared client handles 429 backoff.
 const probeWorkers = 8
@@ -40,42 +52,98 @@ type result struct {
 	total, tech int
 }
 
-func main() { os.Exit(run()) }
+func main() { worker.Main(run) }
 
 func run() int {
-	lines, err := readLines()
+	apply := flag.Bool("apply", false, "actually add the boards it validated; without it the run only reports")
+	flag.Parse()
+
+	lines, err := readLines(flag.Args())
 	if err != nil {
 		log.Printf("harvest-loxo: %v", err)
 		return 1
 	}
 	cands := extractCandidates(lines)
-	existing := loadExistingBoards(boardPath)
+
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+	repo := boardcatalog.NewQueriesRepository(db.New(pool))
+
+	existing, err := loadExistingBoards(ctx, repo)
+	if err != nil {
+		log.Printf("harvest-loxo: %v", err)
+		return 1
+	}
 	var todo []candidate
 	for _, c := range cands {
 		if !existing[c.host+"/"+c.slug] {
 			todo = append(todo, c)
 		}
 	}
-	log.Printf("harvest-loxo: %d candidates, %d new (after de-dup vs %s)", len(cands), len(todo), boardPath)
+	log.Printf("harvest-loxo: %d candidates, %d new (after de-dup vs the catalog)", len(cands), len(todo))
 
 	client := sources.NewClient()
 	adapter := sources.NewLoxo(client)
-	kept := probeAll(context.Background(), client, adapter, todo)
+	kept := probeAll(ctx, client, adapter, todo)
 	sort.Slice(kept, func(i, j int) bool { return kept[i].cand.slug < kept[j].cand.slug })
 
 	for _, r := range kept {
-		fmt.Printf("# %s/%s — %d jobs, %d tech\n", r.cand.host, r.cand.slug, r.total, r.tech)
-		fmt.Printf("- company: %s\n  board: %s/%s\n  hub: true\n", r.company, r.cand.host, r.cand.slug)
+		fmt.Printf("%s/%s — %s — %d jobs, %d tech\n", r.cand.host, r.cand.slug, r.company, r.total, r.tech)
 	}
 	log.Printf("harvest-loxo: %d/%d boards validated with open jobs", len(kept), len(todo))
+	if len(kept) == 0 {
+		return 0
+	}
+	if !*apply {
+		log.Printf("harvest-loxo: re-run with --apply to add these %d boards", len(kept))
+		return 0
+	}
+	return addBoards(ctx, repo, kept)
+}
+
+// addBoards persists the validated boards at status='pending'. A duplicate is counted,
+// not an error: a board another run landed first is the unique index doing its job, and
+// the run should still add the rest.
+func addBoards(ctx context.Context, repo boardcatalog.Repository, kept []result) int {
+	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
+	added, duplicate := 0, 0
+	for _, r := range kept {
+		board := r.cand.host + "/" + r.cand.slug
+		b, err := ins.Insert(ctx, boardcatalog.InsertInput{
+			Provider: provider,
+			Board:    board,
+			Company:  r.company,
+			Hub:      true,
+			Surface:  "cli",
+		}, boardcatalog.StatusPending)
+		switch {
+		case errors.Is(err, boardcatalog.ErrDuplicateBoard):
+			duplicate++
+		case err != nil:
+			log.Printf("harvest-loxo: add %s: %v", board, err)
+			return 1
+		case b.Status == boardcatalog.StatusRejected:
+			// Validation refused a board the loxo adapter just crawled successfully:
+			// that is a bug here, not a bad candidate.
+			log.Printf("harvest-loxo: %s rejected by validation: %s", board, b.RejectedReason)
+			return 1
+		default:
+			added++
+		}
+	}
+	log.Printf("harvest-loxo: added %d boards (pending), %d already listed", added, duplicate)
 	return 0
 }
 
 // readLines reads footprint URLs from a seed-file arg or stdin.
-func readLines() ([]string, error) {
+func readLines(args []string) ([]string, error) {
 	src := os.Stdin
-	if len(os.Args) == 2 {
-		f, err := os.Open(os.Args[1])
+	if len(args) == 1 {
+		f, err := os.Open(args[0])
 		if err != nil {
 			return nil, err
 		}
@@ -214,16 +282,16 @@ func isTechCategory(category string) bool {
 	return true
 }
 
-// loadExistingBoards returns the set of "host/slug" boards already in the board file, so
-// the emitter never re-proposes a known board. A missing file yields an empty set.
-func loadExistingBoards(path string) map[string]bool {
-	m := map[string]bool{}
-	cfg, err := sources.LoadConfig(path)
+// loadExistingBoards returns the set of "host/slug" boards already live in the catalog,
+// so the run never re-probes or re-proposes a known board.
+func loadExistingBoards(ctx context.Context, repo boardcatalog.Repository) (map[string]bool, error) {
+	listed, err := boardcatalog.LoadForProvider(ctx, repo, provider)
 	if err != nil {
-		return m
+		return nil, fmt.Errorf("load catalog for %s: %w", provider, err)
 	}
-	for _, e := range cfg.Sources {
+	m := make(map[string]bool, len(listed))
+	for _, e := range listed {
 		m[e.Board] = true
 	}
-	return m
+	return m, nil
 }

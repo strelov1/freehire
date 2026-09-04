@@ -1,9 +1,8 @@
 -- name: InsertBoard :one
 -- Insert a board row. Callers that pass status='active' also pass a non-null
--- activated_at (curator additions via cmd/add-board, and the one-off
--- cmd/backfill-board-catalog); every other caller passes NULL for both status='pending'
--- and status='rejected'. A collision with an existing 'pending'/'active' row on
--- (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
+-- activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
+-- for both status='pending' and status='rejected'. A collision with an existing
+-- 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 -- the caller maps that to a duplicate-board error.
 INSERT INTO boards (provider, board, region, company, hub, tenants, url, status,
                      submitted_by, surface, rejected_reason, activated_at)
@@ -33,6 +32,14 @@ WHERE provider = $1 AND lower(board) = lower($2) AND region = $3
 SELECT * FROM boards
 WHERE provider = sqlc.arg(provider) AND status IN ('pending', 'active')
 ORDER BY id;
+
+-- name: ListLiveBoards :many
+-- Every board a crawl still visits, across all providers — the identity cmd/prune needs
+-- to decide whether a posting is re-crawlable. Only (provider, board, region), not the
+-- whole row: the guard asks a set-membership question and nothing else.
+SELECT provider, board, region FROM boards
+WHERE status IN ('pending', 'active')
+ORDER BY provider, board, region;
 
 -- name: UpdateBoardCompany :execrows
 -- Correct a board's company name — for a crowdsourced row seeded with

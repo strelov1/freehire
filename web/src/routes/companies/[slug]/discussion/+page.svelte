@@ -1,6 +1,6 @@
 <script lang="ts">
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import CompanyFeedbackDialog from '$lib/components/CompanyFeedbackDialog.svelte';
   import DiscussionIndex from '$lib/components/community/DiscussionIndex.svelte';
   import SubjectHeader from '$lib/components/community/SubjectHeader.svelte';
@@ -9,12 +9,12 @@
   let { data } = $props();
 
   // Feedback is a rated review, distinct from the anonymous discussion below it —
-  // it needs a signed-in caller up front rather than deferring to the dialog, the
-  // same gate JobView uses before its own report dialog.
+  // it needs a signed-in caller up front rather than deferring to the report dialog,
+  // the same gate JobView uses before its own.
   let showFeedback = $state(false);
   function openFeedback() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     showFeedback = true;

@@ -2,6 +2,7 @@ package searchintent
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -105,17 +106,32 @@ func TestResolveDropsUncuratedCollection(t *testing.T) {
 	}
 }
 
-func TestResolveKeepsCatalogedRole(t *testing.T) {
-	got := resolveFacet(t, "role", "senior_backend")
-	if !slices.Equal(got.Facets["role"], []string{"senior_backend"}) {
-		t.Fatalf("role = %v, want [senior_backend]", got.Facets["role"])
+// The interpreter used to offer a `role` enum, and `senior_backend` was its shape: one
+// value fusing two axes. It offers `category` and `seniority` now, which is what that
+// slug decomposed into.
+//
+// The facet is gone from the schema, so a model cannot name it; this pins what happens
+// if one somehow does. Not a silent drop — a name nothing serves means this package and
+// the filter table have drifted apart, which is a bug in the build rather than a value
+// a person typed, and the loud failure is how it gets found.
+func TestResolveRefusesAFacetNothingServes(t *testing.T) {
+	_, err := intent{Facets: map[string][]string{"role": {"senior_backend"}}}.resolve()
+	if err == nil {
+		t.Fatal("resolve accepted role — the facet is retired and nothing serves it")
+	}
+	if !strings.Contains(err.Error(), "role") {
+		t.Errorf("error = %v, want it to name the facet that drifted", err)
 	}
 }
 
-func TestResolveDropsUncatalogedRole(t *testing.T) {
-	got := resolveFacet(t, "role", "chief_vibes_officer")
-	if len(got.Facets["role"]) != 0 {
-		t.Fatalf("role = %v, want none", got.Facets["role"])
+func TestResolveKeepsTheTwoAxesARoleDecomposedInto(t *testing.T) {
+	cat := resolveFacet(t, "category", "backend")
+	if !slices.Equal(cat.Facets["category"], []string{"backend"}) {
+		t.Fatalf("category = %v, want [backend]", cat.Facets["category"])
+	}
+	sen := resolveFacet(t, "seniority", "senior")
+	if !slices.Equal(sen.Facets["seniority"], []string{"senior"}) {
+		t.Fatalf("seniority = %v, want [senior]", sen.Facets["seniority"])
 	}
 }
 

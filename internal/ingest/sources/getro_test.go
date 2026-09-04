@@ -250,13 +250,3 @@ func TestGetroProviderRegistered(t *testing.T) {
 		t.Error("FilterableProviders() should include getro")
 	}
 }
-
-func TestGetroBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/getro.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/getro.yml fails validation: %v", err)
-	}
-}
