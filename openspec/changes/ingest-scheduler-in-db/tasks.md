@@ -17,11 +17,12 @@
       Proven by `internal/ingest/ingestsched/schema_integration_test.go`, which asserts the
       SQLSTATE rather than "some error" — a schema test that accepts any error passes
       identically when the table is missing.
-- [ ] 1.3 Add sqlc queries for: eligible providers (`boards` GROUP BY provider, live
-      statuses, LEFT JOIN `ingest_schedule`), run-state reconcile (upsert the
-      `(provider, 1..shards)` rows, delete rows beyond `shards`), the claim
-      (`FOR UPDATE SKIP LOCKED` with the reclaim window), the finish write, and the report
-      read. Run `make sqlc`.
+- [x] 1.3 `internal/platform/db/queries/ingest_schedule.sql` + `make sqlc`: eligible
+      providers (DISTINCT live `boards.provider` LEFT JOIN `ingest_schedule` — an INNER
+      JOIN here would silently unschedule every unconfigured provider), run-state
+      reconcile (`generate_series` upsert `ON CONFLICT DO NOTHING`, surplus-shard delete,
+      departed-provider delete), the claim (`FOR UPDATE OF rs SKIP LOCKED`), and the
+      finish write. The report read lands with `cmd/schedule-board` in §6.
 - [ ] 1.4 Document `managed` in the migration's COMMENT as ROLLOUT-ONLY, naming task 8.4 as
       its removal — a rollout default that outlives its rollout restores the failure this
       change removes.
@@ -53,20 +54,28 @@
 
 ## 3. `ingestsched` — run state
 
-- [ ] 3.1 `Reconcile`: materialise `(provider, 1..shards)` run-state rows for every
-      eligible provider, delete rows beyond the current shard count, seed `next_due_at` for
-      a new row.
-- [ ] 3.2 Integration tests (real Postgres, testcontainers): a new provider gains its rows;
-      raising the shard count adds only the new shards and leaves existing due times
-      untouched; lowering it deletes only the surplus; a provider whose boards all became
-      `retired` loses its rows.
-- [ ] 3.3 `Claim(limit)`: select due, unclaimed-or-reclaimable rows under
-      `FOR UPDATE SKIP LOCKED`, set `claimed_at`, advance `next_due_at = now() + cadence`.
-- [ ] 3.4 Integration tests: two concurrent claims never return the same row; a claimed row
-      is not re-claimed inside its window; a claim older than `timeout + grace` IS
-      reclaimed; `next_due_at` advances from `now()` so a six-hour outage owes exactly one
-      run, not six.
-- [ ] 3.5 `RecordFinish(provider, shard, exitCode, err)` writing the outcome.
+- [x] 3.1 `QueriesRepository.Eligible` and `.Reconcile`: materialise `(provider, 1..shards)`
+      rows for every schedulable provider, delete surplus shards, and forget providers
+      absent from the list — the sweep `gen-ingest-timers.sh` promised in its header and
+      never had. Plus `Settings.Schedulable()`, so a disabled provider ends up with NO run
+      state and the claim query needs no `enabled` predicate of its own.
+- [x] 3.2 Integration tests: the roster comes from `boards` (a retired-only provider is not
+      eligible); a provider with no override row resolves to defaults through the real
+      LEFT JOIN; an override applies; a new provider gains its rows; raising the shard count
+      leaves existing due times untouched (they are the fleet's stagger); lowering it drops
+      only the surplus; a departed provider loses its rows; a disabled provider's state is
+      deleted, not left idle at a months-old due time that would fire immediately.
+- [x] 3.3 `Claim(limit, grace)`: due-or-reclaimable rows under `FOR UPDATE OF rs SKIP
+      LOCKED`, `claimed_at` set, `next_due_at` advanced to `now() + cadence`. The timeout
+      travels WITH the claim so a cadence edit landing between claim and launch cannot hand
+      a run a budget the scheduler never decided on.
+- [x] 3.4 Integration tests: eight concurrent claims against one due row take it exactly
+      once; a claimed row is not re-claimed inside its window; a claim older than
+      `timeout + grace` IS reclaimed; `next_due_at` advances from `now()`, so a six-hour
+      outage owes one run and not six; the limit is respected exactly.
+- [x] 3.5 `RecordFinish` writing the outcome and releasing the claim — proven to clear
+      `claimed_at`, so the reclaim window guards genuinely stuck runs rather than every run
+      that took a while.
 
 ## 4. The launcher port
 

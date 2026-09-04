@@ -100,6 +100,16 @@ func Effective(provider string, o *Override) Settings {
 	}
 }
 
+// Schedulable reports whether the scheduler should keep run state for this provider and
+// launch it. A disabled provider's run state is DELETED rather than kept idle, so
+// re-enabling starts from a fresh due time instead of a months-old one that would fire
+// immediately — and so the claim query needs no `enabled` predicate of its own.
+//
+// The Managed conjunct is rollout-only and goes away with the column in task 8.5 of
+// openspec/changes/ingest-scheduler-in-db; until then it is what stops the scheduler and
+// the static timers from both driving one provider.
+func (s Settings) Schedulable() bool { return s.Enabled && s.Managed }
+
 // ShardSelectors lists the runs that together cover this provider once.
 func (s Settings) ShardSelectors() []ShardSelector {
 	out := make([]ShardSelector, 0, s.Shards)

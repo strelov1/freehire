@@ -246,6 +246,24 @@ type Querier interface {
 	// groups the result into one message per account, listing the jobs in the order it
 	// receives them. Without this the list order is whatever the join produced.
 	ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]int64, error)
+	// Take up to max_runs due runs, exactly once each.
+	//
+	// The CTE resolves each candidate's cadence and timeout through the same LEFT JOIN and
+	// defaults as the listing above, so a claim can never use different numbers from the
+	// report. FOR UPDATE ... SKIP LOCKED is what makes two overlapping scheduler ticks safe:
+	// the second skips the rows the first holds rather than blocking on them or double-claiming.
+	// `OF rs` names only the run-state table, since FOR UPDATE may not be applied to the
+	// nullable side of an outer join.
+	//
+	// A row is claimable when it is due and unclaimed, or when its claim has outlived that
+	// provider's own timeout plus the grace window — a scheduler killed between claiming and
+	// launching, and a run systemd killed at its timeout, both recover through that second arm
+	// with no operator.
+	//
+	// next_due_at advances to now() + cadence, not to next_due_at + cadence. Advancing at
+	// claim stops a 40-minute crawl from halving its own frequency; advancing from now() caps
+	// catch-up at ONE run, so a six-hour outage does not owe six.
+	ClaimDueRuns(ctx context.Context, arg ClaimDueRunsParams) ([]ClaimDueRunsRow, error)
 	// Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
 	// returning the email fields the matcher/classifier need. FOR UPDATE OF o locks only
 	// outbox rows; SKIP LOCKED lets concurrent workers take disjoint rows; the lease
@@ -1059,6 +1077,11 @@ type Querier interface {
 	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
 	// company_slug) so the member can offer again later (fresh proof, fresh moderation).
 	DeleteReferralOffer(ctx context.Context, arg DeleteReferralOfferParams) (int64, error)
+	// Forget the providers that are no longer eligible — every board retired, or the adapter
+	// gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
+	// it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty
+	// from 18 July).
+	DeleteRunStateForUnlistedProviders(ctx context.Context, providers []string) error
 	// Delete a saved search, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
@@ -1084,6 +1107,8 @@ type Querier interface {
 	// does not exist or is not the caller's (the handler maps that to 404). The match
 	// ledger cascades away with the subscription.
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
+	// Drop the shards left over from a higher shard count.
+	DeleteSurplusRunStateShards(ctx context.Context, arg DeleteSurplusRunStateShardsParams) error
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
 	// Erase one user's daily counters. See DeleteUsageForUser.
@@ -1291,6 +1316,14 @@ type Querier interface {
 	// For an existing user the row is left untouched; a stale period is reset later
 	// under the lock. remaining is seeded with the monthly grant for a fresh row.
 	EnsureBalance(ctx context.Context, arg EnsureBalanceParams) error
+	// Materialise the (provider, 1..shards) rows a provider needs. ON CONFLICT DO NOTHING is
+	// load-bearing: an existing shard keeps its next_due_at, which is the fleet's stagger, and
+	// resetting it would bunch a provider's whole cycle onto one minute.
+	//
+	// A new shard is due immediately. That is deliberate — a shard that has never run has no
+	// schedule to respect, and the concurrency cap is what keeps a fresh 24-way provider from
+	// taking the whole fleet at once.
+	EnsureRunStateShards(ctx context.Context, arg EnsureRunStateShardsParams) error
 	// Seed today's counter for (user, feature) so the SELECT ... FOR UPDATE below always has
 	// a row to lock. That lock is what serialises two simultaneous first-ever consumptions,
 	// so an allowance can never be oversold by a race. An existing row is left untouched.
@@ -2674,6 +2707,14 @@ type Querier interface {
 	ListSavedJobSlugs(ctx context.Context, userID int64) ([]string, error)
 	// A user's saved searches, most recently updated first (the "My filters" picker order).
 	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
+	// Every provider the scheduler may run, with its override if it has one.
+	//
+	// The roster is boards, and the LEFT JOIN is what makes ingest_schedule a set of
+	// OVERRIDES rather than the roster: a provider with a live board and no schedule row comes
+	// back with NULLs, which the caller resolves to documented defaults. An INNER JOIN here
+	// would silently unschedule every unconfigured provider, which is the exact failure this
+	// table was built to remove.
+	ListSchedulableProviders(ctx context.Context) ([]ListSchedulableProvidersRow, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
@@ -3480,6 +3521,10 @@ type Querier interface {
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
 	RecordReminderDeliveryFailure(ctx context.Context, arg RecordReminderDeliveryFailureParams) error
+	// Store how a run ended and release its claim, so the row is claimable again at its next
+	// due time. Clearing claimed_at here is what keeps the reclaim window for genuinely stuck
+	// runs rather than for every run that took a while.
+	RecordRunFinish(ctx context.Context, arg RecordRunFinishParams) error
 	// Record a failed attempt against one entry, dead-lettering it once it passes max_attempts so
 	// a permanently poisonous entry stops being reclaimed by the lease forever.
 	//
