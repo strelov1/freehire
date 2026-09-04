@@ -185,7 +185,11 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, priceI
 		// second customer for one person — which would leave two subscriptions nobody sums.
 		form.Set("customer", existingCustomer)
 	} else {
-		form.Set("customer_creation", "always")
+		// No customer_creation here, and its absence is load-bearing: the provider refuses
+		// it outright in subscription mode ("can only be used in `payment` mode"), and the
+		// refusal is silent from a candidate's side — the session is never created, the
+		// handler answers 404, and the upgrade button hides itself as though billing were
+		// switched off. A subscription always creates a customer anyway.
 		form.Set("metadata[freehire_user_id]", id)
 	}
 

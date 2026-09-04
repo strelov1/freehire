@@ -166,6 +166,29 @@ func TestClientCheckoutReusesAKnownCustomer(t *testing.T) {
 	}
 }
 
+// TestClientCheckoutNeverSendsCustomerCreation guards a parameter the provider refuses in
+// subscription mode. The refusal is invisible from a candidate's side: the session is never
+// created, the handler answers 404, and the upgrade button hides itself as though billing
+// were switched off — which is exactly how it reached production unnoticed.
+func TestClientCheckoutNeverSendsCustomerCreation(t *testing.T) {
+	for _, existing := range []string{"", "cus_9"} {
+		var gotForm string
+		c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			gotForm = r.Form.Encode()
+			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test"}`))
+		})
+
+		if _, err := c.createCheckoutSession(context.Background(), 601,
+			"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", existing); err != nil {
+			t.Fatalf("want no error, got %v", err)
+		}
+		if strings.Contains(gotForm, "customer_creation") {
+			t.Fatalf("form %q sends customer_creation, which subscription mode refuses", gotForm)
+		}
+	}
+}
+
 func TestClientPortalSession(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"url":"https://billing.stripe.com/p/session/test_123"}`))
