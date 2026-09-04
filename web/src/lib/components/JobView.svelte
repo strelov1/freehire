@@ -372,6 +372,26 @@
        (internal/enrich), so the body is the only part of this snippet that takes
        the posting's language. -->
   <JobDescription html={job.description} lang={contentLang} />
+
+  {#if job.skills?.length}
+    <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw
+         `enrichment.skills` is kept in the JSONB and never served (see JobRow's same
+         fix), so reading it here always rendered nothing. -->
+    <section class="flex flex-col gap-2 border-t border-border pt-4">
+      <h2 class="text-base font-semibold">Skills</h2>
+      <ul class="flex flex-wrap gap-1.5">
+        {#each job.skills as skill (skill)}
+          <li>
+            <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
+                 filter panel reading "CI/CD" — the same skill spelled two ways on one
+                 screen. SkillChip labels it from the dictionary and, for a skill the
+                 glossary has reached, carries the definition too. -->
+            <SkillChip slug={skill} />
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
 {/snippet}
 
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
@@ -508,7 +528,14 @@
                      flags over one another so a many-country remote role stays a
                      single compact row instead of wrapping. -->
                 <dd class="flex min-w-0 justify-end text-base">
-                  <CountryFlagStack codes={facet.values.map((v) => v.flag ?? '')} link />
+                  <!-- `labelClass` matches the sibling `dd` below (text-sm font-medium,
+                       ordinary foreground) — the component's own default is a muted
+                       caption sized for the browse card and company panel instead. -->
+                  <CountryFlagStack
+                    codes={facet.values.map((v) => v.flag ?? '')}
+                    link
+                    labelClass="text-sm font-medium"
+                  />
                 </dd>
               {:else}
                 <dd class="min-w-0 break-words text-right font-medium"
@@ -521,23 +548,6 @@
             </div>
           {/each}
         </dl>
-      {/if}
-
-      {#if job.skills?.length}
-        <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the
-             raw `enrichment.skills` is kept in the JSONB and never served (see
-             JobRow's same fix), so reading it here always rendered nothing. -->
-        <ul class="flex flex-wrap gap-1.5 border-t border-border pt-4 first:border-t-0 first:pt-0">
-          {#each job.skills as skill (skill)}
-            <li>
-              <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
-                   filter panel reading "CI/CD" — the same skill spelled two ways on one
-                   screen. SkillChip labels it from the dictionary and, for a skill the
-                   glossary has reached, carries the definition too. -->
-              <SkillChip slug={skill} />
-            </li>
-          {/each}
-        </ul>
       {/if}
 
       <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">

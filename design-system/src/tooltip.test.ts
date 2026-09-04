@@ -12,7 +12,18 @@ function setup() {
     content: slot('<span>Median for the role</span>'),
   });
   const trigger = must(container.querySelector('button'));
-  return { wrapper: must(trigger.parentElement), trigger, queryByRole };
+  return { container, wrapper: must(trigger.parentElement), trigger, queryByRole };
+}
+
+// Every hover interaction now runs on a timer (the show delay below), so these tests
+// drive fake ones instead of waiting on real milliseconds.
+async function withFakeTimers(run: () => Promise<void>) {
+  vi.useFakeTimers();
+  try {
+    await run();
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 describe('Tooltip', () => {
@@ -25,16 +36,47 @@ describe('Tooltip', () => {
 
   // The regression: role="tooltip" associates nothing on its own, so without
   // this link the tooltip was invisible to a screen reader.
-  it('describes the trigger while it is open', async () => {
-    const { wrapper, trigger, queryByRole } = setup();
+  it('describes the trigger while it is open', () =>
+    withFakeTimers(async () => {
+      const { wrapper, trigger, queryByRole } = setup();
 
-    await fireEvent.mouseEnter(wrapper);
+      await fireEvent.mouseEnter(wrapper);
+      await vi.runAllTimersAsync(); // past the show delay below
 
-    const tooltip = must(queryByRole('tooltip'));
-    expect(tooltip.id).toBeTruthy();
-    expect(trigger.getAttribute('aria-describedby')).toBe(tooltip.id);
-  });
+      const tooltip = must(queryByRole('tooltip'));
+      expect(tooltip.id).toBeTruthy();
+      expect(trigger.getAttribute('aria-describedby')).toBe(tooltip.id);
+    }));
 
+  // Hovering across a row of chips fires mouseenter/mouseleave on each one a gliding
+  // pointer passes over — without a delay every chip along the way would flash its
+  // tooltip open before the pointer even settles on the one actually being read.
+  it('does not show on hover until the pointer has sat still for the show delay', () =>
+    withFakeTimers(async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await fireEvent.mouseEnter(wrapper);
+
+      expect(queryByRole('tooltip')).toBeNull();
+    }));
+
+  // The throttling guarantee itself: a pointer gliding past never holds still long
+  // enough to arm the show timer, so leaving before the delay elapses must cancel it
+  // outright rather than merely deferring the open.
+  it('cancels a pending show if the pointer leaves before the show delay elapses', () =>
+    withFakeTimers(async () => {
+      const { wrapper, queryByRole } = setup();
+
+      await fireEvent.mouseEnter(wrapper);
+      await fireEvent.mouseLeave(wrapper);
+      await vi.runAllTimersAsync();
+
+      expect(queryByRole('tooltip')).toBeNull();
+    }));
+
+  // Focus is a single deliberate action (unlike a hover glide), so — unlike the tests
+  // above — this one needs no fake timers at all: with a real, unadvanced clock, the
+  // tooltip is already open, which is only possible if focus carries no show delay.
   it('opens on focus too, not only on hover', async () => {
     const { wrapper, trigger, queryByRole } = setup();
 
@@ -46,12 +88,12 @@ describe('Tooltip', () => {
 
   // Leaving the attribute behind would point at an id that no longer exists,
   // which reads as no description at all.
-  it('drops the description again once the close delay elapses', async () => {
-    vi.useFakeTimers();
-    try {
+  it('drops the description again once the close delay elapses', () =>
+    withFakeTimers(async () => {
       const { wrapper, trigger, queryByRole } = setup();
 
       await fireEvent.mouseEnter(wrapper);
+      await vi.runAllTimersAsync(); // past the show delay
       await fireEvent.mouseLeave(wrapper);
       // The hide is deferred (see below), so it isn't gone the instant the pointer leaves.
       expect(queryByRole('tooltip')).not.toBeNull();
@@ -60,21 +102,18 @@ describe('Tooltip', () => {
 
       expect(queryByRole('tooltip')).toBeNull();
       expect(trigger.getAttribute('aria-describedby')).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    }));
 
   // The regression: mouseleave used to close the tooltip the instant the pointer left
   // the trigger's own layout box, which doesn't cover the gap to the floating content —
   // so moving the pointer toward a link inside the tooltip closed it before arriving.
   // A grace period, cancelled by re-entering (trigger or content) in time, fixes that.
-  it('keeps the tooltip open if the pointer returns before the close delay elapses', async () => {
-    vi.useFakeTimers();
-    try {
+  it('keeps the tooltip open if the pointer returns before the close delay elapses', () =>
+    withFakeTimers(async () => {
       const { wrapper, queryByRole } = setup();
 
       await fireEvent.mouseEnter(wrapper);
+      await vi.runAllTimersAsync(); // past the show delay
       await fireEvent.mouseLeave(wrapper);
       await vi.advanceTimersByTimeAsync(50); // still mid-gap, well under the delay
       await fireEvent.mouseEnter(wrapper); // pointer arrived at the content
@@ -82,29 +121,32 @@ describe('Tooltip', () => {
       await vi.runAllTimersAsync();
 
       expect(queryByRole('tooltip')).not.toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    }));
 
-  it('dismisses on Escape without moving the pointer (WCAG 2.1 SC 1.4.13)', async () => {
-    const { wrapper, trigger, queryByRole } = setup();
+  it('dismisses on Escape without moving the pointer (WCAG 2.1 SC 1.4.13)', () =>
+    withFakeTimers(async () => {
+      const { wrapper, trigger, queryByRole } = setup();
 
-    await fireEvent.mouseEnter(wrapper);
-    await fireEvent.keyDown(window, { key: 'Escape' });
+      await fireEvent.mouseEnter(wrapper);
+      await vi.runAllTimersAsync(); // past the show delay
+      expect(queryByRole('tooltip')).not.toBeNull(); // otherwise Escape has nothing to dismiss
 
-    expect(queryByRole('tooltip')).toBeNull();
-    expect(trigger.getAttribute('aria-describedby')).toBeNull();
-  });
+      await fireEvent.keyDown(window, { key: 'Escape' });
 
-  it('ignores other keys', async () => {
-    const { wrapper, queryByRole } = setup();
+      expect(queryByRole('tooltip')).toBeNull();
+      expect(trigger.getAttribute('aria-describedby')).toBeNull();
+    }));
 
-    await fireEvent.mouseEnter(wrapper);
-    await fireEvent.keyDown(window, { key: 'a' });
+  it('ignores other keys', () =>
+    withFakeTimers(async () => {
+      const { wrapper, queryByRole } = setup();
 
-    expect(queryByRole('tooltip')).not.toBeNull();
-  });
+      await fireEvent.mouseEnter(wrapper);
+      await vi.runAllTimersAsync(); // past the show delay
+      await fireEvent.keyDown(window, { key: 'a' });
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+    }));
 
   // A touch pointer has no hover, so before this the tooltip was simply unreachable on
   // a phone — the one place a reader is most likely to meet a skill chip.
@@ -163,25 +205,29 @@ describe('Tooltip', () => {
 
     // A mouse already has hover. Toggling on its pointerdown too would close the
     // tooltip the moment someone clicked a link inside it.
-    it('ignores a mouse pointerdown', async () => {
-      const { wrapper, queryByRole } = setup();
+    it('ignores a mouse pointerdown', () =>
+      withFakeTimers(async () => {
+        const { wrapper, queryByRole } = setup();
 
-      await fireEvent.mouseEnter(wrapper);
-      await fireEvent.pointerDown(wrapper, { pointerType: 'mouse' });
+        await fireEvent.mouseEnter(wrapper);
+        await vi.runAllTimersAsync(); // past the show delay
+        await fireEvent.pointerDown(wrapper, { pointerType: 'mouse' });
 
-      expect(queryByRole('tooltip')).not.toBeNull();
-    });
+        expect(queryByRole('tooltip')).not.toBeNull();
+      }));
 
     // A pen hovers, so hover already opened the tooltip — and then pressing the trigger
     // would toggle it shut under the very pointer that is aiming at it.
-    it('ignores a pen pointerdown, because a pen hovers', async () => {
-      const { wrapper, queryByRole } = setup();
+    it('ignores a pen pointerdown, because a pen hovers', () =>
+      withFakeTimers(async () => {
+        const { wrapper, queryByRole } = setup();
 
-      await fireEvent.mouseEnter(wrapper);
-      await fireEvent.pointerDown(wrapper, { pointerType: 'pen' });
+        await fireEvent.mouseEnter(wrapper);
+        await vi.runAllTimersAsync(); // past the show delay
+        await fireEvent.pointerDown(wrapper, { pointerType: 'pen' });
 
-      expect(queryByRole('tooltip')).not.toBeNull();
-    });
+        expect(queryByRole('tooltip')).not.toBeNull();
+      }));
   });
 
   // The content is next in DOM order, so Tab out of the trigger lands on the link
@@ -206,14 +252,76 @@ describe('Tooltip', () => {
     expect(queryByRole('tooltip')).toBeNull();
   });
 
-  it('nests inside the wrapper so the pointer can travel onto it', async () => {
-    const { wrapper, queryByRole } = setup();
+  it('nests inside the wrapper so the pointer can travel onto it', () =>
+    withFakeTimers(async () => {
+      const { wrapper, queryByRole } = setup();
 
-    await fireEvent.mouseEnter(wrapper);
+      await fireEvent.mouseEnter(wrapper);
+      await vi.runAllTimersAsync(); // past the show delay
 
-    // A <div> here would be invalid inside the <span> wrapper.
-    const tooltip = queryByRole('tooltip');
-    expect(must(tooltip).tagName).toBe('SPAN');
-    expect(wrapper.contains(tooltip)).toBe(true);
-  });
+      // A <div> here would be invalid inside the <span> wrapper.
+      const tooltip = queryByRole('tooltip');
+      expect(must(tooltip).tagName).toBe('SPAN');
+      expect(wrapper.contains(tooltip)).toBe(true);
+    }));
+
+  // With no `data-tooltip-boundary` ancestor, the viewport is the fallback boundary.
+  it('shifts the content back inside the viewport when centering it would overflow', () =>
+    withFakeTimers(async () => {
+      const originalRect = Element.prototype.getBoundingClientRect;
+      const originalWidth = window.innerWidth;
+      try {
+        Element.prototype.getBoundingClientRect = () =>
+          ({ left: 280, right: 480, top: 0, bottom: 20, width: 200, height: 20, x: 280, y: 0, toJSON() {} }) as DOMRect;
+        Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+
+        const { wrapper, queryByRole } = setup();
+
+        await fireEvent.mouseEnter(wrapper);
+        await vi.runAllTimersAsync(); // past the show delay
+
+        const tooltip = must(queryByRole('tooltip'));
+        // Centered, the mocked box's right edge (480) sits 88px past the 392px boundary
+        // (innerWidth 400 minus the 8px edge padding) — the shift must cancel exactly that.
+        expect(tooltip.style.transform).toContain('-88px');
+      } finally {
+        Element.prototype.getBoundingClientRect = originalRect;
+        Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true });
+      }
+    }));
+
+  // Regression guard for the sidebar-overflow bug this was written for: the sidebar
+  // card has no `overflow` of its own, so the viewport fallback above never fires —
+  // only an ancestor explicitly marked `data-tooltip-boundary` catches it.
+  it('shifts against a marked boundary container instead of the viewport when one is present', () =>
+    withFakeTimers(async () => {
+      const originalRect = Element.prototype.getBoundingClientRect;
+      const originalWidth = window.innerWidth;
+      try {
+        // A wide viewport that would not, on its own, clip the tooltip below — isolating
+        // the assertion to the marked boundary rather than the viewport fallback.
+        Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
+        const { container, wrapper, queryByRole } = setup();
+        container.setAttribute('data-tooltip-boundary', '');
+
+        Element.prototype.getBoundingClientRect = function (this: Element) {
+          if (this === container) {
+            return { left: 0, right: 300, top: 0, bottom: 500, width: 300, height: 500, x: 0, y: 0, toJSON() {} } as DOMRect;
+          }
+          return { left: 200, right: 400, top: 0, bottom: 20, width: 200, height: 20, x: 200, y: 0, toJSON() {} } as DOMRect;
+        };
+
+        await fireEvent.mouseEnter(wrapper);
+        await vi.runAllTimersAsync(); // past the show delay
+
+        const tooltip = must(queryByRole('tooltip'));
+        // Centered, the mocked box's right edge (400) sits 108px past the boundary's
+        // 292px cutoff (300 minus the 8px edge padding) — well inside the 1200px
+        // viewport, so only the marked boundary explains the shift.
+        expect(tooltip.style.transform).toContain('-108px');
+      } finally {
+        Element.prototype.getBoundingClientRect = originalRect;
+        Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true });
+      }
+    }));
 });
