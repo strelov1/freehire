@@ -41,6 +41,14 @@ type InsertInput struct {
 	// SubmittedBy is the crowdsourced submitter, nil for one added by cmd/add-board.
 	SubmittedBy *int64
 	Surface     string
+	// CreatedAt overrides the row's submission time. Zero — every live caller — lets the
+	// column default to now(), which is what a board being added right now means.
+	//
+	// It exists for one caller: cmd/backfill-link-contributions, carrying submissions
+	// made weeks before the catalog existed. Without it that worker had to INSERT into
+	// boards directly, which skipped every check this package's whole point is to apply
+	// (see Insert). One optional field is a smaller thing to carry than a fourth writer.
+	CreatedAt time.Time
 }
 
 // Board is a stored catalog row.

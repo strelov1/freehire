@@ -35,11 +35,11 @@ func (q *Queries) ActivateBoard(ctx context.Context, arg ActivateBoardParams) (i
 
 const insertBoard = `-- name: InsertBoard :one
 INSERT INTO boards (provider, board, region, company, hub, tenants, url, status,
-                     submitted_by, surface, rejected_reason, activated_at)
+                     submitted_by, surface, rejected_reason, activated_at, created_at)
 VALUES ($1, $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11,
-        $12)
+        $12, COALESCE($13, now()))
 RETURNING id, provider, board, region, company, hub, tenants, url, status, submitted_by, surface, rejected_reason, created_at, activated_at
 `
 
@@ -56,6 +56,7 @@ type InsertBoardParams struct {
 	Surface        string             `json:"surface"`
 	RejectedReason pgtype.Text        `json:"rejected_reason"`
 	ActivatedAt    pgtype.Timestamptz `json:"activated_at"`
+	CreatedAt      interface{}        `json:"created_at"`
 }
 
 // Insert a board row. Callers that pass status='active' also pass a non-null
@@ -63,6 +64,10 @@ type InsertBoardParams struct {
 // for both status='pending' and status='rejected'. A collision with an existing
 // 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 // the caller maps that to a duplicate-board error.
+//
+// created_at is passed rather than defaulted so a board carried from an older table keeps
+// the day it was actually submitted; COALESCE gives every live caller now() by passing
+// NULL, so nothing else has to know the parameter exists.
 func (q *Queries) InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error) {
 	row := q.db.QueryRow(ctx, insertBoard,
 		arg.Provider,
@@ -77,6 +82,7 @@ func (q *Queries) InsertBoard(ctx context.Context, arg InsertBoardParams) (Board
 		arg.Surface,
 		arg.RejectedReason,
 		arg.ActivatedAt,
+		arg.CreatedAt,
 	)
 	var i Board
 	err := row.Scan(

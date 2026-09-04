@@ -15,7 +15,7 @@ const attributeBoardToSubmitter = `-- name: AttributeBoardToSubmitter :execrows
 UPDATE boards
 SET submitted_by = $1, url = $2, surface = $3
 WHERE provider = $4 AND lower(board) = lower($5)
-  AND submitted_by IS NULL
+  AND region = $6 AND submitted_by IS NULL
 `
 
 type AttributeBoardToSubmitterParams struct {
@@ -24,6 +24,7 @@ type AttributeBoardToSubmitterParams struct {
 	Surface     string      `json:"surface"`
 	Provider    string      `json:"provider"`
 	Board       string      `json:"board"`
+	Region      string      `json:"region"`
 }
 
 // Give an existing catalog row the submitter who contributed it. The board reached the
@@ -32,6 +33,11 @@ type AttributeBoardToSubmitterParams struct {
 //
 // Guarded on submitted_by IS NULL: a row that already names a submitter keeps them, which
 // makes a re-run inert and stops a later duplicate contribution reassigning credit.
+//
+// Keyed on (provider, lower(board), region) — the catalog's own identity, and what
+// boards_identity_key uses. Dropping region would attribute every regional row of a board
+// to one submitter and overwrite each one's url; a contribution names one board, in the
+// region-less form the contribution flow records.
 func (q *Queries) AttributeBoardToSubmitter(ctx context.Context, arg AttributeBoardToSubmitterParams) (int64, error) {
 	result, err := q.db.Exec(ctx, attributeBoardToSubmitter,
 		arg.SubmittedBy,
@@ -39,6 +45,7 @@ func (q *Queries) AttributeBoardToSubmitter(ctx context.Context, arg AttributeBo
 		arg.Surface,
 		arg.Provider,
 		arg.Board,
+		arg.Region,
 	)
 	if err != nil {
 		return 0, err
@@ -65,50 +72,6 @@ type InsertBoardSubmissionAtParams struct {
 // so a re-run writes nothing.
 func (q *Queries) InsertBoardSubmissionAt(ctx context.Context, arg InsertBoardSubmissionAtParams) (int64, error) {
 	result, err := q.db.Exec(ctx, insertBoardSubmissionAt,
-		arg.URL,
-		arg.SubmittedBy,
-		arg.Surface,
-		arg.CreatedAt,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const insertPendingBoardAt = `-- name: InsertPendingBoardAt :execrows
-INSERT INTO boards (provider, board, region, company, url, status, submitted_by, surface, created_at)
-SELECT $1, $2, '', $3, $4,
-       'pending', $5, $6, $7
-WHERE NOT EXISTS (
-    SELECT 1 FROM boards
-    WHERE provider = $1 AND lower(board) = lower($2)
-)
-`
-
-type InsertPendingBoardAtParams struct {
-	Provider    string             `json:"provider"`
-	Board       string             `json:"board"`
-	Company     string             `json:"company"`
-	URL         pgtype.Text        `json:"url"`
-	SubmittedBy pgtype.Int8        `json:"submitted_by"`
-	Surface     string             `json:"surface"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-}
-
-// Carry one recognized-but-not-yet-onboarded contribution into boards at status='pending',
-// keeping its original created_at for the same reason as above.
-//
-// Guarded by NOT EXISTS rather than ON CONFLICT: boards_identity_key is PARTIAL
-// (WHERE status IN ('pending','active')), so a conflict clause only covers a live row and
-// would happily add a second copy beside a rejected or retired one. Any row under this
-// identity, whatever its status, means the board already reached the catalog — so there is
-// nothing to carry, and a re-run writes nothing.
-func (q *Queries) InsertPendingBoardAt(ctx context.Context, arg InsertPendingBoardAtParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertPendingBoardAt,
-		arg.Provider,
-		arg.Board,
-		arg.Company,
 		arg.URL,
 		arg.SubmittedBy,
 		arg.Surface,

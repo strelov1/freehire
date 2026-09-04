@@ -23,23 +23,6 @@ INSERT INTO board_submissions (url, submitted_by, surface, created_at)
 VALUES (sqlc.arg(url), sqlc.arg(submitted_by), sqlc.arg(surface), sqlc.arg(created_at))
 ON CONFLICT (url) DO NOTHING;
 
--- name: InsertPendingBoardAt :execrows
--- Carry one recognized-but-not-yet-onboarded contribution into boards at status='pending',
--- keeping its original created_at for the same reason as above.
---
--- Guarded by NOT EXISTS rather than ON CONFLICT: boards_identity_key is PARTIAL
--- (WHERE status IN ('pending','active')), so a conflict clause only covers a live row and
--- would happily add a second copy beside a rejected or retired one. Any row under this
--- identity, whatever its status, means the board already reached the catalog — so there is
--- nothing to carry, and a re-run writes nothing.
-INSERT INTO boards (provider, board, region, company, url, status, submitted_by, surface, created_at)
-SELECT sqlc.arg(provider), sqlc.arg(board), '', sqlc.arg(company), sqlc.arg(url),
-       'pending', sqlc.arg(submitted_by), sqlc.arg(surface), sqlc.arg(created_at)
-WHERE NOT EXISTS (
-    SELECT 1 FROM boards
-    WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
-);
-
 -- name: AttributeBoardToSubmitter :execrows
 -- Give an existing catalog row the submitter who contributed it. The board reached the
 -- catalog through the YAML backfill, which carried no attribution, so the person who found
@@ -47,7 +30,12 @@ WHERE NOT EXISTS (
 --
 -- Guarded on submitted_by IS NULL: a row that already names a submitter keeps them, which
 -- makes a re-run inert and stops a later duplicate contribution reassigning credit.
+--
+-- Keyed on (provider, lower(board), region) — the catalog's own identity, and what
+-- boards_identity_key uses. Dropping region would attribute every regional row of a board
+-- to one submitter and overwrite each one's url; a contribution names one board, in the
+-- region-less form the contribution flow records.
 UPDATE boards
 SET submitted_by = sqlc.arg(submitted_by), url = sqlc.arg(url), surface = sqlc.arg(surface)
 WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
-  AND submitted_by IS NULL;
+  AND region = sqlc.arg(region) AND submitted_by IS NULL;

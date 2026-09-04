@@ -73,9 +73,9 @@ func TestOnlyCarryingDestinationsWrite(t *testing.T) {
 	}
 }
 
-// Every destination appears in the report's order, or a run would count rows into a
-// bucket it never prints.
-func TestReportOrderCoversEveryDestination(t *testing.T) {
+// Every destination must appear in the report's order AND carry a label, or a run counts
+// rows into a bucket it never prints, or prints an empty line for one.
+func TestEveryDestinationIsReportable(t *testing.T) {
 	all := []destination{toSubmission, toPendingBoard, toAttribution, dropRefusal, unplaceable}
 	if len(order) != len(all) {
 		t.Fatalf("order has %d entries, want %d", len(order), len(all))
@@ -88,5 +88,17 @@ func TestReportOrderCoversEveryDestination(t *testing.T) {
 		if !seen[d] {
 			t.Errorf("%q is missing from the report order", d)
 		}
+		if label[d] == "" {
+			t.Errorf("%q has no report label", d)
+		}
+	}
+}
+
+// The identity an attribution matches on must be the catalog's own, region included — the
+// contribution flow records no region, so it is the column's default.
+func TestAttributionUsesTheContributionRegion(t *testing.T) {
+	if contributionRegion != "" {
+		t.Errorf("contributionRegion = %q, want the column default that the contribution "+
+			"flow and cmd/add-board both write", contributionRegion)
 	}
 }

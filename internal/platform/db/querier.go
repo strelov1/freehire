@@ -56,6 +56,11 @@ type Querier interface {
 	//
 	// Guarded on submitted_by IS NULL: a row that already names a submitter keeps them, which
 	// makes a re-run inert and stops a later duplicate contribution reassigning credit.
+	//
+	// Keyed on (provider, lower(board), region) — the catalog's own identity, and what
+	// boards_identity_key uses. Dropping region would attribute every regional row of a board
+	// to one submitter and overwrite each one's url; a contribution names one board, in the
+	// region-less form the contribution flow records.
 	AttributeBoardToSubmitter(ctx context.Context, arg AttributeBoardToSubmitterParams) (int64, error)
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
@@ -1872,6 +1877,10 @@ type Querier interface {
 	// for both status='pending' and status='rejected'. A collision with an existing
 	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 	// the caller maps that to a duplicate-board error.
+	//
+	// created_at is passed rather than defaulted so a board carried from an older table keeps
+	// the day it was actually submitted; COALESCE gives every live caller now() by passing
+	// NULL, so nothing else has to know the parameter exists.
 	InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error)
 	// Queue an unclassified URL for triage. The unique index on (url) rejects a duplicate
 	// submission of the same link; the caller maps that violation the same way a duplicate
@@ -1954,15 +1963,6 @@ type Querier interface {
 	// has a mailbox) or address (taken) — the allocation service handles both: it
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
 	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
-	// Carry one recognized-but-not-yet-onboarded contribution into boards at status='pending',
-	// keeping its original created_at for the same reason as above.
-	//
-	// Guarded by NOT EXISTS rather than ON CONFLICT: boards_identity_key is PARTIAL
-	// (WHERE status IN ('pending','active')), so a conflict clause only covers a live row and
-	// would happily add a second copy beside a rejected or retired one. Any row under this
-	// identity, whatever its status, means the board already reached the catalog — so there is
-	// nothing to carry, and a re-run writes nothing.
-	InsertPendingBoardAt(ctx context.Context, arg InsertPendingBoardAtParams) (int64, error)
 	// Creates a job visible only to its creator: the jd-tailor-intake private-JD path
 	// (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
 	// never an upsert — external_id is a synthetic value scoped to this one submission

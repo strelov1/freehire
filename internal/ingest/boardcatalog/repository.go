@@ -171,6 +171,11 @@ func (r *QueriesRepository) InsertRow(ctx context.Context, in InsertInput, statu
 	if surface == "" {
 		surface = "curator"
 	}
+	// Zero means "now", which the query supplies by COALESCE — see InsertInput.CreatedAt.
+	createdAt := pgtype.Timestamptz{}
+	if !in.CreatedAt.IsZero() {
+		createdAt = pgtype.Timestamptz{Time: in.CreatedAt, Valid: true}
+	}
 	row, err := r.q.InsertBoard(ctx, db.InsertBoardParams{
 		Provider:       in.Provider,
 		Board:          in.Board,
@@ -184,6 +189,7 @@ func (r *QueriesRepository) InsertRow(ctx context.Context, in InsertInput, statu
 		Surface:        surface,
 		RejectedReason: pgconv.Text(rejectedReason),
 		ActivatedAt:    activatedAt,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		if pgerr.IsUniqueViolation(err) {

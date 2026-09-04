@@ -15,6 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
@@ -23,6 +25,7 @@ import (
 // row and how many found their destination already holding it.
 func carryAll(t *testing.T, q *db.Queries, rows []db.ListLinkContributionsForBackfillRow) (wrote, already int) {
 	t.Helper()
+	ins := boardcatalog.NewInserter(boardcatalog.NewQueriesRepository(q), sources.Taxonomy())
 	for _, r := range rows {
 		dest, err := destinationOf(r)
 		if err != nil {
@@ -31,7 +34,7 @@ func carryAll(t *testing.T, q *db.Queries, rows []db.ListLinkContributionsForBac
 		if !dest.writes() {
 			continue
 		}
-		changed, err := write(context.Background(), q, r, dest)
+		changed, err := write(context.Background(), q, ins, r, dest)
 		if err != nil {
 			t.Fatalf("write %s: %v", r.Status, err)
 		}
@@ -63,7 +66,7 @@ func seed(t *testing.T, pool *pgxpool.Pool, user int64, when time.Time) {
 	ctx := context.Background()
 	rows := []struct{ url, source, board, status string }{
 		{"https://example.com/review-link", "", "", "review"},
-		{"https://example.com/pending-link", "inhire", "onsign", "pending"},
+		{"https://example.com/pending-link", "ashby", "onsign", "pending"},
 		{"https://example.com/onboarded-link", "greenhouse", "acme", "onboarded"},
 		{"https://example.com/rejected-link", "lever", "deadco", "rejected"},
 	}
@@ -120,7 +123,7 @@ func TestCarryPlacesEveryStatusAndIsIdempotent(t *testing.T) {
 	}
 
 	// The recognized-but-unonboarded board is crawlable again.
-	assertBoard(t, pool, "inhire", "onsign", "pending", user)
+	assertBoard(t, pool, "ashby", "onsign", "pending", user)
 	// The refusal is deliberately NOT carried: 0049 already freed the identity, so the
 	// board can be re-contributed and judged again on the day.
 	assertNoBoard(t, pool, "lever", "deadco")
@@ -205,5 +208,58 @@ func TestCarrySkipsARecognizedRowWithNoBoard(t *testing.T) {
 	}
 	if dest != unplaceable {
 		t.Errorf("destinationOf = %q, want %q", dest, unplaceable)
+	}
+}
+
+// An 'onboarded' contribution whose board is NOT in the catalog is the case that decides
+// whether the drop is safe. The UPDATE changes nothing, exactly as it does for a row
+// already attributed — but the two mean opposite things: one is done, the other names a
+// board nothing crawls. Measured on prod: 163 match, 9 do not.
+//
+// Telling them apart needs a second question, and getting it wrong would let the drop take
+// those 9 while the run reported them as already carried.
+func TestAnOnboardedContributionWithNoCatalogRowIsNotAlreadyCarried(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	repo := boardcatalog.NewQueriesRepository(q)
+	user := insertUser(t, pool)
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO link_contributions (submitted_by, url, source, board, status, surface)
+		 VALUES ($1, 'https://example.com/orphan', 'greenhouse', 'nowhere', 'onboarded', 'web')`,
+		user); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	rows, err := q.ListLinkContributionsForBackfill(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	wrote, already := carryAll(t, q, rows)
+	if wrote != 0 || already != 1 {
+		t.Fatalf("carry wrote %d (%d unchanged), want 0 and 1", wrote, already)
+	}
+	// The unchanged UPDATE is ambiguous; this is the question that resolves it.
+	listed, err := inCatalog(ctx, repo, rows[0])
+	if err != nil {
+		t.Fatalf("inCatalog: %v", err)
+	}
+	if listed {
+		t.Error("the catalog does not carry this board; the run must not read it as carried")
+	}
+
+	// And the ordinary case still answers the other way.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO boards (provider, board, region, company, status)
+		 VALUES ('greenhouse', 'nowhere', '', 'Nowhere', 'active')`); err != nil {
+		t.Fatalf("seed catalog row: %v", err)
+	}
+	listed, err = inCatalog(ctx, repo, rows[0])
+	if err != nil {
+		t.Fatalf("inCatalog: %v", err)
+	}
+	if !listed {
+		t.Error("a board the catalog carries must read as listed")
 	}
 }

@@ -175,7 +175,14 @@ Revisit once a full 24h+ cycle confirms no provider regressed. Once confirmed:
 - [ ] 9.4 Remove `internal/ingest/sources/config.go`'s YAML parsing
       (`LoadConfig`/`ParseConfig`/`ParseRawEntries`/`dedupeBoards`) and delete
       `cmd/backfill-board-catalog` (one-off, no longer needed once it has run in prod).
-- [ ] 9.5 Migration: drop `link_contributions`.
+- [ ] 9.5a Run `cmd/backfill-link-contributions --apply` in prod. **9.5 destroys data until
+      this has run.** 9.1-9.4 moved the read and write paths, not the rows: measured
+      2026-09-04, `link_contributions` held 404 contributions from 11 users, of which
+      `board_submissions` held none of the 26 unclassified URLs and `boards` held neither
+      of the 2 pending boards. The worker also reports the `onboarded` contributions whose
+      board is absent from the catalog (9 on prod) — those are boards nothing crawls, and
+      they need resolving, not dropping.
+- [ ] 9.5 Migration: drop `link_contributions` — only after 9.5a reports a clean run.
 
 ## 10. Review
 

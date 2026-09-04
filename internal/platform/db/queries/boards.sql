@@ -4,12 +4,16 @@
 -- for both status='pending' and status='rejected'. A collision with an existing
 -- 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 -- the caller maps that to a duplicate-board error.
+--
+-- created_at is passed rather than defaulted so a board carried from an older table keeps
+-- the day it was actually submitted; COALESCE gives every live caller now() by passing
+-- NULL, so nothing else has to know the parameter exists.
 INSERT INTO boards (provider, board, region, company, hub, tenants, url, status,
-                     submitted_by, surface, rejected_reason, activated_at)
+                     submitted_by, surface, rejected_reason, activated_at, created_at)
 VALUES (sqlc.arg(provider), sqlc.arg(board), sqlc.arg(region), sqlc.arg(company),
         sqlc.arg(hub), sqlc.arg(tenants), sqlc.arg(url), sqlc.arg(status),
         sqlc.arg(submitted_by), sqlc.arg(surface), sqlc.arg(rejected_reason),
-        sqlc.arg(activated_at))
+        sqlc.arg(activated_at), COALESCE(sqlc.narg(created_at), now()))
 RETURNING *;
 
 -- name: ActivateBoard :execrows
