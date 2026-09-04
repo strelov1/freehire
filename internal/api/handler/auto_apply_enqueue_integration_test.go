@@ -79,7 +79,7 @@ func makePro(t *testing.T, pool *pgxpool.Pool, userID int64) {
 
 func enqueueRequest(t *testing.T, app *fiber.App, slug, cookie string) *http.Response {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/"+slug+"/auto-apply", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/jobs/"+slug+"/auto-apply", nil)
 	if cookie != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 	}
@@ -87,6 +87,7 @@ func enqueueRequest(t *testing.T, app *fiber.App, slug, cookie string) *http.Res
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	t.Cleanup(func() { resp.Body.Close() })
 	return resp
 }
 
@@ -150,12 +151,13 @@ func TestPostJobAutoApply_RejectsAPIKeyOnly(t *testing.T) {
 	insertBaseCV(t, pool, userID)
 	seedEnqueueJob(t, pool, "greenhouse", "keyonly-job")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/keyonly-job/auto-apply", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/jobs/keyonly-job/auto-apply", nil)
 	req.Header.Set("Authorization", "Bearer fhk_whatever")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401 — this route is cookie-only", resp.StatusCode)
 	}
@@ -342,7 +344,7 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 	seedEnqueueJob(t, pool, "greenhouse", "status-job")
 
 	get := func(slug, cookie string) *http.Response {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/"+slug, nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/jobs/"+slug, nil)
 		if cookie != "" {
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 		}

@@ -64,7 +64,7 @@ func startDevServer(t *testing.T, cfg Config) *devServer {
 		// container.Logs returns a live-tailing stream that never reaches EOF for a
 		// running container, so io.ReadAll on it would hang — `docker logs` (a
 		// finite snapshot, not a follow) is what actually completes.
-		out, lerr := exec.Command("docker", "logs", container.GetContainerID()).CombinedOutput()
+		out, lerr := exec.CommandContext(ctx, "docker", "logs", container.GetContainerID()).CombinedOutput()
 		if lerr != nil {
 			return
 		}
@@ -138,7 +138,11 @@ func waitForFunctionRegisteredOK(eventAPIBaseURL, functionID string, timeout tim
 }
 
 func devServerHasFunction(eventAPIBaseURL, functionID string) bool {
-	resp, err := http.Get(eventAPIBaseURL + "/dev")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, eventAPIBaseURL+"/dev", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false
 	}
@@ -169,7 +173,12 @@ func (d *devServer) sendEvent(t *testing.T, name string, data any) {
 	if err != nil {
 		t.Fatalf("marshal event: %v", err)
 	}
-	resp, err := http.Post(d.eventAPIBaseURL+"/e/test", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, d.eventAPIBaseURL+"/e/test", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("build event request %s: %v", name, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("send event %s: %v", name, err)
 	}

@@ -290,7 +290,7 @@ func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.C
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.Write(pdf); err != nil {
 		_ = os.Remove(f.Name())
 		return "", fmt.Errorf("write temp file: %w", err)

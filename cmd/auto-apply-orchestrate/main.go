@@ -124,7 +124,7 @@ func run() int {
 // spike) verified against a real Inngest dev server. It retries briefly since the HTTP
 // server above has just started serving in its own goroutine.
 func selfRegister(addr string) error {
-	req, err := http.NewRequest(http.MethodPut, "http://127.0.0.1"+addr+"/api/inngest", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, "http://127.0.0.1"+addr+"/api/inngest", nil)
 	if err != nil {
 		return err
 	}
