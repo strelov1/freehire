@@ -265,7 +265,6 @@ describe('Tooltip', () => {
       expect(wrapper.contains(tooltip)).toBe(true);
     }));
 
-  // With no `data-tooltip-boundary` ancestor, the viewport is the fallback boundary.
   it('shifts the content back inside the viewport when centering it would overflow', () =>
     withFakeTimers(async () => {
       const originalRect = Element.prototype.getBoundingClientRect;
@@ -290,35 +289,32 @@ describe('Tooltip', () => {
       }
     }));
 
-  // Regression guard for the sidebar-overflow bug this was written for: the sidebar
-  // card has no `overflow` of its own, so the viewport fallback above never fires —
-  // only an ancestor explicitly marked `data-tooltip-boundary` catches it.
-  it('shifts against a marked boundary container instead of the viewport when one is present', () =>
+  // Regression guard: a box wider than the viewport itself overflows both edges at
+  // once. A naive "correct whichever edge overflows" shift would push the near edge
+  // out even further while fixing the far one — this asserts the near (left) edge
+  // stays flush against the padding instead, even though the far edge still overflows.
+  it('keeps the near edge visible when the content is wider than the viewport, rather than pushing it out further', () =>
     withFakeTimers(async () => {
       const originalRect = Element.prototype.getBoundingClientRect;
       const originalWidth = window.innerWidth;
       try {
-        // A wide viewport that would not, on its own, clip the tooltip below — isolating
-        // the assertion to the marked boundary rather than the viewport fallback.
-        Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
-        const { container, wrapper, queryByRole } = setup();
-        container.setAttribute('data-tooltip-boundary', '');
+        // Centered box: left -10, right 310 — 320px wide, wider than the 284px of
+        // usable width an 8px-padded 300px viewport leaves.
+        Element.prototype.getBoundingClientRect = () =>
+          ({ left: -10, right: 310, top: 0, bottom: 20, width: 320, height: 20, x: -10, y: 0, toJSON() {} }) as DOMRect;
+        Object.defineProperty(window, 'innerWidth', { value: 300, configurable: true });
 
-        Element.prototype.getBoundingClientRect = function (this: Element) {
-          if (this === container) {
-            return { left: 0, right: 300, top: 0, bottom: 500, width: 300, height: 500, x: 0, y: 0, toJSON() {} } as DOMRect;
-          }
-          return { left: 200, right: 400, top: 0, bottom: 20, width: 200, height: 20, x: 200, y: 0, toJSON() {} } as DOMRect;
-        };
+        const { wrapper, queryByRole } = setup();
 
         await fireEvent.mouseEnter(wrapper);
         await vi.runAllTimersAsync(); // past the show delay
 
         const tooltip = must(queryByRole('tooltip'));
-        // Centered, the mocked box's right edge (400) sits 108px past the boundary's
-        // 292px cutoff (300 minus the 8px edge padding) — well inside the 1200px
-        // viewport, so only the marked boundary explains the shift.
-        expect(tooltip.style.transform).toContain('-108px');
+        // Shifting right by 18px puts the near edge exactly at the 8px padding
+        // (-10 + 18 = 8). Shifting left instead (the naive far-edge correction) would
+        // have moved the near edge to -28 — further off screen, not less.
+        expect(tooltip.style.transform).toContain('18px');
+        expect(tooltip.style.transform).not.toContain('-18px');
       } finally {
         Element.prototype.getBoundingClientRect = originalRect;
         Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true });

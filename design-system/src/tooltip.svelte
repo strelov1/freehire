@@ -137,14 +137,8 @@
   $effect(() => clearTimers);
 
   // Centering the floating content on the trigger assumes equal room on both sides.
-  // Near the edge of a narrow container (a sidebar card, a filter panel) there isn't —
-  // the box spills past the edge instead of staying inside it. These panels are plain
-  // `overflow: visible`, so there is nothing to detect that automatically: the DOM
-  // gives no signal that a card 300px wide is a boundary while the column beside it
-  // (also `overflow: visible`, also just a plain block) is not. A consumer marks its
-  // own boundary with `data-tooltip-boundary` on the container the tooltip must stay
-  // inside; absent that, the only real constraint left is the viewport itself, so that
-  // is the fallback. `shiftPx` is the correction a "shift" collision strategy would
+  // Near the edge of the viewport there isn't — the box spills off screen instead of
+  // staying inside it. `shiftPx` is the correction a "shift" collision strategy would
   // compute — measured by hand for one axis of one prop rather than pulling in a
   // positioning library for it.
   const EDGE_PADDING_PX = 8;
@@ -154,32 +148,24 @@
   // also writes `shiftPx` — reading a $state you write inside the same effect is a loop.
   let appliedShiftPx = 0;
 
-  // Intersected with the viewport so a boundary that is itself partly scrolled off
-  // screen can't push the content off screen the other way.
-  function boundaryRect() {
-    const marked = triggerEl?.closest<HTMLElement>('[data-tooltip-boundary]');
-    const rect = marked?.getBoundingClientRect();
-    return {
-      left: Math.max(0, rect?.left ?? 0),
-      right: Math.min(window.innerWidth, rect?.right ?? window.innerWidth),
-      top: Math.max(0, rect?.top ?? 0),
-      bottom: Math.min(window.innerHeight, rect?.bottom ?? window.innerHeight),
-    };
-  }
-
-  // Shared by both axes: pulls a box back inside [boundaryNear, boundaryFar] along one
-  // axis, correcting past whichever edge it overflows (never both — the box is capped
-  // narrower than any boundary worth marking).
-  function edgeShift(naturalNear: number, naturalFar: number, boundaryNear: number, boundaryFar: number) {
+  // Pulls a box back inside [0 + padding, boundaryFar - padding] along one axis. A box
+  // wider than the viewport itself (long content on a narrow phone) can overflow both
+  // edges at once, and no single shift satisfies both — this keeps the near edge
+  // (left/top, where reading starts) fully visible and accepts the far edge overflowing
+  // rather than a naive far-only correction pushing the near edge out even further.
+  function edgeShift(naturalNear: number, naturalFar: number, boundaryFar: number) {
+    const overflowNear = EDGE_PADDING_PX - naturalNear;
+    if (overflowNear > 0) return overflowNear;
     const overflowFar = naturalFar - (boundaryFar - EDGE_PADDING_PX);
-    const overflowNear = boundaryNear + EDGE_PADDING_PX - naturalNear;
-    return overflowFar > 0 ? -overflowFar : overflowNear > 0 ? overflowNear : 0;
+    return overflowFar > 0 ? -overflowFar : 0;
   }
 
   // `content` resolves async (SkillChip renders a narrower skeleton first), which
   // commonly changes this box's width after the effect's first measurement — a
   // ResizeObserver re-measures whenever that happens, the same pattern TabStrip uses
-  // for its own overflow mask.
+  // for its own overflow mask. `side` is also a dependency (read inside `measure`,
+  // called synchronously below), so flipping it re-runs this from scratch rather than
+  // reusing a shift measured on the other axis.
   $effect(() => {
     if (!visible || !contentEl) {
       shiftPx = 0;
@@ -187,17 +173,17 @@
       return;
     }
     const el = contentEl;
+    appliedShiftPx = 0;
 
     function measure() {
       // The rect already carries whatever shift is currently applied (via the `style`
       // transform on this element), so it's subtracted back out first — otherwise a
       // resize after the first correction would compound it instead of replacing it.
       const rect = el.getBoundingClientRect();
-      const boundary = boundaryRect();
       appliedShiftPx =
         side === 'top' || side === 'bottom'
-          ? edgeShift(rect.left - appliedShiftPx, rect.right - appliedShiftPx, boundary.left, boundary.right)
-          : edgeShift(rect.top - appliedShiftPx, rect.bottom - appliedShiftPx, boundary.top, boundary.bottom);
+          ? edgeShift(rect.left - appliedShiftPx, rect.right - appliedShiftPx, window.innerWidth)
+          : edgeShift(rect.top - appliedShiftPx, rect.bottom - appliedShiftPx, window.innerHeight);
       shiftPx = appliedShiftPx;
     }
 
