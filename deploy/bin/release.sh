@@ -196,7 +196,11 @@ if [ "$app" = freehire ]; then
   # never built: nudge, apple-revoke and auth-cleanup were six days old, capture-apply-form
   # sixteen. Their units were hand-installed on the box and never reached git either (#56) —
   # the same half-provisioned move, arriving here as a stale binary instead of a missing file.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner merge-companies harvest-orphans recount-companies rollup-stats rollup-facets build-suggestions rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue; do
+  # billing-sync joined 2026-09-04, found the same way and by then eleven days stale. It is
+  # the one on this list a stale binary can cost money: the provider retries a webhook five
+  # times over ~2.5h and then stops for good, and past that window this worker is the only
+  # path by which a paid subscription becomes Pro.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup billing-sync capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner merge-companies harvest-orphans recount-companies rollup-stats rollup-facets build-suggestions rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,
