@@ -52,6 +52,29 @@ import (
 
 func main() { worker.Main(run) }
 
+// destination is where one contribution goes. Naming the five outcomes lets the run
+// classify every row before it writes anything, and lets the report print what it found
+// without a counter per branch.
+type destination string
+
+const (
+	toSubmission   destination = "unclassified URLs -> board_submissions"
+	toPendingBoard destination = "recognized boards -> boards (pending)"
+	toAttribution  destination = "already-onboarded boards -> attributed to their submitter"
+	dropRefusal    destination = "refusals -> dropped (see the package doc)"
+	unplaceable    destination = "UNPLACEABLE: a recognized status carrying no board"
+)
+
+// writes reports whether this destination has a statement behind it. The other two are
+// decisions, not work: a refusal is deliberately let go, and an unplaceable row needs a
+// human rather than a query.
+func (d destination) writes() bool {
+	return d == toSubmission || d == toPendingBoard || d == toAttribution
+}
+
+// order fixes the report's line order, since a map has none.
+var order = []destination{toSubmission, toPendingBoard, toAttribution, dropRefusal, unplaceable}
+
 func run() int {
 	apply := flag.Bool("apply", false, "actually write; without it the run only reports")
 	flag.Parse()
@@ -69,137 +92,104 @@ func run() int {
 		log.Printf("backfill-link-contributions: list: %v", err)
 		return 1
 	}
-	log.Printf("backfill-link-contributions: %d contributions to carry", len(rows))
+	log.Printf("backfill-link-contributions: %d contributions", len(rows))
 
-	var tally tally
+	counts := map[destination]int{}
+	already := 0
 	for _, row := range rows {
-		if err := carry(ctx, q, row, *apply, &tally); err != nil {
+		dest, err := destinationOf(row)
+		if err != nil {
+			log.Printf("backfill-link-contributions: row %d: %v", row.ID, err)
+			return 1
+		}
+		counts[dest]++
+		if !*apply || !dest.writes() {
+			continue
+		}
+		wrote, err := write(ctx, q, row, dest)
+		if err != nil {
 			log.Printf("backfill-link-contributions: row %d (%s): %v", row.ID, row.Status, err)
 			return 1
 		}
+		if !wrote {
+			already++
+		}
 	}
 
-	verb := "would carry"
+	for _, d := range order {
+		if counts[d] > 0 {
+			log.Printf("backfill-link-contributions: %4d  %s", counts[d], d)
+		}
+	}
 	if *apply {
-		verb = "carried"
+		log.Printf("backfill-link-contributions: %d of the writable rows were already carried", already)
+		return 0
 	}
-	log.Printf("backfill-link-contributions: %s %d submissions and %d pending boards; "+
-		"attributed %d existing boards; %d already carried, %d dropped refusals, %d skipped",
-		verb, tally.submissions, tally.pending, tally.attributed, tally.noop, tally.dropped, tally.skipped)
-	if !*apply {
-		log.Print("backfill-link-contributions: dry run, nothing written. Re-run with --apply.")
-	}
+	log.Print("backfill-link-contributions: dry run, nothing written. Re-run with --apply.")
 	return 0
 }
 
-// tally counts what a run did, so the report says which of the four paths each row took
-// rather than one number that hides them.
-type tally struct {
-	submissions, pending, attributed int
-	// dropped counts the refusals this worker deliberately does not carry, so the run
-	// says so rather than leaving them to be inferred from a total that does not add up.
-	dropped int
-	// noop is a row whose destination already holds it — the re-run case.
-	noop int
-	// skipped is a row this worker cannot place: a recognized status with no
-	// (source, board), which the schema allows only for 'review'.
-	skipped int
-}
-
-func carry(ctx context.Context, q *db.Queries, row db.ListLinkContributionsForBackfillRow, apply bool, t *tally) error {
+// destinationOf classifies one contribution. It reads the row and nothing else, so the
+// rules below are testable without a database — which matters, because they are the part
+// a mistake would silently misplace data through.
+func destinationOf(row db.ListLinkContributionsForBackfillRow) (destination, error) {
 	// 'review' is the only status the schema lets carry a NULL source, and its
 	// destination needs no board at all.
 	if row.Status == "review" {
-		return carrySubmission(ctx, q, row, apply, t)
+		return toSubmission, nil
 	}
 	if !row.Source.Valid || !row.Board.Valid || row.Source.String == "" || row.Board.String == "" {
-		// A recognized status with no board names nothing that can be carried. Count it
-		// rather than dropping it silently: a nonzero here means the schema's own
-		// assumption is wrong and the row needs a human.
-		t.skipped++
-		return nil
+		// A recognized status with no board names nothing that can be carried. Counted
+		// rather than dropped silently: a nonzero here means the schema's own assumption
+		// no longer holds and the row needs a human.
+		return unplaceable, nil
 	}
-
 	switch row.Status {
 	case "onboarded":
-		return attribute(ctx, q, row, apply, t)
+		return toAttribution, nil
 	case "pending":
-		return carryBoard(ctx, q, row, apply, t)
+		return toPendingBoard, nil
 	case "rejected":
-		t.dropped++
-		return nil
+		return dropRefusal, nil
 	}
-	return fmt.Errorf("unknown status %q", row.Status)
+	return "", fmt.Errorf("unknown status %q", row.Status)
 }
 
-func carrySubmission(ctx context.Context, q *db.Queries, row db.ListLinkContributionsForBackfillRow, apply bool, t *tally) error {
-	if !apply {
-		t.submissions++
-		return nil
+// write performs one destination's statement, reporting whether it changed a row. False
+// is the ordinary re-run answer, not a failure: every statement here is conflict- or
+// NULL-guarded, which is what makes the whole worker idempotent.
+func write(ctx context.Context, q *db.Queries, row db.ListLinkContributionsForBackfillRow, dest destination) (bool, error) {
+	var n int64
+	var err error
+	switch dest {
+	case toSubmission:
+		n, err = q.InsertBoardSubmissionAt(ctx, db.InsertBoardSubmissionAtParams{
+			URL:         row.URL,
+			SubmittedBy: row.SubmittedBy,
+			Surface:     row.Surface,
+			CreatedAt:   row.CreatedAt,
+		})
+	case toPendingBoard:
+		n, err = q.InsertPendingBoardAt(ctx, db.InsertPendingBoardAtParams{
+			Provider: row.Source.String,
+			Board:    row.Board.String,
+			// A contribution never carried a company name — recognition from a URL is
+			// network-free — so it gets the same placeholder the live flow uses, and a
+			// curator corrects it with cmd/add-board --rename.
+			Company:     boardcatalog.PlaceholderCompany(row.Board.String),
+			URL:         pgconv.Text(row.URL),
+			SubmittedBy: pgconv.Int8(&row.SubmittedBy),
+			Surface:     row.Surface,
+			CreatedAt:   row.CreatedAt,
+		})
+	case toAttribution:
+		n, err = q.AttributeBoardToSubmitter(ctx, db.AttributeBoardToSubmitterParams{
+			SubmittedBy: pgconv.Int8(&row.SubmittedBy),
+			URL:         pgconv.Text(row.URL),
+			Surface:     row.Surface,
+			Provider:    row.Source.String,
+			Board:       row.Board.String,
+		})
 	}
-	n, err := q.InsertBoardSubmissionAt(ctx, db.InsertBoardSubmissionAtParams{
-		URL:         row.URL,
-		SubmittedBy: row.SubmittedBy,
-		Surface:     row.Surface,
-		CreatedAt:   row.CreatedAt,
-	})
-	if err != nil {
-		return err
-	}
-	countWritten(n, &t.submissions, t)
-	return nil
-}
-
-func carryBoard(ctx context.Context, q *db.Queries, row db.ListLinkContributionsForBackfillRow, apply bool, t *tally) error {
-	if !apply {
-		t.pending++
-		return nil
-	}
-	n, err := q.InsertPendingBoardAt(ctx, db.InsertPendingBoardAtParams{
-		Provider: row.Source.String,
-		Board:    row.Board.String,
-		// A contribution never carried a company name — recognition from a URL is
-		// network-free — so it gets the same placeholder the live flow uses, and a
-		// curator corrects it with cmd/add-board --rename.
-		Company:     boardcatalog.PlaceholderCompany(row.Board.String),
-		URL:         pgconv.Text(row.URL),
-		SubmittedBy: pgconv.Int8(&row.SubmittedBy),
-		Surface:     row.Surface,
-		CreatedAt:   row.CreatedAt,
-	})
-	if err != nil {
-		return err
-	}
-	countWritten(n, &t.pending, t)
-	return nil
-}
-
-func attribute(ctx context.Context, q *db.Queries, row db.ListLinkContributionsForBackfillRow, apply bool, t *tally) error {
-	if !apply {
-		t.attributed++
-		return nil
-	}
-	n, err := q.AttributeBoardToSubmitter(ctx, db.AttributeBoardToSubmitterParams{
-		SubmittedBy: pgconv.Int8(&row.SubmittedBy),
-		URL:         pgconv.Text(row.URL),
-		Surface:     row.Surface,
-		Provider:    row.Source.String,
-		Board:       row.Board.String,
-	})
-	if err != nil {
-		return err
-	}
-	countWritten(n, &t.attributed, t)
-	return nil
-}
-
-// countWritten credits a statement that changed a row to its own counter, and one that
-// changed nothing to noop. Zero rows is the ordinary re-run answer here, not a failure:
-// every statement this worker issues is conflict- or NULL-guarded.
-func countWritten(n int64, counter *int, t *tally) {
-	if n > 0 {
-		*counter++
-		return
-	}
-	t.noop++
+	return n > 0, err
 }

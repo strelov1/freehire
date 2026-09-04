@@ -1,8 +1,9 @@
 //go:build integration
 
-// Integration tests for the link_contributions carry, against a real Postgres: each of the
-// four statuses lands where it should, original timestamps survive, and a second run
-// writes nothing.
+// Integration tests for the link_contributions carry, against a real Postgres: what
+// destinationOf decides actually lands there, original timestamps survive, and a second
+// run writes nothing. Where each status GOES is decided without a database — see
+// main_test.go.
 // Run with: go test -tags=integration ./cmd/backfill-link-contributions/
 // Requires Docker (testcontainers spins up a throwaway Postgres with the migrations).
 package main
@@ -17,6 +18,31 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
+
+// carryAll runs the worker's loop over every row, reporting how many statements changed a
+// row and how many found their destination already holding it.
+func carryAll(t *testing.T, q *db.Queries, rows []db.ListLinkContributionsForBackfillRow) (wrote, already int) {
+	t.Helper()
+	for _, r := range rows {
+		dest, err := destinationOf(r)
+		if err != nil {
+			t.Fatalf("destinationOf(%s): %v", r.Status, err)
+		}
+		if !dest.writes() {
+			continue
+		}
+		changed, err := write(context.Background(), q, r, dest)
+		if err != nil {
+			t.Fatalf("write %s: %v", r.Status, err)
+		}
+		if changed {
+			wrote++
+		} else {
+			already++
+		}
+	}
+	return wrote, already
+}
 
 func insertUser(t *testing.T, pool *pgxpool.Pool) int64 {
 	t.Helper()
@@ -77,17 +103,8 @@ func TestCarryPlacesEveryStatusAndIsIdempotent(t *testing.T) {
 		t.Fatalf("listed %d contributions, want 4", len(rows))
 	}
 
-	var first tally
-	for _, row := range rows {
-		if err := carry(ctx, q, row, true, &first); err != nil {
-			t.Fatalf("carry %s: %v", row.Status, err)
-		}
-	}
-	if first.submissions != 1 || first.pending != 1 || first.attributed != 1 || first.dropped != 1 {
-		t.Fatalf("first run tally = %+v, want one carried per status and the refusal dropped", first)
-	}
-	if first.skipped != 0 {
-		t.Errorf("first run skipped %d rows, want none", first.skipped)
+	if wrote, already := carryAll(t, q, rows); wrote != 3 || already != 0 {
+		t.Fatalf("first run wrote %d rows (%d already there), want 3 and 0", wrote, already)
 	}
 
 	// The unclassified URL is queued for triage, under its ORIGINAL date: restamping it
@@ -112,14 +129,8 @@ func TestCarryPlacesEveryStatusAndIsIdempotent(t *testing.T) {
 
 	// A second run is inert: every statement is conflict- or NULL-guarded, so stopping
 	// the worker mid-way and re-running it costs nothing.
-	var second tally
-	for _, row := range rows {
-		if err := carry(ctx, q, row, true, &second); err != nil {
-			t.Fatalf("second carry %s: %v", row.Status, err)
-		}
-	}
-	if second.noop != 3 || second.dropped != 1 {
-		t.Errorf("second run tally = %+v, want the three carried rows as no-ops", second)
+	if wrote, already := carryAll(t, q, rows); wrote != 0 || already != 3 {
+		t.Errorf("second run wrote %d rows (%d already there), want 0 and 3", wrote, already)
 	}
 
 	var boards int
@@ -185,13 +196,14 @@ func TestCarrySkipsARecognizedRowWithNoBoard(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 
-	var got tally
-	for _, row := range rows {
-		if err := carry(ctx, q, row, true, &got); err != nil {
-			t.Fatalf("carry: %v", err)
-		}
+	if len(rows) != 1 {
+		t.Fatalf("listed %d rows, want 1", len(rows))
 	}
-	if got.skipped != 1 {
-		t.Errorf("tally = %+v, want one skipped row", got)
+	dest, err := destinationOf(rows[0])
+	if err != nil {
+		t.Fatalf("destinationOf: %v", err)
+	}
+	if dest != unplaceable {
+		t.Errorf("destinationOf = %q, want %q", dest, unplaceable)
 	}
 }
