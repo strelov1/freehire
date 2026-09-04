@@ -39,6 +39,12 @@ func TestIsTech(t *testing.T) {
 		{"help desk", "Help Desk Technician (Tier 1)", true},
 		{"helpdesk", "Mitarbeiter IT Support und Helpdesk (m/w/d)", true},
 		{"technical support analyst", "Technical Support Analyst", true},
+		{"it support", "1st Line IT Support Technician", true},
+		{"it supporter", "1st Level IT Supporter (m/w/d)", true},
+		{"desktop support", "Desktop Support Analyst - Tier 1", true},
+		{"deskside support", "Deskside Support Engineer (Osaka)", true},
+		{"end user support", "Analyst, End User Support", true},
+		{"end-user support", "Desktop Support Specialist – SCCM, Intune, End-User Support", true},
 
 		// Trap negatives — non-software engineering / non-tech that carry "engineer"
 		// or other shared words. These MUST stay unflagged (bias: leave in unknown).
@@ -62,6 +68,11 @@ func TestIsTech(t *testing.T) {
 		{"customer support analyst", "Customer Support Analyst", false},
 		{"support specialist", "Support Specialist", false},
 		{"front desk", "Front Desk Agent", false},
+		// Bare "technical support" is deliberately absent: sampled live titles give
+		// AGV, automotive, controls, logistics and instructional support alongside the
+		// office-IT ones, so only the analyst form above is anchored enough.
+		{"technical support engineer", "AGV Technical Support Engineer", false},
+		{"technical support specialist", "Automotive Technical Support Specialist", false},
 		// #2421 asked for these two as negatives. Note what the assertion can and
 		// cannot say: both resolve a category that IS in vocab.TechCategories
 		// (project_management, business_analysis), so both are already technical
