@@ -67,6 +67,21 @@ func TestJobviteProvider(t *testing.T) {
 	}
 }
 
+// Jobvite earns fullBoardListing because the public careersite renders the whole job list in
+// one page (no server pagination), so a listing failure aborts the whole Fetch.
+func TestJobviteMarkers(t *testing.T) {
+	s := NewJobvite(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("jobvite should implement the fullBoardListing marker")
+	}
+}
+
+func TestJobviteRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["jobvite"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include jobvite")
+	}
+}
+
 func TestJobviteJobID(t *testing.T) {
 	cases := map[string]string{
 		"https://jobs.jobvite.com/hbg/job/ojJpAfwL":          "ojJpAfwL",

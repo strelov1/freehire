@@ -42,6 +42,21 @@ func TestSuccessFactorsProvider(t *testing.T) {
 	}
 }
 
+// SuccessFactors earns fullBoardListing because Fetch is a single sitemap fetch with no
+// pagination loop — it either succeeds with the whole listing or fails outright.
+func TestSuccessFactorsMarkers(t *testing.T) {
+	s := NewSuccessFactors(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("successfactors should implement the fullBoardListing marker")
+	}
+}
+
+func TestSuccessFactorsRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["successfactors"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include successfactors")
+	}
+}
+
 func TestSFJobID(t *testing.T) {
 	cases := map[string]string{
 		"https://jobs.tetrapak.com/job/Munich-Engineer/12345/":             "12345",

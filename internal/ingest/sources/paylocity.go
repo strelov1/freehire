@@ -35,6 +35,12 @@ func NewPaylocity(c paylocityHTTP) Source { return paylocity{http: c} }
 
 func (paylocity) Provider() string { return "paylocity" }
 
+// fullBoardListing: the listing GET is a single request whose window.pageData embeds the
+// company's whole Jobs array (no pagination), so a listing failure aborts the whole Fetch.
+// Per-job detail fetches are best-effort (only downgrade the description, never drop the
+// posting). Earns the post-run sweep's board-scoped close (freehire#2328).
+func (paylocity) fullBoardListing() {}
+
 func (s paylocity) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	listURL := fmt.Sprintf("%s/Recruiting/Jobs/All/%s", paylocityBase, e.Board)
 	body, err := s.http.GetText(ctx, listURL)

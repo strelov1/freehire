@@ -74,18 +74,30 @@ Unit-level, against the pipeline/sweep fakes.
 ## 6. Phase-1 adapter audit
 
 - [ ] 6.1 Re-measure current stale-row volume per provider (the figures in the old issue thread
-      are from 2026-09-02) to confirm audit priority order.
-- [ ] 6.2 Audit the large ATS platform adapters against the structural bar (candidates: `ukg`,
+      are from 2026-09-02) to confirm audit priority order. **Not done this session — no
+      production database access from this environment.** Re-run before/soon after deploy to
+      confirm the candidate list below was still the right priority order.
+- [x] 6.2 Audit the large ATS platform adapters against the structural bar (candidates: `ukg`,
       `workday`, `paylocity`, `careerplug`, `greenhouse`, `lever`, `ashby`, `workable`,
       `smartrecruiters`, `personio`, `recruitee`, `bamboohr`, `jazzhr`, `icims`,
-      `successfactors`, `jobvite`, `breezyhr`, `eightfold`, `taleo` — adjust against 6.1's
-      measurement). For each: read `Fetch`, determine pass / needs-hardening / defer.
-- [ ] 6.3 For each adapter that needs hardening to pass (e.g., a soft page cap becomes a hard
+      `successfactors`, `jobvite`, `breezyhr` (registered as `breezy`), `eightfold`, `taleo`).
+      For each: read `Fetch`, determine pass / needs-hardening / defer. Result: all 19 pass
+      (13 with no code change: `ukg`, `paylocity`, `greenhouse`, `lever`, `ashby`, `workable`,
+      `smartrecruiters`, `personio`, `recruitee`, `bamboohr`, `jazzhr`, `successfactors`,
+      `jobvite`, `breezy`, `eightfold` — each either a single unpaginated request or an
+      authoritative-total loop with no artificial cap; 3 needed hardening: `workday`,
+      `careerplug`, `icims`, `taleo`). None deferred.
+- [x] 6.3 For each adapter that needs hardening to pass (e.g., a soft page cap becomes a hard
       error, or a total-count check is added), make that change and confirm it against the
-      adapter's existing tests plus any new ones the hardening needs.
-- [ ] 6.4 Implement the `fullBoardListing` marker on each adapter that passes; leave the rest
-      unmarked and record which were deferred and why.
-- [ ] 6.5 Confirm `solidjobs` remains unmarked (negative control — it must not pass the bar as-is).
+      adapter's existing tests plus any new ones the hardening needs. Hardened: `workday`
+      (`splitByFacet`'s two silent-partial-success fallbacks now fail instead), `careerplug`
+      (switched `crawlPagedLinks` → `crawlAllPagedLinks`), `icims` (`jobLocs` no longer skips a
+      failed sub-sitemap silently), `taleo` (`listRequisitions`' page-cap exhaustion now fails
+      instead of returning a truncated result).
+- [x] 6.4 Implement the `fullBoardListing` marker on each adapter that passes; leave the rest
+      unmarked and record which were deferred and why. All 19 candidates pass; none deferred.
+- [x] 6.5 Confirm `solidjobs` remains unmarked (negative control — it must not pass the bar as-is).
+      Pinned by `TestSolidJobsIsNotFullBoardListing`.
 
 ## 7. Documentation
 

@@ -92,6 +92,23 @@ func TestEightfoldProvider(t *testing.T) {
 	}
 }
 
+// Eightfold earns fullBoardListing because pageList proves completeness on both list-API
+// generations — the server's own count is authoritative, no artificial cap exists, and any
+// page error discards what was collected and fails the whole listing (never a partial
+// result). Detail fetches are best-effort per posting (list-only fallback, logged).
+func TestEightfoldMarkers(t *testing.T) {
+	s := NewEightfold(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("eightfold should implement the fullBoardListing marker")
+	}
+}
+
+func TestEightfoldRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["eightfold"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include eightfold")
+	}
+}
+
 func TestParseEightfoldBoard(t *testing.T) {
 	t.Run("valid host/domain", func(t *testing.T) {
 		b, err := parseEightfoldBoard("apply.careers.microsoft.com/microsoft.com")

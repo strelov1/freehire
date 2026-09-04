@@ -12,6 +12,22 @@ func TestBreezyProvider(t *testing.T) {
 	}
 }
 
+// Breezy earns fullBoardListing because the /json listing is a single unpaginated request
+// returning the board's whole postings array, so a listing failure aborts the whole Fetch.
+// Detail fetches are best-effort per posting.
+func TestBreezyMarkers(t *testing.T) {
+	s := NewBreezy(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("breezy should implement the fullBoardListing marker")
+	}
+}
+
+func TestBreezyRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["breezy"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include breezy")
+	}
+}
+
 // jobPostingHTML is a position page carrying the schema.org JobPosting ld+json block
 // Breezy server-renders; the adapter reads only the description from it.
 func jobPostingHTML(title, desc string) string {

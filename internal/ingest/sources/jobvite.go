@@ -26,6 +26,11 @@ func NewJobvite(c HTMLGetter) Source { return jobvite{http: c} }
 
 func (jobvite) Provider() string { return "jobvite" }
 
+// fullBoardListing: the public careersite renders the whole job list in one page (no server
+// pagination), so a listing failure aborts the whole Fetch. Earns the post-run sweep's
+// board-scoped close (freehire#2328).
+func (jobvite) fullBoardListing() {}
+
 func (j jobvite) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, err := url.Parse(fmt.Sprintf("https://jobs.jobvite.com/%s/", e.Board))
 	if err != nil {
