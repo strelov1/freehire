@@ -31,6 +31,14 @@
   // control strip, and both have to remain reachable.
   const bareHeader = $derived(page.url.pathname === '/');
 
+  /** How many of HEADER_LINKS the bare header carries below `lg` — the first two, which
+   *  are the two catalogues. The rest wait for the width, because all five and the right
+   *  cluster do not share a row under ~800px: at 640 the last two used to be drawn ON TOP
+   *  of the stars, the Discord mark and the burger. Two is what fits at the narrow end
+   *  (33px to spare at 320px, labels only — see the nav below), and the burger lists all
+   *  five at every width regardless. */
+  const PHONE_LINKS = 2;
+
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
   // and does the same: brand hard left, menu hard right. The search keeps a readable
@@ -81,7 +89,10 @@
         class="flex items-center gap-2 text-sm font-semibold tracking-tight"
       >
         <BrandMark />
-        <span class="hidden sm:inline" aria-hidden="true">freehire</span>
+        <!-- Dropped on a phone to leave the middle slot its width — except on the homepage,
+             which renders no search box there (its own hero is the box), so the row is a
+             mark and a burger with the whole screen between them. -->
+        <span class={bareHeader ? 'inline' : 'hidden sm:inline'} aria-hidden="true">freehire</span>
       </a>
     </div>
 
@@ -91,22 +102,30 @@
          cap then hands the rest back to the side slots, which keeps it on the axis. -->
     <div class={['flex min-w-0 flex-1', fullBleed && 'max-w-3xl basis-3xl']}>
       {#if bareHeader}
-        <!-- Hidden below 640px, where five labels do not fit beside the brand and the
-             burger — and where the burger is a thumb away and lists every one of these
-             with the same glyph and a full label. Shrinking them to bare icons would
-             trade a legible row for five guesses. -->
-        <nav aria-label="Site" class="hidden items-center gap-5 sm:flex lg:gap-6">
+        <!-- All five below 640px do not fit beside the brand and the burger, but the row
+             they share is otherwise EMPTY on this route — the homepage's search box is its
+             hero, not this slot — so the first two ride along on a phone and the other
+             three wait for the width. Two is what fits, not a ranking: they are the two
+             catalogues, and the burger a thumb away still lists all five with the same
+             glyph and a full label. Bare icons would trade a legible row for guesses. -->
+        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-6">
           <!-- Divides the nav from the wordmark, the same rule the search box draws
                between its Location scope and the field. Without it the first link sat
                one word-gap from "freehire" and read as part of it. -->
           <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
-          {#each HEADER_LINKS as link (link.href)}
+          {#each HEADER_LINKS as link, i (link.href)}
             {@const Icon = link.icon}
             <a
               href={resolve(link.href)}
-              class="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
+              class={[
+                'flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground',
+                i >= PHONE_LINKS && 'hidden lg:flex',
+              ]}
             >
-              <Icon class="size-4 shrink-0" aria-hidden="true" />
+              <!-- Label alone on a phone. The glyph is 22px with its gap and both links
+                   carry one, which at 320px pushed "Companies" under the burger; the word
+                   is what names the destination, so the glyph is what gives way. -->
+              <Icon class="hidden size-4 shrink-0 sm:block" aria-hidden="true" />
               {link.label}
             </a>
           {/each}

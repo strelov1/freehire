@@ -291,7 +291,12 @@
      evidence: the CLI its install line, the extension what the panel actually does. -->
 <section class="border-t border-border py-12 sm:py-16">
   <SectionLabel text="take it with you" />
-  <div class="mt-8 grid gap-6 lg:grid-cols-2">
+  <!-- `grid-cols-1` is load-bearing, not the default written out: with no column template
+       the single track below `lg` is `auto`, which sizes to its widest content — the
+       install line in the `pre`, which does not wrap. That took the track to 416px on a
+       390px phone and gave the whole page a horizontal scrollbar. Tailwind's `grid-cols-*`
+       are `repeat(N, minmax(0, 1fr))` for exactly this, and the `pre` scrolls itself. -->
+  <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
     <div class="flex flex-col gap-5 rounded-xl border border-border p-6 sm:p-8">
       <div class="flex flex-col gap-3">
         <h2 class="text-2xl font-semibold tracking-tight">
