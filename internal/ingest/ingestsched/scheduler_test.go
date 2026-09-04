@@ -17,6 +17,7 @@ type fakeRepo struct {
 
 	reconciled []Settings
 	claimLimit int
+	claimed    bool
 	previewed  bool
 	finished   []finishCall
 
@@ -40,6 +41,7 @@ func (f *fakeRepo) Reconcile(_ context.Context, s []Settings) error {
 func (f *fakeRepo) InFlight(context.Context) (int, error) { return f.inFlight, nil }
 
 func (f *fakeRepo) Claim(_ context.Context, limit int, _ time.Duration) ([]Run, error) {
+	f.claimed = true
 	f.claimLimit = limit
 	if f.claimErr != nil {
 		return nil, f.claimErr
@@ -96,7 +98,13 @@ func newScheduler(repo *fakeRepo, launcher Launcher, apply bool) Scheduler {
 // Shadow mode is the DEFAULT, and the first deployment lands underneath a fleet still
 // driven by 279 static timers. A shadow tick that claimed anything would advance due times
 // the real timers know nothing about.
-func TestShadowTickLaunchesNothingAndMutatesNoState(t *testing.T) {
+//
+// It DOES reconcile, and that is deliberate rather than an oversight: without run-state
+// rows there is nothing for the preview to see, and a shadow run that measured nothing
+// would be worse than no shadow run at all. Creating those rows is inert — only the
+// scheduler reads them, and only in apply mode does it act. What shadow mode must not do is
+// CLAIM: that is the write the static timers would be racing.
+func TestShadowTickReconcilesButNeitherClaimsNorLaunches(t *testing.T) {
 	repo := &fakeRepo{
 		eligible: []Settings{managed("greenhouse")},
 		due:      []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
@@ -119,6 +127,12 @@ func TestShadowTickLaunchesNothingAndMutatesNoState(t *testing.T) {
 	}
 	if got.Applied {
 		t.Error("Applied = true in shadow mode")
+	}
+	if repo.claimed {
+		t.Error("shadow mode claimed; that is the write the static timers would be racing")
+	}
+	if len(repo.reconciled) != 1 {
+		t.Errorf("reconciled %v; shadow mode must still materialise run state or the preview sees nothing", repo.reconciled)
 	}
 }
 
