@@ -7,6 +7,12 @@
 -- parked attempt is never reclaimed by this query — auto_apply_queue_claimable_idx exists
 -- for exactly this predicate.
 --
+-- tailored_cv_id IS NOT NULL AND review_decision = 'approved' (openspec/changes/
+-- auto-apply-tailored-resume): a submission attempt only ever runs for an entry the
+-- candidate has reviewed and approved. An unreviewed or declined entry sits in the queue
+-- but is never claimed — declining also sets blocked_at (via the review endpoint's own
+-- Park-shaped write), so it is additionally excluded by the predicate above.
+--
 -- Returns job.source, job.external_id and job.url because the caller builds the sidecar
 -- request from the row alone — source doubles as the ATS provider name, the same vocabulary
 -- internal/applyform's Provider field already uses, and external_id (board:posting-id) is
@@ -17,6 +23,8 @@ WITH claimable AS (
     FROM auto_apply_queue q
     WHERE q.failed_at IS NULL
       AND q.blocked_at IS NULL
+      AND q.tailored_cv_id IS NOT NULL
+      AND q.review_decision = 'approved'
       AND (q.claimed_at IS NULL
            OR q.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
     ORDER BY q.id
@@ -28,7 +36,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN jobs j ON j.id = c.job_id
 WHERE q.id = c.id
-RETURNING q.id, q.user_id, q.job_id, j.source, j.external_id, j.url;
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url;
 
 -- name: DeleteAutoApplyEntry :exec
 -- Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
@@ -63,3 +71,46 @@ SET attempts   = attempts + 1,
                  END
 WHERE id = sqlc.arg(id)
 RETURNING attempts, failed_at;
+
+-- name: GetAutoApplyQueueEntryForReview :one
+-- One read backing both the tailoring-trigger and the review-decision endpoints
+-- (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
+-- id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a
+-- probing caller learns nothing about entries they do not own) and carries enough of the
+-- entry's own state (job_id for tailoring, tailored_cv_id/review_decision for the review
+-- gate) that neither endpoint needs a second query to decide whether to proceed.
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: SetAutoApplyTailoredCV :exec
+-- Records which tailored CV a queue entry's tailoring run produced. Set once, by the
+-- tailoring endpoint, before the candidate has had a chance to review it — review_decision
+-- stays NULL until the review endpoint records one.
+UPDATE auto_apply_queue
+SET tailored_cv_id = sqlc.arg(tailored_cv_id)
+WHERE id = sqlc.arg(id);
+
+-- name: ApproveAutoApplyReview :execrows
+-- Records an approval. Guarded by review_decision IS NULL so a second attempt at an
+-- already-reviewed entry affects zero rows rather than overwriting a recorded decision —
+-- the handler reads the row first (GetAutoApplyQueueEntryForReview) to tell "already
+-- reviewed" apart from "not found" before ever reaching this statement, so zero rows here
+-- would only mean a race with a concurrent decision on the same entry.
+UPDATE auto_apply_queue
+SET review_decision = 'approved',
+    reviewed_at     = now()
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;
+
+-- name: DeclineAutoApplyReview :execrows
+-- Records a decline AND parks the entry in one statement — the same fields
+-- MarkAutoApplyBlocked sets (blocked_at, last_error), reusing that park vocabulary rather
+-- than inventing a second one, plus the review columns MarkAutoApplyBlocked has no reason
+-- to know about. unmapped stays NULL: this is not a form-field park. last_error is what
+-- tells the two park reasons apart in the queue's own history, per design.md.
+UPDATE auto_apply_queue
+SET review_decision = 'declined',
+    reviewed_at     = now(),
+    blocked_at      = now(),
+    last_error      = sqlc.arg(last_error)
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;

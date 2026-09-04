@@ -57,12 +57,19 @@ decision for the measurements and its caveats.
   `openspec/changes/auto-apply-whitelabel-greenhouse`. Scope stays detection-only: this does
   not add fill/submit coverage for a white-label domain's own bespoke form — an attempt still
   parks even when its layout IS eventually recognized as "just not ours to fill."
-- **File uploads are not resolved.** `resolve.go`'s `answerKeyFor` never matches a `file`
-  kind field — a required résumé/cover-letter upload always parks. There is no artifact
-  (which stored CV, which version) wired through yet. Because of this, `cmd/auto-apply`
-  never needs object storage today — `candidateprofile`'s only résumé read
-  (`resume.Store.Structured`) is a Postgres read that never touches `blobs` — so `main.go`
-  does not require `S3_*` to be configured; it will once this gap closes.
+- **Only the résumé file field resolves; everything else does not.**
+  `openspec/changes/auto-apply-tailored-resume` closed the artifact gap for the résumé/CV
+  upload specifically: `resolve.go`'s `isResumeField` recognizes it by field id (`resume`,
+  Greenhouse's own convention) or label, and it resolves once the claim carries an approved
+  tailored CV (`Claimed.TailoredCVID != uuid.Nil` — set only once a candidate has reviewed
+  and approved a tailoring run; see `internal/application/autoapply/AGENTS.md`). A cover
+  letter or any other file field is still always unmapped — there is no artifact for those.
+  `Client.attachApprovedResume` renders the approved CV through the existing Typst renderer
+  (`internal/candidate/cv`) to a temp file on demand and removes it once the attempt ends; a
+  render failure parks the attempt naming the field rather than being retried. No object
+  storage is involved, so `cmd/auto-apply` still does not require `S3_*` to be configured —
+  `candidateprofile`'s own résumé read (`resume.Store.Structured`) is a Postgres read that
+  never touches `blobs`, and neither does the CV render.
 - **A `Multi` field (a checkbox group taking several answers) only ever resolves at most one
   value.** Not a shortcut: `AnswerSource` never supplies more than one candidate value per
   question today, so there is never more than one to match in the first place. See

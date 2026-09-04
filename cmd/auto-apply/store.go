@@ -36,14 +36,22 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]autoapp
 	}
 	out := make([]autoapply.Claimed, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, autoapply.Claimed{
+		c := autoapply.Claimed{
 			QueueID:    r.ID,
 			UserID:     r.UserID,
 			JobID:      r.JobID,
 			Provider:   r.Source,
 			ExternalID: r.ExternalID,
 			JobURL:     r.URL,
-		})
+		}
+		// Never nil in practice — ClaimAutoApplyBatch's WHERE requires tailored_cv_id IS
+		// NOT NULL — but a claim with no tailored CV degrades to a zero-value id rather
+		// than panicking on a nil dereference, consistent with everything else here
+		// treating a surprising row as data, not a crash.
+		if r.TailoredCvID != nil {
+			c.TailoredCVID = *r.TailoredCvID
+		}
+		out = append(out, c)
 	}
 	return out, nil
 }

@@ -50,6 +50,12 @@ type Querier interface {
 	// tuple) so a file's rows land in a single round trip; view_count accumulates across
 	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
+	// Records an approval. Guarded by review_decision IS NULL so a second attempt at an
+	// already-reviewed entry affects zero rows rather than overwriting a recorded decision —
+	// the handler reads the row first (GetAutoApplyQueueEntryForReview) to tell "already
+	// reviewed" apart from "not found" before ever reaching this statement, so zero rows here
+	// would only mean a race with a concurrent decision on the same entry.
+	ApproveAutoApplyReview(ctx context.Context, id int64) (int64, error)
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
@@ -214,6 +220,12 @@ type Querier interface {
 	// separate reaper process is needed. failed_at/blocked_at excluded so a dead-lettered or
 	// parked attempt is never reclaimed by this query — auto_apply_queue_claimable_idx exists
 	// for exactly this predicate.
+	//
+	// tailored_cv_id IS NOT NULL AND review_decision = 'approved' (openspec/changes/
+	// auto-apply-tailored-resume): a submission attempt only ever runs for an entry the
+	// candidate has reviewed and approved. An unreviewed or declined entry sits in the queue
+	// but is never claimed — declining also sets blocked_at (via the review endpoint's own
+	// Park-shaped write), so it is additionally excluded by the predicate above.
 	//
 	// Returns job.source, job.external_id and job.url because the caller builds the sidecar
 	// request from the row alone — source doubles as the ATS provider name, the same vocabulary
@@ -864,6 +876,12 @@ type Querier interface {
 	// status='pending' guard makes the decision idempotent-safe: a second decision on an
 	// already-decided offer matches no row (the repository maps that to "not pending").
 	DecideReferralOffer(ctx context.Context, arg DecideReferralOfferParams) (ReferralOffer, error)
+	// Records a decline AND parks the entry in one statement — the same fields
+	// MarkAutoApplyBlocked sets (blocked_at, last_error), reusing that park vocabulary rather
+	// than inventing a second one, plus the review columns MarkAutoApplyBlocked has no reason
+	// to know about. unmapped stays NULL: this is not a form-field park. last_error is what
+	// tells the two park reasons apart in the queue's own history, per design.md.
+	DeclineAutoApplyReview(ctx context.Context, arg DeclineAutoApplyReviewParams) (int64, error)
 	// Revoke (delete) a key, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
@@ -1462,6 +1480,13 @@ type Querier interface {
 	// One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 	// which the handler maps to 404 — so a probe cannot tell the two apart.
 	GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error)
+	// One read backing both the tailoring-trigger and the review-decision endpoints
+	// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
+	// id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a
+	// probing caller learns nothing about entries they do not own) and carries enough of the
+	// entry's own state (job_id for tailoring, tailored_cv_id/review_decision for the review
+	// gate) that neither endpoint needs a second query to decide whether to proceed.
+	GetAutoApplyQueueEntryForReview(ctx context.Context, arg GetAutoApplyQueueEntryForReviewParams) (GetAutoApplyQueueEntryForReviewRow, error)
 	// Read-only balance for display (no lock, no LLM). Returns no rows for a user who has never
 	// had credit activity; the caller treats that as a full monthly grant remaining.
 	GetBalance(ctx context.Context, userID int64) (GetBalanceRow, error)
@@ -4008,6 +4033,10 @@ type Querier interface {
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
 	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error
+	// Records which tailored CV a queue entry's tailoring run produced. Set once, by the
+	// tailoring endpoint, before the candidate has had a chance to review it — review_decision
+	// stays NULL until the review endpoint records one.
+	SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) error
 	// Apply the Go-computed cooldown window to a board (called only when the backoff
 	// policy says to cool down).
 	SetBoardCooldown(ctx context.Context, arg SetBoardCooldownParams) error

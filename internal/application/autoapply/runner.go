@@ -16,6 +16,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
@@ -34,6 +36,12 @@ type Claimed struct {
 	// JobURL is the posting's own address, the page the sidecar opens to scan and fill the
 	// application form.
 	JobURL string
+	// TailoredCVID is the candidate's approved tailored CV for this vacancy (openspec/
+	// changes/auto-apply-tailored-resume). Store.Claim only ever returns entries that carry
+	// one — an approved review is part of the claim predicate — so this is never the zero
+	// value for a Claimed the sidecar sees; it is what internal/api/atsapply renders to a
+	// PDF and attaches to the form's résumé upload field.
+	TailoredCVID uuid.UUID
 }
 
 // UnmappedField is one required question on the job's form that no known answer covers —

@@ -658,15 +658,19 @@ export interface NotificationSettings {
   quiet_hours_end: string | null;
 }
 
-/** The five notification-center event kinds a `user_notifications` row can carry —
- *  matches internal/notify/reminder/nudge's kind strings exactly (see
- *  openspec/changes/add-notification-center/design.md decision 1). */
+/** The notification-center event kinds a `user_notifications` row can carry — matches
+ *  internal/notify/reminder/nudge's kind strings exactly (see
+ *  openspec/changes/add-notification-center/design.md decision 1), plus
+ *  `auto_apply_tailor_ready` (openspec/changes/auto-apply-tailored-resume), recorded
+ *  directly by internal/api/handler's auto-apply tailoring endpoint rather than by one of
+ *  those background engines. */
 export type NotificationKind =
   | 'subscription_digest'
   | 'reminder'
   | 'nudge_follow_up'
   | 'nudge_interview_prep'
-  | 'nudge_job_closed';
+  | 'nudge_job_closed'
+  | 'auto_apply_tailor_ready';
 
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this

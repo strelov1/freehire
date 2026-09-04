@@ -62,10 +62,16 @@ var answerKeyFor = map[string]string{
 // Resolve matches every merged field against the candidate's known answers. A required
 // field with no usable answer is reported in Unmapped rather than guessed; an optional one
 // with no answer is simply left out of both lists — nothing to fill, nothing wrong either.
-func Resolve(fields []MergedField, answers map[string]string) Plan {
+//
+// hasApprovedCV is whether the queue entry carries an approved tailored CV (Claimed.
+// TailoredCVID != 0) — the one fact that lets a résumé file field resolve at all (openspec/
+// changes/auto-apply-tailored-resume). It says nothing about WHETHER that CV can actually be
+// rendered; a render failure at submit time is Client.Submit's own park path, not this
+// function's concern.
+func Resolve(fields []MergedField, answers map[string]string, hasApprovedCV bool) Plan {
 	var plan Plan
 	for _, f := range fields {
-		resolved, reason, ok := resolveOne(f, answers)
+		resolved, reason, ok := resolveOne(f, answers, hasApprovedCV)
 		switch {
 		case ok:
 			plan.Fields = append(plan.Fields, resolved)
@@ -128,12 +134,21 @@ func matchLabelAnswerKey(label string) (string, bool) {
 // value to match against a Multi field's options in the first place. Widening AnswerSource
 // to a source that can state several values for one question is what would make this a real
 // gap; until then it is a direct consequence of the answer shape, not a shortcut taken here.
-func resolveOne(f MergedField, answers map[string]string) (ResolvedField, string, bool) {
+func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (ResolvedField, string, bool) {
 	if f.Kind == "file" {
-		// File attachment (résumé/cover letter) needs its own artifact-resolution
-		// plumbing this package does not build — see the package doc. Always unmapped so
-		// a required upload never silently goes out empty.
-		return ResolvedField{}, "file uploads are not resolved by this package", false
+		// A cover letter (or any other file field) still has no artifact-resolution
+		// plumbing here — see the package doc. The résumé/CV upload resolves once the
+		// entry carries an approved tailored CV (openspec/changes/auto-apply-tailored-
+		// resume); Value is empty here and set by Client.Submit once the CV is actually
+		// rendered, right before fillAndSubmit runs — resolution only decides WHETHER the
+		// field can be filled, not what bytes it gets.
+		if isResumeField(f) && hasApprovedCV {
+			return ResolvedField{ID: f.ID, Kind: f.Kind, Multi: f.Multi}, "", true
+		}
+		if isResumeField(f) {
+			return ResolvedField{}, "no approved tailored CV for this attempt", false
+		}
+		return ResolvedField{}, "file uploads other than the résumé are not resolved by this package", false
 	}
 
 	key, known := answerKeyFor[f.ID]
@@ -156,6 +171,19 @@ func resolveOne(f MergedField, answers map[string]string) (ResolvedField, string
 		return ResolvedField{}, fmt.Sprintf("answer %q matches none of this field's offered options", value), false
 	}
 	return ResolvedField{ID: f.ID, Kind: f.Kind, Multi: f.Multi, Value: platformValue}, "", true
+}
+
+// isResumeField reports whether a file-kind field is the résumé/CV upload — the only file
+// field this package ever resolves — as opposed to a cover letter or any other attachment.
+// "resume" is Greenhouse's own field id for it (internal/ingest/applyform/display.go's
+// vocabulary agrees: "resume"/"resume_text" vs. "cover_letter"/"cover_letter_text"); the
+// label fallback covers a custom-labeled field the id alone would miss.
+func isResumeField(f MergedField) bool {
+	if strings.EqualFold(strings.TrimSpace(f.ID), "resume") {
+		return true
+	}
+	lower := strings.ToLower(f.Label)
+	return strings.Contains(lower, "resume") || strings.Contains(lower, "résumé")
 }
 
 // matchOption resolves free text against a field's offered options, returning the
