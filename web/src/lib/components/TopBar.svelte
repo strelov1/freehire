@@ -31,6 +31,17 @@
   // control strip, and both have to remain reachable.
   const bareHeader = $derived(page.url.pathname === '/');
 
+  /** How many of HEADER_LINKS the bare header carries below `lg`, taken from the FRONT of
+   *  that list — so its order is the contract, and reordering it changes what a narrow
+   *  screen gets. Today that is Jobs and Companies.
+   *
+   *  Two, because that is what fits at the narrow end (33px to spare at 320px, labels
+   *  only — see the nav below). `lg` rather than a width nearer the 800px where all five
+   *  do begin to fit, because Tailwind's own breakpoints are what the rest of this header
+   *  is written in and one more arbitrary query is a second answer to the same question.
+   *  Under `lg` the burger lists all five anyway, which is where they were until now. */
+  const LINKS_BELOW_LG = 2;
+
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
   // and does the same: brand hard left, menu hard right. The search keeps a readable
@@ -81,7 +92,11 @@
         class="flex items-center gap-2 text-sm font-semibold tracking-tight"
       >
         <BrandMark />
-        <span class="hidden sm:inline" aria-hidden="true">freehire</span>
+        <!-- Dropped on a phone to leave the middle slot its width for the search box —
+             except on the homepage, which puts no box there (its own hero is the box) and
+             so has the room. What the row spends that room on instead is the nav below,
+             and the two budgets are the same 358px: they are set together. -->
+        <span class={bareHeader ? 'inline' : 'hidden sm:inline'} aria-hidden="true">freehire</span>
       </a>
     </div>
 
@@ -91,22 +106,30 @@
          cap then hands the rest back to the side slots, which keeps it on the axis. -->
     <div class={['flex min-w-0 flex-1', fullBleed && 'max-w-3xl basis-3xl']}>
       {#if bareHeader}
-        <!-- Hidden below 640px, where five labels do not fit beside the brand and the
-             burger — and where the burger is a thumb away and lists every one of these
-             with the same glyph and a full label. Shrinking them to bare icons would
-             trade a legible row for five guesses. -->
-        <nav aria-label="Site" class="hidden items-center gap-5 sm:flex lg:gap-6">
+        <!-- All five do not fit beside the brand and the burger on a phone, but the row
+             they share is otherwise EMPTY on this route — the homepage's search box is its
+             hero, not this slot — so the front of the list rides along and the rest wait
+             for `lg` (see LINKS_BELOW_LG). The cut is by width, not by rank; the burger a
+             thumb away still lists all five with the same glyph and a full label, which is
+             also why bare icons here would trade a legible row for guesses. -->
+        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-6">
           <!-- Divides the nav from the wordmark, the same rule the search box draws
                between its Location scope and the field. Without it the first link sat
                one word-gap from "freehire" and read as part of it. -->
           <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
-          {#each HEADER_LINKS as link (link.href)}
+          {#each HEADER_LINKS as link, i (link.href)}
             {@const Icon = link.icon}
             <a
               href={resolve(link.href)}
-              class="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
+              class={[
+                'flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground',
+                i >= LINKS_BELOW_LG && 'hidden lg:flex',
+              ]}
             >
-              <Icon class="size-4 shrink-0" aria-hidden="true" />
+              <!-- Label alone on a phone. The glyph is 22px with its gap and both links
+                   carry one, which at 320px pushed "Companies" under the burger; the word
+                   is what names the destination, so the glyph is what gives way. -->
+              <Icon class="hidden size-4 shrink-0 sm:block" aria-hidden="true" />
               {link.label}
             </a>
           {/each}

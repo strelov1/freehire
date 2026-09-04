@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Layers } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
+  import { formatCount } from '$lib/utils';
 
   // The mobile controls for a list page (jobs, companies, …): an inline toolbar at the
   // top of the list — the results total on the left, and (on the jobs list) a Swipe entry
@@ -39,8 +40,16 @@
      must break onto a second line rather than clip its rightmost control off-screen. -->
 <div class="mb-3 flex flex-wrap items-center gap-2 md:hidden">
   {#if total !== null}
-    <span class="shrink-0 whitespace-nowrap text-sm text-muted-foreground" aria-live="polite">
-      <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
+    <!-- Rounded on this row, spelled out on the desktop one below. The row is 358px on a
+         390px phone and its contents came to 376: the count at full precision was 103px of
+         that and "2.1M" is 60, which is what puts the controls back on one line. The exact
+         figure stays in the title. -->
+    <span
+      class="shrink-0 whitespace-nowrap text-sm text-muted-foreground"
+      aria-live="polite"
+      title="{total.toLocaleString()} {unit}"
+    >
+      <span class="font-semibold tabular-nums text-foreground">{formatCount(total)}</span>
       {unit}
     </span>
   {/if}

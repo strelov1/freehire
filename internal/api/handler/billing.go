@@ -71,11 +71,26 @@ const applyTimeout = 10 * time.Second
 //   - a delivery we cannot APPLY is still acknowledged, because it IS stored, and the
 //     reconciler owns what happens next.
 func (h *billingHandlers) Webhook(c *fiber.Ctx) error {
-	// c.Body() is the raw bytes as received. The HMAC covers exactly these; verifying a
-	// re-marshalled struct would reject perfectly valid deliveries.
-	event, err := h.billing.Accept(c.Body(), c.Get(billing.SignatureHeader), time.Now())
+	// c.Request().Body() and NOT c.Ctx.Body(), which is neither raw nor safe here.
+	//
+	// Fiber's Body() reads Content-Encoding and DECOMPRESSES, chaining up to three layers
+	// (gzip, deflate, brotli). Two consequences, and the second is the reason this route
+	// cannot use it. The HMAC covers the bytes the provider sent, so a body that arrived
+	// encoded would be verified against something else entirely. And the decompression
+	// happens BEFORE any authentication — the server's 8MB BodyLimit bounds the wire body,
+	// not what it expands to, so on the one unauthenticated POST in the app a few compressed
+	// megabytes become an unbounded allocation. fasthttp's Body() is the bytes as received.
+	event, err := h.billing.Accept(c.Request().Body(), c.Get(billing.SignatureHeader), time.Now())
 	if err != nil {
 		log.Printf("billing: refusing a webhook delivery: %v", err)
+		// A delivery that does not VERIFY is refused with 401 and the provider gives up on
+		// it, which is right: nothing proves it came from them. A delivery that verifies but
+		// does not PARSE is a 400 — retrying it can only produce the same bytes, and an
+		// endpoint that answers a permanent failure with a retryable status is how the
+		// provider decides the endpoint is broken and disables it.
+		if !errors.Is(err, billing.ErrBadSignature) {
+			return fiber.NewError(fiber.StatusBadRequest, "malformed webhook payload")
+		}
 		return fiber.NewError(fiber.StatusUnauthorized, "invalid webhook signature")
 	}
 

@@ -60,7 +60,9 @@ export const NAV = {
  *
  *  Five, and no more: this is a shortcut to the menu's own top, not a second
  *  navigation with its own opinions about what matters. Three ways into the catalogue
- *  and two ways to find out what this is. TopBar decides when the row is drawn. */
+ *  and two ways to find out what this is. TopBar decides when the row is drawn — and,
+ *  below `lg`, how much of it: it takes entries from the FRONT of this list, so the
+ *  ORDER here is what a narrow screen gets, not just the order it reads in. */
 export const HEADER_LINKS = [
   NAV.jobs,
   NAV.companies,

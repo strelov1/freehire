@@ -544,8 +544,23 @@
       role="listbox"
       aria-label="Search suggestions"
       class={cn(
-        'absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
-        hero ? 'rounded-2xl' : 'rounded-md',
+        'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
+        hero
+          ? 'absolute top-full mt-2 rounded-2xl'
+          : // On a phone the panel leaves the box and takes the screen: full width, from
+            // under the sticky header (`top-14` is that header's own `h-14`) down to
+            // `bottom-0`. The box is 278px of a 390px screen, so at its width every row —
+            // a logo, a title, a company line — truncates; and a panel that stopped short
+            // of the bottom left the feed showing through beneath it, where a scroll moved
+            // whichever of the two the finger happened to land on. The side borders and
+            // the radius go with the edges they drew.
+            //
+            // `fixed` rather than an outward margin, because the box does not start at the
+            // viewport edge — the brand sits to its left and the menu to its right, so no
+            // margin reaches past them. It works only because the header draws no
+            // `backdrop-filter` (see TopBar): one would make the header the containing
+            // block and pin this panel to it instead of to the window.
+            'max-sm:fixed max-sm:bottom-0 max-sm:top-14 max-sm:max-h-none max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:top-full sm:mt-2 sm:rounded-md',
       )}
     >
       {#each rows as row, i (row.key)}

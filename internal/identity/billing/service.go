@@ -70,8 +70,10 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 // Enabled reports whether billing is configured.
 func (s *Service) Enabled() bool { return s.cfg.Enabled() }
 
-// Config exposes the configuration for the surfaces that need it.
-func (s *Service) Config() Config { return s.cfg }
+// There is deliberately no Config() accessor. Config carries the secret key and the webhook
+// secret, and an exported getter for them is a way for a future surface to serialise them by
+// accident. Everything outside this package needs an answer about billing, not the
+// credentials it was derived from — Enabled() is that answer.
 
 // Accept verifies a delivery's signature and parses it. It is deliberately separate from
 // Record so the handler cannot record something it has not authenticated: the only way to

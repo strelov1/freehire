@@ -373,6 +373,74 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 	}
 }
 
+// TestParse_ITRolesTheTableDidNotName pins the IT roles that reached a category
+// only through one of the table's bare fall-throughs — "analyst" reads every
+// remaining analyst as data_analytics — so they resolved confidently WRONG rather
+// than not at all. Each now names its own discipline.
+func TestParse_ITRolesTheTableDidNotName(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		{"Lead Service Desk Analyst", "support"},
+		{"IT Service Desk Specialist Level II", "support"},
+		{"SOC Analyst L2", "security"},
+		{"Director - IT Infrastructure", "devops"},
+		{"IT Infrastructure Analyst (Networks and Telecoms)", "devops"},
+		{"MES Developer (Delmia Apriso)", "software_engineering"},
+		// Unchanged: the bare nouns keep falling through as before.
+		{"Business Analyst", "business_analysis"},
+		{"Infrastructure Project Manager", "project_management"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
+// TestParse_HungarianSoftwareTitles pins the Hungarian software vocabulary, added
+// after auditing a general-population Hungarian board where the IT sections are not
+// where every technical posting is filed. The negatives are the point: "fejlesztő"
+// is the bare "developer" noun, and the table's comment lists the non-software
+// senses the catalogue uses it for.
+func TestParse_HungarianSoftwareTitles(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		{"Szoftverfejlesztő - ERP terület", "software_engineering"},
+		{"Lead Szoftverfejlesztő", "software_engineering"},
+		{"Szoftverfejlesztő mérnök (C#)", "software_engineering"},
+		{"Termelési software mérnök", "software_engineering"},
+		{"Hardverközeli alkalmazásfejlesztő", "software_engineering"},
+		{"Üzleti alkalmazás fejlesztő gyakornok", "software_engineering"},
+		{"Java fejlesztő", "software_engineering"},
+		{"JAVA fejlesztők", "software_engineering"},
+		{"Python fejlesztő (Python, Django)", "software_engineering"},
+		{"Node.js fejlesztő", "software_engineering"},
+		{"Senior .net fejlesztő", "software_engineering"},
+		{"Oracle adatbázis fejlesztő", "software_engineering"},
+		{"SAP ABAP fejlesztő (LJK)", "software_engineering"},
+		{"Senior PEGA fejlesztő", "software_engineering"},
+		{"Odoo-fejlesztő", "software_engineering"},
+		{"Webfejlesztő", "software_engineering"},
+		{"Adattárház fejlesztő", "data_engineering"},
+		{"BI fejlesztő", "data_analytics"},
+		{"BI riportfejlesztő", "data_analytics"},
+		{"Senior mobilalkalmazás-fejlesztő (React Native)", "mobile"},
+		// "beágyazott" precedes the plain software entry, so embedded wins.
+		{"Beágyazott szoftverfejlesztő", "embedded"},
+
+		// The bare noun stays unresolved in every non-software sense.
+		{"Anyagfejlesztő - gumikeverékek", ""},
+		{"Beszállítófejlesztő mérnök / Supplier Development Engineer (DMS)", ""},
+		{"Folyamatfejlesztő és automatizációs szakértő", ""},
+		{"Fejlesztő mérnök", ""},
+		{"Fejlesztőpedagógus", ""},
+		{"Képzés-fejlesztési gyakornok", ""},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
 // TestParse_ITAdjacentCoverage covers professions found adjacent to the core IT
 // disciplines during a coverage audit: content/localization crafts that were
 // falling to the bare "designer" entry or resolving to nothing, and back-office

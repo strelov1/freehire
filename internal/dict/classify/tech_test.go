@@ -33,6 +33,12 @@ func TestIsTech(t *testing.T) {
 		// "AI-native" describes the toolchain, not the discipline — still software.
 		{"ai-native engineer", "Senior AI-Native Engineer", true},
 		{"ai native engineer", "AI Native Engineer", true},
+		// The IT service desk: `support` is a non-tech category, so this list is the
+		// only thing that reads the desk as the IT work it is.
+		{"service desk", "Lead Service Desk Analyst", true},
+		{"help desk", "Help Desk Technician (Tier 1)", true},
+		{"helpdesk", "Mitarbeiter IT Support und Helpdesk (m/w/d)", true},
+		{"technical support analyst", "Technical Support Analyst", true},
 
 		// Trap negatives — non-software engineering / non-tech that carry "engineer"
 		// or other shared words. These MUST stay unflagged (bias: leave in unknown).
@@ -49,6 +55,13 @@ func TestIsTech(t *testing.T) {
 		// (ABB, Howmet Aerospace, Texas Instruments, Flextronics). Not software-anchored,
 		// so it stays unknown — the named role carries it instead.
 		{"product engineer", "Product Engineer", false},
+		// The desk terms above must not broaden into the surrounding nouns: bare
+		// support is the whole customer-service population, and a front desk is a
+		// lobby. (Both still resolve a category — `support` and `administration` —
+		// this only pins that the TITLE detector makes no claim about them.)
+		{"customer support analyst", "Customer Support Analyst", false},
+		{"support specialist", "Support Specialist", false},
+		{"front desk", "Front Desk Agent", false},
 		{"empty", "", false},
 	}
 	for _, tt := range tests {
