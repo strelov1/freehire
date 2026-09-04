@@ -21,7 +21,7 @@
     store,
     counts = null,
     inferred = false,
-    onOpen,
+    open = $bindable(false),
   }: {
     variant?: 'jobs' | 'companies' | 'launcher';
     store?: FacetStore;
@@ -30,16 +30,18 @@
      *  out loud, because a visitor who did not pick this scope has no other way to
      *  tell a small catalogue from a filtered one. */
     inferred?: boolean;
-    /** Fired when this popover opens, so whoever hosts it can put its own panel away.
+    /** Whether the popover is showing. Bindable, because the box that hosts it needs
+     *  BOTH directions: it must put its own dropdown away when this opens, and put
+     *  this away when it is focused.
      *
-     *  It has to be announced rather than inferred: this trigger lives INSIDE the
-     *  search box's own element, so the box's click-away handler reads a click here as
-     *  a click on itself and keeps its dropdown open — and the trigger stops the click
-     *  propagating anyway. Both panels then hang off the same header, overlapping. */
-    onOpen?: () => void;
+     *  Neither can be inferred from a click. This trigger lives INSIDE the search box's
+     *  own element, so the box's click-away handler reads a click here as a click on
+     *  itself — and the trigger stops the click propagating anyway. The other way round
+     *  there is no click at all: `/` and Cmd+K focus the input from anywhere. Left to
+     *  themselves both panels hang off the same header, overlapping. */
+    open?: boolean;
   } = $props();
 
-  let open = $state(false);
   let root = $state<HTMLElement | null>(null);
 
   // Launcher has no persisted selection, so its trigger stays the neutral label.
@@ -135,7 +137,6 @@
       // would otherwise immediately re-close the just-opened popover.
       e.stopPropagation();
       open = !open;
-      if (open) onOpen?.();
     }}
     class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
   >

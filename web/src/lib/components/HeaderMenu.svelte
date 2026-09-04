@@ -18,7 +18,6 @@
     FileText,
     SquarePlus,
     ShieldCheck,
-    Info,
     LogOut,
     LogIn,
   } from '@lucide/svelte';
@@ -74,6 +73,10 @@
   // Primary destinations pinned to the very top of the menu. Jobs is the feed at
   // /jobs — the homepage is the landing page above it, reachable via the logo.
   const primaryLinks = [NAV.jobs, NAV.companies];
+
+  // About is rendered on its own at the foot of the list, so its glyph is lifted out
+  // of NAV here rather than spelled a second time.
+  const AboutIcon = NAV.about.icon;
 
   // The rest of the site. The two feature pages here are what the product DOES beyond
   // listing jobs, and until now nothing in this menu led to either of them — the
@@ -193,8 +196,10 @@
   <!-- Desktop bar order: GitHub stars, Discord, then the visitor's OWN two controls —
        the bell and profile/sign-in — then the menu button pinned to the far right. The
        bell used to sit ahead of the project's links, which put two icons about the site
-       between it and the account it notifies about. On mobile all of these collapse
-       into the drawer (below), leaving just the menu button here. -->
+       between it and the account it notifies about. On mobile the two about the site
+       collapse into the drawer (below) and the two that are the visitor's stay: the
+       bell is how they learn something happened, and it cannot be a tap deeper than
+       the menu that would tell them. -->
   <GithubStars class="hidden sm:inline-flex" />
 
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
@@ -339,9 +344,16 @@
         {/each}
 
         <!-- About sits at the very bottom of the link list, just before the
-             Sign in / Log out action (the marketing landing lives at /about). -->
-        <a href={resolve('/about')} role="menuitem" onclick={() => (open = false)} class={linkClass('/about')}>
-          <Info class="size-4 shrink-0" />
+             Sign in / Log out action (the marketing landing lives at /about). Read from
+             NAV like every other destination — spelled here it would be a second copy
+             of a page the header row already draws. -->
+        <a
+          href={resolve(NAV.about.href)}
+          role="menuitem"
+          onclick={() => (open = false)}
+          class={linkClass(NAV.about.href)}
+        >
+          <AboutIcon class="size-4 shrink-0" />
           About
         </a>
 

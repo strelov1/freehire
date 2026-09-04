@@ -2,9 +2,10 @@
 //
 // Two navigations lead to them: the menu behind the header's burger (HeaderMenu),
 // which lists all of them, and the homepage header's own row (TopBar), which on that
-// one route stands in for the search box and shows a subset. Before this module they
-// were two arrays, and they had already drifted — the menu's "Jobs" still pointed at
-// `/` after the feed moved to `/jobs`, and nothing said so.
+// one route stands in for the search box and shows a subset. They were two arrays, and
+// the last time a destination moved — the feed, from `/` to `/jobs` — the menu's copy
+// went on pointing at the old one until someone read both lists side by side. One list
+// is how that stops being possible.
 //
 // A destination carries its own glyph, the way accountNavIcons pairs one to each
 // account section, so the two navigations cannot draw the same page with different
@@ -59,11 +60,7 @@ export const NAV = {
  *
  *  Five, and no more: this is a shortcut to the menu's own top, not a second
  *  navigation with its own opinions about what matters. Three ways into the catalogue
- *  and two ways to find out what this is.
- *
- *  The whole row stands down below 640px, where five labels do not fit beside the
- *  brand and the burger — and where the burger is a thumb away and lists every one of
- *  these with the same glyph and a full label. */
+ *  and two ways to find out what this is. TopBar decides when the row is drawn. */
 export const HEADER_LINKS = [
   NAV.jobs,
   NAV.companies,

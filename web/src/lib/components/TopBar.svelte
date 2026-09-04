@@ -29,7 +29,8 @@
   // The homepage is the one exception: its whole content is a large centred copy of
   // this same box, so the header renders none. Two identical fields on one screen make
   // the visitor choose between them for no reason, and the hero is the focused one.
-  // The brand, the bell and the menu stay — sign-in has to remain reachable.
+  // The brand and the menu stay — sign-in and notifications live in the menu's own
+  // control strip, and both have to remain reachable.
   const bareHeader = $derived(page.url.pathname === '/');
 
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
@@ -117,8 +118,8 @@
           <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
           {#each HEADER_LINKS as link (link.href)}
             {@const Icon = link.icon}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- HEADER_LINKS holds this site's own route paths; resolve() takes a literal, not a variable -->
-            <a href={link.href}
+            <a
+              href={resolve(link.href)}
               class="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               <Icon class="size-4 shrink-0" aria-hidden="true" />

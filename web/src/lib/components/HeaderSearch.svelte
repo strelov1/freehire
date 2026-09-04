@@ -78,6 +78,15 @@
   // Asked for, before the relevance filter takes its cut.
   const companiesFetch = 12;
 
+  /** The Location popover's own state, held here so the two panels can take turns:
+   *  the effect below puts this box's dropdown away when the popover opens, and every
+   *  path that focuses the input puts the popover away. */
+  let locationOpen = $state(false);
+
+  $effect(() => {
+    if (locationOpen) close();
+  });
+
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
 
@@ -430,7 +439,7 @@
       store={target.filterScope?.store}
       counts={target.filterScope?.counts() ?? null}
       inferred={target.filterScope?.inferred?.() ?? false}
-      onOpen={close}
+      bind:open={locationOpen}
     />
     <div class={cn('w-px shrink-0 bg-border', hero ? 'h-7' : 'h-5')}></div>
     <Search class={cn('shrink-0 text-muted-foreground', hero ? 'size-5' : 'size-4')} />
@@ -452,6 +461,9 @@
         // Off a list page nothing has measured the catalogue for us, so the empty
         // box's starting points are fetched here — on the first focus, never on load.
         if (!registered) loadBrowseCounts();
+        // Reached without a click by `/` and Cmd+K, which is the case the popover's own
+        // click-away handler cannot see.
+        locationOpen = false;
         // Focus is the question "what can I put here", so it reopens the dropdown —
         // including after a click-away dismissed it, which would otherwise leave the
         // box permanently silent for the rest of the visit.

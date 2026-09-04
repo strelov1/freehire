@@ -4,6 +4,7 @@
   import { ArrowRight } from '@lucide/svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
+  import { api } from '$lib/api';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
   import type { ApplyPlan } from '$lib/apiSuggestions';
   import { countryLabel } from '$lib/facets';
@@ -129,6 +130,24 @@
    *  becomes the query the feed opens with. `seed` and `onApply` are the modal's own
    *  provisions for exactly this — the same pair the profile editor uses. */
   let filtersOpen = $state(false);
+
+  /** The distribution behind the modal's controls, recomputed as the selection moves.
+   *
+   *  Not optional decoration: a DYNAMIC facet — Skills, City, Job language, Source —
+   *  has no compiled option list at all. FacetSection builds its entire list from this
+   *  map (see its `def.dynamic` branch), so without it those four panes are empty
+   *  selects with nothing to pick. The page's own `counts` cannot serve: the SSR call
+   *  asks for `category` and `countries` alone, which is all the chips need.
+   *
+   *  `disjunctive` so each facet's numbers ignore its own selection — the same call
+   *  every other host of this modal makes. */
+  const stagedCounts = (params: URLSearchParams) =>
+    api.facetCounts(params, { disjunctive: true });
+
+  /** How many postings the staged selection would open, for the footer's Apply — read
+   *  off the same count call rather than a one-row search, the way /analytics does. */
+  const previewCount = (params: URLSearchParams) =>
+    api.facetCounts(params).then((c) => c.total);
 
   function searchWithFilters(staged: StagedFilters) {
     filtersOpen = false;
@@ -346,12 +365,14 @@
 
 <!-- Seeded empty and applied by navigating: see `searchWithFilters`. `savedSearches`
      is off — that tab manages the alerts a signed-in visitor saved from a list, and
-     this modal has no list behind it. `counts` is the same distribution the chips and
-     the dropdown read, so the numbers beside a facet here are the numbers beside it
-     everywhere else on the page. -->
+     this modal has no list behind it. `counts` seeds the controls before the first
+     staged fetch answers; `stagedCounts` is what keeps them right, and what gives the
+     dynamic facets any options at all. -->
 <FilterModal
   seed={emptyFilters()}
   {counts}
+  {stagedCounts}
+  {previewCount}
   open={filtersOpen}
   onClose={() => (filtersOpen = false)}
   applyLabel="Search jobs"
