@@ -46,17 +46,22 @@ var entitlingStatuses = map[string]bool{
 	"past_due": true,
 }
 
-// neverExpires is what a subscription with no end is written as.
+// There is no never-expires sentinel here, and its absence is deliberate — the first draft
+// had one and it was a live hazard.
 //
-// The provider always sends a period end for a recurring subscription, so this is reached
-// only by a one-off lifetime grant. Zero would be the natural Go answer and it is the
-// dangerous one: it reads as long expired, so a lifetime purchaser would be quietly
-// downgraded to the free plan and nobody would be looking for it.
+// The reasoning that put it there came from a different provider, where a null expiry was a
+// documented "this entitlement does not expire". A Stripe SUBSCRIPTION has no such state:
+// every recurring subscription has a period end, and a one-off lifetime purchase is not a
+// subscription at all and never appears in this list. So an unreadable period end does not
+// mean "forever" — it means we read the wrong field.
 //
-// The sentinel is safe because the column is DERIVED rather than accumulated. A refund
-// removes the subscription, the next sync derives the zero time, and the sentinel is gone —
-// it can never outlive what produced it.
-var neverExpires = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
+// That is exactly what happened. The provider moved `current_period_end` from the
+// subscription onto its items; the client still read the top level, got zero, and a sentinel
+// would have turned every subscriber into a permanent one whose cancellation never took
+// effect. Silently, and in the direction of giving the product away.
+//
+// So a subscription whose end cannot be read entitles nobody. Failing closed costs a
+// subscriber one support message; failing open costs the revenue and hides itself.
 
 // proUntilFrom reduces a customer's subscriptions to the single timestamp users.pro_until
 // holds: the furthest point at which any Pro-conferring subscription still stands. The zero
@@ -100,9 +105,7 @@ func (s subscription) coversAny(proPrices []string) bool {
 }
 
 // until is how far this one subscription reaches: the end of the period already paid for.
+// The zero time means we could not read it, and the caller treats that as entitling nobody.
 func (s subscription) until() time.Time {
-	if s.CurrentPeriodEnd.IsZero() {
-		return neverExpires
-	}
 	return s.CurrentPeriodEnd
 }

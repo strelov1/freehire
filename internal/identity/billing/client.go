@@ -89,6 +89,12 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, o
 }
 
 // stripeSubscriptionList is the provider's reply shape for a subscription listing.
+//
+// CurrentPeriodEnd appears in TWO places and the item's is the live one. The provider moved
+// it from the subscription onto each item — a subscription can hold items on different
+// billing cycles, so the field stopped having one answer at the top. The outer field is kept
+// here because an account pinned to an older API version still sends it there, and reading
+// only one place would silently produce a subscription with no end.
 type stripeSubscriptionList struct {
 	Data []struct {
 		Status            string `json:"status"`
@@ -97,7 +103,8 @@ type stripeSubscriptionList struct {
 		CancelAtPeriodEnd bool   `json:"cancel_at_period_end"`
 		Items             struct {
 			Data []struct {
-				Price struct {
+				CurrentPeriodEnd int64 `json:"current_period_end"`
+				Price            struct {
 					ID string `json:"id"`
 				} `json:"price"`
 			} `json:"data"`
@@ -130,17 +137,25 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 	out := subscriber{Subscriptions: make([]subscription, 0, len(raw.Data))}
 	for _, s := range raw.Data {
 		sub := subscription{Status: s.Status}
-		if s.CurrentPeriodEnd > 0 {
-			sub.CurrentPeriodEnd = time.Unix(s.CurrentPeriodEnd, 0).UTC()
-		}
 		if s.CancelAt > 0 {
 			sub.CancelAt = time.Unix(s.CancelAt, 0).UTC()
 		}
+
+		// The furthest item decides how far the subscription reaches: with items on
+		// different cycles, access should last as long as the longest of them.
+		periodEnd := s.CurrentPeriodEnd
 		for _, item := range s.Items.Data {
+			if item.CurrentPeriodEnd > periodEnd {
+				periodEnd = item.CurrentPeriodEnd
+			}
 			if item.Price.ID != "" {
 				sub.PriceIDs = append(sub.PriceIDs, item.Price.ID)
 			}
 		}
+		if periodEnd > 0 {
+			sub.CurrentPeriodEnd = time.Unix(periodEnd, 0).UTC()
+		}
+
 		out.Subscriptions = append(out.Subscriptions, sub)
 	}
 	return out, nil

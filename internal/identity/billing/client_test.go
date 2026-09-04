@@ -16,9 +16,8 @@ const subscriptionsBody = `{
     {
       "id": "sub_1",
       "status": "active",
-      "current_period_end": 1790812800,
       "cancel_at": null,
-      "items": { "data": [ { "price": { "id": "price_pro_monthly" } } ] }
+      "items": { "data": [ { "current_period_end": 1790812800, "price": { "id": "price_pro_monthly" } } ] }
     }
   ]
 }`
@@ -66,6 +65,8 @@ func TestClientSubscriberState(t *testing.T) {
 	if s.Status != "active" {
 		t.Errorf("status: got %q", s.Status)
 	}
+	// Read from the ITEM. The provider moved it there; a client reading only the top level
+	// gets zero, and a zero period end is what an earlier fallback turned into "forever".
 	if got := s.CurrentPeriodEnd.Format(time.RFC3339); got != "2026-10-01T00:00:00Z" {
 		t.Errorf("current_period_end decoded to %s", got)
 	}
@@ -191,5 +192,41 @@ func TestClientHonoursContext(t *testing.T) {
 
 	if _, err := c.subscriberState(ctx, "cus_9"); err == nil {
 		t.Fatal("want an error when the context expires, got nil")
+	}
+}
+
+// TestClientReadsThePeriodEndFromEitherPlace guards the migration that caused the bug. An
+// account pinned to an older API version still sends the field at the subscription level;
+// a current one sends it on the item. Reading only one place produces a subscription with no
+// end, which entitles nobody — a paying customer silently reading as free.
+func TestClientReadsThePeriodEndFromEitherPlace(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "current API: on the item",
+			body: `{"data":[{"status":"active","items":{"data":[{"current_period_end":1790812800,"price":{"id":"price_pro_monthly"}}]}}]}`,
+		},
+		{
+			name: "older API: on the subscription",
+			body: `{"data":[{"status":"active","current_period_end":1790812800,"items":{"data":[{"price":{"id":"price_pro_monthly"}}]}}]}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			})
+			sub, err := c.subscriberState(context.Background(), "cus_9")
+			if err != nil {
+				t.Fatalf("want no error, got %v", err)
+			}
+			until := proUntilFrom(sub, []string{"price_pro_monthly"})
+			if got := until.Format(time.RFC3339); got != "2026-10-01T00:00:00Z" {
+				t.Fatalf("want 2026-10-01T00:00:00Z, got %s", got)
+			}
+		})
 	}
 }

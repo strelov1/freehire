@@ -39,6 +39,16 @@ answer 404, and its worker exits without opening a connection.
 - **A cancelled subscription still entitles until its period ends.** Cancelling says "do not
   renew", not "refund me". They bought that time.
 
+- **`current_period_end` lives on the subscription ITEM, not on the subscription**, and
+  reading the wrong one is not a cosmetic miss. The provider moved it — a subscription can
+  hold items on different cycles, so the field stopped having one answer at the top — and a
+  client that reads only the old place gets zero for every subscriber. The first draft turned
+  a zero into a never-expires sentinel, which would have made every subscriber permanent and
+  stopped cancellation taking effect, silently and in the direction of giving the product
+  away. Both places are read now, the furthest wins, and **a period end that cannot be read
+  entitles nobody**: a Stripe subscription always has one, so an unreadable end means the
+  wrong field, not "forever".
+
 - **An empty price list confers Pro on NOBODY.** A deployment that forgot to name its price
   must refuse to make anyone Pro rather than make everyone Pro — which is why `Enabled()`
   requires the list and there is no default.
@@ -86,7 +96,8 @@ way the tests do not reproduce.
   `"<t>.<raw body>"` with the `whsec_` endpoint secret.
 - Subscriptions: `GET /v1/subscriptions?customer=…&status=all&expand[]=data.items.data.price`
   with `Authorization: Bearer sk_…`. **The price must be expanded** or the items carry a bare
-  id string with nothing to match on.
+  id string with nothing to match on, and **`current_period_end` is on the item** — verified
+  against a real subscription rather than a stub, which is the only way that one shows up.
 - Checkout: `POST /v1/checkout/sessions`, form-encoded. Management: `POST
   /v1/billing_portal/sessions`, which returns a short-lived URL.
 - Delivery: unordered, duplicates possible, retried for up to three days; an endpoint the

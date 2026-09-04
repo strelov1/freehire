@@ -114,13 +114,16 @@ func TestProUntilFrom(t *testing.T) {
 			want:   "2027-03-01T00:00:00Z",
 		},
 		{
-			// The trap. A subscription with no end does not expire, and reading it as the zero
-			// time would silently downgrade whoever holds it.
-			name: "an entitling subscription with no end is not expired",
+			// The trap, and it bit: the provider moved current_period_end onto the items, the
+			// client read the top level, and an earlier "no end means forever" fallback would
+			// have made every subscriber permanent with cancellation never taking effect.
+			// A period end we cannot read means we read the wrong field, not that it lasts
+			// forever — so it entitles nobody.
+			name: "a subscription whose end cannot be read entitles nobody",
 			sub: sub(subscription{
 				Status: "active", PriceIDs: []string{proPrice},
 			}),
-			want: neverExpires.Format(time.RFC3339),
+			want: "",
 		},
 	}
 
