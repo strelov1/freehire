@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -61,7 +62,15 @@ func (s *Service) SubscriptionOverview(ctx context.Context, userID int64) (Overv
 	if err != nil {
 		return Overview{}, err
 	}
+	return s.overviewFor(ctx, customer)
+}
 
+// overviewFor is SubscriptionOverview once the customer is known.
+//
+// Split out so the rule that decides what this screen SAYS can be tested without a
+// database: everything below is about reading the provider and refusing to guess, and none
+// of it depends on which account asked.
+func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, error) {
 	sub, err := s.client.subscriberState(ctx, customer)
 	if err != nil {
 		return Overview{}, err
@@ -83,15 +92,28 @@ func (s *Service) SubscriptionOverview(ctx context.Context, userID int64) (Overv
 		}
 	}
 
-	if best.Status != "" {
-		out.Status = best.Status
-		out.AmountCents, out.Currency, out.Interval = s.priceOf(ctx, best)
-		when := bestUntil
-		if !best.CancelAt.IsZero() {
-			out.EndsAt = &when
-		} else if !when.IsZero() {
-			out.RenewsAt = &when
-		}
+	// No eligible subscription: a free account, or a former subscriber whose last one has
+	// ended. Both must read as "no section", not as a section full of zeroes — the surface
+	// renders what it is given, and a confident "$0 /" tells somebody their card is not
+	// being charged.
+	if best.Status == "" {
+		return Overview{}, ErrNoSubscription
+	}
+
+	amount, currency, interval, err := s.priceOf(ctx, best)
+	if err != nil {
+		// We know they are subscribed but not what for. Saying nothing is the only honest
+		// answer; saying "$0" is a statement about their money that we cannot stand behind.
+		return Overview{}, err
+	}
+	out.Status = best.Status
+	out.AmountCents, out.Currency, out.Interval = amount, currency, interval
+
+	when := bestUntil
+	if !best.CancelAt.IsZero() {
+		out.EndsAt = &when
+	} else if !when.IsZero() {
+		out.RenewsAt = &when
 	}
 
 	out.Invoices = s.client.invoices(ctx, customer)
@@ -100,13 +122,23 @@ func (s *Service) SubscriptionOverview(ctx context.Context, userID int64) (Overv
 
 // priceOf reads what this subscription actually charges. A subscriber on a price we no
 // longer sell is paying THAT price, and showing today's would be a lie about their bill.
-func (s *Service) priceOf(ctx context.Context, sub subscription) (int64, string, string) {
+//
+// It ERRORS rather than returning zeroes when no price resolves. A zero amount is not a
+// missing value on this screen — it renders as "free", which is the one thing a paying
+// subscriber must never be told.
+func (s *Service) priceOf(ctx context.Context, sub subscription) (int64, string, string, error) {
+	var lastErr error
 	for _, id := range sub.PriceIDs {
-		if p, err := s.client.price(ctx, id); err == nil {
-			return p.AmountCents, p.Currency, p.Interval
+		p, err := s.client.price(ctx, id)
+		if err == nil {
+			return p.AmountCents, p.Currency, p.Interval, nil
 		}
+		lastErr = err
 	}
-	return 0, "", ""
+	if lastErr == nil {
+		lastErr = fmt.Errorf("billing: subscription carries no price we could read")
+	}
+	return 0, "", "", lastErr
 }
 
 // invoices lists this customer's charges, newest first.
