@@ -558,6 +558,7 @@ func Register(app *fiber.App, cfg Config) {
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
+	linkedInH := newLinkedInHandlers()
 	photoH := newPhotoHandlers(photoStore)
 	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
 	// interface would be a non-nil interface, and the handler's "no gateway here"
@@ -775,6 +776,9 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
 	// resumeHandlers).
 	resumeH.register(api, mw)
+	// Importing the onboarding wizard's facets from a public LinkedIn profile — the
+	// alternative to uploading a CV, for the user who has no PDF to hand.
+	linkedInH.register(api, mw)
 	// The headshot the photo-bearing CV templates print (see photoHandlers).
 	photoH.register(api, mw)
 	// Dictation for the assistant composer.

@@ -12,25 +12,20 @@
   //
   // `total` is null until the list is ready (then the count appears); `unit` is the
   // already-pluralised noun ("jobs" / "companies"). `onSwipe` is optional — pass it only
-  // where a swipe deck exists (the standalone jobs list). `showDesktopTotal` is false when
-  // the desktop layout already surfaces the total elsewhere (the company page's sidebar
-  // stat), so the above-list line isn't shown twice; the mobile toolbar total is unaffected.
-  // `controls` is an optional slot for the list's own controls — however many the view
-  // passes (the jobs feed's sort and freshness selects; the company catalog's sort
-  // select) — rendered in the mobile toolbar and beside the desktop total. It shows even
-  // when `total` is null so the controls stay reachable while the list is empty or
-  // standing in a prompt.
+  // where a swipe deck exists (the standalone jobs list). `controls` is an optional slot
+  // for the list's own controls — however many the view passes (the jobs feed's sort and
+  // freshness selects; the company catalog's sort select) — rendered in the mobile toolbar
+  // and beside the desktop total. It shows even when `total` is null so the controls stay
+  // reachable while the list is empty or standing in a prompt.
   let {
     total,
     unit,
     onSwipe,
-    showDesktopTotal = true,
     controls,
   }: {
     total: number | null;
     unit: string;
     onSwipe?: () => void;
-    showDesktopTotal?: boolean;
     controls?: Snippet;
   } = $props();
 </script>
@@ -71,13 +66,11 @@
 </div>
 
 <!-- Desktop: the total (and any list controls) sit top-right above the list (filters
-     live in the sidebar). The two are gated INDEPENDENTLY: the total on `showDesktopTotal`
-     (a view that renders its own total elsewhere suppresses this one), the controls on
-     their own presence. Gating both on `showDesktopTotal` is what hid the controls
-     entirely on a company page, where the sidebar carries the count. -->
-{#if (showDesktopTotal && total !== null) || controls}
+     live in the sidebar). The two are gated INDEPENDENTLY — a list standing in a prompt
+     has no total but must keep its controls reachable. -->
+{#if total !== null || controls}
   <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
-    {#if showDesktopTotal && total !== null}
+    {#if total !== null}
       <span class="text-sm text-muted-foreground" aria-live="polite">
         <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
         {unit}

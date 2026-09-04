@@ -14,25 +14,15 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
-	// Composite from resolved seniority+category.
+// The retired `role` facet was backed by a top-level `roles` array derived here. The
+// field is gone from the struct, so it can no longer be WRITTEN; this pins that it is
+// also gone from the JSON, because a rebuild is the only thing that removes it from the
+// live index and a field still marshalled would quietly put it back.
+func TestFromJob_NoLongerCarriesRoles(t *testing.T) {
 	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"})
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
-	if !slices.Contains(doc.Roles, "senior_backend") {
-		t.Errorf("roles = %v, want to contain senior_backend", doc.Roles)
-	}
-	// Named role from the title even with an empty grid.
-	named, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Founding Engineer"})
-	if err != nil {
-		t.Fatalf("FromJob: %v", err)
-	}
-	if !slices.Contains(named.Roles, "founding_engineer") {
-		t.Errorf("roles = %v, want to contain founding_engineer", named.Roles)
-	}
-
-	// roles rides the document top level (like posted_ts) so it is filterable...
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatalf("marshal doc: %v", err)
@@ -41,20 +31,13 @@ func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
 	if err := json.Unmarshal(raw, &full); err != nil {
 		t.Fatalf("unmarshal doc: %v", err)
 	}
-	if _, ok := full["roles"]; !ok {
-		t.Errorf("document should carry a top-level roles field: %s", raw)
+	if _, ok := full["roles"]; ok {
+		t.Errorf("document still carries roles: %s", raw)
 	}
-	// ...but it must NOT be part of the public wire shape (the served jobview.Job).
-	viewRaw, err := json.Marshal(doc.Job)
-	if err != nil {
-		t.Fatalf("marshal view: %v", err)
-	}
-	var view map[string]json.RawMessage
-	if err := json.Unmarshal(viewRaw, &view); err != nil {
-		t.Fatalf("unmarshal view: %v", err)
-	}
-	if _, ok := view["roles"]; ok {
-		t.Errorf("roles leaked into the public job wire shape: %s", viewRaw)
+	// The two axes it decomposed into are what the document keeps, under enrichment
+	// where the `seniority` and `category` facets already read them.
+	if _, ok := full["enrichment"]; !ok {
+		t.Errorf("document lost enrichment, which is where the replacing axes live: %s", raw)
 	}
 }
 
@@ -209,7 +192,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 		t.Errorf("ai_archetype = %q, want empty for category backend", nonAI.AIArchetype)
 	}
 
-	// ai_archetype rides the document top level (like roles) so it is filterable...
+	// ai_archetype rides the document top level (like posted_ts) so it is filterable...
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatalf("marshal doc: %v", err)

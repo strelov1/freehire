@@ -48,6 +48,8 @@ Never write 0 to mean "I am not setting this". Leave the field out.
 
 That is about ZERO, not about the fields. When they DO name a time or a floor, write it: "posted this week" is posted_within_days=7, "in the last few days" is 3, "this month" is 30, "at least 100k" is salary_min=100000. Dropping a bound they asked for leaves them scrolling the same stale postings they came here to skip.
 
+A job title is two fields, not one. "Staff data engineer" is seniority=staff AND category=data_engineering; "senior backend" is senior and backend. Decompose it and write both — a title left in query matches those words in a description instead of filtering, and a grade written alone widens the search to every staff job there is. The category enum spells compounds with an underscore (data_engineering, ml_ai, business_analysis), so read the list rather than the words they wrote.
+
 summary is always required, even when little else is filled. Write it in the language they wrote in: it is shown to them and never matched against a posting.
 
 Values you are given a list to choose from must come from that list. For the rest:
@@ -55,7 +57,6 @@ Values you are given a list to choose from must come from that list. For the res
 - skills: name each technology the way it is normally written ("Kubernetes", "React", "Go"). One skill per entry, never a phrase.
 - countries: the country's ordinary English name ("Portugal", "Germany").
 - cities: the city's bare name ("Lisbon"), with no country or region attached.
-- role: a specific role key of the form <seniority>_<role>, e.g. "senior_backend". Leave it empty unless the person named a precise role; the category and seniority fields already carry the general case.
 
 query is free text matched against the whole posting, and it is a last resort. Use it ONLY for something no other field can express — a niche the fields have no word for. Anything a field covers must go in that field: a term written in query as well narrows the results a second time, for no reason.
 

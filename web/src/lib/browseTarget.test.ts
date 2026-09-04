@@ -10,16 +10,16 @@ describe('browseQuery', () => {
   });
 
   it('carries a facet', () => {
-    expect(browseQuery({ facets: [['role', 'backend']] })).toBe('role=backend');
+    expect(browseQuery({ facets: [['category', 'backend']] })).toBe('category=backend');
   });
 
   // A composed suggestion names several things at once, and the feed must open with
   // all of them — the same rule the in-place filter follows.
   it('carries every part of a composed suggestion', () => {
     const got = new URLSearchParams(
-      browseQuery({ facets: [['role', 'senior_software_engineer'], ['company_slug', 'google']] }),
+      browseQuery({ facets: [['category', 'software_engineering'], ['company_slug', 'google']] }),
     );
-    expect(got.get('role')).toBe('senior_software_engineer');
+    expect(got.get('category')).toBe('software_engineering');
     expect(got.get('company_slug')).toBe('google');
   });
 
@@ -44,9 +44,9 @@ describe('planForSuggestion', () => {
     ]);
   });
 
-  it('applies a role to the role facet', () => {
-    expect(planForSuggestion({ kind: 'role', slug: 'devops', label: 'DevOps Engineer' }).facets).toEqual([
-      ['role', 'devops'],
+  it('applies a specialization to the category facet', () => {
+    expect(planForSuggestion({ kind: 'category', slug: 'devops', label: 'DevOps' }).facets).toEqual([
+      ['category', 'devops'],
     ]);
   });
 });

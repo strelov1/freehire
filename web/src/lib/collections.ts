@@ -508,63 +508,67 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     description: 'Open roles that use Solidity for smart-contract and blockchain development.',
     params: { skills: 'solidity' },
   },
-  // Named-role landings — the `role` facet (roletag: named roles + skill×seniority
-  // combos). Only clearly-technical roles with an individually-verified live count
-  // are listed; the facet also carries non-tech and seniority-only values, which are
-  // covered by the category/seniority axes instead.
+  // Job landings, keyed on the two axes a retired `role` slug decomposed into. Every
+  // one of these was `role: senior_backend` and friends; the pair says the same thing
+  // in the vocabulary the rest of the filter uses, so the URLs and their feeds survive
+  // the facet that used to back them.
+  //
+  // `founding-engineer` is the one that had no mechanical pair — the slug named a
+  // stage, not a grade — so it reads as software engineering at a startup, which is
+  // what the phrase means. Judged, not derived, and worth saying out loud.
   {
     slug: 'software-engineer',
     title: 'Software Engineer',
     description: 'General software engineering roles across the stack and domains.',
-    params: { role: 'software_engineer' },
+    params: { category: 'software_engineering' },
   },
   {
     slug: 'senior-backend',
     title: 'Senior Backend',
     description: 'Senior backend engineering roles owning server-side systems and APIs.',
-    params: { role: 'senior_backend' },
+    params: { category: 'backend', seniority: 'senior' },
   },
   {
     slug: 'senior-frontend',
     title: 'Senior Frontend',
     description: 'Senior frontend engineering roles owning web UI architecture and delivery.',
-    params: { role: 'senior_frontend' },
+    params: { category: 'frontend', seniority: 'senior' },
   },
   {
     slug: 'founding-engineer',
     title: 'Founding Engineer',
     description: 'Founding engineer roles building the first product at early-stage startups.',
-    params: { role: 'founding_engineer' },
+    params: { category: 'software_engineering', company_type: 'startup' },
   },
   {
     slug: 'senior-devops',
     title: 'Senior DevOps',
     description: 'Senior DevOps engineering roles owning build, deployment and infrastructure.',
-    params: { role: 'senior_devops' },
+    params: { category: 'devops', seniority: 'senior' },
   },
   {
     slug: 'senior-fullstack',
     title: 'Senior Full-Stack',
     description: 'Senior full-stack engineering roles spanning frontend and backend delivery.',
-    params: { role: 'senior_fullstack' },
+    params: { category: 'fullstack', seniority: 'senior' },
   },
   {
     slug: 'senior-data-engineering',
     title: 'Senior Data Engineer',
     description: 'Senior data engineering roles building pipelines and data platforms.',
-    params: { role: 'senior_data_engineering' },
+    params: { category: 'data_engineering', seniority: 'senior' },
   },
   {
     slug: 'staff-engineer',
     title: 'Staff Engineer',
     description: 'Staff engineering roles driving technical strategy for a team or product area.',
-    params: { role: 'staff_engineer' },
+    params: { category: 'software_engineering', seniority: 'staff' },
   },
   {
     slug: 'engineering-manager',
     title: 'Engineering Manager',
     description: 'Engineering management roles leading and growing a team of engineers.',
-    params: { role: 'engineering_manager' },
+    params: { category: 'software_engineering', role_type: 'people_manager' },
   },
 ];
 

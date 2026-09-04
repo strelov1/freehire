@@ -157,35 +157,38 @@ func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	}
 	// The handler must request a distribution for the facetable attributes,
 	// including the boolean and numeric-stat ones.
-	for _, want := range []string{"regions", "roles", "enrichment.seniority", "enrichment.visa_sponsorship", "enrichment.salary_min"} {
+	for _, want := range []string{"regions", "enrichment.category", "enrichment.seniority", "enrichment.visa_sponsorship", "enrichment.salary_min"} {
 		if !contains(fake.got.Facets, want) {
 			t.Errorf("Facets requested = %v, missing %q", fake.got.Facets, want)
 		}
 	}
 }
 
-func TestJobFacets_RoleFilterAndDistribution(t *testing.T) {
-	// The public `role` param filters on the bare `roles` attribute, and a `roles`
-	// distribution returned by the backend is re-keyed to the public `role` param.
+// `role` is retired. A request still carrying it must build no filter and get no
+// distribution back — the param is reported through meta.ignored_params instead, so a
+// stale saved search says what happened rather than silently widening.
+func TestJobFacets_RetiredRoleFilterIsIgnored(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{
 		Total:  5,
-		Facets: map[string]map[string]int64{"roles": {"senior_backend": 3, "founding_engineer": 2}},
+		Facets: map[string]map[string]int64{"enrichment.category": {"backend": 3}},
 	}}
 	app := facetsApp(fake)
 
 	_, body := doGet(t, app, "/jobs/facets?role=senior_backend")
 
-	groups, ok := fake.got.Filter.([][]string)
-	if !ok || !filterHas(groups, `roles = "senior_backend"`) {
-		t.Errorf("Filter missing role facet: %#v", fake.got.Filter)
+	if groups, ok := fake.got.Filter.([][]string); ok && filterHas(groups, `roles = "senior_backend"`) {
+		t.Errorf("role still filters: %#v", fake.got.Filter)
+	}
+	if contains(fake.got.Facets, "roles") {
+		t.Errorf("Facets requested = %v, want no roles distribution", fake.got.Facets)
 	}
 	facets := body["data"].(map[string]any)["facets"].(map[string]any)
-	role, present := facets["role"].(map[string]any)
-	if !present {
-		t.Fatalf("roles distribution should be re-keyed to public param role, got %v", facets)
+	if _, present := facets["role"]; present {
+		t.Errorf("facets carries role = %v, want it gone", facets["role"])
 	}
-	if role["senior_backend"].(float64) != 3 {
-		t.Errorf("facets.role.senior_backend = %v, want 3", role["senior_backend"])
+	// The specialization that answers the same question is still served.
+	if _, present := facets["category"]; !present {
+		t.Errorf("facets = %v, want category — it is what replaces the retired facet", facets)
 	}
 }
 

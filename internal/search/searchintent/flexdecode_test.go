@@ -90,3 +90,59 @@ func TestProposalAcceptsAQuotedNumberForABound(t *testing.T) {
 		t.Fatalf("posted_within_days = %v, want 7", got)
 	}
 }
+
+// The one bool in the proposal had no shim, and encoding/json aborts the WHOLE
+// unmarshal on the first type mismatch — so a model writing "false" instead of false
+// cost the caller their entire search. Observed live against the gateway.
+func TestFlexBoolSurvivesAQuotedAnswer(t *testing.T) {
+	for name, body := range map[string]string{
+		"quoted true":  `{"visa_sponsorship": "true", "summary": "s"}`,
+		"quoted false": `{"visa_sponsorship": "false", "summary": "s"}`,
+		"empty string": `{"visa_sponsorship": "", "summary": "s"}`,
+		"null":         `{"visa_sponsorship": null, "summary": "s"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var p proposal
+			if err := json.Unmarshal([]byte(body), &p); err != nil {
+				t.Fatalf("unmarshal: %v — one odd field must not cost the interpretation", err)
+			}
+			if p.Summary != "s" {
+				t.Errorf("summary = %q, want the rest of the answer to survive", p.Summary)
+			}
+		})
+	}
+}
+
+// The other direction: a person who DID ask for sponsorship must get the filter, and a
+// quoted yes is still a yes.
+func TestFlexBoolReadsAWrittenYes(t *testing.T) {
+	for _, body := range []string{
+		`{"visa_sponsorship": true}`,
+		`{"visa_sponsorship": "true"}`,
+	} {
+		var p proposal
+		if err := json.Unmarshal([]byte(body), &p); err != nil {
+			t.Fatalf("unmarshal %s: %v", body, err)
+		}
+		if !p.VisaSponsorship.plain() {
+			t.Errorf("%s left the filter off — they asked for sponsorship", body)
+		}
+	}
+}
+
+// A filter that HIDES postings must never be switched on by an answer nobody can read.
+func TestFlexBoolRefusesToInventAFilter(t *testing.T) {
+	for _, body := range []string{
+		`{"visa_sponsorship": "maybe"}`,
+		`{"visa_sponsorship": "required"}`,
+		`{"visa_sponsorship": ""}`,
+	} {
+		var p proposal
+		if err := json.Unmarshal([]byte(body), &p); err != nil {
+			t.Fatalf("unmarshal %s: %v", body, err)
+		}
+		if p.VisaSponsorship.plain() {
+			t.Errorf("%s set the filter — an unreadable answer must leave it off", body)
+		}
+	}
+}

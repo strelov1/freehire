@@ -14,7 +14,6 @@ import {
   facetToggleSign,
   facetAdd,
   facetRemove,
-  filtersWithRole,
   defaultSortFor,
   effectiveSort,
   sortOptionsFor,
@@ -171,22 +170,16 @@ describe('experienceYearsMax', () => {
   });
 });
 
-describe('role facet round-trips through the generic param path', () => {
-  it('serializes include/exclude/mode and reads them back', () => {
-    const f = emptyFilters();
-    // role is a registered FACET, so emptyFilters seeds it.
-    f.facets.role = { include: ['senior_backend', 'lead_frontend'], exclude: ['fractional_cto'], matchAll: true };
+describe('the retired role facet', () => {
+  // `role` is gone from FACETS, so emptyFilters no longer seeds it and the generic
+  // param path has nothing to serialize. A stale `role=` in a URL is simply not read —
+  // the API reports it through meta.ignored_params instead.
+  it('is not a declared facet, so a stale param round-trips to nothing', () => {
+    expect(emptyFilters().facets.role).toBeUndefined();
 
-    const p = filtersToParams(f);
-    expect(p.getAll('role')).toEqual(['senior_backend,lead_frontend']);
-    expect(p.getAll('role_exclude')).toEqual(['fractional_cto']);
-    expect(p.get('role_mode')).toBe('and');
-
-    const back = filtersFromParams(p);
-    const role = must(back.facets.role);
-    expect(role.include).toEqual(['senior_backend', 'lead_frontend']);
-    expect(role.exclude).toEqual(['fractional_cto']);
-    expect(role.matchAll).toBe(true);
+    const back = filtersFromParams(new URLSearchParams('role=senior_backend&category=backend'));
+    expect(back.facets.role).toBeUndefined();
+    expect(must(back.facets.category).include).toEqual(['backend']);
   });
 });
 
@@ -454,45 +447,6 @@ describe('sort options', () => {
 // with the role facet. Both happen in ONE state change: applied separately, the
 // search would briefly AND a half-typed query against the role and return fewer
 // jobs than either filter alone — a suggestion that empties the page.
-describe('filtersWithRole', () => {
-  it('turns the role on and empties the text query', () => {
-    const after = filtersWithRole({ ...emptyFilters(), q: 'data an' }, 'data_analytics');
-    expect(after.q).toBe('');
-    expect(must(after.facets.role).include).toEqual(['data_analytics']);
-  });
-
-  it('adds to the roles already chosen rather than replacing them', () => {
-    const after = filtersWithRole(filtersWithRole(emptyFilters(), 'backend'), 'frontend');
-    expect(must(after.facets.role).include).toEqual(['backend', 'frontend']);
-  });
-
-  it('switches a role from excluded to included', () => {
-    // Suggestions are withheld for roles already INCLUDED, not for excluded ones, so
-    // an excluded role is still offered. Adding it must flip the sign: a no-op would
-    // clear the typed text and change nothing else, which reads as a broken click.
-    const before = emptyFilters();
-    before.facets.role = { include: [], exclude: ['data_analytics'], matchAll: false };
-    const after = filtersWithRole(before, 'data_analytics');
-    expect(must(after.facets.role).include).toEqual(['data_analytics']);
-    expect(must(after.facets.role).exclude).toEqual([]);
-  });
-
-  it('leaves every other filter alone', () => {
-    const before = withSkills({ include: ['go'] });
-    before.postedWithinDays = 7;
-    const after = filtersWithRole(before, 'backend');
-    expect(must(after.facets.skills).include).toEqual(['go']);
-    expect(after.postedWithinDays).toBe(7);
-  });
-
-  it('does not mutate the filters it was given', () => {
-    const before = { ...emptyFilters(), q: 'data an' };
-    filtersWithRole(before, 'data_analytics');
-    expect(before.q).toBe('data an');
-    expect(must(before.facets.role).include).toEqual([]);
-  });
-});
-
 describe('the two date bounds', () => {
   // They are two questions, not two spellings of one: `posted_within_days` bounds the
   // date the SOURCE states (which some boards restate every crawl) and

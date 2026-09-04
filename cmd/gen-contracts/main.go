@@ -20,7 +20,6 @@ import (
 	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/dict/location"
-	"github.com/strelov1/freehire/internal/dict/roletag"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -393,17 +392,16 @@ func genVocab() string {
 	// Country→region grouping for the hierarchical location filter, derived from the
 	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))
-	// Role slug→label catalog for the role picker — the source of truth for role
-	// labels, derived from the roletag dictionary (composite + named roles).
-	b.WriteString(emitMap("RoleLabels", "ROLE_LABELS", roletag.Catalog()))
 	// Skill slug→display-name catalog. The skills facet is a slug vocabulary, and every
 	// surface showing one to a reader had the same choice to make: print "postgresql" or
 	// invent a prettifier. Generated from the skilltag dictionary that owns the canonical
 	// set, so one spelling serves them all and a new skill cannot arrive unlabelled.
 	b.WriteString(emitMap("SkillLabels", "SKILL_LABELS", skilltag.Labels()))
-	// Role slug→shorthand-aliases for the picker's search: the same curated terms
-	// used to tag titles, so typing "swe"/"sre"/"devrel" finds the role.
-	b.WriteString(emitMapOfSlices("RoleAliases", "ROLE_ALIASES", roleAliases()))
+	// Facet slug→shorthand-aliases for the picker's search: the same curated terms
+	// used to tag titles, so typing "swe" or "data engineer" finds the specialization
+	// that tags them. Keyed by category and seniority slug — the two dictionaries this
+	// is built from, and the two facets that read it.
+	b.WriteString(emitMapOfSlices("FacetAliases", "FACET_ALIASES", facetAliases()))
 	// The company-tag registry (slug, display copy, kind) — the source of truth for
 	// the /collections hub and the job-search facet, generated so the frontend copy
 	// cannot drift from the Go registry that decides membership.
@@ -416,7 +414,7 @@ func genVocab() string {
 // plus named-role aliases (roletag) — keyed by role slug and deduped, for the web
 // picker's alias search. Every value is a lowercase alias already used to tag
 // titles, so search and tagging stay in lockstep.
-func roleAliases() map[string][]string {
+func facetAliases() map[string][]string {
 	sets := map[string]map[string]struct{}{}
 	addAll := func(m map[string][]string) {
 		for slug, aliases := range m {
@@ -430,7 +428,6 @@ func roleAliases() map[string][]string {
 	}
 	addAll(classify.CategoryAliases())
 	addAll(classify.SeniorityAliases())
-	addAll(roletag.NamedAliases())
 
 	out := make(map[string][]string, len(sets))
 	for slug, set := range sets {

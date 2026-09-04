@@ -82,24 +82,20 @@ func TestFilterFromValues_Collections(t *testing.T) {
 	}
 }
 
-func TestFilterFromValues_Role(t *testing.T) {
-	// The role facet maps the public `role` param to the bare `roles` attribute
-	// and behaves exactly like skills: repeated values OR within the facet.
-	got := normalizeGroups(t, FilterFromValues(vals("role=senior_backend&role=lead_frontend")))
-	want := [][]string{{`roles = "lead_frontend"`, `roles = "senior_backend"`}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("role OR: got %v, want %v", got, want)
+func TestFilterFromValues_IgnoresTheRetiredRoleFacet(t *testing.T) {
+	// `role` was a cross-product of `category` and `seniority` and is retired. A stale
+	// link still carrying it must build NO filter — the param is reported through
+	// meta.ignored_params instead, so the search widens visibly rather than silently.
+	if got := normalizeGroups(t, FilterFromValues(vals("role=senior_backend&role_exclude=qa"))); len(got) != 0 {
+		t.Errorf("role built %v, want no filter at all", got)
 	}
 
-	// role_exclude is its own AND group; role ANDs with a non-role facet.
-	got = normalizeGroups(t, FilterFromValues(vals("role=founding_engineer&role_exclude=fractional_cto&regions=eu")))
-	want = [][]string{
-		{`regions = "eu"`},
-		{`roles != "fractional_cto"`},
-		{`roles = "founding_engineer"`},
-	}
+	// It must not take the region down with it: a retired facet beside a live one
+	// leaves the live one filtering.
+	got := normalizeGroups(t, FilterFromValues(vals("role=founding_engineer&regions=eu")))
+	want := [][]string{{`regions = "eu"`}}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("role exclude+AND: got %v, want %v", got, want)
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
@@ -202,7 +198,7 @@ func TestFilterFromValues_ExperienceYearsMaxZero(t *testing.T) {
 // never below zero — so it is a typo, not a query. The contract declares the param
 // non-negative; honouring the sign would turn that typo into an empty result page
 // that looks like a legitimately narrow search.
-// role_type is derived at index time and carried top-level, like `roles` and
+// role_type is derived at index time and carried top-level, like `is_tech` and
 // `ai_archetype`, so it filters on the bare attribute rather than an enrichment.*
 // dot path. Excluding it is how a caller asks for postings with no management
 // marker — which is not the same as asking for individual-contributor postings.

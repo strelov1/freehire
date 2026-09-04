@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/location"
-	"github.com/strelov1/freehire/internal/dict/roletag"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/collections"
@@ -172,9 +171,14 @@ var facetResolvers = map[string]resolver{
 	"ai_archetype":    oneOf(vocab.AIArchetypeValues),
 	"domains":         oneOf(vocab.DomainValues),
 
-	// Curated lists, closed but assembled at startup rather than written out here.
+	// A curated list, closed but assembled at startup rather than written out here.
+	//
+	// `role` used to sit beside it. It is gone: the enum it offered was a cross-product
+	// of `category` and `seniority`, both of which are already above, so the model now
+	// says the same thing in the vocabulary the rest of the request uses — and a grade
+	// can be widened or dropped without rebuilding the filter, which one fused slug
+	// could not express.
 	"collections": oneOf(collections.Slugs()),
-	"role":        oneOf(slices.Collect(maps.Keys(roletag.Catalog()))),
 
 	// Open vocabularies: thousands of values each, so the model writes ordinary words
 	// and the dictionary that already owns the vocabulary decides what they mean.

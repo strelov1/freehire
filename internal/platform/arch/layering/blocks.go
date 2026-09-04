@@ -46,7 +46,7 @@ var blocks = map[string][]string{
 	},
 	"dict": {
 		"classify", "companyname", "industrytag", "lang", "location", "normalize",
-		"roletag", "roletype", "skilladjacency", "skillbundle", "skilltag",
+		"roletype", "skilladjacency", "skillbundle", "skilltag",
 		// skillvec/gen is the registry generator — a main package that reads skilltag
 		// and writes skillvec's source. It never ships in a binary, but it is a package
 		// in the repo, so it needs a block like any other.
@@ -88,6 +88,11 @@ var blocks = map[string][]string{
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
+		// linkedinprofile reads the candidate's own public profile page, so it belongs
+		// with the rest of what a candidate is made of. It takes only safehttp from
+		// platform and derives nothing itself — the caller runs the same dictionaries
+		// the CV path runs, which is what keeps one text from resolving two ways.
+		"linkedinprofile",
 		"matchanalysis", "pii", "resume", "resumeextract",
 	},
 	"job": {

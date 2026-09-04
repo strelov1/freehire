@@ -73,11 +73,13 @@ const (
 
 	// maxValuesPerFacet raises the per-facet value cap above Meili's default of
 	// 100 so the analytics facet distribution is not truncated for high-cardinality
-	// facets (skills, countries, and especially roles — ~800 graded/named values).
+	// facets (skills, cities, countries).
 	// Meili truncates to this cap ALPHABETICALLY (sortFacetValuesBy defaults to
 	// "alpha") BEFORE the client sorts by count, so a cap below the value count
-	// silently drops the busiest values past the alphabetical cut (e.g. "senior_*"
-	// roles). Keep it comfortably above the role catalogue.
+	// silently drops the busiest values past the alphabetical cut — the failure
+	// leaves no trace, which is why the headroom is generous rather than measured.
+	// It was sized for the retired role catalogue (~1,200 values) and is kept there
+	// on purpose: lowering it buys nothing and the mistake it prevents is silent.
 	maxValuesPerFacet = 1200
 
 	taskPollInterval = 50 * time.Millisecond
@@ -586,11 +588,9 @@ func facetSettings() *meilisearch.Settings {
 			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on
 			// the bare attribute; an unknown value is absent so it filters as empty.
 			"is_tech",
-			// roles is derived at index time (roletag) and served top-level like the
-			// other bare facets, so it filters on the plain attribute, not a dot path.
-			"roles",
-			// ai_archetype is derived at index time (aiarchetype) from skills+category,
-			// same pattern as roles.
+			// ai_archetype is derived at index time (aiarchetype) from skills+category
+			// and served top-level like the other bare facets, so it filters on the
+			// plain attribute, not a dot path.
 			"ai_archetype",
 			// role_type is derived at index time (roletype) from the title alone, same
 			// pattern again — no jobs column, so a reindex is what reaches existing

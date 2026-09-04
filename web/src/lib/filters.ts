@@ -22,7 +22,6 @@ import {
   facetToggleSign,
   facetAdd,
   facetRemove,
-  filtersWithRole,
   filtersWithParts,
 } from './facetModel';
 
@@ -167,17 +166,9 @@ export class FilterStore {
     this.#setFacet(param, facetAdd(this.facet(param), raw));
   }
 
-  /** Header role suggestion picked: turn the role on and drop the typed text in one
-   *  discrete write. setNow both applies at once and clears any pending continuous
-   *  write, so debounced text cannot land after the role and re-narrow the search the
-   *  suggestion just widened. (The header no longer types into the store at all — see
-   *  commitQuery — so that race is now only reachable from another caller.) */
-  applyRole(slug: string) {
-    this.#url.setNow(filtersWithRole(this.#url.value, slug));
-  }
-
   /** Header completion picked: apply every facet value it names AND its free text in
-   *  one discrete write. setNow, like applyRole — one filter change, one reload, and
+   *  one discrete write. setNow rather than the debounced write — one filter change,
+   *  one reload, and
    *  no intermediate state where the list is filtered by half a phrase. */
   applyParts(parts: readonly (readonly [string, string])[], q: string) {
     this.#url.setNow(filtersWithParts(this.#url.value, parts, q));

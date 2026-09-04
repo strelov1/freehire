@@ -86,7 +86,7 @@ func TestService_ExcludesAKindTheQueryAlreadyNamed(t *testing.T) {
 	if _, err := s.Suggest(context.Background(), "product owner eng", 10); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains([]string{`kind != "role"`}, idx.gotFilter) {
+	if !slices.Contains([]string{`kind != "category"`}, idx.gotFilter) {
 		t.Errorf("filter = %q, want the named kind excluded", idx.gotFilter)
 	}
 }
@@ -106,8 +106,8 @@ func TestService_NoFilterWhenNothingRecognised(t *testing.T) {
 // which is worse than no suggestion.
 func TestService_WithholdsADrainedSuggestion(t *testing.T) {
 	idx := &fakeIndex{hits: []Document{
-		doc(KindRole, "backend", "Backend Engineer", 0),
-		doc(KindRole, "frontend", "Frontend Engineer", 10),
+		doc(KindCategory, "backend", "Backend Engineer", 0),
+		doc(KindCategory, "frontend", "Frontend Engineer", 10),
 	}}
 	got, err := svc(idx).Suggest(context.Background(), "eng", 10)
 	if err != nil {
@@ -130,7 +130,7 @@ func TestService_HonoursTheLimit(t *testing.T) {
 
 // The refresh is what keeps recognition current with the index the builder rewrites.
 func TestService_RefreshLoadsThePhrases(t *testing.T) {
-	idx := &fakeIndex{allDocs: []Document{doc(KindRole, "backend", "Backend Engineer", 10)}}
+	idx := &fakeIndex{allDocs: []Document{doc(KindCategory, "backend", "Backend Engineer", 10)}}
 	s := New(idx)
 	if err := s.Refresh(context.Background()); err != nil {
 		t.Fatal(err)

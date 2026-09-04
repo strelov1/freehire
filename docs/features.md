@@ -32,7 +32,7 @@ Curated entry points into the catalogue — a stack, a role family, a hiring
 profile — each a real filtered view rather than a static page, so a collection
 never goes stale against the index behind it.
 
-**Live:** /collections · **Code:** `web/src/lib/collections.ts` (the definitions), `internal/dict/roletag`, `internal/search` (the scoped feed)
+**Live:** /collections · **Code:** `web/src/lib/collections.ts` (the definitions), `internal/search` (the scoped feed)
 
 ### Saved searches, shared boards and digests
 

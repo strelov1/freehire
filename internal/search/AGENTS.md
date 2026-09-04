@@ -25,10 +25,10 @@ The search box's completions, in a SEPARATE Meilisearch index (`suggestions`) bu
 offline by `cmd/build-suggestions`.
 
 It exists because the facet dictionaries cannot answer what people type. 8,680
-postings are titled "Product Owner" and the role vocabulary has no such role — only an
-alias folding it into `product`, whose label is "Product Manager" — so the box answered
-a question about real postings by renaming the person asking. Titles are the vocabulary
-the market actually uses.
+postings are titled "Product Owner" and no facet value spells it — the closest is the
+`product` specialization, labelled "Product Manager" — so the box answered a question
+about real postings by renaming the person asking. Titles are the vocabulary the
+market actually uses.
 
 **Not a facet on `jobs`.** `title` is searchable there but not filterable, distinct
 titles number in the millions, and `MaxValuesPerFacet` truncates a facet's

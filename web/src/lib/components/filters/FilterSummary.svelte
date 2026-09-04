@@ -51,10 +51,6 @@
     push('Search', f.q.trim() ? [{ key: 'q', text: f.q, exclude: false, remove: () => store.setQuery('') }] : []);
 
     facetGroup('category', 'Specialization');
-    // Role had no group here at all: it counted towards the badge but drew no chip, so
-    // the only way to lift it was Reset all. Latent while the facet lived inside the
-    // filter modal; the header's role suggestions put it one click from the search box.
-    facetGroup('role', 'Role');
     facetGroup('ai_archetype', 'AI Specialization');
     // Location: regions + countries + cities under one heading.
     push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('cities')]);
