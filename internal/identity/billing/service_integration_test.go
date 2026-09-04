@@ -171,6 +171,51 @@ func TestRecordBindsTheCustomer(t *testing.T) {
 	}
 }
 
+// TestBindingIsWriteOnce closes the one path on which an outsider chooses which account an
+// event is about.
+//
+// resolveUser falls back to the account reference the provider echoes back whenever there is
+// no binding yet — and that reference is attacker-supplied on the Payment Link path, where
+// `?client_reference_id=` is a query parameter anyone opening the link may set. If the write
+// REPLACED an existing binding, somebody paying for their own subscription while naming
+// another person's account id would repoint that account at their customer. The victim's own
+// subscription is then orphaned — nothing reads a customer no user points at, so the
+// reconciler never touches it again — and their plan follows the attacker's card.
+//
+// So the second binding does nothing at all, and the account still answers with the first.
+func TestBindingIsWriteOnce(t *testing.T) {
+	s, pool := newService(t, nil)
+	ctx := context.Background()
+	userID := insertUser(t, pool, "writeonce@example.com")
+
+	if _, _, err := s.Record(ctx, event("evt_first", "cus_theirs", fmt.Sprint(userID))); err != nil {
+		t.Fatalf("first event: %v", err)
+	}
+	if got := customerOf(t, pool, userID); got == nil || *got != "cus_theirs" {
+		t.Fatalf("want the account bound to cus_theirs, got %v", got)
+	}
+
+	// A second event naming the SAME account and a different customer: what a Payment Link
+	// opened with somebody else's id produces.
+	if _, _, err := s.Record(ctx, event("evt_hijack", "cus_attacker", fmt.Sprint(userID))); err != nil {
+		t.Fatalf("second event: %v", err)
+	}
+	if got := customerOf(t, pool, userID); got == nil || *got != "cus_theirs" {
+		t.Fatalf("the binding was replaced: want cus_theirs, got %v", got)
+	}
+
+	// And the plan still follows the customer the account actually pays as. Reading it back
+	// through the service is the property that matters — customerOf above only proves the
+	// column, this proves what SyncUser would ask the provider about.
+	bound, err := s.customerOf(ctx, userID)
+	if err != nil {
+		t.Fatalf("customerOf: %v", err)
+	}
+	if bound != "cus_theirs" {
+		t.Fatalf("want the service to still ask about cus_theirs, got %q", bound)
+	}
+}
+
 // TestRecordKeepsAnUnattributableEvent covers the events that are about nothing we meter.
 // A row we cannot attribute is evidence; a row we refused to write is nothing.
 func TestRecordKeepsAnUnattributableEvent(t *testing.T) {

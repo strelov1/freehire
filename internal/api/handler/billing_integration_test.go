@@ -163,6 +163,83 @@ func TestBillingWebhook(t *testing.T) {
 	})
 }
 
+// TestBillingWebhookNeverDecodesTheBody is the reason this handler reads
+// c.Request().Body() rather than Fiber's Ctx.Body().
+//
+// Ctx.Body() honours Content-Encoding and decompresses, chaining up to three layers. On the
+// one unauthenticated POST in the app that is a hole with two sides. The bytes verified stop
+// being the bytes sent, so what the HMAC covers is decided by a header the sender writes.
+// And the decoding happens BEFORE the signature is checked, while the server's 8MB BodyLimit
+// bounds only the compressed body — so a few megabytes of brotli from anyone at all become
+// an unbounded allocation inside the process.
+//
+// The request below is what probing that looks like: a header claiming an encoding the body
+// does not have. Reading raw, it is simply a signed delivery and verifies. Decoding first,
+// the gunzip fails, the body becomes an error string, and the signature cannot match — so
+// this test answers 401 against the implementation it was written to rule out.
+func TestBillingWebhookNeverDecodesTheBody(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('encoded@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(customerWithPro))
+	}))
+	defer stub.Close()
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app := billingApp(t, pool, enabledBillingConfig(), stub.URL, iss)
+
+	body := []byte(fmt.Sprintf(`{"id":"evt_encoded","type":"checkout.session.completed","data":{"object":{"customer":"cus_encoded","client_reference_id":"%d"}}}`, userID))
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
+	req.Header.Set(billing.SignatureHeader, signDelivery(body, time.Now()))
+	// The lie. Nothing here is gzip, and nothing must try to treat it as gzip.
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resp, err := app.Test(req, 15000)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("want 200 — the signature covers the bytes as received, whatever Content-Encoding claims — got %d", resp.StatusCode)
+	}
+}
+
+// TestBillingWebhookRejectsAMalformedBodyWithoutRetries separates the two refusals. A
+// delivery that does not VERIFY is 401: nothing proves it came from the provider. A delivery
+// that verifies and then does not PARSE is 400, because retrying it can only produce the
+// same bytes — and an endpoint that answers a permanent failure with a retryable status is
+// how the provider decides the endpoint is broken and disables it, taking the renewals with
+// it.
+func TestBillingWebhookRejectsAMalformedBodyWithoutRetries(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app := billingApp(t, pool, enabledBillingConfig(), "http://127.0.0.1:1", iss)
+
+	// Correctly signed by the provider, and unreadable: no event id, so there is no
+	// idempotency key and nothing to record.
+	body := []byte(`{"not":"an event"}`)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
+	req.Header.Set(billing.SignatureHeader, signDelivery(body, time.Now()))
+
+	resp, err := app.Test(req, 15000)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("want 400 for a signed body we cannot parse, got %d", resp.StatusCode)
+	}
+	if n := countBillingEvents(t, pool); n != 0 {
+		t.Fatalf("want nothing recorded for an unparseable delivery, got %d rows", n)
+	}
+}
+
 // TestBillingWebhookAcknowledgesWhatItCannotApply is the split the whole design turns on: a
 // 200 means the event is STORED, not that it was applied. The provider being unreachable
 // must not make it retry something we already hold.

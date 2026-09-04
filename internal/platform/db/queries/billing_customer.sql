@@ -1,13 +1,27 @@
 -- name: SetStripeCustomerID :exec
--- Bind an account to the payment provider's customer, once, when it first transacts.
+-- Bind an account to the payment provider's customer, ONCE, when it first transacts.
 --
--- IS DISTINCT FROM rather than a bare assignment: the webhook and the reconciler both take
--- this path and both will usually be writing the value that is already there, and a write
--- that changes nothing should not wake a trigger or bloat a row.
+-- IS NULL, so this writes a binding and never REPLACES one. That is a security property,
+-- not a tidiness one. An account's customer is resolved two ways (see Service.resolveUser):
+-- from the stored binding, and — only when there is no binding yet — from the account
+-- reference the provider echoes back. That reference is attacker-supplied on one path: a
+-- Stripe Payment Link takes `?client_reference_id=` from whoever opens it. With a bare
+-- assignment, somebody who paid for their own subscription while naming SOMEBODY ELSE'S
+-- account id would overwrite that account's binding, orphan the subscription it was
+-- actually paying for — nothing reads a customer no user points at, so the reconciler
+-- never touches it again — and then hold the victim's plan hostage to their own card.
+--
+-- Refusing the write costs nothing the system needs. The self-healing rebind in
+-- Service.Apply is precisely the NULL case, and an account that genuinely has to move to a
+-- new customer is a support ticket and one UPDATE, not a path a webhook should offer.
+--
+-- Also subsumes the cheaper reason the predicate was here before: the webhook and the
+-- reconciler both take this path and both usually write the value already present, and a
+-- write that changes nothing should not wake a trigger or bloat a row.
 UPDATE users
 SET stripe_customer_id = sqlc.arg(stripe_customer_id)::text
 WHERE id = sqlc.arg(id)
-  AND stripe_customer_id IS DISTINCT FROM sqlc.arg(stripe_customer_id)::text;
+  AND stripe_customer_id IS NULL;
 
 -- name: GetStripeCustomerID :one
 -- Which customer to ask the provider about for this account. NULL means the account has

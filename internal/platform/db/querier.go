@@ -3991,11 +3991,25 @@ type Querier interface {
 	// from chunks that no longer exist, and the job's now-current chunks would never be
 	// backfilled until their NEXT content change.
 	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error)
-	// Bind an account to the payment provider's customer, once, when it first transacts.
+	// Bind an account to the payment provider's customer, ONCE, when it first transacts.
 	//
-	// IS DISTINCT FROM rather than a bare assignment: the webhook and the reconciler both take
-	// this path and both will usually be writing the value that is already there, and a write
-	// that changes nothing should not wake a trigger or bloat a row.
+	// IS NULL, so this writes a binding and never REPLACES one. That is a security property,
+	// not a tidiness one. An account's customer is resolved two ways (see Service.resolveUser):
+	// from the stored binding, and — only when there is no binding yet — from the account
+	// reference the provider echoes back. That reference is attacker-supplied on one path: a
+	// Stripe Payment Link takes `?client_reference_id=` from whoever opens it. With a bare
+	// assignment, somebody who paid for their own subscription while naming SOMEBODY ELSE'S
+	// account id would overwrite that account's binding, orphan the subscription it was
+	// actually paying for — nothing reads a customer no user points at, so the reconciler
+	// never touches it again — and then hold the victim's plan hostage to their own card.
+	//
+	// Refusing the write costs nothing the system needs. The self-healing rebind in
+	// Service.Apply is precisely the NULL case, and an account that genuinely has to move to a
+	// new customer is a support ticket and one UPDATE, not a path a webhook should offer.
+	//
+	// Also subsumes the cheaper reason the predicate was here before: the webhook and the
+	// reconciler both take this path and both usually write the value already present, and a
+	// write that changes nothing should not wake a trigger or bloat a row.
 	SetStripeCustomerID(ctx context.Context, arg SetStripeCustomerIDParams) error
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).

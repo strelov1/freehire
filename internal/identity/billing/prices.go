@@ -34,10 +34,56 @@ type PublicPrice struct {
 // change appears within one coffee break, and long enough that the page costs nothing.
 const priceCacheTTL = 5 * time.Minute
 
+// priceRetryAfter is how long a FAILED read is honoured for.
+//
+// A failure has to expire the cache too, or an unreachable provider turns every request
+// into another attempt at it — which is the load pattern this cache exists to prevent,
+// arriving exactly when the provider can least take it, and spending the rate limit that
+// the webhook's own reads need. Shorter than the TTL because a page with no price recovers
+// on its own rather than waiting out a full cycle.
+const priceRetryAfter = 30 * time.Second
+
+// priceCache holds the last answer and decides who goes and gets the next one.
+//
+// The lock covers the FIELDS and never a provider call. Holding it across the network would
+// serialise every visitor behind one request to a third party — on a public page, in front
+// of crawler traffic — which is a self-inflicted outage rather than a cache.
 type priceCache struct {
-	mu      sync.Mutex
-	at      time.Time
-	entries []PublicPrice
+	mu sync.Mutex
+	// until is when the held answer stops being served. Set on success and on failure
+	// alike, so a provider outage backs off instead of retrying per request.
+	until    time.Time
+	entries  []PublicPrice
+	fetching bool
+}
+
+// claim reports whether this caller is the one that should refresh, and hands back what is
+// currently held either way.
+//
+// At most one refresh is in flight. The others are not queued behind it — they are served
+// the previous answer immediately, because a pricing page that renders a five-minute-old
+// price now is better than one that renders the current price after a provider timeout.
+func (p *priceCache) claim() (entries []PublicPrice, mine bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.fetching || time.Now().Before(p.until) {
+		return p.entries, false
+	}
+	p.fetching = true
+	return p.entries, true
+}
+
+// publish stores a refresh's outcome and returns what callers should now be given.
+func (p *priceCache) publish(entries []PublicPrice, err error) []PublicPrice {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.fetching = false
+	if err != nil {
+		p.until = time.Now().Add(priceRetryAfter)
+		return p.entries
+	}
+	p.entries, p.until = entries, time.Now().Add(priceCacheTTL)
+	return entries
 }
 
 // PublicPrices lists what may be bought, cheapest interval first as configured.
@@ -50,28 +96,31 @@ func (s *Service) PublicPrices(ctx context.Context) []PublicPrice {
 		return nil
 	}
 
-	s.prices.mu.Lock()
-	defer s.prices.mu.Unlock()
-
-	if time.Since(s.prices.at) < priceCacheTTL && s.prices.entries != nil {
-		return s.prices.entries
+	held, mine := s.prices.claim()
+	if !mine {
+		return held
 	}
+	// The claim is released by publish on every path, including the error one — a refresh
+	// that returned without clearing the flag would leave the cache frozen on its last
+	// answer for the life of the process.
+	return s.prices.publish(s.fetchPrices(ctx))
+}
 
+// fetchPrices reads every configured price from the provider.
+//
+// All or nothing. A partial list is worse than none, because a page showing one of two
+// plans looks complete — so a single failure discards what was already read.
+func (s *Service) fetchPrices(ctx context.Context) ([]PublicPrice, error) {
 	out := make([]PublicPrice, 0, len(s.cfg.Prices))
 	for i, id := range s.cfg.Prices {
 		p, err := s.client.price(ctx, id)
 		if err != nil {
-			// Keep whatever we last had rather than publishing a partial list: a page
-			// showing one of two plans is worse than a page showing neither, because it
-			// looks complete.
-			return s.prices.entries
+			return nil, err
 		}
 		p.Default = i == 0
 		out = append(out, p)
 	}
-
-	s.prices.at, s.prices.entries = time.Now(), out
-	return out
+	return out, nil
 }
 
 // price reads one price from the provider.
