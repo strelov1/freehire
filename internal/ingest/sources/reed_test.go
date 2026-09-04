@@ -53,17 +53,6 @@ func TestReedIsHydratingNotStreaming(t *testing.T) {
 	}
 }
 
-func TestReedBoardFileValidates(t *testing.T) {
-	t.Setenv("REED_API_KEY", "test-key")
-	cfg, err := LoadConfig("../../../sources/reed.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/reed.yml fails validation: %v", err)
-	}
-}
-
 // fakeReed serves a fixed two-result search page for every keyword (so the test can assert
 // the adapter dedups the same job ids across the curated keyword set), and a per-id detail.
 // It records the Authorization header so the test asserts Basic auth is carried.

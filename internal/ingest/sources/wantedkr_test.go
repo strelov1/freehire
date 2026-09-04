@@ -38,16 +38,6 @@ func TestWantedKRIsProxied(t *testing.T) {
 	}
 }
 
-func TestWantedKRBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/wantedkr.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/wantedkr.yml fails validation: %v", err)
-	}
-}
-
 func TestWantedKRFetchListThenDetailAndMaps(t *testing.T) {
 	list := `{"data":[{"id":369269}]}` // single item (< page size) ends pagination
 	detail := `{"job":{"id":369269,"position":"Global Performance Marketer",

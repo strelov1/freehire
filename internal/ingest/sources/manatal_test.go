@@ -27,16 +27,6 @@ func TestManatalIsBoardBasedAndFilterable(t *testing.T) {
 	}
 }
 
-func TestManatalBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/manatal.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/manatal.yml fails validation: %v", err)
-	}
-}
-
 func TestManatalFetchPaginatesAndMaps(t *testing.T) {
 	page1 := `{"count":3,"next":"https://open.api.manatal.com/open/v3/career-page/acme/jobs/?page=2","previous":null,"results":[
 {"id":1,"hash":"AB12CD34","organization_name":"Engineering","position_name":"Backend Engineer","description":"<p>Build &amp; ship.</p>","country":"Thailand","state":"Bangkok","city":"Bangkok","location_display":"Bangkok, Thailand","is_remote":true,"contract_details":"full_time"},

@@ -32,16 +32,6 @@ func TestFunctionalWorksRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestFunctionalWorksBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/functionalworks.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/functionalworks.yml fails validation: %v", err)
-	}
-}
-
 func TestFunctionalWorksFetchMaps(t *testing.T) {
 	resp := `{"data":{"jobs":[
 {"title":"Senior Scala Engineer","slug":"remote-senior-scala-engineer-abc","company":{"name":"Acme"},"location":{"city":"Berlin","country":"Germany"},"remote":true,"firstPublished":"2026-07-15T21:18:56.516Z","descriptionHtml":"<p>Build &amp; ship with Scala.</p>","tags":[{"label":"Scala"},{"label":"Kafka"}]},

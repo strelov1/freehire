@@ -31,16 +31,6 @@ func TestRemotliRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestRemotliBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/remotli.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/remotli.yml fails validation: %v", err)
-	}
-}
-
 func TestRemotliFetchPaginatesFiltersAndMaps(t *testing.T) {
 	page1 := `{"jobs":[
 {"jobs":{"id":6381,"title":"Senior QA Engineer","company":"Storyblok","location":"Zürich, Switzerland","type":"full-time","description":"<p>Test.</p>","applyUrl":"https://www.storyblok.com/job?gh_jid=1","status":"active","publishedAt":"2026-08-10T08:47:26.000Z"}},

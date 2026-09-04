@@ -4,11 +4,11 @@
 package telegram
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // Kind describes how a channel formats vacancies, steering the extraction prompt.
@@ -21,29 +21,41 @@ const (
 	KindBoard Kind = "board"
 )
 
-// ChannelEntry is one configured channel from sources/telegram.yml.
+// ChannelEntry is one configured channel from the telegram_channels table.
 type ChannelEntry struct {
-	Channel string `yaml:"channel"`
-	Kind    Kind   `yaml:"kind"`
+	Channel string
+	Kind    Kind
 }
 
-// Config is the parsed sources/telegram.yml: the set of channels to crawl.
+// Config is the set of channels to crawl.
 type Config struct {
-	Channels []ChannelEntry `yaml:"channels"`
+	Channels []ChannelEntry
 }
 
-// LoadChannels resolves the channel file from CHANNELS_FILE (default
-// sources/telegram.yml), loads it, and validates it — the load+validate the crawl
-// and extract workers both need. It fails fast so a misconfigured channel never
+// ChannelLister is the read the crawl and extract workers need from the catalog, named
+// narrowly so the dependency says so: *db.Queries satisfies it, and nothing else about
+// the query layer is reachable from here.
+type ChannelLister interface {
+	ListActiveTelegramChannels(ctx context.Context) ([]db.ListActiveTelegramChannelsRow, error)
+}
+
+// LoadChannels reads the active channels and validates them — the load+validate the
+// crawl and extract workers both need. It fails fast so a misconfigured channel never
 // starts a run.
-func LoadChannels() (Config, error) {
-	path := os.Getenv("CHANNELS_FILE")
-	if path == "" {
-		path = "sources/telegram.yml"
-	}
-	cfg, err := LoadConfig(path)
+//
+// An empty catalog is an error, not an empty run: a crawl with nothing to crawl exits 0
+// having done nothing, which is indistinguishable from a healthy quiet run.
+func LoadChannels(ctx context.Context, q ChannelLister) (Config, error) {
+	rows, err := q.ListActiveTelegramChannels(ctx)
 	if err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("telegram: list channels: %w", err)
+	}
+	if len(rows) == 0 {
+		return Config{}, fmt.Errorf("telegram: no active channels configured")
+	}
+	cfg := Config{Channels: make([]ChannelEntry, len(rows))}
+	for i, row := range rows {
+		cfg.Channels[i] = ChannelEntry{Channel: row.Channel, Kind: Kind(row.Kind)}
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -60,24 +72,6 @@ func (c Config) Kinds() map[string]Kind {
 	return m
 }
 
-// LoadConfig reads and parses a sources/telegram.yml file.
-func LoadConfig(path string) (Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, fmt.Errorf("telegram: read config %s: %w", path, err)
-	}
-	return ParseConfig(data)
-}
-
-// ParseConfig parses sources/telegram.yml bytes into a Config.
-func ParseConfig(data []byte) (Config, error) {
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return Config{}, fmt.Errorf("telegram: parse config: %w", err)
-	}
-	return cfg, nil
-}
-
 // Validate checks every entry has a channel, a known kind, and no duplicates, so
 // the crawl command can fail fast instead of silently skipping or double-crawling.
 // The duplicate check is case-insensitive, matching t.me username matching
@@ -85,6 +79,11 @@ func ParseConfig(data []byte) (Config, error) {
 // "HRLunapark" name the same channel and would otherwise both pass as distinct
 // entries, crawling and extracting the same posts twice under different
 // external_ids.
+//
+// The table's CHECK constraint and case-folded unique index enforce the same three
+// rules. This is not redundant: it is what turns a schema violation nobody reads into a
+// named error at the point of use, and it is the only check a hand-built Config (a test,
+// a future admin path) passes through at all.
 func (c Config) Validate() error {
 	seen := make(map[string]bool, len(c.Channels))
 	for _, e := range c.Channels {

@@ -122,7 +122,7 @@ func isBusinessCategory(category string) bool {
 // the posting alone. It matters because boards are re-crawled hourly on an unchanged
 // dedup key: the title rule is mirrored by the ingest filter, so what it deletes stays
 // deleted, but nothing at crawl time knows a company's bucket. A company-scoped
-// deletion whose board is still listed in sources/*.yml undoes itself within the hour,
+// deletion whose board is still live in the catalog undoes itself within the hour,
 // which is why the worker refuses to run one without retiring the board in the same
 // step.
 func companyScoped(rule string) bool {

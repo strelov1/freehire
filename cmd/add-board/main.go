@@ -111,7 +111,7 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 
 func addBoard(ctx context.Context, pool *pgxpool.Pool, in boardcatalog.InsertInput, registry map[string]sources.Source) int {
 	repo := boardcatalog.NewQueriesRepository(db.New(pool))
-	b, err := boardcatalog.Insert(ctx, repo, in, boardcatalog.StatusActive, registry)
+	b, err := boardcatalog.NewInserter(repo, registry).Insert(ctx, in, boardcatalog.StatusActive)
 	if err != nil {
 		if errors.Is(err, boardcatalog.ErrDuplicateBoard) {
 			log.Printf("add-board: %s/%s already exists (pending or active) — nothing written", in.Provider, in.Board)

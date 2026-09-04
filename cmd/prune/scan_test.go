@@ -76,10 +76,7 @@ func testRand() *rand.Rand { return rand.New(rand.NewPCG(1, 0)) }
 // Nothing at crawl time knows a company's bucket, so what it removes is back within
 // the hour — the deletion is pure loss.
 func TestScanRefusesCompanyRulesWhileTheBoardIsListed(t *testing.T) {
-	listedBoard := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "acme"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"acme": true}},
-	}
+	listedBoard := catalogOf(t, "greenhouse/acme")
 	// A business role at a company that has never posted anything technical: the rule
 	// matches, and only the guard stands between it and deletion.
 	rows := []db.PruneCandidatesRow{
@@ -97,10 +94,7 @@ func TestScanRefusesCompanyRulesWhileTheBoardIsListed(t *testing.T) {
 
 	// Strike the board — the provider is still a crawled platform, this one board is
 	// gone — and the same row becomes a target.
-	retired := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "still-here"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"still-here": true}},
-	}
+	retired := catalogOf(t, "greenhouse/still-here")
 	p, err = scan(context.Background(), &fakeCandidates{rows: rows}, ev, retired, 0, 10, testRand())
 	if err != nil {
 		t.Fatalf("scan: %v", err)
@@ -113,10 +107,7 @@ func TestScanRefusesCompanyRulesWhileTheBoardIsListed(t *testing.T) {
 // The title rule needs the opposite: a posting whose board is not listed is not
 // re-crawlable, so removing it cannot be undone and the rule must not apply.
 func TestScanRefusesTitleRuleOnAnUnlistedBoard(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "acme"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"acme": true}},
-	}
+	brd := catalogOf(t, "greenhouse/acme")
 	rows := []db.PruneCandidatesRow{
 		row(1, "greenhouse", "acme:1", "acme", "Registered Nurse", ""),      // listed board
 		row(2, "greenhouse", "imported:9", "other", "Registered Nurse", ""), // link-source import
@@ -134,10 +125,7 @@ func TestScanRefusesTitleRuleOnAnUnlistedBoard(t *testing.T) {
 // The cap bounds what is collected, not what is counted: a capped run must still say
 // how much work is left, or it reads as a finished campaign.
 func TestScanCapsTargetsButKeepsCounting(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "acme"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"acme": true}},
-	}
+	brd := catalogOf(t, "greenhouse/acme")
 	var rows []db.PruneCandidatesRow
 	for i := int64(1); i <= 25; i++ {
 		rows = append(rows, row(i, "greenhouse", "acme:x", "acme", "Line Cook", ""))
@@ -158,10 +146,7 @@ func TestScanCapsTargetsButKeepsCounting(t *testing.T) {
 // The keyset has to advance past a page in which nothing matched, or the scan loops on
 // the same page forever.
 func TestScanWalksEveryPageAndTerminates(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "acme"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"acme": true}},
-	}
+	brd := catalogOf(t, "greenhouse/acme")
 	var rows []db.PruneCandidatesRow
 	for i := int64(1); i <= 12000; i++ {
 		title := "Backend Engineer" // no rule matches
@@ -191,10 +176,7 @@ func TestScanWalksEveryPageAndTerminates(t *testing.T) {
 // under the unknown rule.
 func TestScanPreservesTheTriStateSignal(t *testing.T) {
 	// The provider is a crawled platform; the rows' own board is retired.
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "still-here"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"still-here": true}},
-	}
+	brd := catalogOf(t, "greenhouse/still-here")
 	rows := []db.PruneCandidatesRow{
 		row(1, "greenhouse", "gone:1", "acme", "Team Member", ""),
 		func() db.PruneCandidatesRow {
@@ -285,10 +267,7 @@ func TestDeleteTargetsKeepsTheCountOnFailure(t *testing.T) {
 // is absent" for free, so the company-scoped rules fired on 2991 hand-curated Telegram
 // vacancies that no crawl restores.
 func TestScanNeverTouchesASourceWithNoBoards(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "acme"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"acme": true}},
-	}
+	brd := catalogOf(t, "greenhouse/acme")
 	rows := []db.PruneCandidatesRow{
 		row(1, "telegram", "jobnetworkng/34050/0", "acme", "Crane Operator", ""),
 		row(2, "telegram", "huntmejob/33477/0", "acme", "Dispatcher", "management"),
@@ -349,10 +328,7 @@ func (c *countingIndex) SubmitJobDeletion(_ context.Context, ids []int64) error 
 // cap excluded empties it of real titles precisely when a cap is in use — which is
 // every first live run, and the one time the operator most needs to read it.
 func TestScanSamplesOnlyWhatItWillDelete(t *testing.T) {
-	brd := boards{
-		listed:     map[boardKey]bool{{"greenhouse", "acme"}: true},
-		byProvider: map[string]map[string]bool{"greenhouse": {"acme": true}},
-	}
+	brd := catalogOf(t, "greenhouse/acme")
 	var rows []db.PruneCandidatesRow
 	for i := int64(1); i <= 2000; i++ {
 		rows = append(rows, row(i, "greenhouse", "acme:x", "acme", "Line Cook", ""))

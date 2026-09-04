@@ -265,13 +265,3 @@ func TestHHProviderRegisteredAndAggregator(t *testing.T) {
 		t.Error("AggregatorProviders() should include hh (multi-company aggregator)")
 	}
 }
-
-func TestHHBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/hh.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/hh.yml fails validation: %v", err)
-	}
-}

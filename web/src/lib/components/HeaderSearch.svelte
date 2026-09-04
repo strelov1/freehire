@@ -6,7 +6,7 @@
   import { LayoutGrid, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
-  import { dropdownRows, namedCompanies } from '$lib/dropdownRows';
+  import { dropdownRows, namedCompanies, type DropdownRow } from '$lib/dropdownRows';
   import { companyLogoUrl } from '$lib/logo';
   import { EntityLogo } from '$lib/ui';
   import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '$lib/types';
@@ -41,6 +41,7 @@
     size = 'header',
     autofocus = false,
     counts = null,
+    onOpenFilters,
   }: {
     placeholder: string;
     size?: 'header' | 'hero';
@@ -49,6 +50,11 @@
      *  the page before the visitor has decided to search, so the width check below is
      *  the feature rather than a fallback. */
     autofocus?: boolean;
+    /** A filter modal the HOST owns, for a page with no list of its own — the
+     *  homepage, where picking filters composes a search rather than narrowing a list.
+     *  Where a list IS registered its own modal wins, so this is never a second way to
+     *  open the same thing. */
+    onOpenFilters?: () => void;
     /** The category distribution behind the empty box, when the page has already
      *  measured it. Off a list page this is otherwise fetched here on first focus;
      *  a caller that server-rendered the same numbers passes them instead of making
@@ -71,6 +77,15 @@
   const companiesLimit = 3;
   // Asked for, before the relevance filter takes its cut.
   const companiesFetch = 12;
+
+  /** The Location popover's own state, held here so the two panels can take turns:
+   *  the effect below puts this box's dropdown away when the popover opens, and every
+   *  path that focuses the input puts the popover away. */
+  let locationOpen = $state(false);
+
+  $effect(() => {
+    if (locationOpen) close();
+  });
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
@@ -174,7 +189,7 @@
   // The All-filters trigger: shown (with its active-filter badge) only on list pages
   // that published `openFilters`; the count getter is called inside this $derived so
   // the badge tracks the view's live filter state.
-  const filterTrigger = $derived(headerFilterTrigger(registered));
+  const filterTrigger = $derived(headerFilterTrigger(registered, onOpenFilters));
 
   // Roles and categories are jobs facets, so the companies list publishes no `suggest`
   // and this stays null there — the header never asks which page it is on.
@@ -346,6 +361,20 @@
     }
   }
 
+  /** The label above a section's first row, or null for a section that needs none.
+   *
+   *  An EMPTY box gets none. Its rows are the only thing in the panel — there is no
+   *  second section to tell them apart from — so the heading was a line of small caps
+   *  introducing a list nobody could confuse with anything. A typed box does have
+   *  neighbours (postings, companies), and there "Filter by" says what picking one of
+   *  these rows does rather than what it is. */
+  function sectionHeading(kind: DropdownRow['kind']): string | null {
+    if (kind === 'text') return null;
+    if (kind === 'job') return 'Jobs';
+    if (kind === 'company') return 'Companies';
+    return draft.text.trim() === '' ? null : 'Filter by';
+  }
+
   const rowClass = (active: boolean) =>
     cn(
       'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
@@ -387,7 +416,11 @@
           // empty screen this is the only interactive thing, so it carries the weight
           // the header version borrows from the bar around it.
           'h-14 gap-3 rounded-2xl px-4 text-base shadow-lg shadow-foreground/5 sm:h-16 sm:px-5'
-        : 'h-11 gap-2 rounded-md px-3 text-sm',
+        : // 48px inside the bar's own 56px. The header height is `h-14` in eight other
+          // places (`top-14`, `top-20`, `PINNED_HEADER_TOP`, the full-bleed
+          // `calc(100dvh-3.5rem)`), so it is the field that grows into the bar rather
+          // than the bar that grows.
+          'h-12 gap-2 rounded-md px-3 text-sm',
     )}
   >
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
@@ -406,6 +439,7 @@
       store={target.filterScope?.store}
       counts={target.filterScope?.counts() ?? null}
       inferred={target.filterScope?.inferred?.() ?? false}
+      bind:open={locationOpen}
     />
     <div class={cn('w-px shrink-0 bg-border', hero ? 'h-7' : 'h-5')}></div>
     <Search class={cn('shrink-0 text-muted-foreground', hero ? 'size-5' : 'size-4')} />
@@ -427,6 +461,9 @@
         // Off a list page nothing has measured the catalogue for us, so the empty
         // box's starting points are fetched here — on the first focus, never on load.
         if (!registered) loadBrowseCounts();
+        // Reached without a click by `/` and Cmd+K, which is the case the popover's own
+        // click-away handler cannot see.
+        locationOpen = false;
         // Focus is the question "what can I put here", so it reopens the dropdown —
         // including after a click-away dismissed it, which would otherwise leave the
         // box permanently silent for the rest of the visit.
@@ -467,13 +504,14 @@
     {/if}
     <!-- All-filters trigger, mirroring the Location scope-prefix on the left: divided
          from the input and pinned to the right edge. Opens the active page's own filter
-         modal; the badge shows the active-filter count. Hidden where no list owns a
-         modal (launcher/listless pages register no `openFilters`). -->
-    {#if filterTrigger.visible}
+         modal — or, on a page with no list, the one its host handed us. The badge shows
+         the active-filter count, and only a list can have one. Hidden where neither
+         exists. -->
+    {#if filterTrigger.open}
       <div class="h-5 w-px shrink-0 bg-border"></div>
       <button
         type="button"
-        onclick={() => registered?.openFilters?.()}
+        onclick={filterTrigger.open}
         aria-label={filterTrigger.count > 0
           ? `Filters (${filterTrigger.count} active)`
           : 'Filters'}
@@ -511,17 +549,12 @@
       )}
     >
       {#each rows as row, i (row.key)}
-        {#if row.first && row.kind !== 'text'}
+        {@const heading = row.first ? sectionHeading(row.kind) : null}
+        {#if heading}
           <li
             class="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
-            {#if row.kind === 'suggestion'}
-              {draft.text.trim() === '' ? 'Where to start' : 'Filter by'}
-            {:else if row.kind === 'job'}
-              Jobs
-            {:else}
-              Companies
-            {/if}
+            {heading}
           </li>
         {/if}
         <li role="option" id="role-suggestion-{i}" aria-selected={activeIndex === i}>

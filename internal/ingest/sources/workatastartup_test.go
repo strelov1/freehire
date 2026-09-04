@@ -38,16 +38,6 @@ func TestWorkAtAStartupRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestWorkAtAStartupBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/workatastartup.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/workatastartup.yml fails validation: %v", err)
-	}
-}
-
 func TestWorkAtAStartupMissingKeyErrors(t *testing.T) {
 	t.Setenv(waasKeyEnv, "")
 	_, err := NewWorkAtAStartup(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{})

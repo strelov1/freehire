@@ -68,13 +68,21 @@
   mask-image: radial-gradient(ellipse 90% 75% at 25% 0%, #000 18%, transparent 80%);
 }
 /* The centred variant, for a hero that is one thing in the middle of the screen
-   rather than a left column beside a visual — the homepage's search box. Everything
-   the grid IS (dot size, spacing, opacity, the --muted-foreground that carries it
-   through both themes) stays above; only where the dots gather moves. Pair it with
-   `dot-grid`, which still sets the positioning context. */
+   rather than a left column beside a visual — the homepage's search box.
+   Horizontally, and ONLY horizontally: the ellipse, its stops and its anchor to the
+   top of the section are the ones above, unchanged.
+
+   It first moved the anchor down to the middle of the section as well, which read
+   worse than the original on every screen: it put the densest dots directly behind
+   the heading and the search box — the one thing the mask exists to prevent — and
+   left the top of the page bare, so the page started empty and got busy as you read
+   down. Anchored at the top the texture is a sky that fades into the copy, which is
+   what /about does and why it looks settled.
+
+   Pair it with `dot-grid`, which still sets the positioning context. */
 .dot-grid-centred::before {
-  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 42%, #000 15%, transparent 78%);
-  mask-image: radial-gradient(ellipse 75% 65% at 50% 42%, #000 15%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 50% 0%, #000 18%, transparent 80%);
+  mask-image: radial-gradient(ellipse 90% 75% at 50% 0%, #000 18%, transparent 80%);
 }
 
 /* CLI promo strip: hidden before first paint for a visitor who already closed it.

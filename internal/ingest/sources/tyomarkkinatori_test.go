@@ -75,16 +75,6 @@ func TestTyomarkkinatoriProvider(t *testing.T) {
 	}
 }
 
-func TestTyomarkkinatoriBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/tyomarkkinatori.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig(sources/tyomarkkinatori.yml): %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/tyomarkkinatori.yml fails registry validation: %v", err)
-	}
-}
-
 func TestTyomarkkinatoriIsBoardlessAggregator(t *testing.T) {
 	s := NewTyomarkkinatori(nil)
 	if _, ok := s.(boardless); !ok {

@@ -37,7 +37,7 @@ nothing but the URL. No network, no database.
   environment its tenant lives in), `hosttenantboard` (`<host>/<tenant>/<guid>`, for UKG Pro
   Recruiting — a different product from UKG Ready, on different hosts).
 - **The mode must match how the ingest adapter addresses the board**, not how the URL reads. The
-  board string is copied verbatim into `sources/<provider>.yml` and into the `external_id`
+  board string is copied verbatim into the `boards` catalog and into the `external_id`
   namespace, so a truncated one is a board that 404s every crawl: Huntflow's adapter fetches
   `<board>.huntflow.io`, which is why a regional tenant's board keeps its `.global` label.
 - **Fail-safe by construction.** A wrong or missing entry makes a link *unrecognised*, never a
@@ -45,7 +45,7 @@ nothing but the URL. No network, no database.
   host is safe to add.
 - **A white-labelled ATS is one row per reseller domain.** HiringThing serves one application
   from ~25 domains and its board IS the careers host, so a slug names nothing on its own — the
-  rows are copied from the domains `sources/hiringthing.yml` is actually on, and an unlisted one
+  rows are copied from the domains the catalog's `hiringthing` boards are actually on, and an unlisted one
   is simply unrecognised.
 - **A platform's own hosts are declined** (`platformHost`). In `host` and `subdomain` mode the
   host IS the board, so a vendor's console (`app.teamtailor.com`, which every Teamtailor career

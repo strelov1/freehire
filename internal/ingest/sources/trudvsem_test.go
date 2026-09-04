@@ -203,13 +203,3 @@ func TestTrudvsemProviderRegistered(t *testing.T) {
 		t.Error("FilterableProviders() should include trudvsem")
 	}
 }
-
-func TestTrudvsemBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/trudvsem.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/trudvsem.yml fails validation: %v", err)
-	}
-}

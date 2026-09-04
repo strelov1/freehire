@@ -1,10 +1,15 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ArrowRight } from '@lucide/svelte';
+  import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
+  import { api } from '$lib/api';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
   import type { ApplyPlan } from '$lib/apiSuggestions';
   import { countryLabel } from '$lib/facets';
+  import { emptyFilters, filtersToParams } from '$lib/facetModel';
+  import type { StagedFilters } from '$lib/stagedFilters.svelte';
   import { CLI_INSTALL, CLI_REPO } from '$lib/cliLinks';
   import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
   import { starterSuggestions } from '$lib/suggestions';
@@ -39,13 +44,13 @@
     scale: CatalogScale | null;
   } = $props();
 
-  /** How many category shortcuts to draw. The dropdown offers ten; eight fills two
-   *  tidy rows under the box on a laptop without the eye giving up on the second. */
-  const CHIP_LIMIT = 8;
-
-  /** How many countries to offer beside the crafts. Four is what fits on one line next
-   *  to "Remote" without the row wrapping on a laptop. */
-  const COUNTRY_CHIP_LIMIT = 4;
+  /** How many shortcuts each row draws. The dropdown offers ten crafts; six and three
+   *  are what fit on ONE line each at 1280px, measured rather than guessed — every chip
+   *  carries a six-digit count, so eight of them wrapped to three lines and pushed the
+   *  catalogue's own figures off the first screen. Those figures are the argument this
+   *  page makes; the shortcuts are a convenience, so the shortcuts give way. */
+  const CHIP_LIMIT = 6;
+  const COUNTRY_CHIP_LIMIT = 3;
 
   type Chip = { href: string; label: string; count?: number };
 
@@ -117,6 +122,40 @@
     ].filter((f) => f !== null),
   );
 
+  /** The All-filters modal, hosted here rather than by a list — there is no list.
+   *
+   *  Everywhere else this modal NARROWS what is already on screen, so it writes into
+   *  that page's URL-synced store as you pick. Here it COMPOSES a search: it is seeded
+   *  empty, edits nothing, and its footer hands back the staged selection, which
+   *  becomes the query the feed opens with. `seed` and `onApply` are the modal's own
+   *  provisions for exactly this — the same pair the profile editor uses. */
+  let filtersOpen = $state(false);
+
+  /** The distribution behind the modal's controls, recomputed as the selection moves.
+   *
+   *  Not optional decoration: a DYNAMIC facet — Skills, City, Job language, Source —
+   *  has no compiled option list at all. FacetSection builds its entire list from this
+   *  map (see its `def.dynamic` branch), so without it those four panes are empty
+   *  selects with nothing to pick. The page's own `counts` cannot serve: the SSR call
+   *  asks for `category` and `countries` alone, which is all the chips need.
+   *
+   *  `disjunctive` so each facet's numbers ignore its own selection — the same call
+   *  every other host of this modal makes. */
+  const stagedCounts = (params: URLSearchParams) =>
+    api.facetCounts(params, { disjunctive: true });
+
+  /** How many postings the staged selection would open, for the footer's Apply — read
+   *  off the same count call rather than a one-row search, the way /analytics does. */
+  const previewCount = (params: URLSearchParams) =>
+    api.facetCounts(params).then((c) => c.total);
+
+  function searchWithFilters(staged: StagedFilters) {
+    filtersOpen = false;
+    const query = filtersToParams(staged.value).toString();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- query appended to a resolved path
+    void goto(query ? `${resolve('/jobs')}?${query}` : resolve('/jobs'));
+  }
+
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   async function copyInstall() {
@@ -165,21 +204,23 @@
   </a>
 {/snippet}
 
-<!-- Hero. Not quite a full viewport: `-8rem` rather than the 3.5rem header alone, so
-     the strip below shows about a line at the fold. A landing whose first screen ends
-     exactly at the fold reads as the whole page, and nobody scrolls a page they have
-     already finished.
+<!-- Hero. Deliberately shorter than the viewport: `-19rem` is the 3.5rem header plus
+     the room the figures below need, so how big the catalogue is lands on the FIRST
+     screen rather than under it. The number is the argument — a stranger deciding
+     whether to type anything into the box is answering "does this place even have my
+     job", and making them scroll to find out asks them to trust it first.
 
      `svh` rather than `vh`: on mobile Safari `100vh` counts browser chrome that is not
      there, so the box it centres would sit noticeably below the middle of the screen.
 
      `dot-grid` is the shared backdrop from app.css that every landing hero here wears.
-     `dot-grid-centred` (also in app.css) is its one variant: the same grid with its
-     mask moved to the middle, because this hero is not a left column beside a visual. -->
+     `dot-grid-centred` (also in app.css) is its one variant: the same grid, the same
+     fade from the top, moved to the horizontal centre because this hero is not a left
+     column beside a visual. -->
 <section
-  class="dot-grid dot-grid-centred -mx-4 flex min-h-[calc(100svh-8rem)] flex-col items-center justify-center px-4 pb-16 pt-12"
+  class="dot-grid dot-grid-centred -mx-4 flex min-h-[calc(100svh-19rem)] flex-col items-center justify-center px-4 pb-10 pt-10"
 >
-  <div class="flex w-full max-w-2xl flex-col items-center gap-8">
+  <div class="flex w-full max-w-2xl flex-col items-center gap-6">
     <!-- No mark or wordmark here: the header carries both, three centimetres above and
          on the same screen. Repeating them made the page introduce itself twice before
          it said anything. -->
@@ -200,6 +241,7 @@
         size="hero"
         autofocus
         {counts}
+        onOpenFilters={() => (filtersOpen = true)}
       />
     </div>
 
@@ -221,9 +263,9 @@
        reads, so the two pages cannot quote numbers measured at different moments —
        and a figure the snapshot could not measure is dropped rather than shown as a
        zero. `tabular-nums` keeps the row from twitching as the counts move. -->
-  <section class="border-t border-border py-12 sm:py-16">
+  <section class="border-t border-border py-10">
     <SectionLabel text="the catalogue, today" />
-    <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">
+    <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
       {#each figures as f (f.label)}
         <!-- `flex-col-reverse` so the number reads first and the label sits under it,
              while the DOM keeps the term before its description. The label is written
@@ -237,7 +279,7 @@
         </div>
       {/each}
     </dl>
-    <div class="mt-8">
+    <div class="mt-6">
       {@render onward(resolve('/open'), 'Every number, live, with the endpoint behind it')}
     </div>
   </section>
@@ -320,3 +362,19 @@
     </div>
   </div>
 </section>
+
+<!-- Seeded empty and applied by navigating: see `searchWithFilters`. `savedSearches`
+     is off — that tab manages the alerts a signed-in visitor saved from a list, and
+     this modal has no list behind it. `counts` seeds the controls before the first
+     staged fetch answers; `stagedCounts` is what keeps them right, and what gives the
+     dynamic facets any options at all. -->
+<FilterModal
+  seed={emptyFilters()}
+  {counts}
+  {stagedCounts}
+  {previewCount}
+  open={filtersOpen}
+  onClose={() => (filtersOpen = false)}
+  applyLabel="Search jobs"
+  onApply={searchWithFilters}
+/>

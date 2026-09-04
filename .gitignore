@@ -23,7 +23,6 @@ hire
 /backfill-application-events
 /backfill-applications
 /backfill-blank-company
-/backfill-board-catalog
 /backfill-clearance
 /backfill-company-info
 /backfill-company-names
@@ -71,7 +70,6 @@ hire
 /search-drain
 /seed-adzuna-description-queue
 /similar-backfill
-/validate-sources
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
 /backfill-derive

@@ -3,8 +3,6 @@ package main
 import (
 	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
 
 // identityKey is the default dedup key: the board id verbatim (case-sensitive).
@@ -90,33 +88,5 @@ func TestMapSeeds(t *testing.T) {
 	got := mapSeeds(workdayProber{}, []string{"aig|wd1|early_careers"})
 	if got[0] != "aig.wd1.myworkdayjobs.com/early_careers" {
 		t.Errorf("workday got %v", got)
-	}
-}
-
-func TestAppendEntries(t *testing.T) {
-	existing := "- company: Acme\n  board: acme\n"
-	out, err := appendEntries(existing, []entry{
-		{Company: "Initech", Board: "initech"},
-		{Company: "Findhelp, A PBC", Board: "findhelp"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Existing preserved verbatim; additions sorted by board (findhelp < initech). A comma
-	// in a block scalar is not a YAML flow indicator, so yaml.v3 leaves the name unquoted.
-	want := "- company: Acme\n  board: acme\n" +
-		"- company: Findhelp, A PBC\n  board: findhelp\n" +
-		"- company: Initech\n  board: initech\n"
-	if out != want {
-		t.Fatalf("got:\n%q\nwant:\n%q", out, want)
-	}
-
-	// Round-trip guard: the merged file parses back into the union of all entries.
-	var entries []entry
-	if err := yaml.Unmarshal([]byte(out), &entries); err != nil {
-		t.Fatalf("merged output does not parse: %v", err)
-	}
-	if len(entries) != 3 {
-		t.Fatalf("round-trip: got %d entries, want 3", len(entries))
 	}
 }

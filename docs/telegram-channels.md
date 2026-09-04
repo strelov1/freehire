@@ -1,8 +1,9 @@
 # Telegram channels
 
 Human-readable index of the public Telegram channels crawled by `cmd/tg-ingest`
-(see `internal/ingest/telegram`). **The source of truth is [`sources/telegram.yml`](../sources/telegram.yml)** —
-this document mirrors it for browsing; when the YAML changes, regenerate this list.
+(see `internal/ingest/telegram`). **The source of truth is the `telegram_channels`
+table** (seeded by [migration 0130](../migrations/0130_telegram_channels.sql)) — this
+document mirrors it for browsing; when the table changes, regenerate this list.
 
 **95 channels** (17 `authored`, 78 `board`) as of the last update.
 
@@ -12,7 +13,7 @@ this document mirrors it for browsing; when the YAML changes, regenerate this li
 - **`board`** — job-board channel; one post is normally one vacancy.
 
 Aggregator-bot channels that repost their own job sites (e.g. `remoteyeah`) are
-deliberately excluded — they duplicate the ATS boards `sources/*.yml` already cover.
+deliberately excluded — they duplicate the ATS boards the catalog already covers.
 
 ## Curated tier-1 (RU / IT)
 

@@ -33,16 +33,6 @@ func TestLandingJobsRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestLandingJobsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/landingjobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/landingjobs.yml fails validation: %v", err)
-	}
-}
-
 // The feed is a top-level array carrying a native id but no company, so identity is split: the
 // id is the dedup key and the URL supplies the employer. This covers the whole happy path.
 func TestLandingJobsFetchMapsAPosting(t *testing.T) {

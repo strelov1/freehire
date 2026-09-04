@@ -58,16 +58,6 @@ func TestHiBobRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestHiBobBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/hibob.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/hibob.yml fails validation: %v", err)
-	}
-}
-
 // The API answers 401 without a Referer naming the tenant's own careers page — no cookie, no
 // token, just that header. Losing it silently empties every board, so it is asserted.
 func TestHiBobSendsTenantRefererElseTheAPIRefuses(t *testing.T) {

@@ -3,7 +3,6 @@ package sources
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -40,29 +39,14 @@ func TestParseUKGReadyBoard(t *testing.T) {
 // only in the host are one crawl target — ukgreadyTenant is what boardIdentity folds them with,
 // and without it the tenant is crawled twice under two external_id namespaces.
 func TestUKGReadyTenantFoldsThePodHost(t *testing.T) {
-	data := []byte(`
-- company: Albanese Confectionery
-  board: secure4.saashr.com/6162397
-- company: Albanese (harvested again)
-  board: secure2.entertimeonline.com/6162397
-- company: Rapid Robert's
-  board: secure.entertimeonline.com/10284
-`)
-	cfg, err := ParseConfig("ukgready", data)
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
+	a, _ := BoardDedupeKey(CompanyEntry{Company: "Albanese Confectionery", Provider: "ukgready", Board: "secure4.saashr.com/6162397"})
+	b, _ := BoardDedupeKey(CompanyEntry{Company: "Albanese (harvested again)", Provider: "ukgready", Board: "secure2.entertimeonline.com/6162397"})
+	if a != b {
+		t.Errorf("two pod hosts of one tenant should share a key, got %q and %q", a, b)
 	}
-	want := []CompanyEntry{
-		{Company: "Albanese Confectionery", Provider: "ukgready", Board: "secure4.saashr.com/6162397"}, // first wins
-		{Company: "Rapid Robert's", Provider: "ukgready", Board: "secure.entertimeonline.com/10284"},
-	}
-	if len(cfg.Sources) != len(want) {
-		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
-	}
-	for i, w := range want {
-		if !reflect.DeepEqual(cfg.Sources[i], w) {
-			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
-		}
+	other, _ := BoardDedupeKey(CompanyEntry{Company: "Rapid Robert's", Provider: "ukgready", Board: "secure.entertimeonline.com/10284"})
+	if other == a {
+		t.Error("a different tenant must not fold onto this one")
 	}
 	// A board with no host part folds to itself rather than to nothing, so a malformed entry
 	// cannot collapse every other malformed entry into one.

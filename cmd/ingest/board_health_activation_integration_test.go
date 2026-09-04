@@ -22,9 +22,9 @@ func TestBoardHealth_RecordSuccessActivatesAPendingBoard(t *testing.T) {
 	h := newBoardHealth(pool)
 	catalog := boardcatalog.NewQueriesRepository(db.New(pool))
 
-	if _, err := boardcatalog.Insert(ctx, catalog,
+	if _, err := boardcatalog.NewInserter(catalog, sources.Taxonomy()).Insert(ctx,
 		boardcatalog.InsertInput{Provider: "greenhouse", Board: "acme", Company: "Acme"},
-		boardcatalog.StatusPending, sources.Taxonomy()); err != nil {
+		boardcatalog.StatusPending); err != nil {
 		t.Fatalf("seed pending board: %v", err)
 	}
 
@@ -62,9 +62,9 @@ func TestBoardHealth_RecordSuccessDoesNotReactivateAnAlreadyActiveBoard(t *testi
 	h := newBoardHealth(pool)
 	catalog := boardcatalog.NewQueriesRepository(db.New(pool))
 
-	first, err := boardcatalog.Insert(ctx, catalog,
+	first, err := boardcatalog.NewInserter(catalog, sources.Taxonomy()).Insert(ctx,
 		boardcatalog.InsertInput{Provider: "greenhouse", Board: "acme", Company: "Acme"},
-		boardcatalog.StatusActive, sources.Taxonomy())
+		boardcatalog.StatusActive)
 	if err != nil {
 		t.Fatalf("seed active board: %v", err)
 	}

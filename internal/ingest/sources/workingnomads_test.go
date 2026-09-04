@@ -31,16 +31,6 @@ func TestWorkingNomadsRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestWorkingNomadsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/workingnomads.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/workingnomads.yml fails validation: %v", err)
-	}
-}
-
 func TestWorkingNomadsFetchMaps(t *testing.T) {
 	feed := `[
 {"url":"https://www.workingnomads.com/job/go/1663269/","title":"Senior React Native Developer","description":"<p>Build apps.</p>","company_name":"Lemon.io","category_name":"Development","tags":"react native,react,nodejs","location":"Europe, North America","pub_date":"2026-06-12T11:32:31-04:00"},

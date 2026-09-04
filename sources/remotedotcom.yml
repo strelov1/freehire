@@ -1,6 +1,0 @@
-# Remote.com curated remote-jobs board. Boardless: one public listing
-# (remote.com/jobs/all, read as an RSC flight), so the entry carries no board; each job's
-# company comes from the posting, not this placeholder. Hydrating: the listing has no body,
-# so a run costs one posting-page request per NEW posting.
-- company: Remote.com
-  provider: remotedotcom

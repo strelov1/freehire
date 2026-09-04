@@ -39,17 +39,6 @@ func TestUSAJobsKeyGatesTheCrawlRegistry(t *testing.T) {
 	}
 }
 
-func TestUSAJobsBoardFileValidates(t *testing.T) {
-	t.Setenv("USAJOBS_API_KEY", "test-key")
-	cfg, err := LoadConfig("../../../sources/usajobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/usajobs.yml fails validation: %v", err)
-	}
-}
-
 // fakeUSAJobs serves the search fixture for page 1 and an empty page afterwards, and
 // records the auth header so the test asserts the key is carried on every request.
 type fakeUSAJobs struct {

@@ -345,45 +345,6 @@ func TestWhatJobsMarketsStateTheirOwnCountry(t *testing.T) {
 	}
 }
 
-// whatjobsMarketBoardFiles maps a market code to its board file, mirroring the filename
-// convention (sources/whatjobs.yml for the default "us" market, sources/whatjobs-<code>.yml for
-// every other one).
-func whatjobsMarketBoardFile(code string) string {
-	if code == "us" {
-		return "../../../sources/whatjobs.yml"
-	}
-	return "../../../sources/whatjobs-" + code + ".yml"
-}
-
-// Every market's board file must load and validate against the real registry, so a malformed
-// entry fails the build rather than a cron run.
-func TestWhatJobsMarketBoardFilesValidate(t *testing.T) {
-	ids := make([]string, len(whatjobsMarkets))
-	for i, m := range whatjobsMarkets {
-		ids[i] = m.code + ":id"
-	}
-	t.Setenv("WHATJOBS_PUBLISHER_IDS", strings.Join(ids, ","))
-	registry := All(nil)
-
-	for _, m := range whatjobsMarkets {
-		cfg, err := LoadConfig(whatjobsMarketBoardFile(m.code))
-		if err != nil {
-			t.Fatalf("market %q: LoadConfig: %v", m.code, err)
-		}
-		if err := cfg.Validate(registry); err != nil {
-			t.Fatalf("market %q: board file fails validation: %v", m.code, err)
-		}
-		if len(cfg.Sources) == 0 {
-			t.Fatalf("market %q: board file lists no keyword slices", m.code)
-		}
-		for _, e := range cfg.Sources {
-			if strings.TrimSpace(e.Board) == "" {
-				t.Errorf("market %q: entry %q has no keyword board", m.code, e.Company)
-			}
-		}
-	}
-}
-
 // A keyword that is blank after trimming must never be sent. Config validation only rejects an
 // EMPTY board, so an entry holding spaces slips through — and the feed answers a blank keyword with
 // its entire unfiltered inventory (32k postings for "   ", 560k for ""), which a single stray board

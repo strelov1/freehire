@@ -32,16 +32,6 @@ func TestNoDeskRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestNoDeskBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/nodesk.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/nodesk.yml fails validation: %v", err)
-	}
-}
-
 // The live feed embeds raw named entities like "&rsquo;" outside CDATA, which the strict
 // XML decoder rejects ("invalid character entity") — this fixture reproduces that shape
 // rather than a hand-cleaned one, so a regression back to GetXML/strict decoding fails loudly.

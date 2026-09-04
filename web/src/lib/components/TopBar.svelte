@@ -6,10 +6,10 @@
   import AuthDialog from './AuthDialog.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
-  import NotificationBell from './NotificationBell.svelte';
   import BrandMark from './BrandMark.svelte';
   import { safeRedirect } from '$lib/safeRedirect';
   import { isFullBleedRoute } from '$lib/shellLayout';
+  import { HEADER_LINKS } from '$lib/siteNav';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
@@ -29,19 +29,9 @@
   // The homepage is the one exception: its whole content is a large centred copy of
   // this same box, so the header renders none. Two identical fields on one screen make
   // the visitor choose between them for no reason, and the hero is the focused one.
-  // The brand, the bell and the menu stay — sign-in has to remain reachable.
+  // The brand and the menu stay — sign-in and notifications live in the menu's own
+  // control strip, and both have to remain reachable.
   const bareHeader = $derived(page.url.pathname === '/');
-
-  // What the freed slot carries instead. The three browse surfaces, which everywhere
-  // else are one tap down inside HeaderMenu — on the page whose entire content is a
-  // search box, the visitor who arrived to LOOK rather than to search has nowhere else
-  // to be told the catalogue can also be walked. Kept to three: this is the menu's own
-  // top, not a second navigation with its own opinions.
-  const browseLinks = [
-    { href: resolve('/jobs'), label: 'Jobs' },
-    { href: resolve('/companies'), label: 'Companies' },
-    { href: resolve('/collections'), label: 'Collections' },
-  ];
 
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
@@ -117,12 +107,22 @@
          cap then hands the rest back to the side slots, which keeps it on the axis. -->
     <div class={['flex min-w-0 flex-1', fullBleed && 'max-w-3xl basis-3xl']}>
       {#if bareHeader}
-        <nav aria-label="Browse" class="flex items-center gap-4 sm:gap-6">
-          {#each browseLinks as link (link.href)}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href in browseLinks is already a resolve() result; the rule cannot see through the array -->
-            <a href={link.href}
-              class="whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
+        <!-- Hidden below 640px, where five labels do not fit beside the brand and the
+             burger — and where the burger is a thumb away and lists every one of these
+             with the same glyph and a full label. Shrinking them to bare icons would
+             trade a legible row for five guesses. -->
+        <nav aria-label="Site" class="hidden items-center gap-5 sm:flex lg:gap-6">
+          <!-- Divides the nav from the wordmark, the same rule the search box draws
+               between its Location scope and the field. Without it the first link sat
+               one word-gap from "freehire" and read as part of it. -->
+          <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
+          {#each HEADER_LINKS as link (link.href)}
+            {@const Icon = link.icon}
+            <a
+              href={resolve(link.href)}
+              class="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
+              <Icon class="size-4 shrink-0" aria-hidden="true" />
               {link.label}
             </a>
           {/each}
@@ -134,8 +134,9 @@
       {/if}
     </div>
 
+    <!-- One cluster, not two: the bell lives inside HeaderMenu beside the profile it
+         notifies about, so this slot is just the menu. -->
     <div class={['flex shrink-0 items-center gap-1', fullBleed && 'flex-1 basis-0 justify-end']}>
-      <NotificationBell />
       <HeaderMenu />
     </div>
   </div>

@@ -32,16 +32,6 @@ func TestCryptocurrencyJobsRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestCryptocurrencyJobsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/cryptocurrencyjobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/cryptocurrencyjobs.yml fails validation: %v", err)
-	}
-}
-
 // Same feed generator family as nodesk (see the adapter's doc comment): reproduces the raw,
 // non-CDATA "&rsquo;" entity shape so a regression back to strict GetXML decoding fails loudly.
 func TestCryptocurrencyJobsFetchSplitsTitleAndMaps(t *testing.T) {

@@ -960,6 +960,14 @@ type SubscriptionMatch struct {
 	LastError      string             `json:"last_error"`
 }
 
+type TelegramChannel struct {
+	ID        int64              `json:"id"`
+	Channel   string             `json:"channel"`
+	Kind      string             `json:"kind"`
+	Active    bool               `json:"active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type TelegramLink struct {
 	UserID   int64              `json:"user_id"`
 	ChatID   int64              `json:"chat_id"`

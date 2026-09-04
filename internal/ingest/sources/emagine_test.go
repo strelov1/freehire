@@ -386,13 +386,3 @@ func TestEmagineRegistered(t *testing.T) {
 		t.Error("All() should register provider emagine")
 	}
 }
-
-func TestEmagineBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/emagine.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/emagine.yml fails validation: %v", err)
-	}
-}

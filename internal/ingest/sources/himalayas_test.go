@@ -32,16 +32,6 @@ func TestHimalayasRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestHimalayasBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/himalayas.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/himalayas.yml fails validation: %v", err)
-	}
-}
-
 func TestHimalayasFetchPaginatesAndMaps(t *testing.T) {
 	// totalCount (3) exceeds the first page, so the adapter must fetch a second offset page.
 	// The offset advances by the count actually returned (page1 has 2 postings → next

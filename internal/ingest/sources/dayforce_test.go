@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -57,30 +56,15 @@ func TestDayforceSiteID(t *testing.T) {
 // Two cultures of one career site are one crawl target: the same posting keeps one
 // jobPostingId in both, so keeping both entries would store it twice under two external_id
 // namespaces and let the company-scoped sweep close whichever copy a run did not refresh.
-func TestParseConfigFoldsDayforceCultureVariants(t *testing.T) {
-	data := []byte(`
-- company: Le Groupe Maurice
-  board: gm/candidateportal/fr-CA
-- company: Le Groupe Maurice (English)
-  board: gm/candidateportal
-- company: dnata
-  board: dcrusa/join-us
-`)
-	cfg, err := ParseConfig("dayforce", data)
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
+func TestBoardDedupeKeyFoldsDayforceCultureVariants(t *testing.T) {
+	fr, _ := BoardDedupeKey(CompanyEntry{Company: "Le Groupe Maurice", Provider: "dayforce", Board: "gm/candidateportal/fr-CA"})
+	en, _ := BoardDedupeKey(CompanyEntry{Company: "Le Groupe Maurice (English)", Provider: "dayforce", Board: "gm/candidateportal"})
+	if fr != en {
+		t.Errorf("two cultures of one career site should share a key, got %q and %q", fr, en)
 	}
-	want := []CompanyEntry{
-		{Company: "Le Groupe Maurice", Provider: "dayforce", Board: "gm/candidateportal/fr-CA"}, // first wins
-		{Company: "dnata", Provider: "dayforce", Board: "dcrusa/join-us"},
-	}
-	if len(cfg.Sources) != len(want) {
-		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
-	}
-	for i, w := range want {
-		if !reflect.DeepEqual(cfg.Sources[i], w) {
-			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
-		}
+	other, _ := BoardDedupeKey(CompanyEntry{Company: "dnata", Provider: "dayforce", Board: "dcrusa/join-us"})
+	if other == fr {
+		t.Error("a different Dayforce site must not fold onto this one")
 	}
 }
 

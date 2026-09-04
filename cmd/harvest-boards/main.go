@@ -1,11 +1,20 @@
-// Command harvest-boards expands a board file (sources/<provider>.yml) with live boards
-// drawn from a seed slug list. The seed (e.g. a public aggregator dump) is a candidate
-// worklist only: every new slug is probed against the platform's official public API and
-// kept only if it returns jobs, so the committed file is our own validated fact set, not a
-// redistributed dataset. Run-once host tool; review the diff before ingesting.
+// Command harvest-boards expands a provider's board catalog with live boards drawn from
+// a seed slug list. The seed (e.g. a public aggregator dump) is a candidate worklist
+// only: every new slug is probed against the platform's official public API and kept
+// only if it returns jobs, so what lands in the catalog is our own validated fact set,
+// not a redistributed dataset.
+//
+// It reports by default and writes only under --apply, the same convention as
+// cmd/add-board and cmd/merge-companies: the probe result is printed before anything is
+// persisted. A kept board enters at status='pending' — probed, but not yet proven by a
+// pipeline crawl, which is exactly what pending means. Pending boards are crawled, so
+// the first successful run promotes them.
 //
 //	go run ./cmd/harvest-boards <provider> <seed.json>
 //	go run ./cmd/harvest-boards -pace 2 -workers 4 workable seed.json   # rate-limited platform
+//	go run ./cmd/harvest-boards --apply greenhouse seed.json            # persist what probed live
+//
+// Needs DATABASE_URL.
 //
 // A seed entry is either a bare slug or an object. The object may claim two things about the
 // candidate, and a seed source that knows either should say so:
@@ -22,27 +31,31 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"sync"
 
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
 // defaultProbeWorkers bounds the concurrent probe fan-out. It bounds the BURST only; a
 // platform whose budget is per-window needs -pace as well (see pacer.go).
 const defaultProbeWorkers = 16
 
-func main() { os.Exit(run()) }
+func main() { worker.Main(run) }
 
 func run() int {
 	// Flags precede the positional arguments, which stay as they were: 1 = discovery (the
 	// prober must support it), 2 = provider plus seed path.
 	pace := flag.Float64("pace", 0, "cap the probe rate at this many requests per second (0 = unpaced)")
 	workers := flag.Int("workers", defaultProbeWorkers, "concurrent probes in flight")
+	apply := flag.Bool("apply", false, "actually add the boards it kept; without it the run only reports")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 1 && len(args) != 2 {
@@ -73,7 +86,14 @@ func run() int {
 			"adapter; no name gate, no pacing", a.provider)
 	}
 
-	ctx := context.Background()
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+	repo := boardcatalog.NewQueriesRepository(db.New(pool))
+
 	client := newCountingClient(paced(sources.NewClient(), *pace))
 	if *pace > 0 {
 		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", *pace, *workers)
@@ -85,14 +105,13 @@ func run() int {
 		return 1
 	}
 
-	boardPath := fmt.Sprintf("sources/%s.yml", provider)
-	cfg, err := sources.LoadConfig(boardPath)
+	listed, err := boardcatalog.LoadForProvider(ctx, repo, provider)
 	if err != nil {
-		log.Printf("harvest-boards: %v", err)
+		log.Printf("harvest-boards: load catalog for %s: %v", provider, err)
 		return 1
 	}
-	existing := make(map[string]bool, len(cfg.Sources))
-	for _, e := range cfg.Sources {
+	existing := make(map[string]bool, len(listed))
+	for _, e := range listed {
 		existing[e.Board] = true
 	}
 
@@ -133,29 +152,48 @@ func run() int {
 	if len(kept) == 0 {
 		return 0
 	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].Board < kept[j].Board })
 
-	current, err := os.ReadFile(boardPath)
-	if err != nil {
-		log.Printf("harvest-boards: %v", err)
-		return 1
+	if !*apply {
+		for _, e := range kept {
+			log.Printf("harvest-boards: would add %s/%s (%s)", provider, e.Board, e.Company)
+		}
+		log.Printf("harvest-boards: %d boards would be added — re-run with --apply to persist", len(kept))
+		return 0
 	}
-	merged, err := appendEntries(string(current), kept)
-	if err != nil {
-		log.Printf("harvest-boards: %v", err)
-		return 1
+	return addBoards(ctx, repo, provider, kept)
+}
+
+// addBoards persists the probed-live boards at status='pending'. A duplicate is counted,
+// not an error: a concurrent harvest or a curator addition landing the same board first
+// is the unique index doing its job, and the run should still add the rest.
+func addBoards(ctx context.Context, repo boardcatalog.Repository, provider string, kept []entry) int {
+	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
+	added, duplicate := 0, 0
+	for _, e := range kept {
+		b, err := ins.Insert(ctx, boardcatalog.InsertInput{
+			Provider: provider,
+			Board:    e.Board,
+			Company:  e.Company,
+			Surface:  "cli",
+		}, boardcatalog.StatusPending)
+		switch {
+		case errors.Is(err, boardcatalog.ErrDuplicateBoard):
+			duplicate++
+		case err != nil:
+			log.Printf("harvest-boards: add %s/%s: %v", provider, e.Board, err)
+			return 1
+		case b.Status == boardcatalog.StatusRejected:
+			// Validation refused a board the prober just watched return jobs through its
+			// own adapter. That is a bug in the harvest, not a bad seed — stop rather
+			// than store more of whatever produced it.
+			log.Printf("harvest-boards: %s/%s rejected by validation: %s", provider, e.Board, b.RejectedReason)
+			return 1
+		default:
+			added++
+		}
 	}
-	// Write via a temp file + rename so a crash mid-write cannot leave a truncated
-	// board file (the committed source of truth ingest crawls).
-	tmp := boardPath + ".tmp"
-	if err := os.WriteFile(tmp, []byte(merged), 0o644); err != nil {
-		log.Printf("harvest-boards: %v", err)
-		return 1
-	}
-	if err := os.Rename(tmp, boardPath); err != nil {
-		log.Printf("harvest-boards: %v", err)
-		return 1
-	}
-	log.Printf("harvest-boards: appended %d boards to %s", len(kept), boardPath)
+	log.Printf("harvest-boards: added %d boards (pending), %d already listed", added, duplicate)
 	return 0
 }
 

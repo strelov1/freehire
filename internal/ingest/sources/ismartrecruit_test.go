@@ -33,18 +33,6 @@ func TestISmartRecruitInhouseToken(t *testing.T) {
 	}
 }
 
-// TestISmartRecruitBoardFileValidates loads the shipped board file and validates every entry
-// against the registry, catching a missing registration or a malformed seed entry.
-func TestISmartRecruitBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/ismartrecruit.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/ismartrecruit.yml fails validation: %v", err)
-	}
-}
-
 // TestISmartRecruitCardsFixture parses a real listing grid and asserts each posting card: the
 // numeric external id decoded from the detail href, the title (en-dash entity decoded), the
 // location cell, and the detail URL.

@@ -145,26 +145,6 @@ func TestEdjoinRegisteredAndFacet(t *testing.T) {
 	}
 }
 
-func TestEdjoinBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/edjoin.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
-	if len(cfg.Sources) == 0 {
-		t.Fatal("sources/edjoin.yml lists no boards")
-	}
-	// Every board is a job-type id, so a non-numeric entry is a mistake the endpoint would
-	// answer with an empty slice rather than an error.
-	for _, e := range cfg.Sources {
-		if strings.Trim(e.Board, "0123456789") != "" {
-			t.Errorf("board %q is not a job-type id", e.Board)
-		}
-	}
-}
-
 // The endpoint dereferences catID, districtID and recruitmentCenterID without a null check and
 // answers a 500 error page when any is missing, so the URL builder must always send all three.
 func TestEdjoinListingURLCarriesMandatoryFilters(t *testing.T) {
