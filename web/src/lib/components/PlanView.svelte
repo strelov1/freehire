@@ -43,15 +43,33 @@
   // section that cannot show the money is worse than none.
   let billing = $state<BillingOverview | null>(null);
 
-  // Only for a plan that could have a subscription behind it. A free account has none by
-  // definition, and asking anyway spends a provider round-trip per page view to be told 404
-  // — the answer `plan` already gave us.
+  // Both are asked for together, and only for a plan that could have a subscription behind
+  // it: a free account has none by definition, and asking anyway spends two provider
+  // round-trips per page view to be told 404 — the answer `plan` already gave us.
+  //
+  // They are cleared FIRST, on every run. What is on screen belongs to the plan we last
+  // read, so when that changes — a subscription lapses, or another account signs in without
+  // a reload — leaving it there shows one person's invoices and receipt links to the next.
+  // `live` drops a slow response from a plan we have since moved off, which is the same
+  // leak arriving late.
   $effect(() => {
-    if (plan?.plan !== 'pro') return;
+    const pro = plan?.plan === 'pro';
+    billing = null;
+    manageUrl = null;
+    if (!pro) return;
+
+    let live = true;
     api
       .billingSubscription()
-      .then((b) => (billing = b))
-      .catch(() => (billing = null));
+      .then((b) => live && (billing = b))
+      .catch(() => {});
+    api
+      .billingManageUrl()
+      .then(({ url }) => live && (manageUrl = url))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   });
 
   const money = formatMinorUnits;
@@ -66,14 +84,6 @@
     canceled: 'Cancelled',
     unpaid: 'Unpaid',
   };
-
-  $effect(() => {
-    if (plan?.plan !== 'pro') return;
-    api
-      .billingManageUrl()
-      .then(({ url }) => (manageUrl = url))
-      .catch(() => (manageUrl = null));
-  });
 
   $effect(() => {
     if (!isAuthenticated()) return;
