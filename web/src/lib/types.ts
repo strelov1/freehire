@@ -100,6 +100,33 @@ export interface PlansMatrix {
   enforced: string[];
 }
 
+/** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`). */
+export interface BillingInvoice {
+  date: string;
+  amount_cents: number;
+  currency: string;
+  /** The provider's word: paid, open, void, uncollectible. A failed charge stays visible —
+   *  hiding it leaves a subscriber wondering why their card was declined. */
+  status: string;
+  receipt_url?: string;
+}
+
+/** What the caller is paying and what has been taken. Read through to the payment provider
+ *  on every request rather than mirrored: a receipt list that has quietly missed a refund is
+ *  worse than no receipt list.
+ *
+ *  `ends_at` replaces `renews_at` after a cancellation — "renews on the 4th" beside "you
+ *  cancelled" is the kind of contradiction that generates support mail. */
+export interface BillingOverview {
+  status: string;
+  amount_cents: number;
+  currency: string;
+  interval: string;
+  renews_at?: string;
+  ends_at?: string;
+  invoices: BillingInvoice[];
+}
+
 export interface PlanState {
   plan: 'free' | 'pro';
   resets_at: string;

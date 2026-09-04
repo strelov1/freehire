@@ -46,6 +46,10 @@ func (h *billingHandlers) register(api fiber.Router, mw middleware) {
 	// checkout, and its own route rather than a field on /me/plan because it is a call to
 	// the provider — the plan surface must stay readable when the provider is not.
 	api.Get("/billing/manage", mw.cookie, h.Manage)
+	// What the caller is paying and what has been taken. Read through to the provider, so
+	// it is its own route rather than a field on /me/plan — that surface must keep answering
+	// when the provider does not.
+	api.Get("/billing/subscription", mw.cookie, h.Subscription)
 }
 
 // applyTimeout bounds the inline attempt to bring the user's plan up to date.
@@ -141,6 +145,31 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "checkout is not available")
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
+}
+
+// Subscription returns what the caller is paying and what has been charged.
+//
+// 404 when there is no subscription — the ordinary state for a free account, and the
+// surface renders nothing rather than an error. The money is read from the provider on
+// every request rather than mirrored here: a receipt list that has quietly missed a refund
+// is worse than no receipt list.
+func (h *billingHandlers) Subscription(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
+	defer cancel()
+
+	out, err := h.billing.SubscriptionOverview(ctx, userID)
+	if err != nil {
+		if !errors.Is(err, billing.ErrNoSubscription) {
+			log.Printf("billing: no subscription overview for user %d: %v", userID, err)
+		}
+		return fiber.NewError(fiber.StatusNotFound, "no subscription")
+	}
+	return c.JSON(fiber.Map{"data": out})
 }
 
 // Manage returns the provider's own page where this subscriber changes their card or

@@ -72,6 +72,7 @@ import type {
   MatchAnalysisResponse,
   Allowance,
   AiUsage,
+  BillingOverview,
   PlansMatrix,
   PlanState,
   UsageHistoryEntry,
@@ -1031,6 +1032,13 @@ export function createApi(
   async function billingCheckout(priceID?: string): Promise<{ url: string }> {
     const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
     return requestData<{ url: string }>(`/api/v1/billing/checkout${q}`);
+  }
+
+  /** What the caller is paying and what has been charged. 404 when there is no
+   *  subscription, which is the ordinary state for a free account — the surface renders
+   *  nothing rather than an error. */
+  async function billingSubscription(): Promise<BillingOverview> {
+    return requestData<BillingOverview>('/api/v1/billing/subscription');
   }
 
   /** What each plan allows and what Pro costs. Public: no session needed. Powers /pricing.
@@ -2247,6 +2255,7 @@ export function createApi(
     plans,
     billingCheckout,
     billingManageUrl,
+    billingSubscription,
     myPlanHistory,
     myUsage,
     listViewedSlugs,
