@@ -70,6 +70,9 @@ func subscriptionError(err error) error {
 	switch {
 	case errors.Is(err, subscription.ErrInvalidChannel):
 		return fiber.NewError(fiber.StatusBadRequest, "unsupported notification channel")
+	case errors.Is(err, subscription.ErrUnfilteredSearch):
+		return fiber.NewError(fiber.StatusBadRequest,
+			"add at least one filter before subscribing — an unfiltered search would notify you about every job")
 	case errors.Is(err, subscription.ErrSavedSearchNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "saved search not found")
 	case errors.Is(err, subscription.ErrDuplicate):

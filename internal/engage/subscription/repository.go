@@ -66,6 +66,21 @@ func (r *QueriesRepository) Create(ctx context.Context, userID, savedSearchID in
 	return fromRow(row), nil
 }
 
+// SavedSearchQuery reads the owner-scoped saved search's stored query. It reuses
+// GetSavedSearch rather than adding a narrower query: the read is once per subscribe,
+// and a second SQL statement selecting one column would be a second place to keep the
+// ownership predicate correct.
+func (r *QueriesRepository) SavedSearchQuery(ctx context.Context, userID, savedSearchID int64) (string, error) {
+	row, err := r.q.GetSavedSearch(ctx, db.GetSavedSearchParams{ID: savedSearchID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrSavedSearchNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return row.Query, nil
+}
+
 func (r *QueriesRepository) SetActive(ctx context.Context, userID, id int64, active bool) (Subscription, error) {
 	row, err := r.q.SetSubscriptionActive(ctx, db.SetSubscriptionActiveParams{
 		Active: active,
