@@ -134,6 +134,7 @@ func TestSetCVAppearanceDefaults_RejectsUnknownTemplate(t *testing.T) {
 
 	in := setCVAppearanceDefaultsRequest{TemplateID: "not-a-real-template"}
 	resp := doCV(t, f.app, fiber.MethodPut, "/api/v1/me/cv-appearance-defaults", f.token, in)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d, want 400, body = %s", resp.StatusCode, body)
@@ -167,10 +168,12 @@ func TestSetCVAppearanceDefaults_ReplacesPreviousValue(t *testing.T) {
 	f := newAppearanceDefaultsFixture(t, "replace-defaults@example.test")
 
 	first := setCVAppearanceDefaultsRequest{TemplateID: "compact", Margins: cv.Margins{Top: 0.75, Right: 0.75, Bottom: 0.75, Left: 0.75}}
-	doCV(t, f.app, fiber.MethodPut, "/api/v1/me/cv-appearance-defaults", f.token, first)
+	firstResp := doCV(t, f.app, fiber.MethodPut, "/api/v1/me/cv-appearance-defaults", f.token, first)
+	firstResp.Body.Close()
 
 	second := setCVAppearanceDefaultsRequest{TemplateID: "sidebar", Margins: cv.Margins{Top: 1, Right: 1, Bottom: 1, Left: 1}}
 	resp := doCV(t, f.app, fiber.MethodPut, "/api/v1/me/cv-appearance-defaults", f.token, second)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)

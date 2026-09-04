@@ -304,7 +304,9 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	var body struct {
 		Data cvResponse `json:"data"`
 	}
-	json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	resp.Body.Close()
 	// Name comes from the structure; the summary/tagline falls back to the headline line.
 	if body.Data.Document.Header.FullName != "Seeded Ada" || body.Data.Document.Summary != "Backend Engineer" {
@@ -346,7 +348,9 @@ func TestCVCreate_UsesSavedAppearanceDefaults(t *testing.T) {
 	var body struct {
 		Data cvResponse `json:"data"`
 	}
-	json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	resp.Body.Close()
 	if body.Data.TemplateID != saved.TemplateID {
 		t.Errorf("template = %q, want saved default %q", body.Data.TemplateID, saved.TemplateID)
@@ -392,7 +396,9 @@ func TestCVCreate_ExplicitTemplateOverridesSavedDefault(t *testing.T) {
 	var body struct {
 		Data cvResponse `json:"data"`
 	}
-	json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	resp.Body.Close()
 	if body.Data.TemplateID != "compact" {
 		t.Errorf("template = %q, want explicit request value %q", body.Data.TemplateID, "compact")
@@ -426,7 +432,9 @@ func TestCVCreate_NoSavedDefaultsUsesSystemDefaults(t *testing.T) {
 	var body struct {
 		Data cvResponse `json:"data"`
 	}
-	json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	resp.Body.Close()
 	if body.Data.TemplateID != cv.DefaultTemplateID {
 		t.Errorf("template = %q, want system default %q", body.Data.TemplateID, cv.DefaultTemplateID)

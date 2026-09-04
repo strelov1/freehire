@@ -157,6 +157,7 @@ func TestResetCVFromResume_CreatesBaseWhenAbsent(t *testing.T) {
 	}
 	app := buildResetApp(h, iss)
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d body = %s", resp.StatusCode, body)
@@ -210,6 +211,7 @@ func TestResetCVFromResume_CreatesBaseFromSavedAppearanceDefaults(t *testing.T) 
 	}
 	app := buildResetApp(h, iss)
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d body = %s", resp.StatusCode, body)
