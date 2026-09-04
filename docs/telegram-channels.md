@@ -2,7 +2,7 @@
 
 Human-readable index of the public Telegram channels crawled by `cmd/tg-ingest`
 (see `internal/ingest/telegram`). **The source of truth is the `telegram_channels`
-table** (seeded by [migration 0129](../migrations/0129_telegram_channels.sql)) — this
+table** (seeded by [migration 0130](../migrations/0130_telegram_channels.sql)) — this
 document mirrors it for browsing; when the table changes, regenerate this list.
 
 **95 channels** (17 `authored`, 78 `board`) as of the last update.

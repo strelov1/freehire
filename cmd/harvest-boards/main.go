@@ -168,15 +168,15 @@ func run() int {
 // not an error: a concurrent harvest or a curator addition landing the same board first
 // is the unique index doing its job, and the run should still add the rest.
 func addBoards(ctx context.Context, repo boardcatalog.Repository, provider string, kept []entry) int {
-	registry := sources.All(sources.NewClient())
-	added, duplicate, rejected := 0, 0, 0
+	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
+	added, duplicate := 0, 0
 	for _, e := range kept {
-		b, err := boardcatalog.Insert(ctx, repo, boardcatalog.InsertInput{
+		b, err := ins.Insert(ctx, boardcatalog.InsertInput{
 			Provider: provider,
 			Board:    e.Board,
 			Company:  e.Company,
 			Surface:  "cli",
-		}, boardcatalog.StatusPending, registry)
+		}, boardcatalog.StatusPending)
 		switch {
 		case errors.Is(err, boardcatalog.ErrDuplicateBoard):
 			duplicate++
@@ -184,19 +184,16 @@ func addBoards(ctx context.Context, repo boardcatalog.Repository, provider strin
 			log.Printf("harvest-boards: add %s/%s: %v", provider, e.Board, err)
 			return 1
 		case b.Status == boardcatalog.StatusRejected:
-			// Validation refused it. That is a bug in the harvest, not in the seed: the
-			// prober just watched this board return jobs through its own adapter.
+			// Validation refused a board the prober just watched return jobs through its
+			// own adapter. That is a bug in the harvest, not a bad seed — stop rather
+			// than store more of whatever produced it.
 			log.Printf("harvest-boards: %s/%s rejected by validation: %s", provider, e.Board, b.RejectedReason)
-			rejected++
+			return 1
 		default:
 			added++
 		}
 	}
-	log.Printf("harvest-boards: added %d boards (pending), %d already listed, %d rejected",
-		added, duplicate, rejected)
-	if rejected > 0 {
-		return 1
-	}
+	log.Printf("harvest-boards: added %d boards (pending), %d already listed", added, duplicate)
 	return 0
 }
 

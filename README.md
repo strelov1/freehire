@@ -247,8 +247,8 @@ ATS platform is a new adapter in `internal/ingest/sources` plus one line in
 validated against the registry when it enters the catalog, before any crawl.
 
 For most companies the platform is already supported, so adding them is just one
-line in the board file. Only when a company runs on an ATS we don't cover yet does
-it need a new provider (a new adapter). Either way, if you want a source added,
+catalog row. Only when a company runs on an ATS we don't cover yet does it need a
+new provider (a new adapter). Either way, if you want a source added,
 **start by [opening an issue](https://github.com/strelov1/freehire/issues)** — name
 the company and its careers URL, and we'll confirm whether it's a one-line add or a
 new provider before any code.

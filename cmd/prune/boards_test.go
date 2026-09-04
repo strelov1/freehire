@@ -244,16 +244,18 @@ func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
 	}
 }
 
-// Retiring every board a provider has is a one-way door, and the report is where it
-// has to be caught. Ingest takes one board file by path, so a provider with nothing
-// left in sources/ is never crawled again — and the company-scoped rules refuse a job
-// they cannot re-crawl, so its postings can never be pruned either. The dead weight
-// becomes permanent. sources/retired/README.md states the order (prune the jobs first,
-// move the last entry after), but stating it in prose leaves it to whoever reads the
-// report at 2am.
+// Retiring every board a provider has is a one-way door, and the report is where it has
+// to be caught. Ingest crawls only live catalog rows, so a provider with none is never
+// crawled again — and the company-scoped rules refuse a job they cannot re-crawl, so its
+// postings can never be pruned either. The dead weight becomes permanent.
+//
+// retireBoards enforces the order too (it holds such a provider back), but a refusal
+// discovered after the run reads as "there was nothing to do". The report is what the
+// operator has in front of them beforehand.
 //
 // The boards are still listed — they are genuine candidates — but the report names the
-// providers it would empty, so the entry that empties one is moved last, deliberately.
+// providers it would empty, so the one that empties a provider is retired last,
+// deliberately, after its jobs are gone.
 func TestReportBoardsNamesProvidersItWouldEmpty(t *testing.T) {
 	// Every board tinyats has is about to be retired; greenhouse keeps one.
 	brd := catalogOf(t, "tinyats/one", "tinyats/two", "greenhouse/dead", "greenhouse/alive")

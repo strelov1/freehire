@@ -1,9 +1,8 @@
 -- name: InsertBoard :one
 -- Insert a board row. Callers that pass status='active' also pass a non-null
--- activated_at (curator additions via cmd/add-board, and the one-off
--- cmd/backfill-board-catalog); every other caller passes NULL for both status='pending'
--- and status='rejected'. A collision with an existing 'pending'/'active' row on
--- (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
+-- activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
+-- for both status='pending' and status='rejected'. A collision with an existing
+-- 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 -- the caller maps that to a duplicate-board error.
 INSERT INTO boards (provider, board, region, company, hub, tenants, url, status,
                      submitted_by, surface, rejected_reason, activated_at)

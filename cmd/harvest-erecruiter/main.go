@@ -62,7 +62,7 @@ func run() int {
 	}
 	defer cleanup()
 	repo := boardcatalog.NewQueriesRepository(db.New(pool))
-	registry := sources.All(sources.NewClient())
+	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
 
 	existing, err := existingCfgs(ctx, repo)
 	if err != nil {
@@ -95,7 +95,7 @@ func run() int {
 		fmt.Printf("%s — %s — %d offers\n", cfg, in.company, offers)
 		kept++
 		if *apply {
-			if err := addBoard(ctx, repo, registry, cfg, in.company); err != nil {
+			if err := addBoard(ctx, ins, cfg, in.company); err != nil {
 				log.Printf("harvest-erecruiter: %v", err)
 				return 1
 			}
@@ -111,13 +111,13 @@ func run() int {
 // addBoard persists one validated cfg at status='pending'. A duplicate is not an error:
 // another run may have landed the same cfg between the catalog read and this insert, and
 // the run should still onboard the rest.
-func addBoard(ctx context.Context, repo boardcatalog.Repository, registry map[string]sources.Source, cfg, company string) error {
-	b, err := boardcatalog.Insert(ctx, repo, boardcatalog.InsertInput{
+func addBoard(ctx context.Context, ins *boardcatalog.Inserter, cfg, company string) error {
+	b, err := ins.Insert(ctx, boardcatalog.InsertInput{
 		Provider: provider,
 		Board:    cfg,
 		Company:  company,
 		Surface:  "cli",
-	}, boardcatalog.StatusPending, registry)
+	}, boardcatalog.StatusPending)
 	switch {
 	case errors.Is(err, boardcatalog.ErrDuplicateBoard):
 		return nil

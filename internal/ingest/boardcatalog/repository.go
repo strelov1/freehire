@@ -46,56 +46,100 @@ type Repository interface {
 	ListBySubmitter(ctx context.Context, submittedBy int64) ([]Board, error)
 }
 
-// Insert validates the candidate against registry and persists it: StatusRejected with
-// the validation error as reason when invalid, else wantStatus (StatusPending for a
-// crowdsourced submission, StatusActive for a curator addition via cmd/add-board).
-// Insert never surfaces a validation failure as an error — only ErrDuplicateBoard (a
-// collision with an existing pending/active row) or a genuine persistence error.
-func Insert(ctx context.Context, repo Repository, in InsertInput, wantStatus Status, registry map[string]sources.Source) (Board, error) {
+// Inserter is the only way a board enters the catalog: it validates, normalizes, refuses
+// a duplicate, and persists.
+//
+// It holds one provider's folded board keys, read once and then kept current by adding
+// every board it writes. That is not only about the query count — though it is the
+// difference between one read per RUN and one per row, which matters because a harvest
+// inserts thousands against a provider with thousands of live boards (paylocity carries
+// ~9.5k). It is also what makes a bulk run CORRECT: two spellings of one board inside a
+// single seed collide on the second, which a set read once and never updated would miss.
+//
+// Its lifetime is one run or one request. A longer-lived Inserter would go stale against
+// other writers — and the identity index is the backstop for that race either way, since
+// it is enforced in the database and this is not.
+type Inserter struct {
+	repo     Repository
+	registry map[string]sources.Source
+	// folded maps provider → the sources.BoardDedupeKey of every board known live.
+	folded map[string]map[string]bool
+}
+
+// NewInserter constructs an Inserter over a repository and the adapter registry.
+func NewInserter(repo Repository, registry map[string]sources.Source) *Inserter {
+	return &Inserter{repo: repo, registry: registry, folded: map[string]map[string]bool{}}
+}
+
+// Insert validates the candidate and persists it: StatusRejected with the validation
+// error as reason when invalid, else wantStatus (StatusPending for a crowdsourced
+// submission or a harvested board, StatusActive for a curator addition via
+// cmd/add-board).
+//
+// It never surfaces a validation failure as an error — an invalid candidate is STORED as
+// rejected, so the submitter is told why instead of the row silently not existing. Only
+// ErrDuplicateBoard (a collision with an existing pending/active row) or a genuine
+// persistence error come back as errors, so a caller that cares must check
+// b.Status == StatusRejected.
+func (i *Inserter) Insert(ctx context.Context, in InsertInput, wantStatus Status) (Board, error) {
 	// A board id never legitimately carries surrounding whitespace, and one that does is
 	// a board that 404s: the adapters paste it into a URL and the pipeline namespaces
 	// external_id with the literal string. It also hides a duplicate from both checks
 	// below — a harvested UKG board once arrived with a trailing space and so did not
 	// collide with the same board already listed.
 	in.Board = strings.TrimSpace(in.Board)
-	if err := Validate(in, registry); err != nil {
-		return repo.InsertRow(ctx, in, StatusRejected, err.Error())
+	if err := Validate(in, i.registry); err != nil {
+		return i.repo.InsertRow(ctx, in, StatusRejected, err.Error())
 	}
-	dup, err := foldsOntoLiveBoard(ctx, repo, in)
+
+	key, keyed := sources.BoardDedupeKey(sources.CompanyEntry{
+		Provider: in.Provider, Board: in.Board, Region: in.Region,
+	})
+	// A boardless entry has no tenant id and is never a duplicate of anything.
+	if keyed {
+		live, err := i.liveKeys(ctx, in.Provider)
+		if err != nil {
+			return Board{}, err
+		}
+		if live[key] {
+			return Board{}, ErrDuplicateBoard
+		}
+	}
+
+	b, err := i.repo.InsertRow(ctx, in, wantStatus, "")
 	if err != nil {
 		return Board{}, err
 	}
-	if dup {
-		return Board{}, ErrDuplicateBoard
+	if keyed && b.Status != StatusRejected {
+		i.folded[in.Provider][key] = true
 	}
-	return repo.InsertRow(ctx, in, wantStatus, "")
+	return b, nil
 }
 
-// foldsOntoLiveBoard reports whether the candidate addresses a board the provider
-// already crawls under a different SPELLING — the half of sources.BoardDedupeKey the
-// unique index cannot express, because the fold is Go and the index is SQL. See that
-// function for what a second spelling costs (a false-close, not just a wasted crawl).
+// liveKeys returns the provider's folded board keys, reading the catalog the first time
+// it is asked about that provider.
 //
-// It runs only for a candidate that passed validation, and costs one query per insert:
-// a curator addition, a crowdsourced submission, or a harvested board. None of those is
-// on a hot path.
-func foldsOntoLiveBoard(ctx context.Context, repo Repository, in InsertInput) (bool, error) {
-	entry := sources.CompanyEntry{Provider: in.Provider, Board: in.Board, Region: in.Region}
-	key, ok := sources.BoardDedupeKey(entry)
-	if !ok {
-		// A boardless entry has no tenant id and is never a duplicate of anything.
-		return false, nil
+// The fold is what the unique index cannot express, because the fold is Go and the index
+// is SQL: iCIMS writes one board as both a slug and a host, Dayforce names one site once
+// per culture, Gusto resolves two employer slugs to one uuid, UKG Ready serves one tenant
+// from several pod hosts. See sources.BoardDedupeKey for what a second spelling costs —
+// a false-close, not just a wasted crawl.
+func (i *Inserter) liveKeys(ctx context.Context, provider string) (map[string]bool, error) {
+	if keys, ok := i.folded[provider]; ok {
+		return keys, nil
 	}
-	live, err := repo.ListActiveForProvider(ctx, in.Provider)
+	live, err := i.repo.ListActiveForProvider(ctx, provider)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
+	keys := make(map[string]bool, len(live))
 	for _, b := range live {
-		if k, ok := sources.BoardDedupeKey(b.CompanyEntry()); ok && k == key {
-			return true, nil
+		if k, ok := sources.BoardDedupeKey(b.CompanyEntry()); ok {
+			keys[k] = true
 		}
 	}
-	return false, nil
+	i.folded[provider] = keys
+	return keys, nil
 }
 
 // Compile-time proof that QueriesRepository satisfies Repository.

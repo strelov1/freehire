@@ -109,17 +109,17 @@ func run() int {
 // not an error: a board another run landed first is the unique index doing its job, and
 // the run should still add the rest.
 func addBoards(ctx context.Context, repo boardcatalog.Repository, kept []result) int {
-	registry := sources.All(sources.NewClient())
+	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
 	added, duplicate := 0, 0
 	for _, r := range kept {
 		board := r.cand.host + "/" + r.cand.slug
-		b, err := boardcatalog.Insert(ctx, repo, boardcatalog.InsertInput{
+		b, err := ins.Insert(ctx, boardcatalog.InsertInput{
 			Provider: provider,
 			Board:    board,
 			Company:  r.company,
 			Hub:      true,
 			Surface:  "cli",
-		}, boardcatalog.StatusPending, registry)
+		}, boardcatalog.StatusPending)
 		switch {
 		case errors.Is(err, boardcatalog.ErrDuplicateBoard):
 			duplicate++

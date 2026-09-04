@@ -15,18 +15,23 @@
 set -euo pipefail
 i=0
 
-# The catalog is the schedule. Reads DATABASE_URL from the host env file, the same one
+# The catalog is the schedule. DATABASE_URL comes from the host env file, the same one
 # every worker unit loads.
 # shellcheck disable=SC1091  # the host env file, not part of this repo
-[ -f /opt/freehire/.env ] && { set -a; . /opt/freehire/.env; set +a; }
-mapfile -t PROVIDERS < <(psql "$DATABASE_URL" -tAc \
+if [ -f /opt/freehire/.env ]; then set -a; . /opt/freehire/.env; set +a; fi
+
+# An empty result is the only answer worth refusing on, and set -e already refuses a
+# failed query. There is deliberately no "fewer than N providers looks wrong" floor: this
+# script only ever creates and enables units — every systemctl disable below names one
+# unit literally — so a short list generates fewer timers and retires nothing. A floor
+# would guard nothing and would block a legitimately smaller catalog.
+providers=$(psql "$DATABASE_URL" -tAc \
   "SELECT provider FROM boards WHERE status IN ('pending','active') GROUP BY provider ORDER BY provider")
-if [ "${#PROVIDERS[@]}" -lt 100 ]; then
-  # A short list means the query failed or the catalog is not what this host crawls.
-  # Generating from it would silently retire most of the fleet.
-  echo "gen-ingest-timers: only ${#PROVIDERS[@]} providers came back — refusing to regenerate" >&2
+if [ -z "$providers" ]; then
+  echo "gen-ingest-timers: the catalog lists no live board — nothing to schedule" >&2
   exit 1
 fi
+mapfile -t PROVIDERS <<<"$providers"
 
 # Boards measured (2026-07-31, 3h of journal) to average >=25 min per run — together
 # 65% of all ingest busy-time, with oracle/paylocity/ukg/careerplug hitting
@@ -125,7 +130,6 @@ done
 # it never named a real provider (every row inside custom.yml carried its OWN provider,
 # never literally "custom"), so cmd/ingest custom finds nothing and exits 0.
 systemctl disable --now freehire-ingest@custom.timer 2>/dev/null || true
-echo "generated + enabled ${#CUSTOM_PROVIDERS[@]} custom.yml provider timers"
 
 # workday shards: one service template (--shard=N/6) + 6 timers, each every 6h at :40,
 # offset one hour apart so a single ~1000-board shard runs per hour and finishes well

@@ -54,9 +54,9 @@ type ExactCounter interface {
 // The exact counts are a full scan, so this belongs in the scheduled worker and nowhere
 // near a request. Load is the read path.
 //
-// telegramChannels is passed in rather than read here: resolving it means reading
-// sources/telegram.yml, which is relative to the worker's working directory. Keeping
-// that at the edge leaves Compute with no file system of its own.
+// telegramChannels is passed in rather than read here: the channel list is not part of
+// the catalogue this measures, and reaching for it would put a second, unrelated query
+// behind Compute.
 func Compute(ctx context.Context, counts ExactCounter, telegramChannels int) (Snapshot, error) {
 	exact, err := counts.CountCatalogueScale(ctx)
 	if err != nil {
