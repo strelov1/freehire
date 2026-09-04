@@ -128,14 +128,24 @@ func (s *Service) Record(ctx context.Context, ev Event) (rowID int64, recorded b
 		// scheduled re-check reaches this account, so losing it silently is how an account
 		// stops being reconcilable without anyone noticing. Logged, and the recorded row
 		// still carries the user, so the reconciler can work without it.
-		if err := s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
-			ID: userID, StripeCustomerID: ev.CustomerID,
-		}); err != nil {
+		if err := s.bindCustomer(ctx, userID, ev.CustomerID); err != nil {
 			log.Printf("billing: event %s recorded but user %d not bound to customer %s: %v",
 				ev.ID, userID, ev.CustomerID, err)
 		}
 	}
 	return rowID, true, nil
+}
+
+// bindCustomer records which provider customer an account is. Idempotent: the query is
+// guarded by IS DISTINCT FROM, so writing the value already there does nothing.
+//
+// Two callers, and they differ only in what a failure means to them — recording must not
+// fail over it, applying must — so the decision stays with them and only the operation
+// lives here.
+func (s *Service) bindCustomer(ctx context.Context, userID int64, customerID string) error {
+	return s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
+		ID: userID, StripeCustomerID: customerID,
+	})
 }
 
 // resolveUser finds which account an event is about.
@@ -175,9 +185,7 @@ func (s *Service) Apply(ctx context.Context, rowID int64, ev Event) error {
 	// marked done, forever. Binding here makes the retry self-healing — which is what a retry
 	// is for.
 	if ev.CustomerID != "" {
-		if err := s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
-			ID: userID, StripeCustomerID: ev.CustomerID,
-		}); err != nil {
+		if err := s.bindCustomer(ctx, userID, ev.CustomerID); err != nil {
 			return fmt.Errorf("billing: binding user %d to customer %s: %w", userID, ev.CustomerID, err)
 		}
 	}
