@@ -98,6 +98,7 @@ func TestPostAutoApplyReview_PublishesReviewDecidedEvent(t *testing.T) {
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "approved"})
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -125,6 +126,7 @@ func TestPostAutoApplyReview_PublishFailureDoesNotChangeTheResponse(t *testing.T
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "declined"})
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a publish failure must not surface as a request failure", resp.StatusCode)
 	}

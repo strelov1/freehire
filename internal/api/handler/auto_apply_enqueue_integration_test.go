@@ -87,7 +87,6 @@ func enqueueRequest(t *testing.T, app *fiber.App, slug, cookie string) *http.Res
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
 	return resp
 }
 
@@ -103,6 +102,7 @@ func TestPostJobAutoApply_RefusesNonGreenhouseSource(t *testing.T) {
 	seedEnqueueJob(t, pool, "lever", "nongh-job")
 
 	resp := enqueueRequest(t, app, "nongh-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 for a non-Greenhouse job", resp.StatusCode)
 	}
@@ -119,6 +119,7 @@ func TestPostJobAutoApply_RefusesNonProCaller(t *testing.T) {
 	seedEnqueueJob(t, pool, "greenhouse", "free-job")
 
 	resp := enqueueRequest(t, app, "free-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusPaymentRequired {
 		t.Fatalf("status = %d, want 402 for a free-tier caller", resp.StatusCode)
 	}
@@ -135,6 +136,7 @@ func TestPostJobAutoApply_RefusesNoBaseCV(t *testing.T) {
 	seedEnqueueJob(t, pool, "greenhouse", "nocv-job")
 
 	resp := enqueueRequest(t, app, "nocv-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("status = %d, want 409 for no base CV", resp.StatusCode)
 	}
@@ -176,6 +178,7 @@ func TestPostJobAutoApply_FreshRequestCreatesOneEntryAndPublishes(t *testing.T) 
 	seedEnqueueJob(t, pool, "greenhouse", "fresh-job")
 
 	resp := enqueueRequest(t, app, "fresh-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -204,10 +207,12 @@ func TestPostJobAutoApply_RepeatRequestIsIdempotentAndDoesNotRepublish(t *testin
 	seedEnqueueJob(t, pool, "greenhouse", "repeat-job")
 
 	first := enqueueRequest(t, app, "repeat-job", cookie)
+	defer first.Body.Close()
 	if first.StatusCode != fiber.StatusOK {
 		t.Fatalf("first status = %d, want 200", first.StatusCode)
 	}
 	second := enqueueRequest(t, app, "repeat-job", cookie)
+	defer second.Body.Close()
 	if second.StatusCode != fiber.StatusOK {
 		t.Fatalf("second status = %d, want 200 (idempotent)", second.StatusCode)
 	}
@@ -236,6 +241,7 @@ func TestPostJobAutoApply_PublishFailureDoesNotChangeTheResponse(t *testing.T) {
 	seedEnqueueJob(t, pool, "greenhouse", "publishfail-job")
 
 	resp := enqueueRequest(t, app, "publishfail-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a publish failure must not surface as a request failure", resp.StatusCode)
 	}
@@ -268,6 +274,7 @@ func TestPostJobAutoApply_DeclinedEntryIsRefusedPermanently(t *testing.T) {
 	}
 
 	resp := enqueueRequest(t, app, "declined-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("status = %d, want 409 — a declined attempt must never be retried", resp.StatusCode)
 	}
@@ -304,6 +311,7 @@ func TestPostJobAutoApply_RefusesAlreadyApplied(t *testing.T) {
 	}
 
 	resp := enqueueRequest(t, app, "applied-job", cookie)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("status = %d, want 409 — already applied for real", resp.StatusCode)
 	}
@@ -362,8 +370,10 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 		t.Fatalf("status for an anonymous caller = %v, want nil", got)
 	}
 
-	if resp := enqueueRequest(t, app, "status-job", cookie); resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("enqueue status = %d, want 200", resp.StatusCode)
+	enqueueResp := enqueueRequest(t, app, "status-job", cookie)
+	defer enqueueResp.Body.Close()
+	if enqueueResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("enqueue status = %d, want 200", enqueueResp.StatusCode)
 	}
 	if got := decodeAutoApplyStatus(t, get("status-job", cookie)); got == nil || *got != "queued" {
 		t.Fatalf("status after enqueue = %v, want \"queued\"", got)

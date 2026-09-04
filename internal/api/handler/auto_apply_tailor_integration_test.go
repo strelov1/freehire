@@ -170,7 +170,7 @@ func autoApplyRequest(t *testing.T, app *fiber.App, method, path, cookie string,
 		}
 		reader = bytes.NewReader(b)
 	}
-	req := httptest.NewRequest(method, path, reader)
+	req := httptest.NewRequestWithContext(context.Background(), method, path, reader)
 	req.Header.Set(fiber.HeaderContentType, "application/json")
 	if cookie != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
@@ -195,6 +195,7 @@ func TestPostAutoApplyTailor_ForeignEntryIsNotFound(t *testing.T) {
 
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", otherCookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404 for a foreign queue entry", resp.StatusCode)
 	}
@@ -217,6 +218,7 @@ func TestPostAutoApplyTailor_AlreadyReviewedEntryIsRefused(t *testing.T) {
 
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("status = %d, want 409 for an already-reviewed entry", resp.StatusCode)
 	}
@@ -246,6 +248,7 @@ func TestPostAutoApplyTailor_SpentAllowanceRefusesBeforeAnyCVOrSession(t *testin
 
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusPaymentRequired {
 		t.Fatalf("status = %d, want 402 for a spent tailor allowance", resp.StatusCode)
 	}
@@ -274,6 +277,7 @@ func TestPostAutoApplyTailor_RunsAndRecordsTheTailoredCV(t *testing.T) {
 
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -321,6 +325,7 @@ func TestPostAutoApplyReview_ForeignEntryIsNotFound(t *testing.T) {
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", otherCookie,
 		autoApplyReviewRequest{Decision: "approved"})
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404 for a foreign queue entry", resp.StatusCode)
 	}
@@ -339,6 +344,7 @@ func TestPostAutoApplyReview_NoTailoredCVYetIsRefused(t *testing.T) {
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "approved"})
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("status = %d, want 409 for an entry with no tailored cv yet", resp.StatusCode)
 	}
@@ -377,6 +383,7 @@ func TestPostAutoApplyReview_ApprovingMakesTheEntryClaimable(t *testing.T) {
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "approved"})
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -405,6 +412,7 @@ func TestPostAutoApplyReview_DecliningParksAndExcludesFromClaim(t *testing.T) {
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "declined"})
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -446,6 +454,7 @@ func TestPostAutoApplyReview_DecisionCannotBeRecordedTwice(t *testing.T) {
 	first := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "approved"})
+	defer first.Body.Close()
 	if first.StatusCode != fiber.StatusOK {
 		t.Fatalf("first review status = %d, want 200", first.StatusCode)
 	}
@@ -453,6 +462,7 @@ func TestPostAutoApplyReview_DecisionCannotBeRecordedTwice(t *testing.T) {
 	second := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/review", cookie,
 		autoApplyReviewRequest{Decision: "declined"})
+	defer second.Body.Close()
 	if second.StatusCode != fiber.StatusConflict {
 		t.Fatalf("second review status = %d, want 409", second.StatusCode)
 	}

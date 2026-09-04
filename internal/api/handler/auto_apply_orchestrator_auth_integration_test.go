@@ -38,7 +38,7 @@ func TestPostAutoApplyTailor_OrchestratorSecretResolvesEntryOwner(t *testing.T) 
 		t.Fatalf("mark reviewed: %v", err)
 	}
 
-	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+testOrchestratorSecret)
 	resp, err := app.Test(req, 10_000)
 	if err != nil {
@@ -60,7 +60,7 @@ func TestPostAutoApplyTailor_NoCredentialsIsUnauthorizedEvenWithSecretConfigured
 	job := insertAutoApplyJob(t, pool, "nocred")
 	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
 
-	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
 	resp, err := app.Test(req, 10_000)
 	if err != nil {
 		t.Fatalf("request: %v", err)
@@ -81,7 +81,7 @@ func TestPostAutoApplyTailor_WrongSecretIsUnauthorized(t *testing.T) {
 	job := insertAutoApplyJob(t, pool, "wrongsecret")
 	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
 
-	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer not-the-real-secret")
 	resp, err := app.Test(req, 10_000)
 	if err != nil {
@@ -109,6 +109,7 @@ func TestPostAutoApplyTailor_HumanCredentialStillOwnershipScopedWithSecretConfig
 
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", otherCookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404 for a foreign queue entry — the secret's presence in config must not weaken ownership for a cookie caller", resp.StatusCode)
 	}
@@ -134,7 +135,7 @@ func TestPostAutoApplyTailor_OrchestratorSecretIsRateLimitedProcessWide(t *testi
 	}
 
 	doSecretRequest := func() int {
-		req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
 		req.Header.Set(fiber.HeaderAuthorization, "Bearer "+testOrchestratorSecret)
 		resp, err := app.Test(req, 10_000)
 		if err != nil {
@@ -166,7 +167,7 @@ func TestPostAutoApplyTailor_HumanCredentialUnaffectedByExhaustedOrchestratorLim
 	insertBaseCV(t, pool, spentOwner)
 	spentJob := insertAutoApplyJob(t, pool, "spent-job")
 	spentQueueID := insertAutoApplyQueueRow(t, pool, spentOwner, spentJob)
-	spendReq := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(spentQueueID, 10)+"/tailor", nil)
+	spendReq := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(spentQueueID, 10)+"/tailor", nil)
 	spendReq.Header.Set(fiber.HeaderAuthorization, "Bearer "+testOrchestratorSecret)
 	if _, err := app.Test(spendReq, 10_000); err != nil {
 		t.Fatalf("spend request: %v", err)
@@ -182,6 +183,7 @@ func TestPostAutoApplyTailor_HumanCredentialUnaffectedByExhaustedOrchestratorLim
 
 	resp := autoApplyRequest(t, app, fiber.MethodPost,
 		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", otherCookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode == fiber.StatusTooManyRequests {
 		t.Fatalf("status = 429 — a human caller must never share the orchestrator's own rate-limit budget")
 	}
