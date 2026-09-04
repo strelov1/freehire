@@ -127,6 +127,8 @@ var categoryTable = []aliasEntry{
 	{"data governance", "data_engineering"},
 	{"data steward", "data_engineering"},
 	{"etl developer", "data_engineering"},
+	// Hungarian: "adattárház" is the data warehouse.
+	{"adattárház fejlesztő", "data_engineering"},
 	{"data scientist", "data_science"},
 	{"data science", "data_science"},
 	// "data scien" fires only on a title truncated mid-word ("Senior Data Scien…"),
@@ -150,6 +152,10 @@ var categoryTable = []aliasEntry{
 	{"power bi developer", "data_analytics"},
 	{"аналитик bi", "data_analytics"},
 	{"bi-аналитик", "data_analytics"},
+	// Hungarian. "riportfejlesztő" is a closed compound, so "bi fejlesztő" cannot
+	// reach it on a word boundary.
+	{"bi fejlesztő", "data_analytics"},
+	{"bi riportfejlesztő", "data_analytics"},
 	// Classic ML and explicitly ML-carrying combined forms first, so a mixed
 	// "ML/AI Engineer" resolves to ml_ai before the bare AI terms below can claim it.
 	{"machine learning", "ml_ai"},
@@ -203,6 +209,11 @@ var categoryTable = []aliasEntry{
 	// "platform engineer" substring, so it needs its own entry.
 	{"platform engineering", "devops"},
 	{"infrastructure engineer", "devops"},
+	// The IT-anchored form of a noun this file otherwise refuses: bare
+	// "infrastructure" names civil, rail, energy and telecom work, but "IT
+	// Infrastructure" states the estate outright ("IT Infrastructure Manager",
+	// "IT Infrastructure & Projects Specialist").
+	{"it infrastructure", "devops"},
 	{"cloud engineer", "devops"},
 	{"system administrator", "devops"},
 	// The plural is the far more common surface form in prod titles ("Systems
@@ -261,6 +272,10 @@ var categoryTable = []aliasEntry{
 	{"ios", "mobile"},
 	// React Native is mobile-only, unlike bare "react" above.
 	{"react native developer", "mobile"},
+	// Hungarian: "mobilalkalmazás" is the mobile app. Both spellings are listed
+	// because a hyphen is a word boundary here, so neither form contains the other.
+	{"mobilalkalmazás-fejlesztő", "mobile"},
+	{"mobilalkalmazás fejlesztő", "mobile"},
 	{"мобильный", "mobile"},
 	{"мобильная", "mobile"},
 	{"мобильных", "mobile"},
@@ -312,6 +327,9 @@ var categoryTable = []aliasEntry{
 	{"grc", "security"},
 	{"vulnerability management", "security"},
 	{"vulnerability analyst", "security"},
+	// The security operations centre. Without this the title falls through to the
+	// bare "analyst" alias far below and lands in data_analytics.
+	{"soc analyst", "security"},
 	{"incident response", "security"},
 	{"red team", "security"},
 	{"red teamer", "security"},
@@ -330,6 +348,9 @@ var categoryTable = []aliasEntry{
 	{"devsecops", "security"},
 	{"embedded", "embedded"},
 	{"firmware", "embedded"},
+	// Hungarian: "beágyazott" is embedded. It precedes the plain
+	// "szoftverfejlesztő" entry further down, which would otherwise claim it.
+	{"beágyazott szoftverfejlesztő", "embedded"},
 	{"встраиваемые", "embedded"},
 	{"встраиваемых", "embedded"},
 	// French: "logiciel embarqué" is embedded software, unambiguous.
@@ -640,6 +661,9 @@ var categoryTable = []aliasEntry{
 	// The unspaced compound: "help desk" above cannot reach it, the same trap the
 	// "back-end"/"back end"/"backend" trio guards against.
 	{"helpdesk", "support"},
+	// The ITIL name for the same desk. Without it the far more common "Service Desk
+	// Analyst" fell through to the bare "analyst" alias and read as data_analytics.
+	{"service desk", "support"},
 	{"call center", "support"},
 	{"call-центр", "support"},
 	{"колл-центр", "support"},
@@ -876,6 +900,9 @@ var categoryTable = []aliasEntry{
 	{"rpa developer", "software_engineering"},
 	{"erp developer", "software_engineering"},
 	{"sap developer", "software_engineering"},
+	// MES is the manufacturing execution system; the role writes and integrates that
+	// software, so it is software engineering with a plant for a customer.
+	{"mes developer", "software_engineering"},
 	{"oracle developer", "software_engineering"},
 	{"abap developer", "software_engineering"},
 	{"wordpress developer", "software_engineering"},
@@ -903,6 +930,36 @@ var categoryTable = []aliasEntry{
 	// ("Engenheira de Software", "Pessoa Desenvolvedora"); an exhaustive sweep of
 	// every language's gendered and inclusive spellings is future work, not done
 	// here.
+	//
+	// Hungarian. "fejlesztő" is the bare noun and prod titles show it is the most
+	// dangerous one yet: on the open catalogue it names materials, supplier,
+	// process, product, business, operations and training development
+	// ("Anyagfejlesztő", "Beszállítófejlesztő mérnök", "Folyamatfejlesztő",
+	// "Termékfejlesztő szakértő", "Üzletfejlesztési menedzser", "Működésfejlesztési
+	// szakértő", "Képzés-fejlesztési gyakornok") alongside the software roles. Every
+	// entry below therefore carries a software or language anchor. Hungarian writes
+	// closed compounds where English writes two words, so a compound spelling never
+	// contains its spaced twin on a word boundary and both are listed.
+	{"szoftverfejlesztő", "software_engineering"},
+	{"szoftver fejlesztő", "software_engineering"},
+	{"szoftvermérnök", "software_engineering"},
+	{"software mérnök", "software_engineering"},
+	{"alkalmazásfejlesztő", "software_engineering"},
+	{"alkalmazás fejlesztő", "software_engineering"},
+	{"webfejlesztő", "software_engineering"},
+	{"java fejlesztő", "software_engineering"},
+	// The plural surface form does not contain the singular as a whole word.
+	{"java fejlesztők", "software_engineering"},
+	{"php fejlesztő", "software_engineering"},
+	{"python fejlesztő", "software_engineering"},
+	{"node.js fejlesztő", "software_engineering"},
+	{".net fejlesztő", "software_engineering"},
+	{"c# fejlesztő", "software_engineering"},
+	{"adatbázis fejlesztő", "software_engineering"},
+	{"abap fejlesztő", "software_engineering"},
+	{"pega fejlesztő", "software_engineering"},
+	{"odoo fejlesztő", "software_engineering"},
+	{"odoo-fejlesztő", "software_engineering"},
 	//
 	// Spanish.
 	{"desarrollador de software", "software_engineering"},

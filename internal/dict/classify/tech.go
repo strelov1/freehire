@@ -59,6 +59,16 @@ var techTitleTerms = []string{
 	"system administrator", "systems administrator", "sysadmin", "network administrator",
 	"database administrator", "linux administrator", "windows administrator",
 	"it administrator", "devsecops",
+	// The IT service desk. These are the one family here whose CATEGORY cannot say
+	// what they are: they resolve to `support`, a vocab.NonTechCategories member, so
+	// without an entry here the derivation reads them as confidently non-technical
+	// and the enrichment gate skips them. That category is right about the function
+	// — reactive, ticket-driven — and wrong about the craft: a help desk runs an IT
+	// estate. The bare nouns stay out. "support" alone is the whole customer-service
+	// population (226k open postings), and only "desk" and the IT-anchored analyst
+	// form are specific enough to carry the claim. Spaced and closed spellings are
+	// separate terms for the same reason the category table lists both.
+	"service desk", "help desk", "helpdesk", "technical support analyst",
 	// Architects (never bare "architect")
 	"software architect", "solutions architect", "cloud architect", "data architect",
 	"security architect", "enterprise architect", "technical architect",

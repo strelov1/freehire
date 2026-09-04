@@ -48,6 +48,20 @@ reads `NonTechCategories` directly. A resolved `engineering_design` vetoes all o
 them: this dictionary and the non-tech title list describe the same physical trades,
 so a match between them is not the accidental kind the veto was built for.
 
+## The one place category and `is_tech` disagree on purpose
+
+The IT service desk (`service desk`, `help desk`, `helpdesk`, `technical support
+analyst`) resolves the `support` category — a `vocab.NonTechCategories` member — and is
+*also* a `techTitleTerms` entry, so `jobderive.deriveIsTech` reads it as `is_tech = true`.
+That is deliberate, not drift: the category is right about the FUNCTION (reactive,
+ticket-driven, alongside customer service) and wrong about the CRAFT, and only the title
+list can say the second thing. Without the entry the enrichment gate skips ~6.6k open
+postings that are plainly IT work.
+
+The bare nouns stay out of both lists. `support` alone is the whole customer-service
+population (226k open postings at the time of writing); only "desk" and the IT-anchored
+analyst form are specific enough to carry the claim.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.
