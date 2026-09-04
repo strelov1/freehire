@@ -50,18 +50,6 @@ type Querier interface {
 	// tuple) so a file's rows land in a single round trip; view_count accumulates across
 	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
-	// Give an existing catalog row the submitter who contributed it. The board reached the
-	// catalog through the YAML backfill, which carried no attribution, so the person who found
-	// it disappeared from their own contributions list.
-	//
-	// Guarded on submitted_by IS NULL: a row that already names a submitter keeps them, which
-	// makes a re-run inert and stops a later duplicate contribution reassigning credit.
-	//
-	// Keyed on (provider, lower(board), region) — the catalog's own identity, and what
-	// boards_identity_key uses. Dropping region would attribute every regional row of a board
-	// to one submitter and overwrite each one's url; a contribution names one board, in the
-	// region-less form the contribution flow records.
-	AttributeBoardToSubmitter(ctx context.Context, arg AttributeBoardToSubmitterParams) (int64, error)
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
@@ -778,12 +766,6 @@ type Querier interface {
 	// be inferred from a NULL job_id — an absence cmd/prune also produces. Users may own several of
 	// these. Returns the metadata the list and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
-	// Record a contribution of a novel company board. The unique index on (source, board) over the
-	// live statuses (migration 0049) rejects a second contribution of a board already queued or
-	// onboarded; the repository maps that violation to ErrBoardAlreadyContributed. A board that was
-	// rejected releases its identity, so it can be contributed again. The AI-credits reward is
-	// granted separately by the caller (credits.Reward), idempotent by the contribution id.
-	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error)
 	// File one person's claim that they applied to a posting and were never answered.
 	//
@@ -813,11 +795,6 @@ type Querier interface {
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
 	CreateReport(ctx context.Context, arg CreateReportParams) (JobReport, error)
-	// Record an unrecognized-but-valid link for manual review: source/board unset, status
-	// 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
-	// duplicate submission of the same url; the repository maps that violation to
-	// ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
-	CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error)
 	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
 	// duplicate name; the partial UNIQUE (user_id) WHERE derived_from_profile rejects a
 	// second profile-derived row for the same user (both surfaced by the repository via
@@ -1888,20 +1865,11 @@ type Querier interface {
 	// for both status='pending' and status='rejected'. A collision with an existing
 	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
 	// the caller maps that to a duplicate-board error.
-	//
-	// created_at is passed rather than defaulted so a board carried from an older table keeps
-	// the day it was actually submitted; COALESCE gives every live caller now() by passing
-	// NULL, so nothing else has to know the parameter exists.
 	InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error)
 	// Queue an unclassified URL for triage. The unique index on (url) rejects a duplicate
 	// submission of the same link; the caller maps that violation the same way a duplicate
 	// board contribution is mapped.
 	InsertBoardSubmission(ctx context.Context, arg InsertBoardSubmissionParams) (BoardSubmission, error)
-	// Carry one unclassified-URL contribution into board_submissions, KEEPING its original
-	// created_at — the ordinary insert defaults to now(), which would restamp a submission
-	// from August as today and reorder every user's list. A URL already queued is left alone,
-	// so a re-run writes nothing.
-	InsertBoardSubmissionAt(ctx context.Context, arg InsertBoardSubmissionAtParams) (int64, error)
 	// Record one change: what it did (ops), what would undo it (inverse), who made it and through
 	// which entry point, and the document version it was computed against. Written in the same
 	// transaction as the document it changed — a change without its revision, or a revision
@@ -2027,6 +1995,10 @@ type Querier interface {
 	// detail endpoint still serves it, and leaving it unmarked would make the facet's
 	// meaning depend on lifecycle state.
 	JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error)
+	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
+	// this board, and which board does a pasted job id belong to. Named after
+	// link_contributions for historical reasons — that table is gone (migration 0131), and
+	// these queries read `jobs`.
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -2333,8 +2305,6 @@ type Querier interface {
 	// The prefix is passed already terminated by the caller (the session id plus '#'), so a
 	// session id that is a prefix of another cannot borrow its charges.
 	ListConsumptionRefsByPrefix(ctx context.Context, arg ListConsumptionRefsByPrefixParams) ([]pgtype.Text, error)
-	// The "my contributions" list: one user's contributions, newest first.
-	ListContributionsByUser(ctx context.Context, submittedBy int64) ([]LinkContribution, error)
 	// Up to $2 (board, region) pairs currently in an active cooldown for a provider,
 	// soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as
 	// cooldowns lapse, so a run does not keep probing the same few boards.
@@ -2595,17 +2565,6 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
-	// Queries used only by the one-off cmd/backfill-link-contributions, which carries the
-	// rows #2357 left behind in link_contributions into boards and board_submissions. That
-	// change moved the read and write paths but not the data, so 401 contributions from 11
-	// users stopped being visible and 28 unprocessed ones stopped being actionable.
-	//
-	// Deleted with the worker once the backfill has run in prod and link_contributions is
-	// dropped.
-	// Every contribution, oldest first, so the carry preserves submission order. Ordered by
-	// id rather than created_at: two rows can share a timestamp, and the id is the sequence
-	// the submissions actually arrived in.
-	ListLinkContributionsForBackfill(ctx context.Context) ([]ListLinkContributionsForBackfillRow, error)
 	// Every board a crawl still visits, across all providers — the identity cmd/prune needs
 	// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
 	// whole row: the guard asks a set-membership question and nothing else.

@@ -744,17 +744,6 @@ type LearnedAtsDomain struct {
 	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
 }
 
-type LinkContribution struct {
-	ID          int64              `json:"id"`
-	SubmittedBy int64              `json:"submitted_by"`
-	URL         string             `json:"url"`
-	Source      pgtype.Text        `json:"source"`
-	Board       pgtype.Text        `json:"board"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Surface     string             `json:"surface"`
-}
-
 type Mailbox struct {
 	ID        int64              `json:"id"`
 	UserID    int64              `json:"user_id"`
