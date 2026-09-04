@@ -21,8 +21,13 @@ type fakeQueries struct {
 	boards    db.BoardHealthMetricsRow
 	newest    pgtype.Timestamptz
 	health    []db.ProviderIngestHealthRow
+	notify    db.NotifyBacklogMetricsRow
 	newestErr error
 	searchErr error
+}
+
+func (f fakeQueries) NotifyBacklogMetrics(context.Context) (db.NotifyBacklogMetricsRow, error) {
+	return f.notify, nil
 }
 
 func (f fakeQueries) SearchOutboxMetrics(context.Context) (db.SearchOutboxMetricsRow, error) {
@@ -55,6 +60,7 @@ func populatedQueries() fakeQueries {
 		enrich:   db.EnrichmentOutboxMetricsRow{Depth: 1049297, DeadLetters: 41, OldestAgeSeconds: 5529600},
 		semantic: db.SemanticOutboxMetricsRow{Depth: 0, DeadLetters: 0, OldestAgeSeconds: 0},
 		boards:   db.BoardHealthMetricsRow{Healthy: 74894, Failing: 7002, Cooled: 1882},
+		notify:   db.NotifyBacklogMetricsRow{PendingSubscriptions: 12, OldestAgeSeconds: 184.25},
 		newest:   pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
 		health: []db.ProviderIngestHealthRow{
 			{

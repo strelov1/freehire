@@ -3110,6 +3110,20 @@ type Querier interface {
 	// zero timestamp: zero reads as 1970, i.e. an infinitely stale catalogue, whereas an
 	// empty catalogue is a fresh-install state and not an incident.
 	NewestOpenJobCreatedAt(ctx context.Context) (pgtype.Timestamptz, error)
+	// The subscription-digest backlog: how many active subscriptions have something
+	// undelivered, and how old the oldest undelivered match is.
+	//
+	// The age is the signal that matters. A pass runs every five minutes, so in steady state
+	// the oldest pending match is minutes old. An age that climbs without bound means some
+	// subscription is never being served — which is not visible in the worker's own log,
+	// because a starved subscription produces no failure: `notify` reported
+	// `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
+	// subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
+	//
+	// Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
+	// that must publish an explicit zero, because an absent series is how the consuming alert
+	// rules recognize a dead exporter.
+	NotifyBacklogMetrics(ctx context.Context) (NotifyBacklogMetricsRow, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.

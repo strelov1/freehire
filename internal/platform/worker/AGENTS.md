@@ -91,8 +91,13 @@ answers *is the worker alive*: a hung run never stamps a completion, so last-run
 covers both "hung" and "timer stopped".
 
 **Per pipeline, by `cmd/queue-metrics`** — `freehire_queue_{depth,dead_letters,oldest_age_seconds}`
-labelled by `queue`, `freehire_boards_total` labelled by `state`, and
-`freehire_catalogue_newest_job_timestamp_seconds`. This answers *is the worker keeping up*.
+labelled by `queue`, `freehire_boards_total` labelled by `state`,
+`freehire_catalogue_newest_job_timestamp_seconds`, and
+`freehire_notify_{pending_subscriptions,oldest_pending_age_seconds}`. This answers *is the
+worker keeping up*. The notify pair exists because a starved subscription produces no
+failure to notice: `notify` reported `delivered=1 failed=0` for weeks while 1.14M matches
+sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/agents/notifications.md)).
+An oldest-pending age climbing past a few passes is the signal; `failed` never moved.
 These names are a contract with the dashboard and alert rules in `freehire-ops`, which
 cannot be compiled against this repo — `cmd/queue-metrics/render_test.go` pins the exact
 exposition text so a rename is a visible edit rather than a silent breakage.
