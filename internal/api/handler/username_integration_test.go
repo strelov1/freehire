@@ -59,10 +59,10 @@ func TestUsernameHTTPFlow(t *testing.T) {
 	do := func(method, path, cookieVal, body string) (int, map[string]any) {
 		var r *http.Request
 		if body != "" {
-			r = httptest.NewRequest(method, path, strings.NewReader(body))
+			r = httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
 			r.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 		} else {
-			r = httptest.NewRequest(method, path, nil)
+			r = httptest.NewRequestWithContext(context.Background(), method, path, nil)
 		}
 		if cookieVal != "" {
 			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookieVal})

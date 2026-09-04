@@ -139,7 +139,7 @@ func TestGetMailbox_LegacyRowWithNoUsernameYet(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/mailbox", auth.RequireAuth(iss, testVersions), h.GetMailbox)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/me/mailbox", nil)
+	r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/me/mailbox", nil)
 	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 	resp, err := app.Test(r, -1)
 	if err != nil {
