@@ -12,8 +12,6 @@ Relevant existing pieces:
   the caller shape as "an automation platform... calling freehire's own API with a per-user
   API key" — this design revisits that (see Decisions: a per-user credential turned out to be
   the wrong shape for a caller with no human to hold a secret for it).
-- `internal/platform/safehttp` — the existing outbound-HTTP transport with its own
-  SSRF/policy guards, already used for every other server-to-server call this codebase makes.
 - `cmd/mail-ingest` — the one existing precedent for a long-lived (`Restart=always`) daemon
   outside `cmd/server`, everything else in `cmd/` being run-once-and-exit.
 - `internal/api/ratelimit` — the shared Redis-backed rate limiter every other throttled route
@@ -125,11 +123,16 @@ cluster. A separate database (not schema) on the instance freehire's own Postgre
 runs keeps Inngest's own migrations and tables from ever colliding with freehire's, while
 adding no new datastore PROCESS to run or monitor.
 
-**The event publish (`PostAutoApplyReview` → `auto-apply/review.decided`) goes out over
-`internal/platform/safehttp`**, the same transport every other outbound server-to-server call
-in this codebase already uses, POSTing to the self-hosted Inngest server's own event API
-(`INNGEST_EVENT_API_URL`, an internal-only address — never the public internet). Best-effort,
-per proposal.md: logged on failure, never returned to the caller.
+**Both the orchestrator's own calls into `hire` and the event publish
+(`PostAutoApplyReview` → `auto-apply/review.decided`) use a plain `http.Client` with a
+bounded timeout — NOT `internal/platform/safehttp`.** That package's guard specifically
+BLOCKS loopback/private-network addresses (it exists for outbound fetches of
+attacker-influenced URLs — Telegram posts, ATS board links); every one of its current
+callers targets a genuinely external, untrusted host. Both calls this change makes target
+addresses that are internal by design (`hire`'s own API, the self-hosted Inngest event API
+at `INNGEST_EVENT_API_URL`) — `safehttp` would refuse to connect to either. Discovered
+mid-implementation: the original plan named `safehttp` by analogy ("every other
+server-to-server call") without checking what its guard actually targets.
 
 ## Risks / Trade-offs
 

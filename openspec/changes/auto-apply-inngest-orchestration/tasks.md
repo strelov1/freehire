@@ -22,31 +22,47 @@
 
 ## 2. `cmd/auto-apply-orchestrate`: the Inngest function
 
-- [ ] 2.1 Add `github.com/inngest/inngestgo` to `go.mod`.
-- [ ] 2.2 New long-lived worker (`Restart=always`, mirrors `cmd/mail-ingest`'s own shape —
-      not a `worker.Main` run-once-and-exit binary). Wires the shared secret from config, an
-      HTTP client to `internal/platform/safehttp`'s transport, and the Inngest client
-      (`Dev: nil` — a real signing key/event key from config, never the dev-mode bypass this
-      session's spike used).
-- [ ] 2.3 RED (integration, real Inngest dev server + a fake `hire` HTTP server standing in
+- [x] 2.1 Add `github.com/inngest/inngestgo` to `go.mod`.
+- [x] 2.2 New long-lived worker (`cmd/auto-apply-orchestrate/main.go`, `Restart=always`,
+      mirrors `cmd/mail-ingest`'s own shape — `worker.Main` without `worker.Bootstrap`,
+      since this binary needs no database at all). Wires the shared secret from config, a
+      plain `http.Client` with a bounded timeout (NOT `internal/platform/safehttp`), and
+      the Inngest client (`Dev` unset — real signing/event keys from config,
+      `ServeWithOpts(EnableUnauthedSync: true)` since this instance is internal-only and
+      single-tenant). Self-registers at startup by PUTting its own `/api/inngest`
+      endpoint — the same handshake 2.9's integration tests drive by hand. Any of
+      `AUTO_APPLY_ORCHESTRATOR_SECRET`/`INNGEST_EVENT_API_URL`/`INNGEST_EVENT_KEY`/
+      `INNGEST_SIGNING_KEY` unset fails startup (exit 1) rather than serving a function
+      that could never authenticate anywhere.
+- [x] 2.3 RED (integration, real Inngest dev server + a fake `hire` HTTP server standing in
       for the two endpoints): a submitted entry calls the tailor endpoint with the shared
       secret, in the URL path this repo's own routes expect.
-- [ ] 2.4 RED: a tailor call returning non-200 ends the run without ever calling the review
+- [x] 2.4 RED: a tailor call returning non-200 ends the run without ever calling the review
       endpoint.
-- [ ] 2.5 RED: after a successful tailor call, the run is durably paused — no review call
+- [x] 2.5 RED: after a successful tailor call, the run is durably paused — no review call
       happens until a matching `auto-apply/review.decided` event arrives.
-- [ ] 2.6 RED: a decision event for a DIFFERENT `queueId` does not resume this run (assert no
-      review call happens for it).
-- [ ] 2.7 RED: a matching decision event resumes the run and calls the review endpoint with
+- [x] 2.6 RED: a decision event for a DIFFERENT `queueId` does not resume this run (assert no
+      review call happens for it). This is the test that caught 2.9's own real bug — see
+      its own note.
+- [x] 2.7 RED: a matching decision event resumes the run and calls the review endpoint with
       that decision.
-- [ ] 2.8 RED: a pause that exceeds its own timeout ends the run without a review call and
+- [x] 2.8 RED: a pause that exceeds its own timeout ends the run without a review call and
       without retrying tailor.
-- [ ] 2.9 GREEN: implement the function to satisfy 2.3–2.8.
+- [x] 2.9 GREEN: implement the function to satisfy 2.3–2.8
+      (`internal/application/autoapplyorchestrate`). Found and fixed a real bug 2.6 alone
+      caught: `step.WaitForEvent`'s own CEL "if" expression binds the candidate event as
+      `async`, not `event` — this session's own earlier spike (and this package's first
+      draft) used `event.data.queueId == "..."`, which silently matched EVERY
+      `auto-apply/review.decided` event rather than failing to parse, so a decision for ANY
+      entry would have resumed EVERY paused run. The proposal.md's "verified end to end"
+      spike claim only ever exercised the matching case; the non-matching case was never
+      actually checked until 2.6. Corrected to `async.data.queueId == "..."`.
 
 ## 3. `PostAutoApplyReview`: publish the decision event
 
 - [ ] 3.1 RED: recording a decision publishes `auto-apply/review.decided` (`queueId`,
-      `decision`) to the configured Inngest event API via `safehttp`.
+      `decision`) to the configured Inngest event API via a plain `http.Client` (see
+      design.md's own Decisions on why not `safehttp`).
 - [ ] 3.2 RED: a publish failure is logged and does NOT change the endpoint's existing
       response (still 200 with the decision, per `auto-apply-tailored-resume`'s own
       contract) — construct the fake event publisher to always error and assert the response
@@ -82,4 +98,15 @@
       self-hosted Inngest instance (mirroring this session's own spike), observed end to end
       through a real tailor call, a real pause, a real decision, and a real review call —
       before task 2.1's future trigger (in `auto-apply-tailored-resume`) ever emits one for
-      real traffic.
+      real traffic. **This is the ONLY real verification of the signed, non-dev
+      registration handshake** (`cmd/auto-apply-orchestrate`'s actual production client
+      construction: real `INNGEST_SIGNING_KEY`/`INNGEST_EVENT_KEY`, `ServeWithOpts` with
+      `EnableUnauthedSync`): 2.9's own integration suite runs entirely against `inngest
+      dev` in its default unsigned mode, and a same-shaped test built with real (if
+      arbitrary) signing/event keys against that SAME `inngest dev` image failed with a
+      401 the executor's own callback could not get past — `inngest dev` does not emulate
+      `inngest start`'s (the actual self-hosted production command per design.md's own
+      Decisions) signed callback behavior closely enough to validate it. Standing up a
+      real `inngest start` deployment (its own Postgres, its own signing-key handshake)
+      to test this in CI is out of scope for this change; this manual step is where that
+      risk actually gets retired before task 2.1's trigger sends real traffic through it.

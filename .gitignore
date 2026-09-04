@@ -20,6 +20,7 @@ hire
 /apple-revoke
 /auth-cleanup
 /auto-apply
+/auto-apply-orchestrate
 /backfill-application-events
 /backfill-applications
 /backfill-blank-company

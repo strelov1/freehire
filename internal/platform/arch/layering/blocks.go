@@ -101,9 +101,9 @@ var blocks = map[string][]string{
 		"outboundurl", "privatejob", "silence", "verdict", "ycdir",
 	},
 	"application": {
-		"appevent", "apptimeline", "autoapply", "calmatch", "calsync", "deliverywindow",
-		"followup", "gmailsync", "ical", "inbox", "jobtracking", "mailbox", "mailclassify",
-		"mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl", "userjob",
+		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
+		"deliverywindow", "followup", "gmailsync", "ical", "inbox", "jobtracking", "mailbox",
+		"mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl", "userjob",
 		"viewlog",
 	},
 	"search": {
