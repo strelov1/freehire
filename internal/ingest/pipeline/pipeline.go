@@ -188,6 +188,11 @@ type Stats struct {
 	Cooled     int
 	Rejected   int
 	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
+	// QualifyingBoards lists, per provider once merged into RunStats, the boards this run
+	// structurally PROVED it covered — see boardQualifies. It is the post-run sweep's board
+	// scope input (freehire#2328): cmd/ingest still gates a board-scoped close on the
+	// provider's adapter carrying the fullBoardListing marker before using any of these.
+	QualifyingBoards []string
 }
 
 // add accumulates another Stats into s, so the per-board and per-provider merges cannot
@@ -199,6 +204,7 @@ func (s *Stats) add(o Stats) {
 	s.Cooled += o.Cooled
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
+	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
 }
 
 // RunStats is a run's outcome broken down by provider. A run may cover several providers
@@ -324,6 +330,9 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 			boardStats, already := handled[boardKey{e.Provider, e.Board, e.Region}]
 			if !already {
 				boardStats = r.ingestBoard(ctx, e)
+			}
+			if boardQualifies(e, boardStats) {
+				boardStats.QualifyingBoards = append(boardStats.QualifyingBoards, e.Board)
 			}
 			crawled.Add(1)
 

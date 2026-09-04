@@ -45,6 +45,20 @@ func SweepGraceWindows(reg map[string]Source) map[string]time.Duration {
 	return out
 }
 
+// FullBoardListingProviders returns, as a set, the provider names in reg whose adapter is
+// registered as structurally proving it lists a board to completion (see fullBoardListing).
+// cmd/ingest consults this as the sweep's fourth board-scope qualification gate: a provider
+// absent from this set never contributes to the board-scoped close, however its crawl went.
+func FullBoardListingProviders(reg map[string]Source) map[string]bool {
+	out := make(map[string]bool)
+	for name, src := range reg {
+		if _, ok := src.(fullBoardListing); ok {
+			out[name] = true
+		}
+	}
+	return out
+}
+
 // AggregatorProviders returns the sorted provider names in reg that aggregate postings
 // from many companies (see aggregator). The cross-source dedup pass uses this to tell an
 // aggregator copy (which may be suppressed) from a first-party ATS posting (which wins).

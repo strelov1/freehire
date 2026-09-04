@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
 // enqueueDeletion queues a removal directly, standing in for the closing statements until
@@ -147,6 +149,14 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 			_, err := q.CloseUnseenJobsBySource(ctx, CloseUnseenJobsBySourceParams{
 				Source: "greenhouse",
 				Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+			})
+			return err
+		}},
+		{"CloseUnseenJobsForBoard", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseUnseenJobsForBoard(ctx, CloseUnseenJobsForBoardParams{
+				Source:       "greenhouse",
+				Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+				BoardPattern: externalid.BoardPattern("acme"),
 			})
 			return err
 		}},

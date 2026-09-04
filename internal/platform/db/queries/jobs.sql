@@ -1280,6 +1280,57 @@ WITH closed AS (
 )
 SELECT count(*) FROM closed;
 
+-- name: CloseUnseenJobsForBoard :one
+-- Board-scoped post-ingest sweep (see job-lifecycle spec, freehire#2328): close every open
+-- job of ONE board not seen since the cutoff, regardless of which company_slug the run wrote
+-- a job for. This is what CloseUnseenJobs' company scope structurally cannot reach: a company
+-- whose LAST posting drops off a board the fleet still crawls never re-enters the crawled-slug
+-- set, so its row stays open forever under the company scope alone. The board scope answers a
+-- narrower, board-level question instead — "did this run prove it listed this board's content"
+-- — which is answerable even when a company wrote nothing this run.
+--
+-- cmd/ingest gates this to a board whose run proved coverage (crawl did not fail, the board
+-- yielded at least one posting) AND whose provider is registered as fullBoardListing — an
+-- adapter that structurally proves it lists a board to completion rather than silently
+-- truncating it. Without that gate this statement is unsafe: an adapter that returns a
+-- partial listing as an unqualified success (the solidjobs shape that forced #2337's revert)
+-- would have this close everything past the point it stopped reaching.
+--
+-- board_pattern is externalid.BoardPattern(board) — the same escaped LIKE prefix
+-- ExistingExternalIDsByBoard and BackfillBoardCompany already use, riding the
+-- (source, external_id text_pattern_ops) index so this reads one board's rows, not the
+-- provider's whole catalogue. The ":" namespace terminator inside the pattern is what keeps a
+-- board whose id is a prefix of another's (e.g. "it" vs "it2") from also matching the other's
+-- rows.
+--
+-- The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+-- this statement so it stays atomic with the close (a rolled-back sweep queues nothing) and
+-- exact (only rows that actually closed are queued) — without it a board-scoped close would
+-- retire rows in Postgres and leave every one of them in the search index until the next full
+-- rebuild.
+--
+-- closed_reason stays 'unseen', not a new value: this is the same mechanism — a crawl of the
+-- place this posting lived did not list it — reaching rows its scope previously could not.
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND last_seen_at < sqlc.arg(cutoff)
+      AND external_id LIKE sqlc.arg(board_pattern)
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
 -- name: UnseenJobIDs :many
 -- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
 -- (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE

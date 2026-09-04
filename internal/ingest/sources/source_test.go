@@ -53,6 +53,19 @@ func (f fakeGraceSource) aggregator() {}
 
 func (f fakeGraceSource) sweepGrace() time.Duration { return f.grace }
 
+// fakeFullBoardListingSource declares that its Fetch structurally proves it lists a board to
+// completion (see fullBoardListing), so its boards are eligible for the sweep's board-scoped
+// close.
+type fakeFullBoardListingSource struct{ provider string }
+
+func (f fakeFullBoardListingSource) Provider() string { return f.provider }
+
+func (f fakeFullBoardListingSource) Fetch(context.Context, CompanyEntry) ([]Job, error) {
+	return nil, nil
+}
+
+func (f fakeFullBoardListingSource) fullBoardListing() {}
+
 func TestRegIndexesByProvider(t *testing.T) {
 	r := reg(fakeSource{"greenhouse"}, fakeSource{"lever"})
 
@@ -135,6 +148,19 @@ func TestSweepGraceWindowsListsOnlyDeclaringProviders(t *testing.T) {
 	want := map[string]time.Duration{"whatjobs": 14 * 24 * time.Hour}
 	if !maps.Equal(got, want) {
 		t.Errorf("SweepGraceWindows() = %v, want %v", got, want)
+	}
+}
+
+func TestFullBoardListingProvidersListsOnlyDeclaringProviders(t *testing.T) {
+	got := FullBoardListingProviders(reg(
+		fakeSource{"greenhouse"},              // board-based, no proof of completeness → excluded
+		fakeAggregatorSource{"jobstash"},      // aggregator, no proof of completeness → excluded
+		fakeFullBoardListingSource{"workday"}, // declares completeness → listed
+	))
+
+	want := map[string]bool{"workday": true}
+	if !maps.Equal(got, want) {
+		t.Errorf("FullBoardListingProviders() = %v, want %v", got, want)
 	}
 }
 

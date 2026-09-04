@@ -225,3 +225,18 @@ type fullCatalog interface{ fullCatalog() }
 // The marker is only sound for a source whose postings CANNOT be probed for liveness; anything
 // verifiable should be closed on evidence instead. See SweepGraceWindows.
 type sweepGrace interface{ sweepGrace() time.Duration }
+
+// fullBoardListing marks an adapter whose Fetch structurally proves, for every board it
+// crawls, that it retrieved the board's full posting list — either by verifying a fetched
+// count against the source's own reported total, or by paginating to the source's natural
+// end (an empty page, hasNext=false, or a declared page count reached) with no artificial
+// page or offset cap in adapter code — and treats any failure to establish that proof as a
+// failed Fetch rather than a partial success. Only such an adapter's boards are safe for the
+// post-run sweep's board-scoped close (freehire#2328): a silently truncated crawl reported as
+// an unqualified success would let the sweep close the unreached remainder as if it were
+// gone, which is exactly what happened to a live solidjobs board and forced #2337's revert.
+// The bar is deliberately structural rather than a documented assumption — solidjobs.go
+// recorded its 500-posting cap in a comment nobody's code read; this marker must not be
+// grantable on the same evidence. See habrcareer.go's fullCatalog Fetch for the pattern
+// (any page failure is a hard error, never a partial result) and FullBoardListingProviders.
+type fullBoardListing interface{ fullBoardListing() }
