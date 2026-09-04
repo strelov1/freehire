@@ -1,6 +1,9 @@
 package billing
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // subscriber is the provider's record of what one customer is currently paying for, as
 // much of it as we read. The provider's own record — invoices, payment method, proration,
@@ -23,7 +26,8 @@ type subscriber struct {
 type subscription struct {
 	Status string
 	// CurrentPeriodEnd is when the paid-for period runs out — the instant access should
-	// lapse if nothing renews it.
+	// lapse if nothing renews it. The zero time means we could not read it, and every caller
+	// treats that as entitling nobody; see the note below on why there is no sentinel.
 	CurrentPeriodEnd time.Time
 	// CancelAt is set when the customer has cancelled but the period they already paid for
 	// has not finished. It is NOT a reason to revoke: they bought that time.
@@ -76,36 +80,30 @@ var entitlingStatuses = map[string]bool{
 func proUntilFrom(sub subscriber, proPrices []string) time.Time {
 	var out time.Time
 	for _, s := range sub.Subscriptions {
-		if !entitlingStatuses[s.Status] {
-			continue
-		}
-		if !s.coversAny(proPrices) {
-			continue
-		}
-		if until := s.until(); until.After(out) {
-			out = until
+		if s.entitles(proPrices) && s.CurrentPeriodEnd.After(out) {
+			out = s.CurrentPeriodEnd
 		}
 	}
 	return out
 }
 
-// coversAny reports whether this subscription is for one of the prices that grant Pro.
+// entitles reports whether this subscription grants Pro right now: a status that entitles,
+// for a price we sell.
 //
-// An empty configured list matches NOTHING rather than everything: a deployment that forgot
-// to name its price should refuse to make anyone Pro, not make everyone Pro.
-func (s subscription) coversAny(proPrices []string) bool {
-	for _, want := range proPrices {
-		for _, have := range s.PriceIDs {
-			if have == want {
-				return true
-			}
+// It is one predicate rather than two checks at each call site because two callers ask it —
+// the plan derivation and the billing section — and they must never disagree about which
+// subscription is "the" one. A status added to entitlingStatuses is then added in one place.
+//
+// An empty configured price list matches NOTHING rather than everything: a deployment that
+// forgot to name its price should refuse to make anyone Pro, not make everyone Pro.
+func (s subscription) entitles(proPrices []string) bool {
+	if !entitlingStatuses[s.Status] {
+		return false
+	}
+	for _, have := range s.PriceIDs {
+		if slices.Contains(proPrices, have) {
+			return true
 		}
 	}
 	return false
-}
-
-// until is how far this one subscription reaches: the end of the period already paid for.
-// The zero time means we could not read it, and the caller treats that as entitling nobody.
-func (s subscription) until() time.Time {
-	return s.CurrentPeriodEnd
 }

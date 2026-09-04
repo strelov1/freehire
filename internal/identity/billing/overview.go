@@ -82,13 +82,9 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 	// rule proUntilFrom applies, so the section cannot describe a different subscription
 	// from the one the plan came from.
 	var best subscription
-	var bestUntil time.Time
 	for _, candidate := range sub.Subscriptions {
-		if !entitlingStatuses[candidate.Status] || !candidate.coversAny(s.cfg.Prices) {
-			continue
-		}
-		if until := candidate.until(); until.After(bestUntil) {
-			best, bestUntil = candidate, until
+		if candidate.entitles(s.cfg.Prices) && candidate.CurrentPeriodEnd.After(best.CurrentPeriodEnd) {
+			best = candidate
 		}
 	}
 
@@ -109,7 +105,7 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 	out.Status = best.Status
 	out.AmountCents, out.Currency, out.Interval = amount, currency, interval
 
-	when := bestUntil
+	when := best.CurrentPeriodEnd
 	if !best.CancelAt.IsZero() {
 		out.EndsAt = &when
 	} else if !when.IsZero() {

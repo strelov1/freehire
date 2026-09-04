@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 )
@@ -98,10 +99,5 @@ func (c *client) price(ctx context.Context, id string) (PublicPrice, error) {
 // a session, because the price arrives from the browser and a caller who could name any
 // price could name one costing nothing.
 func (c Config) Sells(priceID string) bool {
-	for _, id := range c.Prices {
-		if id == priceID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.Prices, priceID)
 }

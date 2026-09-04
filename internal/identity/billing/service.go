@@ -122,13 +122,12 @@ func (s *Service) Record(ctx context.Context, ev Event) (rowID int64, recorded b
 	}
 
 	if hasUser && ev.CustomerID != "" {
-		if bindErr := s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
+		// A failed binding is deliberately not an error: the event IS stored, which is all
+		// the acknowledgement claims, and the cost is that the reconciler cannot reach this
+		// account until the next event — not the money.
+		_ = s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
 			ID: userID, StripeCustomerID: ev.CustomerID,
-		}); bindErr != nil {
-			// The event is stored, which is what the acknowledgement claims. A failed
-			// binding costs the reconciler this account until the next event, not the money.
-			return rowID, true, nil
-		}
+		})
 	}
 	return rowID, true, nil
 }
