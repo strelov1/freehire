@@ -499,7 +499,7 @@
           you confirm is kept here and reused in every CV you build.
         </p>
         <div class="flex flex-col items-center gap-1.5">
-          {@render interviewEntry('bank-empty-example')}
+          {@render interviewEntry()}
         </div>
       </div>
     {:else}
@@ -521,7 +521,7 @@
           <div
             class="flex basis-full flex-col items-start gap-1.5 text-left sm:max-w-[16rem] sm:basis-auto sm:shrink-0 sm:items-end sm:text-right"
           >
-            {@render interviewEntry('bank-example')}
+            {@render interviewEntry()}
           </div>
         </div>
 
@@ -685,6 +685,7 @@
       : employment.role && employment.company
         ? employment.company
         : ''}
+  <div class="flex flex-col gap-2">
   <section class="flex gap-3">
     {#if employment.kind === 'job' && editingEmploymentId !== employment.id}
       <EntityLogo
@@ -763,55 +764,48 @@
     {#if employment.stack?.length}
       <div class="flex flex-wrap gap-1.5">
         {#each employment.stack as tech (tech)}
-          <span class="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tech}</span>
+          <span class="inline-flex items-center gap-1 rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-medium text-brand-strong">
+            <SkillIcon slug={tech} />{tech}
+          </span>
         {/each}
       </div>
     {/if}
 
-    {#if employment.atoms.length === 0}
-      <p class="text-sm text-muted-foreground">
-        {#if employment.kind === 'project'}
-          Nothing recorded for this project yet — the assistant can help you fill it in.
-        {:else}
-          Nothing recorded for this role yet — the assistant can help you fill it in.
-        {/if}
-      </p>
-    {:else}
-      <ul class="flex flex-col gap-1.5">
-        {#each needsAttentionFirst(employment.atoms) as atom (atom.id)}
-          {@render achievement(atom)}
-        {/each}
-      </ul>
-    {/if}
     </div>
   </section>
+
+  {#if employment.atoms.length === 0}
+    <p class="text-sm text-muted-foreground">
+      {#if employment.kind === 'project'}
+        Nothing recorded for this project yet — the assistant can help you fill it in.
+      {:else}
+        Nothing recorded for this role yet — the assistant can help you fill it in.
+      {/if}
+    </p>
+  {:else}
+    <ul class="flex flex-col gap-1.5">
+      {#each needsAttentionFirst(employment.atoms) as atom (atom.id)}
+        {@render achievement(atom)}
+      {/each}
+    </ul>
+  {/if}
+  </div>
 {/snippet}
 
 <!-- The way into the interviewer. The label names what the owner gets, not the machine
-     that produces it, and the example carries the rest: it shows the grain of an answer
-     the interviewer is after — one result, ideally with a number — before the chat is
-     even open. The caller wraps this to set its alignment.
+     that produces it. The caller wraps this to set its alignment.
 
      It opens the panel rather than navigating: the bank is what the conversation is
      about, and leaving it to reach the agent is what this replaced. -->
-{#snippet interviewEntry(id: string)}
-  <Button
-    size="sm"
-    variant="secondary"
-    disabled={turnActive}
-    onclick={() => launchInterview([])}
-    aria-describedby={id}
-  >
-    <Sparkles class="size-3.5" />Add an achievement
+{#snippet interviewEntry()}
+  <Button size="sm" variant="secondary" disabled={turnActive} onclick={() => launchInterview([])}>
+    <Sparkles class="size-3.5" />Tailor your experience
   </Button>
-  <p {id} class="text-xs text-muted-foreground">
-    Tell the assistant what you did — “I cut checkout latency by 40% in one quarter.”
-  </p>
 {/snippet}
 
 {#snippet achievement(atom: ExperienceAtom)}
   <li
-    class="group rounded-md border px-3 py-2 {unconfirmed(atom)
+    class="group rounded-md border py-1.5 pl-1 pr-2 {unconfirmed(atom)
       ? 'border-warning/40 bg-warning/5'
       : selected.includes(atom.id)
         ? 'border-brand/50 bg-brand/5'
@@ -895,7 +889,7 @@
         </div>
       </div>
     {:else}
-      <div class="flex items-start gap-3">
+      <div class="flex items-start gap-2">
         <input
           type="checkbox"
           class="mt-1 size-4 shrink-0 accent-brand"
