@@ -286,13 +286,6 @@
   // nothing has been asked yet — the row then offers to ask.
   let linkStep = $state.raw<LinkIntakeStep | null>(null);
 
-  // A different link is a different question, so the previous answer goes. Reading only
-  // the URL here (not `linkStep`) is what keeps this from undoing its own writes.
-  $effect(() => {
-    link?.url;
-    linkStep = null;
-  });
-
   /** Where a signed-out visitor goes to hand this link in. The link rides along in the
    *  return path so it survives the round trip — otherwise signing in costs them the
    *  paste, and the whole point was that they had it in hand. */
@@ -551,6 +544,9 @@
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
+        // Editing the text asks a different question, so the last link's answer goes
+        // with it — otherwise a half-corrected URL sits under a verdict on the old one.
+        linkStep = null;
         draft = edit(draft, e.currentTarget.value);
       }}
       onfocus={() => {
