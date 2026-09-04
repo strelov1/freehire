@@ -1501,6 +1501,10 @@ type Querier interface {
 	// the owner and the CV: a revision id names an entry in one history, and reading it through a
 	// different CV of the same owner would undo the wrong document.
 	GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (CvRevision, error)
+	// The caller's single survey record, keyed by user_id. No matching row means the candidate
+	// has answered nothing yet, which is a normal state and not an error — the service turns it
+	// into an all-unstated record rather than a 404.
+	GetCandidateSurvey(ctx context.Context, userID int64) (CandidateSurvey, error)
 	// Community discussion threads (see the add-community-threads change). Read paths
 	// join community_personas so a row carries the author's handle, never their user_id.
 	// Every such join is a LEFT JOIN: content outlives its author (a deleted account
@@ -1812,7 +1816,9 @@ type Querier interface {
 	// change to password accounts and explain itself to OAuth-only ones. timezone is NULL
 	// until the user sets one on their profile (internal/application/deliverywindow reads NULL as UTC).
 	// language is never NULL — it has a NOT NULL DEFAULT, so every account has one from
-	// creation.
+	// creation. onboarding_completed_at is NULL until the account has been through the
+	// wizard, and it rides along here rather than on its own endpoint because the root
+	// layout's gate needs it on the same read it already makes to decide anything at all.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
@@ -3064,6 +3070,12 @@ type Querier interface {
 	// and is never sent again. Guarded on status='pending' for idempotency under a
 	// worker retry that already delivered.
 	MarkNudgeDelivered(ctx context.Context, id int64) (int64, error)
+	// Record that this account has been through the onboarding wizard, so it is never routed
+	// there again. Guarded on IS NULL rather than written unconditionally: the useful fact is
+	// WHEN the account first finished, and a second call (a re-submit, a double click, a
+	// decline after a finish) must not overwrite it. That guard is also what makes the
+	// endpoint idempotent — a repeat call affects no rows and is still a success.
+	MarkOnboardingComplete(ctx context.Context, id int64) error
 	// Terminal success: flip a fired reminder to delivered so it leaves the pending
 	// scan and is never sent again. Guarded on status='pending' for idempotency under
 	// a worker retry that already delivered.
@@ -4496,6 +4508,12 @@ type Querier interface {
 	// And it does not distinguish insert from update, because both mean the same thing here:
 	// this person has granted us their calendar.
 	UpsertCalendarGrant(ctx context.Context, arg UpsertCalendarGrantParams) error
+	// Create-or-replace the caller's one survey record. Full-replace, mirroring
+	// UpsertScreeningAnswers: the service reads the current row, merges caller-provided fields
+	// over it (omitted fields keep their stored value, explicit nulls clear), and writes the
+	// merged result back whole — so the SQL layer stays a plain upsert and the partial-update
+	// semantics live in Go, where they are unit-testable without a database.
+	UpsertCandidateSurvey(ctx context.Context, arg UpsertCandidateSurveyParams) (CandidateSurvey, error)
 	// Company feedback: one signed-in user's star rating + category + text per
 	// (company, category) — a user may hold one review per category per company,
 	// upserted in place (edit-by-resubmit) within that category, but may leave a

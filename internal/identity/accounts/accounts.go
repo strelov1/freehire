@@ -53,6 +53,12 @@ type User struct {
 	// i18n: no UI translation ships yet, this just records the preference (see
 	// freehire#1836).
 	Language string
+	// OnboardingCompletedAt is when this account was walked through the onboarding
+	// wizard, nil for one that never has been. It is the whole gate: nil routes the user
+	// into the wizard, non-nil never does. Deliberately an explicit fact rather than an
+	// inference from "does this account have a CV", which was the old rule and stopped
+	// being true the moment the wizard grew questions a CV cannot answer.
+	OnboardingCompletedAt *time.Time
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected

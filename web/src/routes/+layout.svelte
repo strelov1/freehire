@@ -4,10 +4,9 @@
   import { resolve } from '$app/paths';
   import { onMount, untrack } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { onboardingGate, onboardingUrl } from '$lib/onboardingGate.svelte';
   import { safeRedirect } from '$lib/safeRedirect';
-  import { resumeStore } from '$lib/resume.svelte';
   import { resetUserStores } from '$lib/userResource.svelte';
   import {
     capturePageview,
@@ -44,45 +43,42 @@
       page.url.pathname === '/signin',
   );
 
-  // The onboarding gate: auto-redirect a signed-in visitor with no CV yet to
-  // /onboarding (which bounces an anonymous visitor there straight on to /signin —
-  // see that page's own gate). Reappears every visit until a CV exists, no separate
-  // "completed" flag.
+  // The onboarding gate: auto-redirect a signed-in visitor who has never been through the
+  // wizard to /onboarding (which bounces an anonymous visitor straight on to /signin — see
+  // that page's own gate).
+  //
+  // The condition is one explicit account fact, `onboarding_completed_at`. It used to be
+  // "does this account have a CV", which was a fair proxy while the wizard was about the
+  // CV — and became wrong the moment it started asking about experience, money and the
+  // shape of the candidate's search, none of which a stored PDF answers. Under the old
+  // rule every existing account (nearly all of which have a CV) would have skipped every
+  // new question permanently.
+  //
+  // It rides on the user read the layout already makes, so there is no separate fetch to
+  // wait for. `onboardingGate.dismissed` is what keeps this from re-firing within one
+  // visit for someone who navigated away without finishing; they are asked again next
+  // visit, which is the same behaviour the CV rule had.
+  const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null);
   $effect(() => {
-    // GET /me/resume needs a session — an anonymous visitor's request would just 401,
-    // so this waits for isAuthenticated() rather than firing unconditionally on every
-    // page load site-wide. Re-runs once a visitor signs in mid-visit, since
-    // isAuthenticated() is read reactively here too.
-    if (isAuthenticated()) void resumeStore.ensureLoaded();
-  });
-  $effect(() => {
-    if (!resumeStore.loaded) return;
-    const shouldBeThere = isAuthenticated() && !resumeStore.present && !onboardingGate.dismissed;
-    if (shouldBeThere && page.url.pathname !== '/onboarding') {
+    if (isAuthenticated() && needsOnboarding && !onboardingGate.dismissed && page.url.pathname !== '/onboarding') {
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
       void goto(onboardingUrl(page.url.pathname + page.url.search));
     }
   });
 
-  // The other direction — bounce AWAY from /onboarding once there is truly nothing to
-  // do there (signed in AND a CV already exists) — is checked only at arrival (a
-  // direct/bookmarked/stale visit; the page itself always navigates elsewhere on its
-  // own way out), not reactively for the rest of the visit. `resumeStore.loaded` is
-  // read OUTSIDE untrack() so this effect re-runs once the CV-status fetch settles
-  // (it is almost always still in flight the instant this effect first runs, right at
-  // hydration) — without that, a signed-in visitor who already has a CV and lands
-  // directly on /onboarding would see the whole wizard, permanently: the one run this
-  // effect got fired before `loaded` flipped true, and nothing would ever re-trigger
-  // it. `isAuthenticated()`/`resumeStore.present` stay inside untrack() so THEIR later
-  // changes don't retrigger it — the page's OWN CV upload flips resumeStore.present
-  // mid-visit on purpose (so a later visit skips the gate), and reacting to that live
-  // would yank the user off the page before they ever reached the confirm/location
-  // steps. Honors the same `returnTo` the page itself would have used, so a stale link
-  // at least lands the visitor back where they started rather than home.
+  // The other direction — bounce AWAY from /onboarding once there is truly nothing to do
+  // there (signed in AND already marked complete) — is checked only at ARRIVAL: a direct,
+  // bookmarked or stale visit. The page itself always navigates elsewhere on its own way
+  // out, and it is the page that writes the completion marker, so reacting to that write
+  // live would yank the candidate off the wizard the instant they finished their last step
+  // instead of letting it navigate them. Hence untrack().
+  //
+  // Honors the same `returnTo` the page itself would have used, so a stale link at least
+  // lands the visitor back where they started rather than home.
   $effect(() => {
-    if (page.url.pathname !== '/onboarding' || !resumeStore.loaded) return;
+    if (page.url.pathname !== '/onboarding') return;
     untrack(() => {
-      if (isAuthenticated() && resumeStore.present) {
+      if (isAuthenticated() && currentUser()?.onboarding_completed_at != null) {
         // eslint-disable-next-line svelte/no-navigation-without-resolve -- the returnTo branch is a validated same-origin path (safeRedirect), not a typed route; the fallback branch already uses resolve()
         void goto(safeRedirect(page.url.searchParams.get('returnTo')) ?? resolve('/'));
       }

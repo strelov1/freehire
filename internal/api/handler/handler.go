@@ -32,6 +32,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
+	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/referral"
@@ -417,6 +418,11 @@ func Register(app *fiber.App, cfg Config) {
 	// different lifecycle; see internal/ingest/screeninganswers/AGENTS.md).
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
 	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
+	// The onboarding survey: the candidate's own segmentation answers, and the marker
+	// saying they have been through the wizard. A third singleton beside the two above,
+	// and deliberately so — these answers describe the candidate to us alone, where
+	// profileSvc is the search filter and screeningAnswersSvc is what an employer sees.
+	surveyH := newSurveyHandlers(survey.New(survey.NewQueriesRepository(queries)), queries)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
@@ -765,6 +771,7 @@ func Register(app *fiber.App, cfg Config) {
 	profileH.register(api, mw)
 	// The candidate's own screening answers (see screeningAnswersHandlers).
 	screeningAnswersH.register(api, mw)
+	surveyH.register(api, mw)
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)

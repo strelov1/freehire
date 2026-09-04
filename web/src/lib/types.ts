@@ -15,6 +15,10 @@ import type {
 /** @public — the app's vocabulary for the generated contract; a name is carried here
  *  whether or not a screen reads it yet. */
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
+/** The onboarding survey record. Renamed on the way out of the generated contracts, where
+ *  it is `Responses` only because that file is one flat namespace and `Answers` is already
+ *  the screening answers' — see cmd/gen-contracts. */
+export type { Responses as SurveyAnswers } from './generated/contracts';
 // The list-row projection of a job: the same names and derivations as Job, minus the posting
 // text and everything else a row does not draw.
 export type { Card as JobCard } from './generated/contracts';
@@ -370,6 +374,12 @@ export interface User {
   // Never empty ('en' until changed). No UI translation ships yet — this only
   // records the preference for the profile page's language field.
   language: string;
+  // When this account was walked through the onboarding wizard, null if it never has been.
+  // The root layout's gate reads exactly this: null routes the account to /onboarding, a
+  // timestamp never does. It replaced "does this account have a CV", which was a fair
+  // stand-in while the wizard was about the CV and stopped being one the moment it grew
+  // questions a CV cannot answer.
+  onboarding_completed_at: string | null;
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
@@ -1175,6 +1185,10 @@ export interface CandidateContacts {
   languages?: string[];
   certifications?: string[];
   education?: ResumeEducation[];
+  /** Years of experience as the CANDIDATE states them, overlaying whatever the CV extract
+   *  computed. Captured on the onboarding wizard's experience step, pre-filled from the
+   *  extract's own figure. */
+  total_years?: number;
   // The five body fields above are owned per field, and a non-empty value has always
   // implied that. But clearing one to "" leaves no non-empty value to signal it, so the
   // editor that owns that field sends its *_set flag alongside a save that empties it —
@@ -1184,6 +1198,10 @@ export interface CandidateContacts {
   languages_set?: boolean;
   certifications_set?: boolean;
   education_set?: boolean;
+  /** The same explicit-clear signal for the numeric field, where it matters more: 0 is a
+   *  real answer ("less than a year"), so without this flag a deliberate zero would be
+   *  indistinguishable from never having answered and the CV's figure would come back. */
+  total_years_set?: boolean;
 }
 
 /** The résumé status (`GET /me/resume`): storage flags, owned contacts, parse status,

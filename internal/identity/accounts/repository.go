@@ -262,5 +262,5 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
 		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
-		Language: row.Language}, nil
+		Language: row.Language, OnboardingCompletedAt: pgconv.TimePtr(row.OnboardingCompletedAt)}, nil
 }

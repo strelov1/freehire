@@ -46,6 +46,16 @@ export async function updateLanguage(language: string) {
   await invalidateAll();
 }
 
+/** Records that this account has been through the onboarding wizard and re-resolves the
+ *  session, so `currentUser().onboarding_completed_at` — which IS the layout's routing gate
+ *  — reflects it immediately. Without the re-resolve the gate would keep reading a stale
+ *  null and depend entirely on `onboardingGate.dismissed` to avoid re-capturing the user,
+ *  which only holds for the current visit. */
+export async function completeOnboarding() {
+  await api.completeOnboarding();
+  await invalidateAll();
+}
+
 export async function logout() {
   // Best-effort: still re-resolve (to signed-out) even if the network call fails.
   try {

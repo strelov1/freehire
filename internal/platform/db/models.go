@@ -244,6 +244,17 @@ type BroadcastEmail struct {
 	Error    string             `json:"error"`
 }
 
+type CandidateSurvey struct {
+	UserID                int64              `json:"user_id"`
+	JobSearchStage        pgtype.Text        `json:"job_search_stage"`
+	BiggestChallenge      pgtype.Text        `json:"biggest_challenge"`
+	BiggestChallengeNote  pgtype.Text        `json:"biggest_challenge_note"`
+	CurrentIncomeAmount   pgtype.Int4        `json:"current_income_amount"`
+	CurrentIncomeCurrency pgtype.Text        `json:"current_income_currency"`
+	CurrentIncomePeriod   pgtype.Text        `json:"current_income_period"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`
@@ -1088,6 +1099,7 @@ type User struct {
 	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
 	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 	StripeCustomerID           pgtype.Text        `json:"stripe_customer_id"`
+	OnboardingCompletedAt      pgtype.Timestamptz `json:"onboarding_completed_at"`
 }
 
 type UserEmailCode struct {

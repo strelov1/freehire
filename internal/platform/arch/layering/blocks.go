@@ -94,6 +94,11 @@ var blocks = map[string][]string{
 		// the CV path runs, which is what keeps one text from resolving two ways.
 		"linkedinprofile",
 		"matchanalysis", "pii", "resume", "resumeextract",
+		// survey holds the candidate's self-reported segmentation answers (job-search
+		// stage, biggest challenge, current income). It sits here rather than in engage,
+		// whose digests are its most likely future reader, because it states what a
+		// candidate IS — engage is layer 7 and may import this, but not the reverse.
+		"survey",
 	},
 	"job": {
 		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",

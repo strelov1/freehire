@@ -1313,6 +1313,25 @@ export interface Answers {
   age_18_or_older?: boolean;
 }
 
+/**
+ * Responses is one candidate's survey record. Every field is independently optional: a nil
+ * pointer means the candidate has not stated that fact, never a guessed default and never
+ * a zero standing in for silence.
+ */
+export interface Responses {
+  job_search_stage?: string;
+  biggest_challenge?: string;
+  /**
+   * BiggestChallengeNote is free text, and only vocab.JobChallengeOther admits it. A note
+   * beside a coded challenge could contradict it, and nothing downstream would know which
+   * to believe.
+   */
+  biggest_challenge_note?: string;
+  current_income_amount?: number /* int */;
+  current_income_currency?: string;
+  current_income_period?: string;
+}
+
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'applitrack', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'dayforce', 'deel', 'djinni', 'earcu', 'echojobs', 'edjoin', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'hiringthing', 'hrmdirect', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'profession', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotedotcom', 'remotive', 'remotli', 'rippling', 'schoolspring', 'seek', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;

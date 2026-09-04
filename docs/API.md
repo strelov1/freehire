@@ -28,6 +28,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Moderator jobs](#moderator-jobs)
 - [Profile & résumé](#profile--rsum)
 - [Screening answers](#screening-answers)
+- [Onboarding survey](#onboarding-survey)
 - [Activity & shared boards](#activity--shared-boards)
 - [Saved searches & subscriptions](#saved-searches--subscriptions)
 - [Push notifications & alerts](#push-notifications--alerts)
@@ -2887,6 +2888,81 @@ curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \
     "age_18_or_older": true
   }
 }
+```
+
+## Onboarding survey
+
+What you told us about your search when you signed up: how far along it is, the single biggest thing in its way, and what you earn today. A singleton per user — no id in the path. These answers describe you to us and reach no employer and no job search; what you WANT to be paid is a screening answer (`desired_salary_*`), not one of these. `PUT` is a partial update: a field the body omits keeps its stored value, and there is no way to clear one back to unstated.
+
+### `GET /me/survey`
+
+**Auth:** Session or API key
+
+Your stored survey answers. Every field is absent until you answer it.
+
+```bash
+curl "https://freehire.me/api/v1/me/survey" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_search_stage": "searching",
+    "biggest_challenge": "technical_interviews",
+    "current_income_amount": 5000,
+    "current_income_currency": "USD",
+    "current_income_period": "month"
+  }
+}
+```
+
+### `PUT /me/survey`
+
+**Auth:** Session only
+
+Update one or more survey answers.
+
+A field the body omits is left unchanged. A stage or challenge outside its vocabulary, a note alongside any challenge other than `other`, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a non-positive income is a `400` naming the offending field.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job_search_stage` | string | no | One of `not_started`, `searching`, `employed_looking`, `exploring`. (e.g. `searching`) |
+| `biggest_challenge` | string | no | One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`. (e.g. `technical_interviews`) |
+| `biggest_challenge_note` | string | no | Free text. Accepted only alongside `biggest_challenge: "other"`. |
+| `current_income_amount` | integer | no | What you earn today, in the currency and period below. (e.g. `5000`) |
+| `current_income_currency` | string | no | Three-letter ISO 4217 currency code. (e.g. `USD`) |
+| `current_income_period` | string | no | Income period, e.g. `year`, `month`. (e.g. `month`) |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/survey" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"job_search_stage":"searching"}'
+```
+
+```json
+{
+  "data": {
+    "job_search_stage": "searching"
+  }
+}
+```
+
+### `POST /me/onboarding/complete`
+
+**Auth:** Session only
+
+Record that you have been through the onboarding wizard.
+
+Sets `onboarding_completed_at` on your account, which is what stops the app routing you into the wizard again. Idempotent: calling it a second time keeps the original timestamp and still answers `200`.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/onboarding/complete" -b cookies.txt
+```
+
+```json
+{ "data": { "onboarding_complete": true } }
 ```
 
 ## Activity & shared boards

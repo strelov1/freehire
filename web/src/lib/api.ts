@@ -10,7 +10,10 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
-import type { Answers, Display, RevisionView } from '$lib/generated/contracts';
+// `Responses` is the onboarding survey's record. Aliased on the way in because the
+// generated contracts are one flat namespace and the name says nothing on its own there —
+// see cmd/gen-contracts for why it is not called `Answers` like its Go siblings.
+import type { Answers, Display, Responses as SurveyAnswers, RevisionView } from '$lib/generated/contracts';
 import type {
   CvAppearanceDefaults,
   CvAtsDelta,
@@ -1344,6 +1347,35 @@ export function createApi(
     return requestData<Answers>('/api/v1/me/screening-answers', jsonBody('PUT', patch));
   }
 
+  // The onboarding survey — what the candidate told us about their SEARCH (how far along it
+  // is, what is blocking it, what they earn today). Distinct from the screening answers
+  // above, which are what an employer sees; and from the profile, which is a search filter.
+  // What they WANT to be paid is a screening answer, not one of these.
+
+  /** The current user's survey answers. Never null and never a 404: an account that has
+   *  answered nothing reads an object with every field absent, which is what lets the
+   *  wizard decide field by field whether it still has something to ask. */
+  async function getSurvey(): Promise<SurveyAnswers> {
+    return requestData<SurveyAnswers>('/api/v1/me/survey');
+  }
+
+  /** Partially update the user's survey answers: a field the patch omits keeps whatever was
+   *  already stored, and there is no way to clear one back to unstated. A value outside its
+   *  vocabulary, a note alongside a challenge other than `other`, a malformed currency, or a
+   *  non-positive income is a 400 naming the offending field. */
+  async function updateSurvey(patch: Partial<SurveyAnswers>): Promise<SurveyAnswers> {
+    return requestData<SurveyAnswers>('/api/v1/me/survey', jsonBody('PUT', patch));
+  }
+
+  /** Record that this account has been through the onboarding wizard, so the layout stops
+   *  routing it there. Idempotent — a second call keeps the original timestamp. */
+  async function completeOnboarding(): Promise<void> {
+    await requestData<{ onboarding_complete: boolean }>(
+      '/api/v1/me/onboarding/complete',
+      jsonBody('POST', {}),
+    );
+  }
+
   // Talent Network: the caller's own opt-in visibility setting (distinct from the public,
   // unauthenticated profile page at GET /talent-network/:publicID — see
   // internal/handler/me_talent_network.go and talent_network_profile.go).
@@ -2315,6 +2347,9 @@ export function createApi(
     saveProfile,
     getScreeningAnswers,
     updateScreeningAnswers,
+    getSurvey,
+    updateSurvey,
+    completeOnboarding,
     getTalentNetwork,
     setTalentNetworkVisibility,
     getTalentNetworkProfile,
