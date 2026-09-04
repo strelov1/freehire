@@ -60,10 +60,12 @@ const invoiceHistory = 12
 // ErrNoSubscription when the account has never transacted — the ordinary state for a free
 // account, and the caller renders nothing rather than an error.
 func (s *Service) SubscriptionOverview(ctx context.Context, userID int64) (Overview, error) {
-	if !s.Enabled() {
+	// The configuration, not the engine: receipts and renewal dates exist only where a card
+	// was entered on the web, so this is a Stripe question end to end.
+	if !s.cfg.Enabled() {
 		return Overview{}, ErrDisabled
 	}
-	customer, err := s.customerOf(ctx, userID)
+	customer, err := s.stripe().customerOf(ctx, userID)
 	if err != nil {
 		return Overview{}, err
 	}

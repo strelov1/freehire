@@ -12,17 +12,23 @@ import (
 	"time"
 )
 
-// SignatureHeader is the header the provider signs each delivery with.
-const SignatureHeader = "Stripe-Signature"
+// The header a provider signs with is that provider's business and lives with it — see
+// stripeSignatureHeader and revenuecatSignatureHeader. The SCHEME is shared and lives here:
+// both send `t=<unix>,v1=<hex>` and both sign "<timestamp>.<raw body>" with HMAC-SHA256, so
+// one verifier serves both and only the name it is read under differs.
 
-// signatureWindow bounds how old a signed delivery may be. Five minutes is the provider's
-// own default tolerance.
+// stripeSignatureWindow bounds how old a signed Stripe delivery may be. Five minutes is that
+// provider's own default tolerance.
 //
-// The provider retries for up to three days, and this is deliberately NOT wide enough to
-// admit a late retry — a retry is re-signed when it is sent, so the window bounds the age of
-// the SIGNATURE rather than the age of the event. Widening it to accommodate retries would
-// only lengthen the life of a captured delivery.
-const signatureWindow = 5 * time.Minute
+// Stripe retries for up to three days, and this is deliberately NOT wide enough to admit a
+// late retry — a retry is re-signed when it is sent, so the window bounds the age of the
+// SIGNATURE rather than the age of the event. Widening it to accommodate retries would only
+// lengthen the life of a captured delivery.
+//
+// The window is a PARAMETER rather than a constant here because that reasoning is Stripe's
+// and not the scheme's: whether RevenueCat re-signs its retries is not documented, and
+// assuming it does would silently drop every retry it sends. See revenuecatSignatureWindow.
+const stripeSignatureWindow = 5 * time.Minute
 
 // ErrBadSignature marks every reason a delivery failed to authenticate: no header, a
 // malformed one, a stale timestamp, a MAC that does not match.
@@ -44,7 +50,7 @@ var errNoSignature = fmt.Errorf("%w: delivery carries no signature", ErrBadSigna
 // someone holding the secret. The freshness window says it is not a delivery captured
 // last month and sent again: a signature with no time bound is a bearer credential, which
 // is exactly the property that made the shared Authorization header worth replacing.
-func verifySignature(raw []byte, header, secret string, now time.Time) error {
+func verifySignature(raw []byte, header, secret string, window time.Duration, now time.Time) error {
 	if strings.TrimSpace(header) == "" {
 		return errNoSignature
 	}
@@ -55,8 +61,8 @@ func verifySignature(raw []byte, header, secret string, now time.Time) error {
 	}
 
 	signedAt := time.Unix(ts, 0)
-	if drift := now.Sub(signedAt); drift > signatureWindow || drift < -signatureWindow {
-		return fmt.Errorf("%w: signature is %s away from now, outside the %s window", ErrBadSignature, drift.Round(time.Second), signatureWindow)
+	if drift := now.Sub(signedAt); drift > window || drift < -window {
+		return fmt.Errorf("%w: signature is %s away from now, outside the %s window", ErrBadSignature, drift.Round(time.Second), window)
 	}
 
 	// The signed payload is "<timestamp>.<raw body>", written in two goes rather than

@@ -92,7 +92,10 @@ func (p *priceCache) publish(entries []PublicPrice, err error) []PublicPrice {
 // empty list otherwise. An empty list is the honest failure: the page then shows the plan
 // comparison without a price, rather than a price that might be wrong.
 func (s *Service) PublicPrices(ctx context.Context) []PublicPrice {
-	if !s.Enabled() {
+	// Asked of the configuration directly rather than through the engine. This surface is
+	// Stripe's alone — there is no store equivalent of a price list we can quote — so routing
+	// the question through the provider seam would only add a hop to reach the same answer.
+	if !s.cfg.Enabled() {
 		return nil
 	}
 

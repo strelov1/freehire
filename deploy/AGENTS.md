@@ -52,6 +52,50 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   one to verify the other fails every delivery, and the failure looks exactly like a wrong
   key rather than a wrong environment.
 
+- **The stores are a SECOND provider, configured separately and inert without its own three
+  variables.** `REVENUECAT_API_KEY` (a `sk_` SECRET key, server-side only),
+  `REVENUECAT_WEBHOOK_SECRET`, and `REVENUECAT_ENTITLEMENT` (defaults to `pro`). Missing any
+  of them mounts no store route and skips that reconciler pass, and **leaves Stripe working**
+  — the two are independent, so a deployment may sell on the web, in the apps, in both, or in
+  neither.
+
+  This exists because Apple's guideline 3.1.1 and Google Play's Payments policy require
+  digital content consumed in an app to be sold through in-app purchase. The mobile client
+  cannot use the Stripe checkout, and no amount of configuration changes that.
+
+  What happens in the RevenueCat dashboard and nowhere else:
+
+  1. A project, with an iOS app and an Android app, each holding its store credentials (an
+     App Store Connect API key, a Play service-account JSON).
+  2. An entitlement whose identifier matches `REVENUECAT_ENTITLEMENT`. **This string is the
+     contract**: the backend grants Pro for that entitlement and nothing else, and a mismatch
+     looks exactly like nobody having bought anything.
+  3. An offering with the monthly and annual packages, mapped to the products created in App
+     Store Connect and Play Console. Those products are created in the stores first; the
+     paid-apps agreement and banking details must be in place or they cannot be sold.
+  4. The webhook, pointed at `https://freehire.me/api/v1/billing/revenuecat/webhook`, **with
+     HMAC signing enabled**. If the integration offers only a shared `Authorization` header,
+     stop: that is a bearer credential anyone who sees one delivery can replay, and accepting
+     it is a decision to be made deliberately rather than by default.
+
+  **The signature window is wider here than for Stripe, provisionally.** Stripe re-signs every
+  retry, so its window is five minutes; RevenueCat's documentation does not say whether it
+  does, and its last retry arrives 80 minutes after the first. Until somebody inspects a real
+  retried delivery, the window admits that tail — a too-narrow window would drop paid
+  subscriptions silently, which is the worse failure. See `revenuecatSignatureWindow`.
+
+- **Granting Pro by hand changed.** `UPDATE users SET pro_until = …` now FAILS with SQLSTATE
+  `428C9`, and that is deliberate: since migration 0132 the column is derived from three
+  sources and cannot be assigned. Support grants go to the source that no provider sync can
+  revoke:
+
+  ```sql
+  UPDATE users SET pro_until_granted = now() + interval '30 days' WHERE id = $1;
+  ```
+
+  The other two columns belong to their providers. Writing `pro_until_stripe` by hand means
+  the next Stripe sync overwrites it, which is exactly the confusion the split removed.
+
 - **A new worker needs its binary built on the host.** `release.sh` builds the API, not
   every command in `cmd/`. `billing-sync` is the first addition since that was last true;
   build it where the other worker binaries live before enabling the timer, or the unit

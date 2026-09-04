@@ -1060,8 +1060,11 @@ type User struct {
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Language                   string             `json:"language"`
 	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
-	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 	StripeCustomerID           pgtype.Text        `json:"stripe_customer_id"`
+	ProUntilStripe             pgtype.Timestamptz `json:"pro_until_stripe"`
+	ProUntilRevenuecat         pgtype.Timestamptz `json:"pro_until_revenuecat"`
+	ProUntilGranted            pgtype.Timestamptz `json:"pro_until_granted"`
+	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 }
 
 type UserEmailCode struct {

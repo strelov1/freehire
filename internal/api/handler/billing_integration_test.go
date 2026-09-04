@@ -32,6 +32,11 @@ import (
 
 const billingSecret = "whsec_integration"
 
+// stripeSignatureHeader is written out rather than read from the billing package, and that is
+// the right way round for a test: the name is a contract with Stripe, not an internal choice,
+// so a change to the constant should fail here rather than be followed silently.
+const stripeSignatureHeader = "Stripe-Signature"
+
 // signDelivery reproduces what the provider sends: HMAC-SHA256 over "<unix>.<raw body>".
 func signDelivery(body []byte, at time.Time) string {
 	ts := at.Unix()
@@ -45,7 +50,9 @@ func signDelivery(body []byte, at time.Time) string {
 // exercises the real registration path rather than a reimplementation of it.
 func billingApp(t *testing.T, pool *pgxpool.Pool, cfg billing.Config, providerURL string, iss *auth.Issuer) *fiber.App {
 	t.Helper()
-	h := newBillingHandlers(billing.NewWithBase(cfg, db.New(pool), providerURL))
+	// No store provider: these tests are about Stripe, and an unconfigured RevenueCat mounts
+	// nothing — which is also what the disabled case below asserts about Stripe itself.
+	h := newBillingHandlers(billing.NewWithBase(cfg, db.New(pool), providerURL), nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
 	return app
@@ -93,7 +100,7 @@ func TestBillingWebhook(t *testing.T) {
 		req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
 		req.Header.Set("Content-Type", "application/json")
 		if signature != "" {
-			req.Header.Set(billing.SignatureHeader, signature)
+			req.Header.Set(stripeSignatureHeader, signature)
 		}
 		resp, err := app.Test(req, 15000)
 		if err != nil {
@@ -196,7 +203,7 @@ func TestBillingWebhookNeverDecodesTheBody(t *testing.T) {
 
 	body := []byte(fmt.Sprintf(`{"id":"evt_encoded","type":"checkout.session.completed","data":{"object":{"customer":"cus_encoded","client_reference_id":"%d"}}}`, userID))
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
-	req.Header.Set(billing.SignatureHeader, signDelivery(body, time.Now()))
+	req.Header.Set(stripeSignatureHeader, signDelivery(body, time.Now()))
 	// The lie. Nothing here is gzip, and nothing must try to treat it as gzip.
 	req.Header.Set("Content-Encoding", "gzip")
 
@@ -225,7 +232,7 @@ func TestBillingWebhookRejectsAMalformedBodyWithoutRetries(t *testing.T) {
 	// idempotency key and nothing to record.
 	body := []byte(`{"not":"an event"}`)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
-	req.Header.Set(billing.SignatureHeader, signDelivery(body, time.Now()))
+	req.Header.Set(stripeSignatureHeader, signDelivery(body, time.Now()))
 
 	resp, err := app.Test(req, 15000)
 	if err != nil {
@@ -262,7 +269,7 @@ func TestBillingWebhookAcknowledgesWhatItCannotApply(t *testing.T) {
 
 	body := []byte(fmt.Sprintf(`{"id":"evt_unreachable","type":"checkout.session.completed","data":{"object":{"customer":"cus_unreachable","client_reference_id":"%d"}}}`, userID))
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
-	req.Header.Set(billing.SignatureHeader, signDelivery(body, time.Now()))
+	req.Header.Set(stripeSignatureHeader, signDelivery(body, time.Now()))
 
 	resp, err := app.Test(req, 15000)
 	if err != nil {

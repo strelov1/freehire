@@ -905,6 +905,18 @@ type Querier interface {
 	// the same transaction, alongside LockJobForApply) is the durable record; the queue entry
 	// has nothing left to say. Mirrors DeleteApplyFormEntry.
 	DeleteAutoApplyEntry(ctx context.Context, id int64) error
+	// ListSubscribersNearProExpiry was removed by the add-store-purchases change, and its absence
+	// is worth a line because deleting a query is unusual here.
+	//
+	// It predicated on users.pro_until, which stopped being a provider's own answer the moment
+	// that column became GREATEST of three sources: a subscriber whose OTHER source reaches
+	// further would sit outside the window and never be re-checked, and the lost renewal the pass
+	// exists to repair would stay lost. Each provider now has its own near-expiry read against its
+	// own column — ListSubscribersNearProExpiryStripe in billing_customer.sql, and
+	// ListSubscribersNearProExpiryRevenueCat below.
+	//
+	// Left in place it would have been a generated, callable query that is wrong by construction,
+	// sitting where the next provider would reach for it.
 	// Erase one user's billing events. Account deletion calls this; the foreign key cascades,
 	// but deletion states what it erases explicitly rather than relying on a constraint to
 	// mean it.
@@ -1649,6 +1661,12 @@ type Querier interface {
 	// column read and never a call to a billing provider: a provider that is slow must not
 	// be able to slow down a user's next question.
 	GetProUntil(ctx context.Context, id int64) (pgtype.Timestamptz, error)
+	// The plan and where it came from, in one read.
+	//
+	// The derived column and its three sources together, because the surface needs both: the
+	// instant to show, and which origin equals it. Two queries would be two round trips for one
+	// row, and — worse — could disagree if a sync landed between them.
+	GetProUntilSources(ctx context.Context, id int64) (GetProUntilSourcesRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private sets are unreachable. No row → 404.
@@ -1854,6 +1872,17 @@ type Querier interface {
 	// unverified account should be told to confirm its address rather than that somebody
 	// already reported the job.
 	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
+	// Whether this account has ever been seen by RevenueCat: a recorded delivery of theirs, or a
+	// store entitlement we already hold.
+	//
+	// IT GUARDS A READ THAT WRITES. RevenueCat's v1 subscribers endpoint CREATES the subscriber
+	// when the identifier is unknown, so asking about an account that never bought anything
+	// registers it with the provider. Without this predicate a reconciler pass over the user
+	// table would enrol every account we have, silently and permanently.
+	//
+	// Two sources rather than one because they cover different moments: the event row exists from
+	// the first delivery onward, and the column survives even if events are ever pruned.
+	HasRevenueCatFootprint(ctx context.Context, userID int64) (pgtype.Bool, error)
 	// The moderator lever: hide a specific review (idempotent — hiding an already-
 	// hidden row is a no-op). Returns the company_slug so the caller can recompute
 	// that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
@@ -2695,22 +2724,18 @@ type Querier interface {
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
 	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]ListSubmissionsByUserRow, error)
-	// The reconciler's second pass: subscribers whose plan expiry falls inside a window around
-	// now, so a renewal whose webhook was never delivered is repaired within an hour.
+	// The reconciler's second pass for the store provider: accounts whose store entitlement
+	// expires inside a window around now, so a renewal whose webhook was never delivered is
+	// repaired on the next run.
 	//
-	// IT WALKS billing_events, NOT users. Two reasons, and the second is the one that matters.
+	// The predicate is on pro_until_revenuecat and never on the derived pro_until, for the reason
+	// the Stripe query states: the derived column is the FURTHEST of three sources, so a
+	// subscriber whose web subscription or manual grant reaches beyond this renewal would sit
+	// outside the window and never be re-checked.
 	//
-	// Cheapness: only an account that has actually transacted appears here, so the candidate
-	// set is the subscriber base rather than the 8M-row users table, and it is reached through
-	// an index that already exists. A predicate on users.pro_until would want an index on
-	// users, and building one on a table that size means either blocking writes to the account
-	// table or a CONCURRENTLY build with its own failure mode.
-	//
-	// Correctness: reading a subscriber's state from the provider CREATES that subscriber if
-	// the identifier is unknown to them — a GET with a write's consequences. Starting from
-	// events makes "we only ever ask about someone who has transacted" a property of the
-	// query rather than a rule the worker has to remember.
-	ListSubscribersNearProExpiry(ctx context.Context, arg ListSubscribersNearProExpiryParams) ([]ListSubscribersNearProExpiryRow, error)
+	// A non-NULL column is also exactly the footprint HasRevenueCatFootprint looks for, so this
+	// pass can never ask the provider about an account it would thereby create.
+	ListSubscribersNearProExpiryRevenueCat(ctx context.Context, arg ListSubscribersNearProExpiryRevenueCatParams) ([]int64, error)
 	// The reconciler's second pass: accounts bound to a provider customer whose plan expiry
 	// falls inside a window around now, so a renewal whose webhook was never delivered is
 	// repaired on the next run.
@@ -2718,6 +2743,13 @@ type Querier interface {
 	// It walks users rather than billing_events because the binding column is what makes the
 	// question answerable at all — and it is indexed, so the scan is over the accounts that
 	// have transacted rather than over all of them.
+	//
+	// The window is a predicate on pro_until_stripe, NEVER on the derived pro_until. Since
+	// migration 0132 the derived column is the FURTHEST reach of three sources, so a Stripe
+	// customer who also holds a store subscription or a manual grant that reaches beyond their
+	// renewal would sit outside the window and never be re-checked — and the renewal whose
+	// webhook was lost, which is the only reason this query exists, would stay lost. Each
+	// provider's window belongs on that provider's own column.
 	ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error)
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
@@ -2766,7 +2798,14 @@ type Querier interface {
 	// Rows with a NULL user_id come back too. They are not skipped in SQL because "an event we
 	// could not attribute" is a decision the worker should make visibly and log, not something
 	// a WHERE clause silently disposes of.
-	ListUnprocessedBillingEvents(ctx context.Context, maxRows int32) ([]ListUnprocessedBillingEventsRow, error)
+	//
+	// SCOPED BY PROVIDER, and that is not tidiness. An event can only be applied by the provider
+	// that sent it: applying is re-reading the subscriber and writing that provider's source
+	// column, and the two address accounts differently. Handed another provider's row, a pass
+	// would resolve the account through the wrong route, write the wrong column, and then STAMP
+	// the row processed — so a store purchase would be marked done having never conferred
+	// anything, and never be retried.
+	ListUnprocessedBillingEvents(ctx context.Context, arg ListUnprocessedBillingEventsParams) ([]ListUnprocessedBillingEventsRow, error)
 	// Every feature's consumption for one user on one day, for the usage surface. A feature
 	// the user has not touched today simply does not come back, and the caller reports it as
 	// untouched rather than as absent.
@@ -3972,10 +4011,24 @@ type Querier interface {
 	// the guard answers that per row, which is cheaper and more honest than a cursor that
 	// would go stale the moment ingest writes a new posting behind it.
 	SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error)
-	// Move a user's plan expiry. The only writer today is a hand-run statement; the billing
-	// webhook and its reconciler become the writers in the change that adds them, and they
-	// write this and nothing else.
-	SetProUntil(ctx context.Context, arg SetProUntilParams) error
+	// Pro GIVEN rather than sold: support's manual grant today, awarded days once add-invites
+	// lands. No provider sync touches it, which is the whole reason it is separate — before
+	// migration 0132 a hand-set value lived in the column the Stripe sync overwrites, and the
+	// next webhook silently undid it.
+	SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error
+	// How far the APP STORE or GOOGLE PLAY subscription reaches. Written only by the RevenueCat
+	// sync, and only over its own source column, for the same reason the Stripe setter is
+	// confined to its own: neither provider may answer for a plan it did not sell.
+	SetProUntilRevenueCat(ctx context.Context, arg SetProUntilRevenueCatParams) error
+	// How far the WEB subscription reaches. Written only by the Stripe sync, from Stripe's
+	// current view of the customer.
+	//
+	// It writes a source, not the plan. users.pro_until is derived by the schema as the furthest
+	// of three sources and refuses assignment outright (428C9) — see migration 0132 — so
+	// clearing this column says "Stripe confers nothing", never "this account is not Pro". The
+	// account may hold a store subscription or a manual grant, and before 0132 this write would
+	// have revoked either without a trace.
+	SetProUntilStripe(ctx context.Context, arg SetProUntilStripeParams) error
 	// Publish a saved search as a board: set its public slug and (optional) author label,
 	// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing
 	// one on re-share, minting a fresh one otherwise), so this sets it verbatim; a
@@ -4005,7 +4058,7 @@ type Querier interface {
 	// Bind an account to the payment provider's customer, ONCE, when it first transacts.
 	//
 	// IS NULL, so this writes a binding and never REPLACES one. That is a security property,
-	// not a tidiness one. An account's customer is resolved two ways (see Service.resolveUser):
+	// not a tidiness one. An account's customer is resolved two ways (see stripeProvider.account):
 	// from the stored binding, and — only when there is no binding yet — from the account
 	// reference the provider echoes back. That reference is attacker-supplied on one path: a
 	// Stripe Payment Link takes `?client_reference_id=` from whoever opens it. With a bare
@@ -4015,7 +4068,7 @@ type Querier interface {
 	// never touches it again — and then hold the victim's plan hostage to their own card.
 	//
 	// Refusing the write costs nothing the system needs. The self-healing rebind in
-	// Service.Apply is precisely the NULL case, and an account that genuinely has to move to a
+	// engine.Apply is precisely the NULL case, and an account that genuinely has to move to a
 	// new customer is a support ticket and one UPDATE, not a path a webhook should offer.
 	//
 	// Also subsumes the cheaper reason the predicate was here before: the webhook and the

@@ -1252,7 +1252,13 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'differs is the daily amount, and it resets at `resets_at`. A pro caller reads as ' +
           '`unlimited` rather than as a number. `enforced` says whether that ceiling turns ' +
           'anybody away yet — while it is `false` a spent allowance is counted and the ' +
-          'action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM.',
+          'action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM. ' +
+          'A pro caller also carries `pro_until` and `pro_source` — `stripe`, `revenuecat` ' +
+          'or `granted` — both absent on the free plan and on a plan that has ended. ' +
+          '`pro_source` is behavioural: a client offering an in-app purchase must not offer ' +
+          'one to a `stripe` subscriber, who would be charged twice for one plan, and a ' +
+          '`revenuecat` subscriber must be sent to their store to cancel rather than to a ' +
+          'web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.',
         curl: `curl "${BASE_URL}/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
@@ -1264,6 +1270,24 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
     ]
   }
 }`,
+      },
+      {
+        method: 'POST',
+        path: '/billing/revenuecat/sync',
+        auth: 'cookie',
+        summary: 'Re-read your own store subscription now.',
+        description:
+          'For a mobile client that has just completed an App Store or Google Play ' +
+          'purchase. The purchase finishes on the device before the provider’s webhook ' +
+          'reaches us, and if that delivery is lost the provider stops retrying after 80 ' +
+          'minutes — so without this route a paid subscriber can be left looking at a ' +
+          'paywall. It names nobody: the account is the session’s, and a user id in the ' +
+          'request is ignored. Rate-limited per caller, and absent entirely where the store ' +
+          'provider is unconfigured. `status` is `synced` when the plan was written, or ' +
+          '`no_subscription` when RevenueCat holds nothing for this account; a 503 means ' +
+          'the provider could not be reached and the hourly reconciler will finish the job.',
+        curl: `curl -X POST "${BASE_URL}/billing/revenuecat/sync" -b cookies.txt`,
+        responseExample: `{ "data": { "status": "synced" } }`,
       },
       {
         method: 'GET',

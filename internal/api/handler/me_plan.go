@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -38,8 +40,45 @@ type planResponse struct {
 	// ProUntil is when the Pro plan lapses, absent on the free plan. It is read from the
 	// stored column, never from the billing provider — this endpoint must keep answering
 	// when the provider does not.
-	ProUntil   *time.Time      `json:"pro_until,omitempty"`
+	ProUntil *time.Time `json:"pro_until,omitempty"`
+	// ProSource is where the plan was bought: "stripe", "revenuecat" or "granted". Absent on
+	// the free plan, alongside ProUntil.
+	//
+	// It is behavioural rather than informational, which is why it is here at all. Apple
+	// forbids directing an in-app subscriber to a web page to cancel, so a client has to know
+	// which surface to send them to; and offering an in-app purchase to somebody already
+	// paying through Stripe sells them the same plan twice, which RevenueCat would happily
+	// take the money for.
+	ProSource  string          `json:"pro_source,omitempty"`
 	Allowances []allowanceView `json:"allowances"`
+}
+
+// proSourceOf names which origin conferred the plan: the source column equal to the derived
+// pro_until.
+//
+// The order is the tie-break and it is stated rather than left to whichever column is read
+// first, so the answer is stable across deployments. A tie means two origins reach the same
+// instant, which is rare and harmless; naming Stripe first points a client's cancellation
+// advice at the surface the subscriber most likely bought through.
+func proSourceOf(row db.GetProUntilSourcesRow) string {
+	if !row.ProUntil.Valid {
+		return ""
+	}
+	for _, c := range []struct {
+		name  string
+		value pgtype.Timestamptz
+	}{
+		{"stripe", row.ProUntilStripe},
+		{"revenuecat", row.ProUntilRevenuecat},
+		{"granted", row.ProUntilGranted},
+	} {
+		if c.value.Valid && c.value.Time.Equal(row.ProUntil.Time) {
+			return c.name
+		}
+	}
+	// Unreachable while pro_until is GREATEST of the three: something equal to it must exist.
+	// Answering "" rather than guessing keeps a schema change from inventing an origin.
+	return ""
 }
 
 // GetMyPlan returns the caller's plan and today's usage across every metered feature,
@@ -58,11 +97,21 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 		return err
 	}
 	out := planResponse{Plan: string(tier), ResetsAt: resets, Allowances: make([]allowanceView, 0, len(usage))}
-	// One extra column read, not a call to the provider. A lapsed or absent value simply
-	// leaves the field out, which is what a free-plan caller should see.
-	if proUntil, err := h.queries.GetProUntil(c.Context(), userID); err == nil && proUntil.Valid && proUntil.Time.After(time.Now()) {
-		when := proUntil.Time
+	// One extra row read, not a call to the provider. A lapsed or absent value simply leaves
+	// both fields out, which is what a free-plan caller should see.
+	//
+	// A FAILED read is logged rather than swallowed, and the reason is not tidiness. The tier
+	// above came from the same column through plans.Usage, so the response would say "pro"
+	// while carrying no pro_source — and a client that decides whether to show a paywall from
+	// pro_source would then offer an in-app purchase to somebody already paying, which is the
+	// exact double-sell that field exists to prevent.
+	sources, err := h.queries.GetProUntilSources(c.Context(), userID)
+	if err != nil {
+		log.Printf("plan: reading the plan sources for user %d: %v", userID, err)
+	} else if sources.ProUntil.Valid && sources.ProUntil.Time.After(time.Now()) {
+		when := sources.ProUntil.Time
 		out.ProUntil = &when
+		out.ProSource = proSourceOf(sources)
 	}
 	for _, u := range usage {
 		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, u.Enforced, resets))

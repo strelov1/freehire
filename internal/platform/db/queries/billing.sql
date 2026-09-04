@@ -29,9 +29,17 @@ RETURNING id;
 -- Rows with a NULL user_id come back too. They are not skipped in SQL because "an event we
 -- could not attribute" is a decision the worker should make visibly and log, not something
 -- a WHERE clause silently disposes of.
+--
+-- SCOPED BY PROVIDER, and that is not tidiness. An event can only be applied by the provider
+-- that sent it: applying is re-reading the subscriber and writing that provider's source
+-- column, and the two address accounts differently. Handed another provider's row, a pass
+-- would resolve the account through the wrong route, write the wrong column, and then STAMP
+-- the row processed — so a store purchase would be marked done having never conferred
+-- anything, and never be retried.
 SELECT id, provider, event_id, app_user_id, user_id, event_type, received_at
 FROM billing_events
 WHERE processed_at IS NULL
+  AND provider = sqlc.arg(provider)::text
 ORDER BY received_at
 LIMIT sqlc.arg(max_rows);
 
@@ -42,32 +50,59 @@ UPDATE billing_events
 SET processed_at = now()
 WHERE id = sqlc.arg(id);
 
--- name: ListSubscribersNearProExpiry :many
--- The reconciler's second pass: subscribers whose plan expiry falls inside a window around
--- now, so a renewal whose webhook was never delivered is repaired within an hour.
+-- ListSubscribersNearProExpiry was removed by the add-store-purchases change, and its absence
+-- is worth a line because deleting a query is unusual here.
 --
--- IT WALKS billing_events, NOT users. Two reasons, and the second is the one that matters.
+-- It predicated on users.pro_until, which stopped being a provider's own answer the moment
+-- that column became GREATEST of three sources: a subscriber whose OTHER source reaches
+-- further would sit outside the window and never be re-checked, and the lost renewal the pass
+-- exists to repair would stay lost. Each provider now has its own near-expiry read against its
+-- own column — ListSubscribersNearProExpiryStripe in billing_customer.sql, and
+-- ListSubscribersNearProExpiryRevenueCat below.
 --
--- Cheapness: only an account that has actually transacted appears here, so the candidate
--- set is the subscriber base rather than the 8M-row users table, and it is reached through
--- an index that already exists. A predicate on users.pro_until would want an index on
--- users, and building one on a table that size means either blocking writes to the account
--- table or a CONCURRENTLY build with its own failure mode.
---
--- Correctness: reading a subscriber's state from the provider CREATES that subscriber if
--- the identifier is unknown to them — a GET with a write's consequences. Starting from
--- events makes "we only ever ask about someone who has transacted" a property of the
--- query rather than a rule the worker has to remember.
-SELECT DISTINCT b.user_id, u.pro_until
-FROM billing_events b
-JOIN users u ON u.id = b.user_id
-WHERE b.user_id IS NOT NULL
-  AND u.pro_until >= sqlc.arg(from_time)
-  AND u.pro_until < sqlc.arg(to_time)
-LIMIT sqlc.arg(max_rows);
+-- Left in place it would have been a generated, callable query that is wrong by construction,
+-- sitting where the next provider would reach for it.
+
 
 -- name: DeleteBillingEventsForUser :exec
 -- Erase one user's billing events. Account deletion calls this; the foreign key cascades,
 -- but deletion states what it erases explicitly rather than relying on a constraint to
 -- mean it.
 DELETE FROM billing_events WHERE user_id = $1;
+
+-- name: HasRevenueCatFootprint :one
+-- Whether this account has ever been seen by RevenueCat: a recorded delivery of theirs, or a
+-- store entitlement we already hold.
+--
+-- IT GUARDS A READ THAT WRITES. RevenueCat's v1 subscribers endpoint CREATES the subscriber
+-- when the identifier is unknown, so asking about an account that never bought anything
+-- registers it with the provider. Without this predicate a reconciler pass over the user
+-- table would enrol every account we have, silently and permanently.
+--
+-- Two sources rather than one because they cover different moments: the event row exists from
+-- the first delivery onward, and the column survives even if events are ever pruned.
+SELECT EXISTS (
+    SELECT 1 FROM billing_events
+    WHERE user_id = sqlc.arg(user_id)::bigint AND provider = 'revenuecat'
+) OR EXISTS (
+    SELECT 1 FROM users
+    WHERE id = sqlc.arg(user_id)::bigint AND pro_until_revenuecat IS NOT NULL
+);
+
+-- name: ListSubscribersNearProExpiryRevenueCat :many
+-- The reconciler's second pass for the store provider: accounts whose store entitlement
+-- expires inside a window around now, so a renewal whose webhook was never delivered is
+-- repaired on the next run.
+--
+-- The predicate is on pro_until_revenuecat and never on the derived pro_until, for the reason
+-- the Stripe query states: the derived column is the FURTHEST of three sources, so a
+-- subscriber whose web subscription or manual grant reaches beyond this renewal would sit
+-- outside the window and never be re-checked.
+--
+-- A non-NULL column is also exactly the footprint HasRevenueCatFootprint looks for, so this
+-- pass can never ask the provider about an account it would thereby create.
+SELECT id
+FROM users
+WHERE pro_until_revenuecat >= sqlc.arg(from_time)
+  AND pro_until_revenuecat < sqlc.arg(to_time)
+LIMIT sqlc.arg(max_rows);

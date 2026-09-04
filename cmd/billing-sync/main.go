@@ -10,10 +10,16 @@
 //  2. re-read subscriber state for accounts whose plan expiry is near, catching a renewal
 //     whose webhook never arrived at all.
 //
-// The second pass reaches its candidates through the stored customer binding, so it walks
-// the accounts that have actually transacted rather than every account on the site.
+// The second pass reaches its candidates through what each provider can address them by —
+// the stored customer binding for Stripe, the store entitlement column for RevenueCat — so it
+// walks the accounts that have actually transacted rather than every account on the site.
 //
-// Needs DATABASE_URL and the STRIPE_* credentials. Without the credentials it is a no-op
+// BOTH PROVIDERS ARE RECONCILED, each against its own events and its own source column, and
+// each independently of the other. One provider being unreachable must not stop the other:
+// they are different companies with different outages, and a Stripe incident that also
+// stalled App Store renewals would be an outage we invented ourselves.
+//
+// Needs DATABASE_URL and the credentials of at least one provider. With neither it is a no-op
 // that never opens the pool.
 package main
 
@@ -49,9 +55,10 @@ func run() int {
 	// reconcile against, and the spec requires an unconfigured deployment to run without
 	// touching the database at all — which is also what keeps this binary harmless in a
 	// checkout that is not freehire.me.
-	cfg := billing.ConfigFromEnv()
-	if !cfg.Enabled() {
-		log.Print("billing-sync: billing is not configured, nothing to reconcile")
+	stripeCfg := billing.ConfigFromEnv()
+	storeCfg := billing.RevenueCatConfigFromEnv()
+	if !stripeCfg.Enabled() && !storeCfg.Enabled() {
+		log.Print("billing-sync: no billing provider is configured, nothing to reconcile")
 		return 0
 	}
 
@@ -62,25 +69,55 @@ func run() int {
 	}
 	defer cleanup()
 
-	svc := billing.New(cfg, db.New(pool))
+	queries := db.New(pool)
 	max := maxPerRun()
 
-	applied, failed := applyPending(ctx, svc, max)
-	refreshed, refreshFailed := refreshNearExpiry(ctx, svc, max)
+	// Named so every log line says which provider it is about. With two of them, "applying
+	// event evt_1 failed" without a name is a line somebody has to go and look up.
+	passes := []struct {
+		name string
+		svc  reconcilable
+	}{
+		{"stripe", billing.New(stripeCfg, queries)},
+		{"revenuecat", billing.NewRevenueCat(storeCfg, queries)},
+	}
 
-	log.Printf("billing-sync: applied=%d refreshed=%d failed=%d", applied, refreshed, failed+refreshFailed)
-	return worker.ExitCode(failed+refreshFailed, 0)
+	var failures int
+	for _, p := range passes {
+		if !p.svc.Enabled() {
+			continue
+		}
+		applied, failed := applyPending(ctx, p.name, p.svc, max)
+		refreshed, refreshFailed := refreshNearExpiry(ctx, p.name, p.svc, max)
+		failures += failed + refreshFailed
+
+		log.Printf("billing-sync: provider=%s applied=%d refreshed=%d failed=%d",
+			p.name, applied, refreshed, failed+refreshFailed)
+	}
+	return worker.ExitCode(failures, 0)
+}
+
+// reconcilable is what this worker needs of a billing provider, and it is exactly the shared
+// engine's surface. Both providers satisfy it; nothing here knows which one it is holding
+// beyond the name it prints.
+type reconcilable interface {
+	Enabled() bool
+	PendingEvents(ctx context.Context, max int32) ([]db.ListUnprocessedBillingEventsRow, error)
+	Apply(ctx context.Context, rowID int64, ev billing.Event) error
+	MarkProcessed(ctx context.Context, rowID int64) error
+	SubscribersNearExpiry(ctx context.Context, window time.Duration, max int32) ([]int64, error)
+	SyncUser(ctx context.Context, userID int64) error
 }
 
 // applyPending is the first pass: events recorded by the webhook but never applied.
 //
-// One account's failure does not abort the run. The rows are independent, and a provider
-// that is refusing one identifier should not stop the other subscriptions from being
-// repaired — the failed row simply stays unprocessed for the next hour.
-func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied, failed int) {
+// One account's failure does not abort the run. The rows are independent, and a provider that
+// is refusing one identifier should not stop the other subscriptions from being repaired — the
+// failed row simply stays unprocessed for the next hour.
+func applyPending(ctx context.Context, name string, svc reconcilable, max int32) (applied, failed int) {
 	pending, err := svc.PendingEvents(ctx, max)
 	if err != nil {
-		log.Printf("billing-sync: reading pending events: %v", err)
+		log.Printf("billing-sync: %s: reading pending events: %v", name, err)
 		return 0, 1
 	}
 
@@ -103,13 +140,13 @@ func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied
 			// Nobody can ever apply this — an event about something we do not meter, or an
 			// object created outside this integration. Stamping it keeps it out of this queue
 			// rather than failing the run every hour forever.
-			log.Printf("billing-sync: event %s (%s) names no account we meter — stamping it", ev.EventID, ev.EventType)
+			log.Printf("billing-sync: %s: event %s (%s) names no account we meter — stamping it", name, ev.EventID, ev.EventType)
 			if markErr := svc.MarkProcessed(ctx, ev.ID); markErr != nil {
-				log.Printf("billing-sync: stamping event %s: %v", ev.EventID, markErr)
+				log.Printf("billing-sync: %s: stamping event %s: %v", name, ev.EventID, markErr)
 				failed++
 			}
 		default:
-			log.Printf("billing-sync: applying event %s: %v", ev.EventID, err)
+			log.Printf("billing-sync: %s: applying event %s: %v", name, ev.EventID, err)
 			failed++
 		}
 	}
@@ -122,16 +159,16 @@ func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied
 // It re-reads even for accounts nothing has changed for. That is the point — the whole
 // design derives the column WHOLE from provider state, so a sync that finds nothing new
 // writes nothing, and the cheapest way to be sure is to ask.
-func refreshNearExpiry(ctx context.Context, svc *billing.Service, max int32) (refreshed, failed int) {
+func refreshNearExpiry(ctx context.Context, name string, svc reconcilable, max int32) (refreshed, failed int) {
 	ids, err := svc.SubscribersNearExpiry(ctx, expiryWindow, max)
 	if err != nil {
-		log.Printf("billing-sync: reading subscribers near expiry: %v", err)
+		log.Printf("billing-sync: %s: reading subscribers near expiry: %v", name, err)
 		return 0, 1
 	}
 
 	for _, id := range ids {
 		if err := svc.SyncUser(ctx, id); err != nil {
-			log.Printf("billing-sync: refreshing user %d: %v", id, err)
+			log.Printf("billing-sync: %s: refreshing user %d: %v", name, id, err)
 			failed++
 			continue
 		}

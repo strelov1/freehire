@@ -141,7 +141,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 		// change, and until then deletion has to reach both.
 		{"usage counter", `INSERT INTO usage_daily (user_id, feature, day, used) VALUES ($1, 'match', CURRENT_DATE, 2)`, []any{leaver}},
 		{"usage ledger", `INSERT INTO usage_ledger (user_id, feature, day, kind, delta, ref) VALUES ($1, 'match', CURRENT_DATE, 'consume', 1, 'job-1')`, []any{leaver}},
-		{"pro subscription", `UPDATE users SET pro_until = now() + interval '30 days' WHERE id = $1`, []any{leaver}},
+		{"pro subscription", `UPDATE users SET pro_until_stripe = now() + interval '30 days' WHERE id = $1`, []any{leaver}},
 		{"saved search", `INSERT INTO saved_searches (user_id, name, query) VALUES ($1, 'go jobs', 'q=go')`, []any{leaver}},
 		{"profile", `INSERT INTO user_profiles (user_id, specializations, skills) VALUES ($1, ARRAY['backend'], ARRAY['go'])`, []any{leaver}},
 		{"mailbox", `INSERT INTO mailboxes (user_id, address) VALUES ($1, 'leaver@mail.test')`, []any{leaver}},
