@@ -6,44 +6,32 @@ import (
 )
 
 // setEnv points the whole configuration at test values; "" removes a variable.
-const testProjectID = "proj_test"
-
-func setEnv(t *testing.T, apiKey, secret, entitlements, checkout string) {
+func setEnv(t *testing.T, apiKey, secret, prices, siteURL string) {
 	t.Helper()
-	t.Setenv("REVENUECAT_API_KEY", apiKey)
-	t.Setenv("REVENUECAT_WEBHOOK_SECRET", secret)
-	t.Setenv("REVENUECAT_PROJECT_ID", testProjectID)
-	t.Setenv("REVENUECAT_ENTITLEMENT", entitlements)
-	t.Setenv("BILLING_CHECKOUT_URL", checkout)
+	t.Setenv("STRIPE_SECRET_KEY", apiKey)
+	t.Setenv("STRIPE_WEBHOOK_SECRET", secret)
+	t.Setenv("STRIPE_PRICE_IDS", prices)
+	t.Setenv("SITE_URL", siteURL)
 }
 
-// TestConfigFromEnvDisabledIsNotAnError is the property that makes this package safe to
-// ship in a public repository. A self-hoster who never sets these variables must not be
-// able to tell the code is there, and must certainly not have their server refuse to boot
-// over a subsystem they never asked for.
+// TestConfigFromEnvDisabledIsNotAnError is the property that makes this package safe to ship
+// in a public repository. A self-hoster who never sets these variables must not be able to
+// tell the code is there, and must certainly not have their server refuse to boot over a
+// subsystem they never asked for.
 func TestConfigFromEnvDisabledIsNotAnError(t *testing.T) {
 	cases := []struct {
-		name           string
-		apiKey, secret string
+		name                   string
+		apiKey, secret, prices string
 	}{
 		{name: "nothing configured"},
 		{name: "api key only", apiKey: "sk_test"},
 		{name: "webhook secret only", secret: "whsec_test"},
+		{name: "credentials but no prices", apiKey: "sk_test", secret: "whsec_test"},
 	}
-
-	// Every v2 call is scoped to a project, so a deployment without one has no URL to read
-	// state from. Checked separately because setEnv always supplies it.
-	t.Run("no project id", func(t *testing.T) {
-		setEnv(t, "sk_test", "whsec_test", "", "")
-		t.Setenv("REVENUECAT_PROJECT_ID", "")
-		if ConfigFromEnv().Enabled() {
-			t.Fatal("want billing disabled without a project id")
-		}
-	})
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			setEnv(t, tc.apiKey, tc.secret, "", "")
+			setEnv(t, tc.apiKey, tc.secret, tc.prices, "")
 			cfg := ConfigFromEnv()
 			if cfg.Enabled() {
 				t.Fatal("want billing disabled")
@@ -56,83 +44,43 @@ func TestConfigFromEnvDisabledIsNotAnError(t *testing.T) {
 }
 
 func TestConfigFromEnvEnabled(t *testing.T) {
-	setEnv(t, "sk_test", "whsec_test", "", "")
+	setEnv(t, "sk_test", "whsec_test", "price_a", "")
 	cfg := ConfigFromEnv()
 
 	if !cfg.Enabled() {
-		t.Fatal("want billing enabled with both credentials present")
+		t.Fatal("want billing enabled with credentials and a price")
 	}
-	// Checkout needs a paywall of its own, and its absence must not disable the webhook —
-	// events still have to be recorded whether or not we can sell anything today.
+	// Checkout needs somewhere to send the buyer back to, and its absence must not disable
+	// the webhook — subscriptions already sold keep renewing, and refusing to record their
+	// renewals would lose money we have been paid.
 	if cfg.CanCheckout() {
-		t.Fatal("want checkout unavailable with no paywall URL")
-	}
-	if want := []string{"pro"}; !slices.Equal(cfg.Entitlements, want) {
-		t.Fatalf("want the default entitlement %v, got %v", want, cfg.Entitlements)
+		t.Fatal("want checkout unavailable with no site URL")
 	}
 }
 
-func TestConfigFromEnvEntitlementList(t *testing.T) {
-	setEnv(t, "sk_test", "whsec_test", " pro , pro_annual ,, ", "")
+func TestConfigFromEnvPriceList(t *testing.T) {
+	setEnv(t, "sk_test", "whsec_test", " price_a , price_b ,, ", "https://freehire.me")
 	cfg := ConfigFromEnv()
 
-	want := []string{"pro", "pro_annual"}
-	if !slices.Equal(cfg.Entitlements, want) {
-		t.Fatalf("want %v, got %v", want, cfg.Entitlements)
+	want := []string{"price_a", "price_b"}
+	if !slices.Equal(cfg.Prices, want) {
+		t.Fatalf("want %v, got %v", want, cfg.Prices)
+	}
+	// The first is what a NEW subscriber is sold; the rest stay recognised so somebody on an
+	// older or annual price keeps their plan.
+	if got := cfg.CheckoutPrice(); got != "price_a" {
+		t.Fatalf("checkout price: want price_a, got %q", got)
+	}
+	if !cfg.CanCheckout() {
+		t.Fatal("want checkout available")
 	}
 }
 
-// TestCheckoutURLFor builds the provider's hosted paywall link. The identifier is a PATH
-// SEGMENT, not a query parameter, which is the detail that decides whether the URL works
-// at all.
-func TestCheckoutURLFor(t *testing.T) {
-	cases := []struct {
-		name    string
-		base    string
-		userID  int64
-		want    string
-		wantErr bool
-	}{
-		{
-			name:   "identifier is appended as a path segment",
-			base:   "https://pay.rev.cat/abcdef",
-			userID: 601,
-			want:   "https://pay.rev.cat/abcdef/601",
-		},
-		{
-			// A base ending in a slash is the obvious way to write it in an env file, and
-			// a naive join would produce a double slash and a 404.
-			name:   "a trailing slash on the base does not double up",
-			base:   "https://pay.rev.cat/abcdef/",
-			userID: 601,
-			want:   "https://pay.rev.cat/abcdef/601",
-		},
-		{
-			name:    "no paywall configured",
-			base:    "",
-			userID:  601,
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			setEnv(t, "sk_test", "whsec_test", "", tc.base)
-			cfg := ConfigFromEnv()
-
-			got, err := cfg.CheckoutURLFor(tc.userID)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("want an error, got %q", got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("want no error, got %v", err)
-			}
-			if got != tc.want {
-				t.Fatalf("want %q, got %q", tc.want, got)
-			}
-		})
+func TestReturnURL(t *testing.T) {
+	// A trailing slash is the obvious way to write it in an env file, and a naive join would
+	// produce "//my/plan".
+	setEnv(t, "sk_test", "whsec_test", "price_a", "https://freehire.me/")
+	if got := ConfigFromEnv().ReturnURL(); got != "https://freehire.me/my/plan" {
+		t.Fatalf("want https://freehire.me/my/plan, got %q", got)
 	}
 }

@@ -38,12 +38,24 @@
   // candidate: it is the honest statement that there is nothing to buy here.
   let checkoutUrl = $state<string | null>(null);
 
+  // Where a subscriber changes their card or cancels — the provider's own page. Null when
+  // there is no subscription to manage, which is the ordinary state for a free account.
+  let manageUrl = $state<string | null>(null);
+
   $effect(() => {
     if (!isAuthenticated()) return;
     api
       .billingCheckout()
       .then(({ url }) => (checkoutUrl = url))
       .catch(() => (checkoutUrl = null));
+  });
+
+  $effect(() => {
+    if (!isAuthenticated()) return;
+    api
+      .billingManageUrl()
+      .then(({ url }) => (manageUrl = url))
+      .catch(() => (manageUrl = null));
   });
 
   $effect(() => {
@@ -104,11 +116,18 @@
             <span class="text-xs text-muted-foreground">Same features, daily limits</span>
           {/if}
         </div>
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own pages, not SvelteKit routes -->
         {#if plan.plan === 'free' && checkoutUrl}
-          <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's hosted paywall, not a SvelteKit route -->
           <a
             class="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
             href={checkoutUrl}>Upgrade to Pro</a
+          >
+        {:else if manageUrl}
+          <a
+            class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm font-medium"
+            href={manageUrl}
+            target="_blank"
+            rel="noopener noreferrer">Manage subscription</a
           ><!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/if}
       </div>

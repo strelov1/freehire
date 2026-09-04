@@ -2,98 +2,107 @@ package billing
 
 import "time"
 
-// subscriber is the provider's record of one account, as much of it as we read. The
-// provider's own record — product, status, period, payment method — stays with the
-// provider; this type exists to be reduced to a single timestamp and then forgotten.
+// subscriber is the provider's record of what one customer is currently paying for, as
+// much of it as we read. The provider's own record — invoices, payment method, proration,
+// tax — stays with the provider; this type exists to be reduced to a single timestamp and
+// then forgotten.
 //
-// This is the API v2 customer, not the v1 subscriber. The project's secret key is a v2
-// key and v1 refuses it outright ("secret API key incompatible with RevenueCat API V1"),
-// so the v1 shape this package first spoke was not a stylistic choice between two working
-// options — it was 403 on every call.
-//
-// The v2 list carries only entitlements that are ACTIVE, which quietly removes work rather
-// than adding it: a lapsed, refunded or transferred entitlement simply is not there, and
-// the provider has already applied its own grace-period rule to what remains. There is no
-// grace field to reconcile because there is nothing left to reconcile.
+// It is a list of SUBSCRIPTIONS rather than a single one because a customer can hold more
+// than one, and because the provider will not tell us which is "the" subscription. The
+// rule below picks by reach, not by count.
 type subscriber struct {
-	ActiveEntitlements struct {
-		Items []entitlement `json:"items"`
-	} `json:"active_entitlements"`
+	Subscriptions []subscription
 }
 
-// entitlement is one active entitlement.
+// subscription is one of the customer's subscriptions.
 //
-// ExpiresAt is milliseconds since the epoch, and it is a pointer because null is a real
-// value with its own meaning: the entitlement does not expire. See neverExpires.
-type entitlement struct {
-	EntitlementID string `json:"entitlement_id"`
-	ExpiresAt     *int64 `json:"expires_at"`
+// Status matters and cannot be inferred from the dates. `active` and `trialing` both
+// entitle; `past_due` entitles too, because the provider is still retrying the card and
+// taking access away over a failed retry is the same mistake as ignoring a grace period.
+// `canceled`, `unpaid` and `incomplete` do not.
+type subscription struct {
+	Status string
+	// CurrentPeriodEnd is when the paid-for period runs out — the instant access should
+	// lapse if nothing renews it.
+	CurrentPeriodEnd time.Time
+	// CancelAt is set when the customer has cancelled but the period they already paid for
+	// has not finished. It is NOT a reason to revoke: they bought that time.
+	CancelAt time.Time
+	// PriceIDs are the prices this subscription is for. A subscription for something other
+	// than Pro must not confer Pro.
+	PriceIDs []string
 }
 
-// neverExpires is what an entitlement with no expiry is written as.
+// entitlingStatuses are the subscription statuses that grant Pro.
 //
-// The provider reports a non-expiring entitlement — a lifetime purchase — as a null
-// expires_date, and users.pro_until is a timestamp with no room for "never". Zero would be
-// the natural Go answer and it is the dangerous one: it reads as long expired, so a
-// lifetime purchaser would be quietly downgraded to the free plan and nobody would be
-// looking for it.
+// past_due is deliberately here. The provider retries a failed card for days before giving
+// up, and a subscriber whose renewal is mid-retry has not stopped paying — cutting them off
+// on the first failed attempt turns a card that needs updating into a cancelled customer.
+// The subscription's own period end still bounds it, so this cannot grant time nobody
+// bought.
+var entitlingStatuses = map[string]bool{
+	"active":   true,
+	"trialing": true,
+	"past_due": true,
+}
+
+// neverExpires is what a subscription with no end is written as.
+//
+// The provider always sends a period end for a recurring subscription, so this is reached
+// only by a one-off lifetime grant. Zero would be the natural Go answer and it is the
+// dangerous one: it reads as long expired, so a lifetime purchaser would be quietly
+// downgraded to the free plan and nobody would be looking for it.
 //
 // The sentinel is safe because the column is DERIVED rather than accumulated. A refund
-// removes the entitlement from the provider's map, the next sync derives the zero time,
-// and the sentinel is gone — it can never outlive the entitlement that produced it.
-//
-// This is NOT hypothetical, which the first draft of this comment assumed. The provider's
-// catalogue already carries a `lifetime` non_consumable beside the monthly and yearly
-// subscriptions, so the first purchase of one produces a null expiry on day one — and
-// nobody would be watching for a subscriber who quietly reads as free.
+// removes the subscription, the next sync derives the zero time, and the sentinel is gone —
+// it can never outlive what produced it.
 var neverExpires = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 
-// proUntilFrom reduces a subscriber's entitlements to the single timestamp users.pro_until
-// holds: the furthest point at which any pro-conferring entitlement still stands. The zero
-// time means no such entitlement exists, which resolves to the free plan.
+// proUntilFrom reduces a customer's subscriptions to the single timestamp users.pro_until
+// holds: the furthest point at which any Pro-conferring subscription still stands. The zero
+// time means no such subscription exists, which resolves to the free plan.
 //
-// A LAPSED ENTITLEMENT STILL RETURNS ITS DATE. Whether the plan is over is plan.TierOf's
-// question, asked against now; answering it here would erase the only record of when the
-// subscription ended.
+// A LAPSED SUBSCRIPTION STILL RETURNS ITS DATE while its status entitles. Whether the plan
+// is over is plan.TierOf's question, asked against now; answering it here would erase the
+// only record of when the subscription ended.
 //
-// Within one entitlement the answer is the LATER of its expiry and its grace period. A
-// grace period is the provider saying the payment failed but the subscriber is still
-// entitled, so reading the expiry alone would take access from someone who has it — over a
-// card that needs renewing.
-func proUntilFrom(sub subscriber, proEntitlements []string) time.Time {
+// A CANCELLED-BUT-NOT-YET-ENDED subscription still confers. The customer paid for the
+// period they are in; cancelling says "do not renew", not "refund me".
+func proUntilFrom(sub subscriber, proPrices []string) time.Time {
 	var out time.Time
-	for _, ent := range sub.ActiveEntitlements.Items {
-		if !confers(ent.EntitlementID, proEntitlements) {
+	for _, s := range sub.Subscriptions {
+		if !entitlingStatuses[s.Status] {
 			continue
 		}
-		if until := ent.until(); until.After(out) {
+		if !s.coversAny(proPrices) {
+			continue
+		}
+		if until := s.until(); until.After(out) {
 			out = until
 		}
 	}
 	return out
 }
 
-// confers reports whether this entitlement identifier is one that grants Pro.
+// coversAny reports whether this subscription is for one of the prices that grant Pro.
 //
-// The configured list holds BOTH names the provider uses for the same entitlement — the
-// human lookup key ("freehire Pro") and the internal id ("entl…") — because the customer
-// payload names it with one of them and which one is not something to find out from a
-// production incident. Matching either costs nothing: an identifier that is neither is not
-// ours whichever field it came from.
-func confers(id string, proEntitlements []string) bool {
-	for _, want := range proEntitlements {
-		if id == want {
-			return true
+// An empty configured list matches NOTHING rather than everything: a deployment that forgot
+// to name its price should refuse to make anyone Pro, not make everyone Pro.
+func (s subscription) coversAny(proPrices []string) bool {
+	for _, want := range proPrices {
+		for _, have := range s.PriceIDs {
+			if have == want {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// until is how far this one entitlement reaches. A null expiry is not expired — see
-// neverExpires.
-func (e entitlement) until() time.Time {
-	if e.ExpiresAt == nil {
+// until is how far this one subscription reaches: the end of the period already paid for.
+func (s subscription) until() time.Time {
+	if s.CurrentPeriodEnd.IsZero() {
 		return neverExpires
 	}
-	return time.UnixMilli(*e.ExpiresAt).UTC()
+	return s.CurrentPeriodEnd
 }

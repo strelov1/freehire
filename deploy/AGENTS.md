@@ -24,30 +24,26 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   half is copying it to the host and running `systemctl daemon-reload`. Treat git as the
   truth and the host as the copy, not the other way round, or this snapshot rots into
   fiction within a month.
-- **Billing has three manual dashboard steps, and the units are useless without them.**
-  `freehire-billing-sync` and the webhook route both read `REVENUECAT_API_KEY`,
-  `REVENUECAT_WEBHOOK_SECRET`, `REVENUECAT_ENTITLEMENT` and `BILLING_CHECKOUT_URL` from
-  `/opt/freehire/.env`. Getting them means, in the provider's dashboard: registering the
-  webhook at `https://freehire.me/api/v1/billing/revenuecat/webhook` and **enabling HMAC
-  signing** on it (the handler refuses an unsigned delivery — there is no fallback);
-  minting a **secret** `sk_` key, since a public one is refused on the subscriber
-  endpoint; and creating the Web Billing paywall, whose token is what
-  `BILLING_CHECKOUT_URL` holds.
+- **Billing reads four variables from `/opt/freehire/.env`, and is inert without them.**
+  `STRIPE_SECRET_KEY` (`sk_…`), `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_PRICE_IDS` and
+  `SITE_URL`. With any missing, every billing route is simply not mounted and the timer is a
+  no-op that never opens the pool — so the units are safe to install before the provider is
+  ready, they are just inert.
 
-  **`REVENUECAT_PROJECT_ID` is required** (`proja56a40fc`): the code speaks API v2 and
-  every v2 call is scoped to a project. Its absence leaves billing disabled, which is the
-  safe direction but looks exactly like "not deployed yet".
+  **`STRIPE_PRICE_IDS` is a comma-separated list, and the FIRST is what a new subscriber is
+  sold.** The rest stay recognised so that somebody on an older or annual price keeps their
+  plan. An empty list is not a default that sells the obvious thing — it confers Pro on
+  nobody, deliberately, because the alternative to refusing a misconfiguration is granting
+  one.
 
-  **`REVENUECAT_ENTITLEMENT` holds BOTH names of the entitlement**, comma-separated:
-  `freehire Pro,entl58d5471b41`. The provider has a human lookup key and an internal id for
-  one entitlement and names it with one of them in the customer payload; configuring both
-  is what stops that being discovered from an incident. And note it is **not** `pro` — That is the lookup key the
-  project actually carries, and the package's default would match no entitlement at all —
-  which does not fail, it resolves every paying subscriber to the free plan. The value has
-  a space in it; systemd's `EnvironmentFile` strips the surrounding quotes and delivers it
-  whole, verified on the host rather than assumed. With none of them set every billing route is simply
-  not mounted and the timer is a no-op that never opens the pool, so the units are safe to
-  install before the dashboard is ready — they are just inert.
+  Two steps happen in the provider's dashboard and nowhere else: registering the webhook at
+  `https://freehire.me/api/v1/billing/stripe/webhook` (its `whsec_` secret is shown once,
+  on that screen), and creating the price. The rest is API.
+
+  **The webhook secret differs between the dashboard endpoint and `stripe listen`.** Using
+  one to verify the other fails every delivery, and the failure looks exactly like a wrong
+  key rather than a wrong environment.
+
 - **A new worker needs its binary built on the host.** `release.sh` builds the API, not
   every command in `cmd/`. `billing-sync` is the first addition since that was last true;
   build it where the other worker binaries live before enabling the timer, or the unit

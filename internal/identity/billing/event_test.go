@@ -8,45 +8,66 @@ import (
 
 func TestParseEvent(t *testing.T) {
 	cases := []struct {
-		name          string
-		body          string
-		wantErr       bool
-		wantID        string
-		wantAppUserID string
-		wantType      string
+		name     string
+		body     string
+		wantErr  bool
+		wantID   string
+		wantCust string
+		wantRef  string
+		wantType string
 	}{
 		{
-			name:          "an ordinary renewal",
-			body:          `{"api_version":"1.0","event":{"id":"evt_1","app_user_id":"601","type":"RENEWAL","expiration_at_ms":1790000000000}}`,
-			wantID:        "evt_1",
-			wantAppUserID: "601",
-			wantType:      "RENEWAL",
+			name:     "an ordinary renewal",
+			body:     `{"id":"evt_1","type":"invoice.paid","data":{"object":{"customer":"cus_9","status":"paid"}}}`,
+			wantID:   "evt_1",
+			wantCust: "cus_9",
+			wantType: "invoice.paid",
 		},
 		{
-			// The provider's event vocabulary is theirs and it grows. Nothing here branches
-			// on the type, so an unfamiliar one must parse like any other and trigger the
-			// same re-read of subscriber state.
-			name:          "an event type we have never seen",
-			body:          `{"api_version":"1.0","event":{"id":"evt_2","app_user_id":"601","type":"SOMETHING_NEW_IN_2027"}}`,
-			wantID:        "evt_2",
-			wantAppUserID: "601",
-			wantType:      "SOMETHING_NEW_IN_2027",
+			// The one event that arrives BEFORE any customer binding exists, which is why it
+			// carries our own account id and why we put it there.
+			name:     "a completed checkout carries our account reference",
+			body:     `{"id":"evt_2","type":"checkout.session.completed","data":{"object":{"customer":"cus_9","client_reference_id":"601"}}}`,
+			wantID:   "evt_2",
+			wantCust: "cus_9",
+			wantRef:  "601",
+			wantType: "checkout.session.completed",
 		},
 		{
-			name:    "no event object",
-			body:    `{"api_version":"1.0"}`,
+			name:     "the account reference also travels in metadata",
+			body:     `{"id":"evt_3","type":"customer.subscription.updated","data":{"object":{"customer":"cus_9","metadata":{"freehire_user_id":"601"}}}}`,
+			wantID:   "evt_3",
+			wantCust: "cus_9",
+			wantRef:  "601",
+			wantType: "customer.subscription.updated",
+		},
+		{
+			// The provider has hundreds of event types and adds more. Nothing here branches on
+			// the type, so an unfamiliar one must parse like any other.
+			name:     "an event type we have never seen",
+			body:     `{"id":"evt_4","type":"something.new.in.2027","data":{"object":{"customer":"cus_9"}}}`,
+			wantID:   "evt_4",
+			wantCust: "cus_9",
+			wantType: "something.new.in.2027",
+		},
+		{
+			// Not everything the provider sends is about a customer. Recording it and moving
+			// on beats retrying it forever.
+			name:     "an event about nobody",
+			body:     `{"id":"evt_5","type":"price.updated","data":{"object":{"id":"price_x"}}}`,
+			wantID:   "evt_5",
+			wantType: "price.updated",
+		},
+		{
+			name:    "no data object",
+			body:    `{"id":"evt_6","type":"invoice.paid"}`,
 			wantErr: true,
 		},
 		{
-			// Without an id there is no idempotency key, so a redelivery would be recorded
-			// again and applied again. Better to make the provider retry.
+			// Without an id there is no idempotency key, so a redelivery would be applied
+			// twice. Refusing makes the provider retry, which is the safe direction.
 			name:    "event with no id",
-			body:    `{"api_version":"1.0","event":{"app_user_id":"601","type":"RENEWAL"}}`,
-			wantErr: true,
-		},
-		{
-			name:    "event with no app_user_id",
-			body:    `{"api_version":"1.0","event":{"id":"evt_3","type":"RENEWAL"}}`,
+			body:    `{"type":"invoice.paid","data":{"object":{"customer":"cus_9"}}}`,
 			wantErr: true,
 		},
 		{
@@ -71,8 +92,11 @@ func TestParseEvent(t *testing.T) {
 			if got.ID != tc.wantID {
 				t.Errorf("id: want %q, got %q", tc.wantID, got.ID)
 			}
-			if got.AppUserID != tc.wantAppUserID {
-				t.Errorf("app_user_id: want %q, got %q", tc.wantAppUserID, got.AppUserID)
+			if got.CustomerID != tc.wantCust {
+				t.Errorf("customer: want %q, got %q", tc.wantCust, got.CustomerID)
+			}
+			if got.UserRef != tc.wantRef {
+				t.Errorf("ref: want %q, got %q", tc.wantRef, got.UserRef)
 			}
 			if got.Type != tc.wantType {
 				t.Errorf("type: want %q, got %q", tc.wantType, got.Type)
@@ -88,30 +112,28 @@ func TestParseEvent(t *testing.T) {
 // today will change; what arrived will not. A field we have no name for must survive into
 // the stored record, or the audit trail answers only the questions we already thought of.
 func TestParseEventKeepsFieldsItDoesNotRead(t *testing.T) {
-	body := `{"api_version":"1.0","event":{"id":"evt_4","app_user_id":"601","type":"RENEWAL","store":"stripe","price_in_purchased_currency":4.99}}`
+	body := `{"id":"evt_7","type":"invoice.paid","data":{"object":{"customer":"cus_9","amount_paid":500,"currency":"usd"}}}`
 
 	got, err := parseEvent([]byte(body))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	for _, want := range []string{"price_in_purchased_currency", "store"} {
+	for _, want := range []string{"amount_paid", "currency"} {
 		if !strings.Contains(string(got.Payload), want) {
 			t.Errorf("payload dropped %q: %s", want, got.Payload)
 		}
 	}
 }
 
-// TestUserIDFromAppUserID covers the identifier round-trip. We put users.id in, so we
-// expect it back — but the provider will also hand us identifiers that were never ours,
-// and those have to be recorded rather than rejected.
-func TestUserIDFromAppUserID(t *testing.T) {
+// TestUserIDFromRef covers the identifier round-trip. We only ever send a users.id, so
+// anything else was never ours and must be reported rather than guessed at.
+func TestUserIDFromRef(t *testing.T) {
 	cases := []struct {
 		in     string
 		want   int64
 		wantOK bool
 	}{
 		{in: "601", want: 601, wantOK: true},
-		{in: "$RCAnonymousID:9f8c", wantOK: false},
 		{in: "", wantOK: false},
 		{in: "601abc", wantOK: false},
 		{in: "-1", wantOK: false},
@@ -120,7 +142,7 @@ func TestUserIDFromAppUserID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
-			got, ok := userIDFromAppUserID(tc.in)
+			got, ok := userIDFromRef(tc.in)
 			if ok != tc.wantOK {
 				t.Fatalf("ok: want %v, got %v", tc.wantOK, ok)
 			}

@@ -1056,6 +1056,7 @@ type User struct {
 	Language                   string             `json:"language"`
 	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
 	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
+	StripeCustomerID           pgtype.Text        `json:"stripe_customer_id"`
 }
 
 type UserEmailCode struct {

@@ -1030,6 +1030,16 @@ export function createApi(
     return requestData<{ url: string }>('/api/v1/billing/checkout');
   }
 
+  /** Where this caller manages their subscription — the payment provider's own page, where
+   *  they change their card or cancel. Generated per visit and short-lived, so it is fetched
+   *  when a surface is about to show it rather than stored.
+   *
+   *  404 when there is no subscription, or the provider is unreachable. Either way the
+   *  surface omits the link rather than rendering a broken one. */
+  async function billingManageUrl(): Promise<{ url: string }> {
+    return requestData<{ url: string }>('/api/v1/billing/manage');
+  }
+
   /** What the caller's account did this period: model calls, failures and tokens, read
    *  from the LLM gateway. Never fails for anything the caller can act on — an account
    *  that has never used AI, and a gateway that is down, both answer zeroes. */
@@ -2209,6 +2219,7 @@ export function createApi(
     myAnalyses,
     myPlan,
     billingCheckout,
+    billingManageUrl,
     myPlanHistory,
     myUsage,
     listViewedSlugs,

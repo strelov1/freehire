@@ -1,22 +1,20 @@
 // Command billing-sync repairs what webhook delivery lost. Schedule it hourly.
 //
 // It is not a safety net bolted onto a reliable channel. The provider retries a delivery
-// five times over about two and a half hours and then stops for good, so after that window
-// this worker is the ONLY path by which a paid subscription becomes Pro. Two passes:
+// for up to three days and then stops for good, and an endpoint it decides is broken can be
+// disabled sooner than that — after either, this worker is the ONLY path by which a paid
+// subscription becomes Pro. Two passes:
 //
 //  1. apply events the webhook recorded but could not apply — the provider was
 //     unreachable, the pool was saturated, the process died between the two;
 //  2. re-read subscriber state for accounts whose plan expiry is near, catching a renewal
 //     whose webhook never arrived at all.
 //
-// Both passes reach their candidates through billing_events, never through users. It is
-// cheaper — the subscriber base rather than 8M rows — and it is safer: the provider's
-// subscriber GET creates whatever identifier it is handed, so a candidate set that can only
-// contain accounts which have transacted is the difference between repairing subscriptions
-// and inventing them.
+// The second pass reaches its candidates through the stored customer binding, so it walks
+// the accounts that have actually transacted rather than every account on the site.
 //
-// Needs DATABASE_URL and the REVENUECAT_* credentials. Without the credentials it is a
-// no-op that never opens the pool.
+// Needs DATABASE_URL and the STRIPE_* credentials. Without the credentials it is a no-op
+// that never opens the pool.
 package main
 
 import (
@@ -87,15 +85,15 @@ func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied
 	}
 
 	for _, ev := range pending {
-		err := svc.Apply(ctx, ev.ID, ev.AppUserID)
+		err := svc.Apply(ctx, ev.ID, billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType})
 		switch {
 		case err == nil:
 			applied++
-		case errors.Is(err, billing.ErrUnknownSubscriber):
-			// Nobody can ever apply this — a dashboard TEST event, or an anonymous
-			// identifier from a client that purchased before it was identified. Stamping it
-			// keeps it out of this queue rather than failing the run every hour forever.
-			log.Printf("billing-sync: event %s names app_user_id %q, which is not one of our accounts — stamping it", ev.EventID, ev.AppUserID)
+		case errors.Is(err, billing.ErrUnknownSubscriber), errors.Is(err, billing.ErrNoSubscription):
+			// Nobody can ever apply this — an event about something we do not meter, or an
+			// object created outside this integration. Stamping it keeps it out of this queue
+			// rather than failing the run every hour forever.
+			log.Printf("billing-sync: event %s (%s) names no account we meter — stamping it", ev.EventID, ev.EventType)
 			if markErr := svc.MarkProcessed(ctx, ev.ID); markErr != nil {
 				log.Printf("billing-sync: stamping event %s: %v", ev.EventID, markErr)
 				failed++
@@ -122,7 +120,7 @@ func refreshNearExpiry(ctx context.Context, svc *billing.Service, max int32) (re
 	}
 
 	for _, id := range ids {
-		if err := svc.Sync(ctx, strconv.FormatInt(id, 10)); err != nil {
+		if err := svc.SyncUser(ctx, id); err != nil {
 			log.Printf("billing-sync: refreshing user %d: %v", id, err)
 			failed++
 			continue

@@ -13,110 +13,96 @@
 // column rather than an API. A provider that is slow or unreachable can therefore never
 // delay a user's next question.
 //
-// The one rule worth stating twice: a webhook is a SIGNAL that something about a user
+// The one rule worth stating twice: a webhook is a SIGNAL that something about a customer
 // changed, never a fact about what it changed to. Delivery is unordered and duplicates are
-// possible, so the handler re-reads the subscriber's current state and derives the column
-// from that. Nothing here branches on the event type.
+// possible — the provider says so itself — so the handler re-reads the customer's current
+// subscriptions and derives the column from that. Nothing here branches on the event type,
+// and there are hundreds of them.
 package billing
 
 import (
 	"errors"
 	"os"
-	"strconv"
 	"strings"
 )
 
 // Config is everything the environment decides about billing.
 type Config struct {
-	// APIKey is the provider's SECRET key (sk_…), used server-side only to read subscriber
-	// state. A public key gets 401 on that endpoint, by their design and ours.
+	// APIKey is the provider's SECRET key (sk_…), used server-side only.
 	APIKey string
-	// WebhookSecret signs incoming deliveries. See verifySignature.
+	// WebhookSecret (whsec_…) signs incoming deliveries. See verifySignature.
 	WebhookSecret string
-	// ProjectID scopes every v2 call. v1 addressed a subscriber globally; v2 addresses a
-	// customer inside a project, so this is not optional decoration — without it there is
-	// no URL to read state from.
-	ProjectID string
-	// Entitlements are the entitlement identifiers that confer Pro. Usually one: an
-	// entitlement already sits above products, so monthly and annual share it.
-	Entitlements []string
-	// CheckoutURL is everything up to and including the hosted paywall's token. The user's
-	// identifier is appended as a further path segment — see CheckoutURLFor.
-	CheckoutURL string
+	// Prices are the price identifiers that confer Pro — usually two, a monthly and an
+	// annual. A subscription for anything else must not make anyone Pro.
+	Prices []string
+	// SiteURL is where a customer comes back to after paying or after managing their
+	// subscription. Empty disables checkout: there would be nowhere to return them to.
+	SiteURL string
 }
-
-// defaultEntitlement is the identifier assumed when the environment names none.
-const defaultEntitlement = "pro"
 
 // ConfigFromEnv reads the configuration. It NEVER fails.
 //
 // Absent credentials mean billing is switched off, not that the deployment is broken. This
-// is the same degradation the rest of the fleet has for optional subsystems, and here it
-// is also what makes the package harmless to anyone running freehire themselves.
+// is the same degradation the rest of the fleet has for optional subsystems, and here it is
+// also what makes the package harmless to anyone running freehire themselves.
 func ConfigFromEnv() Config {
-	cfg := Config{
-		APIKey:        strings.TrimSpace(os.Getenv("REVENUECAT_API_KEY")),
-		WebhookSecret: strings.TrimSpace(os.Getenv("REVENUECAT_WEBHOOK_SECRET")),
-		ProjectID:     strings.TrimSpace(os.Getenv("REVENUECAT_PROJECT_ID")),
-		Entitlements:  entitlementList(os.Getenv("REVENUECAT_ENTITLEMENT")),
-		// Trimmed of a trailing slash so appending a segment cannot produce "//", which the
-		// paywall answers with a 404 — an easy thing to write in an env file and a
-		// miserable thing to diagnose from the other end.
-		CheckoutURL: strings.TrimRight(strings.TrimSpace(os.Getenv("BILLING_CHECKOUT_URL")), "/"),
+	return Config{
+		APIKey:        strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
+		WebhookSecret: strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
+		Prices:        priceList(os.Getenv("STRIPE_PRICE_IDS")),
+		SiteURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("SITE_URL")), "/"),
 	}
-	return cfg
 }
 
-// entitlementList parses the comma-separated entitlement identifiers, falling back to the
-// default. An empty list would silently mean "nobody is ever Pro", so it cannot be one.
-func entitlementList(raw string) []string {
+// priceList parses the comma-separated price identifiers.
+//
+// There is no default, and an unset value yields an EMPTY list rather than a guess. An
+// empty list confers Pro on nobody (see subscription.coversAny), which is the right way for
+// a misconfiguration to fail: a guessed default would either match nothing — the same
+// outcome, less honestly — or, worse, match a price we did not mean.
+func priceList(raw string) []string {
 	var out []string
 	for _, part := range strings.Split(raw, ",") {
-		if name := strings.TrimSpace(part); name != "" {
-			out = append(out, name)
+		if id := strings.TrimSpace(part); id != "" {
+			out = append(out, id)
 		}
-	}
-	if len(out) == 0 {
-		return []string{defaultEntitlement}
 	}
 	return out
 }
 
-// Enabled reports whether billing can do its job: verify a delivery and read subscriber
+// Enabled reports whether billing can do its job: verify a delivery and read customer
 // state. Both credentials are needed, and one without the other is a half-configured
-// deployment that would accept unverifiable webhooks or record events it can never apply.
+// deployment that would either accept unverifiable webhooks or record events it can never
+// apply.
+//
+// The price list is required too. Without it every sync would derive "no Pro" and quietly
+// downgrade every subscriber — a failure that looks exactly like nobody having paid.
 func (c Config) Enabled() bool {
-	return c.APIKey != "" && c.WebhookSecret != "" && c.ProjectID != ""
+	return c.APIKey != "" && c.WebhookSecret != "" && len(c.Prices) > 0
 }
 
 // CanCheckout reports whether we can send anyone to buy.
 //
-// Separate from Enabled on purpose: a missing paywall URL must not stop the webhook from
-// recording events. Purchases made on another surface — the mobile app, through the App
-// Store — still arrive, and refusing to record them because the web paywall is not set up
-// would lose subscriptions we were paid for.
+// Separate from Enabled on purpose: a missing site URL must not stop the webhook from
+// recording events. Subscriptions already sold keep renewing, and refusing to record their
+// renewals because nobody can start a NEW purchase would lose money we have been paid.
 func (c Config) CanCheckout() bool {
-	return c.Enabled() && c.CheckoutURL != ""
+	return c.Enabled() && c.SiteURL != ""
 }
 
-// ErrNoCheckout is returned when no hosted paywall is configured.
-var ErrNoCheckout = errors.New("billing: no checkout URL is configured")
+// ErrNoCheckout is returned when checkout is not configured.
+var ErrNoCheckout = errors.New("billing: checkout is not configured")
 
-// CheckoutURLFor is where this user buys Pro.
-//
-// The identifier is a PATH SEGMENT, not a query parameter — `https://pay.rev.cat/<token>/
-// <app_user_id>` — which is the single detail that decides whether the link resolves.
-//
-// It takes a user id rather than a string so that the app-user identifier cannot be
-// anything but the account's own. The provider assigns an anonymous identifier to a client
-// it has not been told about, and a purchase made under one lands on a subscriber we can
-// never resolve to a person; the type is what makes that unreachable rather than merely
-// documented.
-func (c Config) CheckoutURLFor(userID int64) (string, error) {
-	if !c.CanCheckout() {
-		return "", ErrNoCheckout
+// CheckoutPrice is the price a new subscriber is sold. The first configured price is the
+// one offered; the rest stay recognised so that a subscriber on an older or annual price
+// keeps their plan.
+func (c Config) CheckoutPrice() string {
+	if len(c.Prices) == 0 {
+		return ""
 	}
-	// A decimal integer needs no escaping, and saying so here is cheaper than an import
-	// that suggests the value might ever contain something that does.
-	return c.CheckoutURL + "/" + strconv.FormatInt(userID, 10), nil
+	return c.Prices[0]
 }
+
+// ReturnURL is where the provider sends a browser back to, for both a finished purchase and
+// a visit to the management portal.
+func (c Config) ReturnURL() string { return c.SiteURL + "/my/plan" }

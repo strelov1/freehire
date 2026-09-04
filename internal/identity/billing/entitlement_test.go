@@ -5,101 +5,132 @@ import (
 	"time"
 )
 
-// ms is a v2 expiry: milliseconds since the epoch. Taking a string keeps the cases
-// readable while the type under test stays the one the provider actually sends.
-func ms(t *testing.T, s string) *int64 {
+const proPrice = "price_pro_monthly"
+
+func at(t *testing.T, s string) time.Time {
 	t.Helper()
 	v, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		t.Fatalf("bad test timestamp %q: %v", s, err)
 	}
-	out := v.UnixMilli()
-	return &out
+	return v
 }
 
-// sub builds a v2 customer carrying the given active entitlements.
-func sub(items ...entitlement) subscriber {
-	var s subscriber
-	s.ActiveEntitlements.Items = items
-	return s
+// sub builds a customer carrying the given subscriptions.
+func sub(items ...subscription) subscriber {
+	return subscriber{Subscriptions: items}
 }
 
-// TestProUntilFrom walks every shape the provider's active-entitlement list arrives in.
+// TestProUntilFrom walks every shape a customer's subscriptions arrive in.
 //
-// Note what is NOT here any more: a grace period. The v2 list carries only entitlements
-// that are ACTIVE, so the provider has already applied its own grace rule and what is left
-// is one expiry per entitlement. The v1 shape this replaced needed both fields and a rule
-// to combine them.
+// Two of these cases are the ones that would cost a paying customer their plan quietly, and
+// neither is reachable from the dates alone: a card mid-retry (`past_due`) and a
+// cancellation that has not reached the end of the period already paid for.
 func TestProUntilFrom(t *testing.T) {
-	proIDs := []string{"freehire Pro"}
-
 	cases := []struct {
-		name string
-		sub  subscriber
-		ids  []string
-		want string // RFC3339, or "" for the zero time
+		name   string
+		sub    subscriber
+		prices []string
+		want   string // RFC3339, or "" for the zero time
 	}{
 		{
-			name: "an active entitlement",
-			sub:  sub(entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")}),
+			name: "an active subscription",
+			sub: sub(subscription{
+				Status: "active", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice},
+			}),
 			want: "2026-10-01T00:00:00Z",
 		},
 		{
-			// Lapsed, refunded and transferred all look the same from here: the entitlement
-			// is simply not in the ACTIVE list, and no branch was needed to notice.
-			name: "no active entitlements at all",
+			name: "a trial entitles like a paid period",
+			sub: sub(subscription{
+				Status: "trialing", CurrentPeriodEnd: at(t, "2026-09-20T00:00:00Z"), PriceIDs: []string{proPrice},
+			}),
+			want: "2026-09-20T00:00:00Z",
+		},
+		{
+			// The provider retries a failed card for days. Cutting access on the first failed
+			// attempt turns a card that needs updating into a cancelled customer.
+			name: "a card mid-retry still entitles",
+			sub: sub(subscription{
+				Status: "past_due", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice},
+			}),
+			want: "2026-10-01T00:00:00Z",
+		},
+		{
+			// Cancelling says "do not renew", not "refund me". They bought this period.
+			name: "cancelled but the paid period has not ended",
+			sub: sub(subscription{
+				Status:           "active",
+				CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"),
+				CancelAt:         at(t, "2026-10-01T00:00:00Z"),
+				PriceIDs:         []string{proPrice},
+			}),
+			want: "2026-10-01T00:00:00Z",
+		},
+		{
+			name: "a finished cancellation entitles nobody",
+			sub: sub(subscription{
+				Status: "canceled", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice},
+			}),
+			want: "",
+		},
+		{
+			name: "an unpaid subscription entitles nobody",
+			sub: sub(subscription{
+				Status: "unpaid", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice},
+			}),
+			want: "",
+		},
+		{
+			name: "no subscriptions at all",
 			sub:  sub(),
 			want: "",
 		},
 		{
-			name: "only an entitlement that does not confer pro",
-			sub:  sub(entitlement{EntitlementID: "extra_storage", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")}),
+			// Somebody subscribed to something else entirely must not become Pro.
+			name: "an active subscription for another price",
+			sub: sub(subscription{
+				Status: "active", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{"price_something_else"},
+			}),
 			want: "",
 		},
 		{
-			// The trap. A null expiry means the entitlement does not expire, and reading it
-			// as the zero time would silently downgrade a lifetime purchaser — and the
-			// catalogue already carries a lifetime product.
-			name: "an entitlement with no expiry is not expired",
-			sub:  sub(entitlement{EntitlementID: "freehire Pro", ExpiresAt: nil}),
-			want: neverExpires.Format(time.RFC3339),
+			// A deployment that forgot to name its price should make NOBODY Pro, rather than
+			// everybody.
+			name: "no configured prices matches nothing",
+			sub: sub(subscription{
+				Status: "active", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice},
+			}),
+			prices: []string{},
+			want:   "",
 		},
 		{
-			name: "several entitlements confer pro; the latest wins",
+			name: "two subscriptions; the furthest reach wins",
 			sub: sub(
-				entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")},
-				entitlement{EntitlementID: "entl58d5471b41", ExpiresAt: ms(t, "2027-03-01T00:00:00Z")},
+				subscription{Status: "active", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice}},
+				subscription{Status: "active", CurrentPeriodEnd: at(t, "2027-03-01T00:00:00Z"), PriceIDs: []string{"price_pro_annual"}},
 			),
-			ids:  []string{"freehire Pro", "entl58d5471b41"},
-			want: "2027-03-01T00:00:00Z",
+			prices: []string{proPrice, "price_pro_annual"},
+			want:   "2027-03-01T00:00:00Z",
 		},
 		{
-			name: "a non-expiring entitlement outranks a dated one",
-			sub: sub(
-				entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")},
-				entitlement{EntitlementID: "entl58d5471b41", ExpiresAt: nil},
-			),
-			ids:  []string{"freehire Pro", "entl58d5471b41"},
+			// The trap. A subscription with no end does not expire, and reading it as the zero
+			// time would silently downgrade whoever holds it.
+			name: "an entitling subscription with no end is not expired",
+			sub: sub(subscription{
+				Status: "active", PriceIDs: []string{proPrice},
+			}),
 			want: neverExpires.Format(time.RFC3339),
-		},
-		{
-			// The payload names the entitlement with ONE of the provider's two identifiers
-			// and we do not get to choose which. Configuring both is what makes that a
-			// non-question rather than a production incident.
-			name: "the internal id is matched as readily as the lookup key",
-			sub:  sub(entitlement{EntitlementID: "entl58d5471b41", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")}),
-			ids:  []string{"freehire Pro", "entl58d5471b41"},
-			want: "2026-10-01T00:00:00Z",
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ids := tc.ids
-			if ids == nil {
-				ids = proIDs
+			prices := tc.prices
+			if prices == nil {
+				prices = []string{proPrice}
 			}
-			got := proUntilFrom(tc.sub, ids)
+			got := proUntilFrom(tc.sub, prices)
 
 			if tc.want == "" {
 				if !got.IsZero() {
@@ -107,10 +138,7 @@ func TestProUntilFrom(t *testing.T) {
 				}
 				return
 			}
-			want, err := time.Parse(time.RFC3339, tc.want)
-			if err != nil {
-				t.Fatalf("bad want %q: %v", tc.want, err)
-			}
+			want := at(t, tc.want)
 			if !got.Equal(want) {
 				t.Fatalf("want %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
 			}
@@ -118,13 +146,15 @@ func TestProUntilFrom(t *testing.T) {
 	}
 }
 
-// TestProUntilFromIsIdempotent asserts the property the whole design rests on: the column
-// is DERIVED from provider state, so applying the same state twice yields the same answer
-// and a repeated sync is free.
+// TestProUntilFromIsIdempotent asserts the property the whole design rests on: the column is
+// DERIVED from provider state, so applying the same state twice yields the same answer and a
+// repeated sync is free.
 func TestProUntilFromIsIdempotent(t *testing.T) {
-	s := sub(entitlement{EntitlementID: "freehire Pro", ExpiresAt: ms(t, "2026-10-01T00:00:00Z")})
-	first := proUntilFrom(s, []string{"freehire Pro"})
-	second := proUntilFrom(s, []string{"freehire Pro"})
+	s := sub(subscription{
+		Status: "active", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"), PriceIDs: []string{proPrice},
+	})
+	first := proUntilFrom(s, []string{proPrice})
+	second := proUntilFrom(s, []string{proPrice})
 	if !first.Equal(second) {
 		t.Fatalf("not idempotent: %s then %s", first, second)
 	}

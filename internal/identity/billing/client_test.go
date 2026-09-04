@@ -4,107 +4,91 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
 
-// The v2 customer object, trimmed to what we read.
-const customerBody = `{
-  "object": "customer",
-  "id": "601",
-  "project_id": "proj_test",
-  "active_entitlements": {
-    "object": "list",
-    "items": [
-      { "object": "customer.active_entitlement", "entitlement_id": "freehire Pro", "expires_at": 1790812800000 }
-    ],
-    "next_page": null
-  }
+// The provider's subscription listing, trimmed to what we read.
+const subscriptionsBody = `{
+  "object": "list",
+  "data": [
+    {
+      "id": "sub_1",
+      "status": "active",
+      "current_period_end": 1790812800,
+      "cancel_at": null,
+      "items": { "data": [ { "price": { "id": "price_pro_monthly" } } ] }
+    }
+  ]
 }`
 
 func testClient(t *testing.T, h http.HandlerFunc) *client {
 	t.Helper()
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	// The server's own client, not safehttp's: safehttp refuses private addresses, which
-	// is exactly right in production and exactly wrong for a loopback test server.
-	return newClient("sk_test", testProjectID, srv.URL, srv.Client())
+	// The server's own client, not safehttp's: safehttp refuses private addresses, which is
+	// exactly right in production and exactly wrong for a loopback test server.
+	return newClient("sk_test", srv.URL, srv.Client())
 }
 
 func TestClientSubscriberState(t *testing.T) {
-	var gotPath, gotAuth string
+	var gotPath, gotQuery, gotAuth string
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
-		gotPath, gotAuth = r.URL.EscapedPath(), r.Header.Get("Authorization")
+		gotPath, gotQuery, gotAuth = r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(customerBody))
+		_, _ = w.Write([]byte(subscriptionsBody))
 	})
 
-	sub, err := c.subscriberState(context.Background(), "601")
+	sub, err := c.subscriberState(context.Background(), "cus_9")
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
 
-	// v2 addresses a customer inside a project; v1 addressed a subscriber globally.
-	if want := "/projects/proj_test/customers/601"; gotPath != want {
-		t.Errorf("path: want %q, got %q", want, gotPath)
+	if gotPath != "/subscriptions" {
+		t.Errorf("path: want /subscriptions, got %q", gotPath)
 	}
-	// A secret key, as a bearer token. A public key is refused by the provider on this
-	// endpoint by design, so getting this wrong looks like an outage rather than a typo.
 	if want := "Bearer sk_test"; gotAuth != want {
 		t.Errorf("authorization: want %q, got %q", want, gotAuth)
 	}
+	// status=all on purpose: filtering server-side would split the entitling rule between a
+	// query parameter and entitlingStatuses.
+	for _, want := range []string{"customer=cus_9", "status=all", "expand"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q is missing %q", gotQuery, want)
+		}
+	}
 
-	items := sub.ActiveEntitlements.Items
-	if len(items) != 1 {
-		t.Fatalf("entitlements not read: %+v", items)
+	if len(sub.Subscriptions) != 1 {
+		t.Fatalf("subscriptions not read: %+v", sub.Subscriptions)
 	}
-	if items[0].EntitlementID != "freehire Pro" {
-		t.Errorf("entitlement_id not read: %q", items[0].EntitlementID)
+	s := sub.Subscriptions[0]
+	if s.Status != "active" {
+		t.Errorf("status: got %q", s.Status)
 	}
-	if items[0].ExpiresAt == nil {
-		t.Fatal("expires_at not read")
+	if got := s.CurrentPeriodEnd.Format(time.RFC3339); got != "2026-10-01T00:00:00Z" {
+		t.Errorf("current_period_end decoded to %s", got)
 	}
-	if got := time.UnixMilli(*items[0].ExpiresAt).UTC().Format(time.RFC3339); got != "2026-10-01T00:00:00Z" {
-		t.Errorf("expires_at decoded to %s", got)
+	// Without expanding the price the items carry a bare id string and there is nothing to
+	// match a configured price against.
+	if len(s.PriceIDs) != 1 || s.PriceIDs[0] != "price_pro_monthly" {
+		t.Errorf("prices not read: %v", s.PriceIDs)
 	}
 }
 
-// TestClientTreatsAnUnknownCustomerAsFree is the case every account that never bought
-// anything falls into. A 404 is an answer — "no purchases" — not a failure; treating it as
-// one would leave events unprocessed forever for every identifier that was never ours.
-func TestClientTreatsAnUnknownCustomerAsFree(t *testing.T) {
+// TestClientTreatsNoSubscriptionsAsFree is the case every account that cancelled falls into.
+// An empty list is an answer, not a failure.
+func TestClientTreatsNoSubscriptionsAsFree(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"Customer not found"}`))
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
 	})
 
-	sub, err := c.subscriberState(context.Background(), "601")
+	sub, err := c.subscriberState(context.Background(), "cus_9")
 	if err != nil {
-		t.Fatalf("a 404 must not be an error, got %v", err)
-	}
-	if len(sub.ActiveEntitlements.Items) != 0 {
-		t.Fatalf("want no entitlements, got %+v", sub.ActiveEntitlements.Items)
-	}
-	if until := proUntilFrom(sub, []string{"freehire Pro"}); !until.IsZero() {
-		t.Fatalf("an unknown customer must derive to the free plan, got %s", until)
-	}
-}
-
-// TestClientEscapesTheIdentifier guards the path segment. The identifiers we send are
-// integers, but the provider's namespace is arbitrary strings and a transfer can hand us
-// one — an unescaped slash would silently address a different endpoint.
-func TestClientEscapesTheIdentifier(t *testing.T) {
-	var gotPath string
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.EscapedPath()
-		_, _ = w.Write([]byte(`{"active_entitlements":{"items":[]}}`))
-	})
-
-	if _, err := c.subscriberState(context.Background(), "a/b"); err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
-	if want := "/projects/proj_test/customers/a%2Fb"; gotPath != want {
-		t.Fatalf("path: want %q, got %q", want, gotPath)
+	if until := proUntilFrom(sub, []string{"price_pro_monthly"}); !until.IsZero() {
+		t.Fatalf("no subscriptions must derive to the free plan, got %s", until)
 	}
 }
 
@@ -114,14 +98,10 @@ func TestClientErrors(t *testing.T) {
 		status int
 		body   string
 	}{
-		{name: "unauthorised", status: http.StatusUnauthorized, body: `{"message":"invalid api key"}`},
-		{name: "provider error", status: http.StatusInternalServerError, body: `{"message":"boom"}`},
-		{name: "rate limited", status: http.StatusTooManyRequests, body: `{"message":"slow down"}`},
+		{name: "unauthorised", status: http.StatusUnauthorized, body: `{"error":{"message":"invalid api key"}}`},
+		{name: "provider error", status: http.StatusInternalServerError, body: `{"error":{"message":"boom"}}`},
+		{name: "rate limited", status: http.StatusTooManyRequests, body: `{"error":{"message":"slow down"}}`},
 		{name: "not JSON", status: http.StatusOK, body: `<html>gateway</html>`},
-		// The failure this package shipped with: a v2 secret key against a v1 endpoint.
-		// It must surface as an error rather than as an empty customer, or every
-		// subscriber would quietly read as free.
-		{name: "wrong API version", status: http.StatusForbidden, body: `{"code":7723,"message":"incompatible with RevenueCat API V1"}`},
 	}
 
 	for _, tc := range cases {
@@ -130,16 +110,77 @@ func TestClientErrors(t *testing.T) {
 				w.WriteHeader(tc.status)
 				_, _ = w.Write([]byte(tc.body))
 			})
-			if _, err := c.subscriberState(context.Background(), "601"); err == nil {
+			if _, err := c.subscriberState(context.Background(), "cus_9"); err == nil {
 				t.Fatal("want an error, got nil")
 			}
 		})
 	}
 }
 
-// TestClientHonoursContext matters because this call sits inside a webhook handler with a
-// 60-second budget at the far end. A provider that hangs must fail the apply, not the
-// delivery.
+// TestClientCheckoutSessionCarriesTheAccount guards the two places our account id travels.
+// One covers the first purchase, before any customer binding exists; the other covers every
+// renewal after it. Losing either loses the ability to say whose payment this was.
+func TestClientCheckoutSession(t *testing.T) {
+	var gotForm string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form.Encode()
+		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
+	})
+
+	url, err := c.createCheckoutSession(context.Background(), 601,
+		"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", "")
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if url != "https://checkout.stripe.com/c/pay/cs_test_123" {
+		t.Fatalf("url: got %q", url)
+	}
+	for _, want := range []string{"client_reference_id=601", "freehire_user_id", "mode=subscription", "price_pro_monthly"} {
+		if !strings.Contains(gotForm, want) {
+			t.Errorf("form %q is missing %q", gotForm, want)
+		}
+	}
+}
+
+// TestClientCheckoutReusesAKnownCustomer: a second purchase must not create a second
+// customer for one person, which would leave two subscriptions nobody sums.
+func TestClientCheckoutReusesAKnownCustomer(t *testing.T) {
+	var gotForm string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form.Encode()
+		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_456"}`))
+	})
+
+	if _, err := c.createCheckoutSession(context.Background(), 601,
+		"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", "cus_9"); err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if !strings.Contains(gotForm, "customer=cus_9") {
+		t.Errorf("form %q does not reuse the known customer", gotForm)
+	}
+	if strings.Contains(gotForm, "customer_creation") {
+		t.Errorf("form %q asks for a new customer despite holding one", gotForm)
+	}
+}
+
+func TestClientPortalSession(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"url":"https://billing.stripe.com/p/session/test_123"}`))
+	})
+
+	url, err := c.createPortalSession(context.Background(), "cus_9", "https://freehire.me/my/plan")
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if url != "https://billing.stripe.com/p/session/test_123" {
+		t.Fatalf("url: got %q", url)
+	}
+}
+
+// TestClientHonoursContext matters because these calls sit inside a webhook handler with a
+// budget at the far end. A provider that hangs must fail the apply, not the delivery.
 func TestClientHonoursContext(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
@@ -148,7 +189,7 @@ func TestClientHonoursContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	if _, err := c.subscriberState(ctx, "601"); err == nil {
+	if _, err := c.subscriberState(ctx, "cus_9"); err == nil {
 		t.Fatal("want an error when the context expires, got nil")
 	}
 }

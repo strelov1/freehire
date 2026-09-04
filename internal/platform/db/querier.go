@@ -1686,6 +1686,9 @@ type Querier interface {
 	// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
 	// error — the handler treats "not backfilled yet" and "computed empty" the same.
 	GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error)
+	// Which customer to ask the provider about for this account. NULL means the account has
+	// never transacted, which is the same answer the provider gives for an id it does not know.
+	GetStripeCustomerID(ctx context.Context, id int64) (pgtype.Text, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -1764,6 +1767,13 @@ type Querier interface {
 	// Reverse lookup: the user linked to an inbound Discord account, for contribution-from-Discord. If a
 	// Discord account somehow linked more than once, the most recently linked user wins.
 	GetUserIDByDiscordID(ctx context.Context, discordID int64) (int64, error)
+	// Resolve a provider customer back to one of our accounts. This is the direction a webhook
+	// needs: a delivery names the customer, never the user.
+	//
+	// No rows means the customer is not ours — a dashboard test object, or a customer created
+	// outside this integration. The caller records the event and reports it rather than
+	// guessing.
+	GetUserIDByStripeCustomer(ctx context.Context, stripeCustomerID string) (int64, error)
 	// Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
 	// chat somehow linked more than once, the most recently linked user wins.
 	GetUserIDByTelegramChat(ctx context.Context, chatID int64) (int64, error)
@@ -2679,6 +2689,14 @@ type Querier interface {
 	// events makes "we only ever ask about someone who has transacted" a property of the
 	// query rather than a rule the worker has to remember.
 	ListSubscribersNearProExpiry(ctx context.Context, arg ListSubscribersNearProExpiryParams) ([]ListSubscribersNearProExpiryRow, error)
+	// The reconciler's second pass: accounts bound to a provider customer whose plan expiry
+	// falls inside a window around now, so a renewal whose webhook was never delivered is
+	// repaired on the next run.
+	//
+	// It walks users rather than billing_events because the binding column is what makes the
+	// question answerable at all — and it is indexed, so the scan is over the accounts that
+	// have transacted rather than over all of them.
+	ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error)
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
@@ -3962,6 +3980,12 @@ type Querier interface {
 	// from chunks that no longer exist, and the job's now-current chunks would never be
 	// backfilled until their NEXT content change.
 	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error)
+	// Bind an account to the payment provider's customer, once, when it first transacts.
+	//
+	// IS DISTINCT FROM rather than a bare assignment: the webhook and the reconciler both take
+	// this path and both will usually be writing the value that is already there, and a write
+	// that changes nothing should not wake a trigger or bloat a row.
+	SetStripeCustomerID(ctx context.Context, arg SetStripeCustomerIDParams) error
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)

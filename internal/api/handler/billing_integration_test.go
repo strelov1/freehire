@@ -55,16 +55,15 @@ func enabledBillingConfig() billing.Config {
 	return billing.Config{
 		APIKey:        "sk_test",
 		WebhookSecret: billingSecret,
-		// Every v2 call is scoped to a project; without this the config reports itself
-		// disabled and no route is mounted at all.
-		ProjectID:    "proj_test",
-		Entitlements: []string{"pro"},
-		CheckoutURL:  "https://pay.rev.cat/tok",
+		// Without a price nothing confers Pro, so the config reports itself disabled and no
+		// route is mounted at all.
+		Prices:  []string{"price_pro_monthly"},
+		SiteURL: "https://freehire.me",
 	}
 }
 
 // v2CustomerWithPro is what the provider returns for a subscriber who is entitled.
-const v2CustomerWithPro = `{"active_entitlements":{"items":[{"entitlement_id":"pro","expires_at":1790812800000}]}}`
+const customerWithPro = `{"object":"list","data":[{"status":"active","current_period_end":1790812800,"items":{"data":[{"price":{"id":"price_pro_monthly"}}]}}]}`
 
 func TestBillingWebhook(t *testing.T) {
 	pool := startPostgres(t)
@@ -78,20 +77,20 @@ func TestBillingWebhook(t *testing.T) {
 	var providerCalls int
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		providerCalls++
-		_, _ = w.Write([]byte(v2CustomerWithPro))
+		_, _ = w.Write([]byte(customerWithPro))
 	}))
 	defer stub.Close()
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app := billingApp(t, pool, enabledBillingConfig(), stub.URL, iss)
 
-	body := []byte(fmt.Sprintf(`{"api_version":"1.0","event":{"id":"evt_int_1","app_user_id":"%d","type":"RENEWAL"}}`, userID))
+	body := []byte(fmt.Sprintf(`{"id":"evt_int_1","type":"checkout.session.completed","data":{"object":{"customer":"cus_int_1","client_reference_id":"%d"}}}`, userID))
 
 	// Returns the status code and closes the body: nothing here reads a webhook response,
 	// and handing back an open body makes every call site owe a close.
 	post := func(signature string) int {
 		t.Helper()
-		req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/revenuecat/webhook", strings.NewReader(string(body)))
+		req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
 		req.Header.Set("Content-Type", "application/json")
 		if signature != "" {
 			req.Header.Set(billing.SignatureHeader, signature)
@@ -184,8 +183,8 @@ func TestBillingWebhookAcknowledgesWhatItCannotApply(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app := billingApp(t, pool, enabledBillingConfig(), stub.URL, iss)
 
-	body := []byte(fmt.Sprintf(`{"api_version":"1.0","event":{"id":"evt_unreachable","app_user_id":"%d","type":"RENEWAL"}}`, userID))
-	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/revenuecat/webhook", strings.NewReader(string(body)))
+	body := []byte(fmt.Sprintf(`{"id":"evt_unreachable","type":"checkout.session.completed","data":{"object":{"customer":"cus_unreachable","client_reference_id":"%d"}}}`, userID))
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/billing/stripe/webhook", strings.NewReader(string(body)))
 	req.Header.Set(billing.SignatureHeader, signDelivery(body, time.Now()))
 
 	resp, err := app.Test(req, 15000)
@@ -217,8 +216,17 @@ func TestBillingCheckout(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
+	// The provider mints the checkout page; we only ever hand it the account id.
+	var gotForm string
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form.Encode()
+		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_int"}`))
+	}))
+	defer stub.Close()
+
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app := billingApp(t, pool, enabledBillingConfig(), "https://provider.invalid", iss)
+	app := billingApp(t, pool, enabledBillingConfig(), stub.URL, iss)
 
 	t.Run("an anonymous caller gets no link", func(t *testing.T) {
 		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/billing/checkout", nil)
@@ -254,9 +262,13 @@ func TestBillingCheckout(t *testing.T) {
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		want := fmt.Sprintf("https://pay.rev.cat/tok/%d", userID)
-		if out.Data.URL != want {
-			t.Fatalf("want %q, got %q", want, out.Data.URL)
+		if out.Data.URL != "https://checkout.stripe.com/c/pay/cs_test_int" {
+			t.Fatalf("want the provider's checkout page, got %q", out.Data.URL)
+		}
+		// The identifier the provider will echo back must be the SESSION's account, not
+		// anything the request could have named. It is what decides who becomes Pro.
+		if want := fmt.Sprintf("client_reference_id=%d", userID); !strings.Contains(gotForm, want) {
+			t.Fatalf("form %q does not carry %q", gotForm, want)
 		}
 	})
 }
@@ -273,7 +285,7 @@ func TestBillingRoutesAbsentWhenUnconfigured(t *testing.T) {
 	for _, tc := range []struct {
 		method, path string
 	}{
-		{http.MethodPost, "/api/v1/billing/revenuecat/webhook"},
+		{http.MethodPost, "/api/v1/billing/stripe/webhook"},
 		{http.MethodGet, "/api/v1/billing/checkout"},
 	} {
 		req := httptest.NewRequestWithContext(ctx, tc.method, tc.path, strings.NewReader("{}"))

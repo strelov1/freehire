@@ -13,14 +13,15 @@ import (
 )
 
 // SignatureHeader is the header the provider signs each delivery with.
-const SignatureHeader = "X-RevenueCat-Webhook-Signature"
+const SignatureHeader = "Stripe-Signature"
 
-// signatureWindow bounds how old a signed delivery may be.
+// signatureWindow bounds how old a signed delivery may be. Five minutes is the provider's
+// own default tolerance.
 //
-// The provider's retries run at 5, 10, 20, 40 and 80 minutes, so this is deliberately NOT
-// wide enough to admit a late retry — a retry is re-signed when it is sent, so the window
-// bounds the age of the SIGNATURE rather than the age of the event. Widening it to
-// accommodate retries would only lengthen the life of a captured delivery.
+// The provider retries for up to three days, and this is deliberately NOT wide enough to
+// admit a late retry — a retry is re-signed when it is sent, so the window bounds the age of
+// the SIGNATURE rather than the age of the event. Widening it to accommodate retries would
+// only lengthen the life of a captured delivery.
 const signatureWindow = 5 * time.Minute
 
 var errNoSignature = errors.New("billing: delivery carries no signature")
@@ -71,6 +72,10 @@ func verifySignature(raw []byte, header, secret string, now time.Time) error {
 // key, so the provider adding a `v2` beside it must not turn every delivery into a
 // rejection. A missing t or v1 is still an error — that is not a new scheme, it is a
 // malformed one.
+//
+// Ignoring every scheme but v1 is the provider's own instruction, and it is a DOWNGRADE
+// defence: they send a deliberately fake `v0` on test deliveries, so a verifier that
+// accepted any scheme would accept a signature it never checked.
 func parseSignatureHeader(header string) (ts int64, sig []byte, err error) {
 	var sawTS, sawSig bool
 	for _, part := range strings.Split(header, ",") {
