@@ -3,6 +3,7 @@ package ingestsched
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -67,16 +68,27 @@ func seconds(d time.Duration) int32 {
 	return toInt32(int(d/time.Second), 0, maxSeconds)
 }
 
-// toInt32 bounds v into [lo, hi] and then converts. The guards and the conversion sit
-// together on purpose: this is the shape a static analyser can see, and separating them
-// into a clamp that returns an int left CodeQL still reporting an unbounded conversion at
-// the call site — correctly, since it could not follow the bound across the return.
+// toInt32 bounds v into [lo, hi] and then converts.
+//
+// The guards and the conversion sit together on purpose: a clamp that returned an int left
+// the analyser reporting an unbounded conversion at each call site, correctly, since it
+// could not follow the bound across the return. The final pair of guards is against
+// CONSTANTS rather than the lo/hi parameters, for the same reason one step further in — a
+// bound that arrives as an argument proves nothing about this line on its own. Every real
+// hi here is far below MaxInt32, so those two guards never fire; they are what makes the
+// conversion provably safe rather than safe-by-inspection.
 func toInt32(v, lo, hi int) int32 {
 	if v < lo {
 		v = lo
 	}
 	if v > hi {
 		v = hi
+	}
+	if v > math.MaxInt32 {
+		v = math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		v = math.MinInt32
 	}
 	return int32(v)
 }
