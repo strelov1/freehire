@@ -1253,6 +1253,15 @@ type Querier interface {
 	// Idempotent via the outbox's UNIQUE (job_id). Run in the same transaction as the job's
 	// UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueApplyFormCapture(ctx context.Context, jobID int64) (int64, error)
+	// Creates the candidate-facing entry that starts the tailor-then-review sequence
+	// (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+	// existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
+	// double-click or a page reload racing this same request is expected, common traffic here,
+	// not a fault, and the constraint is the only thing that closes the window between a
+	// check and an insert. No row back means the handler's own INSERT lost the race (or the
+	// pair was already queued by an earlier request) — it re-reads via
+	// GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
+	EnqueueAutoApply(ctx context.Context, arg EnqueueAutoApplyParams) (int64, error)
 	// Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
 	// eligible jobs of the given company_slugs back into enrichment_outbox at the CURRENT
 	// target version, regardless of their existing enrichment_version. Unlike
@@ -1264,15 +1273,6 @@ type Querier interface {
 	// ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
 	// (not yet claimed) alone, so running this twice in a row costs nothing.
 	EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg EnqueueEnrichmentForCompanySlugsParams) (int64, error)
-	// Creates the candidate-facing entry that starts the tailor-then-review sequence
-	// (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
-	// existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
-	// double-click or a page reload racing this same request is expected, common traffic here,
-	// not a fault, and the constraint is the only thing that closes the window between a
-	// check and an insert. No row back means the handler's own INSERT lost the race (or the
-	// pair was already queued by an earlier request) — it re-reads via
-	// GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
-	EnqueueAutoApply(ctx context.Context, arg EnqueueAutoApplyParams) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and confirmed technical), so an already-enriched job is not
