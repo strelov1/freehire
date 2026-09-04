@@ -147,8 +147,10 @@
       due time, not the timer.
 - [x] 7.2 `ingest-scheduler` and `schedule-board` added to `release.sh`'s worker-binary
       build list, and to `.gitignore` (the repo has a guard test for the second).
-      NOTE for the operator: `release.sh` lives on the HOST; the repo copy is a record, and
-      `cmd/add-board` is missing from the host list too — worth checking during §8.1.
+      `release.sh` lives on the HOST; the repo copy is a record. Diffed the two while
+      writing this (2026-09-04): the host carried `add-board` and
+      `backfill-company-type-hint`, which the repo copy had never gained — both added here
+      so the record is true, alongside this change's two.
 - [x] 7.3 `internal/ingest/ingestsched/AGENTS.md`: the roster/override rule, the
       one-spelling rule with the `habr_career` incident behind it, the security argument for
       the shape-before-registry gate, the claim/reclaim contract, and a "measurements this
@@ -186,10 +188,13 @@
 
 ## 10. Review
 
-- [ ] 10.1 `gofmt -l` clean; `go vet ./...`; `go test ./...`.
-- [ ] 10.2 `go vet -tags=integration ./...` and the full `go test -tags=integration ./...`.
-- [ ] 10.3 `pnpm check:sql` on the added migrations; `pnpm check:links`; shellcheck via the
-      `artifacts` job on any changed `*.sh`.
+- [x] 10.1 `gofmt -l` clean; `go vet ./...` clean; `go test ./...` clean.
+- [x] 10.2 `go vet -tags=integration ./...` clean, and the FULL
+      `go test -tags=integration ./...` across the whole module clean.
+- [x] 10.3 `check-migrations` (squawk): 0 issues on the two added migrations — the
+      `prefer-bigint-over-int` findings on shard/second/exit-code columns are suppressed
+      with the reason beside each. `check-doc-links`: 289 links, all resolve. shellcheck
+      clean on the changed `release.sh`.
 - [ ] 10.4 Confirm on prod that every provider has completed a run within its cadence since
       cutover — the one measurement that proves the fleet did not quietly lose a provider,
       which is the failure this whole change exists to make impossible.
