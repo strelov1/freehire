@@ -15,6 +15,13 @@ const claimDueRuns = `-- name: ClaimDueRuns :many
 WITH candidate AS (
     SELECT rs.provider,
            rs.shard,
+           -- The shard COUNT is how many run-state rows the provider has, not
+           -- ingest_schedule.shards. Reconcile creates exactly one row per shard, so the
+           -- rows ARE the count; reading it from the override table instead would be a
+           -- second source for one fact, and the two disagree for any provider whose rows
+           -- exist while its override row does not. A subquery rather than a window
+           -- function, because FOR UPDATE may not be combined with one.
+           (SELECT count(*) FROM ingest_run_state peer WHERE peer.provider = rs.provider)::int AS shards,
            COALESCE(s.cadence_sec, $1::int) AS cadence_sec,
            COALESCE(s.timeout_sec, $2::int) AS timeout_sec
     FROM ingest_run_state rs
@@ -34,7 +41,7 @@ SET claimed_at      = now(),
     next_due_at     = now() + make_interval(secs => c.cadence_sec)
 FROM candidate c
 WHERE rs.provider = c.provider AND rs.shard = c.shard
-RETURNING rs.provider, rs.shard, c.timeout_sec
+RETURNING rs.provider, rs.shard, c.shards, c.timeout_sec
 `
 
 type ClaimDueRunsParams struct {
@@ -47,6 +54,7 @@ type ClaimDueRunsParams struct {
 type ClaimDueRunsRow struct {
 	Provider   string `json:"provider"`
 	Shard      int32  `json:"shard"`
+	Shards     int32  `json:"shards"`
 	TimeoutSec int32  `json:"timeout_sec"`
 }
 
@@ -81,7 +89,12 @@ func (q *Queries) ClaimDueRuns(ctx context.Context, arg ClaimDueRunsParams) ([]C
 	items := []ClaimDueRunsRow{}
 	for rows.Next() {
 		var i ClaimDueRunsRow
-		if err := rows.Scan(&i.Provider, &i.Shard, &i.TimeoutSec); err != nil {
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Shard,
+			&i.Shards,
+			&i.TimeoutSec,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -90,6 +103,20 @@ func (q *Queries) ClaimDueRuns(ctx context.Context, arg ClaimDueRunsParams) ([]C
 		return nil, err
 	}
 	return items, nil
+}
+
+const countInFlightRuns = `-- name: CountInFlightRuns :one
+SELECT count(*) FROM ingest_run_state WHERE claimed_at IS NOT NULL
+`
+
+// How many runs the scheduler believes are executing. This is what replaces
+// ingest-slot.sh's flock semaphore: 279 independent timers could not see each other, so
+// the ceiling had to live in a wrapper script; one scheduler can simply count.
+func (q *Queries) CountInFlightRuns(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countInFlightRuns)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const deleteRunStateForUnlistedProviders = `-- name: DeleteRunStateForUnlistedProviders :exec
@@ -196,6 +223,68 @@ func (q *Queries) ListSchedulableProviders(ctx context.Context) ([]ListSchedulab
 			&i.DisabledReason,
 			&i.Notes,
 			&i.Managed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const previewDueRuns = `-- name: PreviewDueRuns :many
+SELECT rs.provider,
+       rs.shard,
+       (SELECT count(*) FROM ingest_run_state peer WHERE peer.provider = rs.provider)::int AS shards,
+       COALESCE(s.timeout_sec, $1::int) AS timeout_sec
+FROM ingest_run_state rs
+LEFT JOIN ingest_schedule s ON s.provider = rs.provider
+WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
+   OR (rs.claimed_at IS NOT NULL
+       AND rs.claimed_at < now() - make_interval(
+               secs => COALESCE(s.timeout_sec, $1::int)
+                       + $2::int))
+ORDER BY rs.next_due_at
+LIMIT $3
+`
+
+type PreviewDueRunsParams struct {
+	DefaultTimeoutSec int32 `json:"default_timeout_sec"`
+	GraceSec          int32 `json:"grace_sec"`
+	MaxRuns           int32 `json:"max_runs"`
+}
+
+type PreviewDueRunsRow struct {
+	Provider   string `json:"provider"`
+	Shard      int32  `json:"shard"`
+	Shards     int32  `json:"shards"`
+	TimeoutSec int32  `json:"timeout_sec"`
+}
+
+// What ClaimDueRuns WOULD take, without taking it. Shadow mode's read: the first
+// deployment lands underneath a fleet still driven by the static timers, so a tick that
+// advanced a due time would desynchronise state the real timers know nothing about.
+//
+// The predicate is copied from ClaimDueRuns rather than shared, because sqlc has no way to
+// share one. A divergence between the two would make the shadow run a measurement of
+// something other than what apply mode does, so they are asserted equivalent by an
+// integration test rather than by inspection.
+func (q *Queries) PreviewDueRuns(ctx context.Context, arg PreviewDueRunsParams) ([]PreviewDueRunsRow, error) {
+	rows, err := q.db.Query(ctx, previewDueRuns, arg.DefaultTimeoutSec, arg.GraceSec, arg.MaxRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PreviewDueRunsRow{}
+	for rows.Next() {
+		var i PreviewDueRunsRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Shard,
+			&i.Shards,
+			&i.TimeoutSec,
 		); err != nil {
 			return nil, err
 		}

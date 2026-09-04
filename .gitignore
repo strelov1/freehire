@@ -51,6 +51,7 @@ hire
 /hydrate-adzuna-description
 /import-company-industries
 /ingest
+/ingest-scheduler
 /liveness
 /mail-ingest
 /mail-preview
@@ -68,6 +69,7 @@ hire
 /resolve-url
 /rollup-company
 /rollup-views
+/schedule-board
 /search-drain
 /seed-adzuna-description-queue
 /similar-backfill

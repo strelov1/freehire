@@ -713,6 +713,10 @@ type Querier interface {
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.
 	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
+	// How many runs the scheduler believes are executing. This is what replaces
+	// ingest-slot.sh's flock semaphore: 279 independent timers could not see each other, so
+	// the ceiling had to live in a wrapper script; one scheduler can simply count.
+	CountInFlightRuns(ctx context.Context) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -3158,6 +3162,15 @@ type Querier interface {
 	// The display name is the modal `company` across the aggregator rows, since two aggregators
 	// may spell the same employer differently and the name is what the harvest gate compares.
 	OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error)
+	// What ClaimDueRuns WOULD take, without taking it. Shadow mode's read: the first
+	// deployment lands underneath a fleet still driven by the static timers, so a tick that
+	// advanced a due time would desynchronise state the real timers know nothing about.
+	//
+	// The predicate is copied from ClaimDueRuns rather than shared, because sqlc has no way to
+	// share one. A divergence between the two would make the shadow run a measurement of
+	// something other than what apply mode does, so they are asserted equivalent by an
+	// integration test rather than by inspection.
+	PreviewDueRuns(ctx context.Context, arg PreviewDueRunsParams) ([]PreviewDueRunsRow, error)
 	// Domains whose confident-hit count has reached the promotion threshold; the sync
 	// worker unions these into the Gmail search query.
 	PromotedDomains(ctx context.Context, threshold int32) ([]string, error)

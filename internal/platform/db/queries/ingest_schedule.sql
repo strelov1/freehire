@@ -65,6 +65,13 @@ WHERE provider <> ALL (sqlc.arg(providers)::text[]);
 WITH candidate AS (
     SELECT rs.provider,
            rs.shard,
+           -- The shard COUNT is how many run-state rows the provider has, not
+           -- ingest_schedule.shards. Reconcile creates exactly one row per shard, so the
+           -- rows ARE the count; reading it from the override table instead would be a
+           -- second source for one fact, and the two disagree for any provider whose rows
+           -- exist while its override row does not. A subquery rather than a window
+           -- function, because FOR UPDATE may not be combined with one.
+           (SELECT count(*) FROM ingest_run_state peer WHERE peer.provider = rs.provider)::int AS shards,
            COALESCE(s.cadence_sec, sqlc.arg(default_cadence_sec)::int) AS cadence_sec,
            COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int) AS timeout_sec
     FROM ingest_run_state rs
@@ -84,7 +91,7 @@ SET claimed_at      = now(),
     next_due_at     = now() + make_interval(secs => c.cadence_sec)
 FROM candidate c
 WHERE rs.provider = c.provider AND rs.shard = c.shard
-RETURNING rs.provider, rs.shard, c.timeout_sec;
+RETURNING rs.provider, rs.shard, c.shards, c.timeout_sec;
 
 -- name: RecordRunFinish :exec
 -- Store how a run ended and release its claim, so the row is claimable again at its next
@@ -96,3 +103,32 @@ SET claimed_at       = NULL,
     last_exit_code   = sqlc.arg(exit_code)::int,
     last_error       = NULLIF(sqlc.arg(last_error)::text, '')
 WHERE provider = sqlc.arg(provider) AND shard = sqlc.arg(shard)::int;
+
+-- name: CountInFlightRuns :one
+-- How many runs the scheduler believes are executing. This is what replaces
+-- ingest-slot.sh's flock semaphore: 279 independent timers could not see each other, so
+-- the ceiling had to live in a wrapper script; one scheduler can simply count.
+SELECT count(*) FROM ingest_run_state WHERE claimed_at IS NOT NULL;
+
+-- name: PreviewDueRuns :many
+-- What ClaimDueRuns WOULD take, without taking it. Shadow mode's read: the first
+-- deployment lands underneath a fleet still driven by the static timers, so a tick that
+-- advanced a due time would desynchronise state the real timers know nothing about.
+--
+-- The predicate is copied from ClaimDueRuns rather than shared, because sqlc has no way to
+-- share one. A divergence between the two would make the shadow run a measurement of
+-- something other than what apply mode does, so they are asserted equivalent by an
+-- integration test rather than by inspection.
+SELECT rs.provider,
+       rs.shard,
+       (SELECT count(*) FROM ingest_run_state peer WHERE peer.provider = rs.provider)::int AS shards,
+       COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int) AS timeout_sec
+FROM ingest_run_state rs
+LEFT JOIN ingest_schedule s ON s.provider = rs.provider
+WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
+   OR (rs.claimed_at IS NOT NULL
+       AND rs.claimed_at < now() - make_interval(
+               secs => COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int)
+                       + sqlc.arg(grace_sec)::int))
+ORDER BY rs.next_due_at
+LIMIT sqlc.arg(max_runs);

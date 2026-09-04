@@ -8,6 +8,7 @@ package ingestsched
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -328,7 +329,15 @@ func TestClaimRespectsItsLimit(t *testing.T) {
 		t.Fatalf("Claim: %v", err)
 	}
 	if len(claimed) != 3 {
-		t.Errorf("claimed %d, want exactly the limit of 3", len(claimed))
+		t.Fatalf("claimed %d, want exactly the limit of 3", len(claimed))
+	}
+	// The shard COUNT travels with the claim, because it is what turns shard 3 into
+	// `--shard=3/24`. Reading it again at launch could pick up a count a curator changed
+	// in between, and build a selector the scheduler never decided on.
+	for _, run := range claimed {
+		if run.Shards != 24 {
+			t.Errorf("claimed %s/%d with Shards = %d, want 24", run.Provider, run.Shard, run.Shards)
+		}
 	}
 }
 
@@ -419,6 +428,119 @@ func TestADisabledProviderIsNotScheduledAndItsStateIsDropped(t *testing.T) {
 	}
 	if len(claimed) != 0 {
 		t.Errorf("claimed %d runs for a disabled provider, want 0", len(claimed))
+	}
+}
+
+// Shadow mode's whole value is that it measures what apply mode WOULD do. PreviewDue and
+// ClaimDueRuns carry the same predicate written twice, because sqlc cannot share one — so
+// their equivalence is asserted here rather than trusted to survive the next edit.
+func TestPreviewSeesExactlyWhatAClaimWouldTake(t *testing.T) {
+	repo, pool := newRepo(t)
+	ctx := context.Background()
+	addBoard(t, pool, "paylocity", "acme")
+	addBoard(t, pool, "greenhouse", "globex")
+
+	wide := Effective("paylocity", &Override{
+		Provider: "paylocity", Shards: 5, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
+	})
+	if err := repo.Reconcile(ctx, []Settings{wide, Effective("greenhouse", nil)}); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	// One row already claimed and long dead, so the reclaim arm of the predicate is
+	// exercised too, not just the plain due arm.
+	if _, err := pool.Exec(ctx,
+		`UPDATE ingest_run_state SET claimed_at = now() - interval '3 hours'
+		  WHERE provider = 'paylocity' AND shard = 1`); err != nil {
+		t.Fatalf("age a claim: %v", err)
+	}
+
+	preview, err := repo.PreviewDue(ctx, 10, time.Minute)
+	if err != nil {
+		t.Fatalf("PreviewDue: %v", err)
+	}
+	if len(preview) == 0 {
+		t.Fatal("preview saw nothing; the test premise is broken")
+	}
+
+	claimed, err := repo.Claim(ctx, 10, time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	if len(preview) != len(claimed) {
+		t.Fatalf("preview saw %d runs, claim took %d", len(preview), len(claimed))
+	}
+	seen := make(map[string]Run, len(preview))
+	for _, r := range preview {
+		seen[fmt.Sprintf("%s/%d", r.Provider, r.Shard)] = r
+	}
+	for _, r := range claimed {
+		key := fmt.Sprintf("%s/%d", r.Provider, r.Shard)
+		want, ok := seen[key]
+		if !ok {
+			t.Errorf("claim took %s, which the preview did not see", key)
+			continue
+		}
+		if want.Shards != r.Shards || want.RunTimeout != r.RunTimeout {
+			t.Errorf("%s: preview %d shards/%v, claim %d shards/%v",
+				key, want.Shards, want.RunTimeout, r.Shards, r.RunTimeout)
+		}
+	}
+}
+
+// Shadow mode must leave run state exactly as it found it, or the static timers still
+// driving the fleet would be racing a due time nobody told them about.
+func TestPreviewMutatesNothing(t *testing.T) {
+	repo, pool := newRepo(t)
+	ctx := context.Background()
+	addBoard(t, pool, "greenhouse", "acme")
+	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	before := dueAt(t, pool, "greenhouse", 1)
+	if _, err := repo.PreviewDue(ctx, 10, time.Minute); err != nil {
+		t.Fatalf("PreviewDue: %v", err)
+	}
+
+	if after := dueAt(t, pool, "greenhouse", 1); !after.Equal(before) {
+		t.Errorf("preview moved next_due_at from %v to %v", before, after)
+	}
+	inFlight, err := repo.InFlight(ctx)
+	if err != nil {
+		t.Fatalf("InFlight: %v", err)
+	}
+	if inFlight != 0 {
+		t.Errorf("preview claimed %d runs; want none", inFlight)
+	}
+}
+
+func TestInFlightCountsClaimedRuns(t *testing.T) {
+	repo, pool := newRepo(t)
+	ctx := context.Background()
+	addBoard(t, pool, "paylocity", "acme")
+
+	wide := Effective("paylocity", &Override{
+		Provider: "paylocity", Shards: 4, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
+	})
+	if err := repo.Reconcile(ctx, []Settings{wide}); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	if n, err := repo.InFlight(ctx); err != nil || n != 0 {
+		t.Fatalf("InFlight before any claim = %d (%v), want 0", n, err)
+	}
+	if _, err := repo.Claim(ctx, 3, time.Minute); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if n, err := repo.InFlight(ctx); err != nil || n != 3 {
+		t.Fatalf("InFlight after claiming 3 = %d (%v), want 3", n, err)
+	}
+	if err := repo.RecordFinish(ctx, "paylocity", 1, 0, ""); err != nil {
+		t.Fatalf("RecordFinish: %v", err)
+	}
+	if n, err := repo.InFlight(ctx); err != nil || n != 2 {
+		t.Fatalf("InFlight after one finish = %d (%v), want 2", n, err)
 	}
 }
 

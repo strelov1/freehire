@@ -13,8 +13,11 @@ import (
 // looked up again at launch, so a cadence edit landing between the two cannot hand a run a
 // budget the scheduler never decided on.
 type Run struct {
-	Provider   string
+	Provider string
+	// Shard and Shards together are the `--shard=i/n` selector. Shards == 1 means the
+	// provider is crawled whole and no selector is passed at all.
 	Shard      int
+	Shards     int
 	RunTimeout time.Duration
 }
 
@@ -26,9 +29,14 @@ type Repository interface {
 	// Reconcile makes run state match the given settings: one row per shard, surplus
 	// shards dropped, and providers absent from the list forgotten entirely.
 	Reconcile(ctx context.Context, settings []Settings) error
+	// InFlight counts the runs believed to be executing — the fleet ceiling that
+	// ingest-slot.sh's flock semaphore used to enforce from outside.
+	InFlight(ctx context.Context) (int, error)
 	// Claim takes up to limit due runs and marks them started. A claim older than its
 	// provider's timeout plus grace is treated as dead and may be taken again.
 	Claim(ctx context.Context, limit int, grace time.Duration) ([]Run, error)
+	// PreviewDue reports what Claim WOULD take, without taking it. Shadow mode's read.
+	PreviewDue(ctx context.Context, limit int, grace time.Duration) ([]Run, error)
 	// RecordFinish stores a run's outcome and releases its claim.
 	RecordFinish(ctx context.Context, provider string, shard, exitCode int, runErr string) error
 }
@@ -117,6 +125,41 @@ func (r *QueriesRepository) Claim(ctx context.Context, limit int, grace time.Dur
 		out = append(out, Run{
 			Provider:   row.Provider,
 			Shard:      int(row.Shard),
+			Shards:     int(row.Shards),
+			RunTimeout: time.Duration(row.TimeoutSec) * time.Second,
+		})
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) InFlight(ctx context.Context) (int, error) {
+	n, err := r.q.CountInFlightRuns(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("count in-flight runs: %w", err)
+	}
+	return int(n), nil
+}
+
+func (r *QueriesRepository) PreviewDue(ctx context.Context, limit int, grace time.Duration) ([]Run, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+
+	rows, err := r.q.PreviewDueRuns(ctx, db.PreviewDueRunsParams{
+		DefaultTimeoutSec: int32(DefaultRunTimeout.Seconds()),
+		GraceSec:          int32(grace.Seconds()),
+		MaxRuns:           int32(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("preview due runs: %w", err)
+	}
+
+	out := make([]Run, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Run{
+			Provider:   row.Provider,
+			Shard:      int(row.Shard),
+			Shards:     int(row.Shards),
 			RunTimeout: time.Duration(row.TimeoutSec) * time.Second,
 		})
 	}

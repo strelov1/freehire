@@ -1,0 +1,173 @@
+package ingestsched
+
+import (
+	"context"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+)
+
+func newTestLauncher(rec *recordedExec) SystemdLauncher {
+	return SystemdLauncher{
+		IngestBinary: "/opt/freehire/src/hire-current/ingest",
+		WorkingDir:   "/opt/freehire/src/hire-current",
+		EnvFile:      "/opt/freehire/.env",
+		RunAs:        "freehire",
+		exec:         rec.run,
+	}
+}
+
+type recordedExec struct {
+	name string
+	args []string
+	err  error
+}
+
+func (r *recordedExec) run(_ context.Context, name string, args ...string) error {
+	r.name = name
+	r.args = args
+	return r.err
+}
+
+// argValue reads the value of a --flag=value argument, so a test asserts the VALUE rather
+// than the exact position of a flag in a list that will grow.
+func argValue(args []string, flag string) (string, bool) {
+	for _, a := range args {
+		if after, ok := strings.CutPrefix(a, flag+"="); ok {
+			return after, true
+		}
+	}
+	return "", false
+}
+
+// The per-provider timeout is the whole reason runs are transient units rather than one
+// static template: a template can carry only one value, and this fleet needs 3000s for most
+// providers and 4500s for the per-posting-detail ones.
+func TestLaunchCarriesTheRunsOwnTimeout(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	err := l.Launch(context.Background(), Run{
+		Provider: "paylocity", Shard: 3, Shards: 24, RunTimeout: 4500 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	if rec.name != "systemd-run" {
+		t.Errorf("exec %q, want systemd-run", rec.name)
+	}
+	if got, ok := argValue(rec.args, "--property=TimeoutStartSec"); !ok || got != "4500" {
+		t.Errorf("TimeoutStartSec = %q (found=%v), want 4500", got, ok)
+	}
+}
+
+func TestLaunchNamesTheUnitAfterTheProviderAndShard(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "habr_career", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	got, ok := argValue(rec.args, "--unit")
+	if !ok {
+		t.Fatalf("no --unit in %v", rec.args)
+	}
+	// The unit name is derived from the same string that selects the boards. That is the
+	// habr_career fix in structural form: there is no second spelling to drift.
+	if !strings.Contains(got, "habr_career") {
+		t.Errorf("--unit = %q, want it to carry the provider key verbatim", got)
+	}
+
+	// --collect so a failed run's unit is garbage-collected; without it the leftover
+	// failed unit keeps its name and the next launch is refused.
+	if !slices.Contains(rec.args, "--collect") {
+		t.Errorf("--collect missing from %v", rec.args)
+	}
+}
+
+// An unsharded provider must be launched with no shard selector at all, not with a
+// hand-written 1/1: cmd/ingest treats a missing selector as "crawl everything", and the two
+// spellings would be one more thing that can disagree.
+func TestLaunchOmitsTheShardSelectorForAnUnshardedProvider(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	for _, a := range rec.args {
+		if strings.HasPrefix(a, "--shard=") {
+			t.Errorf("unsharded run carries %q; want no shard selector", a)
+		}
+	}
+	if rec.args[len(rec.args)-1] != "greenhouse" {
+		t.Errorf("last argument = %q, want the bare provider key", rec.args[len(rec.args)-1])
+	}
+}
+
+func TestLaunchPassesTheShardSelectorForAShardedProvider(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "workday", Shard: 4, Shards: 6, RunTimeout: DefaultRunTimeout,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	if last := rec.args[len(rec.args)-1]; last != "--shard=4/6" {
+		t.Errorf("last argument = %q, want --shard=4/6", last)
+	}
+}
+
+// The scheduler is privileged so that it may create transient units; the crawl itself must
+// not be. Dropping to the service account is a property of the launch, not of the host's
+// goodwill.
+func TestLaunchDropsToTheUnprivilegedServiceAccount(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	if got, ok := argValue(rec.args, "--uid"); !ok || got != "freehire" {
+		t.Errorf("--uid = %q (found=%v), want freehire", got, ok)
+	}
+	if got, ok := argValue(rec.args, "--property=EnvironmentFile"); !ok || got != "/opt/freehire/.env" {
+		t.Errorf("EnvironmentFile = %q (found=%v)", got, ok)
+	}
+}
+
+// The gate is not advisory. A key that ValidateProviderKey refuses must never become an
+// argv element or a unit name, and the launcher is the last place that can still be true.
+func TestLaunchRefusesAnUnsafeOrUnknownProviderKey(t *testing.T) {
+	for _, provider := range []string{
+		"greenhouse;rm -rf /",
+		"greenhouse lever",
+		"habrcareer", // well-shaped, but no adapter answers to it
+	} {
+		rec := &recordedExec{}
+		l := newTestLauncher(rec)
+
+		err := l.Launch(context.Background(), Run{
+			Provider: provider, Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout,
+		})
+		if err == nil {
+			t.Errorf("Launch(%q) = nil, want a refusal", provider)
+		}
+		if rec.name != "" {
+			t.Errorf("Launch(%q) executed %q %v; nothing must run", provider, rec.name, rec.args)
+		}
+	}
+}

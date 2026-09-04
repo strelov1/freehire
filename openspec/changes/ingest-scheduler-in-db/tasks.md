@@ -81,25 +81,41 @@
 
 ## 4. The launcher port
 
-- [ ] 4.1 Define `Launcher` (one method: launch a validated run with its provider, shard
-      selector and timeout) and a recording fake for tests.
-- [ ] 4.2 `systemdLauncher`: `systemd-run` with `--unit`, `--property=TimeoutStartSec=`,
-      the unprivileged account, and the `ingest <provider> [--shard=i/n]` argv. Unit tests
-      assert the constructed argument list, including that the per-provider timeout — not
-      the default — reaches it.
-- [ ] 4.3 Test: a provider key rejected by 2.4 never reaches the `Launcher` at all.
+- [x] 4.1 `Launcher` port + a recording fake. The port exists because `systemd-run` lives
+      only on the crawl host, and the claim/due/reclaim logic must be testable without one.
+- [x] 4.2 `SystemdLauncher`: `--unit` (named from the same provider string that selects the
+      boards), `--collect` (or a failed run's leftover unit keeps its name and refuses the
+      next launch — the fleet would stop one provider at a time, quietly),
+      `--property=TimeoutStartSec` from the row, `CPUWeight`/`IOWeight` as the old units
+      carried, `--uid` to the unprivileged account, and `EnvironmentFile`. An UNSHARDED
+      provider gets no `--shard` at all rather than `1/1`: `cmd/ingest` already reads a
+      missing selector as "crawl everything", and two spellings of one instruction is one
+      more pair that can disagree.
+- [x] 4.3 Test: a key refused by 2.4 never reaches the executor — asserted on the recorder
+      having run nothing at all, not merely on the error.
 
 ## 5. `cmd/ingest-scheduler`
 
-- [ ] 5.1 The worker: `worker.Bootstrap`, reconcile, claim up to `cap − in_flight`, launch,
-      exit. Concurrency cap default 10 (`ingest-slot.sh`'s calibrated value), overridable.
-- [ ] 5.2 Shadow mode is the DEFAULT: without `INGEST_SCHEDULER_APPLY` it resolves,
-      reports every decision, launches nothing and advances no due time.
-- [ ] 5.3 A saturated tick logs that it skipped and leaves every due row claimable.
-- [ ] 5.4 Tests over the fake launcher: shadow mode launches nothing and mutates no state;
-      apply mode launches; a saturated fleet launches nothing and says so; a partially
-      loaded fleet launches exactly the free capacity.
-- [ ] 5.5 Test: only `managed` providers are launched while the column exists.
+- [x] 5.1 `ingestsched.Scheduler.Tick` + `cmd/ingest-scheduler` (`worker.Main`/`Bootstrap`)
+      and `config.LoadIngestScheduler`. Cap default 10 — `ingest-slot.sh`'s calibrated
+      value, carried over unchanged so this change is about the MECHANISM and does not
+      quietly re-tune throughput at the same time. A non-positive cap is floored to 1:
+      a cap of 0 would read as saturated forever and stop the fleet with every check green.
+- [x] 5.2 Shadow mode is the DEFAULT, backed by a separate `PreviewDueRuns` read. An
+      integration test asserts preview and claim select the SAME rows with the same shard
+      count and timeout — the predicate is written twice because sqlc cannot share one, and
+      a divergence would make the shadow run a measurement of something else. A second test
+      asserts preview moves no due time and claims nothing.
+- [x] 5.3 A saturated tick claims NOTHING (limit 0, not a claim that is then discarded), so
+      every due row stays claimable; it logs the saturation rather than exiting quietly.
+- [x] 5.4 Tests over fakes: shadow launches nothing and previews; apply launches; saturated
+      launches nothing and says so; a partially loaded fleet claims exactly `cap − in_flight`;
+      a failed launch releases its claim at once (exit code 126) instead of idling the shard
+      for the whole reclaim window; one failed launch does not stop the rest.
+- [x] 5.5 Test: only `enabled && managed` providers are reconciled and launched.
+      **Disabled and unmanaged are reported SEPARATELY** — a test drove this out: during
+      cutover `Unmanaged` holds ~226 providers, and folding them into `Disabled` would bury
+      the two that are genuinely turned off.
 
 ## 6. `cmd/schedule-board`
 
