@@ -17,7 +17,7 @@
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
-  import { formatDate } from '$lib/utils';
+  import { formatDate, formatDateTime } from '$lib/utils';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
@@ -74,6 +74,11 @@
 
   // Presentational values derived from the (server-rendered) job.
   const posted = $derived(formatDate(job.posted_at));
+  // When the posting's own content last changed. `jobs.updated_at` is deliberately left
+  // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
+  // means "the words moved", not "the crawler came back" — which is the only reading that
+  // earns a line beside the posting date.
+  const updated = $derived(formatDate(job.updated_at));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
@@ -328,6 +333,33 @@
   </Button>
 {/snippet}
 
+<!-- When the posting went up and when its words last moved. Two facts ABOUT the posting,
+     so they ride the provenance line with the company and the badges rather than the
+     sidebar's source row, where a reader comparing freshness had to look past the match
+     score and the salary to find them.
+     "Updated" is dropped when it lands on the posting's own day: a job written once and
+     never touched would otherwise print the same date twice and say nothing with it.
+     The visible label is a date; the exact clock time rides the `title`, since an hour is
+     what a reader wants only when they are already suspicious of the day.
+     Rendered twice, one visible at a time (the caller passes the display class): to the
+     right of the provenance line from lg, and under the title below it, where that line is
+     a single non-wrapping row whose company name is already truncating to fit. -->
+{#snippet postingDates(className: string)}
+  {#if posted}
+    <div class={`items-center gap-x-2 text-xs text-muted-foreground ${className}`}>
+      <span class="whitespace-nowrap">
+        Posted <time datetime={job.posted_at} title={formatDateTime(job.posted_at)}>{posted}</time>
+      </span>
+      {#if updated && updated !== posted}
+        <span aria-hidden="true">·</span>
+        <span class="whitespace-nowrap">
+          Updated <time datetime={job.updated_at} title={formatDateTime(job.updated_at)}>{updated}</time>
+        </span>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
 <!-- The action strip: everything a reader does WITH the posting — talk about it, flag
      it, keep it, open it — on one line, sharing the tab row's rule. It carries the
      rule itself (`border-b`) rather than sitting above one, so the line reads as a
@@ -459,6 +491,10 @@
         </span>
       {/each}
     </div>
+
+    <!-- `ml-auto` rather than a grid column: the badges above are a variable-width group,
+         so the dates take whatever is left of the line and sit against its right edge. -->
+    {@render postingDates('ml-auto hidden shrink-0 lg:flex')}
   </div>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
@@ -472,6 +508,11 @@
         </Chip>
       {/if}
     </div>
+
+    <!-- Below lg the provenance line is a single non-wrapping row already truncating the
+         company name, so the dates read here instead — a caption under the title rather
+         than right-aligned, which on one phone-width column would only look adrift. -->
+    {@render postingDates('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
@@ -566,7 +607,9 @@
           {#if job.manually_added}
             <Badge variant="secondary">Manually added</Badge>
           {/if}
-          {#if posted}<span>Posted {posted}</span>{/if}
+          <!-- The posting date used to close this row; it now rides the header's provenance
+               line beside the freshness badges, which is where the rest of the "how old is
+               this?" answer already lives. -->
         </div>
         {#if views > 0 || applies > 0}
           <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">

@@ -27,6 +27,22 @@ export function formatDate(ts: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** The same instant with the clock time, for a `title` behind a formatDate label:
+ *  the visible line stays a date, and a reader who cares about the hour gets it on
+ *  hover rather than in a second column. '' for null/invalid, like formatDate. */
+export function formatDateTime(ts: string | null | undefined): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 /** Whether s is a LinkedIn personal-profile URL: an http(s) link on linkedin.com (or a
  *  country/www subdomain) whose path is /in/<handle>. Mirrors the backend's shape check —
  *  the server re-validates on submit, so this is just for inline form feedback. */
