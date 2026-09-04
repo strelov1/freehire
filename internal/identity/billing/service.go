@@ -37,6 +37,7 @@ type Service struct {
 	cfg    Config
 	q      *db.Queries
 	client *client
+	prices priceCache
 }
 
 // New constructs a Service. It never fails: an unconfigured Service reports itself disabled
@@ -263,9 +264,17 @@ func (s *Service) customerOf(ctx context.Context, userID int64) (string, error) 
 // The account's id is taken from the caller's session and never from the request: it
 // decides who gets charged and who becomes Pro, and a value the browser composes is a value
 // the browser can change.
-func (s *Service) CheckoutURL(ctx context.Context, userID int64) (string, error) {
+func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string) (string, error) {
 	if !s.cfg.CanCheckout() {
 		return "", ErrNoCheckout
+	}
+
+	// A price the browser named must be one we actually sell. The parameter arrives from the
+	// client, and a caller who could name any price could name one costing nothing.
+	if priceID == "" {
+		priceID = s.cfg.CheckoutPrice()
+	} else if !s.cfg.Sells(priceID) {
+		return "", fmt.Errorf("%w: price %q is not offered", ErrNoCheckout, priceID)
 	}
 
 	// An existing customer is reused so a second purchase cannot create a second customer
@@ -276,8 +285,18 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64) (string, error)
 		customerID = existing.String
 	}
 
-	return s.client.createCheckoutSession(ctx, userID,
-		s.cfg.CheckoutPrice(), s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID)
+	// Pre-fill the address we already hold, so a buyer does not retype what we asked them
+	// for at sign-up. Only for a NEW customer: the provider refuses an email alongside an
+	// existing one, since that customer already has theirs.
+	var email string
+	if customerID == "" {
+		if addr, emailErr := s.q.UserEmail(ctx, userID); emailErr == nil {
+			email = addr
+		}
+	}
+
+	return s.client.createCheckoutSession(ctx, userID, email,
+		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID)
 }
 
 // ManagementURL is the provider's own page where this subscriber changes their card or

@@ -73,6 +73,33 @@ export interface Allowance {
 /** The caller's plan and every metered feature's standing today (`GET /api/v1/me/plan`).
  *  Every feature is listed, including untouched ones: the surface shows what the plan IS,
  *  and a feature missing because no row exists yet would read as one they do not have. */
+/** One thing a visitor may buy (`GET /api/v1/plans`). The money comes from the payment
+ *  provider, never from our configuration: a price written beside its id in an env file is a
+ *  second source of truth about what something costs, and the two disagree the first time
+ *  one is changed — on the page a customer can hold us to. */
+export interface PublicPrice {
+  id: string;
+  /** Smallest currency unit, as the provider stores it. Formatting happens in the view. */
+  amount_cents: number;
+  currency: string;
+  interval: 'month' | 'year';
+  /** The price a new subscriber is sold unless they choose otherwise. */
+  default: boolean;
+}
+
+/** What each plan allows and what Pro costs (`GET /api/v1/plans`). Public and
+ *  unauthenticated — a pricing page that needs an account cannot do a pricing page's job.
+ *
+ *  `features` comes from the same configuration the metering path reads, so the comparison
+ *  cannot drift from the limits actually enforced. `enforced` names the features whose
+ *  ceiling really refuses today; while the shadow run is on it is empty, and a page claiming
+ *  otherwise would be selling a limit nobody meets. */
+export interface PlansMatrix {
+  features: { feature: string; free_daily: number; pro_unlimited: boolean }[];
+  prices: PublicPrice[];
+  enforced: string[];
+}
+
 export interface PlanState {
   plan: 'free' | 'pro';
   resets_at: string;

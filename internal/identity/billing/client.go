@@ -168,7 +168,7 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 // comes back on the completion event, which is how a first purchase is attributed before
 // any customer binding exists. The customer's metadata survives that event, which is how
 // every later renewal is attributed once the binding does exist.
-func (c *client) createCheckoutSession(ctx context.Context, userID int64, priceID, successURL, cancelURL, existingCustomer string) (string, error) {
+func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer string) (string, error) {
 	id := strconv.FormatInt(userID, 10)
 
 	form := url.Values{}
@@ -191,6 +191,9 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, priceI
 		// handler answers 404, and the upgrade button hides itself as though billing were
 		// switched off. A subscription always creates a customer anyway.
 		form.Set("metadata[freehire_user_id]", id)
+		if email != "" {
+			form.Set("customer_email", email)
+		}
 	}
 
 	var out struct {

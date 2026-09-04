@@ -72,6 +72,7 @@ import type {
   MatchAnalysisResponse,
   Allowance,
   AiUsage,
+  PlansMatrix,
   PlanState,
   UsageHistoryEntry,
   MyAnalysisItem,
@@ -1027,8 +1028,17 @@ export function createApi(
    *  Throws when billing is not configured on this deployment, or when no paywall is set
    *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
    *  entry point, never as an error to show. */
-  async function billingCheckout(): Promise<{ url: string }> {
-    return requestData<{ url: string }>('/api/v1/billing/checkout');
+  async function billingCheckout(priceID?: string): Promise<{ url: string }> {
+    const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
+    return requestData<{ url: string }>(`/api/v1/billing/checkout${q}`);
+  }
+
+  /** What each plan allows and what Pro costs. Public: no session needed. Powers /pricing.
+   *
+   *  The allowances come from the same configuration the metering path reads, so the
+   *  comparison cannot drift from the limits actually enforced. */
+  async function plans(): Promise<PlansMatrix> {
+    return requestData<PlansMatrix>('/api/v1/plans');
   }
 
   /** Where this caller manages their subscription — the payment provider's own page, where
@@ -2234,6 +2244,7 @@ export function createApi(
     myInterviews,
     myAnalyses,
     myPlan,
+    plans,
     billingCheckout,
     billingManageUrl,
     myPlanHistory,

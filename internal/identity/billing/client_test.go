@@ -129,7 +129,7 @@ func TestClientCheckoutSession(t *testing.T) {
 		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
 	})
 
-	url, err := c.createCheckoutSession(context.Background(), 601,
+	url, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
 		"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", "")
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
@@ -154,7 +154,7 @@ func TestClientCheckoutReusesAKnownCustomer(t *testing.T) {
 		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_456"}`))
 	})
 
-	if _, err := c.createCheckoutSession(context.Background(), 601,
+	if _, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
 		"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", "cus_9"); err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
@@ -179,7 +179,7 @@ func TestClientCheckoutNeverSendsCustomerCreation(t *testing.T) {
 			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test"}`))
 		})
 
-		if _, err := c.createCheckoutSession(context.Background(), 601,
+		if _, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
 			"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", existing); err != nil {
 			t.Fatalf("want no error, got %v", err)
 		}

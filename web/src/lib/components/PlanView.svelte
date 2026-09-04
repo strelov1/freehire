@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import type { AiUsage, PlanState, UsageHistoryEntry } from '$lib/types';
@@ -32,23 +33,9 @@
       .catch(() => (usage = null));
   });
 
-  // Where this caller buys Pro. Null means there is nowhere to send them — billing is not
-  // configured on this deployment, or no paywall is set up — and the upgrade entry point is
-  // then ABSENT rather than broken. Both cases answer 404, which is not an error to show a
-  // candidate: it is the honest statement that there is nothing to buy here.
-  let checkoutUrl = $state<string | null>(null);
-
   // Where a subscriber changes their card or cancels — the provider's own page. Null when
   // there is no subscription to manage, which is the ordinary state for a free account.
   let manageUrl = $state<string | null>(null);
-
-  $effect(() => {
-    if (!isAuthenticated()) return;
-    api
-      .billingCheckout()
-      .then(({ url }) => (checkoutUrl = url))
-      .catch(() => (checkoutUrl = null));
-  });
 
   $effect(() => {
     if (!isAuthenticated()) return;
@@ -116,12 +103,15 @@
             <span class="text-xs text-muted-foreground">Same features, daily limits</span>
           {/if}
         </div>
-        <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own pages, not SvelteKit routes -->
-        {#if plan.plan === 'free' && checkoutUrl}
+        {#if plan.plan === 'free'}
+          <!-- To /pricing rather than straight to checkout: the choice between monthly and
+               annual belongs on a page that can explain it, and sending someone to a payment
+               form without it silently sells them the monthly one. -->
           <a
             class="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-            href={checkoutUrl}>Upgrade to Pro</a
+            href={resolve('/pricing')}>Upgrade to Pro</a
           >
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own page, not a SvelteKit route -->
         {:else if manageUrl}
           <a
             class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm font-medium"

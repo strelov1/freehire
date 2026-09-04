@@ -466,7 +466,10 @@ func Register(app *fiber.App, cfg Config) {
 	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
-	billingH := newBillingHandlers(billing.New(cfg.Billing, queries))
+	billingSvc := billing.New(cfg.Billing, queries)
+	billingH := newBillingHandlers(billingSvc)
+	// Public: a pricing page that needs an account cannot do a pricing page's job.
+	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
@@ -751,6 +754,7 @@ func Register(app *fiber.App, cfg Config) {
 	planH.register(api, mw)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
 	billingH.register(api, mw)
+	plansH.register(api)
 	usageH.register(api, mw)
 
 	// API-key management and the auth surface (see authHandlers).
