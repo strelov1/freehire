@@ -33,6 +33,31 @@ describe('dropdownRows', () => {
       .map((r) => r.kind)).toEqual(['suggestion']);
   });
 
+  // A pasted URL is not text anybody wrote to be searched for: the sections behind it
+  // are answers to a full-text search that finds nothing, so the panel becomes one row.
+  it('replaces the whole panel with the link row when the text is a link', () => {
+    const link = { url: 'https://acme.com/jobs/1', ownSlug: null };
+    const rows = dropdownRows({
+      suggestions: [suggestion('a')],
+      jobs: [job('j')],
+      companies: [company('c')],
+      text: 'https://acme.com/jobs/1',
+      link,
+    });
+    expect(rows).toEqual([{ kind: 'link', link, key: 'l', first: true }]);
+  });
+
+  it('keeps the ordinary panel when the text is not a link', () => {
+    const rows = dropdownRows({
+      suggestions: [suggestion('a')],
+      jobs: [],
+      companies: [],
+      text: 'go',
+      link: null,
+    });
+    expect(rows.map((r) => r.kind)).toEqual(['suggestion', 'text']);
+  });
+
   it('skips a section that has nothing rather than leaving a gap', () => {
     const rows = dropdownRows({
       suggestions: [],

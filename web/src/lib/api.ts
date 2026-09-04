@@ -59,6 +59,7 @@ import type {
   SubmissionInput,
   PrefillResult,
   Contribution,
+  FoundJob,
   ResolvedLink,
   ReferralOffer,
   ReferralRequestInput,
@@ -1553,6 +1554,14 @@ export function createApi(
     return requestData<PrefillResult>('/api/v1/submissions/prefill', jsonBody('POST', { url }));
   }
 
+  /** Ask whether a job page in the wild is one the catalog already carries. Public and
+   *  read-only — it writes nothing, records no contribution, and fetches no page, so it is
+   *  the half of the link intake a signed-out visitor may run. `null` means the URL names
+   *  no posting we hold, which is an answer rather than an error. */
+  async function findJobByUrl(url: string): Promise<FoundJob | null> {
+    return requestData<FoundJob | null>(`/api/v1/jobs/find?url=${encodeURIComponent(url)}`);
+  }
+
   /** Hand a job link to freehire. One sequence serves every surface: the catalog is checked,
    *  the vacancy imported when anything can read it, and the board behind it recorded for
    *  onboarding either way. The outcome says which of those happened (422 for a non-URL). */
@@ -2331,6 +2340,7 @@ export function createApi(
     submitJob,
     listMySubmissions,
     prefillSubmission,
+    findJobByUrl,
     resolveJobLink,
     listMyContributions,
     createReferralRequest,

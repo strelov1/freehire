@@ -401,6 +401,13 @@ export interface Contribution {
  *  - `queued`   nothing could read the page, so the link went to manual triage */
 type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
 
+/** A job page in the wild recognised as one the catalog already carries. The lookup that
+ *  produces it is public and read-only, so this is deliberately narrower than ResolvedLink:
+ *  nothing was imported and no board was recorded, so there is no status to report. */
+export interface FoundJob {
+  public_slug: string;
+}
+
 export interface ResolvedLink {
   public_slug: string | null;
   status: IntakeStatus;
