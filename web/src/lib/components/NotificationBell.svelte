@@ -44,10 +44,15 @@
     open = false;
   });
 
-  function toggle(e: MouseEvent) {
-    // Stop the toggle's own click from reaching the window outside-handler (see
-    // HeaderMenu's identical guard).
-    e.stopPropagation();
+  function toggle() {
+    // No stopPropagation here (unlike HeaderMenu's identical-looking guard): that
+    // guard exists because HeaderMenu swaps its button's icon (Menu/X) on open,
+    // which detaches the clicked element from the DOM and makes root.contains(e.target)
+    // read false on bubble — this button's Bell icon never swaps, so that failure
+    // mode doesn't apply. Letting the click reach `window` is what lets another
+    // open overlay (HeaderSearch's mobile suggestion list, HeaderMenu itself) see
+    // it as an outside click and close — without it, opening the bell over an
+    // already-open one left both stacked on screen.
     open = !open;
     if (open) void notificationCenter.refresh();
   }
@@ -88,9 +93,15 @@
     </button>
 
     {#if open}
+      <!-- On a phone the panel leaves the button and takes the screen: full width, from
+           under the sticky header (`top-14` is that header's own `h-14`) down to
+           `bottom-0` — same treatment as HeaderSearch's mobile suggestion list, and for
+           the same reason: `fixed` rather than `absolute` because the button sits well
+           right of the viewport edge, so no side margin reaches it. Works only because
+           TopBar's header draws no `backdrop-filter` (see its own comment) — that would
+           make the header the containing block and pin this panel to it instead. -->
       <div
-        class="absolute right-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-96 overflow-y-auto rounded-md border border-border bg-background shadow-lg sm:w-96"
-        style="max-height: min(70vh, 32rem);"
+        class="inset-x-0 z-50 overflow-y-auto border border-border bg-background shadow-lg max-sm:fixed max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
       >
         <div class="flex items-center justify-between border-b border-border px-3 py-2">
           <span class="text-sm font-semibold">Notifications</span>
