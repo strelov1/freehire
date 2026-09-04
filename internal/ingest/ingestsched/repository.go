@@ -64,10 +64,24 @@ const (
 
 // seconds converts a duration to the bounded int32 the schema stores.
 func seconds(d time.Duration) int32 {
-	return int32(clamp(int(d/time.Second), 0, maxSeconds))
+	return toInt32(int(d/time.Second), 0, maxSeconds)
 }
 
-// clamp bounds v into [lo, hi].
+// toInt32 bounds v into [lo, hi] and then converts. The guards and the conversion sit
+// together on purpose: this is the shape a static analyser can see, and separating them
+// into a clamp that returns an int left CodeQL still reporting an unbounded conversion at
+// the call site — correctly, since it could not follow the bound across the return.
+func toInt32(v, lo, hi int) int32 {
+	if v < lo {
+		v = lo
+	}
+	if v > hi {
+		v = hi
+	}
+	return int32(v)
+}
+
+// clamp bounds v into [lo, hi], for callers that stay in int.
 func clamp(v, lo, hi int) int {
 	switch {
 	case v < lo:
@@ -148,13 +162,13 @@ func (r *QueriesRepository) Reconcile(ctx context.Context, settings []Settings) 
 func (r *QueriesRepository) reconcileOne(ctx context.Context, s Settings) error {
 	if err := r.q.EnsureRunStateShards(ctx, db.EnsureRunStateShardsParams{
 		Provider: s.Provider,
-		Shards:   int32(clamp(s.Shards, 1, maxShardOrdinal)),
+		Shards:   toInt32(s.Shards, 1, maxShardOrdinal),
 	}); err != nil {
 		return fmt.Errorf("ensure shards: %w", err)
 	}
 	if err := r.q.DeleteSurplusRunStateShards(ctx, db.DeleteSurplusRunStateShardsParams{
 		Provider: s.Provider,
-		Shards:   int32(clamp(s.Shards, 1, maxShardOrdinal)),
+		Shards:   toInt32(s.Shards, 1, maxShardOrdinal),
 	}); err != nil {
 		return fmt.Errorf("drop surplus shards: %w", err)
 	}
@@ -170,7 +184,7 @@ func (r *QueriesRepository) Claim(ctx context.Context, limit int, grace time.Dur
 		DefaultCadenceSec: seconds(DefaultCadence),
 		DefaultTimeoutSec: seconds(DefaultRunTimeout),
 		GraceSec:          seconds(grace),
-		MaxRuns:           int32(clamp(limit, 0, maxRuns)),
+		MaxRuns:           toInt32(limit, 0, maxRuns),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("claim due runs: %w", err)
@@ -214,7 +228,7 @@ func (r *QueriesRepository) PreviewDue(ctx context.Context, limit int, grace tim
 	rows, err := r.q.PreviewDueRuns(ctx, db.PreviewDueRunsParams{
 		DefaultTimeoutSec: seconds(DefaultRunTimeout),
 		GraceSec:          seconds(grace),
-		MaxRuns:           int32(clamp(limit, 0, maxRuns)),
+		MaxRuns:           toInt32(limit, 0, maxRuns),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("preview due runs: %w", err)
@@ -239,8 +253,8 @@ func (r *QueriesRepository) RecordFinish(ctx context.Context, provider string, s
 	// because this method is the one that writes, and it takes a plain int from anywhere.
 	err := r.q.RecordRunFinish(ctx, db.RecordRunFinishParams{
 		Provider:  provider,
-		Shard:     int32(clamp(shard, 0, maxShardOrdinal)),
-		ExitCode:  int32(clamp(exitCode, 0, maxExitStatus)),
+		Shard:     toInt32(shard, 0, maxShardOrdinal),
+		ExitCode:  toInt32(exitCode, 0, maxExitStatus),
 		LastError: runErr,
 	})
 	if err != nil {

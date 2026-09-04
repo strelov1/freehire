@@ -100,7 +100,7 @@ func int4Ptr(v *int) pgtype.Int4 {
 	if v == nil {
 		return pgtype.Int4{}
 	}
-	return pgtype.Int4{Int32: int32(clamp(*v, 0, maxShardOrdinal)), Valid: true}
+	return pgtype.Int4{Int32: toInt32(*v, 0, maxShardOrdinal), Valid: true}
 }
 
 func int4Seconds(d *time.Duration) pgtype.Int4 {
