@@ -15,9 +15,11 @@ import type {
 /** @public — the app's vocabulary for the generated contract; a name is carried here
  *  whether or not a screen reads it yet. */
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
-/** The onboarding survey record. Renamed on the way out of the generated contracts, where
- *  it is `Responses` only because that file is one flat namespace and `Answers` is already
- *  the screening answers' — see cmd/gen-contracts. */
+/** @public — the app's name for the onboarding survey record, carried here whether or not
+ *  a screen reads it yet, like the contract re-exports above. It is `Responses` in the
+ *  generated file only because that file is one flat namespace and `Answers` is already the
+ *  screening answers' — see cmd/gen-contracts — so the useful name has to be given
+ *  somewhere, and this facade is where the app gives it. */
 export type { Responses as SurveyAnswers } from './generated/contracts';
 // The list-row projection of a job: the same names and derivations as Job, minus the posting
 // text and everything else a row does not draw.
