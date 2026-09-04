@@ -1,10 +1,14 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ArrowRight } from '@lucide/svelte';
+  import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
   import type { ApplyPlan } from '$lib/apiSuggestions';
   import { countryLabel } from '$lib/facets';
+  import { emptyFilters, filtersToParams } from '$lib/facetModel';
+  import type { StagedFilters } from '$lib/stagedFilters.svelte';
   import { CLI_INSTALL, CLI_REPO } from '$lib/cliLinks';
   import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
   import { starterSuggestions } from '$lib/suggestions';
@@ -117,6 +121,22 @@
     ].filter((f) => f !== null),
   );
 
+  /** The All-filters modal, hosted here rather than by a list — there is no list.
+   *
+   *  Everywhere else this modal NARROWS what is already on screen, so it writes into
+   *  that page's URL-synced store as you pick. Here it COMPOSES a search: it is seeded
+   *  empty, edits nothing, and its footer hands back the staged selection, which
+   *  becomes the query the feed opens with. `seed` and `onApply` are the modal's own
+   *  provisions for exactly this — the same pair the profile editor uses. */
+  let filtersOpen = $state(false);
+
+  function searchWithFilters(staged: StagedFilters) {
+    filtersOpen = false;
+    const query = filtersToParams(staged.value).toString();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- query appended to a resolved path
+    void goto(query ? `${resolve('/jobs')}?${query}` : resolve('/jobs'));
+  }
+
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   async function copyInstall() {
@@ -174,8 +194,9 @@
      there, so the box it centres would sit noticeably below the middle of the screen.
 
      `dot-grid` is the shared backdrop from app.css that every landing hero here wears.
-     `dot-grid-centred` (also in app.css) is its one variant: the same grid with its
-     mask moved to the middle, because this hero is not a left column beside a visual. -->
+     `dot-grid-centred` (also in app.css) is its one variant: the same grid, the same
+     fade from the top, moved to the horizontal centre because this hero is not a left
+     column beside a visual. -->
 <section
   class="dot-grid dot-grid-centred -mx-4 flex min-h-[calc(100svh-8rem)] flex-col items-center justify-center px-4 pb-16 pt-12"
 >
@@ -200,6 +221,7 @@
         size="hero"
         autofocus
         {counts}
+        onOpenFilters={() => (filtersOpen = true)}
       />
     </div>
 
@@ -320,3 +342,17 @@
     </div>
   </div>
 </section>
+
+<!-- Seeded empty and applied by navigating: see `searchWithFilters`. `savedSearches`
+     is off — that tab manages the alerts a signed-in visitor saved from a list, and
+     this modal has no list behind it. `counts` is the same distribution the chips and
+     the dropdown read, so the numbers beside a facet here are the numbers beside it
+     everywhere else on the page. -->
+<FilterModal
+  seed={emptyFilters()}
+  {counts}
+  open={filtersOpen}
+  onClose={() => (filtersOpen = false)}
+  applyLabel="Search jobs"
+  onApply={searchWithFilters}
+/>

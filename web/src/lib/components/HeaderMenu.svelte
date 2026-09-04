@@ -7,8 +7,6 @@
     X,
     Sun,
     Moon,
-    Briefcase,
-    Building2,
     CircleUser,
     Activity,
     ListChecks,
@@ -20,12 +18,6 @@
     FileText,
     SquarePlus,
     ShieldCheck,
-    Layers,
-    Wand,
-    Bell,
-    ChartColumn,
-    TrendingUp,
-    MessagesSquare,
     Info,
     LogOut,
     LogIn,
@@ -38,6 +30,7 @@
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
   import { ProviderIcon } from '$lib/ui';
+  import { NAV } from '$lib/siteNav';
 
   // Same invite link as the footer's socials row (Footer.svelte) — no shared
   // constant exists for it yet, so it's kept inline here like GITHUB_URL's
@@ -79,10 +72,7 @@
   // authenticated). Moderation is gated on the moderator role at render time.
   // Primary destinations pinned to the very top of the menu. Jobs is the feed at
   // /jobs — the homepage is the landing page above it, reachable via the logo.
-  const primaryLinks = [
-    { href: '/jobs', label: 'Jobs', icon: Briefcase },
-    { href: '/companies', label: 'Companies', icon: Building2 },
-  ] as const;
+  const primaryLinks = [NAV.jobs, NAV.companies];
 
   // The rest of the site. The two feature pages here are what the product DOES beyond
   // listing jobs, and until now nothing in this menu led to either of them — the
@@ -93,14 +83,19 @@
   // above. Those are the app; these are what it is for, and the divider between the
   // sections is what tells them apart — so the labels here name the subject
   // ("CV tailoring") rather than the tool.
+  // How it works leads this group rather than sitting beside /about at the bottom:
+  // /about is who publishes the site, this is how the thing in front of you works, and
+  // it is the answer a first-time visitor is looking for. The homepage header names it
+  // too, but only there and only above 640px — this is where it is always reachable.
   const navLinks = [
-    { href: '/collections', label: 'Collections', icon: Layers },
-    { href: '/features/tailor', label: 'CV tailoring', icon: Wand },
-    { href: '/features/notifications', label: 'Job notifications', icon: Bell },
-    { href: '/analytics', label: 'Analytics', icon: ChartColumn },
-    { href: '/trends', label: 'Trends', icon: TrendingUp },
-    { href: '/discussions', label: 'Discussions', icon: MessagesSquare },
-  ] as const;
+    NAV.collections,
+    NAV.howItWorks,
+    NAV.cvTailoring,
+    NAV.jobNotifications,
+    NAV.analytics,
+    NAV.trends,
+    NAV.discussions,
+  ];
 
   // Personal account items — what the signed-in user owns/reads, in the same order
   // as the account sidebar (Profile is rendered separately just above these, so the

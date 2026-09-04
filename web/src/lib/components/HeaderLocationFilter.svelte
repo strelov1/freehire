@@ -21,6 +21,7 @@
     store,
     counts = null,
     inferred = false,
+    onOpen,
   }: {
     variant?: 'jobs' | 'companies' | 'launcher';
     store?: FacetStore;
@@ -29,6 +30,13 @@
      *  out loud, because a visitor who did not pick this scope has no other way to
      *  tell a small catalogue from a filtered one. */
     inferred?: boolean;
+    /** Fired when this popover opens, so whoever hosts it can put its own panel away.
+     *
+     *  It has to be announced rather than inferred: this trigger lives INSIDE the
+     *  search box's own element, so the box's click-away handler reads a click here as
+     *  a click on itself and keeps its dropdown open — and the trigger stops the click
+     *  propagating anyway. Both panels then hang off the same header, overlapping. */
+    onOpen?: () => void;
   } = $props();
 
   let open = $state(false);
@@ -127,6 +135,7 @@
       // would otherwise immediately re-close the just-opened popover.
       e.stopPropagation();
       open = !open;
+      if (open) onOpen?.();
     }}
     class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
   >
