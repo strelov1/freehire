@@ -102,19 +102,37 @@
 - [x] 5.4 `go test -tags=integration ./...` green (195/195 packages, whole module —
       includes the new `internal/application/autoapplyorchestrate` and the extended
       `internal/api/handler` integration suites).
-- [ ] 5.5 Manual: one `auto-apply/submit` event, published by hand against the deployed
-      self-hosted Inngest instance (mirroring this session's own spike), observed end to end
-      through a real tailor call, a real pause, a real decision, and a real review call —
-      before task 2.1's future trigger (in `auto-apply-tailored-resume`) ever emits one for
-      real traffic. **This is the ONLY real verification of the signed, non-dev
-      registration handshake** (`cmd/auto-apply-orchestrate`'s actual production client
-      construction: real `INNGEST_SIGNING_KEY`/`INNGEST_EVENT_KEY`, `ServeWithOpts` with
-      `EnableUnauthedSync`): 2.9's own integration suite runs entirely against `inngest
-      dev` in its default unsigned mode, and a same-shaped test built with real (if
-      arbitrary) signing/event keys against that SAME `inngest dev` image failed with a
-      401 the executor's own callback could not get past — `inngest dev` does not emulate
-      `inngest start`'s (the actual self-hosted production command per design.md's own
-      Decisions) signed callback behavior closely enough to validate it. Standing up a
-      real `inngest start` deployment (its own Postgres, its own signing-key handshake)
-      to test this in CI is out of scope for this change; this manual step is where that
-      risk actually gets retired before task 2.1's trigger sends real traffic through it.
+- [x] 5.5a Manual, done locally this session: a REAL self-hosted `inngest start` (not
+      `inngest dev`) against its own local Postgres database, with real signing/event
+      keys, `cmd/server` and `cmd/auto-apply-orchestrate` both built and run as plain
+      processes against a local Postgres seeded with one user/CV/job/queue-entry row,
+      exactly the deploy-model shape (not testcontainers, not the dev-mode image). A hand
+      PUT self-registration (matching `cmd/auto-apply-orchestrate`'s own `selfRegister`)
+      wrote a real row into `inngest`'s own `apps`/`functions` tables — the signed,
+      non-dev registration handshake 2.9's own suite could not exercise (that suite runs
+      against `inngest dev`, whose unsigned callback path does not emulate `inngest
+      start`'s closely enough — see the note this replaces). One hand-published
+      `auto-apply/submit` event then ran the REAL sequence: a real ~50s tailor call landed
+      on `PostAutoApplyTailor` and wrote `tailored_cv_id`; the run paused (`function_runs`
+      showed no further progress until a decision arrived — confirmed no premature review
+      call); `POST /me/auto-apply/1/review` recorded the decision AND published
+      `auto-apply/review.decided` to the real self-hosted instance (visible in its own
+      logs); the paused `step.WaitForEvent` received it and resumed, calling
+      `PostAutoApplyReview` again — which correctly answered 409 (already reviewed, since
+      this manual run recorded the decision directly rather than only through the
+      orchestrator, an artifact of testing both endpoints separately in one pass rather
+      than a defect). One environment quirk found and worked around, not a code bug:
+      `cmd/auto-apply-orchestrate`'s own `selfRegister` PUTs `127.0.0.1<addr>`, whose Host
+      header becomes the URL the Inngest server calls back — correct when both processes
+      share one host's `localhost` (the real host-2 deploy shape), wrong when the Inngest
+      server runs in Docker and the orchestrator runs on the bare host (this local
+      verification's own shape only) — worked around by re-issuing the self-registration
+      PUT with an explicit `Host: host.docker.internal:<port>` header.
+- [ ] 5.5b Still open: the SAME check against the actual host-2 deployment (real systemd
+      units, real `AUTO_APPLY_ORCHESTRATOR_SECRET`, both processes on one real host where
+      5.5a's Docker-vs-bare-host quirk cannot occur) — before task 2.1's future trigger
+      (in `auto-apply-tailored-resume`) ever emits a real `auto-apply/submit` for real
+      traffic. 5.5a already retired the specific risk this task was originally written to
+      close (the signed registration handshake, unverifiable against `inngest dev`); 5.5b
+      is what confirms the checked-in systemd units themselves are wired correctly on the
+      real host, not a substitute for it.
