@@ -190,15 +190,54 @@ the order matters more than any single command.
 - [ ] 9.2 Delete `deploy/bin/gen-ingest-timers.sh` and `deploy/bin/ingest-slot.sh`.
 - [ ] 9.3 Reconcile `deploy/` against the host and confirm `./deploy/check-drift.sh` exits 0.
 
-## 10. Review
+## 10. Review findings, folded back in
 
-- [x] 10.1 `gofmt -l` clean; `go vet ./...` clean; `go test ./...` clean.
-- [x] 10.2 `go vet -tags=integration ./...` clean, and the FULL
+A code review of §1-§7 (2026-09-04) found one Critical and four Important. All are fixed
+and each carries a test; recorded here because every one of them is a rule the next reader
+needs, not a diff.
+
+- [x] 10.1 CRITICAL — **nothing released a successful run's claim.** `RecordFinish` was
+      called only when a LAUNCH failed; `cmd/ingest` knows nothing about the scheduler and a
+      transient unit just ends. So `claimed_at` was set at claim and cleared by nothing:
+      every successful run occupied a slot forever and the fleet saturated permanently after
+      `Cap` launches, exit code 0, every check green. Added `Launcher.Finished` and
+      `Scheduler.reap`, which runs BEFORE capacity is measured and in shadow mode too.
+      Dropped `--collect` in the same change: systemd already collects a SUCCESSFUL
+      transient unit, and that absence is how the reaper reads success — collecting failures
+      too would erase the exit code and make "succeeded" and "failed" one answer.
+- [x] 10.2 IMPORTANT — **run state was tracked only for MANAGED providers.** During the
+      whole cutover `managed` defaults to false, so the departed-provider delete ran over
+      the entire table every minute, and — worse — run state stayed empty, so the full day
+      of shadow output §8.3 exists to read would have measured nothing. Tracking is now by
+      `enabled`; `managed` gates the CLAIM, in SQL.
+- [x] 10.3 IMPORTANT — **one unreconcilable provider stopped the whole tick**, against the
+      package's own stated isolation rule. `Reconcile` now reports and steps over. `shards`
+      gained an upper bound of 64 in both schema and CLI: unbounded, `--shards=100000000`
+      makes `generate_series` outlive the scheduler's start timeout, and every following
+      tick repeats it first.
+- [x] 10.4 IMPORTANT — **the cap was a check-then-act pair**, so two overlapping
+      invocations each read zero in flight and each claimed the whole cap. The tick now
+      holds a Postgres advisory lock (`0x66687363`, registered in
+      `internal/platform/migrate`). The flock semaphore this replaces WAS atomic.
+- [x] 10.5 IMPORTANT — **during cutover the two ceilings cannot see each other**: the
+      static units obey `ingest-slot.sh`'s 10 slots, the transient ones obey
+      `INGEST_SCHEDULER_CAP`. 10 + 10 is 20 on a host calibrated for 10 — the I/O saturation
+      that produced nginx 504s. The runbook now steps the scheduler's cap up with the share
+      of the fleet it owns.
+- [x] 10.6 Minor — both deletes now spare a CLAIMED row (erasing one loses the only record
+      that a crawl is running); `GRACE_SECONDS=0` no longer silently means two minutes; the
+      report says `not-managed` rather than asserting a static timer that §9 may already
+      have deleted; the unit regains `After=meilisearch.service` for parity.
+
+## 11. Review
+
+- [x] 11.1 `gofmt -l` clean; `go vet ./...` clean; `go test ./...` clean.
+- [x] 11.2 `go vet -tags=integration ./...` clean, and the FULL
       `go test -tags=integration ./...` across the whole module clean.
-- [x] 10.3 `check-migrations` (squawk): 0 issues on the two added migrations — the
+- [x] 11.3 `check-migrations` (squawk): 0 issues on the two added migrations — the
       `prefer-bigint-over-int` findings on shard/second/exit-code columns are suppressed
       with the reason beside each. `check-doc-links`: 289 links, all resolve. shellcheck
       clean on the changed `release.sh`.
-- [ ] 10.4 Confirm on prod that every provider has completed a run within its cadence since
+- [ ] 11.4 Confirm on prod that every provider has completed a run within its cadence since
       cutover — the one measurement that proves the fleet did not quietly lose a provider,
       which is the failure this whole change exists to make impossible.

@@ -144,7 +144,9 @@ recover without operator action.
 
 The system SHALL bound how many ingest runs it launches concurrently, counting the runs it
 believes to be in flight, and SHALL launch at most that many minus those already running on
-any one tick. A tick that can launch nothing because the fleet is saturated SHALL report
+any one tick. Counting and claiming SHALL be serialised against other instances of the
+scheduler, so two overlapping invocations cannot each read the same free capacity and each
+consume all of it. A tick that can launch nothing because the fleet is saturated SHALL report
 that it skipped rather than exiting silently, and SHALL leave the skipped rows due so the
 next tick picks them up.
 
@@ -158,6 +160,11 @@ next tick picks them up.
 
 - **WHEN** the cap is 10 and 7 runs are in flight
 - **THEN** at most 3 runs are launched on that tick
+
+#### Scenario: A second concurrent scheduler does not double the ceiling
+
+- **WHEN** a second scheduler invocation starts while one is already deciding
+- **THEN** it exits without claiming, rather than measuring the same free capacity again
 
 ### Requirement: A run is launched as a transient unit carrying its own timeout
 
@@ -175,6 +182,41 @@ unprivileged service account, and SHALL outlive the scheduler invocation that st
 
 - **WHEN** the scheduler has launched runs and exits
 - **THEN** the launched runs continue
+
+### Requirement: A finished run is noticed by the scheduler, not reported by itself
+
+A launched run SHALL NOT be relied upon to announce its own completion — it is an ordinary
+`cmd/ingest` process that knows nothing about scheduling. The scheduler SHALL therefore ask
+the service manager about every claimed run, release the claims of those that have ended,
+and count only the ones still executing.
+
+This SHALL happen BEFORE free capacity is measured, so a tick that has just released
+capacity may use it. It SHALL happen in shadow mode as well as in apply mode.
+
+A run whose status cannot be read SHALL be counted as still executing and reported. Over-
+counting costs one slot for one tick; under-counting launches a second copy of a crawl that
+is already running.
+
+#### Scenario: A run whose unit has ended releases its claim
+
+- **WHEN** a claimed run's unit no longer exists
+- **THEN** its claim is released, its outcome recorded, and it stops counting against the
+  concurrency cap
+
+#### Scenario: A run still executing keeps its claim
+
+- **WHEN** a claimed run's unit is still active
+- **THEN** its claim is untouched and it counts against the cap
+
+#### Scenario: Capacity freed this tick is usable this tick
+
+- **WHEN** nine of ten in-flight runs are found to have ended
+- **THEN** the same tick treats nine slots as free rather than reporting saturation
+
+#### Scenario: An unreadable run status does not free a slot
+
+- **WHEN** the service manager cannot be asked about a claimed run
+- **THEN** the run is counted as executing and the failure is reported
 
 ### Requirement: A run's outcome is recorded against its schedule row
 
