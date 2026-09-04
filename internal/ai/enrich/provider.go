@@ -29,6 +29,14 @@ type JobInput struct {
 	// would discard the LLM's copy anyway — so the model spends no tokens on geography
 	// we already know.
 	GeoPinned bool
+	// CompanyTypeHint is a second derived signal: a confirmed vocab.CompanyTypeValues
+	// entry from CompanyTypeHints, keyed by the job's company_slug, when the company is
+	// hand-curated as a known case. A single job posting rarely states its employer's
+	// business model in so many words, so company_type otherwise comes back null far
+	// more often than the other enums; this feeds the prompt a verified fact instead of
+	// asking the model to infer one. Empty when the company is not in the curated set —
+	// the model then classifies from the posting alone, as before.
+	CompanyTypeHint string
 }
 
 // GeoPinned reports whether the deterministic dictionary resolved a concrete place for

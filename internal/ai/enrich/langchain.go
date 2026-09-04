@@ -112,7 +112,18 @@ func buildSystemPrompt(askGeo bool) string {
 	for _, d := range vocab.DomainValues {
 		fmt.Fprintf(&b, "    %s: %s\n", d, vocab.DomainGloss[d])
 	}
-	enum("company_type", vocab.CompanyTypeValues)
+	// company_type is the company's business model, glossed per-value so the model
+	// distinguishes e.g. outsource (vendor delivers the project) from outstaff (client
+	// manages the placed engineer) instead of guessing from the bare label.
+	b.WriteString("- company_type — the company's business model:\n")
+	for _, ct := range vocab.CompanyTypeValues {
+		fmt.Fprintf(&b, "    %s: %s\n", ct, vocab.CompanyTypeGloss[ct])
+	}
+	// A curated hint (see CompanyTypeHints) overrides the "never guess" default for this
+	// one field: a single posting rarely states its employer's business model, so
+	// company_type otherwise comes back null far more often than the other enums.
+	b.WriteString("  If the input states \"Known company type\", that is a VERIFIED fact — ")
+	b.WriteString("use it as company_type unless the posting itself explicitly contradicts it.\n")
 	enum("company_size", vocab.CompanySizeValues)
 
 	if askGeo {
@@ -170,6 +181,9 @@ func userPrompt(job JobInput) string {
 	// Source-provided remote hint (from the ATS API or the location text) — a
 	// prior for the model, not a guarantee of scope.
 	fmt.Fprintf(&b, "Remote flag: %t\n", job.Remote)
+	if job.CompanyTypeHint != "" {
+		fmt.Fprintf(&b, "Known company type: %s\n", job.CompanyTypeHint)
+	}
 	fmt.Fprintf(&b, "Description:\n%s\n", llm.TruncateRunes(job.Description, maxDescriptionRunes))
 	return b.String()
 }

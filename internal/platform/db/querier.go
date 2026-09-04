@@ -1199,6 +1199,17 @@ type Querier interface {
 	// Idempotent via the outbox's UNIQUE (job_id). Run in the same transaction as the job's
 	// UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueApplyFormCapture(ctx context.Context, jobID int64) (int64, error)
+	// Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
+	// eligible jobs of the given company_slugs back into enrichment_outbox at the CURRENT
+	// target version, regardless of their existing enrichment_version. Unlike
+	// EnqueuePendingJobs (which only re-queues rows BELOW the target version), this also
+	// picks up a job already enriched under the current version — the case after adding a
+	// company to enrich.CompanyTypeHints, whose existing postings need a second pass with
+	// the new prompt hint, not a version bump that would re-enrich the whole catalogue.
+	// Same eligibility gate as EnqueuePendingJobs, so a re-run never queues work
+	// ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
+	// (not yet claimed) alone, so running this twice in a row costs nothing.
+	EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg EnqueueEnrichmentForCompanySlugsParams) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and confirmed technical), so an already-enriched job is not
