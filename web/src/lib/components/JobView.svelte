@@ -5,7 +5,6 @@
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { autoApplyButtonState } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
@@ -284,7 +283,7 @@
 
   async function onAutoApplyClick() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     autoApplyError = null;
