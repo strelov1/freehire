@@ -1,6 +1,6 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: Choosing a suggestion applies its facets and keeps the typed text
+### Requirement: Choosing a suggestion applies what it names and keeps the typed text
 
 Choosing a suggestion SHALL apply every facet part it names, through the list's
 existing filter store, so the URL, the filter chips, the result list and the facet
@@ -34,3 +34,13 @@ title, or to both as separate rows.
 #### Scenario: No pick applies a role
 - **WHEN** any suggestion is chosen
 - **THEN** the resulting filters carry no `role` parameter
+
+## REMOVED Requirements
+
+### Requirement: Choosing a suggestion applies its facets and keeps the typed text
+
+**Reason**: Two of its three scenarios were written against the `role` facet, which is
+retired — "Selecting a role applies the facet" names a filter no request can carry any
+more. Rewording them inside a MODIFIED block would have silently dropped the scenarios
+rather than recording that the behaviour they described is gone, so the requirement is
+removed and restated above under a header that no longer promises a role.

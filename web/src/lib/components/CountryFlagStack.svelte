@@ -22,11 +22,18 @@
     max = 6,
     link = false,
     class: className = '',
+    labelClass = 'text-xs font-medium text-muted-foreground',
   }: {
     codes: string[];
     max?: number;
     link?: boolean;
     class?: string;
+    // The single-country label defaults to a small muted caption, right for the
+    // browse card and the company panel's "Offices" list — both already sit beside
+    // other small muted text. The job facet list is the odd one out: its other
+    // values are `text-sm font-medium` in the ordinary foreground colour, so it
+    // overrides this to match rather than reading as a lesser fact about the role.
+    labelClass?: string;
   } = $props();
 
   const shown = $derived(codes.slice(0, max));
@@ -38,7 +45,7 @@
   {@const label = countryLabel(code)}
   {#snippet chip()}
     <CountryFlag {code} {label} />
-    <span class="truncate text-xs font-medium text-muted-foreground">{label}</span>
+    <span class={['truncate', labelClass]}>{label}</span>
   {/snippet}
   <div class={['inline-flex items-center gap-1.5', className]}>
     {#if link}

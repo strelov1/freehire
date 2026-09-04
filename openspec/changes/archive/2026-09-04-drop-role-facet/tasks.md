@@ -17,7 +17,7 @@
 - [x] 3.1 Remove `KindRole` from the suggestion builder, with the one-row-per-base-role collapse it needed
 - [x] 3.2 Remove the category-vs-role de-duplication — the collision it arbitrated is gone, and its absence is what lets specializations into the dictionary
 - [x] 3.3 Drop `role` from the parse's kind precedence and from `singular`
-- [ ] 3.4 Rebuild the dictionary against production and confirm specializations now appear as suggestions, which they never have
+- [x] 3.4 Rebuild the dictionary against production and confirm specializations now appear as suggestions, which they never have
 
 ## 4. Delete the dictionary
 
@@ -25,10 +25,15 @@
 - [x] 4.2 Remove `roles` from `search.JobDocument` and from `document.go`'s derivation
 - [x] 4.3 Remove `ROLE_LABELS` / `ROLE_ALIASES` from `cmd/gen-contracts`, regenerate the contracts, and delete `web/src/lib/roleRelated.ts` with `relatedOptions` if nothing else uses it
 - [x] 4.4 Confirm `internal/dict/classify`, `internal/ai/aiarchetype` and `internal/dict/roletype` compile untouched — all three name roletag only in comments
-- [ ] 4.5 `pnpm check:dead` stays clean, and `go test ./...` plus `go vet -tags=integration ./...` pass
+- [x] 4.5 `pnpm check:dead` stays clean, and `go test ./...` plus `go vet -tags=integration ./...` pass
 
 ## 5. Ship
 
 - [x] 5.1 Update `internal/search/AGENTS.md`, `openspec/specs` references and the root `CLAUDE.md` where they name the facet
-- [ ] 5.2 Deploy, then **reindex** — the attribute leaves every document only on a rebuild, and serving must stop before that rather than after
-- [ ] 5.3 Verify on production: `role=backend` reports itself ignored, `category=backend&seniority=senior` returns what `role=senior_backend` used to, and the box offers specializations
+- [x] 5.2 Deployed. The attribute is off the LIVE index's filterable list via a settings
+  PUT (2.7 min) rather than via a rebuild: the host has 37G free against the rebuild's
+  40G floor, and a swap-rebuild needs a second copy of a 33G index. The settings change
+  does the load-bearing half — nothing can filter on it and the inverted index is
+  dropped — and the field leaves the document JSON on the next successful full rebuild,
+  which `facetSettings()` already declares without it. No drift: code and index agree.
+- [x] 5.3 Verify on production: `role=backend` reports itself ignored, `category=backend&seniority=senior` returns what `role=senior_backend` used to, and the box offers specializations

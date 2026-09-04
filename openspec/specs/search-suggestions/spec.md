@@ -3,29 +3,6 @@
 ## Purpose
 TBD - created by archiving change add-search-suggestions. Update Purpose after archive.
 ## Requirements
-### Requirement: A dedicated suggestions index holds every offerable completion
-
-The system SHALL maintain a Meilisearch index, separate from the jobs index,
-holding one document per offerable suggestion. Each document SHALL carry the
-display text, a `kind` of `title`, `role`, `skill`, `category` or `company`, the
-facet value the suggestion applies (absent for a `title`, which is free text), the
-count of open postings behind it, and the count of times visitors have searched
-for it.
-
-The index SHALL be separate rather than a facet on the jobs index. A facet is a
-bounded value dictionary and distinct job titles number in the millions:
-`MaxValuesPerFacet` would truncate the distribution and `title` is not a
-filterable attribute. Suggestions are mined into a bounded dictionary offline
-instead.
-
-#### Scenario: A title suggestion carries no facet value
-- **WHEN** the index holds the suggestion "Java Developer" of kind `title`
-- **THEN** it carries no facet value, because no facet names that phrase
-
-#### Scenario: A role suggestion carries its slug
-- **WHEN** the index holds the suggestion "Backend Engineer" of kind `role`
-- **THEN** it carries the facet value `backend`
-
 ### Requirement: Titles are mined from the catalogue above a frequency floor
 
 The builder SHALL walk the open catalogue, normalise each posting title, count the
@@ -67,48 +44,6 @@ role and category dictionaries carry those axes properly.
 #### Scenario: The same word qualified by a craft is kept
 - **WHEN** the normalised title is `engineering manager`
 - **THEN** it is kept, because it names a craft
-
-### Requirement: A category is not offered when a role already names it
-
-A bare-category role and its category select the same postings. Measured on the
-live catalogue, role `devops` counts 53,250 against category `devops` at 53,251,
-and role `data_analytics` counts 77,367 against category 77,375. Offering both
-puts one filter in the dropdown twice, which is the confusion this feature exists
-to remove.
-
-The builder SHALL emit a `category` suggestion only when no `role` suggestion
-shares its slug. The role wins: "DevOps Engineer" names a job, "DevOps" names a
-department.
-
-#### Scenario: The role wins over its identical category
-- **WHEN** both a role and a category carry the slug `devops`
-- **THEN** only the role suggestion is emitted
-
-#### Scenario: A category with no matching role survives
-- **WHEN** the category `healthcare` has no role sharing its slug
-- **THEN** the category suggestion is emitted
-
-### Requirement: One suggestion per base role, never one per grade
-
-The role catalogue carries every seniority grade as its own slug
-(`senior_data_analytics`, `intern_qa`), and graded slugs outnumber ungraded ones
-in the live distribution roughly six to one. Offering them individually spends the
-whole row budget on one role: `data analyst` measured as Data Analyst, Senior Data
-Analyst, Lead Data Analyst, Junior Data Analyst and Intern Data Analyst, with Data
-Engineer and Data Scientist pushed out entirely.
-
-The endpoint SHALL return at most one completion per base role — the slug with any
-seniority grade stripped — keeping whichever variant matches the query best. A
-query that names a grade still reaches it, because naming it makes that variant
-the better match.
-
-#### Scenario: Grades of one role do not crowd out other roles
-- **WHEN** the query is `data analyst` and the index carries Data Analyst alongside its senior, lead, junior and intern grades and Data Engineer
-- **THEN** Data Analyst is offered once and Data Engineer is still offered
-
-#### Scenario: Naming a grade keeps that grade
-- **WHEN** the query is `senior data analyst`
-- **THEN** the row offered for that role is Senior Data Analyst, not Data Analyst
 
 ### Requirement: A suggestion with no open postings is not offered
 
@@ -295,4 +230,29 @@ public reads share.
 #### Scenario: Suggest volume does not throttle job search
 - **WHEN** a client exhausts its suggest allowance
 - **THEN** its requests to the job search endpoint are still served
+
+### Requirement: A dedicated suggestions index holds every offerable completion kind
+
+The system SHALL maintain a Meilisearch index, separate from the jobs index, holding
+one document per offerable suggestion. Each document SHALL carry the display text, a
+`kind` of `title`, `skill`, `category` or `company`, the facet value the suggestion
+applies (absent for a `title`, which is free text), the count of open postings behind
+it, and the count of times visitors have searched for it.
+
+The index SHALL be separate rather than a facet on the jobs index. A facet is a bounded
+value dictionary and distinct job titles number in the millions: `MaxValuesPerFacet`
+would truncate the distribution and `title` is not a filterable attribute. Suggestions
+are mined into a bounded dictionary offline instead.
+
+#### Scenario: A title suggestion carries no facet value
+- **WHEN** the index holds the suggestion "Java Developer" of kind `title`
+- **THEN** it carries no facet value, because no facet names that phrase
+
+#### Scenario: A category suggestion carries its slug
+- **WHEN** the index holds the suggestion "Backend" of kind `category`
+- **THEN** it carries the facet value `backend`
+
+#### Scenario: No suggestion names a role
+- **WHEN** the dictionary is built
+- **THEN** no document carries the kind `role`
 

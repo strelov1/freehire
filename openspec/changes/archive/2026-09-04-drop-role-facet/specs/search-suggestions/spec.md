@@ -20,9 +20,20 @@ dictionary the way every other phrase does — as a mined posting title. "Senior
 Engineer" is 23,643 postings written that way, which is a stronger answer than a slug
 built by multiplying two vocabularies.
 
-## MODIFIED Requirements
-
 ### Requirement: A dedicated suggestions index holds every offerable completion
+
+**Reason**: Its `kind` vocabulary named `role`, and one of its two scenarios — "A role
+suggestion carries its slug" — asserts a document kind the builder can no longer
+produce. Rewording that scenario inside a MODIFIED block would have dropped it silently
+rather than recording that what it described is gone, so the requirement is removed and
+restated with the surviving kinds.
+
+**Migration**: The index, its separateness argument and every other kind are unchanged.
+Only `role` leaves the vocabulary.
+
+## ADDED Requirements
+
+### Requirement: A dedicated suggestions index holds every offerable completion kind
 
 The system SHALL maintain a Meilisearch index, separate from the jobs index, holding
 one document per offerable suggestion. Each document SHALL carry the display text, a
