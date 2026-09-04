@@ -162,7 +162,8 @@ func Register(client inngestgo.Client, cfg Config) (inngestgo.ServableFunction, 
 					// confirmed against a real dev server: "event.data..." (this
 					// session's own earlier spike, and this package's own first draft)
 					// silently matched EVERY event of the right name rather than failing
-					// to parse, which the negative-case integration test below caught.
+					// to parse, which this package's own negative-case integration test
+					// (orchestrate_integration_test.go) caught.
 					If: inngestgo.StrPtr(fmt.Sprintf("async.data.queueId == %q", queueID)),
 				},
 			)

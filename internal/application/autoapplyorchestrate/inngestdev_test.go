@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,7 +153,7 @@ func devServerHasFunction(eventAPIBaseURL, functionID string) bool {
 	}
 	for _, f := range info.Functions {
 		// The dev server slugs a function as "<appID>-<functionID>".
-		if len(f.Slug) >= len(functionID) && f.Slug[len(f.Slug)-len(functionID):] == functionID {
+		if strings.HasSuffix(f.Slug, functionID) {
 			return true
 		}
 	}

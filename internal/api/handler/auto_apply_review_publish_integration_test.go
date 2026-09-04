@@ -60,6 +60,28 @@ func (f *fakeEventPublisher) Calls() int {
 	return len(f.calls) + len(f.submitCalls)
 }
 
+// waitForPublishCalls polls until events has recorded `want` calls or fails the test.
+// publishSubmit/publishReviewDecided (auto_apply_review_publish.go) fire the real publish
+// from a goroutine detached from the request — deliberately, so a slow event API cannot
+// hold a candidate-facing response open — so a test observing the call count can no longer
+// assume it landed by the time app.Test returns.
+func waitForPublishCalls(t *testing.T, events *fakeEventPublisher, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if got := events.Calls(); got >= want {
+			if got != want {
+				t.Fatalf("publish calls = %d, want %d", got, want)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("publish calls = %d, want %d (timed out waiting)", events.Calls(), want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestPostAutoApplyReview_PublishesReviewDecidedEvent(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
@@ -80,9 +102,7 @@ func TestPostAutoApplyReview_PublishesReviewDecidedEvent(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 
-	if got := events.Calls(); got != 1 {
-		t.Fatalf("publish calls = %d, want 1", got)
-	}
+	waitForPublishCalls(t, events, 1)
 	if events.calls[0].queueID != queueID || events.calls[0].decision != "approved" {
 		t.Errorf("published (queueID=%d, decision=%q), want (queueID=%d, decision=\"approved\")",
 			events.calls[0].queueID, events.calls[0].decision, queueID)

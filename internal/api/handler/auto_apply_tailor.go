@@ -58,13 +58,10 @@ type autoApplyEntry struct {
 func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (autoApplyEntry, error) {
 	if isAutoApplySystemCaller(c) {
 		row, err := h.queries.GetAutoApplyQueueEntryByID(c.Context(), queueID)
-		if err != nil {
-			return autoApplyEntry{}, err
-		}
-		return autoApplyEntry{
-			ID: row.ID, UserID: row.UserID, JobID: row.JobID,
-			TailoredCvID: row.TailoredCvID, ReviewDecision: row.ReviewDecision,
-		}, nil
+		// The generated row is field-for-field identical to autoApplyEntry (same names,
+		// types, order) — a direct conversion, not a copy, so the two reads below can
+		// never drift apart from what this type actually carries.
+		return autoApplyEntry(row), err
 	}
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -73,13 +70,7 @@ func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (
 	row, err := h.queries.GetAutoApplyQueueEntryForReview(c.Context(), db.GetAutoApplyQueueEntryForReviewParams{
 		ID: queueID, UserID: userID,
 	})
-	if err != nil {
-		return autoApplyEntry{}, err
-	}
-	return autoApplyEntry{
-		ID: row.ID, UserID: row.UserID, JobID: row.JobID,
-		TailoredCvID: row.TailoredCvID, ReviewDecision: row.ReviewDecision,
-	}, nil
+	return autoApplyEntry(row), err
 }
 
 // autoApplyTailorResponse is what starting a tailoring run reports: the tailored CV id and

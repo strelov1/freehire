@@ -49,7 +49,7 @@ Two placements surprise people, and both are in the table's comments: the LLM cl
 and moderator-authored vacancies plus the public submission queue are `ingest`, because
 they are manual job intake rather than applications.
 
-`cmd/<name>/` — every binary is a **run-once-and-exit** worker except `cmd/server` and `cmd/mail-ingest` (a long-lived SES inbound daemon, `Restart=always`). The rest are cron-driven, not daemons; they need `DATABASE_URL` and exit non-zero on failure.
+`cmd/<name>/` — every binary is a **run-once-and-exit** worker except `cmd/server`, `cmd/mail-ingest` (a long-lived SES inbound daemon, `Restart=always`), and `cmd/auto-apply-orchestrate` (serves the Inngest function's own HTTP callback protocol between steps, needs no `DATABASE_URL`). The rest are cron-driven, not daemons; they need `DATABASE_URL` and exit non-zero on failure.
 
 Non-obvious:
 

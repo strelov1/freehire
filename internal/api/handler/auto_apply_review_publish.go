@@ -94,25 +94,44 @@ func (p *inngestEventPublisher) post(ctx context.Context, name string, data any)
 
 // publishSubmit best-effort publishes auto-apply/submit so the orchestrator starts a
 // fresh run — same "log and continue" convention as publishReviewDecided below: the
-// enqueue itself already succeeded and committed, so this must never fail the response.
+// enqueue itself already succeeded and committed, so this must never fail, or hold open,
+// the response. Detached from the request's own context (which is cancelled the moment
+// the handler returns, before a goroutine started from it would get to run) onto a fresh
+// one bounded by inngestPublishTimeout instead.
 func (h *assistantHandlers) publishSubmit(ctx context.Context, queueID int64) {
 	if h.events == nil {
 		return
 	}
-	if err := h.events.PublishSubmit(ctx, queueID); err != nil {
-		log.Printf("auto-apply: publishing submit event for queue entry %d: %v", queueID, err)
-	}
+	go func() {
+		ctx, cancel := detachedPublishContext(ctx)
+		defer cancel()
+		if err := h.events.PublishSubmit(ctx, queueID); err != nil {
+			log.Printf("auto-apply: publishing submit event for queue entry %d: %v", queueID, err)
+		}
+	}()
 }
 
 // publishReviewDecided best-effort publishes auto-apply/review.decided so a paused
 // orchestrator run resumes — the same "log and continue" convention
-// notifyTailoredCVReady already follows in this same file: recording the candidate's
-// decision must never depend on, wait for, or fail because of this.
+// notifyTailoredCVReady (auto_apply_tailor.go) already follows: recording the candidate's
+// decision must never depend on, wait for, or fail because of this. Detached the same way
+// publishSubmit is, for the same reason.
 func (h *assistantHandlers) publishReviewDecided(ctx context.Context, queueID int64, decision string) {
 	if h.events == nil {
 		return
 	}
-	if err := h.events.PublishReviewDecided(ctx, queueID, decision); err != nil {
-		log.Printf("auto-apply: publishing review-decided event for queue entry %d: %v", queueID, err)
-	}
+	go func() {
+		ctx, cancel := detachedPublishContext(ctx)
+		defer cancel()
+		if err := h.events.PublishReviewDecided(ctx, queueID, decision); err != nil {
+			log.Printf("auto-apply: publishing review-decided event for queue entry %d: %v", queueID, err)
+		}
+	}()
+}
+
+// detachedPublishContext carries the request context's values (for tracing/logging) but
+// none of its cancellation, since the request itself will have finished responding before
+// the publish goroutine runs — only inngestPublishTimeout bounds it.
+func detachedPublishContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), inngestPublishTimeout)
 }
