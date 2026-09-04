@@ -32,6 +32,56 @@ func autoApplyQueueID(c *fiber.Ctx) (int64, error) {
 	return id, nil
 }
 
+// autoApplyEntry is the subset of an auto_apply_queue row both PostAutoApplyTailor and
+// PostAutoApplyReview need, regardless of which of resolveAutoApplyEntry's two reads
+// produced it.
+type autoApplyEntry struct {
+	ID             int64
+	UserID         int64
+	JobID          int64
+	TailoredCvID   *uuid.UUID
+	ReviewDecision pgtype.Text
+}
+
+// resolveAutoApplyEntry reads one auto-apply queue entry and settles who it belongs to.
+//
+// A human caller (cookie or a live api_keys row) must OWN the entry: the read itself
+// enforces that (GetAutoApplyQueueEntryForReview), so a foreign or missing id both come
+// back as pgx.ErrNoRows → 404, never revealing which to a probing caller — unchanged from
+// before this function existed.
+//
+// The trusted auto-apply orchestrator (isAutoApplySystemCaller — see
+// auto_apply_orchestrator_auth.go) authenticated as the deployment's own shared secret,
+// not as any particular candidate, so it has no ownership claim of its own to check the
+// row against. It reads by id alone (GetAutoApplyQueueEntryByID) and acts as whichever
+// user the row itself names.
+func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (autoApplyEntry, error) {
+	if isAutoApplySystemCaller(c) {
+		row, err := h.queries.GetAutoApplyQueueEntryByID(c.Context(), queueID)
+		if err != nil {
+			return autoApplyEntry{}, err
+		}
+		return autoApplyEntry{
+			ID: row.ID, UserID: row.UserID, JobID: row.JobID,
+			TailoredCvID: row.TailoredCvID, ReviewDecision: row.ReviewDecision,
+		}, nil
+	}
+	userID, err := requireUserID(c)
+	if err != nil {
+		return autoApplyEntry{}, err
+	}
+	row, err := h.queries.GetAutoApplyQueueEntryForReview(c.Context(), db.GetAutoApplyQueueEntryForReviewParams{
+		ID: queueID, UserID: userID,
+	})
+	if err != nil {
+		return autoApplyEntry{}, err
+	}
+	return autoApplyEntry{
+		ID: row.ID, UserID: row.UserID, JobID: row.JobID,
+		TailoredCvID: row.TailoredCvID, ReviewDecision: row.ReviewDecision,
+	}, nil
+}
+
 // autoApplyTailorResponse is what starting a tailoring run reports: the tailored CV id and
 // its per-requirement account of itself, the same report shape the interactive workspace
 // shows (cv.AutopilotEntry).
@@ -52,10 +102,6 @@ type autoApplyTailorResponse struct {
 // own ownership check), and an entry whose review has already been recorded as 409, rather
 // than re-tailoring it.
 func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
 	queueID, err := autoApplyQueueID(c)
 	if err != nil {
 		return err
@@ -64,12 +110,11 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
 
-	entry, err := h.queries.GetAutoApplyQueueEntryForReview(c.Context(), db.GetAutoApplyQueueEntryForReviewParams{
-		ID: queueID, UserID: userID,
-	})
+	entry, err := h.resolveAutoApplyEntry(c, queueID)
 	if err != nil {
 		return err // foreign or missing → pgx.ErrNoRows → 404, per RenderError's own mapping
 	}
+	userID := entry.UserID
 	if entry.ReviewDecision.Valid {
 		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
@@ -210,10 +255,6 @@ const autoApplyDeclineReason = "candidate declined the tailored CV"
 // it is never claimed and never confused with a form-field park. A decision may be recorded
 // only once; a second attempt is refused as 409, and the existing decision is unchanged.
 func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
 	queueID, err := autoApplyQueueID(c)
 	if err != nil {
 		return err
@@ -226,9 +267,7 @@ func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, `decision must be "approved" or "declined"`)
 	}
 
-	entry, err := h.queries.GetAutoApplyQueueEntryForReview(c.Context(), db.GetAutoApplyQueueEntryForReviewParams{
-		ID: queueID, UserID: userID,
-	})
+	entry, err := h.resolveAutoApplyEntry(c, queueID)
 	if err != nil {
 		return err // foreign or missing → pgx.ErrNoRows → 404
 	}

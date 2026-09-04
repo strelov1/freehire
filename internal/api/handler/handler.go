@@ -132,8 +132,13 @@ type middleware struct {
 	// identity read (/auth/me) mounts it; every other key-accepting route stays
 	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
 	// credential's reach unless it opts in.
-	cvKey  fiber.Handler
-	cookie fiber.Handler
+	cvKey fiber.Handler
+	// autoApplyGate is keyAuth (cookie or full-scope API key) widened with a fallback
+	// to the shared auto-apply orchestrator secret (see
+	// openspec/changes/auto-apply-inngest-orchestration/design.md) — only the two
+	// auto-apply tailor/review routes mount it; every other route stays on key.
+	autoApplyGate fiber.Handler
+	cookie        fiber.Handler
 	// optionalCookie attaches a cookie session when there is one but never rejects.
 	// It exists for provider callbacks, which are browser navigations: a 401 there
 	// renders JSON into the address bar instead of sending the user back to the app.
@@ -343,6 +348,13 @@ type Config struct {
 	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
 	// Empty defaults to the frontend origin's own host.
 	ServedHosts []string
+	// AutoApplyOrchestratorSecret is the shared, static credential
+	// cmd/auto-apply-orchestrate presents to authenticate itself (not any particular
+	// candidate) on POST /me/auto-apply/:queueId/{tailor,review} — see
+	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables the
+	// path entirely: the two routes then behave exactly as they did under plain
+	// cookie/API-key auth, with no fallback.
+	AutoApplyOrchestratorSecret string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -663,6 +675,7 @@ func Register(app *fiber.App, cfg Config) {
 	// handlers resolve it to the internal id before writing user_jobs.
 	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
 	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
+	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth, cfg.Throttler)
 	// cookieAuth is the single cookie-only gate (RequireAuth) for the
 	// browser-convenience surfaces below — key management, saved searches, the CV
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
@@ -672,6 +685,7 @@ func Register(app *fiber.App, cfg Config) {
 		optional:       optionalAuth,
 		key:            keyAuth,
 		cvKey:          cvKeyAuth,
+		autoApplyGate:  autoApplyGate,
 		cookie:         cookieAuth,
 		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
 		moderator:      requireModerator,

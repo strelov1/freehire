@@ -208,8 +208,8 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// auto-apply-tailored-resume) — API key or cookie, never a session id from the caller.
 	// See auto_apply_tailor.go's own doc comment for why these are not variants of
 	// /autopilot above.
-	api.Post("/me/auto-apply/:queueId/tailor", mw.key, h.PostAutoApplyTailor)
-	api.Post("/me/auto-apply/:queueId/review", mw.key, h.PostAutoApplyReview)
+	api.Post("/me/auto-apply/:queueId/tailor", mw.autoApplyGate, h.PostAutoApplyTailor)
+	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, h.PostAutoApplyReview)
 }
 
 // defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is

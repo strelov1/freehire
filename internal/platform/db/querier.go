@@ -1480,6 +1480,14 @@ type Querier interface {
 	// One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 	// which the handler maps to 404 — so a probe cannot tell the two apart.
 	GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error)
+	// The same read as GetAutoApplyQueueEntryForReview, but by id ALONE — no ownership
+	// predicate. This is for the trusted auto-apply orchestrator caller only
+	// (openspec/changes/auto-apply-inngest-orchestration): it authenticates as the
+	// deployment's own shared secret, not as any particular user, so it has no owner of its
+	// own to check the row against — the row's own user_id in the result IS the owner it
+	// acts as. Never used for a caller that presented ownership-scoped credentials; see
+	// resolveAutoApplyEntry in internal/api/handler/auto_apply_tailor.go.
+	GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (GetAutoApplyQueueEntryByIDRow, error)
 	// One read backing both the tailoring-trigger and the review-decision endpoints
 	// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
 	// id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a

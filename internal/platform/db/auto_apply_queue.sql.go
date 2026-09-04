@@ -156,6 +156,40 @@ func (q *Queries) DeleteAutoApplyEntry(ctx context.Context, id int64) error {
 	return err
 }
 
+const getAutoApplyQueueEntryByID = `-- name: GetAutoApplyQueueEntryByID :one
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = $1
+`
+
+type GetAutoApplyQueueEntryByIDRow struct {
+	ID             int64       `json:"id"`
+	UserID         int64       `json:"user_id"`
+	JobID          int64       `json:"job_id"`
+	TailoredCvID   *uuid.UUID  `json:"tailored_cv_id"`
+	ReviewDecision pgtype.Text `json:"review_decision"`
+}
+
+// The same read as GetAutoApplyQueueEntryForReview, but by id ALONE — no ownership
+// predicate. This is for the trusted auto-apply orchestrator caller only
+// (openspec/changes/auto-apply-inngest-orchestration): it authenticates as the
+// deployment's own shared secret, not as any particular user, so it has no owner of its
+// own to check the row against — the row's own user_id in the result IS the owner it
+// acts as. Never used for a caller that presented ownership-scoped credentials; see
+// resolveAutoApplyEntry in internal/api/handler/auto_apply_tailor.go.
+func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (GetAutoApplyQueueEntryByIDRow, error) {
+	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryByID, id)
+	var i GetAutoApplyQueueEntryByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.TailoredCvID,
+		&i.ReviewDecision,
+	)
+	return i, err
+}
+
 const getAutoApplyQueueEntryForReview = `-- name: GetAutoApplyQueueEntryForReview :one
 SELECT id, user_id, job_id, tailored_cv_id, review_decision
 FROM auto_apply_queue

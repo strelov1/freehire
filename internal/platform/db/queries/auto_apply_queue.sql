@@ -83,6 +83,18 @@ SELECT id, user_id, job_id, tailored_cv_id, review_decision
 FROM auto_apply_queue
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
+-- name: GetAutoApplyQueueEntryByID :one
+-- The same read as GetAutoApplyQueueEntryForReview, but by id ALONE — no ownership
+-- predicate. This is for the trusted auto-apply orchestrator caller only
+-- (openspec/changes/auto-apply-inngest-orchestration): it authenticates as the
+-- deployment's own shared secret, not as any particular user, so it has no owner of its
+-- own to check the row against — the row's own user_id in the result IS the owner it
+-- acts as. Never used for a caller that presented ownership-scoped credentials; see
+-- resolveAutoApplyEntry in internal/api/handler/auto_apply_tailor.go.
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = sqlc.arg(id);
+
 -- name: SetAutoApplyTailoredCV :exec
 -- Records which tailored CV a queue entry's tailoring run produced. Set once, by the
 -- tailoring endpoint, before the candidate has had a chance to review it — review_decision
