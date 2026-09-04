@@ -21,7 +21,10 @@ type Run struct {
 	RunTimeout time.Duration
 }
 
-// Repository is the scheduling persistence contract, in package domain types.
+// Repository is what the SCHEDULER needs from the store, and nothing more. The reporting
+// and editing reads behind cmd/schedule-board are deliberately absent: a tick has no
+// business being able to rewrite a curator's cadence, and a fake standing in for this
+// interface should not have to implement two methods the code under test never calls.
 type Repository interface {
 	// Eligible lists every provider with a live board, each resolved against its
 	// override row if it has one. A provider with no row comes back on defaults.

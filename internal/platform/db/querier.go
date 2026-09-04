@@ -3754,6 +3754,15 @@ type Querier interface {
 	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
 	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
 	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
+	// The whole schedule as an operator reads it: every eligible provider, its override if it
+	// has one, and what its runs have actually been doing. Aggregated per provider rather than
+	// per shard, because the question this answers is "is anything not running?" and 24
+	// paylocity rows would bury the answer.
+	//
+	// shards_in_state is counted from run state rather than read from the override, for the
+	// same reason ClaimDueRuns counts it: the rows ARE the shard count, and a report that read
+	// the intended number instead would show a healthy 24 while 12 rows existed.
+	ReportIngestSchedule(ctx context.Context) ([]ReportIngestScheduleRow, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
@@ -4496,6 +4505,14 @@ type Querier interface {
 	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
 	// mark connected, preserving the sync cursor on reconnect.
 	UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error
+	// Write one provider's override. Every argument is optional: a NULL means "leave this
+	// alone" on an existing row and "use the documented default" on a new one, so a curator
+	// changing only the shard count does not silently reset the cadence someone measured.
+	//
+	// The CHECK on the table still decides whether the result is legal — disabling without a
+	// reason is refused here exactly as it is in psql, which is the point of putting the rule
+	// in the schema.
+	UpsertIngestSchedule(ctx context.Context, arg UpsertIngestScheduleParams) error
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =
 	// one job" property of the pipeline's write path.

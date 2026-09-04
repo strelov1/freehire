@@ -119,13 +119,22 @@
 
 ## 6. `cmd/schedule-board`
 
-- [ ] 6.1 Report mode (default): every eligible provider with effective cadence, shards,
-      timeout, default-vs-override per field, `managed`, and last run outcome.
-- [ ] 6.2 Write mode under `--apply`: set cadence / shards / timeout / notes; `--disable
-      --reason=…`; `--manage` to flip `managed`. Refuse a disable with no reason at the CLI
-      as well as in the schema.
-- [ ] 6.3 Tests mirroring `cmd/add-board`'s split: the DB-touching cores tested against a
-      throwaway `testdb.Pool`, the dry-run and invalid-input paths on the CLI wrappers.
+- [x] 6.1 Report mode (default): a table of every eligible provider — default vs override,
+      cadence, timeout, state, next due, last finish, and the note or disable reason. The
+      SHARDS column shows the intended count and, when they differ, what run state actually
+      holds: an unreconciled shard-count change is exactly the drift this change removes, so
+      it must be visible rather than averaged away.
+- [x] 6.2 Write mode under `--apply`: `--shards/--cadence/--timeout/--notes`,
+      `--disable --reason`, `--enable`, `--manage/--unmanage`. Every field is OPTIONAL and a
+      missing one is left alone — a naive UPSERT would let raising the shard count silently
+      reset a measured cadence. Contradictory flag pairs are refused, and so is a provider
+      key the registry does not know: a typo written into the table would otherwise be
+      reported as refused by every tick long after whoever typed it had moved on.
+- [x] 6.3 Tests split as `cmd/add-board` does: `edit` (pure flag logic) unit-tested with no
+      database; `Report`/`SaveOverride` integration-tested against a throwaway `testdb.Pool`
+      — the default/override distinction, the partial-edit rule, the schema's refusal of an
+      unexplained disable surfacing rather than being swallowed, and the last-run outcome
+      surviving the round trip.
 
 ## 7. Deploy artifacts
 

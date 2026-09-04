@@ -132,3 +132,65 @@ WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
                        + sqlc.arg(grace_sec)::int))
 ORDER BY rs.next_due_at
 LIMIT sqlc.arg(max_runs);
+
+-- name: ReportIngestSchedule :many
+-- The whole schedule as an operator reads it: every eligible provider, its override if it
+-- has one, and what its runs have actually been doing. Aggregated per provider rather than
+-- per shard, because the question this answers is "is anything not running?" and 24
+-- paylocity rows would bury the answer.
+--
+-- shards_in_state is counted from run state rather than read from the override, for the
+-- same reason ClaimDueRuns counts it: the rows ARE the shard count, and a report that read
+-- the intended number instead would show a healthy 24 while 12 rows existed.
+SELECT b.provider,
+       s.shards,
+       s.cadence_sec,
+       s.timeout_sec,
+       s.enabled,
+       s.disabled_reason,
+       s.notes,
+       s.managed,
+       COALESCE(rs.shards_in_state, 0)::int AS shards_in_state,
+       COALESCE(rs.in_flight, 0)::int       AS in_flight,
+       rs.next_due_at,
+       rs.last_finished_at
+FROM (SELECT DISTINCT provider FROM boards WHERE status IN ('pending', 'active')) b
+LEFT JOIN ingest_schedule s ON s.provider = b.provider
+LEFT JOIN (
+    SELECT provider,
+           count(*)                                        AS shards_in_state,
+           count(*) FILTER (WHERE claimed_at IS NOT NULL)  AS in_flight,
+           min(next_due_at)::timestamptz                   AS next_due_at,
+           max(last_finished_at)::timestamptz              AS last_finished_at
+    FROM ingest_run_state
+    GROUP BY provider
+) rs ON rs.provider = b.provider
+ORDER BY b.provider;
+
+-- name: UpsertIngestSchedule :exec
+-- Write one provider's override. Every argument is optional: a NULL means "leave this
+-- alone" on an existing row and "use the documented default" on a new one, so a curator
+-- changing only the shard count does not silently reset the cadence someone measured.
+--
+-- The CHECK on the table still decides whether the result is legal — disabling without a
+-- reason is refused here exactly as it is in psql, which is the point of putting the rule
+-- in the schema.
+INSERT INTO ingest_schedule (provider, shards, cadence_sec, timeout_sec,
+                             enabled, disabled_reason, notes, managed)
+VALUES (sqlc.arg(provider),
+        COALESCE(sqlc.narg(shards)::int, 1),
+        COALESCE(sqlc.narg(cadence_sec)::int, 3600),
+        COALESCE(sqlc.narg(timeout_sec)::int, 3000),
+        COALESCE(sqlc.narg(enabled)::boolean, true),
+        sqlc.narg(disabled_reason)::text,
+        sqlc.narg(notes)::text,
+        COALESCE(sqlc.narg(managed)::boolean, false))
+ON CONFLICT (provider) DO UPDATE SET
+    shards          = COALESCE(sqlc.narg(shards)::int, ingest_schedule.shards),
+    cadence_sec     = COALESCE(sqlc.narg(cadence_sec)::int, ingest_schedule.cadence_sec),
+    timeout_sec     = COALESCE(sqlc.narg(timeout_sec)::int, ingest_schedule.timeout_sec),
+    enabled         = COALESCE(sqlc.narg(enabled)::boolean, ingest_schedule.enabled),
+    disabled_reason = COALESCE(sqlc.narg(disabled_reason)::text, ingest_schedule.disabled_reason),
+    notes           = COALESCE(sqlc.narg(notes)::text, ingest_schedule.notes),
+    managed         = COALESCE(sqlc.narg(managed)::boolean, ingest_schedule.managed),
+    updated_at      = now();
