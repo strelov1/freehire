@@ -335,8 +335,9 @@ func (d jobleadsDetail) description() string {
 // one registry build, so every board's search pages and detail fan-out compete for the same
 // token bucket (both paths hit the same Cloudflare-scored edge). The rate is deliberately
 // gentle: the true window budget is unknown — under-shooting only lengthens a run, while
-// over-shooting re-enters the bot-scoring that 403s the whole edge; ~40 requests at 2/s
-// were served clean in the spike and the pace stays under that.
+// over-shooting re-enters the bot-scoring that 403s/429s the edge (~2 req/s served clean;
+// a burstier ~20 req/s verification run 429'd the detail endpoint on the spot, measured
+// 2026-09-04). The pace stays on the clean side of that.
 func pacedJobleadsPoster(c jobleadsHTTP) jobleadsHTTP {
 	return pacedJobleads{
 		c:   c,
