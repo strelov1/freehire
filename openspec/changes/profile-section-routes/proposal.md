@@ -54,4 +54,12 @@ leaf route).
   the Profile section only; a new `+page.ts` on the index route for `?tab=`
   compatibility; the four existing `contacts|experience|screening|skills
   /+page.ts` redirect stubs are deleted.
+- `cv-readiness/+page.svelte` (an existing, unlisted route under
+  `/my/profile/` that is deliberately not one of the 8 sections) is renamed to
+  `cv-readiness/+page@my.svelte` — SvelteKit nests every page inside every
+  ancestor layout by default, so without this reset the new
+  `my/profile/+layout.svelte` would wrap it too (its tab strip and its "no
+  profile yet" gate both being wrong there). The `@my` reset keeps it exactly
+  where it was, inside `my/+layout.svelte` only — same mechanism already used
+  by `my/assistant/+layout@.svelte`.
 - No backend/API changes, no migration, no other route or package affected.

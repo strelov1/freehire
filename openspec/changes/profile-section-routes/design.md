@@ -80,6 +80,15 @@ that convention, not a new one.
   (`/my/profile/experience` etc.) already 308-redirects today] → after this
   change those same URLs render directly instead of redirecting, which is
   strictly less indirection, not a break.
+- [Adding `my/profile/+layout.svelte` implicitly nests every existing page
+  under `my/profile/**` inside it, including `cv-readiness/+page.svelte` — an
+  existing, unlisted route that is deliberately not one of the 8 sections and
+  must keep rendering only inside `my/+layout.svelte`. Found in code review,
+  not caught by `svelte-check` or the manual QA pass since neither exercises
+  SvelteKit's layout-inheritance rules.] → renamed to
+  `cv-readiness/+page@my.svelte`, the same `@`-reset mechanism
+  `my/assistant/+layout@.svelte` already uses, verified live (with a profile)
+  to no longer show the section tab strip.
 
 ## Migration Plan
 

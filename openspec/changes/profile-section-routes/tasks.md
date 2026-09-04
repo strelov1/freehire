@@ -19,6 +19,7 @@
 ## 3. Compatibility
 
 - [x] 3.1 Add `web/src/routes/my/profile/+page.ts` with a `load({ url })` that 308-redirects `?tab=<id>` (for the 7 known non-default ids) to `/my/profile/<id>`.
+- [x] 3.2 (found in code review) Rename `web/src/routes/my/profile/cv-readiness/+page.svelte` to `+page@my.svelte` — the new `+layout.svelte` would otherwise silently wrap this pre-existing, deliberately-unlisted route too (SvelteKit nests every page inside every ancestor layout by default). Verified live: the tab strip no longer appears on `/my/profile/cv-readiness`.
 
 ## 4. Verification
 
