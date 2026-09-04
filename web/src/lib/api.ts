@@ -923,6 +923,16 @@ export function createApi(
     return jobInteraction(slug, 'save', 'DELETE');
   }
 
+  /** Start an auto-apply attempt for the current user and this job
+   *  (openspec/changes/auto-apply-submit-trigger). Idempotent for a live, undecided
+   *  attempt; rejects with an ApiError (402 not PRO, 409 no base CV or already declined,
+   *  400 not a Greenhouse posting) whose `message` is the caller-facing reason. */
+  function autoApplyJob(slug: string): Promise<{ status: string }> {
+    return requestData<{ status: string }>(`/api/v1/jobs/${encodeURIComponent(slug)}/auto-apply`, {
+      method: 'POST',
+    });
+  }
+
   /** Dismiss (swipe away) a job in the swipe deck. Keeps it out of the deck only;
    *  the job stays visible in the normal list and search. */
   function dismissJob(slug: string): Promise<UserJob> {
@@ -2241,6 +2251,7 @@ export function createApi(
     markJobApplied,
     saveJob,
     unsaveJob,
+    autoApplyJob,
     dismissJob,
     undismissJob,
     voteJob,

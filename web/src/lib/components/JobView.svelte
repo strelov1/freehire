@@ -3,8 +3,10 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
-  import { api } from '$lib/api';
+  import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { autoApplyButtonState } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
@@ -268,6 +270,35 @@
       // Leave the current state; the user can retry.
     }
   }
+
+  // Auto-apply (openspec/changes/auto-apply-submit-trigger): PRO-only, Greenhouse-only.
+  // Eligibility (plan tier, base CV) is not known client-side — the button stays
+  // clickable and the backend's own 402/409 message is what tells an ineligible
+  // caller why, surfaced below rather than pre-empted here.
+  let autoApplyOverrideStatus = $state<string | null>(null);
+  let autoApplySubmitting = $state(false);
+  let autoApplyError = $state<string | null>(null);
+  const autoApplyState = $derived(
+    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status),
+  );
+
+  async function onAutoApplyClick() {
+    if (!isAuthenticated()) {
+      openAuthDialog('login');
+      return;
+    }
+    autoApplyError = null;
+    autoApplySubmitting = true;
+    try {
+      await api.autoApplyJob(job.public_slug);
+      autoApplyOverrideStatus = 'queued';
+      track('job_auto_apply', { slug: job.public_slug });
+    } catch (err) {
+      autoApplyError = err instanceof ApiError ? err.message : 'Something went wrong — please try again.';
+    } finally {
+      autoApplySubmitting = false;
+    }
+  }
 </script>
 
 <!-- The apply CTA renders twice: inline in the header on desktop, and in the
@@ -289,6 +320,33 @@
   >
     Apply <ArrowRight class="size-4" />
   </Button>
+{/snippet}
+
+<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside Apply, not a
+     replacement for it — auto-apply still goes through the same ATS in the end, this
+     button only starts the tailor-then-review sequence. Absent entirely off
+     autoApplyButtonState's `hidden` (any source but Greenhouse today). `idle` is the only
+     clickable state; `queued`/`declined` render disabled (the `disabled:opacity-50` the
+     button variant already carries) so a caller who already has an attempt sees that at a
+     glance rather than clicking into a 200 or a 409 that changes nothing. -->
+{#snippet autoApplyCta(className: string)}
+  {#if autoApplyState.kind !== 'hidden'}
+    <Button
+      variant="secondary"
+      size="md"
+      disabled={autoApplyState.kind !== 'idle' || autoApplySubmitting}
+      onclick={onAutoApplyClick}
+      class={className}
+    >
+      {#if autoApplyState.kind === 'queued'}
+        Auto-apply queued
+      {:else if autoApplyState.kind === 'declined'}
+        Auto-apply declined
+      {:else}
+        Auto-apply
+      {/if}
+    </Button>
+  {/if}
 {/snippet}
 
 <!-- Save, a quiet peer of the apply CTA rather than the full-width button it was in the
@@ -350,6 +408,7 @@
     </a>
     {@render reportButton()}
     {@render saveButton()}
+    {@render autoApplyCta('ml-1 hidden shrink-0 lg:inline-flex')}
     {@render applyCta('md', 'ml-1 hidden shrink-0 lg:inline-flex')}
   </div>
 {/snippet}
@@ -719,6 +778,20 @@
           View on your board →
         </a>
       </div>
+    {/if}
+
+    {#if autoApplyState.kind === 'queued' && autoApplyOverrideStatus === 'queued'}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
+      >
+        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored résumé — you'll get
+          a notification to review it.
+        </span>
+      </div>
+    {/if}
+    {#if autoApplyError}
+      <p class="text-sm text-destructive">{autoApplyError}</p>
     {/if}
 
     {#if showSignInPrompt}

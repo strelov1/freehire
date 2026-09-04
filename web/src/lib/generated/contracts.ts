@@ -292,6 +292,15 @@ export interface Job {
    * where FromRow leaves it false).
    */
   referral_available?: boolean;
+  /**
+   * AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
+   * live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
+   * — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
+   * detail handler overlays it, keyed by (caller_id, job_id), never joined into the
+   * primary job query every anonymous reader also pays for.
+   * See openspec/changes/auto-apply-submit-trigger.
+   */
+  auto_apply_status?: string;
 }
 
 //////////

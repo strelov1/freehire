@@ -58,28 +58,42 @@
 
 ## 5. Frontend: the Auto-apply button
 
-- [ ] 5.1 Add `auto_apply_status` to the frontend `Job` type (`web/src/lib/types.ts`).
-- [ ] 5.2 A small pure function deciding the button's rendered state from
-      `(job.source, job.auto_apply_status)` — kept out of the component so it is testable
-      without mounting Svelte, mirroring `notificationTarget.ts`'s own convention. Cover:
-      not-greenhouse (button absent), no status (idle/enabled), `queued` (disabled,
-      "queued" label), `declined` (disabled, "declined" label).
-- [ ] 5.3 Wire the button into `JobView.svelte` beside the existing "Apply" link, calling
-      `POST /api/v1/jobs/:slug/auto-apply` on click, showing a toast on success
-      ("we're preparing a tailored resume, we'll let you know when it's ready to review")
-      and flipping to the queued state; a refusal (402/409) surfaces its own message
-      rather than the generic queued toast.
-- [ ] 5.4 Manual: click through in a running dev server against a seeded Greenhouse job —
-      PRO account (queues, toast, state persists on reload), free account (refused, no
-      button state change), an already-declined entry (button rendered disabled on load).
+- [x] 5.1 Add `auto_apply_status` to the frontend `Job` type — turned out to need no manual
+      edit: `web/src/lib/generated/contracts.ts` is generated from the Go struct
+      (`make gen-contracts`), and regenerating after jobview.go's own field picked it up
+      automatically, comment and all.
+- [x] 5.2 A small pure function (`web/src/lib/autoApplyButton.ts`,
+      `autoApplyButtonState(source, status)`) deciding the button's rendered state — kept
+      out of the component so it is testable without mounting Svelte, mirroring
+      `notificationTarget.ts`'s own convention. Covers: not-greenhouse (hidden), no status
+      (idle), `queued` (disabled), `declined` (disabled).
+- [x] 5.3 Wired the button into `JobView.svelte` beside the existing "Apply" link, calling
+      `POST /api/v1/jobs/:slug/auto-apply` on click. Used the existing inline-banner
+      pattern `justApplied` already establishes on this same page, not a toast — this
+      repo's job page has no toast primitive, and matching the established idiom beat
+      introducing one. Idle → click → disabled + a success banner + flips to the queued
+      state locally; a refusal surfaces the backend's own error message as inline text
+      rather than the success banner.
+- [x] 5.4 Manual, done locally this session (rebuilt `app`+`web` images, real Postgres,
+      real cookies for a PRO and a free-tier user): confirmed via direct API calls (with
+      cookie) that `auto_apply_status` is correct (`declined`/absent) once authenticated,
+      and confirmed the click→queue backend path end-to-end (already covered by 3.4's own
+      integration test). **Found a real, pre-existing limitation, not a defect in this
+      change**: `web/src/routes/jobs/[slug]/+page.server.ts` calls `serverApi(fetch)` with
+      no cookie, so the job page's SERVER render is always anonymous — `auto_apply_status`
+      (like the already-shipped `my_vote`, same call site, same omission) is absent on a
+      first load/reload and only reflects the caller's own state after a client-side
+      interaction on that same page view, not after a reload. Confirmed with the user this
+      session: leave as-is, matching `my_vote`'s own existing behavior — not something this
+      change should fix on its own.
 
 ## 6. Verification
 
-- [ ] 6.1 `gofmt -l .` clean on every touched Go file; `pnpm lint`/`pnpm check` clean on
-      every touched frontend file (per this repo's own web conventions).
-- [ ] 6.2 `go vet ./...` and `go test ./...` green.
-- [ ] 6.3 `go vet -tags=integration ./...` green.
-- [ ] 6.4 `go test -tags=integration ./...` green — this change adds a new route and a new
-      write path, not just a signature.
-- [ ] 6.5 `pnpm --filter web test` (or this repo's equivalent) green for the new pure
-      state-decision function.
+- [x] 6.1 `gofmt -l .` clean; `pnpm lint`/`pnpm check` clean on every touched frontend file
+      (2 pre-existing `no-shadow` warnings remain in `JobView.svelte`, unrelated to this
+      change's own code — confirmed by line number against the pre-change file).
+- [x] 6.2 `go vet ./...` and `go test ./...` green.
+- [x] 6.3 `go vet -tags=integration ./...` green.
+- [x] 6.4 `go test -tags=integration ./...` green — 195/195 packages, whole module.
+- [x] 6.5 `pnpm test` (web) green — 1383/1383 tests, 121/121 files, including the new
+      `autoApplyButton.test.ts`.
