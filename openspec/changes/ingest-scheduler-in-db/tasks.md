@@ -163,6 +163,10 @@
 
 ## 8. Cutover — OPERATOR STEPS, sequenced on prod
 
+The commands, the order, and the rollback for each step are written out in
+[runbook.md](runbook.md). It touches a live fleet of 238 providers over several days, and
+the order matters more than any single command.
+
 - [ ] 8.1 Deploy §1-§7 with shadow mode on. Confirm the unit runs, reports, and launches
       nothing.
 - [ ] 8.2 Seed the overrides from `gen-ingest-timers.sh`'s constants, each with its `notes`:
