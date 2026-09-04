@@ -6,7 +6,6 @@
   import AuthDialog from './AuthDialog.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
-  import NotificationBell from './NotificationBell.svelte';
   import BrandMark from './BrandMark.svelte';
   import { safeRedirect } from '$lib/safeRedirect';
   import { isFullBleedRoute } from '$lib/shellLayout';
@@ -134,8 +133,9 @@
       {/if}
     </div>
 
+    <!-- One cluster, not two: the bell lives inside HeaderMenu beside the profile it
+         notifies about, so this slot is just the menu. -->
     <div class={['flex shrink-0 items-center gap-1', fullBleed && 'flex-1 basis-0 justify-end']}>
-      <NotificationBell />
       <HeaderMenu />
     </div>
   </div>

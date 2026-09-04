@@ -29,6 +29,7 @@
   import { cn } from '$lib/ui';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
+  import NotificationBell from './NotificationBell.svelte';
   import { ProviderIcon } from '$lib/ui';
   import { NAV } from '$lib/siteNav';
 
@@ -189,9 +190,11 @@
 {/snippet}
 
 <div class="relative flex items-center gap-1" bind:this={root}>
-  <!-- Desktop bar order: GitHub stars, Discord, then profile/sign-in (second to
-       last), then the menu button pinned to the far right. On mobile all of these
-       collapse into the drawer (below), leaving just the menu button here. -->
+  <!-- Desktop bar order: GitHub stars, Discord, then the visitor's OWN two controls —
+       the bell and profile/sign-in — then the menu button pinned to the far right. The
+       bell used to sit ahead of the project's links, which put two icons about the site
+       between it and the account it notifies about. On mobile all of these collapse
+       into the drawer (below), leaving just the menu button here. -->
   <GithubStars class="hidden sm:inline-flex" />
 
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
@@ -204,6 +207,8 @@
   >
     <ProviderIcon provider="discord" />
   </a>
+
+  <NotificationBell />
 
   <!-- Desktop only: profile (signed in) or sign-in (signed out) sits before the
        menu button. -->
