@@ -373,11 +373,11 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 	}
 }
 
-// TestParse_ITRolesTheTableDidNotName pins the IT roles that reached a category
-// only through one of the table's bare fall-throughs — "analyst" reads every
-// remaining analyst as data_analytics — so they resolved confidently WRONG rather
-// than not at all. Each now names its own discipline.
-func TestParse_ITRolesTheTableDidNotName(t *testing.T) {
+// TestParse_UnnamedITRoles pins the IT roles that reached a category only through
+// one of the table's bare fall-throughs — "analyst" reads every remaining analyst as
+// data_analytics — so they resolved confidently WRONG rather than not at all. Each
+// now names its own discipline.
+func TestParse_UnnamedITRoles(t *testing.T) {
 	cases := []struct{ title, wantCategory string }{
 		{"Lead Service Desk Analyst", "support"},
 		{"IT Service Desk Specialist Level II", "support"},
@@ -388,6 +388,27 @@ func TestParse_ITRolesTheTableDidNotName(t *testing.T) {
 		// Unchanged: the bare nouns keep falling through as before.
 		{"Business Analyst", "business_analysis"},
 		{"Infrastructure Project Manager", "project_management"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
+// "IT Infrastructure" is a domain noun, so it must resolve only after every role
+// noun. These are the titles that pin the placement: move the entry back up into the
+// devops block and all three become devops, which is wrong for all three.
+func TestParse_ITInfrastructureYieldsToTheRoleNoun(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		{"IT Infrastructure Security Engineer", "security"},
+		{"IT Infrastructure Project Manager", "project_management"},
+		// Not sales: "Cyber Security" names a discipline outright and the security
+		// block outranks the sales one. The pin here is only that it is not devops.
+		{"Business Development Executive (IT Infrastructure/Cyber Security)", "security"},
+		// What is left once no role noun claims the title is the estate itself.
+		{"Head of IT Infrastructure", "devops"},
+		{"IT Infrastructure Manager", "devops"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.wantCategory {

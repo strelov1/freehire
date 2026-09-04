@@ -62,6 +62,14 @@ func TestIsTech(t *testing.T) {
 		{"customer support analyst", "Customer Support Analyst", false},
 		{"support specialist", "Support Specialist", false},
 		{"front desk", "Front Desk Agent", false},
+		// #2421 asked for these two as negatives. Note what the assertion can and
+		// cannot say: both resolve a category that IS in vocab.TechCategories
+		// (project_management, business_analysis), so both are already technical
+		// EVIDENCE and were before this list existed. All that is pinned here is that
+		// the title detector adds no claim of its own — which is why the IT-prefixed
+		// forms the issue proposed would have changed no outcome.
+		{"project manager", "Project Manager", false},
+		{"business analyst", "Business Analyst", false},
 		{"empty", "", false},
 	}
 	for _, tt := range tests {

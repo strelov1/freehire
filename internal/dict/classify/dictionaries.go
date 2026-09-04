@@ -209,11 +209,9 @@ var categoryTable = []aliasEntry{
 	// "platform engineer" substring, so it needs its own entry.
 	{"platform engineering", "devops"},
 	{"infrastructure engineer", "devops"},
-	// The IT-anchored form of a noun this file otherwise refuses: bare
-	// "infrastructure" names civil, rail, energy and telecom work, but "IT
-	// Infrastructure" states the estate outright ("IT Infrastructure Manager",
-	// "IT Infrastructure & Projects Specialist").
-	{"it infrastructure", "devops"},
+	// "it infrastructure" belongs to this category but is NOT listed here — it names
+	// an estate, not a role, so it resolves with the other domain nouns down beside
+	// the bare "manager"/"analyst" fall-throughs. Search for it there.
 	{"cloud engineer", "devops"},
 	{"system administrator", "devops"},
 	// The plural is the far more common surface form in prod titles ("Systems
@@ -558,6 +556,19 @@ var categoryTable = []aliasEntry{
 	{"проект-менеджер", "project_management"},
 	{"скрам-мастер", "project_management"},
 	{"скрам мастер", "project_management"},
+	// "IT Infrastructure" names an ESTATE, not a role, and its slot is the whole
+	// ruling. It sits BELOW the technical role nouns, so the security engineer and the
+	// project manager who happen to work on that estate keep their own discipline
+	// ("IT Infrastructure Security Engineer", "IT Infrastructure Project Manager") —
+	// in the devops block it outran both. It sits ABOVE the business functions, so
+	// what is left over stays with the estate rather than drifting into back-office
+	// ("IT Infrastructure & Operations Manager" is devops, not operations; "IT
+	// Infrastructure Asset and Contract Manager" is devops, not legal). The residue
+	// this costs is the handful of genuine sales titles on the estate ("Pre Sales
+	// Specialist IT Infrastructure"), measured at ~4 against ~13 saved. Bare
+	// "infrastructure" gets no entry at all: it names civil, rail, energy and telecom
+	// work.
+	{"it infrastructure", "devops"},
 	{"engineering manager", "management"},
 	{"team manager", "management"},
 	{"marketing", "marketing"},
@@ -937,8 +948,13 @@ var categoryTable = []aliasEntry{
 	// "Folyamatfejlesztő", "Termékfejlesztő szakértő", "Üzletfejlesztési menedzser",
 	// "Működésfejlesztési szakértő", "Képzés-fejlesztési gyakornok") alongside the
 	// software roles. Hungarian also writes closed compounds where English writes two
-	// words, so a compound never contains its spaced twin on a word boundary and both
-	// spellings are listed.
+	// words, so a compound never contains its spaced twin on a word boundary. Where
+	// prod showed both spellings in use, both are listed; the language is
+	// agglutinative and an exhaustive sweep of its plurals, hyphenations and case
+	// endings is future work, not done here — the same stance this file takes on
+	// gendered forms above. That is why "java fejlesztők" and "odoo-fejlesztő" have
+	// entries and the other twelve entries' plurals do not: those are the surface
+	// forms the catalogue actually carries.
 	{"szoftverfejlesztő", "software_engineering"},
 	{"szoftver fejlesztő", "software_engineering"},
 	{"szoftvermérnök", "software_engineering"},

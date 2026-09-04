@@ -55,12 +55,14 @@ analyst`) resolves the `support` category — a `vocab.NonTechCategories` member
 *also* a `techTitleTerms` entry, so `jobderive.deriveIsTech` reads it as `is_tech = true`.
 That is deliberate, not drift: the category is right about the FUNCTION (reactive,
 ticket-driven, alongside customer service) and wrong about the CRAFT, and only the title
-list can say the second thing. Without the entry the enrichment gate skips ~6.6k open
-postings that are plainly IT work.
+list can say the second thing. `tech.go` carries the argument and the measurements
+beside the terms; do not restate them here, or the two copies will drift.
 
-The bare nouns stay out of both lists. `support` alone is the whole customer-service
-population (226k open postings at the time of writing); only "desk" and the IT-anchored
-analyst form are specific enough to carry the claim.
+**The exception is the DESK, not IT support at large.** `IT Support Specialist` and
+`Desktop Support Technician` are equally IT and stay `is_tech = false`, because
+extending the claim to them is a separate, larger decision (~5.5k more open postings
+into the enrichment gate) that has not been taken. Read the boundary as "not yet",
+not as a ruling that those roles are non-technical.
 
 ## Serving: dict-only
 

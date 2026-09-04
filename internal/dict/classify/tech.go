@@ -17,9 +17,12 @@ import (
 // governing rule is the "engineer"/"developer" trap: prod titles show bare
 // "engineer" is dominated by NON-software roles (mechanical, manufacturing,
 // civil, drainage, optical, project) and bare "developer" also names non-tech
-// roles (business/real-estate developer). So every term here is SOFTWARE-ANCHORED
-// — no bare "engineer"/"developer"/"analyst"/"architect"/"administrator" — and a
-// non-software "…Engineer" stays `unknown` rather than being mislabelled tech.
+// roles (business/real-estate developer). So every term here is ANCHORED to the
+// discipline — no bare "engineer"/"developer"/"analyst"/"architect"/"administrator"
+// — and a non-software "…Engineer" stays `unknown` rather than being mislabelled
+// tech. The anchor is usually the word "software" or a language name; the IT
+// service desk below is the one family anchored on its own noun instead, and it
+// carries the argument for that beside the terms.
 var techTitleTerms = []string{
 	// Software engineer forms (never bare "engineer")
 	"software engineer", "software development engineer", "devops engineer",
