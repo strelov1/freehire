@@ -60,15 +60,16 @@
 
 ## 3. `PostAutoApplyReview`: publish the decision event
 
-- [ ] 3.1 RED: recording a decision publishes `auto-apply/review.decided` (`queueId`,
+- [x] 3.1 RED: recording a decision publishes `auto-apply/review.decided` (`queueId`,
       `decision`) to the configured Inngest event API via a plain `http.Client` (see
       design.md's own Decisions on why not `safehttp`).
-- [ ] 3.2 RED: a publish failure is logged and does NOT change the endpoint's existing
+- [x] 3.2 RED: a publish failure is logged and does NOT change the endpoint's existing
       response (still 200 with the decision, per `auto-apply-tailored-resume`'s own
       contract) — construct the fake event publisher to always error and assert the response
       is unaffected.
-- [ ] 3.3 GREEN: implement, reusing the existing `RecordNotification`-style
-      "best-effort, log and continue" shape already in this same handler file.
+- [x] 3.3 GREEN: implement, reusing the existing `RecordNotification`-style
+      "best-effort, log and continue" shape already in this same handler file
+      (`internal/api/handler/auto_apply_review_publish.go`, `assistantHandlers.events`).
 
 ## 4. Config and deploy
 

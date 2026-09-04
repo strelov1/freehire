@@ -105,6 +105,12 @@ type assistantHandlers struct {
 	// convention: the mint endpoint answers 501 and the interview session view offers
 	// no voice mode, rather than the composer discovering the absence on first use.
 	realtime realtimeMinter
+
+	// events best-effort publishes auto-apply/review.decided so a paused
+	// cmd/auto-apply-orchestrate run resumes (openspec/changes/auto-apply-inngest-orchestration).
+	// Nil is the unconfigured deployment: PostAutoApplyReview then publishes nothing,
+	// exactly as it did before this existed.
+	events autoApplyEventPublisher
 }
 
 // assistantModels names the model client the assistant runs on and the resolver that

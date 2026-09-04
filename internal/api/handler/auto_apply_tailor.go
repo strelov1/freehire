@@ -296,5 +296,7 @@ func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
 
+	h.publishReviewDecided(c.Context(), queueID, in.Decision)
+
 	return c.JSON(fiber.Map{"data": fiber.Map{"decision": in.Decision}})
 }

@@ -338,6 +338,8 @@ func main() {
 		ExtensionRedirectAllowlist: cfg.ExtensionRedirectAllowlist,
 
 		AutoApplyOrchestratorSecret: cfg.AutoApplyOrchestratorSecret,
+		InngestEventAPIURL:          cfg.InngestEventAPIURL,
+		InngestEventKey:             cfg.InngestEventKey,
 	})
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.

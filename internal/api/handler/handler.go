@@ -355,6 +355,12 @@ type Config struct {
 	// path entirely: the two routes then behave exactly as they did under plain
 	// cookie/API-key auth, with no fallback.
 	AutoApplyOrchestratorSecret string
+	// InngestEventAPIURL and InngestEventKey point PostAutoApplyReview's best-effort
+	// event publish (auto-apply/review.decided) at the self-hosted Inngest server. Either
+	// empty disables the publish entirely — the review decision itself is still recorded,
+	// exactly as it is today.
+	InngestEventAPIURL string
+	InngestEventKey    string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -590,6 +596,9 @@ func Register(app *fiber.App, cfg Config) {
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
 	if cfg.Realtime != nil {
 		assistantH.realtime = cfg.Realtime
+	}
+	if p := newInngestEventPublisher(cfg.InngestEventAPIURL, cfg.InngestEventKey); p != nil {
+		assistantH.events = p
 	}
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
