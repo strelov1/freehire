@@ -30,6 +30,19 @@
   }
 }
 
+/* Scroll a strip without the browser drawing a rail across it. The tracking board's
+   columns, a tab bar, a row of cards: each has to stay scrollable on a viewport too
+   narrow to hold it, but a scrollbar set to "always show" sits ON the content and
+   covers the bottom of whatever it overlays. This hides the rail only — the element
+   still scrolls, so it goes alongside an `overflow-*`, never instead of one. The two
+   declarations are the same rule for two engines, not a fallback pair. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Shiki dual-theme code highlighting for the API docs. One SSR render emits both
    palettes as CSS vars; the light values apply by default and the dark values
    swap in under the .dark theme class. The block chrome (padding, scroll) is

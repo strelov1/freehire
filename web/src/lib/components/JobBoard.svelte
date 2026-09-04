@@ -378,7 +378,7 @@
   {#if view === 'list'}
     <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
   {:else}
-    <div class="flex gap-3 overflow-x-auto pb-2">
+    <div class="no-scrollbar flex gap-3 overflow-x-auto pb-2">
       {#each BOARD_COLUMNS as col (col.id)}
         <BoardColumn
           id={col.id}

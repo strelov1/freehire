@@ -116,7 +116,10 @@
       {/snippet}
 
       <!-- Below lg: a horizontal, scrollable strip above the content. -->
-      <nav aria-label={s.shell.accountSections} class="mb-4 flex gap-1 overflow-x-auto lg:hidden">
+      <nav
+        aria-label={s.shell.accountSections}
+        class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
+      >
         {@render navLinks('shrink-0 whitespace-nowrap')}
       </nav>
 

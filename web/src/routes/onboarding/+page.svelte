@@ -588,15 +588,3 @@
     </div>
   </div>
 {/if}
-
-<style>
-  /* Step content scrolls without a visible scrollbar (same pattern as JobDrawer's tab
-     rail) — the full-screen steps read as a page, not a scroll pane with a rail. */
-  .no-scrollbar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-</style>
