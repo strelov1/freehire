@@ -4510,9 +4510,10 @@ type Querier interface {
 	UpsertCalendarGrant(ctx context.Context, arg UpsertCalendarGrantParams) error
 	// Create-or-replace the caller's one survey record. Full-replace, mirroring
 	// UpsertScreeningAnswers: the service reads the current row, merges caller-provided fields
-	// over it (omitted fields keep their stored value, explicit nulls clear), and writes the
-	// merged result back whole — so the SQL layer stays a plain upsert and the partial-update
-	// semantics live in Go, where they are unit-testable without a database.
+	// over it (an omitted field keeps its stored value; there is deliberately no operation that
+	// returns a stated field to unstated — see survey.Merge), and writes the merged result back
+	// whole. So the SQL layer stays a plain upsert and the partial-update semantics live in Go,
+	// where they are unit-testable without a database.
 	UpsertCandidateSurvey(ctx context.Context, arg UpsertCandidateSurveyParams) (CandidateSurvey, error)
 	// Company feedback: one signed-in user's star rating + category + text per
 	// (company, category) — a user may hold one review per category per company,

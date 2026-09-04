@@ -60,14 +60,21 @@ func (s *Store) Get(ctx context.Context, userID int64) (Responses, error) {
 // the first update is also a create.
 func (s *Store) Update(ctx context.Context, userID int64, update Responses) (Responses, error) {
 	update.Sanitize()
-	if err := update.Validate(); err != nil {
-		return Responses{}, &ValidationError{err: err}
-	}
 
 	existing, err := s.repo.Get(ctx, userID)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return Responses{}, err
 	}
 
-	return s.repo.Upsert(ctx, userID, Merge(existing, update))
+	// Validate the MERGED record, not the patch. Validating the patch alone would break the
+	// contract one field above it: the note's gate reads the challenge, so a caller who has
+	// already stored `other` and now sends only the note — completing an answer, not
+	// contradicting one — would be rejected for carrying no challenge, even though "a field
+	// the body omits keeps its stored value" says it does not have to.
+	merged := Merge(existing, update)
+	if err := merged.Validate(); err != nil {
+		return Responses{}, &ValidationError{err: err}
+	}
+
+	return s.repo.Upsert(ctx, userID, merged)
 }

@@ -9,7 +9,8 @@ const nothing: OnboardingAnswered = {
   hasTotalYears: false,
   hasSkills: false,
   hasLocation: false,
-  hasMoney: false,
+  hasDesiredSalary: false,
+  hasCurrentIncome: false,
   hasStage: false,
   hasChallenge: false,
 };
@@ -44,6 +45,16 @@ describe('plannedSteps', () => {
     expect(plannedSteps({ ...nothing, hasSpecializations: true, hasProfileLinks: true })).not.toContain('confirm');
   });
 
+  it('keeps asking the money step until BOTH its figures are stored', () => {
+    // Same rule as the confirm step, for the same reason: the screen carries two
+    // independent questions (desired salary in the screening answers, current income in the
+    // survey), and any account that ever set a desired salary through /me/screening-answers
+    // would otherwise never once be asked what it earns today.
+    expect(plannedSteps({ ...nothing, hasDesiredSalary: true })).toContain('money');
+    expect(plannedSteps({ ...nothing, hasCurrentIncome: true })).toContain('money');
+    expect(plannedSteps({ ...nothing, hasDesiredSalary: true, hasCurrentIncome: true })).not.toContain('money');
+  });
+
   it('leaves an account that has answered everything with no steps at all', () => {
     const everything: OnboardingAnswered = {
       hasResume: true,
@@ -52,7 +63,8 @@ describe('plannedSteps', () => {
       hasTotalYears: true,
       hasSkills: true,
       hasLocation: true,
-      hasMoney: true,
+      hasDesiredSalary: true,
+      hasCurrentIncome: true,
       hasStage: true,
       hasChallenge: true,
     };

@@ -93,6 +93,39 @@ func TestUpdateRejectsInvalidInputAsAValidationError(t *testing.T) {
 	}
 }
 
+func TestUpdateValidatesTheMergedRecordNotJustThePatch(t *testing.T) {
+	// "A field the body omits keeps its stored value" has to hold for the note's gate too.
+	// A caller who already stored `other` and now sends only the note is completing an
+	// answer, not contradicting one — validating the patch alone would reject it because
+	// the patch carries no challenge.
+	repo := &fakeRepo{stored: Responses{BiggestChallenge: s("other")}}
+	store := New(repo)
+
+	got, err := store.Update(context.Background(), 1, Responses{BiggestChallengeNote: s("visa paperwork")})
+	if err != nil {
+		t.Fatalf("Update() = %v, want nil", err)
+	}
+	if got.BiggestChallengeNote == nil || *got.BiggestChallengeNote != "visa paperwork" {
+		t.Errorf("note = %v, want it stored", got.BiggestChallengeNote)
+	}
+}
+
+func TestUpdateRejectsAPatchThatMakesTheMergedRecordInvalid(t *testing.T) {
+	// The mirror image: moving off `other` while a note is stored must not persist a record
+	// Validate would reject. Merge drops the stale note, so this is really a guard that the
+	// two agree.
+	repo := &fakeRepo{stored: Responses{BiggestChallenge: s("other"), BiggestChallengeNote: s("visa paperwork")}}
+	store := New(repo)
+
+	got, err := store.Update(context.Background(), 1, Responses{BiggestChallenge: s("english")})
+	if err != nil {
+		t.Fatalf("Update() = %v, want nil", err)
+	}
+	if got.BiggestChallengeNote != nil {
+		t.Errorf("note = %q, want it dropped with the challenge it belonged to", *got.BiggestChallengeNote)
+	}
+}
+
 func TestUpdateSanitizesBeforeValidating(t *testing.T) {
 	// " usd " is a valid currency the moment it is normalized, and rejecting it would be
 	// rejecting a value the wizard could plausibly send.

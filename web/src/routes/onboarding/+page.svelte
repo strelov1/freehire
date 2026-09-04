@@ -23,12 +23,13 @@
   import { completeOnboarding, isAuthenticated } from '$lib/auth.svelte';
   import { onboardingGate } from '$lib/onboardingGate.svelte';
   import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered, type StepKind } from '$lib/onboardingSteps';
-  import { mergeProfileLinks, splitProfileLinks, type ProfileLinks } from '$lib/profileLinks';
+  import { persistStep, type SaveDeps, type WizardAnswers } from '$lib/onboardingSave';
+  import { splitProfileLinks, type ProfileLinks } from '$lib/profileLinks';
   import { profileStore } from '$lib/profile.svelte';
   import { safeRedirect } from '$lib/safeRedirect';
   import { signinUrl } from '$lib/signin';
   import { focusTrap } from '$lib/actions/focusTrap';
-  import type { DerivedLocation, LocationPreferences } from '$lib/types';
+  import type { CandidateContacts, DerivedLocation, LocationPreferences } from '$lib/types';
   import type { MergedFacets } from '$lib/onboardingImport';
   import ChallengeStep from '$lib/components/onboarding/ChallengeStep.svelte';
   import ConfirmStep from '$lib/components/onboarding/ConfirmStep.svelte';
@@ -71,6 +72,9 @@
   let location = $state<LocationPreferences | null>(null);
   let links = $state<ProfileLinks>({ linkedin: '', github: '', other: [] });
   let linksPrefilled = $state(false);
+  // The account's whole owned résumé overlay, held because every write to it is a FULL
+  // REPLACE — see onboardingSave.ts's header. Kept current from each write's response.
+  let contacts = $state<CandidateContacts>({});
   let totalYears = $state<number | null>(null);
   let derivedTotalYears = $state<number | null>(null);
   let currentIncome = $state<number | null>(null);
@@ -109,6 +113,7 @@
       // Contacts are the candidate's own edits; the structured extract is what the CV said.
       // Prefer the former, fall back to the latter — the same precedence the résumé screens
       // use, so the wizard never shows a stale link beside a corrected one.
+      contacts = resume?.contacts ?? {};
       const storedLinks = resume?.contacts?.links ?? resume?.structured?.links ?? [];
       if (storedLinks.length > 0) {
         links = splitProfileLinks(storedLinks);
@@ -137,11 +142,16 @@
         hasTotalYears: totalYears !== null,
         hasSkills: skills.length > 0,
         hasLocation: location !== null,
-        hasMoney: desiredSalary !== null || currentIncome !== null,
+        hasDesiredSalary: desiredSalary !== null,
+        hasCurrentIncome: currentIncome !== null,
         hasStage: searchStage !== null,
         hasChallenge: challenge !== null,
       };
       steps = plannedSteps(answered);
+      // The plan replaces a provisional list of all eight steps, so the cursor has to go
+      // back to the start with it — a Skip pressed while the load was still in flight would
+      // otherwise leave it pointing past the end of the real plan, at nothing.
+      index = 0;
       loaded = true;
 
       // An account with nothing left to ask should not be shown a wizard with no steps in
@@ -163,91 +173,33 @@
   let saving = $state(false);
   let saveError = $state<string | null>(null);
 
-  /** Persist the step being left. Each writes to the store that owns its fact; a step whose
-   *  answer is still untouched writes nothing, so skipping is genuinely free.
-   *
-   *  Throws on failure. The caller keeps the candidate on the step rather than advancing
-   *  past an answer that was not stored — silently losing it is what the per-step save
-   *  exists to prevent. */
-  async function persist(kind: StepKind): Promise<void> {
-    switch (kind) {
-      case 'cv':
-        // Nothing of its own: the upload and the LinkedIn import both persist as they run.
-        return;
-      case 'confirm':
-        await saveProfile();
-        await saveLinks();
-        return;
-      case 'experience':
-        if (totalYears === null) return;
-        // total_years_set travels beside the value because 0 is a real answer ("less than a
-        // year") and the server cannot otherwise tell it from "never said".
-        await api.putResumeContacts({ total_years: totalYears, total_years_set: true });
-        return;
-      case 'skills':
-        await saveProfile();
-        return;
-      case 'location':
-        await saveProfile();
-        return;
-      case 'money': {
-        if (desiredSalary !== null) {
-          await api.updateScreeningAnswers({
-            desired_salary_amount: desiredSalary,
-            desired_salary_currency: moneyCurrency,
-            desired_salary_period: moneyPeriod,
-          });
-        }
-        if (currentIncome !== null) {
-          await api.updateSurvey({
-            current_income_amount: currentIncome,
-            current_income_currency: moneyCurrency,
-            current_income_period: moneyPeriod,
-          });
-        }
-        return;
-      }
-      case 'stage':
-        if (searchStage === null) return;
-        await api.updateSurvey({ job_search_stage: searchStage });
-        return;
-      case 'challenge': {
-        if (challenge === null) return;
-        // The note is accepted only alongside "other", and the server rejects any other
-        // pairing — so it is sent only when it belongs to the answer.
-        const note = challenge === 'other' ? challengeNote.trim() : '';
-        await api.updateSurvey({
-          biggest_challenge: challenge,
-          ...(note !== '' ? { biggest_challenge_note: note } : {}),
-        });
-        return;
-      }
-    }
-  }
+  // What the dispatch in onboardingSave.ts is handed. Assembled here rather than there so
+  // that module stays Svelte-free and its tests need no runes.
+  const wizardAnswers = $derived<WizardAnswers>({
+    specializations,
+    skills,
+    seniorities,
+    excludedSkills: profileStore.profile?.excluded_skills ?? [],
+    location,
+    links,
+    contacts,
+    totalYears,
+    derivedTotalYears,
+    currentIncome,
+    desiredSalary,
+    currency: moneyCurrency,
+    period: moneyPeriod,
+    stage: searchStage,
+    challenge,
+    challengeNote,
+  });
 
-  // The profile save endpoint requires a non-empty specialization AND skill set for the
-  // profile to exist at all, so a level-or-location-only save has nowhere to land. Skipped
-  // rather than failed: the candidate can still fill it in from /my/profile, and blocking
-  // the wizard on it would make an optional step mandatory.
-  async function saveProfile(): Promise<void> {
-    if (specializations.length === 0 || skills.length === 0) return;
-    await profileStore.save(
-      specializations,
-      skills,
-      seniorities,
-      profileStore.profile?.excluded_skills ?? [],
-      location,
-    );
-  }
-
-  // Writes the whole list back, named fields first and everything the classifier never
-  // recognised untouched — so a candidate who only edited their LinkedIn does not lose the
-  // personal site their CV listed.
-  async function saveLinks(): Promise<void> {
-    const merged = mergeProfileLinks(links);
-    if (merged.length === 0) return;
-    await api.putResumeContacts({ links: merged });
-  }
+  const saveDeps: SaveDeps = {
+    saveProfile: (spec, sk, sen, excl, loc) => profileStore.save(spec, sk, sen, excl, loc),
+    putResumeContacts: (c) => api.putResumeContacts(c),
+    updateScreeningAnswers: (p) => api.updateScreeningAnswers(p),
+    updateSurvey: (p) => api.updateSurvey(p),
+  };
 
   // True when Level and/or Location have a pick the profile save is about to drop, for the
   // reason saveProfile explains. Shown as a heads-up rather than a blocker — the
@@ -258,26 +210,60 @@
 
   /** Save the current step and move on. On the last one, finish. */
   async function advance() {
-    if (saving || currentKind === undefined) return;
+    if (saving || !loaded || currentKind === undefined) return;
+    const kind = currentKind;
     saving = true;
     saveError = null;
     try {
-      await persist(currentKind);
+      // The response IS the new stored overlay, so keeping it is what stops a later contacts
+      // write spreading something three screens stale — see onboardingSave.ts's header.
+      contacts = await persistStep(kind, wizardAnswers, saveDeps);
     } catch {
       saveError = "Couldn't save that just now. Try again, or skip this step.";
       saving = false;
       return;
     }
+    // A CV uploaded on the first step is parsed in the background, so what it yields is not
+    // readable until after the step is left. Re-reading here is what lets the experience and
+    // links steps open pre-filled for the account this whole wizard exists for — a brand new
+    // one, which had no résumé at all when the page first loaded.
+    if (kind === 'cv') await refreshFromResume();
     saving = false;
     if (isLast) await leave();
     else index += 1;
   }
 
   /** Move on WITHOUT saving. Skipping is a choice not to answer, so it must not persist a
-   *  slider's resting position as though the candidate had put it there. */
+   *  slider's resting position as though the candidate had put it there.
+   *
+   *  Guarded on `saving` for the same reason Continue is: without it, clicking Continue and
+   *  then Skip advances the index twice — once here and once when the save resolves — and
+   *  the step in between is never shown, never asked, never saved. */
   async function skip() {
+    if (saving || !loaded) return;
     if (isLast) await leave();
     else index += 1;
+  }
+
+  /** Re-read the résumé and take anything it now offers that the candidate has not answered
+   *  themselves. Best-effort and non-destructive: a value the candidate set always wins, and
+   *  a parse still in flight simply yields nothing rather than blocking the wizard. */
+  async function refreshFromResume() {
+    const resume = await api.getResume().catch(() => null);
+    if (!resume) return;
+    contacts = resume.contacts ?? contacts;
+    derivedTotalYears = resume.structured?.total_years ?? derivedTotalYears;
+    const storedLinks = resume.contacts?.links ?? resume.structured?.links ?? [];
+    if (storedLinks.length === 0) return;
+    const found = splitProfileLinks(storedLinks);
+    // Fill only the boxes the candidate has left empty, and keep every link we did not
+    // recognise so a round trip cannot lose one.
+    links = {
+      linkedin: links.linkedin || found.linkedin,
+      github: links.github || found.github,
+      other: [...new Set([...links.other, ...found.other])],
+    };
+    linksPrefilled = linksPrefilled || links.linkedin !== '' || links.github !== '';
   }
 
   function back() {
@@ -315,8 +301,20 @@
     linksPrefilled = true;
   }
 
+  /** Escape leaves the wizard for THIS VISIT only — it does not mark onboarding complete.
+   *
+   *  Deliberately weaker than the close button beside it. Escape is not always aimed at the
+   *  dialog: the skills typeahead and the specialization search both use it to dismiss their
+   *  own popups and do not stop it propagating, so a candidate closing a dropdown reaches
+   *  this handler. While completion was a per-visit flag that misfire cost them nothing —
+   *  they were asked again next time. Now that it is a permanent account fact, treating a
+   *  stray keypress as "I am done with onboarding forever" would end the wizard for good for
+   *  someone who never meant to leave it. */
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') void leave();
+    if (e.key !== 'Escape') return;
+    onboardingGate.dismiss();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- returnTo is a validated same-origin path (safeRedirect), not a typed route
+    void goto(returnTo);
   }
 </script>
 
@@ -344,7 +342,8 @@
         <button
           type="button"
           onclick={() => void skip()}
-          class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          disabled={saving || !loaded}
+          class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
         >
           Skip
         </button>

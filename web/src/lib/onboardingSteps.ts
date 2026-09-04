@@ -48,17 +48,21 @@ export interface OnboardingAnswered {
   hasTotalYears: boolean;
   hasSkills: boolean;
   hasLocation: boolean;
-  hasMoney: boolean;
+  /** The two money questions are tracked apart because they live in different stores and
+   *  are independently answerable — see the AND rule in stepIsUnanswered. */
+  hasDesiredSalary: boolean;
+  hasCurrentIncome: boolean;
   hasStage: boolean;
   hasChallenge: boolean;
 }
 
 /** Whether a given step still has something to ask.
  *
- *  `confirm` is the one step carrying two independent questions — specializations and the
- *  candidate's profile links — and it counts as answered only once BOTH are stored. Calling
- *  it done on the specializations alone is how an existing account would go from never
- *  having been asked for its LinkedIn to never being asked at all. */
+ *  Two steps carry two independent questions each, and both count as answered only once
+ *  BOTH are stored: `confirm` (specializations and profile links) and `money` (the desired
+ *  salary, which lives in the screening answers, and today's income, which lives in the
+ *  survey). Calling either done on one half is how an existing account goes from never
+ *  having been asked for its LinkedIn — or what it earns — to never being asked at all. */
 function stepIsUnanswered(step: StepKind, a: OnboardingAnswered): boolean {
   switch (step) {
     case 'cv':
@@ -72,7 +76,7 @@ function stepIsUnanswered(step: StepKind, a: OnboardingAnswered): boolean {
     case 'location':
       return !a.hasLocation;
     case 'money':
-      return !a.hasMoney;
+      return !a.hasDesiredSalary || !a.hasCurrentIncome;
     case 'stage':
       return !a.hasStage;
     case 'challenge':

@@ -8,9 +8,10 @@ WHERE user_id = $1;
 -- name: UpsertCandidateSurvey :one
 -- Create-or-replace the caller's one survey record. Full-replace, mirroring
 -- UpsertScreeningAnswers: the service reads the current row, merges caller-provided fields
--- over it (omitted fields keep their stored value, explicit nulls clear), and writes the
--- merged result back whole — so the SQL layer stays a plain upsert and the partial-update
--- semantics live in Go, where they are unit-testable without a database.
+-- over it (an omitted field keeps its stored value; there is deliberately no operation that
+-- returns a stated field to unstated — see survey.Merge), and writes the merged result back
+-- whole. So the SQL layer stays a plain upsert and the partial-update semantics live in Go,
+-- where they are unit-testable without a database.
 INSERT INTO candidate_survey (
     user_id, job_search_stage, biggest_challenge, biggest_challenge_note,
     current_income_amount, current_income_currency, current_income_period

@@ -430,6 +430,9 @@ func ownedEqual(a, b Owned) bool {
 		a.CertificationsSet != b.CertificationsSet || a.EducationSet != b.EducationSet {
 		return false
 	}
+	if a.TotalYears != b.TotalYears || a.TotalYearsSet != b.TotalYearsSet {
+		return false
+	}
 	return stringsEqual(a.Links, b.Links) && stringsEqual(a.Languages, b.Languages) &&
 		stringsEqual(a.Certifications, b.Certifications) && educationEqual(a.Education, b.Education)
 }
