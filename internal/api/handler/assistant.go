@@ -216,6 +216,11 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// /autopilot above.
 	api.Post("/me/auto-apply/:queueId/tailor", mw.autoApplyGate, h.PostAutoApplyTailor)
 	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, h.PostAutoApplyReview)
+
+	// The candidate-facing trigger for the sequence above (openspec/changes/
+	// auto-apply-submit-trigger) — cookie-only, never mw.key or mw.autoApplyGate: see
+	// auto_apply_enqueue.go's own doc comment for why.
+	api.Post("/jobs/:slug/auto-apply", mw.cookie, h.PostJobAutoApply)
 }
 
 // defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is

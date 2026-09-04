@@ -114,6 +114,30 @@ SET review_decision = 'approved',
     reviewed_at     = now()
 WHERE id = sqlc.arg(id) AND review_decision IS NULL;
 
+-- name: EnqueueAutoApply :one
+-- Creates the candidate-facing entry that starts the tailor-then-review sequence
+-- (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+-- existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
+-- double-click or a page reload racing this same request is expected, common traffic here,
+-- not a fault, and the constraint is the only thing that closes the window between a
+-- check and an insert. No row back means the handler's own INSERT lost the race (or the
+-- pair was already queued by an earlier request) — it re-reads via
+-- GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
+INSERT INTO auto_apply_queue (user_id, job_id)
+VALUES (sqlc.arg(user_id), sqlc.arg(job_id))
+ON CONFLICT (user_id, job_id) DO NOTHING
+RETURNING id;
+
+-- name: GetAutoApplyQueueEntryForJob :one
+-- The caller's own existing auto-apply entry for one job, if any — the conflict-read path
+-- for EnqueueAutoApply, and the read behind the job detail response's own auto-apply
+-- status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
+-- a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
+-- exists yet for this (user, job) pair.
+SELECT id, review_decision
+FROM auto_apply_queue
+WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
+
 -- name: DeclineAutoApplyReview :execrows
 -- Records a decline AND parks the entry in one statement — the same fields
 -- MarkAutoApplyBlocked sets (blocked_at, last_error), reusing that park vocabulary rather

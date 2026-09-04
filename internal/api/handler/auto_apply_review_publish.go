@@ -15,11 +15,13 @@ import (
 	"github.com/strelov1/freehire/internal/application/autoapplyorchestrate"
 )
 
-// autoApplyEventPublisher publishes the review-decision event that resumes a paused
-// auto-apply orchestrator run (internal/application/autoapplyorchestrate). Nil (the
-// assistantHandlers.events zero value) is the unconfigured deployment — see
-// publishReviewDecided, the only caller.
+// autoApplyEventPublisher publishes the two events that drive the durable orchestrator
+// run (internal/application/autoapplyorchestrate): PublishSubmit starts one
+// (openspec/changes/auto-apply-submit-trigger), PublishReviewDecided resumes one paused
+// awaiting the candidate's decision. Nil (the assistantHandlers.events zero value) is the
+// unconfigured deployment — see publishSubmit/publishReviewDecided, the only callers.
 type autoApplyEventPublisher interface {
+	PublishSubmit(ctx context.Context, queueID int64) error
 	PublishReviewDecided(ctx context.Context, queueID int64, decision string) error
 }
 
@@ -52,14 +54,23 @@ func newInngestEventPublisher(baseURL, eventKey string) *inngestEventPublisher {
 	}
 }
 
-func (p *inngestEventPublisher) PublishReviewDecided(ctx context.Context, queueID int64, decision string) error {
-	body, err := json.Marshal(map[string]any{
-		"name": autoapplyorchestrate.EventReviewDecided,
-		"data": autoapplyorchestrate.ReviewDecidedEvent{
-			QueueID:  strconv.FormatInt(queueID, 10),
-			Decision: decision,
-		},
+func (p *inngestEventPublisher) PublishSubmit(ctx context.Context, queueID int64) error {
+	return p.post(ctx, autoapplyorchestrate.EventSubmit, autoapplyorchestrate.SubmitEvent{
+		QueueID: strconv.FormatInt(queueID, 10),
 	})
+}
+
+func (p *inngestEventPublisher) PublishReviewDecided(ctx context.Context, queueID int64, decision string) error {
+	return p.post(ctx, autoapplyorchestrate.EventReviewDecided, autoapplyorchestrate.ReviewDecidedEvent{
+		QueueID:  strconv.FormatInt(queueID, 10),
+		Decision: decision,
+	})
+}
+
+// post sends one event to the self-hosted Inngest event API. Shared by both publish
+// methods — they differ only in event name and data shape.
+func (p *inngestEventPublisher) post(ctx context.Context, name string, data any) error {
+	body, err := json.Marshal(map[string]any{"name": name, "data": data})
 	if err != nil {
 		return fmt.Errorf("encode event: %w", err)
 	}
@@ -79,6 +90,18 @@ func (p *inngestEventPublisher) PublishReviewDecided(ctx context.Context, queueI
 		return fmt.Errorf("publish event: status %d: %s", resp.StatusCode, string(b))
 	}
 	return nil
+}
+
+// publishSubmit best-effort publishes auto-apply/submit so the orchestrator starts a
+// fresh run — same "log and continue" convention as publishReviewDecided below: the
+// enqueue itself already succeeded and committed, so this must never fail the response.
+func (h *assistantHandlers) publishSubmit(ctx context.Context, queueID int64) {
+	if h.events == nil {
+		return
+	}
+	if err := h.events.PublishSubmit(ctx, queueID); err != nil {
+		log.Printf("auto-apply: publishing submit event for queue entry %d: %v", queueID, err)
+	}
 }
 
 // publishReviewDecided best-effort publishes auto-apply/review.decided so a paused

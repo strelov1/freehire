@@ -1264,6 +1264,15 @@ type Querier interface {
 	// ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
 	// (not yet claimed) alone, so running this twice in a row costs nothing.
 	EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg EnqueueEnrichmentForCompanySlugsParams) (int64, error)
+	// Creates the candidate-facing entry that starts the tailor-then-review sequence
+	// (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+	// existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
+	// double-click or a page reload racing this same request is expected, common traffic here,
+	// not a fault, and the constraint is the only thing that closes the window between a
+	// check and an insert. No row back means the handler's own INSERT lost the race (or the
+	// pair was already queued by an earlier request) — it re-reads via
+	// GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
+	EnqueueAutoApply(ctx context.Context, arg EnqueueAutoApplyParams) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and confirmed technical), so an already-enriched job is not
@@ -1488,6 +1497,12 @@ type Querier interface {
 	// acts as. Never used for a caller that presented ownership-scoped credentials; see
 	// resolveAutoApplyEntry in internal/api/handler/auto_apply_tailor.go.
 	GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (GetAutoApplyQueueEntryByIDRow, error)
+	// The caller's own existing auto-apply entry for one job, if any — the conflict-read path
+	// for EnqueueAutoApply, and the read behind the job detail response's own auto-apply
+	// status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
+	// a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
+	// exists yet for this (user, job) pair.
+	GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error)
 	// One read backing both the tailoring-trigger and the review-decision endpoints
 	// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
 	// id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a

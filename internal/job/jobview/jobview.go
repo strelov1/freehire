@@ -127,6 +127,13 @@ type Job struct {
 	// read-time projection attached only by the detail handler (omitted on list rows,
 	// where FromRow leaves it false).
 	ReferralAvailable bool `json:"referral_available,omitempty"`
+	// AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
+	// live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
+	// — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
+	// detail handler overlays it, keyed by (caller_id, job_id), never joined into the
+	// primary job query every anonymous reader also pays for.
+	// See openspec/changes/auto-apply-submit-trigger.
+	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`
 }
 
 // FromRow maps a database job row to the public wire shape. It is a thin shim: it

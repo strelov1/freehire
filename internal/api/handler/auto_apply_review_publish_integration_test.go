@@ -30,7 +30,17 @@ type fakeEventPublisher struct {
 		queueID  int64
 		decision string
 	}
-	err error
+	// submitCalls records PublishSubmit calls separately — auto-apply-submit-trigger's
+	// own tests only ever care about the count, not a decision string.
+	submitCalls []int64
+	err         error
+}
+
+func (f *fakeEventPublisher) PublishSubmit(_ context.Context, queueID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.submitCalls = append(f.submitCalls, queueID)
+	return f.err
 }
 
 func (f *fakeEventPublisher) PublishReviewDecided(_ context.Context, queueID int64, decision string) error {
@@ -43,10 +53,11 @@ func (f *fakeEventPublisher) PublishReviewDecided(_ context.Context, queueID int
 	return f.err
 }
 
+// Calls returns the total number of publish calls of either kind.
 func (f *fakeEventPublisher) Calls() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return len(f.calls)
+	return len(f.calls) + len(f.submitCalls)
 }
 
 func TestPostAutoApplyReview_PublishesReviewDecidedEvent(t *testing.T) {

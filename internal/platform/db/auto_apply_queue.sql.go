@@ -156,6 +156,33 @@ func (q *Queries) DeleteAutoApplyEntry(ctx context.Context, id int64) error {
 	return err
 }
 
+const enqueueAutoApply = `-- name: EnqueueAutoApply :one
+INSERT INTO auto_apply_queue (user_id, job_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id, job_id) DO NOTHING
+RETURNING id
+`
+
+type EnqueueAutoApplyParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// Creates the candidate-facing entry that starts the tailor-then-review sequence
+// (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+// existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
+// double-click or a page reload racing this same request is expected, common traffic here,
+// not a fault, and the constraint is the only thing that closes the window between a
+// check and an insert. No row back means the handler's own INSERT lost the race (or the
+// pair was already queued by an earlier request) — it re-reads via
+// GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
+func (q *Queries) EnqueueAutoApply(ctx context.Context, arg EnqueueAutoApplyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, enqueueAutoApply, arg.UserID, arg.JobID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getAutoApplyQueueEntryByID = `-- name: GetAutoApplyQueueEntryByID :one
 SELECT id, user_id, job_id, tailored_cv_id, review_decision
 FROM auto_apply_queue
@@ -187,6 +214,34 @@ func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (Get
 		&i.TailoredCvID,
 		&i.ReviewDecision,
 	)
+	return i, err
+}
+
+const getAutoApplyQueueEntryForJob = `-- name: GetAutoApplyQueueEntryForJob :one
+SELECT id, review_decision
+FROM auto_apply_queue
+WHERE user_id = $1 AND job_id = $2
+`
+
+type GetAutoApplyQueueEntryForJobParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+type GetAutoApplyQueueEntryForJobRow struct {
+	ID             int64       `json:"id"`
+	ReviewDecision pgtype.Text `json:"review_decision"`
+}
+
+// The caller's own existing auto-apply entry for one job, if any — the conflict-read path
+// for EnqueueAutoApply, and the read behind the job detail response's own auto-apply
+// status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
+// a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
+// exists yet for this (user, job) pair.
+func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error) {
+	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryForJob, arg.UserID, arg.JobID)
+	var i GetAutoApplyQueueEntryForJobRow
+	err := row.Scan(&i.ID, &i.ReviewDecision)
 	return i, err
 }
 
