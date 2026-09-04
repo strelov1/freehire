@@ -28,19 +28,28 @@
 
 ## 2. `ingestsched` — eligibility and configuration
 
-- [ ] 2.1 New package `internal/ingest/ingestsched`; add it to the block table in
-      `internal/platform/arch/layering/blocks.go` (block `ingest`) or the layering guard
-      test fails.
-- [ ] 2.2 `Effective(provider)` resolving a provider's effective cadence/shards/timeout
-      from an optional override row plus documented defaults, reporting for each field
-      whether it came from a default or an override.
-- [ ] 2.3 Tests: an unconfigured eligible provider resolves to hourly / 1 shard / default
-      timeout and is marked as defaulted; an override wins per-field; a row with `enabled`
-      false is excluded and carries its reason.
-- [ ] 2.4 `ValidateProviderKey`: a provider key SHALL resolve in `sources.Taxonomy()` AND
-      match a strict character class before it may reach a unit name or an argv. Tests
-      cover an unregistered key, a key with a shell metacharacter, and a key with a space —
-      each reported and skipped, never launched.
+- [x] 2.1 New package `internal/ingest/ingestsched`, added to the block table in
+      `internal/platform/arch/layering/blocks.go` (block `ingest`).
+- [x] 2.2 `Effective(provider, *Override)` resolving cadence/shards/timeout from an
+      optional override plus documented defaults (`DefaultShards`, `DefaultCadence`,
+      `DefaultRunTimeout`), plus `Settings.ShardSelectors()` so "unsharded is shard 1 of 1"
+      is stated once rather than in every caller.
+      **Provenance is per-ROW, not per-field** — the task first said per-field, which the
+      schema cannot support: the columns are NOT NULL with defaults, so an existing row
+      always specifies every field, and inferring per-field provenance by comparing against
+      the defaults would call an explicit hourly cadence a default by accident. Per-row is
+      also exactly what the spec's report scenario asks for.
+- [x] 2.3 Tests: an unconfigured provider resolves to the defaults and is marked
+      `Overridden: false` and `Enabled: true` — the case the whole change turns on; an
+      override supplies its values and carries its `Notes`; a disabled override carries its
+      reason through to the report; shard selectors cover 1..n exactly once.
+- [x] 2.4 `ValidateProviderKey`: shape check FIRST (lower-case ASCII, digits, `_`, `-` —
+      an allowlist, since a denylist is a list of the attacks someone thought of), then the
+      `sources.Taxonomy()` lookup. Rejects a space, `;`, `$(...)`, `/`, a newline, a
+      case variant, and systemd's own `@` and `%`. Two tests earn their keep beyond the
+      table: `habrcareer` is asserted to be UNKNOWN (the real production failure), and
+      every key the live registry carries is asserted to pass — the test that catches a
+      shape rule written to fit `greenhouse` and blind to `habr_career` or `whatjobs-br`.
 
 ## 3. `ingestsched` — run state
 

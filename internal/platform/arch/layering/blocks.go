@@ -118,8 +118,8 @@ var blocks = map[string][]string{
 	// (load.go), so they cannot be handed over in the snapshot.
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
-		"catalogstats", "contribution", "jdresolve", "linkimport", "linksource", "moderation",
-		"pipeline", "screeninganswers", "sources", "submission", "telegram",
+		"catalogstats", "contribution", "ingestsched", "jdresolve", "linkimport", "linksource",
+		"moderation", "pipeline", "screeninganswers", "sources", "submission", "telegram",
 	},
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordbot", "emailnotify",
