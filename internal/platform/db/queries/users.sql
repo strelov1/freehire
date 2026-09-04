@@ -344,6 +344,45 @@ UNION
 SELECT e.s3_key FROM emails e
 WHERE e.user_id = $1 AND e.s3_key IS NOT NULL AND e.s3_key <> '';
 
+-- name: GetUsernameByUser :one
+-- The account's own username (NULL until claimed/allocated) and, when set, the
+-- time of its last EXPLICIT change via SetUsername — NULL for a lazily
+-- allocated default written by SetUsernameIfAbsent, which never touches this
+-- column (see the add-username-claim change's design.md, Decision 2).
+SELECT username, username_updated_at
+FROM users
+WHERE id = $1;
+
+-- name: SetUsernameIfAbsent :execrows
+-- Claim username for id only if the account has none yet, leaving
+-- username_updated_at untouched. Zero affected rows means the account already
+-- has a username (a concurrent caller won the race); a unique violation on
+-- username means another account already holds it. The caller resolves either
+-- case by re-reading GetUsernameByUser.
+UPDATE users
+SET username = $2
+WHERE id = $1
+  AND username IS NULL;
+
+-- name: SetUsername :exec
+-- Replace the account's username unconditionally and record the change time.
+-- The caller (accounts.ClaimUsername) has already validated the format, the
+-- reserved list, and the 30-day cooldown against the account's own prior
+-- change — this query trusts its input, same as every other single-column
+-- update in this file. A unique violation means another account already holds
+-- username.
+UPDATE users
+SET username = $2, username_updated_at = now()
+WHERE id = $1;
+
+-- name: GetUserIDByUsername :one
+-- Uniqueness/availability lookup: which account (if any) already holds
+-- username. Used by the username-check endpoint and by the hosted-mailbox
+-- inbound resolver to map a recipient's local-part back to its owning user.
+SELECT id
+FROM users
+WHERE username = $1;
+
 -- name: DeleteUser :exec
 -- Erase the account. Every user-owned table declares ON DELETE CASCADE, so this one
 -- statement is the whole database side of account deletion; the trails that outlive

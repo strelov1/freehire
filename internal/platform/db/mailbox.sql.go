@@ -20,36 +20,36 @@ func (q *Queries) DeleteMailbox(ctx context.Context, userID int64) error {
 	return err
 }
 
-const getMailboxByAddress = `-- name: GetMailboxByAddress :one
-SELECT id, user_id, address, created_at FROM mailboxes WHERE address = $1
+const ensureMailbox = `-- name: EnsureMailbox :exec
+INSERT INTO mailboxes (user_id) VALUES ($1)
+ON CONFLICT (user_id) DO NOTHING
 `
 
-// Recipient resolution for the inbound ingest worker.
-func (q *Queries) GetMailboxByAddress(ctx context.Context, address string) (Mailbox, error) {
-	row := q.db.QueryRow(ctx, getMailboxByAddress, address)
-	var i Mailbox
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Address,
-		&i.CreatedAt,
-	)
-	return i, err
+// Enroll userID in the hosted mailbox, idempotently — a second call for the same
+// user is a no-op. The address itself is never stored here; it is always derived
+// from the account's username (see the add-username-claim change).
+func (q *Queries) EnsureMailbox(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, ensureMailbox, userID)
+	return err
 }
 
 const getMailboxByUser = `-- name: GetMailboxByUser :one
-SELECT id, user_id, address, created_at FROM mailboxes WHERE user_id = $1
+SELECT id, user_id, created_at FROM mailboxes WHERE user_id = $1
 `
 
-func (q *Queries) GetMailboxByUser(ctx context.Context, userID int64) (Mailbox, error) {
+type GetMailboxByUserRow struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Existence check: does this account have a hosted mailbox at all. address is not
+// selected — it is retired in favor of the derived <users.username>@<domain> address
+// (see the add-username-claim change) and no longer read by any caller.
+func (q *Queries) GetMailboxByUser(ctx context.Context, userID int64) (GetMailboxByUserRow, error) {
 	row := q.db.QueryRow(ctx, getMailboxByUser, userID)
-	var i Mailbox
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Address,
-		&i.CreatedAt,
-	)
+	var i GetMailboxByUserRow
+	err := row.Scan(&i.ID, &i.UserID, &i.CreatedAt)
 	return i, err
 }
 
@@ -92,27 +92,39 @@ func (q *Queries) InsertHostedMessage(ctx context.Context, arg InsertHostedMessa
 	return err
 }
 
-const insertMailbox = `-- name: InsertMailbox :one
-INSERT INTO mailboxes (user_id, address) VALUES ($1, $2)
-RETURNING id, user_id, address, created_at
+const listMailboxesWithoutBackfilledUsername = `-- name: ListMailboxesWithoutBackfilledUsername :many
+SELECT m.user_id, m.address
+FROM mailboxes m
+JOIN users u ON u.id = m.user_id
+WHERE u.username IS NULL
+ORDER BY m.user_id
 `
 
-type InsertMailboxParams struct {
-	UserID  int64  `json:"user_id"`
-	Address string `json:"address"`
+type ListMailboxesWithoutBackfilledUsernameRow struct {
+	UserID  int64       `json:"user_id"`
+	Address pgtype.Text `json:"address"`
 }
 
-// Claim an address for a user. May raise a unique violation on user_id (already
-// has a mailbox) or address (taken) — the allocation service handles both: it
-// reads-back on a user conflict and retries the next suffix on an address conflict.
-func (q *Queries) InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error) {
-	row := q.db.QueryRow(ctx, insertMailbox, arg.UserID, arg.Address)
-	var i Mailbox
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Address,
-		&i.CreatedAt,
-	)
-	return i, err
+// Candidates for cmd/backfill-username-from-mailbox: every hosted mailbox whose
+// owner has not yet been backfilled onto users.username. Small by construction —
+// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
+// cmd/backfill-* workers exist for — so one unpaged query is enough.
+func (q *Queries) ListMailboxesWithoutBackfilledUsername(ctx context.Context) ([]ListMailboxesWithoutBackfilledUsernameRow, error) {
+	rows, err := q.db.Query(ctx, listMailboxesWithoutBackfilledUsername)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMailboxesWithoutBackfilledUsernameRow{}
+	for rows.Next() {
+		var i ListMailboxesWithoutBackfilledUsernameRow
+		if err := rows.Scan(&i.UserID, &i.Address); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

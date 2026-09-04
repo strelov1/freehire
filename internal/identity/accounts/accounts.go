@@ -144,6 +144,27 @@ type Repository interface {
 	// UserByID returns the user with the given id, or ErrUserNotFound when absent.
 	UserByID(ctx context.Context, id int64) (User, error)
 
+	// UsernameByUser returns the account's username (ok=false if none set) and,
+	// when set, the time of its last EXPLICIT change via SetUsername (nil for a
+	// lazily allocated default written by SetUsernameIfAbsent that was never
+	// explicitly claimed).
+	UsernameByUser(ctx context.Context, userID int64) (name string, updatedAt *time.Time, ok bool, err error)
+
+	// SetUsernameIfAbsent claims username for userID only if the account has
+	// none yet, without touching username_updated_at. Returns ErrUsernameTaken
+	// on any collision — either username is already held by another account, or
+	// this account already has one (a concurrent caller won) — the caller
+	// resolves which by re-reading UsernameByUser.
+	SetUsernameIfAbsent(ctx context.Context, userID int64, username string) error
+
+	// SetUsername replaces the account's username unconditionally and records
+	// the change time. Returns ErrUsernameTaken if username is already held by
+	// another account.
+	SetUsername(ctx context.Context, userID int64, username string) error
+
+	// UsernameTaken reports whether any account already holds username.
+	UsernameTaken(ctx context.Context, username string) (bool, error)
+
 	// WithTx returns a Repository bound to the given transaction.
 	WithTx(tx pgx.Tx) Repository
 }

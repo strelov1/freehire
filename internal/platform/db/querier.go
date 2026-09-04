@@ -1287,6 +1287,10 @@ type Querier interface {
 	// For an existing user the row is left untouched; a stale period is reset later
 	// under the lock. remaining is seeded with the monthly grant for a fresh row.
 	EnsureBalance(ctx context.Context, arg EnsureBalanceParams) error
+	// Enroll userID in the hosted mailbox, idempotently — a second call for the same
+	// user is a no-op. The address itself is never stored here; it is always derived
+	// from the account's username (see the add-username-claim change).
+	EnsureMailbox(ctx context.Context, userID int64) error
 	// Seed today's counter for (user, feature) so the SELECT ... FOR UPDATE below always has
 	// a row to lock. That lock is what serialises two simultaneous first-ever consumptions,
 	// so an allowance can never be oversold by a race. An existing row is left untouched.
@@ -1594,9 +1598,10 @@ type Querier interface {
 	// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
 	// a compensation line only when one is known.
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
-	// Recipient resolution for the inbound ingest worker.
-	GetMailboxByAddress(ctx context.Context, address string) (Mailbox, error)
-	GetMailboxByUser(ctx context.Context, userID int64) (Mailbox, error)
+	// Existence check: does this account have a hosted mailbox at all. address is not
+	// selected — it is retired in favor of the derived <users.username>@<domain> address
+	// (see the add-username-claim change) and no longer read by any caller.
+	GetMailboxByUser(ctx context.Context, userID int64) (GetMailboxByUserRow, error)
 	// The caller's own feedback in one category on a company, for the edit form's
 	// prefill and for Upsert to tell an edit from a genuinely new review. No row
 	// when they have not left one in that category yet. Not filtered by status:
@@ -1763,6 +1768,10 @@ type Querier interface {
 	// Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
 	// chat somehow linked more than once, the most recently linked user wins.
 	GetUserIDByTelegramChat(ctx context.Context, chatID int64) (int64, error)
+	// Uniqueness/availability lookup: which account (if any) already holds
+	// username. Used by the username-check endpoint and by the hosted-mailbox
+	// inbound resolver to map a recipient's local-part back to its owning user.
+	GetUserIDByUsername(ctx context.Context, username pgtype.Text) (int64, error)
 	// The caller's cached fit analysis for one job, with the four staleness stamps it was
 	// computed against: model, cv_uploaded_at, job_content_hash, language. No row means the
 	// pair was never analyzed (the handler serves a null analysis, no LLM call). The handler
@@ -1820,6 +1829,11 @@ type Querier interface {
 	// decide whether a correctly-signed token was revoked. One primary-key lookup; this
 	// is the price of making a stateless JWT revocable at all.
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
+	// The account's own username (NULL until claimed/allocated) and, when set, the
+	// time of its last EXPLICIT change via SetUsername — NULL for a lazily
+	// allocated default written by SetUsernameIfAbsent, which never touches this
+	// column (see the add-username-claim change's design.md, Decision 2).
+	GetUsernameByUser(ctx context.Context, id int64) (GetUsernameByUserRow, error)
 	// Why CreateGhostReport returned no row. Read only on the failure path, so the happy
 	// path stays one statement. Each column answers one gate, and the repository maps the
 	// first failing one — unverified before closed before duplicate — because an
@@ -1910,10 +1924,6 @@ type Querier interface {
 	// GPU-bound (~19 docs/s against a GPU embedding a wave in ~7s) — see
 	// hire-semantic-vectors-in-pg's "THE REAL BOTTLENECK IS POSTGRES, NOT THE GPU" note.
 	InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error
-	// Claim an address for a user. May raise a unique violation on user_id (already
-	// has a mailbox) or address (taken) — the allocation service handles both: it
-	// reads-back on a user conflict and retries the next suffix on an address conflict.
-	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
 	// Creates a job visible only to its creator: the jd-tailor-intake private-JD path
 	// (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
 	// never an upsert — external_id is a synthetic value scoped to this one submission
@@ -2532,6 +2542,11 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
+	// Candidates for cmd/backfill-username-from-mailbox: every hosted mailbox whose
+	// owner has not yet been backfilled onto users.username. Small by construction —
+	// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
+	// cmd/backfill-* workers exist for — so one unpaged query is enough.
+	ListMailboxesWithoutBackfilledUsername(ctx context.Context) ([]ListMailboxesWithoutBackfilledUsernameRow, error)
 	// All of the caller's own feedback on a company, across every category they've
 	// reviewed it under — the write dialog's "which categories have I already
 	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
@@ -3975,6 +3990,19 @@ type Querier interface {
 	// guard, which is exactly how invariants drift apart.
 	// On success, extract status is marked ok for this upload stamp.
 	SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) (int64, error)
+	// Replace the account's username unconditionally and record the change time.
+	// The caller (accounts.ClaimUsername) has already validated the format, the
+	// reserved list, and the 30-day cooldown against the account's own prior
+	// change — this query trusts its input, same as every other single-column
+	// update in this file. A unique violation means another account already holds
+	// username.
+	SetUsername(ctx context.Context, arg SetUsernameParams) error
+	// Claim username for id only if the account has none yet, leaving
+	// username_updated_at untouched. Zero affected rows means the account already
+	// has a username (a concurrent caller won the race); a unique violation on
+	// username means another account already holds it. The caller resolves either
+	// case by re-reading GetUsernameByUser.
+	SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error)
 	// ---------------------------------------------------------------------------
 	// Skill demand history (the personal GET /me/market-pulse read)
 	// ---------------------------------------------------------------------------

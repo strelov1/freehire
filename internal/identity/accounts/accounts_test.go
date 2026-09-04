@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -58,6 +59,24 @@ type fakeRepo struct {
 	setHash            string
 	resetHash          string
 	setPasswordVersion int32
+
+	// Username state (for EnsureUsername/ClaimUsername tests): usernameByUser
+	// holds each account's current username row; takenUsernames maps a claimed
+	// name back to its owning user id, across all accounts, to simulate
+	// collisions between different users. usernameByUserErrOnRecheck, when set,
+	// is returned starting from the SECOND UsernameByUser call onward — the
+	// first call is always the real "does this account already have one" check;
+	// later calls are the post-collision re-read EnsureUsernameFromBase makes,
+	// which is what a test for a re-read failure needs to fail instead.
+	usernameByUser             map[int64]fakeUsernameRow
+	takenUsernames             map[string]int64
+	usernameByUserCalls        int
+	usernameByUserErrOnRecheck error
+}
+
+type fakeUsernameRow struct {
+	name      string
+	updatedAt *time.Time
 }
 
 type idResult struct {

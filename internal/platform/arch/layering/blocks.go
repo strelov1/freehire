@@ -67,7 +67,7 @@ var blocks = map[string][]string{
 	},
 	"identity": {
 		"accountdelete", "accounts", "auth", "auth/apple", "auth/applejobs",
-		"auth/mobileauth", "auth/oauth", "auth/recentauth", "userprofile",
+		"auth/mobileauth", "auth/oauth", "auth/recentauth", "userprofile", "username",
 	},
 	"candidate": {
 		"atscheck",

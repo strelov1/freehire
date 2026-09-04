@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -263,4 +264,57 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
 		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
 		Language: row.Language}, nil
+}
+
+// UsernameByUser returns the account's username (ok=false if none) and, when
+// set, the time of its last explicit change.
+func (r *QueriesRepository) UsernameByUser(ctx context.Context, userID int64) (string, *time.Time, bool, error) {
+	row, err := r.q.GetUsernameByUser(ctx, userID)
+	if err != nil {
+		return "", nil, false, err
+	}
+	if !row.Username.Valid {
+		return "", nil, false, nil
+	}
+	return row.Username.String, pgconv.TimePtr(row.UsernameUpdatedAt), true, nil
+}
+
+// SetUsernameIfAbsent claims username for userID only if the account has none
+// yet. Maps a unique violation, and the zero-rows-affected case (the account
+// already had a username), both to ErrUsernameTaken — the caller resolves
+// either by re-reading UsernameByUser.
+func (r *QueriesRepository) SetUsernameIfAbsent(ctx context.Context, userID int64, username string) error {
+	n, err := r.q.SetUsernameIfAbsent(ctx, db.SetUsernameIfAbsentParams{ID: userID, Username: pgconv.Text(username)})
+	if pgerr.IsUniqueViolation(err) {
+		return ErrUsernameTaken
+	}
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrUsernameTaken
+	}
+	return nil
+}
+
+// SetUsername replaces the account's username unconditionally. Maps a unique
+// violation to ErrUsernameTaken.
+func (r *QueriesRepository) SetUsername(ctx context.Context, userID int64, username string) error {
+	err := r.q.SetUsername(ctx, db.SetUsernameParams{ID: userID, Username: pgconv.Text(username)})
+	if pgerr.IsUniqueViolation(err) {
+		return ErrUsernameTaken
+	}
+	return err
+}
+
+// UsernameTaken reports whether any account already holds username.
+func (r *QueriesRepository) UsernameTaken(ctx context.Context, username string) (bool, error) {
+	_, err := r.q.GetUserIDByUsername(ctx, pgconv.Text(username))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

@@ -51,6 +51,15 @@ Four packages split this surface — keep the split:
   identity, concurrent callback) and `ErrEmailRace` (different identity, same verified
   email) by retrying rather than failing. Both paths are unit-tested — preserve them if you
   touch the resolution order.
+- **A lazily allocated username never starts the 30-day change cooldown.** `EnsureUsername`/
+  `EnsureUsernameFromBase` write `username` but leave `username_updated_at` `NULL`; only
+  `ClaimUsername` (an explicit, user-initiated pick) sets it, and the cooldown is evaluated
+  only against a non-`NULL` value. Setting it on the lazy path would lock a user who never
+  knew a username existed out of picking their own for a month.
+- **`ClaimUsername` never substitutes a suffixed alternative.** A taken, reserved, or
+  invalid desired name is rejected outright — only `EnsureUsername`'s system-generated
+  default goes through `Candidate`'s collision-suffix search. A user who typed a specific
+  name asked for exactly that one.
 
 ## Limitations
 

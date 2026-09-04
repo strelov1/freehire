@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
+	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -64,6 +65,11 @@ type inboxHandlers struct {
 	// stand a mailbox up without a Google credential — the fallback path and the search
 	// path are different code, and both have to be covered.
 	mailboxes mailboxes
+	// accounts resolves the caller's own account username, which a hosted-mailbox
+	// claim adopts as its address (see internal/application/mailbox). Never nil —
+	// it never touches a password, so a plain authHasher backs it the same as
+	// authHandlers.
+	accounts *accounts.Service
 }
 
 // mailboxes resolves one caller's searchable mailbox, or nil when they have none.
@@ -104,6 +110,7 @@ func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *g
 		frontendOrigin: frontendOrigin,
 		cookieSecure:   cookieSecure,
 		mailDomain:     mailDomain,
+		accounts:       accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 	}
 }
 
