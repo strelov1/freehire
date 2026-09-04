@@ -23,9 +23,11 @@
       reconcile (`generate_series` upsert `ON CONFLICT DO NOTHING`, surplus-shard delete,
       departed-provider delete), the claim (`FOR UPDATE OF rs SKIP LOCKED`), and the
       finish write. The report read lands with `cmd/schedule-board` in §6.
-- [ ] 1.4 Document `managed` in the migration's COMMENT as ROLLOUT-ONLY, naming task 8.4 as
-      its removal — a rollout default that outlives its rollout restores the failure this
-      change removes.
+- [x] 1.4 `managed` is documented as ROLLOUT-ONLY in its column comment, in
+      `COMMENT ON TABLE ingest_schedule`, and at `Settings.Schedulable` — the one place it
+      is read. Each names task 8.5 as its removal — this task first said 8.4, which is the
+      cutover, not the removal. A rollout default that outlives its rollout restores the
+      failure this change removes, so the pointer has to land on the right task.
 
 ## 2. `ingestsched` — eligibility and configuration
 
