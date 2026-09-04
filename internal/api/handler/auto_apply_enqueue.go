@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -17,10 +18,22 @@ import (
 // actually submit. See openspec/changes/auto-apply-submit-trigger.
 const autoApplyEnqueueSource = "greenhouse"
 
-// autoApplyDeclinedResponse is what a permanently-declined pair answers with — distinct
-// wording from autoApplyDeclineReason (auto_apply_tailor.go), which is the stored
+// autoApplyAlreadyDeclinedMessage is what a permanently-declined pair answers with —
+// distinct wording from autoApplyDeclineReason (auto_apply_tailor.go), which is the stored
 // last_error, not a response body.
 const autoApplyAlreadyDeclinedMessage = "this auto-apply attempt was already declined"
+
+// autoApplyStatusQueued is the wire status for a live, undecided auto-apply entry —
+// shared between this endpoint's own success response and GetJob's status overlay
+// (jobs.go), so the two can never drift apart on what "queued" is spelled as.
+const autoApplyStatusQueued = "queued"
+
+// autoApplyQueuedResponse is the success body for both a fresh enqueue and an idempotent
+// repeat against an existing, undecided entry — the caller cannot (and need not) tell
+// the two apart.
+func autoApplyQueuedResponse(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{"data": fiber.Map{"status": autoApplyStatusQueued}})
+}
 
 // PostJobAutoApply is the candidate-facing trigger auto-apply-tailored-resume and
 // auto-apply-inngest-orchestration both assumed would exist: it creates one durable
@@ -65,6 +78,18 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before using auto-apply")
 	}
 
+	// cmd/auto-apply/store.go's Submit deletes the queue row in the same transaction it
+	// marks the job applied (applications.applied_at, via MarkJobApplied), so a completed
+	// attempt leaves no queue row behind for EnqueueAutoApply's own ON CONFLICT to catch —
+	// without this check a re-click after a real submission would start a second one.
+	if applied, err := h.queries.GetUserJobApplied(c.Context(), db.GetUserJobAppliedParams{
+		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+	}); err != nil {
+		return err
+	} else if applied {
+		return fiber.NewError(fiber.StatusConflict, "already applied to this job")
+	}
+
 	id, err := h.queries.EnqueueAutoApply(c.Context(), db.EnqueueAutoApplyParams{UserID: userID, JobID: job.ID})
 	switch {
 	case err == nil:
@@ -73,7 +98,7 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		// an idempotent replay that touched no row, would let the orchestrator's executor
 		// see the same auto-apply/submit more than once for one entry).
 		h.publishSubmit(c.Context(), id)
-		return c.JSON(fiber.Map{"data": fiber.Map{"status": "queued"}})
+		return autoApplyQueuedResponse(c)
 	case errors.Is(err, pgx.ErrNoRows):
 		existing, ferr := h.queries.GetAutoApplyQueueEntryForJob(c.Context(), db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
@@ -87,7 +112,7 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		// A live, undecided entry already exists (the common "page reload, a second
 		// tab" case per design.md) — reporting success without a second row is the
 		// intended idempotent behavior, not a fault to log.
-		return c.JSON(fiber.Map{"data": fiber.Map{"status": "queued"}})
+		return autoApplyQueuedResponse(c)
 	default:
 		return err
 	}

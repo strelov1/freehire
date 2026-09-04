@@ -186,9 +186,7 @@ func TestPostJobAutoApply_FreshRequestCreatesOneEntryAndPublishes(t *testing.T) 
 	if count != 1 {
 		t.Fatalf("auto_apply_queue rows = %d, want 1", count)
 	}
-	if got := events.Calls(); got != 1 {
-		t.Fatalf("publish calls = %d, want 1", got)
-	}
+	waitForPublishCalls(t, events, 1)
 }
 
 func TestPostJobAutoApply_RepeatRequestIsIdempotentAndDoesNotRepublish(t *testing.T) {
@@ -220,9 +218,7 @@ func TestPostJobAutoApply_RepeatRequestIsIdempotentAndDoesNotRepublish(t *testin
 	if count != 1 {
 		t.Fatalf("auto_apply_queue rows = %d, want 1 (no duplicate)", count)
 	}
-	if got := events.Calls(); got != 1 {
-		t.Fatalf("publish calls = %d, want 1 (only the fresh insert publishes)", got)
-	}
+	waitForPublishCalls(t, events, 1)
 }
 
 func TestPostJobAutoApply_PublishFailureDoesNotChangeTheResponse(t *testing.T) {
@@ -281,6 +277,42 @@ func TestPostJobAutoApply_DeclinedEntryIsRefusedPermanently(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("auto_apply_queue rows = %d, want 1 (no second row)", count)
+	}
+}
+
+// TestPostJobAutoApply_RefusesAlreadyApplied guards the duplicate-submission risk a code
+// review found: cmd/auto-apply/store.go's Submit deletes the auto_apply_queue row in the
+// same transaction it stamps user_jobs.applied_at, so once a real ATS submission
+// completes, EnqueueAutoApply's own ON CONFLICT dedup sees no row to conflict with — a
+// re-click would otherwise start a second, genuine application for the same job.
+func TestPostJobAutoApply_RefusesAlreadyApplied(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "applied@example.test")
+	makePro(t, pool, userID)
+	insertBaseCV(t, pool, userID)
+	jobID := seedEnqueueJob(t, pool, "greenhouse", "applied-job")
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO applications (user_id, job_id, applied_at) VALUES ($1, $2, now())`,
+		userID, jobID); err != nil {
+		t.Fatalf("seed applications row: %v", err)
+	}
+
+	resp := enqueueRequest(t, app, "applied-job", cookie)
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("status = %d, want 409 — already applied for real", resp.StatusCode)
+	}
+
+	var count int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM auto_apply_queue WHERE user_id = $1", userID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("auto_apply_queue rows = %d, want 0 — no new attempt after a real application", count)
 	}
 }
 

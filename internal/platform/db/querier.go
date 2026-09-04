@@ -1889,6 +1889,15 @@ type Querier interface {
 	// compares all four against the live model, CV upload time, job content_hash and profile
 	// language to decide the stale flag.
 	GetUserJobAnalysis(ctx context.Context, arg GetUserJobAnalysisParams) (GetUserJobAnalysisRow, error)
+	// Whether the caller already applied to a job (applications.applied_at set — the process
+	// table, not user_jobs, holds this column; see RecordJobView's own comment above), the
+	// durable signal cmd/auto-apply/store.go's Submit stamps via MarkJobApplied on a real ATS
+	// submission. The guard PostJobAutoApply consults so a re-click after a successful
+	// auto-apply cannot start a second one; auto_apply_queue's own row is gone by then (Submit
+	// deletes it in the same transaction). Same COALESCE'd-scalar-subquery idiom as GetJobVote,
+	// for the same reason: always exactly one row, so a miss reads as "not applied" rather than
+	// needing its own pgx.ErrNoRows branch.
+	GetUserJobApplied(ctx context.Context, arg GetUserJobAppliedParams) (bool, error)
 	// The caller's current stage for one application (empty string when unset), so the
 	// worker can decide a monotonic-forward advancement.
 	GetUserJobStage(ctx context.Context, arg GetUserJobStageParams) (string, error)

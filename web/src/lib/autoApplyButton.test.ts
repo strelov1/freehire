@@ -19,4 +19,9 @@ describe('autoApplyButtonState', () => {
   it('is declined when the caller already declined this attempt', () => {
     expect(autoApplyButtonState('greenhouse', 'declined')).toEqual({ kind: 'declined' });
   });
+
+  it('is applied when the caller already applied, regardless of status', () => {
+    expect(autoApplyButtonState('greenhouse', null, true)).toEqual({ kind: 'applied' });
+    expect(autoApplyButtonState('greenhouse', 'queued', true)).toEqual({ kind: 'applied' });
+  });
 });

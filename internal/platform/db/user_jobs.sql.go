@@ -271,6 +271,30 @@ func (q *Queries) GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, 
 	return my_vote, err
 }
 
+const getUserJobApplied = `-- name: GetUserJobApplied :one
+SELECT ((SELECT applied_at FROM applications WHERE user_id = $1 AND job_id = $2) IS NOT NULL)::boolean AS applied
+`
+
+type GetUserJobAppliedParams struct {
+	UserID int64       `json:"user_id"`
+	JobID  pgtype.Int8 `json:"job_id"`
+}
+
+// Whether the caller already applied to a job (applications.applied_at set — the process
+// table, not user_jobs, holds this column; see RecordJobView's own comment above), the
+// durable signal cmd/auto-apply/store.go's Submit stamps via MarkJobApplied on a real ATS
+// submission. The guard PostJobAutoApply consults so a re-click after a successful
+// auto-apply cannot start a second one; auto_apply_queue's own row is gone by then (Submit
+// deletes it in the same transaction). Same COALESCE'd-scalar-subquery idiom as GetJobVote,
+// for the same reason: always exactly one row, so a miss reads as "not applied" rather than
+// needing its own pgx.ErrNoRows branch.
+func (q *Queries) GetUserJobApplied(ctx context.Context, arg GetUserJobAppliedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getUserJobApplied, arg.UserID, arg.JobID)
+	var applied bool
+	err := row.Scan(&applied)
+	return applied, err
+}
+
 const listDismissedJobSlugs = `-- name: ListDismissedJobSlugs :many
 SELECT jobs.public_slug
 FROM user_jobs uj

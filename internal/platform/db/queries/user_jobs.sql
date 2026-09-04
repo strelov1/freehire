@@ -453,6 +453,17 @@ RETURNING upvote_count, downvote_count;
 -- detail reads. Always returns one row via the COALESCE'd scalar subquery.
 SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2), 0)::smallint AS my_vote;
 
+-- name: GetUserJobApplied :one
+-- Whether the caller already applied to a job (applications.applied_at set — the process
+-- table, not user_jobs, holds this column; see RecordJobView's own comment above), the
+-- durable signal cmd/auto-apply/store.go's Submit stamps via MarkJobApplied on a real ATS
+-- submission. The guard PostJobAutoApply consults so a re-click after a successful
+-- auto-apply cannot start a second one; auto_apply_queue's own row is gone by then (Submit
+-- deletes it in the same transaction). Same COALESCE'd-scalar-subquery idiom as GetJobVote,
+-- for the same reason: always exactly one row, so a miss reads as "not applied" rather than
+-- needing its own pgx.ErrNoRows branch.
+SELECT ((SELECT applied_at FROM applications WHERE user_id = $1 AND job_id = $2) IS NOT NULL)::boolean AS applied;
+
 -- name: CountMyJobsByStage :many
 -- Per-stage application counts for the Pipeline snapshot. An application is any
 -- row the user applied to or staged (saved-only rows are excluded); a row with
