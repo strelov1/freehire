@@ -1,0 +1,197 @@
+//go:build integration
+
+// Integration tests for the link_contributions carry, against a real Postgres: each of the
+// four statuses lands where it should, original timestamps survive, and a second run
+// writes nothing.
+// Run with: go test -tags=integration ./cmd/backfill-link-contributions/
+// Requires Docker (testcontainers spins up a throwaway Postgres with the migrations).
+package main
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/testdb"
+)
+
+func insertUser(t *testing.T, pool *pgxpool.Pool) int64 {
+	t.Helper()
+	var id int64
+	err := pool.QueryRow(context.Background(),
+		`INSERT INTO users (email) VALUES ('carry@example.com') RETURNING id`).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	return id
+}
+
+// seed writes one contribution of each status, plus the catalog row an 'onboarded'
+// contribution is expected to find already there (carrying no submitter, exactly as the
+// YAML backfill left it).
+func seed(t *testing.T, pool *pgxpool.Pool, user int64, when time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	rows := []struct{ url, source, board, status string }{
+		{"https://example.com/review-link", "", "", "review"},
+		{"https://example.com/pending-link", "inhire", "onsign", "pending"},
+		{"https://example.com/onboarded-link", "greenhouse", "acme", "onboarded"},
+		{"https://example.com/rejected-link", "lever", "deadco", "rejected"},
+	}
+	for _, r := range rows {
+		var source, board any
+		if r.source != "" {
+			source, board = r.source, r.board
+		}
+		_, err := pool.Exec(ctx,
+			`INSERT INTO link_contributions (submitted_by, url, source, board, status, surface, created_at)
+			 VALUES ($1, $2, $3, $4, $5, 'web', $6)`,
+			user, r.url, source, board, r.status, when)
+		if err != nil {
+			t.Fatalf("seed %s: %v", r.status, err)
+		}
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO boards (provider, board, region, company, status)
+		 VALUES ('greenhouse', 'acme', '', 'Acme', 'active')`); err != nil {
+		t.Fatalf("seed catalog row: %v", err)
+	}
+}
+
+func TestCarryPlacesEveryStatusAndIsIdempotent(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	user := insertUser(t, pool)
+	when := time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)
+	seed(t, pool, user, when)
+
+	rows, err := q.ListLinkContributionsForBackfill(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 4 {
+		t.Fatalf("listed %d contributions, want 4", len(rows))
+	}
+
+	var first tally
+	for _, row := range rows {
+		if err := carry(ctx, q, row, true, &first); err != nil {
+			t.Fatalf("carry %s: %v", row.Status, err)
+		}
+	}
+	if first.submissions != 1 || first.pending != 1 || first.attributed != 1 || first.dropped != 1 {
+		t.Fatalf("first run tally = %+v, want one carried per status and the refusal dropped", first)
+	}
+	if first.skipped != 0 {
+		t.Errorf("first run skipped %d rows, want none", first.skipped)
+	}
+
+	// The unclassified URL is queued for triage, under its ORIGINAL date: restamping it
+	// as today would reorder every user's contributions list.
+	var subCreated time.Time
+	if err := pool.QueryRow(ctx,
+		`SELECT created_at FROM board_submissions WHERE url = 'https://example.com/review-link'`,
+	).Scan(&subCreated); err != nil {
+		t.Fatalf("the review row must reach board_submissions: %v", err)
+	}
+	if !subCreated.UTC().Equal(when) {
+		t.Errorf("submission created_at = %s, want the original %s", subCreated.UTC(), when)
+	}
+
+	// The recognized-but-unonboarded board is crawlable again.
+	assertBoard(t, pool, "inhire", "onsign", "pending", user)
+	// The refusal is deliberately NOT carried: 0049 already freed the identity, so the
+	// board can be re-contributed and judged again on the day.
+	assertNoBoard(t, pool, "lever", "deadco")
+	// The already-onboarded board keeps its single row and gains its submitter.
+	assertBoard(t, pool, "greenhouse", "acme", "active", user)
+
+	// A second run is inert: every statement is conflict- or NULL-guarded, so stopping
+	// the worker mid-way and re-running it costs nothing.
+	var second tally
+	for _, row := range rows {
+		if err := carry(ctx, q, row, true, &second); err != nil {
+			t.Fatalf("second carry %s: %v", row.Status, err)
+		}
+	}
+	if second.noop != 3 || second.dropped != 1 {
+		t.Errorf("second run tally = %+v, want the three carried rows as no-ops", second)
+	}
+
+	var boards int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM boards`).Scan(&boards); err != nil {
+		t.Fatalf("count boards: %v", err)
+	}
+	if boards != 2 {
+		t.Errorf("boards = %d, want 2 (the seeded one plus the carried pending) — "+
+			"the re-run must not add another", boards)
+	}
+}
+
+// assertNoBoard is the counterpart: the identity must be free, so a later contribution of
+// the same board is accepted rather than colliding with a carried-over refusal.
+func assertNoBoard(t *testing.T, pool *pgxpool.Pool, provider, board string) {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM boards WHERE provider = $1 AND board = $2`,
+		provider, board).Scan(&n); err != nil {
+		t.Fatalf("count %s/%s: %v", provider, board, err)
+	}
+	if n != 0 {
+		t.Errorf("%s/%s is in the catalog (%d rows); a refusal must not be carried", provider, board, n)
+	}
+}
+
+func assertBoard(t *testing.T, pool *pgxpool.Pool, provider, board, wantStatus string, wantUser int64) {
+	t.Helper()
+	var status string
+	var submitter *int64
+	err := pool.QueryRow(context.Background(),
+		`SELECT status, submitted_by FROM boards WHERE provider = $1 AND board = $2`,
+		provider, board).Scan(&status, &submitter)
+	if err != nil {
+		t.Fatalf("%s/%s not in the catalog: %v", provider, board, err)
+	}
+	if status != wantStatus {
+		t.Errorf("%s/%s status = %q, want %q", provider, board, status, wantStatus)
+	}
+	if submitter == nil || *submitter != wantUser {
+		t.Errorf("%s/%s submitter = %v, want %d — the contribution must stay attributed",
+			provider, board, submitter, wantUser)
+	}
+}
+
+// A recognized status with no (source, board) names nothing that can be carried. It is
+// counted rather than dropped: a nonzero skip means the schema's own assumption — only
+// 'review' carries a NULL source — no longer holds, and the row needs a human.
+func TestCarrySkipsARecognizedRowWithNoBoard(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	user := insertUser(t, pool)
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO link_contributions (submitted_by, url, source, board, status, surface)
+		 VALUES ($1, 'https://example.com/x', NULL, NULL, 'pending', 'web')`, user); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	rows, err := q.ListLinkContributionsForBackfill(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	var got tally
+	for _, row := range rows {
+		if err := carry(ctx, q, row, true, &got); err != nil {
+			t.Fatalf("carry: %v", err)
+		}
+	}
+	if got.skipped != 1 {
+		t.Errorf("tally = %+v, want one skipped row", got)
+	}
+}

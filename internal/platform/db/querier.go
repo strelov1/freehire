@@ -50,6 +50,13 @@ type Querier interface {
 	// tuple) so a file's rows land in a single round trip; view_count accumulates across
 	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
+	// Give an existing catalog row the submitter who contributed it. The board reached the
+	// catalog through the YAML backfill, which carried no attribution, so the person who found
+	// it disappeared from their own contributions list.
+	//
+	// Guarded on submitted_by IS NULL: a row that already names a submitter keeps them, which
+	// makes a re-run inert and stops a later duplicate contribution reassigning credit.
+	AttributeBoardToSubmitter(ctx context.Context, arg AttributeBoardToSubmitterParams) (int64, error)
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
@@ -1870,6 +1877,11 @@ type Querier interface {
 	// submission of the same link; the caller maps that violation the same way a duplicate
 	// board contribution is mapped.
 	InsertBoardSubmission(ctx context.Context, arg InsertBoardSubmissionParams) (BoardSubmission, error)
+	// Carry one unclassified-URL contribution into board_submissions, KEEPING its original
+	// created_at — the ordinary insert defaults to now(), which would restamp a submission
+	// from August as today and reorder every user's list. A URL already queued is left alone,
+	// so a re-run writes nothing.
+	InsertBoardSubmissionAt(ctx context.Context, arg InsertBoardSubmissionAtParams) (int64, error)
 	// Record one change: what it did (ops), what would undo it (inverse), who made it and through
 	// which entry point, and the document version it was computed against. Written in the same
 	// transaction as the document it changed — a change without its revision, or a revision
@@ -1942,6 +1954,15 @@ type Querier interface {
 	// has a mailbox) or address (taken) — the allocation service handles both: it
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
 	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
+	// Carry one recognized-but-not-yet-onboarded contribution into boards at status='pending',
+	// keeping its original created_at for the same reason as above.
+	//
+	// Guarded by NOT EXISTS rather than ON CONFLICT: boards_identity_key is PARTIAL
+	// (WHERE status IN ('pending','active')), so a conflict clause only covers a live row and
+	// would happily add a second copy beside a rejected or retired one. Any row under this
+	// identity, whatever its status, means the board already reached the catalog — so there is
+	// nothing to carry, and a re-run writes nothing.
+	InsertPendingBoardAt(ctx context.Context, arg InsertPendingBoardAtParams) (int64, error)
 	// Creates a job visible only to its creator: the jd-tailor-intake private-JD path
 	// (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
 	// never an upsert — external_id is a synthetic value scoped to this one submission
@@ -2563,6 +2584,17 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
+	// Queries used only by the one-off cmd/backfill-link-contributions, which carries the
+	// rows #2357 left behind in link_contributions into boards and board_submissions. That
+	// change moved the read and write paths but not the data, so 401 contributions from 11
+	// users stopped being visible and 28 unprocessed ones stopped being actionable.
+	//
+	// Deleted with the worker once the backfill has run in prod and link_contributions is
+	// dropped.
+	// Every contribution, oldest first, so the carry preserves submission order. Ordered by
+	// id rather than created_at: two rows can share a timestamp, and the id is the sequence
+	// the submissions actually arrived in.
+	ListLinkContributionsForBackfill(ctx context.Context) ([]ListLinkContributionsForBackfillRow, error)
 	// Every board a crawl still visits, across all providers — the identity cmd/prune needs
 	// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
 	// whole row: the guard asks a set-membership question and nothing else.
