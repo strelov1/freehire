@@ -2,7 +2,15 @@
 <html lang="%lang%">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- `interactive-widget=resizes-content` asks the browser to SHRINK the page when the
+    on-screen keyboard opens, rather than leave it full height and cover the bottom of it.
+    Without it a `bottom: 0` panel — the search box's suggestions on a phone — sits behind
+    the keys with its last rows unreachable. Chrome honours it; Safari ignores it, which is
+    why the panel also measures `visualViewport` for itself (see HeaderSearch). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <!-- Warm the company-logo origin: every job row and company header renders an
     <img> from it (CompanyLogo → $lib/logo), so a listing opens a connection to it
     within the first paint, on every page that matters. Its handshake is otherwise

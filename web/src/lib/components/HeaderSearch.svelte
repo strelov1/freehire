@@ -271,6 +271,51 @@
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
   const rowCount = $derived(suggestOpen ? rows.length : 0);
 
+  /** How much of the screen's bottom the on-screen keyboard is covering, in pixels.
+   *
+   *  Neither mobile browser shrinks the PAGE for the keyboard on its own — it is drawn
+   *  over the bottom of a viewport that stays full height — so the panel below, pinned
+   *  from the header to `bottom: 0`, ran under the keys with its last rows unreachable.
+   *  Which is the worst place to lose: the visitor has just typed, and the rows they are
+   *  reading are the ones the typing produced.
+   *
+   *  `visualViewport` is the part of the page actually left visible, so the difference
+   *  between it and the window is the keyboard. `app.html` also asks Chrome to shrink the
+   *  page itself (`interactive-widget=resizes-content`), and the two do not double up:
+   *  where the browser honours that, the window shrinks with it and this measures 0.
+   *
+   *  Held here rather than in a shared store because this panel is the only thing that
+   *  reaches the bottom edge today; a second one (a composer, a sheet) is when it earns
+   *  a module of its own. */
+  let keyboardInset = $state(0);
+
+  $effect(() => {
+    // Nothing to lift while the panel is shut, and no listener to keep either.
+    if (!suggestOpen) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const measure = () => {
+      // Only the phone-width panel has a bottom edge to lift: at `sm` and up it hangs off
+      // the box and is sized by `max-height`. Read the breakpoint the same way the
+      // autofocus check above reads it, so there is one answer to "is this a phone".
+      const wide = window.matchMedia('(min-width: 640px)').matches;
+      keyboardInset = wide
+        ? 0
+        : Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    };
+    measure();
+    // `scroll` as well as `resize`: iOS scrolls the visual viewport inside the layout one
+    // to keep the focused field visible, which moves the keyboard's top edge without
+    // changing its height.
+    viewport.addEventListener('resize', measure);
+    viewport.addEventListener('scroll', measure);
+    return () => {
+      viewport.removeEventListener('resize', measure);
+      viewport.removeEventListener('scroll', measure);
+      keyboardInset = 0;
+    };
+  });
+
   function close() {
     dismissed = true;
     activeIndex = -1;
@@ -422,6 +467,19 @@
           // than the bar that grows.
           'h-12 gap-2 rounded-md px-3 text-sm',
     )}
+    onpointerdown={(e) => {
+      // The whole box takes the caret, not just the field inside it. Probed at 390px: the
+      // field is 175px of a 278px box, and the other 103 — the rule, the magnifier, the
+      // `/` hint, the padding — landed on nothing at all. That reads as a search box that
+      // ignored the first tap and answered the second, better-aimed one.
+      //
+      // Only what is NOT itself a control: the scope prefix, the clear button and the
+      // All-filters trigger keep their own taps. `preventDefault` because the default for
+      // a press on a non-focusable box is to take focus AWAY from the field.
+      if ((e.target as HTMLElement | null)?.closest('button, input, a')) return;
+      e.preventDefault();
+      inputEl?.focus();
+    }}
   >
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
          scope-prefix, divided from the search icon. `variant` picks the popover body
@@ -542,6 +600,7 @@
     <ul
       id="role-suggestions"
       role="listbox"
+      style:bottom={keyboardInset > 0 ? `${keyboardInset}px` : null}
       aria-label="Search suggestions"
       class={cn(
         'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
