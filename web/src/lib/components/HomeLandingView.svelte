@@ -43,13 +43,13 @@
     scale: CatalogScale | null;
   } = $props();
 
-  /** How many category shortcuts to draw. The dropdown offers ten; eight fills two
-   *  tidy rows under the box on a laptop without the eye giving up on the second. */
-  const CHIP_LIMIT = 8;
-
-  /** How many countries to offer beside the crafts. Four is what fits on one line next
-   *  to "Remote" without the row wrapping on a laptop. */
-  const COUNTRY_CHIP_LIMIT = 4;
+  /** How many shortcuts each row draws. The dropdown offers ten crafts; six and three
+   *  are what fit on ONE line each at 1280px, measured rather than guessed — every chip
+   *  carries a six-digit count, so eight of them wrapped to three lines and pushed the
+   *  catalogue's own figures off the first screen. Those figures are the argument this
+   *  page makes; the shortcuts are a convenience, so the shortcuts give way. */
+  const CHIP_LIMIT = 6;
+  const COUNTRY_CHIP_LIMIT = 3;
 
   type Chip = { href: string; label: string; count?: number };
 
@@ -185,10 +185,11 @@
   </a>
 {/snippet}
 
-<!-- Hero. Not quite a full viewport: `-8rem` rather than the 3.5rem header alone, so
-     the strip below shows about a line at the fold. A landing whose first screen ends
-     exactly at the fold reads as the whole page, and nobody scrolls a page they have
-     already finished.
+<!-- Hero. Deliberately shorter than the viewport: `-19rem` is the 3.5rem header plus
+     the room the figures below need, so how big the catalogue is lands on the FIRST
+     screen rather than under it. The number is the argument — a stranger deciding
+     whether to type anything into the box is answering "does this place even have my
+     job", and making them scroll to find out asks them to trust it first.
 
      `svh` rather than `vh`: on mobile Safari `100vh` counts browser chrome that is not
      there, so the box it centres would sit noticeably below the middle of the screen.
@@ -198,9 +199,9 @@
      fade from the top, moved to the horizontal centre because this hero is not a left
      column beside a visual. -->
 <section
-  class="dot-grid dot-grid-centred -mx-4 flex min-h-[calc(100svh-8rem)] flex-col items-center justify-center px-4 pb-16 pt-12"
+  class="dot-grid dot-grid-centred -mx-4 flex min-h-[calc(100svh-19rem)] flex-col items-center justify-center px-4 pb-10 pt-10"
 >
-  <div class="flex w-full max-w-2xl flex-col items-center gap-8">
+  <div class="flex w-full max-w-2xl flex-col items-center gap-6">
     <!-- No mark or wordmark here: the header carries both, three centimetres above and
          on the same screen. Repeating them made the page introduce itself twice before
          it said anything. -->
@@ -243,9 +244,9 @@
        reads, so the two pages cannot quote numbers measured at different moments —
        and a figure the snapshot could not measure is dropped rather than shown as a
        zero. `tabular-nums` keeps the row from twitching as the counts move. -->
-  <section class="border-t border-border py-12 sm:py-16">
+  <section class="border-t border-border py-10">
     <SectionLabel text="the catalogue, today" />
-    <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">
+    <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
       {#each figures as f (f.label)}
         <!-- `flex-col-reverse` so the number reads first and the label sits under it,
              while the DOM keeps the term before its description. The label is written
@@ -259,7 +260,7 @@
         </div>
       {/each}
     </dl>
-    <div class="mt-8">
+    <div class="mt-6">
       {@render onward(resolve('/open'), 'Every number, live, with the endpoint behind it')}
     </div>
   </section>

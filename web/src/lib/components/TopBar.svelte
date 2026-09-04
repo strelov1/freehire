@@ -33,7 +33,6 @@
   // The brand, the bell and the menu stay — sign-in has to remain reachable.
   const bareHeader = $derived(page.url.pathname === '/');
 
-
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs
   // edge to edge under its own icon rail, so the header drops the centered `max-w-6xl`
   // and does the same: brand hard left, menu hard right. The search keeps a readable
@@ -113,6 +112,10 @@
              with the same glyph and a full label. Shrinking them to bare icons would
              trade a legible row for five guesses. -->
         <nav aria-label="Site" class="hidden items-center gap-5 sm:flex lg:gap-6">
+          <!-- Divides the nav from the wordmark, the same rule the search box draws
+               between its Location scope and the field. Without it the first link sat
+               one word-gap from "freehire" and read as part of it. -->
+          <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
           {#each HEADER_LINKS as link (link.href)}
             {@const Icon = link.icon}
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- HEADER_LINKS holds this site's own route paths; resolve() takes a literal, not a variable -->
