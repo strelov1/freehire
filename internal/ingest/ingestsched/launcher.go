@@ -201,17 +201,23 @@ const maxExitStatus = 255
 // erroring because the caller already has the raw text in Result: a status outside 0-255 is
 // systemd saying something other than "the process exited with", and the run is finished
 // either way. Losing the claim over an odd number would be the worse failure.
-// The two parse failures mean different things and must not collapse into one. Text that
-// is not a number at all carries no status, so it reads as 0; a number too large to hold
-// is still a number, and strconv.Atoi hands back the saturated value alongside ErrRange, so
-// it clamps like any other oversized status. Treating both as 0 would record "exited
-// cleanly" for a unit that said something enormous.
+// Parsed with ParseInt at the WIDTH the column holds, not with Atoi into a
+// platform-width int. Atoi yields a value whose size depends on the architecture, so
+// narrowing it later is a conversion no reader — and no analyser — can call safe from the
+// line itself; ParseInt saturates at the requested width instead, and its result is in
+// range by construction.
+//
+// The two parse failures mean different things and must not collapse into one. Text that is
+// not a number carries no status, so it reads as 0; a number too large to hold is still a
+// number, and ParseInt hands back the saturated value alongside ErrRange, so it clamps like
+// any other oversized status. Treating both as 0 would record "exited cleanly" for a unit
+// that said something enormous.
 func exitStatus(raw string) int {
-	code, err := strconv.Atoi(strings.TrimSpace(raw))
+	code, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 32)
 	if err != nil && !errors.Is(err, strconv.ErrRange) {
 		return 0
 	}
-	return clamp(code, 0, maxExitStatus)
+	return clamp(int(code), 0, maxExitStatus)
 }
 
 func shardLabel(run Run) string {
