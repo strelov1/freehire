@@ -523,6 +523,32 @@ type GmailConnection struct {
 	Scopes          []string           `json:"scopes"`
 }
 
+// Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
+type IngestRunState struct {
+	Provider       string             `json:"provider"`
+	Shard          int32              `json:"shard"`
+	NextDueAt      pgtype.Timestamptz `json:"next_due_at"`
+	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
+	LastStartedAt  pgtype.Timestamptz `json:"last_started_at"`
+	LastFinishedAt pgtype.Timestamptz `json:"last_finished_at"`
+	LastExitCode   pgtype.Int4        `json:"last_exit_code"`
+	LastError      pgtype.Text        `json:"last_error"`
+}
+
+// Per-provider ingest scheduling OVERRIDES. The roster is boards; a provider absent from this table is scheduled on the column defaults. enabled=false requires a disabled_reason. managed is rollout-only and is dropped once every provider is cut over — see openspec/changes/ingest-scheduler-in-db/tasks.md task 8.5.
+type IngestSchedule struct {
+	Provider       string             `json:"provider"`
+	Shards         int32              `json:"shards"`
+	CadenceSec     int32              `json:"cadence_sec"`
+	TimeoutSec     int32              `json:"timeout_sec"`
+	Enabled        bool               `json:"enabled"`
+	DisabledReason pgtype.Text        `json:"disabled_reason"`
+	Notes          pgtype.Text        `json:"notes"`
+	Managed        bool               `json:"managed"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type InsightsCompanyGrowth struct {
 	CompanySlug   string `json:"company_slug"`
 	OpenCount     int32  `json:"open_count"`
