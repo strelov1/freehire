@@ -26,6 +26,9 @@ type fakeRepo struct {
 	rows map[uuid.UUID]fakeRow
 	// writes counts insertions, so a row can record the order it arrived in.
 	writes int
+	// appearanceDefaults holds at most one saved row per user, mirroring the real table's
+	// user_id primary key.
+	appearanceDefaults map[int64]db.CvAppearanceDefault
 }
 
 type fakeRow struct {

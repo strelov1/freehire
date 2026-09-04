@@ -4,7 +4,7 @@
   import { Bell, Bookmark, ChevronRight } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { ensureSaved, matchedSavedSearch, setPendingAlert } from '$lib/saveSearchAlert';
@@ -66,7 +66,7 @@
     if (busy) return;
     if (!isAuthenticated()) {
       setPendingAlert(query); // resume the save after sign-in (incl. an OAuth redirect)
-      openAuthDialog();
+      promptSignIn();
       return;
     }
     busy = true;

@@ -1,0 +1,17 @@
+[Unit]
+Description=freehire: release main to production once CI is green on it
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+# Runs as root, like release.sh itself, which it calls: the release drops to the freehire
+# user for every git and build step and needs root only to reload nginx and repoint the
+# color symlink. Reads AUTODEPLOY, GITHUB_STATUS_TOKEN, TELEGRAM_BOT_TOKEN and
+# SITE_ALERT_CHAT_ID from /opt/freehire/.env (0600).
+ExecStart=/opt/freehire/bin/autodeploy.sh
+# A release builds Go and the web bundle; anything under half an hour is normal, and
+# hanging forever is not. TimeoutStartSec turns a wedged release into a failed unit,
+# which is what the Telegram alert and the commit status are for.
+TimeoutStartSec=45min
+# NOT niced, unlike the alert timers: this is the release, and a release that loses the
+# CPU to a crawl fan-out just takes longer while production waits on it.

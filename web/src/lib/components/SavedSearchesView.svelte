@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Check, Pencil, Share2, Trash2 } from '@lucide/svelte';
+  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { signinUrl } from '$lib/signin';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { profileStore } from '$lib/profile.svelte';
@@ -156,7 +157,7 @@
 {#if !isAuthenticated()}
   <div class="flex flex-col items-center gap-3 py-12 text-center">
     <p class="text-sm text-muted-foreground">Sign in to manage your saved searches.</p>
-    <Button variant="primary" onclick={() => openAuthDialog()}>Sign in</Button>
+    <Button variant="primary" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
   </div>
 {:else}
   <div class="flex flex-col gap-6">

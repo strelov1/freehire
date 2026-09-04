@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { popularCollectionLinks } from '$lib/collections';
   import { reopen } from '$lib/consent.svelte';
+  import { SOCIAL_LINKS } from '$lib/socialLinks';
   import { ProviderIcon } from '$lib/ui';
 
   // Grouped navigation over existing routes only — kept deliberately small so the
@@ -65,13 +66,8 @@
   ];
 
   // External profiles: open in a new tab, each rendered with its ProviderIcon brand
-  // mark. All three follow the muted text colour (so they match and hover works).
-  const socials = [
-    { provider: 'github', label: 'GitHub', href: 'https://github.com/strelov1/freehire' },
-    { provider: 'linkedin', label: 'LinkedIn', href: 'https://linkedin.com/company/freehire-dev/' },
-    { provider: 'telegram', label: 'Telegram', href: 'https://t.me/freehiredev' },
-    { provider: 'discord', label: 'Discord', href: 'https://discord.gg/sYnZksswR' },
-  ];
+  // mark. All follow the muted text colour (so they match and hover works). Shared
+  // with the /signin brand panel — see $lib/socialLinks.
 
   // A strip below the four groups rather than a fifth column: the grid is
   // sm:grid-cols-4, and ten links would not fit one anyway. Kept out of `groups`
@@ -180,7 +176,7 @@
           Cookie settings
         </button>
         <div class="flex items-center gap-3">
-          {#each socials as social (social.provider)}
+          {#each SOCIAL_LINKS as social (social.provider)}
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
             <a href={social.href}
               target="_blank"

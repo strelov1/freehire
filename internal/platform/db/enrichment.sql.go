@@ -139,6 +139,41 @@ func (q *Queries) DeleteIneligibleEnrichmentOutbox(ctx context.Context, maxRows 
 	return result.RowsAffected(), nil
 }
 
+const enqueueEnrichmentForCompanySlugs = `-- name: EnqueueEnrichmentForCompanySlugs :execrows
+INSERT INTO enrichment_outbox (job_id, target_version)
+SELECT id, $1::int
+FROM jobs
+WHERE company_slug = ANY($2::text[])
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND is_tech IS TRUE
+  AND description <> ''
+ON CONFLICT (job_id, target_version) DO NOTHING
+`
+
+type EnqueueEnrichmentForCompanySlugsParams struct {
+	TargetVersion int32    `json:"target_version"`
+	CompanySlugs  []string `json:"company_slugs"`
+}
+
+// Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
+// eligible jobs of the given company_slugs back into enrichment_outbox at the CURRENT
+// target version, regardless of their existing enrichment_version. Unlike
+// EnqueuePendingJobs (which only re-queues rows BELOW the target version), this also
+// picks up a job already enriched under the current version — the case after adding a
+// company to enrich.CompanyTypeHints, whose existing postings need a second pass with
+// the new prompt hint, not a version bump that would re-enrich the whole catalogue.
+// Same eligibility gate as EnqueuePendingJobs, so a re-run never queues work
+// ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
+// (not yet claimed) alone, so running this twice in a row costs nothing.
+func (q *Queries) EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg EnqueueEnrichmentForCompanySlugsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, enqueueEnrichmentForCompanySlugs, arg.TargetVersion, arg.CompanySlugs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const enqueuePendingJobs = `-- name: EnqueuePendingJobs :execrows
 INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, $1::int

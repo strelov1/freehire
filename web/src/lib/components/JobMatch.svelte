@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Ban, Check, FileText, Lock, RotateCcw, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { signinUrl } from '$lib/signin';
   import {
     resolveMatchState,
     matchBarSegments,
@@ -333,7 +334,7 @@
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock class="size-3.5 shrink-0" />Sign in to see your match
         </span>
-        <Button variant="primary" size="sm" onclick={() => openAuthDialog('login')}>Sign in</Button>
+        <Button variant="primary" size="sm" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
       {:else}
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <FileText class="size-3.5 shrink-0" />Add your skills or upload a CV

@@ -3,7 +3,7 @@
   import { MessageSquare, Star } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import type { Company, CompanyFeedbackSummary } from '$lib/types';
   import CompanyFeedbackDialog from './CompanyFeedbackDialog.svelte';
   import CompanyFeedbackListDialog from './CompanyFeedbackListDialog.svelte';
@@ -71,7 +71,7 @@
   }
   function openFeedbackForm() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     showFeedbackList = false;

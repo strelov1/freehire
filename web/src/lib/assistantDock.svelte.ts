@@ -3,9 +3,9 @@
 //
 // The panel is opened from inside the Experience tab and the offset has to be applied by
 // `my/+layout.svelte`, on the other side of a route boundary a page cannot pass props
-// through. Same shape as auth-dialog.svelte.ts, and safe under SSR for the same reason:
-// it is a client-only UI concern that defaults to nothing and is only ever mutated from
-// browser interactions.
+// through. A module-level $state singleton, safe under SSR because it is a client-only
+// UI concern that defaults to nothing and is only ever mutated from browser
+// interactions.
 
 /**
  * The docked panel's width. Fixed rather than measured: the shell's offset and the media

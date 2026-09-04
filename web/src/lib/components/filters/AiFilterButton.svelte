@@ -1,20 +1,20 @@
 <script lang="ts">
   import { MessageSquareText } from '@lucide/svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import type { FilterStore } from '$lib/filters';
   import AiFilterDialog from './AiFilterDialog.svelte';
 
   // Rendered for everyone, signed in or not. Hiding it from signed-out visitors would
   // hide the feature from exactly the people who have not yet been given a reason to
-  // sign in; the gate is on activation, through the app's existing auth dialog.
+  // sign in; the gate is on activation, which sends them to /signin.
   let { store }: { store: FilterStore } = $props();
 
   let open = $state(false);
 
   function activate() {
     if (!isAuthenticated()) {
-      openAuthDialog();
+      promptSignIn();
       return;
     }
     open = true;

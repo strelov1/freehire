@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Handshake } from '@lucide/svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { Button } from '$lib/ui';
 
   // Shown on a vacancy and on the company page when the company has an approved referrer.
@@ -32,7 +32,7 @@
 
   async function ask() {
     if (!isAuthenticated()) {
-      openAuthDialog();
+      promptSignIn();
       return;
     }
     if (!Modal) {

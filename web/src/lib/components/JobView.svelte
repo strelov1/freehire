@@ -5,8 +5,8 @@
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
   import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
@@ -193,9 +193,10 @@
     if (!applied) showApplyPrompt = true;
   }
 
-  // Gate — "Sign up" routes to /onboarding (registration is a step there now, not a
-  // dialog — see auth-dialog.svelte.ts); "View without signing in" opens the posting
-  // in a new tab (the navigation the click was holding back).
+  // Gate — "Sign up" routes to /onboarding, which bounces an anonymous visitor to
+  // /signin to register before continuing into the CV/profile wizard; "View without
+  // signing in" opens the posting in a new tab (the navigation the click was holding
+  // back).
   function signUpFromGate() {
     showSignInPrompt = false;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
@@ -224,33 +225,31 @@
     showApplyPrompt = false;
   }
 
-  // Saving requires an account: a signed-out click opens the sign-in dialog
-  // instead (no auto-save afterwards — once signed in they can click again).
+  // Saving requires an account.
   function onSaveClick() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     toggleSave();
   }
 
-  // Reporting also requires an account (the report is attributed to the user); a
-  // signed-out click opens sign-in instead of the dialog.
+  // Reporting also requires an account (the report is attributed to the user).
   function onReportClick() {
     if (!isAuthenticated()) {
-      openAuthDialog('login');
+      promptSignIn();
       return;
     }
     showReport = true;
   }
 
   // The discussion is members-only: a signed-out click is held back (the link
-  // does not navigate) and the sign-in dialog opens instead. The href stays put
+  // does not navigate) and the sign-in page opens instead. The href stays put
   // so the route is still SSR-linkable for signed-in visitors.
   function onDiscussionClick(e: MouseEvent) {
     if (!isAuthenticated()) {
       e.preventDefault();
-      openAuthDialog('login');
+      promptSignIn();
     }
   }
 

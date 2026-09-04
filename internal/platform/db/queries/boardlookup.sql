@@ -1,22 +1,7 @@
--- name: CreateContribution :one
--- Record a contribution of a novel company board. The unique index on (source, board) over the
--- live statuses (migration 0049) rejects a second contribution of a board already queued or
--- onboarded; the repository maps that violation to ErrBoardAlreadyContributed. A board that was
--- rejected releases its identity, so it can be contributed again. The AI-credits reward is
--- granted separately by the caller (credits.Reward), idempotent by the contribution id.
-INSERT INTO link_contributions (submitted_by, url, source, board, surface)
-VALUES (sqlc.arg(submitted_by)::bigint, sqlc.arg(url), sqlc.arg(source), sqlc.arg(board), sqlc.arg(surface))
-RETURNING *;
-
-
--- name: CreateReviewContribution :one
--- Record an unrecognized-but-valid link for manual review: source/board unset, status
--- 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
--- duplicate submission of the same url; the repository maps that violation to
--- ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
-INSERT INTO link_contributions (submitted_by, url, status, surface)
-VALUES (sqlc.arg(submitted_by)::bigint, sqlc.arg(url), 'review', sqlc.arg(surface))
-RETURNING *;
+-- Board lookups behind the "contribute a board" flow: does the catalogue already crawl
+-- this board, and which board does a pasted job id belong to. Named after
+-- link_contributions for historical reasons — that table is gone (migration 0131), and
+-- these queries read `jobs`.
 
 -- name: JobsExistForBoard :one
 -- Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
@@ -54,9 +39,3 @@ LIMIT 1;
 SELECT company, company_slug FROM jobs
 WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern) AND company_slug <> ''
 LIMIT 1;
-
--- name: ListContributionsByUser :many
--- The "my contributions" list: one user's contributions, newest first.
-SELECT * FROM link_contributions
-WHERE submitted_by = $1
-ORDER BY created_at DESC;

@@ -5,7 +5,7 @@
   import { refuses, remaining, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MatchAnalysisResponse } from '$lib/types';
@@ -114,7 +114,7 @@
       variant="primary"
       size="lg"
       disabled={tailoring}
-      onclick={guest ? () => openAuthDialog('login') : startTailoring}
+      onclick={guest ? promptSignIn : startTailoring}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
       Tailor my CV

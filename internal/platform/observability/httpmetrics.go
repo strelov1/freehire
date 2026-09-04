@@ -28,6 +28,51 @@ var httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help: "API responses by method and HTTP status code.",
 }, []string{"method", "status"})
 
+// httpRouteRequests counts every response by the ROUTE PATTERN it matched, and by nothing else.
+//
+// This is the separate metric httpRequests' comment reserves rather than the route label it
+// refuses. Route ALONE is ~700 series; route x status x method is the tens of thousands that
+// counter exists to avoid, so the two questions stay in two metrics: "is the error rate rising"
+// is httpRequests, "where is the traffic going" is this one. Adding a second label here puts
+// the cardinality back and defeats the split — TestHTTPRouteMetricLabelsAreBounded says so.
+var httpRouteRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "freehire_http_route_requests_total",
+	Help: "API responses by the route pattern they matched (not the request path).",
+}, []string{"route"})
+
+// unmatchedRoute is the label for a request no registered route claimed.
+//
+// It is a constant rather than the path the caller asked for, and that is the whole point of
+// routeLabel: see there.
+const unmatchedRoute = "unmatched"
+
+// routeLabel returns the registered PATTERN a request matched — "/api/v1/jobs/:id", never
+// "/api/v1/jobs/senior-go-engineer-42".
+//
+// The pattern is a string the app built at registration time, so it is both bounded (the router
+// decides the vocabulary, not the caller) and safe to store (it shares nothing with the recycled
+// request buffer — the two properties methodLabel had to construct by hand).
+//
+// Both properties are lost in exactly one case, which is why the guard is here. When no route
+// matched, Fiber's Ctx.Route() synthesises a Route whose Path is c.pathOriginal — the caller's
+// raw path, aliasing the request buffer. Returning it would hand any caller the power to mint a
+// series per request AND repeat the label-corruption failure that answered /metrics with a 500 on
+// prod 2026-08-20. That synthetic route is marked by an empty Handlers slice (a registered route
+// cannot have one — Fiber panics at registration), so that is what this tests.
+//
+// A request that reaches no HANDLER but does pass a middleware — a 404 — is a subtler case: Fiber
+// leaves c.route pointing at the last middleware that ran, and app.Use registers at "/". Those
+// land on the "/" series rather than on unmatchedRoute, which is correct enough (they are counted,
+// bounded, and not confusable with a real endpoint) and not worth reaching into unexported state
+// to refine.
+func routeLabel(c *fiber.Ctx) string {
+	route := c.Route()
+	if route == nil || len(route.Handlers) == 0 {
+		return unmatchedRoute
+	}
+	return route.Path
+}
+
 // methodLabel maps a request method onto one of a fixed set of package-level constants.
 //
 // It exists for two reasons, and the first one broke production. fasthttp backs c.Method() with
@@ -82,6 +127,7 @@ func HTTPMetrics() fiber.Handler {
 			return err
 		}
 		httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(c.Response().StatusCode())).Inc()
+		httpRouteRequests.WithLabelValues(routeLabel(c)).Inc()
 		return nil
 	}
 }
@@ -98,6 +144,7 @@ func CountErrors(next fiber.ErrorHandler) fiber.ErrorHandler {
 	return func(c *fiber.Ctx, err error) error {
 		rendered := next(c, err)
 		httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(c.Response().StatusCode())).Inc()
+		httpRouteRequests.WithLabelValues(routeLabel(c)).Inc()
 		return rendered
 	}
 }

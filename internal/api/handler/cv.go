@@ -183,6 +183,11 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// binary is configured; the rest still works.
 	api.Get("/cv-templates", mw.cookie, h.ListCVTemplates)
 	api.Get("/cv-fonts", mw.cookie, h.ListCVFonts)
+	// The candidate's personal defaults for a NEW CV's template/typography/margins. Cookie-only:
+	// a personal setting, not something the in-app assistant needs to touch. A flat path
+	// (not nested under /me/cvs/:id) — this is not a CV, it never collides with the :id routes.
+	api.Get("/me/cv-appearance-defaults", mw.cookie, h.GetCVAppearanceDefaults)
+	api.Put("/me/cv-appearance-defaults", mw.cookie, h.SetCVAppearanceDefaults)
 	// Listing takes a key: it is a read of the caller's own tailored copies, and it is where
 	// a CLI learns the CV id every other keyed route here is addressed by. Creating a blank
 	// CV stays cookie-only — authoring a whole document is the browser's.
@@ -288,7 +293,8 @@ type cvTailoredResponse struct {
 
 type createCVRequest struct {
 	Title string `json:"title"`
-	// TemplateID selects the template; empty defaults to the classic-ats template.
+	// TemplateID selects the template; empty falls back to the caller's saved appearance
+	// default (CreateCV), or the classic-ats system default when they have none saved.
 	TemplateID string `json:"template_id"`
 	// Seed pre-fills the new CV from the caller's stored résumé structure when available.
 	Seed bool `json:"seed"`
@@ -362,7 +368,19 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	tmplID, err := validCVTemplate(in.TemplateID)
+	// An explicit template on the request always wins; an omitted one falls back to the
+	// caller's saved appearance defaults, then to the system default — never straight to
+	// classic-ats the way validCVTemplate("") would on its own. The request has no
+	// style/margin fields, so those always come from the saved (or system) defaults.
+	defaults, _, err := h.cvStore.GetAppearanceDefaults(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	requestedTemplateID := in.TemplateID
+	if requestedTemplateID == "" {
+		requestedTemplateID = defaults.TemplateID
+	}
+	tmplID, err := validCVTemplate(requestedTemplateID)
 	if err != nil {
 		return err
 	}
@@ -376,6 +394,8 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 			doc = cv.Seed(st)
 		}
 	}
+	doc.Style = defaults.Style
+	doc.Margins = defaults.Margins
 
 	meta, err := h.cvStore.Create(c.Context(), userID, cvTitle(in.Title), tmplID, doc)
 	if err != nil {

@@ -1,6 +1,6 @@
 // The OAuth providers this app knows how to label, and how to fetch the subset the
-// server has actually enabled. Shared by every credential surface (AuthDialog's sign-in,
-// /onboarding's register/sign-in step) so the label map and the "unreachable endpoint
+// server has actually enabled. Used by /signin (register, sign in, and the recovery
+// steps all share one credential form) so the label map and the "unreachable endpoint
 // just means no provider buttons" fallback exist in exactly one place.
 import { api } from './api';
 

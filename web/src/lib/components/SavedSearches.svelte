@@ -1,8 +1,9 @@
 <script lang="ts">
   import { Bell, Bookmark, Pencil, Trash2 } from '@lucide/svelte';
+  import { page } from '$app/state';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { signinUrl } from '$lib/signin';
   import { canonicalQuery, savedSearchQuery } from '$lib/filters';
   import type { StagedFilters } from '$lib/stagedFilters.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
@@ -136,13 +137,12 @@
 
 <div class="flex flex-col gap-4">
   {#if !isAuthenticated()}
-    <button
-      type="button"
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
+    <a href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}
       class="self-start text-sm font-medium text-primary underline-offset-4 hover:underline"
-      onclick={() => openAuthDialog()}
     >
       Sign in to save filters
-    </button>
+    </a>
   {:else}
     <!-- Zone 1: alerts for the filters staged right now. Save is the primary action;
          once saved, the channel toggles (Telegram / Email) render in place. -->

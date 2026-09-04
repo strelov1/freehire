@@ -10,12 +10,19 @@ Snapshot taken 2026-09-01 from `/etc/systemd/system/freehire-*` and `/opt/freehi
 
 ```
 systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
-bin/        13 operator scripts (release, backups, alerting, ingest slotting)
+bin/        14 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 ```
 
-`systemd/freehire-ingest@.service` is one template; the 255 `freehire-ingest@<board>.timer`
-files beside it are per-source schedules, which is why the timer count dwarfs everything
-else. Nothing generates them — a new board means a new timer file, by hand.
+`systemd/freehire-ingest@.service` is one template; the `freehire-ingest@<provider>.timer`
+files beside it are per-provider schedules, which is why the timer count dwarfs everything
+else. `bin/gen-ingest-timers.sh` writes them from the board catalog
+(`SELECT provider FROM boards WHERE status IN ('pending','active')`) — it is not run by
+anything, so a new provider means running it on the host.
+
+**`bin/autodeploy.sh` is what actually ships main to production**, on a 10-minute timer:
+it waits for the commit to be green and then calls `release.sh`. What "green" means is the
+one thing worth knowing about it — see the comment above its check, which records the day
+a scheduled Dependabot run made every deploy stop, silently, at exit 0.
 
 ## Always true
 

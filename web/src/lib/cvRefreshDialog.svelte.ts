@@ -1,8 +1,8 @@
-// Global controller for the CV-refresh confirm dialog, the same singleton shape as
-// auth-dialog.svelte.ts: offerCvRefresh() is a plain async function (called from script
-// logic, not a template) and needs to await a yes/no from a dialog that must be mounted
-// somewhere in the tree exactly once — see CvRefreshDialog.svelte, mounted in the root
-// layout beside CookieConsent and SupportToast.
+// Global controller for the CV-refresh confirm dialog: offerCvRefresh() is a plain
+// async function (called from script logic, not a template) and needs to await a
+// yes/no from a dialog that must be mounted somewhere in the tree exactly once — see
+// CvRefreshDialog.svelte, mounted in the root layout beside CookieConsent and
+// SupportToast.
 
 let open = $state(false);
 let message = $state('');

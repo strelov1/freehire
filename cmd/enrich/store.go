@@ -67,6 +67,9 @@ func (s *dbStore) Job(ctx context.Context, id int64) (enrich.JobInput, error) {
 		// The dictionary-derived country/region columns tell the prompt builder to skip
 		// the geo ask when geography is already pinned (see enrich.GeoPinned).
 		GeoPinned: enrich.GeoPinned(j.Countries, j.Regions),
+		// A curated hint for a hand-picked set of known outsourcing/outstaffing
+		// companies (see enrich.CompanyTypeHints); empty for every other company.
+		CompanyTypeHint: enrich.CompanyTypeHints[j.CompanySlug],
 	}, nil
 }
 

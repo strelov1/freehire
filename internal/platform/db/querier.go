@@ -766,12 +766,6 @@ type Querier interface {
 	// be inferred from a NULL job_id — an absence cmd/prune also produces. Users may own several of
 	// these. Returns the metadata the list and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
-	// Record a contribution of a novel company board. The unique index on (source, board) over the
-	// live statuses (migration 0049) rejects a second contribution of a board already queued or
-	// onboarded; the repository maps that violation to ErrBoardAlreadyContributed. A board that was
-	// rejected releases its identity, so it can be contributed again. The AI-credits reward is
-	// granted separately by the caller (credits.Reward), idempotent by the contribution id.
-	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error)
 	// File one person's claim that they applied to a posting and were never answered.
 	//
@@ -801,11 +795,6 @@ type Querier interface {
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
 	CreateReport(ctx context.Context, arg CreateReportParams) (JobReport, error)
-	// Record an unrecognized-but-valid link for manual review: source/board unset, status
-	// 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
-	// duplicate submission of the same url; the repository maps that violation to
-	// ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
-	CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error)
 	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
 	// duplicate name; the partial UNIQUE (user_id) WHERE derived_from_profile rejects a
 	// second profile-derived row for the same user (both surfaced by the repository via
@@ -1203,6 +1192,17 @@ type Querier interface {
 	// Idempotent via the outbox's UNIQUE (job_id). Run in the same transaction as the job's
 	// UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueApplyFormCapture(ctx context.Context, jobID int64) (int64, error)
+	// Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
+	// eligible jobs of the given company_slugs back into enrichment_outbox at the CURRENT
+	// target version, regardless of their existing enrichment_version. Unlike
+	// EnqueuePendingJobs (which only re-queues rows BELOW the target version), this also
+	// picks up a job already enriched under the current version — the case after adding a
+	// company to enrich.CompanyTypeHints, whose existing postings need a second pass with
+	// the new prompt hint, not a version bump that would re-enrich the whole catalogue.
+	// Same eligibility gate as EnqueuePendingJobs, so a re-run never queues work
+	// ClaimEnrichmentBatch would refuse anyway. ON CONFLICT leaves a row already pending
+	// (not yet claimed) alone, so running this twice in a row costs nothing.
+	EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg EnqueueEnrichmentForCompanySlugsParams) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and confirmed technical), so an already-enriched job is not
@@ -1429,6 +1429,9 @@ type Querier interface {
 	// repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
 	// other provider passes '' here, matching the column's default.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
+	// The user's saved CV appearance defaults, if any. No row means the user has never saved
+	// any — the caller falls back to the system defaults rather than treating this as an error.
+	GetCVAppearanceDefaults(ctx context.Context, userID int64) (CvAppearanceDefault, error)
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
 	// the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
@@ -1992,6 +1995,10 @@ type Querier interface {
 	// detail endpoint still serves it, and leaving it unmarked would make the facet's
 	// meaning depend on lifecycle state.
 	JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error)
+	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
+	// this board, and which board does a pasted job id belong to. Named after
+	// link_contributions for historical reasons — that table is gone (migration 0131), and
+	// these queries read `jobs`.
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -2298,8 +2305,6 @@ type Querier interface {
 	// The prefix is passed already terminated by the caller (the session id plus '#'), so a
 	// session id that is a prefix of another cannot borrow its charges.
 	ListConsumptionRefsByPrefix(ctx context.Context, arg ListConsumptionRefsByPrefixParams) ([]pgtype.Text, error)
-	// The "my contributions" list: one user's contributions, newest first.
-	ListContributionsByUser(ctx context.Context, submittedBy int64) ([]LinkContribution, error)
 	// Up to $2 (board, region) pairs currently in an active cooldown for a provider,
 	// soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as
 	// cooldowns lapse, so a run does not keep probing the same few boards.
@@ -4361,6 +4366,9 @@ type Querier interface {
 	// form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
 	// every write so a form's age always describes the payload actually stored.
 	UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error
+	// Replaces the user's CV appearance defaults wholesale — there is exactly one row per user,
+	// so a save always means "this is the new complete set", never a partial patch.
+	UpsertCVAppearanceDefaults(ctx context.Context, arg UpsertCVAppearanceDefaultsParams) (CvAppearanceDefault, error)
 	// Store the grant a calendar consent produced, and record that it now covers the calendar.
 	//
 	// Three things this deliberately does not do. It does not touch `email`: a candidate who

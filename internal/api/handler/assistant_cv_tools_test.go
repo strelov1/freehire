@@ -129,6 +129,17 @@ func (r *cvRepo) MergeAutopilotEntry(_ context.Context, id uuid.UUID, userID int
 	return 1, nil
 }
 
+// GetAppearanceDefaults/UpsertAppearanceDefaults are unused by anything in this file — no
+// case here saves or reads appearance defaults — so GetAppearanceDefaults always reports
+// "nothing saved" and Upsert is never expected to be called.
+func (r *cvRepo) GetAppearanceDefaults(context.Context, int64) (db.CvAppearanceDefault, error) {
+	return db.CvAppearanceDefault{}, pgx.ErrNoRows
+}
+
+func (r *cvRepo) UpsertAppearanceDefaults(_ context.Context, userID int64, templateID string, style, margins []byte) (db.CvAppearanceDefault, error) {
+	return db.CvAppearanceDefault{UserID: userID, TemplateID: templateID, Style: style, Margins: margins}, nil
+}
+
 // testCVID is the CV every case in this file addresses. Fixed so a failure names a
 // stable value rather than a fresh random one.
 var testCVID = uuid.MustParse("55555555-5555-4555-8555-555555555555")

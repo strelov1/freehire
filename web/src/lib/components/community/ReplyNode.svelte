@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { communityFormError } from '$lib/community';
   import type { CommunityReply } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -63,7 +63,7 @@
 
   function onReplyClick() {
     if (!isAuthenticated()) {
-      openAuthDialog();
+      promptSignIn();
       return;
     }
     replying = !replying;

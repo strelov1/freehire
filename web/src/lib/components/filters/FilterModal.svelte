@@ -7,7 +7,7 @@
   import { Tooltip } from '$lib/ui';
   import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '$lib/facets';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { profileStore } from '$lib/profile.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '$lib/filters';
@@ -118,6 +118,11 @@
   // link when it doesn't.
   const showProfileAction = $derived(hasSavedTab && (!isAuthenticated() || profileStore.loaded));
   const profile = $derived(profileStore.profile);
+
+  function applyProfileOrSignIn() {
+    if (profile) staged.applyProfile(profile);
+    else promptSignIn();
+  }
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
@@ -293,10 +298,10 @@
 
 {#snippet profileAction()}
   {#if !isAuthenticated() || profile}
-    <!-- Signed-out: click opens the sign-in dialog; signed-in with a profile: applies it. -->
+    <!-- Signed-out: click sends the visitor to /signin; signed-in with a profile: applies it. -->
     <button
       type="button"
-      onclick={() => (profile ? staged.applyProfile(profile) : openAuthDialog('login'))}
+      onclick={applyProfileOrSignIn}
       class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />

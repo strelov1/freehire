@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -142,6 +143,121 @@ func TestHTTPMetricsLabelsAreBounded(t *testing.T) {
 	if n := testutil.CollectAndCount(httpRequests); n > 24 {
 		t.Errorf("the counter holds %d series after three distinct paths — a path or route label "+
 			"has crept in, and at ~700 routes that is tens of thousands of series", n)
+	}
+}
+
+// routeCount reads one series of the route counter, or 0 when that route has never been touched.
+func routeCount(t *testing.T, route string) float64 {
+	t.Helper()
+	return testutil.ToFloat64(httpRouteRequests.WithLabelValues(route))
+}
+
+// TestRouteMetricCountsThePatternNotThePath is the property that makes a route label affordable
+// at all: three requests to three different job slugs are three increments of ONE series, because
+// the label is the registered pattern and not what the caller typed.
+func TestRouteMetricCountsThePatternNotThePath(t *testing.T) {
+	app := fiber.New()
+	app.Use(HTTPMetrics())
+	app.Get("/jobs/:slug", func(c *fiber.Ctx) error { return c.SendString("ok") })
+
+	before := routeCount(t, "/jobs/:slug")
+
+	for _, slug := range []string{"a-1", "b-2", "c-3"} {
+		resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/jobs/"+slug, nil))
+		if err != nil {
+			t.Fatalf("GET /jobs/%s: %v", slug, err)
+		}
+		resp.Body.Close()
+	}
+
+	if got := routeCount(t, "/jobs/:slug") - before; got != 3 {
+		t.Errorf("/jobs/:slug counted %v, want 3 — the label is probably the request path, which "+
+			"is one series per slug and unbounded", got)
+	}
+	if got := routeCount(t, "/jobs/a-1"); got != 0 {
+		t.Errorf("a literal path minted its own series (%v) — the label is not the route pattern", got)
+	}
+}
+
+// TestRouteMetricCountsAnErrorHandlerResponse covers the half that does not pass through the
+// middleware. Fiber renders a returned error in the ErrorHandler after the chain has unwound, so
+// without CountErrors doing its own increment every failing endpoint would read as no traffic.
+func TestRouteMetricCountsAnErrorHandlerResponse(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: CountErrors(fiber.DefaultErrorHandler)})
+	app.Use(HTTPMetrics())
+	app.Get("/gone", func(c *fiber.Ctx) error { return fiber.NewError(fiber.StatusNotFound, "no") })
+
+	before := routeCount(t, "/gone")
+
+	resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/gone", nil))
+	if err != nil {
+		t.Fatalf("GET /gone: %v", err)
+	}
+	resp.Body.Close()
+
+	if got := routeCount(t, "/gone") - before; got != 1 {
+		t.Errorf("/gone counted %v, want exactly 1", got)
+	}
+}
+
+// TestRouteLabelRefusesAnUnmatchedPath is the cardinality guard AND the buffer-aliasing guard in
+// one. When nothing matched, Fiber's Ctx.Route() hands back a synthetic Route carrying the
+// caller's raw path — so passing it through would let any caller mint a series per request and
+// would store a string backed by the recycled request buffer, which is what answered /metrics
+// with a 500 on prod 2026-08-20.
+func TestRouteLabelRefusesAnUnmatchedPath(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: CountErrors(fiber.DefaultErrorHandler)})
+	app.Get("/known", func(c *fiber.Ctx) error { return c.SendString("ok") })
+
+	before := routeCount(t, unmatchedRoute)
+
+	for _, path := range []string{"/nope-1", "/nope-2"} {
+		resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, path, nil))
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Fatalf("fixture: GET %s answered %d, want 404", path, resp.StatusCode)
+		}
+	}
+
+	if got := routeCount(t, unmatchedRoute) - before; got != 2 {
+		t.Errorf("unmatched requests counted %v on the %q series, want 2", got, unmatchedRoute)
+	}
+	if got := routeCount(t, "/nope-1"); got != 0 {
+		t.Errorf("an unmatched path minted its own series (%v) — the caller can now grow the "+
+			"metric without bound, one request at a time", got)
+	}
+}
+
+// TestRouteMetricLabelsAreBounded pins the split between this metric and httpRequests. Route is
+// ~700 series on its own; the moment a status or method label joins it, it becomes the tens of
+// thousands that the other counter refuses a route label to avoid, and having two metrics stops
+// buying anything.
+func TestRouteMetricLabelsAreBounded(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: CountErrors(fiber.DefaultErrorHandler)})
+	app.Use(HTTPMetrics())
+	app.Get("/one", func(c *fiber.Ctx) error { return c.SendString("ok") })
+	app.Post("/one", func(c *fiber.Ctx) error { return fiber.NewError(fiber.StatusBadRequest, "no") })
+
+	before := testutil.CollectAndCount(httpRouteRequests)
+
+	for _, req := range []*http.Request{
+		httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/one", nil),
+		httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/one", nil),
+	} {
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("%s /one: %v", req.Method, err)
+		}
+		resp.Body.Close()
+	}
+
+	// Two methods, two statuses, one route: one new series.
+	if got := testutil.CollectAndCount(httpRouteRequests) - before; got > 1 {
+		t.Errorf("one route produced %d new series — a status or method label has crept in, and "+
+			"at ~700 routes that multiplies into the cardinality this metric was split to avoid", got)
 	}
 }
 

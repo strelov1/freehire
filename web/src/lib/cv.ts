@@ -31,6 +31,14 @@ export interface CvMeta {
   updated_at: string;
 }
 
+/** The candidate's saved defaults for a NEW CV's template/typography/margins — or, when they
+ *  have never saved any, the system's standard CV defaults (never an absent/empty shape). */
+export interface CvAppearanceDefaults {
+  template_id: string;
+  style: Style;
+  margins: Margins;
+}
+
 /** The cover-letter surface's read shape. `present: false` is a pair never drafted — an empty
  *  state, not an error. `stale` reports that the model or the vacancy's language moved since;
  *  the letter stays readable, because it may already have been sent. */

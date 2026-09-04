@@ -368,6 +368,14 @@ type Cv struct {
 	LastClickAt        pgtype.Timestamptz `json:"last_click_at"`
 }
 
+type CvAppearanceDefault struct {
+	UserID     int64              `json:"user_id"`
+	TemplateID string             `json:"template_id"`
+	Style      []byte             `json:"style"`
+	Margins    []byte             `json:"margins"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CvLinkClick struct {
 	ID           int64              `json:"id"`
 	TracerLinkID pgtype.UUID        `json:"tracer_link_id"`
@@ -734,17 +742,6 @@ type LearnedAtsDomain struct {
 	ConfidentHits int32              `json:"confident_hits"`
 	FirstSeenAt   pgtype.Timestamptz `json:"first_seen_at"`
 	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
-}
-
-type LinkContribution struct {
-	ID          int64              `json:"id"`
-	SubmittedBy int64              `json:"submitted_by"`
-	URL         string             `json:"url"`
-	Source      pgtype.Text        `json:"source"`
-	Board       pgtype.Text        `json:"board"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Surface     string             `json:"surface"`
 }
 
 type Mailbox struct {

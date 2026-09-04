@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { api } from '$lib/api';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { formatMinorUnits } from '$lib/money';
   import { isAuthenticated } from '$lib/auth.svelte';
   import Seo from '$lib/components/Seo.svelte';
@@ -175,7 +175,7 @@
           <button
             type="button"
             class="mt-auto rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"
-            onclick={() => openAuthDialog()}>Sign in to upgrade</button
+            onclick={promptSignIn}>Sign in to upgrade</button
           >
         {/if}
         {#if error}

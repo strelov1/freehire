@@ -73,6 +73,64 @@ func TestStoreTailorSeedsBaseFromResumeWhenAbsent(t *testing.T) {
 	}
 }
 
+// The résumé-seed branch is the only place Store.Tailor mints a base CV from scratch, so it
+// is where saved appearance defaults must apply — see the add-cv-appearance-defaults change.
+func TestStoreTailorSeedsBaseFromSavedAppearanceDefaults(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	saved := AppearanceDefaults{
+		TemplateID: "timeline",
+		Style:      Style{FontFamily: "carlito", FontSize: 10, LineHeight: 0.65},
+		Margins:    Margins{Top: 1, Right: 1, Bottom: 1, Left: 1},
+	}
+	if _, err := s.SetAppearanceDefaults(ctx, 7, saved); err != nil {
+		t.Fatalf("set appearance defaults: %v", err)
+	}
+
+	seeder := fakeSeeder{ok: true, st: resumeextract.Structured{FullName: "Ada Lovelace"}}
+	base, _, _, err := s.Tailor(ctx, 7, 100, "Tailored: X", seeder, nil)
+	if err != nil {
+		t.Fatalf("tailor: %v", err)
+	}
+	if base.TemplateID != saved.TemplateID {
+		t.Errorf("base template = %q, want saved default %q", base.TemplateID, saved.TemplateID)
+	}
+	brec, err := s.Get(ctx, base.ID, 7)
+	if err != nil {
+		t.Fatalf("get base: %v", err)
+	}
+	if brec.Document.Style != saved.Style {
+		t.Errorf("base style = %+v, want saved default %+v", brec.Document.Style, saved.Style)
+	}
+	if brec.Document.Margins != saved.Margins {
+		t.Errorf("base margins = %+v, want saved default %+v", brec.Document.Margins, saved.Margins)
+	}
+}
+
+// Without saved appearance defaults, the résumé-seed branch must behave exactly as it did
+// before this change: the system's hardcoded defaults.
+func TestStoreTailorSeedsBaseFromSystemDefaultsWhenNoneSaved(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	seeder := fakeSeeder{ok: true, st: resumeextract.Structured{FullName: "Ada Lovelace"}}
+	base, _, _, err := s.Tailor(ctx, 7, 100, "Tailored: X", seeder, nil)
+	if err != nil {
+		t.Fatalf("tailor: %v", err)
+	}
+	if base.TemplateID != DefaultTemplateID {
+		t.Errorf("base template = %q, want system default %q", base.TemplateID, DefaultTemplateID)
+	}
+	brec, err := s.Get(ctx, base.ID, 7)
+	if err != nil {
+		t.Fatalf("get base: %v", err)
+	}
+	if brec.Document.Margins != DefaultMargins() {
+		t.Errorf("base margins = %+v, want system default %+v", brec.Document.Margins, DefaultMargins())
+	}
+}
+
 func TestStoreTailorRefusesWithoutResume(t *testing.T) {
 	repo := newFakeRepo()
 	s := NewStore(repo)

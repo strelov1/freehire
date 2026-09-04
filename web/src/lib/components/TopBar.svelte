@@ -1,13 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { afterNavigate, replaceState } from '$app/navigation';
-  import { authDialog, openAuthDialog, closeAuthDialog } from '$lib/auth-dialog.svelte';
-  import AuthDialog from './AuthDialog.svelte';
+  import { afterNavigate, goto } from '$app/navigation';
+  import { signinUrl } from '$lib/signin';
   import HeaderSearch from './HeaderSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
-  import { safeRedirect } from '$lib/safeRedirect';
   import { isFullBleedRoute } from '$lib/shellLayout';
   import { HEADER_LINKS } from '$lib/siteNav';
 
@@ -39,39 +37,25 @@
   // width and centers itself in the gap rather than stretching across the monitor.
   const fullBleed = $derived(isFullBleedRoute(page.url.pathname));
 
-  // The auth dialog lives at the layout level but its open state is a shared
-  // singleton (see auth-dialog.svelte), so deep components — like a job's Save
-  // button — can prompt sign-in through the same dialog this header renders.
-
-  // Surface auth prompts carried in the URL on the client, then clean it.
-  // ?auth_error: a failed OAuth callback. ?auth=required: a guarded page (e.g.
-  // /my/tracking, /jobs/swipe) bounced a signed-out visitor here to sign in. Runs in
-  // afterNavigate — not onMount — because this header lives in the persistent root
-  // layout: a guard that redirects here via client-side navigation never remounts
-  // it, so onMount would fire only on a cold load and miss the in-app bounce.
-  // afterNavigate covers both the initial load and every later navigation, and
-  // stays off the SSR path. The replaceState clean-up below removes the params, so
-  // the immediate re-run sees none and no loop forms.
-  // safeRedirect (in $lib/safeRedirect) accepts only a same-origin rooted path as
-  // the post-login redirect — never a scheme-relative "//host", absolute URL, or a
-  // backslash/control-char trick — mirroring the backend's SafeReturnPath, so a
-  // crafted link can't bounce the user off-site.
-
+  // A failed OAuth callback lands back wherever that attempt's `returnTo` pointed,
+  // carrying `?auth_error` (appended by the backend — see internal/api/handler/oauth.go)
+  // — which could be ANY page, not just one that itself knows about /signin. This is
+  // the one place that catches it regardless of where it landed, and sends the visitor
+  // on to /signin with the failure surfaced there instead of opening the in-place
+  // dialog over whatever page that happened to be. Runs in afterNavigate — not
+  // onMount — because this header lives in the persistent root layout: a redirect
+  // that lands here via client-side navigation never remounts it, so onMount would
+  // fire only on a cold load and miss the in-app bounce. afterNavigate covers both
+  // the initial load and every later navigation, and stays off the SSR path.
   afterNavigate(() => {
-    const params = page.url.searchParams;
-    if (params.has('auth_error')) {
-      // A real failure: seed the dialog's error banner.
-      openAuthDialog('login', 'Sign-in failed. Please try again.');
-    } else if (params.get('auth') === 'required') {
-      // Just a sign-in gate, not an error — open the dialog with no error banner.
-      // ?redirect (set by a guarded page) is the deep link to return to after
-      // sign-in; stash it before the URL is cleaned below.
-      openAuthDialog('login', null, safeRedirect(params.get('redirect')));
-    } else {
-      return;
-    }
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
-    replaceState(page.url.pathname, {});
+    if (!page.url.searchParams.has('auth_error')) return;
+    const query = [...page.url.searchParams]
+      .filter(([key]) => key !== 'auth_error')
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+      .join('&');
+    const returnTo = page.url.pathname + (query ? `?${query}` : '');
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
+    void goto(signinUrl({ returnTo, error: 'oauth' }), { replaceState: true });
   });
 </script>
 
@@ -141,7 +125,3 @@
     </div>
   </div>
 </header>
-
-{#if authDialog.open}
-  <AuthDialog bind:mode={authDialog.mode} initialError={authDialog.error} onClose={closeAuthDialog} />
-{/if}

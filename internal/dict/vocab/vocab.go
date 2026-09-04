@@ -190,6 +190,20 @@ var (
 		"other":         "none of the above (incl. generic horizontal productivity/CRM SaaS with no vertical)",
 	}
 	CompanyTypeValues = []string{"product", "startup", "outsource", "outstaff", "agency", "inhouse", "government"}
+	// CompanyTypeGloss is the one-line definition of each company_type value, supplied
+	// to the enrichment LLM so it distinguishes them by BUSINESS MODEL rather than
+	// guessing from a bare label — outsource vs outstaff in particular collapse to the
+	// same intuition ("body shop for hire") without an explicit contrast on who manages
+	// the day-to-day work. Every CompanyTypeValues entry has a gloss (asserted by a test).
+	CompanyTypeGloss = map[string]string{
+		"product":    "builds and sells its OWN software product(s) directly to customers — the software is the business itself",
+		"startup":    "early-stage company (a funding/maturity stage, not a service model) — small team, still finding product-market fit",
+		"outsource":  "builds custom software FOR OTHER companies under contract — the vendor's own team manages and delivers whole projects/products for external clients",
+		"outstaff":   "staff augmentation — places its own engineers to work EMBEDDED inside a client's team, day-to-day managed by the CLIENT (contrast with outsource, where the vendor manages delivery)",
+		"agency":     "work-for-hire studio delivering marketing, design, branding, or creative services for clients — the non-engineering-delivery counterpart of outsource",
+		"inhouse":    "an internal engineering/IT team inside a company whose core business is NOT software — builds tools for the company's own operations, not to sell",
+		"government": "a government or public-sector body/agency",
+	}
 	// CompanyFeedbackTypeValues is the closed category vocabulary for a company
 	// feedback/review entry (internal/engage/companyfeedback) — what aspect of the
 	// experience the review is about, Glassdoor-style.
