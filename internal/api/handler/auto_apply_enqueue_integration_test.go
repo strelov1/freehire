@@ -363,10 +363,14 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 		return resp
 	}
 
-	if got := decodeAutoApplyStatus(t, get("status-job", cookie)); got != nil {
+	beforeResp := get("status-job", cookie)
+	defer beforeResp.Body.Close()
+	if got := decodeAutoApplyStatus(t, beforeResp); got != nil {
 		t.Fatalf("status before any attempt = %v, want nil", got)
 	}
-	if got := decodeAutoApplyStatus(t, get("status-job", "")); got != nil {
+	anonResp := get("status-job", "")
+	defer anonResp.Body.Close()
+	if got := decodeAutoApplyStatus(t, anonResp); got != nil {
 		t.Fatalf("status for an anonymous caller = %v, want nil", got)
 	}
 
@@ -375,7 +379,9 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 	if enqueueResp.StatusCode != fiber.StatusOK {
 		t.Fatalf("enqueue status = %d, want 200", enqueueResp.StatusCode)
 	}
-	if got := decodeAutoApplyStatus(t, get("status-job", cookie)); got == nil || *got != "queued" {
+	queuedResp := get("status-job", cookie)
+	defer queuedResp.Body.Close()
+	if got := decodeAutoApplyStatus(t, queuedResp); got == nil || *got != "queued" {
 		t.Fatalf("status after enqueue = %v, want \"queued\"", got)
 	}
 
@@ -389,7 +395,9 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 		queueID); err != nil {
 		t.Fatalf("mark declined: %v", err)
 	}
-	if got := decodeAutoApplyStatus(t, get("status-job", cookie)); got == nil || *got != "declined" {
+	declinedResp := get("status-job", cookie)
+	defer declinedResp.Body.Close()
+	if got := decodeAutoApplyStatus(t, declinedResp); got == nil || *got != "declined" {
 		t.Fatalf("status after decline = %v, want \"declined\"", got)
 	}
 }
