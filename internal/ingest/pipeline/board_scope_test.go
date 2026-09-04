@@ -99,6 +99,31 @@ func TestRunReportsQualifyingBoardWhenEveryPostingWasRejected(t *testing.T) {
 	}
 }
 
+// TestRunReportsOnlyBoardsItActuallyCrawled: a run that only entered a subset of a
+// provider's boards (a targeted run, a shard) reports only those as qualifying — a board
+// simply absent from the run's entries can never appear, by construction of RunStats being
+// built entirely from what Run() iterated.
+func TestRunReportsOnlyBoardsItActuallyCrawled(t *testing.T) {
+	src := fakeSource{provider: "greenhouse", jobs: []sources.Job{{ExternalID: "1", Title: "Backend Engineer"}}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+	// Only "acme" is in this run's entries — "globex" (another board of the same provider)
+	// is not, standing in for a board this run never reached.
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["greenhouse"].QualifyingBoards
+	if !slices.Contains(got, "acme") {
+		t.Errorf("QualifyingBoards = %v, want it to contain the crawled board %q", got, "acme")
+	}
+	if slices.Contains(got, "globex") {
+		t.Errorf("QualifyingBoards = %v, must not contain a board this run never crawled", got)
+	}
+}
+
 // TestRunReportsNoBoardWhenAStreamDiedMidCrawl is the regression this board scope exists to
 // avoid (see design.md's "the Failed>0 refinement is load-bearing", freehire#725): a streaming
 // board that fails partway through after partial progress is deliberately treated as HEALTHY

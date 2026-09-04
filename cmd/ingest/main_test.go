@@ -85,6 +85,65 @@ func TestSweepBySource(t *testing.T) {
 	}
 }
 
+// The board-scoped close (freehire#2328) only ever touches a board the provider's adapter is
+// registered as listing to completion, and is withheld from a provider excluded for the same
+// reasons sweepBySource withholds the source-scoped close: a sweepGrace provider (its crawl
+// deliberately reaches only a slice) or a fullCatalog provider (already closes by source alone,
+// strictly broader — belt-and-braces since today's fullCatalog adapters are boardless anyway).
+// Duplicate board entries (a repeated board-file row, or one board id recurring across regional
+// slices) are de-duplicated so neither the close nor its log line double-counts.
+func TestSweepableBoards(t *testing.T) {
+	grace := map[string]time.Duration{"whatjobs": 14 * 24 * time.Hour}
+	fullCatalog := map[string]bool{"habr_career": true}
+	fullBoardListing := map[string]bool{"workday": true, "whatjobs": true, "habr_career": true}
+
+	cases := []struct {
+		name     string
+		provider string
+		stats    pipeline.Stats
+		want     []string
+	}{
+		{
+			name:     "registered provider's qualifying boards are returned sorted",
+			provider: "workday",
+			stats:    pipeline.Stats{QualifyingBoards: []string{"zeta-inc", "acme-corp"}},
+			want:     []string{"acme-corp", "zeta-inc"},
+		},
+		{
+			name:     "duplicate boards are de-duplicated",
+			provider: "workday",
+			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp", "acme-corp"}},
+			want:     []string{"acme-corp"},
+		},
+		{
+			name:     "a provider not registered as fullBoardListing gets none",
+			provider: "greenhouse",
+			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			want:     nil,
+		},
+		{
+			name:     "a sweepGrace provider is excluded even if registered",
+			provider: "whatjobs",
+			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			want:     nil,
+		},
+		{
+			name:     "a fullCatalog provider is excluded even if registered",
+			provider: "habr_career",
+			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			want:     nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sweepableBoards(tc.provider, tc.stats, grace, fullCatalog, fullBoardListing)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("sweepableBoards(%q) = %v, want %v", tc.provider, got, tc.want)
+			}
+		})
+	}
+}
+
 // HYDRATION_RETRY_DAYS widens the window during which a body-less row is re-offered for
 // detail hydration, so an operator can repair a backlog the ordinary two-week window has
 // already aged past (freehire#1866). Unset means the default; a value that is not a positive

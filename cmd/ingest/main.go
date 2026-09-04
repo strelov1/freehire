@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -215,6 +217,11 @@ func run() int {
 	for _, p := range sources.FullCatalogProviders(registry) {
 		fullCatalog[p] = true
 	}
+	// A fullBoardListing provider's adapter is registered as structurally proving it lists a
+	// board to completion (freehire#2328), so the sweep may close within its boards — see
+	// sweepableBoards for the full gate, including why a sweepGrace or fullCatalog provider is
+	// excluded even when registered.
+	fullBoardListing := sources.FullBoardListingProviders(registry)
 	for _, provider := range sweepableProviders(runStats) {
 		if selfClosing[provider] {
 			continue
@@ -237,8 +244,71 @@ func run() int {
 			log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
 		}
 		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
+
+		// Board-scoped close (job-lifecycle spec, freehire#2328): the company scope above
+		// leaks a company whose LAST posting drops off a board this run still crawled — that
+		// company's slug never re-enters companySlugs, so its row never closes under either
+		// scope so far. This closes it directly, per board the run structurally proved it
+		// covered (runStats[provider].QualifyingBoards) on a provider whose adapter is
+		// registered as listing a board to completion — see sweepableBoards for the full gate.
+		// Reuses this provider's own cutoff: a board-scope candidate is by construction never
+		// a sweepGrace provider, so the window is always the default here.
+		var boardFailed int
+		for _, boardID := range sweepableBoards(provider, runStats[provider], grace, fullCatalog, fullBoardListing) {
+			boardClosed, err := queries.CloseUnseenJobsForBoard(ctx, db.CloseUnseenJobsForBoardParams{
+				Source:       provider,
+				Cutoff:       cutoff,
+				BoardPattern: externalid.BoardPattern(boardID),
+			})
+			if err != nil {
+				// One board's failure must not skip the rest — see sweepProvider's own
+				// per-provider isolation for the same reasoning, one scope narrower.
+				boardFailed++
+				log.Printf("close stale jobs (%s board %q): %v", provider, boardID, err)
+				continue
+			}
+			if boardClosed > 0 {
+				log.Printf("closed %d stale %s jobs on board %q (unseen for %s)", boardClosed, provider, boardID, window)
+			}
+		}
+		if boardFailed > 0 {
+			failed++
+		}
 	}
 	return worker.ExitCode(failed, 0)
+}
+
+// sweepableBoards returns, sorted and de-duplicated, the boards of provider the board-scoped
+// close may retire this run: those the run structurally proved it covered
+// (stats.QualifyingBoards, see pipeline.boardQualifies) on a provider whose adapter is
+// registered as listing a board to completion (fullBoardListing). A provider absent from that
+// registration never contributes to the board scope, however its crawl went — see
+// sources.fullBoardListing for the bar an adapter must clear to earn it.
+//
+// Excluded even when registered, for the same reasons sweepBySource excludes them from the
+// source-scoped close: a sweepGrace provider (its crawl deliberately reaches only a slice of
+// the catalogue, so a board-scoped close on the default window would close postings that
+// merely drifted past the crawl's depth) and a fullCatalog provider (already closes by source
+// alone on a clean run, strictly broader than board scope — and today's fullCatalog adapters
+// are boardless besides, so this exclusion is belt-and-braces). Callers gate on shouldSweep
+// first, same as sweepBySource.
+//
+// De-duplication guards against a board legitimately appearing twice in one run (a repeated
+// board-file entry, or one board id recurring across independent regional slices) double-
+// counting the close and its log line.
+func sweepableBoards(provider string, stats pipeline.Stats, grace map[string]time.Duration, fullCatalog, fullBoardListing map[string]bool) []string {
+	if !fullBoardListing[provider] {
+		return nil
+	}
+	if _, hasGrace := grace[provider]; hasGrace {
+		return nil
+	}
+	if fullCatalog[provider] {
+		return nil
+	}
+	boards := slices.Clone(stats.QualifyingBoards)
+	sort.Strings(boards)
+	return slices.Compact(boards)
 }
 
 // sweepableProviders returns, sorted, the providers in a run that ingested at least one

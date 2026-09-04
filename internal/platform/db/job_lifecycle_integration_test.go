@@ -299,6 +299,66 @@ func TestCloseUnseenJobsForBoardDoesNotCrossBoards(t *testing.T) {
 	}
 }
 
+// TestCloseUnseenJobsForBoardClosesACompanyTheCompanyScopeCannotReach pins the exact leak
+// freehire#2328 reports and CloseUnseenJobsForBoard exists to close: two companies share one
+// board, and this "run" wrote nothing for the second (its last posting simply stopped being
+// listed) — so CloseUnseenJobs' company scope, which the caller would derive from what this
+// run actually crawled, would never even consider it. The board-scoped close carries no
+// company_slug predicate at all, so it reaches company B's row anyway, through the board it
+// shares with A.
+func TestCloseUnseenJobsForBoardClosesACompanyTheCompanyScopeCannotReach(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	aParams := ingestParams(externalid.Namespace("workday_acme", "1"), "A's posting")
+	aParams.Company, aParams.CompanySlug = "Company A", "company-a"
+	a, err := ingestUpsert(ctx, q, aParams)
+	if err != nil {
+		t.Fatalf("upsert company A: %v", err)
+	}
+
+	bParams := ingestParams(externalid.Namespace("workday_acme", "2"), "B's posting")
+	bParams.Company, bParams.CompanySlug = "Company B", "company-b"
+	b, err := ingestUpsert(ctx, q, bParams)
+	if err != nil {
+		t.Fatalf("upsert company B: %v", err)
+	}
+
+	// This run crawled the board and re-saw A (fresh) but not B — exactly the shape
+	// CloseUnseenJobs' crawled-company scope would leak forever.
+	ageJob(t, pool, a.ID, 1*time.Hour)
+	ageJob(t, pool, b.ID, 49*time.Hour)
+
+	closed, err := q.CloseUnseenJobsForBoard(ctx, CloseUnseenJobsForBoardParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		BoardPattern: externalid.BoardPattern("workday_acme"),
+	})
+	if err != nil {
+		t.Fatalf("board sweep: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("board sweep closed %d jobs, want 1 (only B, the leak)", closed)
+	}
+
+	bAfter, err := q.GetJob(ctx, b.ID)
+	if err != nil {
+		t.Fatalf("get B: %v", err)
+	}
+	if !bAfter.ClosedAt.Valid {
+		t.Fatal("company B's stale job must be closed — this is the leak the board scope exists to close")
+	}
+	aAfter, err := q.GetJob(ctx, a.ID)
+	if err != nil {
+		t.Fatalf("get A: %v", err)
+	}
+	if aAfter.ClosedAt.Valid {
+		t.Fatal("company A's freshly-seen job must stay open")
+	}
+}
+
 func TestClosedJobsLeaveListSurfacesButResolveOnDetail(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

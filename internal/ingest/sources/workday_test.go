@@ -1,12 +1,9 @@
 package sources
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -26,6 +23,24 @@ func TestWorkdayEmploymentType(t *testing.T) {
 		if got := workdayEmploymentType(in); got != want {
 			t.Errorf("workdayEmploymentType(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Workday earns fullBoardListing because listPostings proves completeness for every path: an
+// uncapped board pages to its own reported total (pageAll), and a capped board either resolves
+// via facet splitting or fails loudly (splitByFacet, hardened by
+// TestWorkdaySplitFailsAtMaxDepth / TestWorkdayFailsWhenCappedWithNoUsableDimension) — it never
+// returns a partial listing as a success.
+func TestWorkdayMarkers(t *testing.T) {
+	s := NewWorkday(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("workday should implement the fullBoardListing marker")
+	}
+}
+
+func TestWorkdayRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["workday"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include workday")
 	}
 }
 
@@ -402,7 +417,12 @@ func TestWorkdaySplitsRecursesIntoSecondDimensionWhenSliceStillCapped(t *testing
 
 // Recursion must not go deeper than maxFacetDepth combined dimensions: a slice still capped
 // at that depth is paged as-is (best effort) rather than recursed further.
-func TestWorkdaySplitStopsAtMaxDepth(t *testing.T) {
+// A board still capped after exhausting maxFacetDepth cannot be proven complete, so the crawl
+// must fail loudly rather than return the depth limit's leaf slice as if it were the whole
+// board (see the fullBoardListing marker's bar, internal/ingest/sources/source.go: an adapter
+// that returns a partial listing as an unqualified success is exactly the solidjobs shape that
+// forced freehire#2337's revert).
+func TestWorkdaySplitFailsAtMaxDepth(t *testing.T) {
 	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
 		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
 			{"facetParameter":"dimA","values":[{"id":"a1","count":2000}]}
@@ -414,8 +434,8 @@ func TestWorkdaySplitStopsAtMaxDepth(t *testing.T) {
 			{"facetParameter":"dimC","values":[{"id":"c1","count":2000}]}
 		]}`).
 		// Three dimensions applied (dimA, dimB, dimC) is the depth limit; this slice is still
-		// capped and carries a fourth, unused dimension, but recursion must not use it —
-		// it must page this response as-is instead.
+		// capped and carries a fourth, unused dimension, but recursion must not use it — it
+		// must fail instead of paging this response as-is.
 		route(`{"dimA":["a1"],"dimB":["b1"],"dimC":["c1"]}`, `{"total":2000,"jobPostings":[
 			{"title":"Leaf","externalPath":"/job/X/LEAF-1","locationsText":"Remote"}
 		],"facets":[
@@ -427,11 +447,8 @@ func TestWorkdaySplitStopsAtMaxDepth(t *testing.T) {
 		t.Fatalf("parseWorkdayBoard: %v", err)
 	}
 	postings, err := workday{http: fake}.listPostings(context.Background(), b)
-	if err != nil {
-		t.Fatalf("listPostings: %v", err)
-	}
-	if len(postings) != 1 || postings[0].ExternalPath != "/job/X/LEAF-1" {
-		t.Fatalf("postings = %+v, want the depth-limit leaf's single posting, no dimD request", postings)
+	if err == nil {
+		t.Fatalf("listPostings = %+v, nil error — want a hard failure, a depth-limited leaf slice must never be returned as a complete board", postings)
 	}
 	if _, ok := fake.pages[`{"dimA":["a1"],"dimB":["b1"],"dimC":["c1"],"dimD":["d1"]}`]; ok {
 		t.Error("a dimD route exists on the fake but must never be requested past max depth")
@@ -491,13 +508,10 @@ func TestWorkdayBelowCapDoesNotSplit(t *testing.T) {
 	}
 }
 
-// A capped page carrying no facets at all cannot be split further — this must be visible (a log
-// line), not a silent truncation, which is the exact failure mode this change exists to fix.
-func TestWorkdayLogsWhenCappedWithNoUsableDimension(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr)
-
+// A capped page carrying no facets at all cannot be split further, and a board this size
+// cannot be proven complete by paging the capped response as-is — the crawl must fail loudly,
+// naming the provider and board, rather than return a silently truncated board as a success.
+func TestWorkdayFailsWhenCappedWithNoUsableDimension(t *testing.T) {
 	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
 		route(`{}`, `{"total":2000,"jobPostings":[
 			{"title":"Engineer","externalPath":"/job/X/E-1","locationsText":"Berlin"}
@@ -508,14 +522,11 @@ func TestWorkdayLogsWhenCappedWithNoUsableDimension(t *testing.T) {
 		t.Fatalf("parseWorkdayBoard: %v", err)
 	}
 	postings, err := workday{http: fake}.listPostings(context.Background(), b)
-	if err != nil {
-		t.Fatalf("listPostings: %v", err)
+	if err == nil {
+		t.Fatalf("listPostings = %+v, nil error — want a hard failure, a capped page with no usable dimension must never be returned as a complete board", postings)
 	}
-	if len(postings) != 1 {
-		t.Fatalf("len(postings) = %d, want 1 — the capped page's own postings, best effort", len(postings))
-	}
-	if !strings.Contains(buf.String(), "workday") || !strings.Contains(buf.String(), "acme") {
-		t.Errorf("log output = %q, want a warning naming the provider and board", buf.String())
+	if !strings.Contains(err.Error(), "workday") || !strings.Contains(err.Error(), "acme") {
+		t.Errorf("error = %q, want it to name the provider and board", err.Error())
 	}
 }
 

@@ -45,30 +45,30 @@ through `externalid.BoardPattern`, the same pattern the seen-set and `BoardTrack
 
 ## 4. The sweep
 
-- [ ] 4.1 In `cmd/ingest`, after the existing company-scoped close, run a board-scoped close per
+- [x] 4.1 In `cmd/ingest`, after the existing company-scoped close, run a board-scoped close per
       qualifying board, gated on all four conditions: crawl proof (section 3), the entry names a
       board, the provider is not `sweepGrace`/self-closing/`fullCatalog`, and the provider is in
       `FullBoardListingProviders()`. Keep the company-scoped close exactly as it is.
-- [ ] 4.2 Log each board-scoped close with its board and count.
-- [ ] 4.3 A per-board failure is logged and the sweep continues to the next board; the run still
+- [x] 4.2 Log each board-scoped close with its board and count.
+- [x] 4.3 A per-board failure is logged and the sweep continues to the next board; the run still
       exits non-zero, matching how a provider-level sweep failure is already handled.
 
 ## 5. Tests — what must NOT close
 
 Unit-level, against the pipeline/sweep fakes.
 
-- [ ] 5.1 A board that yielded zero postings closes nothing, though its crawl succeeded.
-- [ ] 5.2 A board whose crawl failed (including a mid-crawl failure after partial progress)
+- [x] 5.1 A board that yielded zero postings closes nothing, though its crawl succeeded.
+- [x] 5.2 A board whose crawl failed (including a mid-crawl failure after partial progress)
       closes nothing.
-- [ ] 5.3 A boardless entry closes nothing through the board scope.
-- [ ] 5.4 A provider declaring `sweepGrace` closes nothing through the board scope.
-- [ ] 5.5 A board the run never reached closes nothing.
-- [ ] 5.6 A provider whose adapter does NOT carry `fullBoardListing` closes nothing through the
+- [x] 5.3 A boardless entry closes nothing through the board scope.
+- [x] 5.4 A provider declaring `sweepGrace` closes nothing through the board scope.
+- [x] 5.5 A board the run never reached closes nothing.
+- [x] 5.6 A provider whose adapter does NOT carry `fullBoardListing` closes nothing through the
       board scope, even when every other condition holds.
-- [ ] 5.7 **The leak, closed:** a company the run wrote NO posting for, whose stale job sits on a
+- [x] 5.7 **The leak, closed:** a company the run wrote NO posting for, whose stale job sits on a
       board that yielded, on a provider carrying `fullBoardListing`, IS closed.
-- [ ] 5.8 A board that yielded only REJECTED postings still qualifies — the crawl reached them.
-- [ ] 5.9 `go build ./... && go vet ./... && go test ./...`, then `go vet -tags=integration ./...`
+- [x] 5.8 A board that yielded only REJECTED postings still qualifies — the crawl reached them.
+- [x] 5.9 `go build ./... && go vet ./... && go test ./...`, then `go vet -tags=integration ./...`
       and the tagged suites for `internal/platform/db`, `cmd/ingest`, `internal/ingest/pipeline`.
 
 ## 6. Phase-1 adapter audit
