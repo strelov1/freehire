@@ -1,0 +1,35 @@
+[Unit]
+Description=freehire: self-hosted Inngest server (auto-apply orchestrator's own event bus)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=freehire
+EnvironmentFile=/opt/freehire/.env
+# The inngest CLI takes its own config as flags, not env vars (unlike every other unit
+# in this fleet, which reads freehire's own Go binaries — those call os.Getenv directly).
+# ${...} here is systemd's own ExecStart substitution (systemd.service(5)), not a shell:
+# the values come from the same /opt/freehire/.env every other unit reads.
+#
+# INNGEST_POSTGRES_URI must name a database DIFFERENT from freehire's own (a NEW database
+# on the SAME Postgres instance, per openspec/changes/auto-apply-inngest-orchestration/
+# design.md) — this server owns its own migrations and tables, which must never collide
+# with freehire's. INNGEST_SIGNING_KEY / INNGEST_EVENT_KEY must be the exact values
+# cmd/server and cmd/auto-apply-orchestrate present as INNGEST_SIGNING_KEY / INNGEST_EVENT_KEY
+# in this SAME .env file — one shared pair of secrets, three consumers.
+ExecStart=/opt/freehire/bin/inngest start \
+  --host 127.0.0.1 \
+  --port 8288 \
+  --postgres-uri ${INNGEST_POSTGRES_URI} \
+  --signing-key ${INNGEST_SIGNING_KEY} \
+  --event-key ${INNGEST_EVENT_KEY}
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

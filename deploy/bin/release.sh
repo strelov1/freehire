@@ -200,7 +200,9 @@ if [ "$app" = freehire ]; then
   # the one on this list a stale binary can cost money: the provider retries a webhook five
   # times over ~2.5h and then stops for good, and past that window this worker is the only
   # path by which a paid subscription becomes Pro.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup billing-sync capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner merge-companies harvest-orphans recount-companies rollup-stats rollup-facets build-suggestions rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue add-board backfill-company-type-hint ingest-scheduler schedule-board; do
+  # auto-apply-orchestrate is a long-lived Inngest function server, not a cron worker, but it
+  # ships from hire-current the same way every other binary here does.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup billing-sync capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner merge-companies harvest-orphans recount-companies rollup-stats rollup-facets build-suggestions rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue add-board backfill-company-type-hint ingest-scheduler schedule-board auto-apply-orchestrate; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,
@@ -228,9 +230,11 @@ if [ "$app" = freehire ]; then
     echo "$stale" | sed "s/^/[release:$app]   /" >&2
     echo "[release:$app]   their timers are firing whatever an older release left. Add them to the list in $0." >&2
   fi
-  # mail-ingest is a long-lived daemon (not a timer): restart it so it picks up the
-  # freshly built binary from the repointed hire-current. Enabled once via provision.
+  # mail-ingest and auto-apply-orchestrate are long-lived daemons (not timers): restart
+  # them so they pick up the freshly built binary from the repointed hire-current.
+  # Enabled once via provision.
   systemctl try-restart freehire-mail-ingest.service 2>/dev/null || true
+  systemctl try-restart freehire-auto-apply-orchestrate.service 2>/dev/null || true
 fi
 # Schema BEFORE the code that reads it. This exists because on 2026-07-29 a release carried
 # a merged migration nobody had applied: sqlc reads every column of a table, so one missing

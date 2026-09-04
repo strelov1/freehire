@@ -73,28 +73,35 @@
 
 ## 4. Config and deploy
 
-- [ ] 4.1 `internal/platform/config`: `INNGEST_EVENT_API_URL`, `INNGEST_EVENT_KEY`,
-      `INNGEST_SIGNING_KEY` (the worker's own callback auth), and
-      `AUTO_APPLY_ORCHESTRATOR_SECRET` (shared between `cmd/server` and
-      `cmd/auto-apply-orchestrate` — see section 1). Follow the existing `LLM_ADMIN_*`
-      pattern of "empty/unset degrades, never panics" ONLY where that is safe: the
-      orchestrator worker itself has no useful degraded mode (see design.md's Non-Goals — it
-      either runs against a real Inngest instance or is not deployed), so its own missing
-      config should fail its startup loudly. `AUTO_APPLY_ORCHESTRATOR_SECRET` unset on the
-      server side must simply mean the secret-auth path never matches (nothing to fail
-      loudly about — the two routes still work for human callers).
-- [ ] 4.2 `deploy/`: new systemd unit for `cmd/auto-apply-orchestrate` (`Restart=always`,
-      mirrors `cmd/mail-ingest`'s unit) and for the self-hosted Inngest server
-      (`inngest start --postgres-uri <freehire Postgres, a NEW database>`), plus their env
-      files. Per `deploy/AGENTS.md`: this only edits the checked-in unit files — copying them
-      to host-2 and enabling them is a separate, manual step, not part of this task.
+- [x] 4.1 `internal/platform/config`: `INNGEST_EVENT_API_URL`, `INNGEST_EVENT_KEY`,
+      `INNGEST_SIGNING_KEY`, `AUTO_APPLY_ORCHESTRATOR_SECRET` and
+      `AUTO_APPLY_ORCHESTRATE_PORT` (the worker's own callback listen port). The
+      orchestrator worker (`cmd/auto-apply-orchestrate`) fails its own startup loudly on
+      any of the four required values missing; `AUTO_APPLY_ORCHESTRATOR_SECRET` unset on
+      the server side simply means the secret-auth path never matches, and
+      `INNGEST_EVENT_API_URL`/`INNGEST_EVENT_KEY` unset there disables the review-decided
+      publish (see 3.3) — neither degrades the server's own startup.
+- [x] 4.2 `deploy/`: `freehire-auto-apply-orchestrate.service` (`Restart=always`, mirrors
+      `freehire-mail-ingest.service`, built from `hire-current` — added to
+      `deploy/bin/release.sh`'s own build list and long-lived-daemon restart line, the
+      same two places `mail-ingest` is, per that script's own comment about what happens
+      when a unit is missing from them) and `freehire-inngest.service` (the self-hosted
+      Inngest server itself — `inngest start`, not built by this repo, mirrors
+      `freehire-logo.service`'s "third-party binary in /opt/freehire/bin" shape rather
+      than a `hire-current` one). No new env FILE — `AUTO_APPLY_ORCHESTRATOR_SECRET` /
+      `INNGEST_*` join the one shared `/opt/freehire/.env` every non-mail worker already
+      reads. Per `deploy/AGENTS.md`: this only edits the checked-in unit files — copying
+      them to host-2, provisioning the self-hosted Inngest server's own Postgres database,
+      and enabling both units is a separate, manual step, not part of this task.
 
 ## 5. Verification
 
-- [ ] 5.1 `gofmt -l .` clean on every touched file.
-- [ ] 5.2 `go vet ./...` and `go test ./...` green.
-- [ ] 5.3 `go vet -tags=integration ./...` green.
-- [ ] 5.4 `go test -tags=integration ./...` green.
+- [x] 5.1 `gofmt -l .` clean on every touched file.
+- [x] 5.2 `go vet ./...` and `go test ./...` green.
+- [x] 5.3 `go vet -tags=integration ./...` green.
+- [x] 5.4 `go test -tags=integration ./...` green (195/195 packages, whole module —
+      includes the new `internal/application/autoapplyorchestrate` and the extended
+      `internal/api/handler` integration suites).
 - [ ] 5.5 Manual: one `auto-apply/submit` event, published by hand against the deployed
       self-hosted Inngest instance (mirroring this session's own spike), observed end to end
       through a real tailor call, a real pause, a real decision, and a real review call —

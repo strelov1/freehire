@@ -1,0 +1,27 @@
+[Unit]
+Description=freehire worker: auto-apply orchestrator (tailor -> await review -> review)
+After=network-online.target freehire-inngest.service
+Wants=network-online.target
+Requires=freehire-inngest.service
+
+[Service]
+Type=simple
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+# AUTO_APPLY_ORCHESTRATOR_SECRET / INNGEST_EVENT_API_URL / INNGEST_EVENT_KEY /
+# INNGEST_SIGNING_KEY live in this shared file like every other secret this fleet
+# uses — no separate env file, unlike the mail-sending workers' own split (see
+# deploy/AGENTS.md).
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+# Long-lived: an Inngest function must stay reachable between steps for the SDK's
+# own callback protocol, so this serves HTTP and blocks until SIGTERM — same shape
+# as freehire-mail-ingest.service. Restart if it dies or loses its self-registration
+# with freehire-inngest.service.
+Restart=always
+RestartSec=5
+ExecStart=/opt/freehire/src/hire-current/auto-apply-orchestrate
+
+[Install]
+WantedBy=multi-user.target
