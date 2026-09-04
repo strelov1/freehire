@@ -2,6 +2,7 @@ package ingestsched
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -129,7 +130,7 @@ func (l SystemdLauncher) Finished(ctx context.Context, run Run) (Outcome, error)
 		return Outcome{Done: false}, nil
 	}
 
-	code, _ := strconv.Atoi(props["ExecMainStatus"])
+	code := exitStatus(props["ExecMainStatus"])
 	detail := props["Result"]
 	// A failed unit holds its name until it is reset, and the next launch of this shard
 	// would be refused with "unit already exists" — the fleet would stop one provider at a
@@ -187,6 +188,30 @@ func (l SystemdLauncher) unitName(run Run) string {
 		name += "-" + strconv.Itoa(run.Shard)
 	}
 	return name + ".service"
+}
+
+// maxExitStatus is the largest value a process exit status can carry.
+const maxExitStatus = 255
+
+// exitStatus parses systemd's ExecMainStatus and bounds it to a real process status.
+//
+// The value arrives as text, is parsed with strconv.Atoi into a platform-width int, and is
+// stored in an int32 column — so an unbounded parse would let a value past int32 WRAP on
+// the way to the database and record a status the run never had. Clamping rather than
+// erroring because the caller already has the raw text in Result: a status outside 0-255 is
+// systemd saying something other than "the process exited with", and the run is finished
+// either way. Losing the claim over an odd number would be the worse failure.
+// The two parse failures mean different things and must not collapse into one. Text that
+// is not a number at all carries no status, so it reads as 0; a number too large to hold
+// is still a number, and strconv.Atoi hands back the saturated value alongside ErrRange, so
+// it clamps like any other oversized status. Treating both as 0 would record "exited
+// cleanly" for a unit that said something enormous.
+func exitStatus(raw string) int {
+	code, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		return 0
+	}
+	return clamp(code, 0, maxExitStatus)
 }
 
 func shardLabel(run Run) string {

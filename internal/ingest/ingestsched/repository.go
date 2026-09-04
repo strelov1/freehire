@@ -48,6 +48,37 @@ type Repository interface {
 	RecordFinish(ctx context.Context, provider string, shard, exitCode int, runErr string) error
 }
 
+// The bounds every int -> int32 conversion in this package is squeezed through. Go's
+// conversion WRAPS on overflow rather than failing, so an unbounded one stores a value the
+// caller never meant and nothing anywhere reports a problem — CodeQL flags the shape, and
+// it is right to. Each bound is chosen to be far past any real value and far short of
+// int32.
+const (
+	// maxShardOrdinal mirrors the schema's upper bound on ingest_schedule.shards.
+	maxShardOrdinal = 64
+	// maxSeconds is a year. A cadence or a timeout past that is not a schedule.
+	maxSeconds = 366 * 24 * 3600
+	// maxRuns bounds one tick's claim. The fleet's real cap is 10.
+	maxRuns = 1000
+)
+
+// seconds converts a duration to the bounded int32 the schema stores.
+func seconds(d time.Duration) int32 {
+	return int32(clamp(int(d/time.Second), 0, maxSeconds))
+}
+
+// clamp bounds v into [lo, hi].
+func clamp(v, lo, hi int) int {
+	switch {
+	case v < lo:
+		return lo
+	case v > hi:
+		return hi
+	default:
+		return v
+	}
+}
+
 // QueriesRepository is the sqlc-backed Repository.
 type QueriesRepository struct {
 	q *db.Queries
@@ -117,13 +148,13 @@ func (r *QueriesRepository) Reconcile(ctx context.Context, settings []Settings) 
 func (r *QueriesRepository) reconcileOne(ctx context.Context, s Settings) error {
 	if err := r.q.EnsureRunStateShards(ctx, db.EnsureRunStateShardsParams{
 		Provider: s.Provider,
-		Shards:   int32(s.Shards),
+		Shards:   int32(clamp(s.Shards, 1, maxShardOrdinal)),
 	}); err != nil {
 		return fmt.Errorf("ensure shards: %w", err)
 	}
 	if err := r.q.DeleteSurplusRunStateShards(ctx, db.DeleteSurplusRunStateShardsParams{
 		Provider: s.Provider,
-		Shards:   int32(s.Shards),
+		Shards:   int32(clamp(s.Shards, 1, maxShardOrdinal)),
 	}); err != nil {
 		return fmt.Errorf("drop surplus shards: %w", err)
 	}
@@ -136,10 +167,10 @@ func (r *QueriesRepository) Claim(ctx context.Context, limit int, grace time.Dur
 	}
 
 	rows, err := r.q.ClaimDueRuns(ctx, db.ClaimDueRunsParams{
-		DefaultCadenceSec: int32(DefaultCadence.Seconds()),
-		DefaultTimeoutSec: int32(DefaultRunTimeout.Seconds()),
-		GraceSec:          int32(grace.Seconds()),
-		MaxRuns:           int32(limit),
+		DefaultCadenceSec: seconds(DefaultCadence),
+		DefaultTimeoutSec: seconds(DefaultRunTimeout),
+		GraceSec:          seconds(grace),
+		MaxRuns:           int32(clamp(limit, 0, maxRuns)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("claim due runs: %w", err)
@@ -158,7 +189,7 @@ func (r *QueriesRepository) Claim(ctx context.Context, limit int, grace time.Dur
 }
 
 func (r *QueriesRepository) InFlightRuns(ctx context.Context) ([]Run, error) {
-	rows, err := r.q.ListInFlightRuns(ctx, int32(DefaultRunTimeout.Seconds()))
+	rows, err := r.q.ListInFlightRuns(ctx, seconds(DefaultRunTimeout))
 	if err != nil {
 		return nil, fmt.Errorf("list in-flight runs: %w", err)
 	}
@@ -181,9 +212,9 @@ func (r *QueriesRepository) PreviewDue(ctx context.Context, limit int, grace tim
 	}
 
 	rows, err := r.q.PreviewDueRuns(ctx, db.PreviewDueRunsParams{
-		DefaultTimeoutSec: int32(DefaultRunTimeout.Seconds()),
-		GraceSec:          int32(grace.Seconds()),
-		MaxRuns:           int32(limit),
+		DefaultTimeoutSec: seconds(DefaultRunTimeout),
+		GraceSec:          seconds(grace),
+		MaxRuns:           int32(clamp(limit, 0, maxRuns)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("preview due runs: %w", err)
@@ -202,10 +233,14 @@ func (r *QueriesRepository) PreviewDue(ctx context.Context, limit int, grace tim
 }
 
 func (r *QueriesRepository) RecordFinish(ctx context.Context, provider string, shard, exitCode int, runErr string) error {
+	// Bounded again here, not only where the status was parsed. Both columns are int32,
+	// and an out-of-range int WRAPS on conversion rather than failing — so a value that
+	// slipped past the parser would be stored as a status the run never had. Two guards
+	// because this method is the one that writes, and it takes a plain int from anywhere.
 	err := r.q.RecordRunFinish(ctx, db.RecordRunFinishParams{
 		Provider:  provider,
-		Shard:     int32(shard),
-		ExitCode:  int32(exitCode),
+		Shard:     int32(clamp(shard, 0, maxShardOrdinal)),
+		ExitCode:  int32(clamp(exitCode, 0, maxExitStatus)),
 		LastError: runErr,
 	})
 	if err != nil {

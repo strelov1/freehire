@@ -150,6 +150,32 @@ func TestLaunchDropsToTheUnprivilegedServiceAccount(t *testing.T) {
 	}
 }
 
+// The exit code comes from a string systemd hands back, is parsed with strconv.Atoi, and
+// ends up in an int32 column. Unbounded, a value past int32 wraps on the way to the
+// database and records a status the run never had — CodeQL flags exactly this shape, and
+// it is right to. A process status is 0-255; anything else is systemd telling us something
+// other than an exit code, so it is clamped and the raw text kept.
+func TestExitStatusIsBoundedToAProcessStatus(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{"0", 0},
+		{"1", 1},
+		{"255", 255},
+		{"", 0},
+		{"not-a-number", 0},
+		{"-1", 0},
+		{"256", 255},
+		{"9223372036854775807", 255},
+		{"99999999999999999999999", 255}, // past int64 as well, so Atoi itself errors
+	} {
+		if got := exitStatus(tc.raw); got != tc.want {
+			t.Errorf("exitStatus(%q) = %d, want %d", tc.raw, got, tc.want)
+		}
+	}
+}
+
 // The gate is not advisory. A key that ValidateProviderKey refuses must never become an
 // argv element or a unit name, and the launcher is the last place that can still be true.
 func TestLaunchRefusesAnUnsafeOrUnknownProviderKey(t *testing.T) {

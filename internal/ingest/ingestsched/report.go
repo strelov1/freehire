@@ -100,14 +100,14 @@ func int4Ptr(v *int) pgtype.Int4 {
 	if v == nil {
 		return pgtype.Int4{}
 	}
-	return pgtype.Int4{Int32: int32(*v), Valid: true}
+	return pgtype.Int4{Int32: int32(clamp(*v, 0, maxShardOrdinal)), Valid: true}
 }
 
 func int4Seconds(d *time.Duration) pgtype.Int4 {
 	if d == nil {
 		return pgtype.Int4{}
 	}
-	return pgtype.Int4{Int32: int32(d.Seconds()), Valid: true}
+	return pgtype.Int4{Int32: seconds(*d), Valid: true}
 }
 
 func boolPtr(v *bool) pgtype.Bool {
