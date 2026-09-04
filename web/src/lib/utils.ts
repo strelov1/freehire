@@ -19,28 +19,31 @@ export function assertNever(x: never): never {
   throw new Error(`Unreachable case: ${JSON.stringify(x)}`);
 }
 
-/** Format an RFC3339 timestamp as a short local date; '' for null/invalid. */
-export function formatDate(ts: string | null | undefined): string {
-  if (!ts) return '';
+/** The Date behind an RFC3339 string, or null when there is nothing to format —
+ *  missing and unparseable are one case here, because every formatter below answers
+ *  both with ''. Nothing else in this file needs to tell them apart. */
+function parseTs(ts: string | null | undefined): Date | null {
+  if (!ts) return null;
   const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** The same instant with the clock time, for a `title` behind a formatDate label:
- *  the visible line stays a date, and a reader who cares about the hour gets it on
- *  hover rather than in a second column. '' for null/invalid, like formatDate. */
+// Shared so the date a reader sees and the one in the tooltip behind it cannot come
+// to disagree about how a month is spelled.
+const DATE_PARTS = { year: 'numeric', month: 'short', day: 'numeric' } as const;
+
+/** Format an RFC3339 timestamp as a short local date; '' for null/invalid. */
+export function formatDate(ts: string | null | undefined): string {
+  const d = parseTs(ts);
+  return d ? d.toLocaleDateString(undefined, DATE_PARTS) : '';
+}
+
+/** The same instant with the clock time, for a `title` behind a formatDate or
+ *  formatDateOrAgo label: the visible line stays short, and a reader who cares about
+ *  the hour gets it on hover rather than in a second column. '' for null/invalid. */
 export function formatDateTime(ts: string | null | undefined): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const d = parseTs(ts);
+  return d ? d.toLocaleString(undefined, { ...DATE_PARTS, hour: '2-digit', minute: '2-digit' }) : '';
 }
 
 /** Whether s is a LinkedIn personal-profile URL: an http(s) link on linkedin.com (or a
@@ -94,9 +97,8 @@ let relativeTime: Intl.RelativeTimeFormat | undefined;
  *  ago", "2 days ago"); '' for null/invalid. How recently a job was posted is a
  *  key signal, so the list card shows it relative rather than as a bare date. */
 export function timeAgo(ts: string | null | undefined): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return '';
+  const d = parseTs(ts);
+  if (!d) return '';
   const seconds = Math.round((Date.now() - d.getTime()) / 1000);
   const rtf = (relativeTime ??= new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }));
   for (const [unit, span] of TIME_UNITS) {
@@ -117,9 +119,8 @@ const RECENT_MS = 86400 * 1000;
  *  branch: "in 2 hours" on a posting date is a clock-skew artefact, and reading it
  *  as an age would be worse than reading it as a date. */
 export function formatDateOrAgo(ts: string | null | undefined): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return '';
+  const d = parseTs(ts);
+  if (!d) return '';
   const age = Date.now() - d.getTime();
   return age >= 0 && age < RECENT_MS ? timeAgo(ts) : formatDate(ts);
 }

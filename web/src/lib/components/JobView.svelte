@@ -613,9 +613,6 @@
           {#if job.manually_added}
             <Badge variant="secondary">Manually added</Badge>
           {/if}
-          <!-- The posting date used to close this row; it now rides the header's provenance
-               line beside the freshness badges, which is where the rest of the "how old is
-               this?" answer already lives. -->
         </div>
         {#if views > 0 || applies > 0}
           <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">
