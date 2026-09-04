@@ -136,6 +136,12 @@ func TestScheduleRefusesNonPositiveNumbers(t *testing.T) {
 	}{
 		{"shards", 0},
 		{"shards", -1},
+		// Bounded ABOVE too: reconcile materialises one row per shard through
+		// generate_series, so an unbounded count turns a typo into a statement that
+		// outlives the scheduler's start timeout — and every following tick repeats it
+		// first, stopping the whole fleet.
+		{"shards", 65},
+		{"shards", 100000},
 		{"cadence_sec", 0},
 		{"cadence_sec", -3600},
 		{"timeout_sec", 0},

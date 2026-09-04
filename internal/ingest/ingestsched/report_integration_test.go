@@ -139,7 +139,7 @@ func TestReportShowsRunStateSeparatelyFromTheIntendedShardCount(t *testing.T) {
 	settings := Effective("workday", &Override{
 		Provider: "workday", Shards: 6, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{settings}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{settings}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
@@ -158,7 +158,8 @@ func TestReportCarriesTheLastRunOutcome(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	manage(t, pool, "greenhouse")
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 

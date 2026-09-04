@@ -83,10 +83,11 @@ func TestLaunchNamesTheUnitAfterTheProviderAndShard(t *testing.T) {
 		t.Errorf("--unit = %q, want it to carry the provider key verbatim", got)
 	}
 
-	// --collect so a failed run's unit is garbage-collected; without it the leftover
-	// failed unit keeps its name and the next launch is refused.
-	if !slices.Contains(rec.args, "--collect") {
-		t.Errorf("--collect missing from %v", rec.args)
+	// Deliberately NOT --collect. systemd already collects a SUCCESSFUL transient unit, and
+	// that absence is how Finished reads success; collecting failures too would erase the
+	// exit code before anyone could read it, making "succeeded" and "failed" one answer.
+	if slices.Contains(rec.args, "--collect") {
+		t.Error("--collect would erase a failed run's exit code before it could be read")
 	}
 }
 

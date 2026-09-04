@@ -11,6 +11,26 @@ static timer or by the scheduler, never both. `ingest_schedule.managed` is what 
 and the disable-the-timer and flip-the-flag steps are ONE step. If you do only half, you
 either double-crawl a provider or stop crawling it — and stopping is the silent one.
 
+**The second rule, which is easy to miss:** during cutover there are TWO concurrency
+ceilings, and they cannot see each other. The static units go through
+`/opt/freehire/bin/ingest-slot.sh` and its 10 flock slots; the scheduler's transient units
+bypass that script entirely and obey `INGEST_SCHEDULER_CAP`. A half-cut-over fleet can
+therefore run 20 crawls at once on a host calibrated for 10 — which is the I/O saturation
+that produced nginx 504s the last time it happened. So:
+
+**Set the scheduler's cap in proportion to how much of the fleet it owns.** Start at 2,
+and raise it roughly in step with the share of providers cut over, reaching 10 only when
+`ingest-slot.sh` is gone (§9). `INGEST_SCHEDULER_CAP` lives in `/opt/freehire/.env`.
+
+```
+# a rough guide, not a formula — measure /proc/pressure/io rather than trusting it
+#   first wave (~3 providers)   INGEST_SCHEDULER_CAP=2
+#   ~25% cut over              INGEST_SCHEDULER_CAP=3
+#   ~50%                       INGEST_SCHEDULER_CAP=5
+#   ~90%                       INGEST_SCHEDULER_CAP=8
+#   after §9                   INGEST_SCHEDULER_CAP=10   (or unset; 10 is the default)
+```
+
 ---
 
 ## Before anything

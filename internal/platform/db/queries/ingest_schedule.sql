@@ -33,16 +33,28 @@ ON CONFLICT (provider, shard) DO NOTHING;
 
 -- name: DeleteSurplusRunStateShards :exec
 -- Drop the shards left over from a higher shard count.
+--
+-- A CLAIMED row is left alone. Deleting one would erase the scheduler's only record that a
+-- crawl is still executing, so the fleet would under-count itself and launch past its cap —
+-- and the surviving run would finish with nothing to report to. The row goes on the next
+-- tick after it is reaped, which costs one minute and cannot lose a slot.
 DELETE FROM ingest_run_state
-WHERE provider = sqlc.arg(provider) AND shard > sqlc.arg(shards)::int;
+WHERE provider = sqlc.arg(provider)
+  AND shard > sqlc.arg(shards)::int
+  AND claimed_at IS NULL;
 
 -- name: DeleteRunStateForUnlistedProviders :exec
 -- Forget the providers that are no longer eligible — every board retired, or the adapter
 -- gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
 -- it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty
 -- from 18 July).
+--
+-- A CLAIMED row survives, for the same reason as the surplus-shard delete above: it is the
+-- only record that a crawl is still running, and losing it makes the fleet under-count
+-- itself. A provider disabled mid-crawl keeps its row for one more tick, until the reap.
 DELETE FROM ingest_run_state
-WHERE provider <> ALL (sqlc.arg(providers)::text[]);
+WHERE provider <> ALL (sqlc.arg(providers)::text[])
+  AND claimed_at IS NULL;
 
 -- name: ClaimDueRuns :many
 -- Take up to max_runs due runs, exactly once each.
@@ -76,11 +88,18 @@ WITH candidate AS (
            COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int) AS timeout_sec
     FROM ingest_run_state rs
     LEFT JOIN ingest_schedule s ON s.provider = rs.provider
-    WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
-       OR (rs.claimed_at IS NOT NULL
-           AND rs.claimed_at < now() - make_interval(
-                   secs => COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int)
-                           + sqlc.arg(grace_sec)::int))
+    WHERE ((rs.claimed_at IS NULL AND rs.next_due_at <= now())
+        OR (rs.claimed_at IS NOT NULL
+            AND rs.claimed_at < now() - make_interval(
+                    secs => COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int)
+                            + sqlc.arg(grace_sec)::int)))
+    -- ROLLOUT GATE, removed with the column in task 8.5 of
+    -- openspec/changes/ingest-scheduler-in-db. Run state is tracked for every enabled
+    -- provider so the stagger and the shadow preview exist from day one; what `managed`
+    -- decides is whether the SCHEDULER may launch it, or whether its static timer still
+    -- owns it. COALESCE to false: while the column exists, a provider nobody has handed
+    -- over is still the static timer's.
+    AND COALESCE(s.managed, false)
     ORDER BY rs.next_due_at
     LIMIT sqlc.arg(max_runs)
     FOR UPDATE OF rs SKIP LOCKED
@@ -104,11 +123,25 @@ SET claimed_at       = NULL,
     last_error       = NULLIF(sqlc.arg(last_error)::text, '')
 WHERE provider = sqlc.arg(provider) AND shard = sqlc.arg(shard)::int;
 
--- name: CountInFlightRuns :one
--- How many runs the scheduler believes are executing. This is what replaces
--- ingest-slot.sh's flock semaphore: 279 independent timers could not see each other, so
--- the ceiling had to live in a wrapper script; one scheduler can simply count.
-SELECT count(*) FROM ingest_run_state WHERE claimed_at IS NOT NULL;
+-- name: ListInFlightRuns :many
+-- Every claimed run, with what the scheduler needs to ask the service manager about it.
+--
+-- Rows, not a count. A transient unit finishes and tells nobody, so claimed_at is set at
+-- claim and cleared by nothing until the scheduler reaps: a plain count would include every
+-- run that ever succeeded, and the fleet's concurrency cap would fill permanently after
+-- Cap launches with every check still green.
+--
+-- This is what replaces ingest-slot.sh's flock semaphore. 279 independent timers could not
+-- see each other, so the ceiling had to live in a wrapper script; one scheduler can count —
+-- but only if it also notices when a run has ended.
+SELECT rs.provider,
+       rs.shard,
+       (SELECT count(*) FROM ingest_run_state peer WHERE peer.provider = rs.provider)::int AS shards,
+       COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int) AS timeout_sec
+FROM ingest_run_state rs
+LEFT JOIN ingest_schedule s ON s.provider = rs.provider
+WHERE rs.claimed_at IS NOT NULL
+ORDER BY rs.claimed_at;
 
 -- name: PreviewDueRuns :many
 -- What ClaimDueRuns WOULD take, without taking it. Shadow mode's read: the first
@@ -125,11 +158,18 @@ SELECT rs.provider,
        COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int) AS timeout_sec
 FROM ingest_run_state rs
 LEFT JOIN ingest_schedule s ON s.provider = rs.provider
-WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
-   OR (rs.claimed_at IS NOT NULL
-       AND rs.claimed_at < now() - make_interval(
-               secs => COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int)
-                       + sqlc.arg(grace_sec)::int))
+WHERE ((rs.claimed_at IS NULL AND rs.next_due_at <= now())
+    OR (rs.claimed_at IS NOT NULL
+        AND rs.claimed_at < now() - make_interval(
+                secs => COALESCE(s.timeout_sec, sqlc.arg(default_timeout_sec)::int)
+                        + sqlc.arg(grace_sec)::int)))
+    -- ROLLOUT GATE, removed with the column in task 8.5 of
+    -- openspec/changes/ingest-scheduler-in-db. Run state is tracked for every enabled
+    -- provider so the stagger and the shadow preview exist from day one; what `managed`
+    -- decides is whether the SCHEDULER may launch it, or whether its static timer still
+    -- owns it. COALESCE to false: while the column exists, a provider nobody has handed
+    -- over is still the static timer's.
+    AND COALESCE(s.managed, false)
 ORDER BY rs.next_due_at
 LIMIT sqlc.arg(max_runs);
 

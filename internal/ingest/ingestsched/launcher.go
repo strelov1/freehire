@@ -5,13 +5,34 @@ import (
 	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 )
 
-// Launcher starts one claimed run. It is a port because `systemd-run` exists only on the
-// crawl host: the claim, due and reclaim logic — the part worth testing — must not need a
-// service manager to be exercised.
+// Outcome is how a launched run ended, as read back from the service manager.
+type Outcome struct {
+	// Done is false while the run is still executing.
+	Done bool
+	// ExitCode is the crawl's own status. It is 0 for a run whose unit has vanished,
+	// which is what a SUCCESSFUL transient unit does on its own.
+	ExitCode int
+	// Detail is the service manager's word for how it ended ("exit-code", "timeout",
+	// "signal"), kept because "the run failed" and "the run was killed at its budget"
+	// need different responses.
+	Detail string
+}
+
+// Launcher starts one claimed run and later reports whether it has ended. It is a port
+// because `systemd-run` exists only on the crawl host: the claim, due and reclaim logic —
+// the part worth testing — must not need a service manager to be exercised.
 type Launcher interface {
 	Launch(ctx context.Context, run Run) error
+	// Finished reports whether a launched run has ended, and how.
+	//
+	// This exists because a transient unit finishes and tells NOBODY: cmd/ingest knows
+	// nothing about the scheduler. Without it, claimed_at would be set at claim and
+	// cleared by nothing, so every successful run would permanently occupy a slot and the
+	// fleet would saturate for good after Cap launches — with every check green.
+	Finished(ctx context.Context, run Run) (Outcome, error)
 }
 
 // SystemdLauncher starts each run as a TRANSIENT systemd unit.
@@ -34,8 +55,10 @@ type SystemdLauncher struct {
 	// RunAs is the unprivileged account the crawl drops to.
 	RunAs string
 
-	// exec is the seam the tests use. nil means really run systemd-run.
+	// exec is the seam the tests use. nil means really run the command.
 	exec func(ctx context.Context, name string, args ...string) error
+	// show reads a unit's properties. nil means really ask systemctl.
+	show func(ctx context.Context, unit string, properties ...string) (map[string]string, error)
 }
 
 // NewSystemdLauncher builds the launcher used on the host.
@@ -61,10 +84,10 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 	args := []string{
 		"--unit=" + l.unitName(run),
 		"--description=freehire ingest " + run.Provider + " " + shardLabel(run),
-		// Garbage-collect the unit when it exits, including on failure. Without this a
-		// failed run's unit keeps its name and the next launch is refused — the fleet
-		// would stop one provider at a time, quietly.
-		"--collect",
+		// Deliberately NOT --collect. systemd already garbage-collects a SUCCESSFUL
+		// transient unit; --collect would collect failed ones too, erasing the exit code
+		// before Finished could read it and making "it succeeded" and "it failed" the same
+		// answer. A failed unit's name is freed by reset-failed in Finished instead.
 		"--property=Type=oneshot",
 		"--property=TimeoutStartSec=" + strconv.Itoa(int(run.RunTimeout.Seconds())),
 		// The weights the per-provider units carried: a crawl yields to the API.
@@ -84,6 +107,65 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 	}
 
 	return l.execute(ctx, "systemd-run", args...)
+}
+
+// Finished asks systemd how the run's unit is doing.
+//
+// A unit that does not exist finished SUCCESSFULLY — systemd garbage-collects a successful
+// transient unit on its own, while a failed one lingers. That asymmetry is the whole reason
+// Launch does not pass --collect.
+func (l SystemdLauncher) Finished(ctx context.Context, run Run) (Outcome, error) {
+	unit := l.unitName(run)
+	props, err := l.properties(ctx, unit, "LoadState", "ActiveState", "Result", "ExecMainStatus")
+	if err != nil {
+		return Outcome{}, fmt.Errorf("read %s: %w", unit, err)
+	}
+
+	if state := props["LoadState"]; state == "not-found" || state == "" {
+		return Outcome{Done: true}, nil
+	}
+	switch props["ActiveState"] {
+	case "activating", "active", "deactivating", "reloading":
+		return Outcome{Done: false}, nil
+	}
+
+	code, _ := strconv.Atoi(props["ExecMainStatus"])
+	detail := props["Result"]
+	// A failed unit holds its name until it is reset, and the next launch of this shard
+	// would be refused with "unit already exists" — the fleet would stop one provider at a
+	// time. Resetting right after the status has been read keeps the failure legible AND
+	// the name free.
+	if err := l.execute(ctx, "systemctl", "reset-failed", unit); err != nil {
+		// The status was already read, so the run IS finished; failing to tidy up must not
+		// hold the claim open. Carry it in Detail rather than losing it.
+		detail += " (reset-failed: " + err.Error() + ")"
+	}
+	return Outcome{Done: true, ExitCode: code, Detail: detail}, nil
+}
+
+func (l SystemdLauncher) properties(ctx context.Context, unit string, names ...string) (map[string]string, error) {
+	if l.show != nil {
+		return l.show(ctx, unit, names...)
+	}
+
+	args := []string{"show", unit}
+	for _, n := range names {
+		args = append(args, "--property="+n)
+	}
+	// `systemctl show` answers 0 with LoadState=not-found for a unit that never existed,
+	// so a non-zero status here is a real failure to ask, not a missing unit.
+	out, err := exec.CommandContext(ctx, "systemctl", args...).Output()
+	if err != nil {
+		return nil, err
+	}
+
+	props := make(map[string]string, len(names))
+	for _, line := range strings.Split(string(out), "\n") {
+		if key, value, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
+			props[key] = value
+		}
+	}
+	return props, nil
 }
 
 func (l SystemdLauncher) execute(ctx context.Context, name string, args ...string) error {

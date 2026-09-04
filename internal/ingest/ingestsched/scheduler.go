@@ -53,9 +53,13 @@ type TickResult struct {
 	Applied   bool
 	Saturated bool
 
-	Eligible  int
-	Scheduled int
-	InFlight  int
+	Eligible int
+	// Tracked is how many providers have run state — every ENABLED one, whether or not
+	// the scheduler is yet allowed to launch it.
+	Tracked  int
+	InFlight int
+	// Reaped counts the claims released this tick because their unit had ended.
+	Reaped int
 
 	Launched    []Run
 	WouldLaunch []Run
@@ -99,35 +103,54 @@ func (s Scheduler) Tick(ctx context.Context) (TickResult, error) {
 	}
 
 	result := TickResult{Applied: s.Apply, Eligible: len(eligible)}
-	schedulable := make([]Settings, 0, len(eligible))
-	for _, settings := range eligible {
-		switch {
-		case !settings.Enabled:
-			result.Disabled = append(result.Disabled, Skipped{settings.Provider, settings.DisabledReason})
-		case !settings.Managed:
-			// Rollout only: the static timer still owns this provider. Removed with the
-			// column in task 8.5.
-			result.Unmanaged = append(result.Unmanaged, settings.Provider)
-		default:
-			// The gate runs here as well as in the launcher. Here it keeps a bad key from
-			// ever gaining run state; there it is the last point where refusing is still
-			// possible. Neither alone is enough.
-			if err := ValidateProviderKey(settings.Provider); err != nil {
-				result.Refused = append(result.Refused, Skipped{settings.Provider, err.Error()})
-				continue
-			}
-			schedulable = append(schedulable, settings)
-		}
-	}
-	result.Scheduled = len(schedulable)
 
-	if err := s.Repo.Reconcile(ctx, schedulable); err != nil {
+	// TRACKED is every ENABLED provider — including the ones a static timer still owns.
+	// `managed` gates the LAUNCH, not the tracking, and the difference matters twice:
+	// Reconcile deletes the state of every provider absent from its list, so tracking only
+	// the managed ones would run a full-table delete every minute of a cutover during which
+	// `managed` defaults to false; and shadow mode previews FROM run state, so with no rows
+	// the day of shadow output §8.3 exists to read would measure nothing at all.
+	tracked := make([]Settings, 0, len(eligible))
+	for _, settings := range eligible {
+		if !settings.Enabled {
+			result.Disabled = append(result.Disabled, Skipped{settings.Provider, settings.DisabledReason})
+			continue
+		}
+		// The gate runs here as well as in the launcher. Here it keeps a bad key from ever
+		// gaining run state; there it is the last point where refusing is still possible.
+		// Neither alone is enough.
+		if err := ValidateProviderKey(settings.Provider); err != nil {
+			result.Refused = append(result.Refused, Skipped{settings.Provider, err.Error()})
+			continue
+		}
+		if !settings.Managed {
+			// Rollout only. Reported so an operator can see how much of the fleet is still
+			// on the old path; removed with the column in task 8.5.
+			result.Unmanaged = append(result.Unmanaged, settings.Provider)
+		}
+		tracked = append(tracked, settings)
+	}
+	result.Tracked = len(tracked)
+
+	unreconciled, err := s.Repo.Reconcile(ctx, tracked)
+	result.Failed = append(result.Failed, unreconciled...)
+	if err != nil {
 		return result, fmt.Errorf("reconcile run state: %w", err)
 	}
 
-	inFlight, err := s.Repo.InFlight(ctx)
+	// Reap BEFORE measuring capacity. A launched run's transient unit finishes and tells
+	// nobody — cmd/ingest knows nothing about the scheduler — so without this the claim
+	// set at claim time would be cleared by nothing, every successful run would occupy a
+	// slot forever, and the fleet would saturate for good after Cap launches with every
+	// check green. Reaping after the measurement would be almost as bad: a tick that just
+	// freed nine slots would still refuse to launch until the next minute.
+	//
+	// It runs in shadow mode too. That is the mode the fleet sits in for a full day, and a
+	// shadow run whose in-flight count only ever grows measures a saturation that is not
+	// real.
+	inFlight, err := s.reap(ctx, &result)
 	if err != nil {
-		return result, fmt.Errorf("count in-flight runs: %w", err)
+		return result, err
 	}
 	result.InFlight = inFlight
 
@@ -166,6 +189,40 @@ func (s Scheduler) Tick(ctx context.Context) (TickResult, error) {
 		result.Launched = append(result.Launched, run)
 	}
 	return result, nil
+}
+
+// reap asks the service manager about every claimed run, records the ones that have ended,
+// and returns how many are genuinely still executing.
+//
+// One unreadable unit must not cost the whole tick: it is reported and its claim left
+// alone, which the reclaim window then handles on its own timescale. Stopping here would
+// turn one odd unit into a stopped fleet.
+func (s Scheduler) reap(ctx context.Context, result *TickResult) (int, error) {
+	claimed, err := s.Repo.InFlightRuns(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list in-flight runs: %w", err)
+	}
+
+	running := 0
+	for _, run := range claimed {
+		outcome, err := s.Launcher.Finished(ctx, run)
+		if err != nil {
+			result.Failed = append(result.Failed, Skipped{run.Provider, "read run status: " + err.Error()})
+			running++ // Unknown, so assume it is alive: over-counting costs a slot, under-counting double-launches.
+			continue
+		}
+		if !outcome.Done {
+			running++
+			continue
+		}
+		if err := s.Repo.RecordFinish(ctx, run.Provider, run.Shard, outcome.ExitCode, outcome.Detail); err != nil {
+			result.Failed = append(result.Failed, Skipped{run.Provider, "record finish: " + err.Error()})
+			running++
+			continue
+		}
+		result.Reaped++
+	}
+	return running, nil
 }
 
 // launchFailedExitCode marks a run that never started, so last_exit_code distinguishes it

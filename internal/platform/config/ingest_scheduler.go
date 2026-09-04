@@ -47,8 +47,11 @@ func LoadIngestScheduler() IngestScheduler {
 	if c.Cap < 1 {
 		c.Cap = 1
 	}
-	if c.Grace < 0 {
-		c.Grace = 0
+	// Floored at one second, not at zero. Scheduler.grace() reads a zero Grace as "use
+	// DefaultGrace", so returning 0 here would silently hand back two minutes and make
+	// INGEST_SCHEDULER_GRACE_SECONDS=0 mean the opposite of what it says.
+	if c.Grace < time.Second {
+		c.Grace = time.Second
 	}
 	return c
 }

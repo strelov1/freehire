@@ -29,6 +29,10 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
+// lockKey serializes scheduler ticks across processes. The project's advisory-lock key
+// list lives in internal/platform/migrate.
+const lockKey = 0x66687363 // "fhsc" — freehire scheduler
+
 func main() {
 	worker.Main(run)
 }
@@ -40,6 +44,35 @@ func run() int {
 		return 1
 	}
 	defer cleanup()
+
+	// Single-flight across PROCESSES, not just across timer firings. The fleet's
+	// concurrency cap is a check-then-act pair — count what is in flight, then claim
+	// `cap - that` — and two overlapping invocations would each read zero and each claim
+	// the whole cap, running 2x the ceiling the host is tuned for. `Type=oneshot` stops the
+	// timer stacking on itself but says nothing about a hand-run invocation beside it, and
+	// the flock semaphore this replaces WAS atomic. A run that cannot take the lock exits
+	// cleanly: the next minute's tick loses nothing, because all state is in the database.
+	lockConn, err := pool.Acquire(ctx)
+	if err != nil {
+		log.Printf("acquire lock connection: %v", err)
+		return 1
+	}
+	defer lockConn.Release()
+
+	var locked bool
+	if err := lockConn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", int64(lockKey)).Scan(&locked); err != nil {
+		log.Printf("scheduler lock: %v", err)
+		return 1
+	}
+	if !locked {
+		log.Print("scheduler: another tick holds the lock; skipping this one")
+		return 0
+	}
+	defer func() {
+		if _, err := lockConn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", int64(lockKey)); err != nil {
+			log.Printf("scheduler unlock: %v", err)
+		}
+	}()
 
 	cfg := config.LoadIngestScheduler()
 	scheduler := ingestsched.Scheduler{
@@ -73,10 +106,11 @@ func report(r ingestsched.TickResult, apply bool) {
 	if apply {
 		mode = "apply"
 	}
-	log.Printf("scheduler tick: mode=%s eligible=%d scheduled=%d in_flight=%d launched=%d would_launch=%d "+
-		"disabled=%d unmanaged=%d refused=%d failed=%d saturated=%t",
-		mode, r.Eligible, r.Scheduled, r.InFlight, len(r.Launched), len(r.WouldLaunch),
-		len(r.Disabled), len(r.Unmanaged), len(r.Refused), len(r.Failed), r.Saturated)
+	log.Printf("scheduler tick: mode=%s eligible=%d tracked=%d in_flight=%d reaped=%d launched=%d "+
+		"would_launch=%d disabled=%d unmanaged=%d refused=%d failed=%d saturated=%t",
+		mode, r.Eligible, r.Tracked, r.InFlight, r.Reaped, len(r.Launched),
+		len(r.WouldLaunch), len(r.Disabled), len(r.Unmanaged), len(r.Refused), len(r.Failed),
+		r.Saturated)
 
 	if r.Saturated {
 		log.Printf("scheduler: fleet saturated at %d in flight; every due run stays claimable for the next tick", r.InFlight)

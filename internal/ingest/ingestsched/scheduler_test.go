@@ -3,6 +3,7 @@ package ingestsched
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -11,15 +12,16 @@ import (
 // stands in for Postgres wherever the assertion is about the scheduler's DECISIONS —
 // the SQL itself is proven in repository_integration_test.go against a real database.
 type fakeRepo struct {
-	eligible []Settings
-	due      []Run
-	inFlight int
+	eligible     []Settings
+	due          []Run
+	inFlightRuns []Run
 
-	reconciled []Settings
-	claimLimit int
-	claimed    bool
-	previewed  bool
-	finished   []finishCall
+	reconciled     []Settings
+	reconcileSkips []Skipped
+	claimLimit     int
+	claimed        bool
+	previewed      bool
+	finished       []finishCall
 
 	claimErr error
 }
@@ -33,12 +35,12 @@ type finishCall struct {
 
 func (f *fakeRepo) Eligible(context.Context) ([]Settings, error) { return f.eligible, nil }
 
-func (f *fakeRepo) Reconcile(_ context.Context, s []Settings) error {
+func (f *fakeRepo) Reconcile(_ context.Context, s []Settings) ([]Skipped, error) {
 	f.reconciled = s
-	return nil
+	return f.reconcileSkips, nil
 }
 
-func (f *fakeRepo) InFlight(context.Context) (int, error) { return f.inFlight, nil }
+func (f *fakeRepo) InFlightRuns(context.Context) ([]Run, error) { return f.inFlightRuns, nil }
 
 func (f *fakeRepo) Claim(_ context.Context, limit int, _ time.Duration) ([]Run, error) {
 	f.claimed = true
@@ -74,6 +76,8 @@ func (f *fakeRepo) RecordFinish(_ context.Context, provider string, shard, exitC
 type fakeLauncher struct {
 	launched []Run
 	err      error
+	// outcomes is keyed "provider/shard"; a run absent from it is still running.
+	outcomes map[string]Outcome
 }
 
 func (f *fakeLauncher) Launch(_ context.Context, run Run) error {
@@ -82,6 +86,10 @@ func (f *fakeLauncher) Launch(_ context.Context, run Run) error {
 	}
 	f.launched = append(f.launched, run)
 	return nil
+}
+
+func (f *fakeLauncher) Finished(_ context.Context, run Run) (Outcome, error) {
+	return f.outcomes[fmt.Sprintf("%s/%d", run.Provider, run.Shard)], nil
 }
 
 func managed(provider string) Settings {
@@ -163,8 +171,8 @@ func TestApplyTickClaimsAndLaunches(t *testing.T) {
 // independent timers could not see each other; one scheduler can simply count.
 func TestTickLaunchesOnlyTheFreeCapacity(t *testing.T) {
 	repo := &fakeRepo{
-		eligible: []Settings{managed("paylocity")},
-		inFlight: 7,
+		eligible:     []Settings{managed("paylocity")},
+		inFlightRuns: stillRunning("paylocity", 7),
 		due: []Run{
 			{Provider: "paylocity", Shard: 1, Shards: 24, RunTimeout: DefaultRunTimeout},
 			{Provider: "paylocity", Shard: 2, Shards: 24, RunTimeout: DefaultRunTimeout},
@@ -191,9 +199,9 @@ func TestTickLaunchesOnlyTheFreeCapacity(t *testing.T) {
 // logged its skips too.
 func TestSaturatedTickLaunchesNothingAndSaysSo(t *testing.T) {
 	repo := &fakeRepo{
-		eligible: []Settings{managed("greenhouse")},
-		inFlight: 10,
-		due:      []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
+		eligible:     []Settings{managed("greenhouse")},
+		inFlightRuns: stillRunning("paylocity", 10),
+		due:          []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
 	}
 	launcher := &fakeLauncher{}
 
@@ -210,6 +218,48 @@ func TestSaturatedTickLaunchesNothingAndSaysSo(t *testing.T) {
 	}
 	if repo.claimLimit != 0 {
 		t.Errorf("a saturated tick asked to claim %d; it must not claim at all", repo.claimLimit)
+	}
+}
+
+// Run state is TRACKED for every enabled provider, including the ones still owned by their
+// static timer. Two reasons, and the second is the one that nearly sank the rollout plan:
+//
+//   - Reconcile deletes the state of every provider absent from its list. Passing only the
+//     MANAGED ones would run a full-table delete every minute for the whole cutover, since
+//     managed defaults to false — discarding the stagger and the run history continuously.
+//   - Shadow mode previews from run state. With no rows there is nothing to preview, so the
+//     full day of shadow output §8.3 is supposed to be read would have measured nothing at
+//     all.
+//
+// What `managed` gates is the LAUNCH, and that gate lives in the claim predicate.
+func TestTickTracksEveryEnabledProviderIncludingUnmanagedOnes(t *testing.T) {
+	unmanaged := managed("lever")
+	unmanaged.Managed = false
+
+	disabled := managed("bayt")
+	disabled.Enabled = false
+	disabled.DisabledReason = "fingerprint client has no proxy support"
+
+	repo := &fakeRepo{eligible: []Settings{managed("greenhouse"), unmanaged, disabled}}
+
+	got, err := newScheduler(repo, &fakeLauncher{}, true).Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	names := make([]string, 0, len(repo.reconciled))
+	for _, s := range repo.reconciled {
+		names = append(names, s.Provider)
+	}
+	if len(names) != 2 || names[0] != "greenhouse" || names[1] != "lever" {
+		t.Fatalf("reconciled %v, want greenhouse and lever — every ENABLED provider", names)
+	}
+	if got.Tracked != 2 {
+		t.Errorf("Tracked = %d, want 2", got.Tracked)
+	}
+	// bayt is out because it is disabled, which is a decision with a reason attached.
+	if len(got.Disabled) != 1 || got.Disabled[0].Provider != "bayt" {
+		t.Errorf("Disabled = %v, want only bayt", got.Disabled)
 	}
 }
 
@@ -231,11 +281,8 @@ func TestTickSchedulesOnlyManagedEnabledProviders(t *testing.T) {
 		t.Fatalf("Tick: %v", err)
 	}
 
-	if len(repo.reconciled) != 1 || repo.reconciled[0].Provider != "greenhouse" {
-		t.Fatalf("reconciled %v, want only greenhouse", repo.reconciled)
-	}
-	if got.Eligible != 3 || got.Scheduled != 1 {
-		t.Errorf("Eligible/Scheduled = %d/%d, want 3/1", got.Eligible, got.Scheduled)
+	if got.Eligible != 3 || got.Tracked != 2 {
+		t.Errorf("Eligible/Tracked = %d/%d, want 3/2", got.Eligible, got.Tracked)
 	}
 	// A curator's decision and a rollout state are reported separately. During cutover
 	// Unmanaged holds ~226 providers; mixing them would bury the two genuinely turned off.
@@ -274,6 +321,149 @@ func TestTickRefusesAProviderKeyTheRegistryDoesNotKnow(t *testing.T) {
 	}
 }
 
+// THE bug this reaper exists for. A launched run's transient unit finishes on its own and
+// tells nobody: cmd/ingest knows nothing about the scheduler. Without a reap, claimed_at is
+// set at claim and cleared by nothing, so every successful run permanently occupies a slot
+// and the fleet saturates for good after DefaultCap launches — with every check green,
+// which is exactly the silence this whole change removes.
+func TestTickReapsRunsWhoseUnitHasFinished(t *testing.T) {
+	done := Run{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}
+	stillGoing := Run{Provider: "lever", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}
+
+	repo := &fakeRepo{
+		eligible:     []Settings{managed("greenhouse"), managed("lever")},
+		inFlightRuns: []Run{done, stillGoing},
+	}
+	launcher := &fakeLauncher{
+		outcomes: map[string]Outcome{
+			"greenhouse/1": {Done: true},
+			"lever/1":      {Done: false},
+		},
+	}
+
+	got, err := newScheduler(repo, launcher, true).Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	if len(repo.finished) != 1 {
+		t.Fatalf("finished = %v, want the one whose unit is gone", repo.finished)
+	}
+	if repo.finished[0].provider != "greenhouse" {
+		t.Errorf("reaped %s, want greenhouse", repo.finished[0].provider)
+	}
+	if repo.finished[0].exitCode != 0 {
+		t.Errorf("exit code = %d, want 0 — a vanished transient unit succeeded", repo.finished[0].exitCode)
+	}
+	if got.Reaped != 1 {
+		t.Errorf("Reaped = %d, want 1", got.Reaped)
+	}
+}
+
+// A crawl that ran and failed must be recorded with ITS exit code, not with the
+// launch-failure code and not as a success. last_exit_code is what an operator reads to
+// tell "never started" from "started and died".
+func TestTickReapsAFailedRunWithItsOwnExitCode(t *testing.T) {
+	failed := Run{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}
+	repo := &fakeRepo{
+		eligible:     []Settings{managed("greenhouse")},
+		inFlightRuns: []Run{failed},
+	}
+	launcher := &fakeLauncher{
+		outcomes: map[string]Outcome{
+			"greenhouse/1": {Done: true, ExitCode: 1, Detail: "exit-code"},
+		},
+	}
+
+	if _, err := newScheduler(repo, launcher, true).Tick(context.Background()); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	if len(repo.finished) != 1 {
+		t.Fatalf("finished = %v, want one", repo.finished)
+	}
+	if repo.finished[0].exitCode != 1 {
+		t.Errorf("exit code = %d, want the run's own 1", repo.finished[0].exitCode)
+	}
+	if repo.finished[0].runErr == "" {
+		t.Error("the failure detail was dropped")
+	}
+}
+
+// The reap must run BEFORE the budget is computed, or a tick that just freed nine slots
+// would still refuse to launch anything until the next minute.
+func TestTickReapsBeforeItMeasuresFreeCapacity(t *testing.T) {
+	var inFlight []Run
+	for i := 1; i <= 10; i++ {
+		inFlight = append(inFlight, Run{Provider: "paylocity", Shard: i, Shards: 24, RunTimeout: DefaultRunTimeout})
+	}
+	outcomes := map[string]Outcome{}
+	for i := 1; i <= 9; i++ {
+		outcomes[fmt.Sprintf("paylocity/%d", i)] = Outcome{Done: true}
+	}
+	outcomes["paylocity/10"] = Outcome{Done: false}
+
+	repo := &fakeRepo{
+		eligible:     []Settings{managed("paylocity")},
+		inFlightRuns: inFlight,
+		due:          []Run{{Provider: "paylocity", Shard: 11, Shards: 24, RunTimeout: DefaultRunTimeout}},
+	}
+	launcher := &fakeLauncher{outcomes: outcomes}
+
+	got, err := newScheduler(repo, launcher, true).Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	if got.Saturated {
+		t.Error("Saturated = true after reaping nine of ten runs; the reap must precede the budget")
+	}
+	if repo.claimLimit != 9 {
+		t.Errorf("claim limit = %d, want 10 - 1 still running = 9", repo.claimLimit)
+	}
+}
+
+// Shadow mode must reap too. It is the mode the fleet sits in for a full day, and a shadow
+// run whose in-flight count only ever grows measures a saturation that is not real.
+func TestShadowModeStillReaps(t *testing.T) {
+	repo := &fakeRepo{
+		eligible:     []Settings{managed("greenhouse")},
+		inFlightRuns: []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
+	}
+	launcher := &fakeLauncher{outcomes: map[string]Outcome{"greenhouse/1": {Done: true}}}
+
+	if _, err := newScheduler(repo, launcher, false).Tick(context.Background()); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if len(repo.finished) != 1 {
+		t.Errorf("shadow mode reaped %v; a stale claim it never made must still be cleared", repo.finished)
+	}
+}
+
+// One provider that cannot be reconciled must not stop the fleet. The per-provider timers
+// this replaces had that isolation for free; concentrating 279 of them into one process is
+// the moment to state it, because now one bad row can stop everything.
+func TestOneUnreconcilableProviderDoesNotStopTheTick(t *testing.T) {
+	repo := &fakeRepo{
+		eligible:       []Settings{managed("greenhouse"), managed("lever")},
+		reconcileSkips: []Skipped{{Provider: "lever", Reason: "ensure shards: lock timeout"}},
+		due:            []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
+	}
+	launcher := &fakeLauncher{}
+
+	got, err := newScheduler(repo, launcher, true).Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	if len(launcher.launched) != 1 {
+		t.Errorf("launched %v; greenhouse must still run", launcher.launched)
+	}
+	if len(got.Failed) != 1 || got.Failed[0].Provider != "lever" {
+		t.Errorf("Failed = %v, want lever reported rather than swallowed", got.Failed)
+	}
+}
+
 // An empty roster is a failed MEASUREMENT, not an empty catalogue. Reconcile deletes the
 // run state of every provider absent from its list, so a tick that accepted zero eligible
 // providers would wipe the fleet's entire schedule — including the stagger — on the
@@ -305,8 +495,8 @@ func TestTickAcceptsARosterWhereNothingIsSchedulableYet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Tick: %v", err)
 	}
-	if got.Scheduled != 0 || len(got.Unmanaged) != 1 {
-		t.Errorf("Scheduled/Unmanaged = %d/%v, want 0/[greenhouse]", got.Scheduled, got.Unmanaged)
+	if len(got.Unmanaged) != 1 || got.Unmanaged[0] != "greenhouse" {
+		t.Errorf("Unmanaged = %v, want [greenhouse]", got.Unmanaged)
 	}
 }
 
@@ -369,4 +559,18 @@ func (f *failFirstLauncher) Launch(_ context.Context, _ Run) error {
 		return errors.New("first launch fails")
 	}
 	return nil
+}
+
+func (f *failFirstLauncher) Finished(context.Context, Run) (Outcome, error) {
+	return Outcome{}, nil
+}
+
+// stillRunning stages n in-flight runs whose units the fake launcher reports as alive,
+// since an outcome absent from its map means "not finished".
+func stillRunning(provider string, n int) []Run {
+	out := make([]Run, 0, n)
+	for i := 1; i <= n; i++ {
+		out = append(out, Run{Provider: provider, Shard: i, Shards: 24, RunTimeout: DefaultRunTimeout})
+	}
+	return out
 }

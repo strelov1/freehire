@@ -26,11 +26,18 @@ WITH candidate AS (
            COALESCE(s.timeout_sec, $2::int) AS timeout_sec
     FROM ingest_run_state rs
     LEFT JOIN ingest_schedule s ON s.provider = rs.provider
-    WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
-       OR (rs.claimed_at IS NOT NULL
-           AND rs.claimed_at < now() - make_interval(
-                   secs => COALESCE(s.timeout_sec, $2::int)
-                           + $3::int))
+    WHERE ((rs.claimed_at IS NULL AND rs.next_due_at <= now())
+        OR (rs.claimed_at IS NOT NULL
+            AND rs.claimed_at < now() - make_interval(
+                    secs => COALESCE(s.timeout_sec, $2::int)
+                            + $3::int)))
+    -- ROLLOUT GATE, removed with the column in task 8.5 of
+    -- openspec/changes/ingest-scheduler-in-db. Run state is tracked for every enabled
+    -- provider so the stagger and the shadow preview exist from day one; what ` + "`" + `managed` + "`" + `
+    -- decides is whether the SCHEDULER may launch it, or whether its static timer still
+    -- owns it. COALESCE to false: while the column exists, a provider nobody has handed
+    -- over is still the static timer's.
+    AND COALESCE(s.managed, false)
     ORDER BY rs.next_due_at
     LIMIT $4
     FOR UPDATE OF rs SKIP LOCKED
@@ -105,29 +112,20 @@ func (q *Queries) ClaimDueRuns(ctx context.Context, arg ClaimDueRunsParams) ([]C
 	return items, nil
 }
 
-const countInFlightRuns = `-- name: CountInFlightRuns :one
-SELECT count(*) FROM ingest_run_state WHERE claimed_at IS NOT NULL
-`
-
-// How many runs the scheduler believes are executing. This is what replaces
-// ingest-slot.sh's flock semaphore: 279 independent timers could not see each other, so
-// the ceiling had to live in a wrapper script; one scheduler can simply count.
-func (q *Queries) CountInFlightRuns(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countInFlightRuns)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const deleteRunStateForUnlistedProviders = `-- name: DeleteRunStateForUnlistedProviders :exec
 DELETE FROM ingest_run_state
 WHERE provider <> ALL ($1::text[])
+  AND claimed_at IS NULL
 `
 
 // Forget the providers that are no longer eligible — every board retired, or the adapter
 // gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
 // it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty
 // from 18 July).
+//
+// A CLAIMED row survives, for the same reason as the surplus-shard delete above: it is the
+// only record that a crawl is still running, and losing it makes the fleet under-count
+// itself. A provider disabled mid-crawl keeps its row for one more tick, until the reap.
 func (q *Queries) DeleteRunStateForUnlistedProviders(ctx context.Context, providers []string) error {
 	_, err := q.db.Exec(ctx, deleteRunStateForUnlistedProviders, providers)
 	return err
@@ -135,7 +133,9 @@ func (q *Queries) DeleteRunStateForUnlistedProviders(ctx context.Context, provid
 
 const deleteSurplusRunStateShards = `-- name: DeleteSurplusRunStateShards :exec
 DELETE FROM ingest_run_state
-WHERE provider = $1 AND shard > $2::int
+WHERE provider = $1
+  AND shard > $2::int
+  AND claimed_at IS NULL
 `
 
 type DeleteSurplusRunStateShardsParams struct {
@@ -144,6 +144,11 @@ type DeleteSurplusRunStateShardsParams struct {
 }
 
 // Drop the shards left over from a higher shard count.
+//
+// A CLAIMED row is left alone. Deleting one would erase the scheduler's only record that a
+// crawl is still executing, so the fleet would under-count itself and launch past its cap —
+// and the surviving run would finish with nothing to report to. The row goes on the next
+// tick after it is reaped, which costs one minute and cannot lose a slot.
 func (q *Queries) DeleteSurplusRunStateShards(ctx context.Context, arg DeleteSurplusRunStateShardsParams) error {
 	_, err := q.db.Exec(ctx, deleteSurplusRunStateShards, arg.Provider, arg.Shards)
 	return err
@@ -171,6 +176,59 @@ type EnsureRunStateShardsParams struct {
 func (q *Queries) EnsureRunStateShards(ctx context.Context, arg EnsureRunStateShardsParams) error {
 	_, err := q.db.Exec(ctx, ensureRunStateShards, arg.Provider, arg.Shards)
 	return err
+}
+
+const listInFlightRuns = `-- name: ListInFlightRuns :many
+SELECT rs.provider,
+       rs.shard,
+       (SELECT count(*) FROM ingest_run_state peer WHERE peer.provider = rs.provider)::int AS shards,
+       COALESCE(s.timeout_sec, $1::int) AS timeout_sec
+FROM ingest_run_state rs
+LEFT JOIN ingest_schedule s ON s.provider = rs.provider
+WHERE rs.claimed_at IS NOT NULL
+ORDER BY rs.claimed_at
+`
+
+type ListInFlightRunsRow struct {
+	Provider   string `json:"provider"`
+	Shard      int32  `json:"shard"`
+	Shards     int32  `json:"shards"`
+	TimeoutSec int32  `json:"timeout_sec"`
+}
+
+// Every claimed run, with what the scheduler needs to ask the service manager about it.
+//
+// Rows, not a count. A transient unit finishes and tells nobody, so claimed_at is set at
+// claim and cleared by nothing until the scheduler reaps: a plain count would include every
+// run that ever succeeded, and the fleet's concurrency cap would fill permanently after
+// Cap launches with every check still green.
+//
+// This is what replaces ingest-slot.sh's flock semaphore. 279 independent timers could not
+// see each other, so the ceiling had to live in a wrapper script; one scheduler can count —
+// but only if it also notices when a run has ended.
+func (q *Queries) ListInFlightRuns(ctx context.Context, defaultTimeoutSec int32) ([]ListInFlightRunsRow, error) {
+	rows, err := q.db.Query(ctx, listInFlightRuns, defaultTimeoutSec)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInFlightRunsRow{}
+	for rows.Next() {
+		var i ListInFlightRunsRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Shard,
+			&i.Shards,
+			&i.TimeoutSec,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSchedulableProviders = `-- name: ListSchedulableProviders :many
@@ -241,11 +299,18 @@ SELECT rs.provider,
        COALESCE(s.timeout_sec, $1::int) AS timeout_sec
 FROM ingest_run_state rs
 LEFT JOIN ingest_schedule s ON s.provider = rs.provider
-WHERE (rs.claimed_at IS NULL AND rs.next_due_at <= now())
-   OR (rs.claimed_at IS NOT NULL
-       AND rs.claimed_at < now() - make_interval(
-               secs => COALESCE(s.timeout_sec, $1::int)
-                       + $2::int))
+WHERE ((rs.claimed_at IS NULL AND rs.next_due_at <= now())
+    OR (rs.claimed_at IS NOT NULL
+        AND rs.claimed_at < now() - make_interval(
+                secs => COALESCE(s.timeout_sec, $1::int)
+                        + $2::int)))
+    -- ROLLOUT GATE, removed with the column in task 8.5 of
+    -- openspec/changes/ingest-scheduler-in-db. Run state is tracked for every enabled
+    -- provider so the stagger and the shadow preview exist from day one; what ` + "`" + `managed` + "`" + `
+    -- decides is whether the SCHEDULER may launch it, or whether its static timer still
+    -- owns it. COALESCE to false: while the column exists, a provider nobody has handed
+    -- over is still the static timer's.
+    AND COALESCE(s.managed, false)
 ORDER BY rs.next_due_at
 LIMIT $3
 `

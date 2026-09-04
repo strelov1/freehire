@@ -20,8 +20,13 @@ CREATE TABLE ingest_schedule (
     provider        text PRIMARY KEY,
     -- 1 = crawl the provider whole. >1 partitions it across --shard=i/n runs, which is how
     -- a board list too large for one timeout is covered (paylocity: 24).
+    -- Bounded ABOVE as well as below. The reconcile materialises one row per shard through
+    -- generate_series, so an unbounded count turns a typo into a statement that outlives
+    -- the scheduler's own start timeout — and every following tick repeats it first, which
+    -- stops the whole fleet. 64 is comfortably past the largest real value (paylocity's 24)
+    -- and far short of anything that could not finish.
     -- squawk-ignore prefer-bigint-over-int -- a shard count is tens; the largest is 24
-    shards          int NOT NULL DEFAULT 1 CHECK (shards > 0),
+    shards          int NOT NULL DEFAULT 1 CHECK (shards > 0 AND shards <= 64),
     -- squawk-ignore prefer-bigint-over-int -- seconds in a period; int32 spans 68 years
     cadence_sec     int NOT NULL DEFAULT 3600 CHECK (cadence_sec > 0),
     -- TimeoutStartSec for the launched run. 3000 = 2400s of crawl budget plus the

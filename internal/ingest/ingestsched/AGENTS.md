@@ -47,6 +47,19 @@ stuck run is reclaimed, and how the fleet's concurrency is bounded. Replaces
 - **A disabled provider's run state is DELETED, not left idle.** Keeping the row would leave
   a months-old `next_due_at` that fires the instant it is re-enabled, and it would force an
   `enabled` predicate into the claim query that it does not otherwise need.
+- **A finished run tells nobody, so the scheduler must ASK.** `cmd/ingest` knows nothing
+  about the scheduler, and a transient unit just ends. `Scheduler.reap` therefore queries
+  the service manager about every claimed run before counting capacity. Without it,
+  `claimed_at` would be set at claim and cleared by nothing: every successful run would
+  occupy a slot forever and the fleet would saturate permanently after `Cap` launches — with
+  every check green and exit code 0. That is why `Launch` does NOT pass `--collect`:
+  systemd already collects a SUCCESSFUL transient unit, and that absence is how the reaper
+  reads success, while a failed one lingers long enough for its exit code to be read.
+- **During cutover there are TWO concurrency ceilings and they cannot see each other.** The
+  static units go through `ingest-slot.sh`'s 10 flock slots; the scheduler's transient units
+  bypass it and obey `INGEST_SCHEDULER_CAP`. A half-cut-over fleet can run 20 crawls on a
+  host calibrated for 10 — the I/O saturation that produced nginx 504s. The runbook steps
+  the scheduler's cap up in proportion to the share of providers it owns.
 - **A saturated tick claims NOTHING and says so.** Not "claims and discards" — every due row
   stays claimable for the next tick, because advancing a due time under saturation would
   skip a cycle rather than defer it. `ingest-slot.sh` logged its skips for the same reason: a

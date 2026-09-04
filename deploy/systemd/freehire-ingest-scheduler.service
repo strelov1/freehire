@@ -1,6 +1,10 @@
 [Unit]
 Description=freehire ingest scheduler (one tick)
-After=network.target postgresql.service
+# meilisearch is here for parity with the per-provider units this replaces: a crawl
+# enqueues into search_outbox rather than talking to Meili, so this is ordering hygiene
+# rather than a dependency — but a difference from the units being replaced is worth not
+# introducing silently.
+After=network.target postgresql.service meilisearch.service
 [Service]
 Type=oneshot
 # Root, and this is the ONLY privileged piece of the ingest fleet. It needs to create

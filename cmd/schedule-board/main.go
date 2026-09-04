@@ -36,6 +36,10 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
+// maxShards mirrors the CHECK on ingest_schedule.shards. Both exist: the constraint stops
+// a hand-written psql UPDATE, this stops the round trip.
+const maxShards = 64
+
 func main() { worker.Main(run) }
 
 func run() int {
@@ -117,6 +121,13 @@ func edit(provider string, f editFlags) (ingestsched.OverrideInput, error) {
 	}
 	if f.disable && strings.TrimSpace(f.reason) == "" {
 		return in, fmt.Errorf("--disable requires --reason: an unexplained disable is the silence this table exists to remove")
+	}
+	// The table bounds this too. Refusing here as well is what turns a fat-fingered zero
+	// into a message rather than a constraint name — and the constraint is the only thing
+	// standing between a typo and a generate_series that outlives the scheduler's timeout
+	// on every tick.
+	if f.shards > maxShards {
+		return in, fmt.Errorf("--shards=%d exceeds the maximum of %d; the largest real value is paylocity's 24", f.shards, maxShards)
 	}
 
 	if f.shards > 0 {
@@ -231,7 +242,11 @@ func state(r ingestsched.ProviderReport) string {
 	case !r.Enabled:
 		return "disabled"
 	case !r.Managed:
-		return "static-timer"
+		// "not-managed", not "static-timer": between §9 (the generated units are deleted)
+		// and §8.5 (the column is dropped) a provider in this state is scheduled by
+		// NOTHING, and a label asserting a timer that no longer exists would read as
+		// healthy.
+		return "not-managed"
 	case r.InFlight > 0:
 		return fmt.Sprintf("running:%d", r.InFlight)
 	default:

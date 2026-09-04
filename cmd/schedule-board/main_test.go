@@ -59,6 +59,22 @@ func TestEditRefusesADisableWithNoReason(t *testing.T) {
 	}
 }
 
+// The table bounds this too, but a curator deserves a sentence rather than a constraint
+// name. An unbounded shard count is a typo away from a generate_series that outlives the
+// scheduler's start timeout on every tick, which stops the whole fleet.
+func TestEditRefusesAnAbsurdShardCount(t *testing.T) {
+	if _, err := edit("paylocity", editFlags{shards: maxShards + 1}); err == nil {
+		t.Errorf("--shards=%d was accepted", maxShards+1)
+	}
+	if _, err := edit("paylocity", editFlags{shards: 100000}); err == nil {
+		t.Error("--shards=100000 was accepted")
+	}
+	// The largest real value must still go through.
+	if _, err := edit("paylocity", editFlags{shards: 24}); err != nil {
+		t.Errorf("--shards=24 (paylocity's real value) was refused: %v", err)
+	}
+}
+
 func TestEditRefusesContradictoryFlags(t *testing.T) {
 	if _, err := edit("greenhouse", editFlags{disable: true, enable: true, reason: "x"}); err == nil {
 		t.Error("--disable --enable together were accepted")

@@ -30,11 +30,15 @@ type Repository interface {
 	// override row if it has one. A provider with no row comes back on defaults.
 	Eligible(ctx context.Context) ([]Settings, error)
 	// Reconcile makes run state match the given settings: one row per shard, surplus
-	// shards dropped, and providers absent from the list forgotten entirely.
-	Reconcile(ctx context.Context, settings []Settings) error
-	// InFlight counts the runs believed to be executing — the fleet ceiling that
-	// ingest-slot.sh's flock semaphore used to enforce from outside.
-	InFlight(ctx context.Context) (int, error)
+	// shards dropped, and providers absent from the list forgotten entirely. A provider
+	// that could not be reconciled comes back in the returned slice rather than failing
+	// the call — one bad row must not stop the fleet.
+	Reconcile(ctx context.Context, settings []Settings) ([]Skipped, error)
+	// InFlightRuns lists the claimed runs. The scheduler asks the service manager about
+	// each before counting it, because a transient unit that finished tells nobody — a
+	// plain count would include every run that ever succeeded, and the fleet would
+	// saturate permanently.
+	InFlightRuns(ctx context.Context) ([]Run, error)
 	// Claim takes up to limit due runs and marks them started. A claim older than its
 	// provider's timeout plus grace is treated as dead and may be taken again.
 	Claim(ctx context.Context, limit int, grace time.Duration) ([]Run, error)
@@ -83,27 +87,45 @@ func overrideFrom(row db.ListSchedulableProvidersRow) *Override {
 	}
 }
 
-func (r *QueriesRepository) Reconcile(ctx context.Context, settings []Settings) error {
+// Reconcile makes run state match settings, one provider at a time.
+//
+// A provider whose reconcile fails is REPORTED and stepped over, not returned as the whole
+// call's error. The per-provider timers this replaces had that isolation for free, and
+// giving it up would mean one bad row — a lock timeout, a shard count nobody bounded —
+// stops every provider on every tick until somebody finds it.
+//
+// A failed provider still counts as PRESENT for the departed-provider delete below. Its
+// rows are not what failed, and dropping them would turn a transient error into a lost
+// stagger and a lost run history.
+func (r *QueriesRepository) Reconcile(ctx context.Context, settings []Settings) ([]Skipped, error) {
 	providers := make([]string, 0, len(settings))
+	var failed []Skipped
+
 	for _, s := range settings {
 		providers = append(providers, s.Provider)
-
-		if err := r.q.EnsureRunStateShards(ctx, db.EnsureRunStateShardsParams{
-			Provider: s.Provider,
-			Shards:   int32(s.Shards),
-		}); err != nil {
-			return fmt.Errorf("ensure shards for %s: %w", s.Provider, err)
-		}
-		if err := r.q.DeleteSurplusRunStateShards(ctx, db.DeleteSurplusRunStateShardsParams{
-			Provider: s.Provider,
-			Shards:   int32(s.Shards),
-		}); err != nil {
-			return fmt.Errorf("drop surplus shards for %s: %w", s.Provider, err)
+		if err := r.reconcileOne(ctx, s); err != nil {
+			failed = append(failed, Skipped{s.Provider, err.Error()})
 		}
 	}
 
 	if err := r.q.DeleteRunStateForUnlistedProviders(ctx, providers); err != nil {
-		return fmt.Errorf("forget departed providers: %w", err)
+		return failed, fmt.Errorf("forget departed providers: %w", err)
+	}
+	return failed, nil
+}
+
+func (r *QueriesRepository) reconcileOne(ctx context.Context, s Settings) error {
+	if err := r.q.EnsureRunStateShards(ctx, db.EnsureRunStateShardsParams{
+		Provider: s.Provider,
+		Shards:   int32(s.Shards),
+	}); err != nil {
+		return fmt.Errorf("ensure shards: %w", err)
+	}
+	if err := r.q.DeleteSurplusRunStateShards(ctx, db.DeleteSurplusRunStateShardsParams{
+		Provider: s.Provider,
+		Shards:   int32(s.Shards),
+	}); err != nil {
+		return fmt.Errorf("drop surplus shards: %w", err)
 	}
 	return nil
 }
@@ -135,12 +157,22 @@ func (r *QueriesRepository) Claim(ctx context.Context, limit int, grace time.Dur
 	return out, nil
 }
 
-func (r *QueriesRepository) InFlight(ctx context.Context) (int, error) {
-	n, err := r.q.CountInFlightRuns(ctx)
+func (r *QueriesRepository) InFlightRuns(ctx context.Context) ([]Run, error) {
+	rows, err := r.q.ListInFlightRuns(ctx, int32(DefaultRunTimeout.Seconds()))
 	if err != nil {
-		return 0, fmt.Errorf("count in-flight runs: %w", err)
+		return nil, fmt.Errorf("list in-flight runs: %w", err)
 	}
-	return int(n), nil
+
+	out := make([]Run, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Run{
+			Provider:   row.Provider,
+			Shard:      int(row.Shard),
+			Shards:     int(row.Shards),
+			RunTimeout: time.Duration(row.TimeoutSec) * time.Second,
+		})
+	}
+	return out, nil
 }
 
 func (r *QueriesRepository) PreviewDue(ctx context.Context, limit int, grace time.Duration) ([]Run, error) {

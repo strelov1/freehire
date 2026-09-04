@@ -713,10 +713,6 @@ type Querier interface {
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.
 	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
-	// How many runs the scheduler believes are executing. This is what replaces
-	// ingest-slot.sh's flock semaphore: 279 independent timers could not see each other, so
-	// the ceiling had to live in a wrapper script; one scheduler can simply count.
-	CountInFlightRuns(ctx context.Context) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -1085,6 +1081,10 @@ type Querier interface {
 	// gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
 	// it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty
 	// from 18 July).
+	//
+	// A CLAIMED row survives, for the same reason as the surplus-shard delete above: it is the
+	// only record that a crawl is still running, and losing it makes the fleet under-count
+	// itself. A provider disabled mid-crawl keeps its row for one more tick, until the reap.
 	DeleteRunStateForUnlistedProviders(ctx context.Context, providers []string) error
 	// Delete a saved search, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
@@ -1112,6 +1112,11 @@ type Querier interface {
 	// ledger cascades away with the subscription.
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
 	// Drop the shards left over from a higher shard count.
+	//
+	// A CLAIMED row is left alone. Deleting one would erase the scheduler's only record that a
+	// crawl is still executing, so the fleet would under-count itself and launch past its cap —
+	// and the surviving run would finish with nothing to report to. The row goes on the next
+	// tick after it is reaped, which costs one minute and cannot lose a slot.
 	DeleteSurplusRunStateShards(ctx context.Context, arg DeleteSurplusRunStateShardsParams) error
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
@@ -2462,6 +2467,17 @@ type Querier interface {
 	// silence ladder it reads from, so both channels clear the same bar from the same
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
+	// Every claimed run, with what the scheduler needs to ask the service manager about it.
+	//
+	// Rows, not a count. A transient unit finishes and tells nobody, so claimed_at is set at
+	// claim and cleared by nothing until the scheduler reaps: a plain count would include every
+	// run that ever succeeded, and the fleet's concurrency cap would fill permanently after
+	// Cap launches with every check still green.
+	//
+	// This is what replaces ingest-slot.sh's flock semaphore. 279 independent timers could not
+	// see each other, so the ceiling had to live in a wrapper script; one scheduler can count —
+	// but only if it also notices when a run has ended.
+	ListInFlightRuns(ctx context.Context, defaultTimeoutSec int32) ([]ListInFlightRunsRow, error)
 	// The referrer inbox: open (sent) requests for every company the referrer has an approved
 	// offer for. Joins the request pool to the caller's approved offers on company_slug, and
 	// the catalogue for the company's display name (LEFT so a request survives an unknown

@@ -38,6 +38,20 @@ func addBoard(t *testing.T, pool *pgxpool.Pool, provider, board string) {
 	}
 }
 
+// manage hands a provider to the scheduler. The claim and preview queries carry the
+// rollout gate (COALESCE(s.managed, false)), so a test that expects a run to be claimed
+// must say so explicitly — which is the point: during cutover, a provider nobody has
+// handed over is still its static timer's.
+func manage(t *testing.T, pool *pgxpool.Pool, provider string) {
+	t.Helper()
+	_, err := pool.Exec(context.Background(),
+		`INSERT INTO ingest_schedule (provider, managed) VALUES ($1, true)
+		 ON CONFLICT (provider) DO UPDATE SET managed = true`, provider)
+	if err != nil {
+		t.Fatalf("manage %s: %v", provider, err)
+	}
+}
+
 func settingsFor(t *testing.T, repo *QueriesRepository, provider string) Settings {
 	t.Helper()
 	all, err := repo.Eligible(context.Background())
@@ -144,7 +158,7 @@ func TestReconcileMaterialisesOneRowPerShard(t *testing.T) {
 		Provider: "workday", Shards: 6, Cadence: 6 * time.Hour,
 		RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{settings}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{settings}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
@@ -164,14 +178,14 @@ func TestReconcileKeepsExistingDueTimesWhenShardsChange(t *testing.T) {
 	four := Effective("join", &Override{
 		Provider: "join", Shards: 4, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{four}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{four}); err != nil {
 		t.Fatalf("Reconcile 4: %v", err)
 	}
 	before := dueAt(t, pool, "join", 2)
 
 	five := four
 	five.Shards = 5
-	if err := repo.Reconcile(ctx, []Settings{five}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{five}); err != nil {
 		t.Fatalf("Reconcile 5: %v", err)
 	}
 
@@ -192,7 +206,7 @@ func TestReconcileDropsSurplusShardsAndDepartedProviders(t *testing.T) {
 	wide := Effective("paylocity", &Override{
 		Provider: "paylocity", Shards: 24, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{wide, Effective("greenhouse", nil)}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{wide, Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile wide: %v", err)
 	}
 
@@ -201,7 +215,7 @@ func TestReconcileDropsSurplusShardsAndDepartedProviders(t *testing.T) {
 	// greenhouse is left out of this call: its boards were all retired, so it is no longer
 	// eligible and its run state must go with it. Under the script this replaced, its timer
 	// would have survived forever.
-	if err := repo.Reconcile(ctx, []Settings{narrow}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{narrow}); err != nil {
 		t.Fatalf("Reconcile narrow: %v", err)
 	}
 
@@ -217,8 +231,9 @@ func TestClaimTakesOnlyDueRunsAndAdvancesFromNow(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
+	manage(t, pool, "greenhouse")
 
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
@@ -253,7 +268,8 @@ func TestClaimAdvancesFromNowNotFromTheMissedDueTime(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	manage(t, pool, "greenhouse")
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	_, err := pool.Exec(ctx,
@@ -276,7 +292,8 @@ func TestClaimReclaimsARunThatOutlivedItsTimeoutPlusGrace(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	manage(t, pool, "greenhouse")
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	if _, err := repo.Claim(ctx, 10, time.Minute); err != nil {
@@ -316,11 +333,12 @@ func TestClaimRespectsItsLimit(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "paylocity", "acme")
+	manage(t, pool, "paylocity")
 
 	wide := Effective("paylocity", &Override{
 		Provider: "paylocity", Shards: 24, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{wide}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{wide}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
@@ -348,7 +366,8 @@ func TestConcurrentClaimsNeverTakeTheSameRunTwice(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	manage(t, pool, "greenhouse")
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
@@ -399,7 +418,7 @@ func TestADisabledProviderIsNotScheduledAndItsStateIsDropped(t *testing.T) {
 	if !on.Schedulable() {
 		t.Fatal("an enabled, managed provider must be schedulable")
 	}
-	if err := repo.Reconcile(ctx, []Settings{on}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{on}); err != nil {
 		t.Fatalf("Reconcile on: %v", err)
 	}
 	if got := shardsInState(t, pool, "greenhouse"); len(got) != 1 {
@@ -415,7 +434,7 @@ func TestADisabledProviderIsNotScheduledAndItsStateIsDropped(t *testing.T) {
 
 	// The scheduler reconciles only what is schedulable, so a disabled provider simply
 	// is not in the list.
-	if err := repo.Reconcile(ctx, nil); err != nil {
+	if _, err := repo.Reconcile(ctx, nil); err != nil {
 		t.Fatalf("Reconcile off: %v", err)
 	}
 	if got := shardsInState(t, pool, "greenhouse"); len(got) != 0 {
@@ -439,11 +458,13 @@ func TestPreviewSeesExactlyWhatAClaimWouldTake(t *testing.T) {
 	ctx := context.Background()
 	addBoard(t, pool, "paylocity", "acme")
 	addBoard(t, pool, "greenhouse", "globex")
+	manage(t, pool, "paylocity")
+	manage(t, pool, "greenhouse")
 
 	wide := Effective("paylocity", &Override{
 		Provider: "paylocity", Shards: 5, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{wide, Effective("greenhouse", nil)}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{wide, Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	// One row already claimed and long dead, so the reclaim arm of the predicate is
@@ -488,13 +509,56 @@ func TestPreviewSeesExactlyWhatAClaimWouldTake(t *testing.T) {
 	}
 }
 
+// The rollout gate, end to end through SQL. An unmanaged provider is TRACKED — it has run
+// state, it appears in the report, it accrues a stagger — and is never CLAIMED, because its
+// static timer still owns it. Getting this backwards in either direction is a live
+// incident: tracking only managed providers wipes the fleet's state every minute of the
+// cutover, and claiming unmanaged ones double-crawls every provider.
+func TestAnUnmanagedProviderIsTrackedButNeverClaimed(t *testing.T) {
+	repo, pool := newRepo(t)
+	ctx := context.Background()
+	addBoard(t, pool, "greenhouse", "acme")
+	addBoard(t, pool, "lever", "globex")
+	manage(t, pool, "lever") // greenhouse is deliberately left to its static timer
+
+	settings := []Settings{Effective("greenhouse", nil), Effective("lever", nil)}
+	if _, err := repo.Reconcile(ctx, settings); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	if got := shardsInState(t, pool, "greenhouse"); len(got) != 1 {
+		t.Errorf("unmanaged provider has %v run state, want one row — it must still be tracked", got)
+	}
+
+	claimed, err := repo.Claim(ctx, 10, time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].Provider != "lever" {
+		t.Fatalf("claimed %v, want only the managed lever", claimed)
+	}
+
+	// The preview must agree, or the shadow run would report launches the apply run would
+	// never make.
+	preview, err := repo.PreviewDue(ctx, 10, time.Minute)
+	if err != nil {
+		t.Fatalf("PreviewDue: %v", err)
+	}
+	for _, r := range preview {
+		if r.Provider == "greenhouse" {
+			t.Errorf("preview offered the unmanaged greenhouse: %v", preview)
+		}
+	}
+}
+
 // Shadow mode must leave run state exactly as it found it, or the static timers still
 // driving the fleet would be racing a due time nobody told them about.
 func TestPreviewMutatesNothing(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	manage(t, pool, "greenhouse")
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
@@ -506,12 +570,12 @@ func TestPreviewMutatesNothing(t *testing.T) {
 	if after := dueAt(t, pool, "greenhouse", 1); !after.Equal(before) {
 		t.Errorf("preview moved next_due_at from %v to %v", before, after)
 	}
-	inFlight, err := repo.InFlight(ctx)
+	inFlight, err := repo.InFlightRuns(ctx)
 	if err != nil {
-		t.Fatalf("InFlight: %v", err)
+		t.Fatalf("InFlightRuns: %v", err)
 	}
-	if inFlight != 0 {
-		t.Errorf("preview claimed %d runs; want none", inFlight)
+	if len(inFlight) != 0 {
+		t.Errorf("preview claimed %d runs; want none", len(inFlight))
 	}
 }
 
@@ -519,28 +583,29 @@ func TestInFlightCountsClaimedRuns(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "paylocity", "acme")
+	manage(t, pool, "paylocity")
 
 	wide := Effective("paylocity", &Override{
 		Provider: "paylocity", Shards: 4, Cadence: time.Hour, RunTimeout: DefaultRunTimeout, Enabled: true,
 	})
-	if err := repo.Reconcile(ctx, []Settings{wide}); err != nil {
+	if _, err := repo.Reconcile(ctx, []Settings{wide}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 
-	if n, err := repo.InFlight(ctx); err != nil || n != 0 {
-		t.Fatalf("InFlight before any claim = %d (%v), want 0", n, err)
+	if n, err := repo.InFlightRuns(ctx); err != nil || len(n) != 0 {
+		t.Fatalf("InFlightRuns before any claim = %d (%v), want 0", len(n), err)
 	}
 	if _, err := repo.Claim(ctx, 3, time.Minute); err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if n, err := repo.InFlight(ctx); err != nil || n != 3 {
-		t.Fatalf("InFlight after claiming 3 = %d (%v), want 3", n, err)
+	if n, err := repo.InFlightRuns(ctx); err != nil || len(n) != 3 {
+		t.Fatalf("InFlightRuns after claiming 3 = %d (%v), want 3", len(n), err)
 	}
 	if err := repo.RecordFinish(ctx, "paylocity", 1, 0, ""); err != nil {
 		t.Fatalf("RecordFinish: %v", err)
 	}
-	if n, err := repo.InFlight(ctx); err != nil || n != 2 {
-		t.Fatalf("InFlight after one finish = %d (%v), want 2", n, err)
+	if n, err := repo.InFlightRuns(ctx); err != nil || len(n) != 2 {
+		t.Fatalf("InFlightRuns after one finish = %d (%v), want 2", len(n), err)
 	}
 }
 
@@ -548,7 +613,8 @@ func TestRecordFinishClearsTheClaimAndStoresTheOutcome(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	addBoard(t, pool, "greenhouse", "acme")
-	if err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
+	manage(t, pool, "greenhouse")
+	if _, err := repo.Reconcile(ctx, []Settings{Effective("greenhouse", nil)}); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	if _, err := repo.Claim(ctx, 10, time.Minute); err != nil {
