@@ -260,6 +260,42 @@ func TestTickRefusesAProviderKeyTheRegistryDoesNotKnow(t *testing.T) {
 	}
 }
 
+// An empty roster is a failed MEASUREMENT, not an empty catalogue. Reconcile deletes the
+// run state of every provider absent from its list, so a tick that accepted zero eligible
+// providers would wipe the fleet's entire schedule — including the stagger — on the
+// strength of one bad read. gen-ingest-timers.sh refused on exactly this and said so; the
+// scheduler must not lose that.
+func TestTickRefusesAnEmptyRoster(t *testing.T) {
+	repo := &fakeRepo{eligible: nil}
+	launcher := &fakeLauncher{}
+
+	_, err := newScheduler(repo, launcher, true).Tick(context.Background())
+	if err == nil {
+		t.Fatal("an empty roster was accepted; want a refusal")
+	}
+	if repo.reconciled != nil {
+		t.Errorf("reconciled %v on an empty roster; run state must be left alone", repo.reconciled)
+	}
+}
+
+// A roster that is non-empty but has nothing SCHEDULABLE is different, and must be
+// allowed: on the first day of the cutover every provider is still unmanaged, and that is
+// the expected state, not a failure.
+func TestTickAcceptsARosterWhereNothingIsSchedulableYet(t *testing.T) {
+	unmanaged := managed("greenhouse")
+	unmanaged.Managed = false
+	repo := &fakeRepo{eligible: []Settings{unmanaged}}
+	launcher := &fakeLauncher{}
+
+	got, err := newScheduler(repo, launcher, true).Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if got.Scheduled != 0 || len(got.Unmanaged) != 1 {
+		t.Errorf("Scheduled/Unmanaged = %d/%v, want 0/[greenhouse]", got.Scheduled, got.Unmanaged)
+	}
+}
+
 // A launch that fails must release its claim immediately. Leaving it claimed would idle
 // that shard for the whole reclaim window — timeout plus grace — over an error the
 // scheduler already knows about.

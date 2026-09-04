@@ -29,6 +29,31 @@ the same string read from the same row.
   its first successful crawl
 - **THEN** that provider becomes eligible on the scheduler's next tick
 
+### Requirement: An empty roster is refused, not obeyed
+
+The system SHALL refuse a tick that finds NO eligible provider, and SHALL leave run state
+untouched when it does. Reconciliation deletes the state of every provider absent from the
+list it is given, so acting on an empty roster would erase the whole fleet's schedule —
+including the stagger that keeps providers from crawling on the same minute — on the
+strength of one bad read.
+
+A roster that is non-empty but currently has nothing SCHEDULABLE SHALL be accepted
+normally: that is the expected state on the first day of a rollout, not a failure.
+
+There SHALL be no threshold above zero. A legitimately smaller catalogue must still be
+schedulable, and a "fewer than N looks wrong" floor would block one while catching nothing
+that zero does not.
+
+#### Scenario: No eligible provider fails the tick
+
+- **WHEN** the roster read returns no provider at all
+- **THEN** the tick reports an error and reconciles nothing
+
+#### Scenario: A roster with nothing schedulable is not an error
+
+- **WHEN** every eligible provider is disabled or not yet handed to the scheduler
+- **THEN** the tick succeeds, launches nothing, and reports each provider's reason
+
 ### Requirement: A provider absent from the configuration table is scheduled on defaults
 
 The system SHALL treat the configuration table as a set of OVERRIDES, not as the roster.

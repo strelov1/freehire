@@ -85,6 +85,19 @@ func (s Scheduler) Tick(ctx context.Context) (TickResult, error) {
 		return TickResult{}, fmt.Errorf("read roster: %w", err)
 	}
 
+	// An empty roster is a failed measurement, not an empty catalogue. Reconcile deletes
+	// the run state of every provider absent from its list, so accepting zero here would
+	// wipe the fleet's whole schedule — the stagger included — on the strength of one bad
+	// read. gen-ingest-timers.sh refused on exactly this, and said why; losing that in the
+	// port would be a regression dressed as a simplification.
+	//
+	// There is deliberately no "fewer than N providers looks wrong" floor above zero: a
+	// legitimately smaller catalogue must still be schedulable, and a floor would block it
+	// while catching nothing zero does not.
+	if len(eligible) == 0 {
+		return TickResult{Applied: s.Apply}, fmt.Errorf("the catalog lists no live board: refusing to reconcile away every provider's schedule")
+	}
+
 	result := TickResult{Applied: s.Apply, Eligible: len(eligible)}
 	schedulable := make([]Settings, 0, len(eligible))
 	for _, settings := range eligible {
