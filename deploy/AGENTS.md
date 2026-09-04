@@ -19,6 +19,19 @@ else. `bin/gen-ingest-timers.sh` writes them from the board catalog
 (`SELECT provider FROM boards WHERE status IN ('pending','active')`) — it is not run by
 anything, so a new provider means running it on the host.
 
+**Both are being retired.** `freehire-ingest-scheduler.timer` runs
+`cmd/ingest-scheduler` once a minute, which reads the same catalog and starts each due run
+as a TRANSIENT unit — so there is no per-provider file to generate and no second spelling
+of a provider key to drift from `boards`. The generator's "not run by anything" above is
+exactly what that fixes: between its manual runs the units were a photograph of a catalog
+that had moved, and two providers died in that gap (see
+[internal/ingest/ingestsched/AGENTS.md](../internal/ingest/ingestsched/AGENTS.md)).
+During the cutover BOTH mechanisms are installed and each provider is driven by exactly one
+of them, decided by `ingest_schedule.managed`; the generated files and
+`bin/gen-ingest-timers.sh` and `bin/ingest-slot.sh` all go once every provider is managed.
+**The scheduler ships in shadow mode** (`INGEST_SCHEDULER_APPLY` unset), so installing it
+changes nothing until an operator turns launches on.
+
 **`bin/autodeploy.sh` is what actually ships main to production**, on a 10-minute timer:
 it waits for the commit to be green and then calls `release.sh`. What "green" means is the
 one thing worth knowing about it — see the comment above its check, which records the day

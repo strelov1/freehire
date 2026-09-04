@@ -203,6 +203,7 @@ Each is self-contained and can be read independently.
 | **Facet-search drain** (search_outbox, incremental facet-index pushes, reconciler) | [internal/search/searchdrain/AGENTS.md](internal/search/searchdrain/AGENTS.md) |
 | **`internal/ingest`** — the block itself: what it is, what it may import | [internal/ingest/AGENTS.md](internal/ingest/AGENTS.md) |
 | **Source ingest** (adapters, provider registry, validation) | [internal/ingest/sources/AGENTS.md](internal/ingest/sources/AGENTS.md) |
+| **Ingest scheduling** (what makes a crawl due, the claim, the fleet cap, the measurement behind every override) | [internal/ingest/ingestsched/AGENTS.md](internal/ingest/ingestsched/AGENTS.md) |
 | **Board catalog** (the `boards` table: lifecycle, insert-time validation, `cmd/add-board`) | [internal/ingest/boardcatalog/AGENTS.md](internal/ingest/boardcatalog/AGENTS.md) |
 | **Pipeline** (Runner, dedup, UpsertJob, board health, search indexing) | [internal/ingest/pipeline/AGENTS.md](internal/ingest/pipeline/AGENTS.md) |
 | **Apply-form capture** (ATS application forms, verbatim platform vocabulary, queue drain) | [internal/ingest/applyform/AGENTS.md](internal/ingest/applyform/AGENTS.md) |

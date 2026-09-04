@@ -138,17 +138,26 @@
 
 ## 7. Deploy artifacts
 
-- [ ] 7.1 `deploy/systemd/freehire-ingest-scheduler.service` (+ `.timer`, `OnCalendar=*:*:00`).
-      The scheduler runs privileged so it may create transient units; record why in the unit.
-- [ ] 7.2 Add `ingest-scheduler` and `schedule-board` to `release.sh`'s worker-binary build
-      list — a worker whose binary was never built fails every minute.
-- [ ] 7.3 Write `internal/ingest/ingestsched/AGENTS.md`: the eligibility rule, the
-      absence-means-scheduled rule and why, the claim/reclaim contract, the validation gate
-      before `systemd-run`, and the MEASURED reasoning inherited from
-      `gen-ingest-timers.sh` (paylocity's 10.42 s/board, join's 1.5 req/s, eightfold's
-      proxy, workstream's hydrating first pass).
-- [ ] 7.4 Update `deploy/AGENTS.md` and `internal/ingest/sources/AGENTS.md` to point at the
-      new capability; `pnpm check:links` must stay green.
+- [x] 7.1 `deploy/systemd/freehire-ingest-scheduler.{service,timer}`. The unit records why
+      it is the one privileged piece (it creates transient units; each carries
+      `--uid=freehire`, so the crawl's own privilege is unchanged). The timer sets
+      `Persistent=false` — unlike every per-provider timer it replaces — because catch-up
+      now lives in `next_due_at`, and letting systemd ALSO replay a missed tick would add
+      nothing and fire a burst on boot. No `RandomizedDelaySec` either: the stagger is the
+      due time, not the timer.
+- [x] 7.2 `ingest-scheduler` and `schedule-board` added to `release.sh`'s worker-binary
+      build list, and to `.gitignore` (the repo has a guard test for the second).
+      NOTE for the operator: `release.sh` lives on the HOST; the repo copy is a record, and
+      `cmd/add-board` is missing from the host list too — worth checking during §8.1.
+- [x] 7.3 `internal/ingest/ingestsched/AGENTS.md`: the roster/override rule, the
+      one-spelling rule with the `habr_career` incident behind it, the security argument for
+      the shape-before-registry gate, the claim/reclaim contract, and a "measurements this
+      inherits" section carrying every number from `gen-ingest-timers.sh`'s comments —
+      paylocity's 10.42 s/board arithmetic, join's 1.5 req/s cumulative-budget finding,
+      oracle's 6.82 s/board, eightfold's proxy, workstream's hydrating first pass, the
+      twelve 3h providers' measurement, reed's quota, and why bayt/gulftalent are off.
+- [x] 7.4 `AGENTS.md` (the module table), `deploy/AGENTS.md` and
+      `internal/ingest/sources/AGENTS.md` updated; `check-doc-links` green at 289 links.
 
 ## 8. Cutover — OPERATOR STEPS, sequenced on prod
 
