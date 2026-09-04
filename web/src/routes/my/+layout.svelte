@@ -5,12 +5,11 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
-  import { isAuthenticated, currentUser } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
+  import { currentUser } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { messages, navLabel } from '$lib/i18n/shell';
   import { t } from '$lib/i18n/t';
-  import { Button, cn } from '$lib/ui';
+  import { cn } from '$lib/ui';
   import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
   import { accountNavIcons } from '$lib/accountNavIcons';
   import { dockOffset } from '$lib/assistantDock.svelte';
@@ -88,77 +87,73 @@
   style:padding-left={dockOffset() ? `${dockOffset()}px` : undefined}
 >
   <div class="mx-auto w-full max-w-6xl px-4 py-6">
-    {#if !isAuthenticated()}
-      <div class="flex flex-col items-center gap-3 py-12 text-center">
-        <p class="text-sm text-muted-foreground">{s.shell.signInPrompt}</p>
-        <Button variant="primary" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>{s.shell.signIn}</Button>
-      </div>
-    {:else}
-      <!-- Same items, two forms; `extra` carries the per-form item tweaks. When
-           `iconOnly`, the label is dropped and the icon centres (collapsed rail). -->
-      {#snippet navLinks(extra: string, iconOnly = false)}
-        {#each navItems as item (item.href)}
-          {@const active = isSectionActive(path, item.href)}
-          {@const Icon = accountNavIcons[item.href]}
-          {@const label = navLabel(s, item.href, item.label)}
-          <a
-            href={resolve(item.href)}
-            aria-current={active ? 'page' : undefined}
-            title={iconOnly ? label : undefined}
-            class={cn(itemClass(active), iconOnly && 'justify-center', extra)}
-          >
-            <Icon class="size-4 shrink-0" />
-            {#if !iconOnly}
-              {label}
-            {/if}
-          </a>
-        {/each}
-      {/snippet}
+    <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
+         /signin before this renders, so the shell only ever draws for a session. -->
 
-      <!-- Below lg: a horizontal, scrollable strip above the content. -->
-      <nav
-        aria-label={s.shell.accountSections}
-        class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
-      >
-        {@render navLinks('shrink-0 whitespace-nowrap')}
-      </nav>
-
-      <div class="lg:flex lg:gap-8">
-        <!-- lg and up: a collapsible vertical sidebar beside the content. -->
-        <aside
-          aria-label={s.shell.accountSections}
-          class={cn(
-            'hidden shrink-0 transition-[width] duration-200 lg:block',
-            collapsed ? 'lg:w-14' : 'lg:w-56',
-          )}
+    <!-- Same items, two forms; `extra` carries the per-form item tweaks. When
+         `iconOnly`, the label is dropped and the icon centres (collapsed rail). -->
+    {#snippet navLinks(extra: string, iconOnly = false)}
+      {#each navItems as item (item.href)}
+        {@const active = isSectionActive(path, item.href)}
+        {@const Icon = accountNavIcons[item.href]}
+        {@const label = navLabel(s, item.href, item.label)}
+        <a
+          href={resolve(item.href)}
+          aria-current={active ? 'page' : undefined}
+          title={iconOnly ? label : undefined}
+          class={cn(itemClass(active), iconOnly && 'justify-center', extra)}
         >
-          <div class="sticky top-6 flex flex-col gap-1">
-            <button
-              type="button"
-              onclick={toggleNav}
-              title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-              aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-              class={cn(
-                'mb-1 flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-                collapsed && 'justify-center',
-              )}
-            >
-              {#if collapsed}
-                <PanelLeft class="size-4" />
-              {:else}
-                <PanelLeftClose class="size-4" />
-              {/if}
-            </button>
-            <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
-              {@render navLinks('', collapsed)}
-            </nav>
-          </div>
-        </aside>
+          <Icon class="size-4 shrink-0" />
+          {#if !iconOnly}
+            {label}
+          {/if}
+        </a>
+      {/each}
+    {/snippet}
 
-        <div class="min-w-0 flex-1">
-          {@render children()}
+    <!-- Below lg: a horizontal, scrollable strip above the content. -->
+    <nav
+      aria-label={s.shell.accountSections}
+      class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
+    >
+      {@render navLinks('shrink-0 whitespace-nowrap')}
+    </nav>
+
+    <div class="lg:flex lg:gap-8">
+      <!-- lg and up: a collapsible vertical sidebar beside the content. -->
+      <aside
+        aria-label={s.shell.accountSections}
+        class={cn(
+          'hidden shrink-0 transition-[width] duration-200 lg:block',
+          collapsed ? 'lg:w-14' : 'lg:w-56',
+        )}
+      >
+        <div class="sticky top-6 flex flex-col gap-1">
+          <button
+            type="button"
+            onclick={toggleNav}
+            title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+            aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+            class={cn(
+              'mb-1 flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+              collapsed && 'justify-center',
+            )}
+          >
+            {#if collapsed}
+              <PanelLeft class="size-4" />
+            {:else}
+              <PanelLeftClose class="size-4" />
+            {/if}
+          </button>
+          <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
+            {@render navLinks('', collapsed)}
+          </nav>
         </div>
+      </aside>
+
+      <div class="min-w-0 flex-1">
+        {@render children()}
       </div>
-    {/if}
+    </div>
   </div>
 </div>

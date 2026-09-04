@@ -22,8 +22,6 @@ export const messages = defineMessages(
       '/my/security': 'Security',
     },
     shell: {
-      signInPrompt: 'Sign in to access your account.',
-      signIn: 'Sign in',
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',
       accountSections: 'Account sections',
@@ -51,8 +49,6 @@ export const messages = defineMessages(
       '/my/security': 'Безопасность',
     },
     shell: {
-      signInPrompt: 'Войдите, чтобы получить доступ к аккаунту.',
-      signIn: 'Войти',
       expandSidebar: 'Развернуть панель',
       collapseSidebar: 'Свернуть панель',
       accountSections: 'Разделы аккаунта',

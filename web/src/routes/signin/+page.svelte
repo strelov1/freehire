@@ -234,13 +234,16 @@
       </div>
 
       {#if providers.length > 0 && !isRecovery}
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-3">
           {#each providers as provider (provider)}
+            <!-- Sized to match the submit button below (h-12 / rounded-lg / text-base):
+                 the two stacks read as one column of equally weighted choices. -->
             <Button
               variant="outline"
+              class="h-12 rounded-lg px-5 text-base"
               href={`/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`}
             >
-              <ProviderIcon {provider} />
+              <ProviderIcon {provider} class="size-5" />
               Continue with {providerLabels[provider]}
             </Button>
           {/each}

@@ -103,7 +103,11 @@
       {/each}
     </ul>
 
-    <div class="relative mt-8 aspect-square w-full overflow-hidden rounded-2xl border border-background/15 bg-background/5 p-4">
+    <!-- Landscape, not square: the tallest slide is three stacked rows (~160px), so a
+         square box left the board slide with a third of its height empty. A fixed
+         height rather than an aspect ratio — the column is max-w-sm, so this is the
+         3/2 the ratio would have given, without an arbitrary Tailwind value. -->
+    <div class="relative mt-6 h-64 w-full overflow-hidden rounded-2xl border border-background/15 bg-background/5 p-4">
       {#if active === 0}
         <div class="flex h-full flex-col justify-center gap-3">
           {#each [100, 72, 85] as w (w)}
