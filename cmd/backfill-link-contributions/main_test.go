@@ -31,10 +31,17 @@ func TestDestinationOf(t *testing.T) {
 		{"recognized, not yet onboarded", row("pending", "inhire", "onsign"), toPendingBoard},
 		{"already a catalog row", row("onboarded", "greenhouse", "acme"), toAttribution},
 		{"a curator's refusal", row("rejected", "lever", "deadco"), dropRefusal},
-		// 'review' is the only status the schema lets carry a NULL source. A recognized
-		// status that carries one anyway names nothing that can be carried.
-		{"recognized with a NULL source", row("pending", "", ""), unplaceable},
-		{"recognized with an empty board", row("onboarded", "greenhouse", ""), unplaceable},
+		// A refusal during triage leaves an unclassified URL exactly as it was, so 190 of
+		// the 204 refusals on prod carry a NULL source. A refusal is not carried either
+		// way — reading these as "needs a human" was the bug the prod dry run found.
+		{"a refused unclassified URL", row("rejected", "", ""), dropRefusal},
+		// An empty board is not missing data: a boardless provider crawls one company's
+		// own API and has no board id. Prod carries one such contribution, on amazon.
+		{"boardless provider, no board", row("onboarded", "amazon", ""), toAttribution},
+		// These two statuses mean a board WAS recognized, so a missing provider
+		// contradicts the status itself.
+		{"pending with no provider", row("pending", "", ""), unplaceable},
+		{"onboarded with no provider", row("onboarded", "", ""), unplaceable},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
