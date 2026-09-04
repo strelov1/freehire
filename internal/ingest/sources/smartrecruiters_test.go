@@ -116,6 +116,22 @@ func TestSmartRecruitersProvider(t *testing.T) {
 	}
 }
 
+// SmartRecruiters earns fullBoardListing because listPostings proves completeness:
+// totalFound is authoritative (pages until offset >= totalFound or an empty page), no
+// artificial cap exists, and any listing error aborts the whole Fetch.
+func TestSmartRecruitersMarkers(t *testing.T) {
+	s := NewSmartRecruiters(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("smartrecruiters should implement the fullBoardListing marker")
+	}
+}
+
+func TestSmartRecruitersRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["smartrecruiters"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include smartrecruiters")
+	}
+}
+
 // The SmartRecruiters experienceLevel enum maps onto freehire's seniority vocabulary.
 // Ambiguous/unset values (not_applicable, unknown) map to "" so the title dictionary
 // decides instead — structured signal only, never a guess.

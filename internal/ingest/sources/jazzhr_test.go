@@ -36,6 +36,21 @@ func TestJazzHRProvider(t *testing.T) {
 	}
 }
 
+// JazzHR earns fullBoardListing because the /apply listing is a single page linking every
+// open posting (no pagination), so a listing failure aborts the whole Fetch.
+func TestJazzHRMarkers(t *testing.T) {
+	s := NewJazzHR(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("jazzhr should implement the fullBoardListing marker")
+	}
+}
+
+func TestJazzHRRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["jazzhr"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include jazzhr")
+	}
+}
+
 func TestJazzHRJobID(t *testing.T) {
 	cases := map[string]string{
 		"https://proautomated.applytojob.com/apply/nfHu9c2Sxz/Field-Service-Engineer": "nfHu9c2Sxz",

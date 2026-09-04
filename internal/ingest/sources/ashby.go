@@ -19,6 +19,12 @@ func NewAshby(c JSONGetter) Source { return ashby{http: c} }
 
 func (ashby) Provider() string { return "ashby" }
 
+// fullBoardListing: Fetch is a single unpaginated request returning the board's whole jobs
+// array — no loop that could stop early, so any listing failure aborts the whole Fetch
+// rather than returning a partial result. Earns the post-run sweep's board-scoped close
+// (freehire#2328).
+func (ashby) fullBoardListing() {}
+
 func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// includeCompensation=true is required — omitted, the API silently drops the
 	// compensation object entirely rather than erroring (confirmed live 2026-08-14).

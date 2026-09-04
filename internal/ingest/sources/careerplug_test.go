@@ -2,9 +2,13 @@ package sources
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // careerplugDetailA/B are CareerPlug job pages: server-rendered HTML whose payload is the
@@ -38,9 +42,54 @@ const careerplugList2 = `<html><body><div id="job_table">
 <a href="/jobs/200"><span class="name">Shift Lead</span></a>
 </div></body></html>`
 
+// careerplugEndlessFake serves an endless /jobs listing: every page carries one new job link,
+// so a paging loop never reaches a natural end on its own — only careerplugMaxPages can stop
+// it. Mirrors html_test.go's pagedFake, tailored to careerplug's link format and page shape.
+type careerplugEndlessFake struct{}
+
+func (careerplugEndlessFake) GetHTML(_ context.Context, rawURL string) (*html.Node, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	page := u.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+	body := fmt.Sprintf(`<html><body><a href="/jobs/%s">Role</a></body></html>`, page)
+	return html.Parse(strings.NewReader(body))
+}
+
+// A listing still yielding new links past the page cap is a truncated walk, not a genuinely
+// exhausted one, and must fail the whole Fetch rather than silently return the links gathered
+// so far — that partial-success shape is exactly what forced freehire#2337's revert (see the
+// fullBoardListing marker's bar, internal/ingest/sources/source.go, and
+// TestCrawlAllPagedLinksErrorsWhenCapTruncatesWalk for the same contract on the shared helper).
+func TestCareerPlugFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	_, err := NewCareerPlug(careerplugEndlessFake{}).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "careerplug", Board: "acme",
+	})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite the listing still yielding new links past the page cap — a truncated walk must not be returned as a partial success")
+	}
+}
+
 func TestCareerPlugProvider(t *testing.T) {
 	if got := NewCareerPlug(nil).Provider(); got != "careerplug" {
 		t.Errorf("Provider() = %q, want %q", got, "careerplug")
+	}
+}
+
+func TestCareerPlugMarkers(t *testing.T) {
+	s := NewCareerPlug(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("careerplug should implement the fullBoardListing marker")
+	}
+}
+
+func TestCareerPlugRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["careerplug"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include careerplug")
 	}
 }
 

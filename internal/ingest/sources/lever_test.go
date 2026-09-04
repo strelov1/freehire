@@ -13,6 +13,22 @@ func TestLeverProvider(t *testing.T) {
 	}
 }
 
+// Lever earns fullBoardListing because Fetch is a single unpaginated request that returns the
+// board's whole postings array in one response — there is no loop that could stop early, so
+// any listing failure aborts the whole Fetch rather than returning a partial result.
+func TestLeverMarkers(t *testing.T) {
+	s := NewLever(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("lever should implement the fullBoardListing marker")
+	}
+}
+
+func TestLeverRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["lever"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include lever")
+	}
+}
+
 func TestLeverFetch(t *testing.T) {
 	fake := &fakeHTTP{body: `[
 		{

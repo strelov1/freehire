@@ -12,6 +12,23 @@ func TestPersonioProvider(t *testing.T) {
 	}
 }
 
+// Personio earns fullBoardListing because Fetch's default-locale feed carries every open
+// position in one document (no pagination), and its fetch failing aborts the whole Fetch —
+// the English-feed and detail-page fallbacks are best-effort and only affect body richness,
+// never whether a position is counted.
+func TestPersonioMarkers(t *testing.T) {
+	s := NewPersonio(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("personio should implement the fullBoardListing marker")
+	}
+}
+
+func TestPersonioRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["personio"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include personio")
+	}
+}
+
 func TestPersonioFetch(t *testing.T) {
 	fake := &fakeHTTP{body: `<?xml version="1.0" encoding="UTF-8"?>
 <workzag-jobs>

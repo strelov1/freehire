@@ -12,6 +12,22 @@ func TestWorkableProvider(t *testing.T) {
 	}
 }
 
+// Workable earns fullBoardListing because Fetch is a single unpaginated request that returns
+// the board's whole jobs array in one response — there is no loop that could stop early, so
+// any listing failure aborts the whole Fetch rather than returning a partial result.
+func TestWorkableMarkers(t *testing.T) {
+	s := NewWorkable(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("workable should implement the fullBoardListing marker")
+	}
+}
+
+func TestWorkableRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["workable"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include workable")
+	}
+}
+
 func TestWorkableFetch(t *testing.T) {
 	fake := &fakeHTTP{body: `{
 		"jobs": [

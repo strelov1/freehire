@@ -13,6 +13,22 @@ func TestAshbyProvider(t *testing.T) {
 	}
 }
 
+// Ashby earns fullBoardListing because Fetch is a single unpaginated request that returns the
+// board's whole jobs array in one response — there is no loop that could stop early, so any
+// listing failure aborts the whole Fetch rather than returning a partial result.
+func TestAshbyMarkers(t *testing.T) {
+	s := NewAshby(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("ashby should implement the fullBoardListing marker")
+	}
+}
+
+func TestAshbyRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["ashby"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include ashby")
+	}
+}
+
 func TestAshbyFetch(t *testing.T) {
 	fake := &fakeHTTP{body: `{
 		"jobs": [

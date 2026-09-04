@@ -13,6 +13,22 @@ func TestRecruiteeProvider(t *testing.T) {
 	}
 }
 
+// Recruitee earns fullBoardListing because Fetch is a single unpaginated request returning
+// the board's whole offers array — no loop that could stop early, so any listing failure
+// aborts the whole Fetch.
+func TestRecruiteeMarkers(t *testing.T) {
+	s := NewRecruitee(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("recruitee should implement the fullBoardListing marker")
+	}
+}
+
+func TestRecruiteeRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["recruitee"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include recruitee")
+	}
+}
+
 func TestRecruiteeFetch(t *testing.T) {
 	fake := &fakeHTTP{body: `{
 		"offers": [

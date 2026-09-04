@@ -12,6 +12,22 @@ func TestBambooHRProvider(t *testing.T) {
 	}
 }
 
+// BambooHR earns fullBoardListing because Fetch's list request is a single unpaginated call
+// returning the board's whole result array — no loop that could stop early, so any listing
+// failure aborts the whole Fetch. Detail fetches are best-effort per posting.
+func TestBambooHRMarkers(t *testing.T) {
+	s := NewBambooHR(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("bamboohr should implement the fullBoardListing marker")
+	}
+}
+
+func TestBambooHRRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["bamboohr"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include bamboohr")
+	}
+}
+
 func bambooDetail(id, name string) string {
 	return `{"result": {"jobOpening": {
 		"jobOpeningName": "` + name + `",

@@ -13,6 +13,22 @@ func TestGreenhouseProvider(t *testing.T) {
 	}
 }
 
+// Greenhouse earns fullBoardListing because Fetch is a single unpaginated request that
+// returns the board's whole jobs array in one response — there is no loop that could stop
+// early, so any listing failure aborts the whole Fetch rather than returning a partial result.
+func TestGreenhouseMarkers(t *testing.T) {
+	s := NewGreenhouse(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("greenhouse should implement the fullBoardListing marker")
+	}
+}
+
+func TestGreenhouseRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["greenhouse"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include greenhouse")
+	}
+}
+
 func TestGreenhouseFetchDecodesAndSanitizesContent(t *testing.T) {
 	// Greenhouse delivers `content` as entity-encoded HTML.
 	fake := &fakeHTTP{body: `{

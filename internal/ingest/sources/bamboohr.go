@@ -17,6 +17,12 @@ func NewBambooHR(c JSONGetter) Source { return bambooHR{http: c} }
 
 func (bambooHR) Provider() string { return "bamboohr" }
 
+// fullBoardListing: the list request is a single unpaginated call returning the board's whole
+// result array — no loop that could stop early, so any listing failure aborts the whole
+// Fetch. Detail fetches are best-effort per posting. Earns the post-run sweep's board-scoped
+// close (freehire#2328).
+func (bambooHR) fullBoardListing() {}
+
 // bambooHRPosting is one item from the careers list (no description here); the list
 // carries the work-mode signal, the detail carries the body.
 type bambooHRPosting struct {
