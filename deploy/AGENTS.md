@@ -25,8 +25,9 @@ else. Nothing generates them — a new board means a new timer file, by hand.
   truth and the host as the copy, not the other way round, or this snapshot rots into
   fiction within a month.
 - **Billing reads four variables from `/opt/freehire/.env`, and is inert without them.**
-  `STRIPE_SECRET_KEY` (`sk_…`), `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_PRICE_IDS` and
-  `SITE_URL`. With any missing, every billing route is simply not mounted and the timer is a
+  `STRIPE_SECRET_KEY` (`sk_…`), `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_PRICE_IDS`, and
+  `FRONTEND_ORIGIN` — which the fleet already sets, and which is reused rather than given a
+  billing-specific twin that would disagree with it the first time one was changed. With any missing, every billing route is simply not mounted and the timer is a
   no-op that never opens the pool — so the units are safe to install before the provider is
   ready, they are just inert.
 

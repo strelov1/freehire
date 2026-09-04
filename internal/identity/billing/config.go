@@ -37,6 +37,10 @@ type Config struct {
 	Prices []string
 	// SiteURL is where a customer comes back to after paying or after managing their
 	// subscription. Empty disables checkout: there would be nowhere to return them to.
+	//
+	// It reads FRONTEND_ORIGIN, which the fleet already sets and which already means exactly
+	// this. A SITE_URL of its own would be a second name for one fact, and the two would
+	// disagree the first time somebody changed one.
 	SiteURL string
 }
 
@@ -50,7 +54,7 @@ func ConfigFromEnv() Config {
 		APIKey:        strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
 		WebhookSecret: strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		Prices:        priceList(os.Getenv("STRIPE_PRICE_IDS")),
-		SiteURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("SITE_URL")), "/"),
+		SiteURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN")), "/"),
 	}
 }
 

@@ -11,7 +11,7 @@ func setEnv(t *testing.T, apiKey, secret, prices, siteURL string) {
 	t.Setenv("STRIPE_SECRET_KEY", apiKey)
 	t.Setenv("STRIPE_WEBHOOK_SECRET", secret)
 	t.Setenv("STRIPE_PRICE_IDS", prices)
-	t.Setenv("SITE_URL", siteURL)
+	t.Setenv("FRONTEND_ORIGIN", siteURL)
 }
 
 // TestConfigFromEnvDisabledIsNotAnError is the property that makes this package safe to ship
