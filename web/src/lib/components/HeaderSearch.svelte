@@ -312,6 +312,12 @@
       signedIn: isAuthenticated,
     });
     linkBusy = false;
+    // The box may have moved on while the intake was out: a paste over the old text, or
+    // the text cleared entirely. The answer is about the URL we asked with, so applying
+    // it now would navigate to a posting nobody is asking about any more — the same
+    // stale-response hazard the suggestion fetches guard with `previewToken`, answered
+    // here by the question itself rather than by a counter.
+    if (link?.url !== pasted.url) return;
     if (step.kind === 'open') {
       openPosting(step.slug);
       return;

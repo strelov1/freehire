@@ -103,5 +103,15 @@ function ownPostingSlug(url: URL, origin: string): string | null {
   // sending it to the posting would quietly drop what the visitor asked for.
   const [section, slug, ...rest] = url.pathname.split('/').filter((p) => p !== '');
   if (section !== 'jobs' || !slug || rest.length > 0) return null;
-  return decodeURIComponent(slug);
+
+  // A lone `%` is a legal path and an illegal escape, so decoding it THROWS — and this
+  // runs inside a $derived on every keystroke in the header, where a throw takes the
+  // whole page down rather than the one row. An undecodable segment is handed back as
+  // it stands: it is not a slug we issued, so it lands on our own 404 instead of a
+  // blank screen.
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
 }

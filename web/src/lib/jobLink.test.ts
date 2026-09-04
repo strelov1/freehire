@@ -86,6 +86,13 @@ describe('pastedJobLink', () => {
     expect(pastedJobLink('https://freehire.me/jobs/c%2B%2B-dev', ORIGIN)?.ownSlug).toBe('c++-dev');
   });
 
+  // A lone `%` is a legal path and an illegal escape. This runs in a $derived on every
+  // keystroke in the header, so a throw here would take the page down, not the row.
+  it('survives a path that cannot be decoded', () => {
+    expect(() => pastedJobLink('https://freehire.me/jobs/100%', ORIGIN)).not.toThrow();
+    expect(pastedJobLink('https://freehire.me/jobs/100%', ORIGIN)?.ownSlug).toBe('100%');
+  });
+
   // Our own pages that are not postings take the ordinary path: the intake finding them
   // uninteresting is the honest answer, and guessing a slug from them would not be.
   it.each([
