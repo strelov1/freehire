@@ -175,7 +175,7 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
-	url, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"))
+	url, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), billing.Discount{})
 	if err != nil {
 		// Either checkout is unconfigured, or the provider refused. Neither is something a
 		// candidate can act on, and a 404 lets the surface omit the offer rather than render

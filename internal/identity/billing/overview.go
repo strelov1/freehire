@@ -159,7 +159,7 @@ func (c *client) invoices(ctx context.Context, customerID string) []Invoice {
 			HostedInvoiceURL string `json:"hosted_invoice_url"`
 		} `json:"data"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/invoices?"+form.Encode(), nil, &raw); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/invoices?"+form.Encode(), nil, "", &raw); err != nil {
 		return []Invoice{}
 	}
 

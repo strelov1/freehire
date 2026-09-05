@@ -36,18 +36,18 @@
 
 ## 3. Billing: the two provider abilities
 
-- [ ] 3.1 Give `client.do` an optional header argument and thread it through the existing call
+- [x] 3.1 Give `client.do` an optional header argument and thread it through the existing call
   sites unchanged.
-- [ ] 3.2 `client.createCoupon` (`duration=once`, `percent_off`) with an idempotency key
+- [x] 3.2 `client.createCoupon` (`duration=once`, `percent_off`) with an idempotency key
   derived from account, code and price; attach it to the session as `discounts[0][coupon]`.
-- [ ] 3.3 Add `billing.Discount` (a percentage, nothing else) and the parameter on
+- [x] 3.3 Add `billing.Discount` (a percentage, nothing else) and the parameter on
   `Service.CheckoutURL`. A zero `Discount` must produce a byte-identical request to today's.
-- [ ] 3.4 `client.creditCustomerBalance` → `POST /v1/customers/{id}/balance_transactions` with
+- [x] 3.4 `client.creditCustomerBalance` → `POST /v1/customers/{id}/balance_transactions` with
   a negative amount and `Idempotency-Key` = the reward id.
-- [ ] 3.6 `Service.CreditAccount(ctx, userID, cents, key)`: resolve the account's customer,
+- [x] 3.6 `Service.CreditAccount(ctx, userID, cents, key)`: resolve the account's customer,
   creating and binding one through the write-once setter when there is none, then credit it.
   Assert no second customer is created for an already-bound account.
-- [ ] 3.5 `client.hasCollectedPayment(ctx, customerID)`: any invoice with `amount_paid > 0`.
+- [x] 3.5 `client.hasCollectedPayment(ctx, customerID)`: any invoice with `amount_paid > 0`.
   Assert against a stub that an active-but-uncollected subscription answers false.
 
 ## 4. Granting the reward
@@ -108,7 +108,9 @@
 ## 8. Verification
 
 - [ ] 8.1 `gofmt -l .` silent, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`.
-- [ ] 8.2 `go test -tags=integration ./internal/identity/promo/ ./internal/identity/billing/`.
+- [ ] 8.2 `go test -tags=integration ./internal/identity/promo/ ./internal/identity/billing/`,
+  including the two assertions that need a real database: `CreditAccount` creates no second
+  customer for an already-bound account, and the seat claim cannot be won twice.
 - [ ] 8.3 `pnpm check:sql`, `pnpm check:links`, `golangci-lint run`.
 - [ ] 8.4 Walk the whole flow against a Stripe stub: invited signup → discounted checkout →
   paid invoice → worker grants → referrer credited; then re-run the worker and assert nothing

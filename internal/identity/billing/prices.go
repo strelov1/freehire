@@ -136,7 +136,7 @@ func (c *client) price(ctx context.Context, id string) (PublicPrice, error) {
 			Interval string `json:"interval"`
 		} `json:"recurring"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/prices/"+url.PathEscape(id), nil, &raw); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/prices/"+url.PathEscape(id), nil, "", &raw); err != nil {
 		return PublicPrice{}, err
 	}
 	return PublicPrice{

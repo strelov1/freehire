@@ -31,7 +31,7 @@ func TestDisabledServiceRefusesEverything(t *testing.T) {
 	if err := s.SyncUser(context.Background(), 1); !errors.Is(err, ErrDisabled) {
 		t.Errorf("SyncUser: want ErrDisabled, got %v", err)
 	}
-	if _, err := s.CheckoutURL(context.Background(), 1, ""); !errors.Is(err, ErrNoCheckout) {
+	if _, err := s.CheckoutURL(context.Background(), 1, "", Discount{}); !errors.Is(err, ErrNoCheckout) {
 		t.Errorf("CheckoutURL: want ErrNoCheckout, got %v", err)
 	}
 	if _, err := s.ManagementURL(context.Background(), 1); !errors.Is(err, ErrNoCheckout) {

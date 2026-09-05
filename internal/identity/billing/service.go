@@ -298,7 +298,7 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 // The account's id is taken from the caller's session and never from the request: it decides
 // who gets charged and who becomes Pro, and a value the browser composes is a value the
 // browser can change.
-func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string) (string, error) {
+func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount) (string, error) {
 	if !s.cfg.CanCheckout() {
 		return "", ErrNoCheckout
 	}
@@ -329,8 +329,112 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string)
 		}
 	}
 
+	// A coupon is minted per session rather than looked up, because it is created from a
+	// percentage this account is owed rather than from a catalogue of offers. A failure to
+	// mint one is fatal to the checkout on purpose: sending somebody to pay full price for
+	// an offer they were shown is worse than asking them to try again.
+	var couponID string
+	if !discount.none() {
+		couponID, err = s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key)
+		if err != nil {
+			return "", fmt.Errorf("billing: minting a discount for user %d: %w", userID, err)
+		}
+	}
+
 	return s.client.createCheckoutSession(ctx, userID, email,
-		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID)
+		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID, couponID)
+}
+
+// HasCollectedPayment reports whether this customer has ever had an invoice that actually
+// collected money.
+//
+// Exposed for the referral reward, which must be earned by money rather than by a
+// subscription existing. It takes a customer id and not an account id because its caller
+// already holds one — the worker reads the binding to decide whether asking is worth an
+// API call at all.
+func (s *Service) HasCollectedPayment(ctx context.Context, customerID string) (bool, error) {
+	if !s.cfg.Enabled() {
+		return false, ErrDisabled
+	}
+	return s.client.hasCollectedPayment(ctx, customerID)
+}
+
+// CreditAccount places credit on this account's provider customer, creating and binding one
+// when the account has never bought anything.
+//
+// Creating the customer is what makes a reward deliverable to somebody who is not a
+// subscriber. The binding goes through the same write-once setter a purchase uses, so this
+// can never repoint an account that already has one; if the binding loses a race, the
+// customer we just created is abandoned and the credit goes to the one that won.
+//
+// cents is a POSITIVE amount of credit. The provider's sign convention is applied once, in
+// the client.
+func (s *Service) CreditAccount(ctx context.Context, userID, cents int64, idempotencyKey string) error {
+	if !s.cfg.Enabled() {
+		return ErrDisabled
+	}
+	if cents <= 0 {
+		return fmt.Errorf("billing: refusing to credit user %d with %d cents", userID, cents)
+	}
+
+	currency, err := s.checkoutCurrency(ctx)
+	if err != nil {
+		return err
+	}
+
+	customerID, err := s.stripe().customerOf(ctx, userID)
+	if errors.Is(err, ErrNoSubscription) {
+		customerID, err = s.newCustomerFor(ctx, userID, idempotencyKey)
+	}
+	if err != nil {
+		return err
+	}
+
+	return s.client.creditCustomerBalance(ctx, customerID, cents, currency,
+		"freehire invite reward", idempotencyKey)
+}
+
+// newCustomerFor registers an account with the provider and binds it.
+//
+// The idempotency key is suffixed rather than reused: the same key on two different
+// endpoints would make the second call replay the first one's response, and the provider
+// would hand back a customer where a balance transaction was asked for.
+func (s *Service) newCustomerFor(ctx context.Context, userID int64, idempotencyKey string) (string, error) {
+	var email string
+	if addr, emailErr := s.q.UserEmail(ctx, userID); emailErr == nil {
+		email = addr
+	}
+
+	customerID, err := s.client.createCustomer(ctx, userID, email, idempotencyKey+"_customer")
+	if err != nil {
+		return "", fmt.Errorf("billing: creating a customer for user %d: %w", userID, err)
+	}
+
+	if err := s.q.SetStripeCustomerID(ctx, db.SetStripeCustomerIDParams{
+		ID:               userID,
+		StripeCustomerID: customerID,
+	}); err != nil {
+		return "", fmt.Errorf("billing: binding user %d to a new customer: %w", userID, err)
+	}
+
+	// Re-read rather than trusting what we just wrote. The setter is write-once, so a
+	// concurrent purchase may have bound a different customer first — and crediting the one
+	// we created would put the reward on a customer nothing else will ever read.
+	return s.stripe().customerOf(ctx, userID)
+}
+
+// checkoutCurrency is the currency the sold price is denominated in.
+//
+// A credit must be in the same currency as the invoices it is meant to reduce; a mismatch
+// is refused by the provider, which is the right failure but a late one.
+func (s *Service) checkoutCurrency(ctx context.Context) (string, error) {
+	wanted := s.cfg.CheckoutPrice()
+	for _, price := range s.PublicPrices(ctx) {
+		if price.ID == wanted {
+			return price.Currency, nil
+		}
+	}
+	return "", fmt.Errorf("billing: cannot read the currency of price %q", wanted)
 }
 
 // ManagementURL is the provider's own page where this subscriber changes their card or
