@@ -10,7 +10,7 @@ Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/
 ## What is here
 
 ```
-systemd/   382 files — 53 .service, 324 .timer, 5 drop-in directories
+systemd/   384 files — 54 .service, 325 .timer, 5 drop-in directories
 bin/        16 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 nginx/       1 snippet — snippets/freehire-app.conf, hand-edited, not generated
 ```
@@ -24,9 +24,20 @@ teach the reader to ignore the tool.
 
 `systemd/freehire-ingest@.service` is one template; the `freehire-ingest@<provider>.timer`
 files beside it are per-provider schedules, which is why the timer count dwarfs everything
-else. `bin/gen-ingest-timers.sh` writes them from the board catalog
+else.
+
+`bin/gen-ingest-timers.sh` writes them from the board catalog
 (`SELECT provider FROM boards WHERE status IN ('pending','active')`) — it is not run by
 anything, so a new provider means running it on the host.
+
+**`freehire-similarw` is here because an unbounded worker blocks every DDL migration.**
+The similar-jobs backfill ran as a hand-started transient unit for five days; its page
+query holds ACCESS SHARE on `jobs` for ~95s at a time, so `cmd/migrate` never got the
+ACCESS EXCLUSIVE an `ALTER TABLE` needs and `release.sh` failed twice on 2026-09-05
+(55P03 on migration 0139). It is a bounded slice on a timer now — the ~5 quiet minutes in
+every 20 are what a migration gets in through. If a release still fails that way, look for
+another long reader on `jobs` before blaming the migration:
+`SELECT pid, state, now()-xact_start, query FROM pg_stat_activity WHERE xact_start IS NOT NULL ORDER BY 3 DESC;`
 
 **Both are being retired.** `freehire-ingest-scheduler.timer` runs
 `cmd/ingest-scheduler` once a minute, which reads the same catalog and starts each due run
