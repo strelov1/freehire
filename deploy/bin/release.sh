@@ -4,6 +4,24 @@
 # rebuilds the worker binaries, and repoints the `hire-current` symlink (workers
 # follow the active release). Old color stays warm for rollback.
 set -euo pipefail
+# One release at a time, enforced here rather than by convention.
+#
+# Until autodeploy.sh existed, "a person is running it" WAS the lock: nothing on this
+# host holds a file lock, and systemd's refusal to start a second instance of a oneshot
+# unit only ever protected the timer path. A timer that releases on its own introduces
+# the collision that could not happen before — a scheduled run starting while an
+# operator is mid-flip — and two releases sharing one inactive color would build over
+# each other's checkout and flip nginx at whichever finished first.
+#
+# `flock -n` so this fails immediately with something readable instead of a script that
+# appears to hang. Exit 3 is a distinct code on purpose: autodeploy.sh reads it as "not
+# my turn, try the next tick" rather than as a failed release, so a hand-run deploy does
+# not raise an alert. /var/lock is tmpfs, so a reboot mid-release cannot leave it held.
+exec 9>/var/lock/freehire-release.lock
+if ! flock -n 9; then
+  echo "release: another release is already running; refusing to start a second." >&2
+  exit 3
+fi
 app="${1:-freehire}"
 case "$app" in
   freehire) snip=freehire-upstream; apisvc=freehire-api; websvc=freehire-web; dir=hire; bin=hire-api; b_api=8081; b_web=8083; g_api=8082; g_web=8084 ;;
@@ -196,13 +214,22 @@ if [ "$app" = freehire ]; then
   # never built: nudge, apple-revoke and auth-cleanup were six days old, capture-apply-form
   # sixteen. Their units were hand-installed on the box and never reached git either (#56) —
   # the same half-provisioned move, arriving here as a stale binary instead of a missing file.
-  # billing-sync joined 2026-09-04, found the same way and by then eleven days stale. It is
-  # the one on this list a stale binary can cost money: the provider retries a webhook five
-  # times over ~2.5h and then stops for good, and past that window this worker is the only
-  # path by which a paid subscription becomes Pro.
-  # auto-apply-orchestrate is a long-lived Inngest function server, not a cron worker, but it
-  # ships from hire-current the same way every other binary here does.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup billing-sync capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner merge-companies harvest-orphans recount-companies rollup-stats rollup-facets build-suggestions rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue add-board backfill-company-type-hint ingest-scheduler schedule-board auto-apply-orchestrate; do
+  # backfill-company-type-hint joined 2026-09-04, ahead of its own first run, for the same
+  # reason import-collections was added: a one-off with no unit should not need a hand build
+  # on the box the first time it runs either.
+  # backfill-board-catalog left 2026-09-04: freehire#2406 deleted its cmd/ entirely (sources/,
+  # the board catalog it backfilled, was retired), and this list still tried to build it on
+  # every release — the drift this comment keeps warning about, arriving as a directory that
+  # no longer exists instead of one nothing built. No systemd unit ever referenced it (checked
+  # both /etc/systemd/system and this repo's provision/ before removing), so nothing to add
+  # back on the other side.
+  # billing-sync and build-suggestions joined 2026-09-04, found by the check below on this
+  # release: both had freehire-*.service units already installed on the box, firing whatever
+  # binary was last built by hand — the same arrival this comment keeps describing, just two
+  # more of it.
+  # auto-apply-orchestrate joined 2026-09-05: a long-lived Inngest function server, not a
+  # cron worker, but it ships from hire-current the same way every other binary here does.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint billing-sync build-suggestions merge-companies add-board harvest-orphans recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,
@@ -230,11 +257,13 @@ if [ "$app" = freehire ]; then
     echo "$stale" | sed "s/^/[release:$app]   /" >&2
     echo "[release:$app]   their timers are firing whatever an older release left. Add them to the list in $0." >&2
   fi
-  # mail-ingest and auto-apply-orchestrate are long-lived daemons (not timers): restart
-  # them so they pick up the freshly built binary from the repointed hire-current.
-  # Enabled once via provision.
+  # mail-ingest is a long-lived daemon (not a timer): restart it so it picks up the
+  # freshly built binary from the repointed hire-current. Enabled once via provision.
+  # auto-apply-orchestrate is restarted separately, AFTER the flip below — it calls
+  # hire's own API over loopback at a fixed blue/green port, so restarting it here
+  # (before $new is actually active) would have it come up pointed at whichever color
+  # is about to go warm-standby, not the one about to take traffic.
   systemctl try-restart freehire-mail-ingest.service 2>/dev/null || true
-  systemctl try-restart freehire-auto-apply-orchestrate.service 2>/dev/null || true
 fi
 # Schema BEFORE the code that reads it. This exists because on 2026-07-29 a release carried
 # a merged migration nobody had applied: sqlc reads every column of a table, so one missing
@@ -280,11 +309,60 @@ if [ "$app" = freehire ]; then
   done
   [ -n "$fok" ] || { echo "[release:$app] facet smoke FAILED on $new — a facet attr likely needs a reindex; NOT flipping"; exit 1; }
 fi
+# Keep this build reachable after the next flip, for the tabs still running it.
+#
+# nginx serves /_app/immutable/ off hire-current (snippets/freehire-app.conf), the
+# symlink the flip below repoints in one step -- so without this, every chunk of
+# the outgoing build stops existing the instant traffic moves, and a tab that was
+# open across the release 404s on its next navigation. SvelteKit draws that as the
+# 500 page over an HTTP 200. The client-side guard in web/src/routes/+layout.svelte
+# rescues the tab that has already noticed a new build; it cannot rescue the one
+# navigating inside the five-minute version-poll window, and this is that half.
+#
+# Safe because every name under _app/immutable carries a content hash: a copy kept
+# from an older build can never disagree with a live one about what it contains.
+#
+# That is also why this OVERWRITES rather than skipping what is already there. The
+# bytes are identical either way, so the only thing rewriting them buys is a fresh
+# timestamp -- which is what makes a file's age in here mean "since the last build
+# that shipped this chunk" instead of "since it was first seen". Skipping would
+# evict a chunk that had been stable all week on the day before the build that
+# finally replaced it, leaving that hash in neither directory: precisely the 404
+# this exists to prevent, arriving only for the chunks that actually changed.
+#
+# The prune runs whether or not the copy did, because a copy fails on a full disk
+# and that is the one time reclaiming matters. Neither step is fatal: a release
+# that cannot fill the attic is still a good release, and refusing to ship over it
+# would trade a rare stale-tab 404 for a stuck deploy.
+if [ "$app" = freehire ]; then
+  attic=/opt/freehire/asset-attic/_app/immutable
+  install -d -o freehire -g freehire "$attic" 2>/dev/null || true
+  if cp -rf "/opt/freehire/src/hire-${new}/web/build/client/_app/immutable/." "$attic/"; then
+    chown -R freehire:freehire /opt/freehire/asset-attic 2>/dev/null || true
+  else
+    echo "[release:$app] WARNING: could not refill the asset attic; tabs open across the NEXT flip may 404 on this build's chunks" >&2
+  fi
+  # `-mtime +3` is "older than three full days", so a chunk outlives by at least
+  # three days the last build that shipped it.
+  find "$attic" -type f -mtime +3 -delete 2>/dev/null || true
+  find "$attic" -type d -empty -delete 2>/dev/null || true
+  echo "[release:$app] asset attic holds $(find "$attic" -type f | wc -l) files ($(du -sh "$attic" | cut -f1))"
+fi
+
 ln -sf "$S/${snip}-${new}.conf" "$S/${snip}-active.conf"
 nginx -t && nginx -s reload
 if [ "$app" = freehire ]; then
   ln -sfn "/opt/freehire/src/hire-${new}" /opt/freehire/src/hire-current
   echo "[release:$app] workers now follow hire-${new} (hire-current repointed)"
+  # auto-apply-orchestrate calls hire's own API over loopback at a fixed blue/green
+  # port (internal/platform/config's own PORT default, 8080, matches neither — found
+  # 2026-09-05 the hard way: every call failed with connection refused until this
+  # existed). Regenerated on every release, after $new is the color nginx just sent
+  # traffic to, so a restart now always picks up the currently-active port rather
+  # than whichever color is about to go warm-standby.
+  echo "HIRE_BASE_URL=http://127.0.0.1:${aport}/api/v1" > /opt/freehire/env/auto-apply-orchestrate.env
+  chown freehire:freehire /opt/freehire/env/auto-apply-orchestrate.env
+  systemctl try-restart freehire-auto-apply-orchestrate.service 2>/dev/null || true
 fi
 echo "[release:$app] flipped to $new; previous color warm for rollback"
 

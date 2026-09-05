@@ -4,14 +4,23 @@ The production host's systemd units and operator scripts, as they run on host-2.
 not built, not imported by anything — this directory is a **record**, and the only reason
 it exists is that the machine was the sole copy.
 
-Snapshot taken 2026-09-01 from `/etc/systemd/system/freehire-*` and `/opt/freehire/bin/*.sh`.
+Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/bin/*.sh` and
+`/etc/nginx/snippets/freehire-app.conf`.
 
 ## What is here
 
 ```
 systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
-bin/        14 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
+bin/        16 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
+nginx/       1 snippet — snippets/freehire-app.conf, hand-edited, not generated
 ```
+
+`nginx/` holds one file on purpose. `freehire-app.conf` decides how `/_app/immutable/` is
+served, which is roughly three quarters of all requests and where the asset attic below
+lives; it was the last load-bearing thing on this host whose only copy was the machine.
+The other `freehire-*` snippets are left out because `freehire-upstream-active.conf` is
+the symlink the flip repoints, so tracking it would report drift after every release and
+teach the reader to ignore the tool.
 
 `systemd/freehire-ingest@.service` is one template; the `freehire-ingest@<provider>.timer`
 files beside it are per-provider schedules, which is why the timer count dwarfs everything
@@ -103,9 +112,53 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   `meilisearch`, `rollup-views`, `seed-from-nginx` are compiled artifacts, and a committed
   binary breaks `git pull` on the host.
 - **The scripts are shellcheck-clean and CI enforces it.** The `artifacts` job runs
-  shellcheck over every tracked `*.sh`, so these 13 are covered the moment they are
+  shellcheck over every tracked `*.sh`, so these 16 are covered the moment they are
   committed. The findings that came with them were all style-level and are suppressed
   inline with the reason beside them — none was a defect.
+
+## The asset attic
+
+`/opt/freehire/asset-attic/_app/immutable/` holds the client chunks of recent builds, and
+nginx falls back to it when the live build does not have the file (`location @attic` in
+`nginx/snippets/freehire-app.conf`). `release.sh` copies each build in and drops what no
+build has shipped for three days; about 39 MB a build.
+
+It exists because `/_app/immutable/` is served off `hire-current`, the symlink the flip
+repoints in one step — so before this, every chunk of the outgoing build stopped existing
+the instant traffic moved, and a tab open across the release 404'd on its next navigation,
+which SvelteKit draws as the 500 page over an HTTP 200. Keeping the files is safe by
+construction: every name under `_app/immutable` carries a content hash, so a kept copy can
+never disagree with a live build about what it contains.
+
+It is the second half of a fix, not a replacement for the first.
+`web/src/routes/+layout.svelte` leaves through a full page load once `updated` reports a
+new build, which took these from 265 a day to about 22; what it cannot catch is a reader
+navigating inside the five-minute version poll, and no client-side guard can. Neither half
+is redundant: the client one also covers a stale tab older than the attic's three days.
+
+**An empty attic protects nobody for one release.** `release.sh` banks the build it is
+about to make live, so the build going *warm* was only ever banked by the release before
+it. The first run after this shipped had nothing behind it, and the same hole opens after
+any hand-wipe of the directory. Seeding it costs one command per colour, and both were run
+on 2026-09-05 when this went in:
+
+```bash
+install -d -o freehire -g freehire /opt/freehire/asset-attic/_app/immutable
+for c in blue green; do
+  cp -rf "/opt/freehire/src/hire-$c/web/build/client/_app/immutable/." \
+         /opt/freehire/asset-attic/_app/immutable/
+done
+chown -R freehire:freehire /opt/freehire/asset-attic
+```
+
+**To undo it**, restore the snippet and reload — the directory can then be deleted at
+leisure, since nothing but that `location` block reads it:
+
+```bash
+ls /etc/nginx/snippets/freehire-app.conf.bak.*   # release.sh never writes these; they are hand-made
+cp /etc/nginx/snippets/freehire-app.conf.bak.<stamp> /etc/nginx/snippets/freehire-app.conf
+nginx -t && systemctl reload nginx
+```
 
 ## Checking for drift
 

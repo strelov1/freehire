@@ -16,21 +16,28 @@ here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# The same two sets deploy/ holds: units without the host's .bak clutter, and the
-# shell scripts without the compiled binaries beside them.
-ssh -o ConnectTimeout=15 "$HOST" '
-  cd /etc/systemd/system && tar cz $(ls -d freehire-* | grep -v "\.bak") 2>/dev/null
-' > "$work/units.tgz"
-ssh -o ConnectTimeout=15 "$HOST" '
-  cd /opt/freehire/bin && tar cz $(ls *.sh | grep -v "\.bak")
-' > "$work/bin.tgz"
+# The same three sets deploy/ holds: units without the host's .bak clutter, the
+# shell scripts without the compiled binaries beside them, and the one nginx
+# snippet that is hand-edited rather than generated. Only that one:
+# freehire-upstream-active.conf is the symlink the flip repoints, so tracking it
+# would report drift after every release and teach the reader to ignore this tool.
+# One set: run a command on the host that writes a tar to stdout, unpack it under
+# the directory of the same name here. Straight through the pipe rather than via a
+# file, so an ssh that fails takes the pipeline with it instead of leaving an empty
+# archive for tar to complain about.
+fetch_set() {
+  mkdir -p "$work/$1"
+  ssh -o ConnectTimeout=15 "$HOST" "$2" | tar xz -C "$work/$1"
+}
 
-mkdir -p "$work/systemd" "$work/bin"
-tar xzf "$work/units.tgz" -C "$work/systemd"
-tar xzf "$work/bin.tgz" -C "$work/bin"
+# shellcheck disable=SC2016  # single quotes on purpose: the $( ) picks the files on the HOST
+fetch_set systemd 'cd /etc/systemd/system && tar cz $(ls -d freehire-* | grep -v "\.bak") 2>/dev/null'
+# shellcheck disable=SC2016  # as above
+fetch_set bin     'cd /opt/freehire/bin && tar cz $(ls *.sh | grep -v "\.bak")'
+fetch_set nginx   'cd /etc/nginx && tar cz snippets/freehire-app.conf'
 
 status=0
-for set in systemd bin; do
+for set in systemd bin nginx; do
   if diff -ru "$here/$set" "$work/$set" > "$work/$set.diff" 2>&1; then
     echo "$set: in sync"
   else
