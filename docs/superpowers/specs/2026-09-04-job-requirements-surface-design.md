@@ -116,9 +116,15 @@ heading, 23% carry one followed by a list. Those were a regex sweep, and the shi
 extractor is stricter than a regex on purpose — a vocabulary phrase opens a section
 only when the rest of the heading is itself vocabulary, which is what stops
 `MUST HAVE MORNING/DAYTIME AVAILABILITY` (a real prod heading, over a list of
-employee benefits) from opening one. Run over 164 live postings, the extractor yields
-on **12.8%**. That is the number to hold: it lifts coverage from 2.9% to 12.8%
-immediately, four-fold, and the two sources union.
+employee benefits) from opening one.
+
+Run over 164 live postings during planning, the extractor yielded on 12.8%. **That
+number was wrong**, and so was the 43.5% a later re-measurement gave: both sampled in
+an order that correlates with the posting's SOURCE, which is precisely what decides
+whether requirements appear as a list. Measured properly after the backfill —
+`TABLESAMPLE SYSTEM (5)` over 350k open rows, 2026-09-05 — the extractor yields on
+**28.0%**. With the model's own 1.9%, **29.3%** of open postings show a reader
+something, up from 1.9%: fifteen-fold, and the two sources barely overlap.
 
 ### 3. Storage and the merge
 
