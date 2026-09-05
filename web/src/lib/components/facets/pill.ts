@@ -3,6 +3,11 @@ import { cn } from '$lib/ui';
 // The shared three-state look of a selectable facet pill: idle (secondary fill),
 // selected-include (brand fill), selected-exclude (muted destructive,
 // struck through). Callers add their own size classes via `extra`.
+//
+// This is the FILTER pill, and not the only pill in the app: stating something about
+// yourself is two-state and bordered, which is profile/SeniorityPills.svelte. Two looks
+// on purpose — a facet you are narrowing by and an answer you are giving read
+// differently — so reach for that one before adding a fourth state here.
 export function pillClass(active: boolean, exclude: boolean, extra = ''): string {
   return cn(
     'rounded-full border font-medium transition-colors active:translate-y-px',

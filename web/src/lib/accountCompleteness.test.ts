@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { accountSteps, outstandingOf, type CompletenessInput } from './accountCompleteness';
+import {
+  accountSteps,
+  outstandingOf,
+  stepLeadsSomewhere,
+  type CompletenessInput,
+} from './accountCompleteness';
 import type { UserProfile } from './types';
 
 // What the account card measures. The predicates are the whole point of the module, so
@@ -68,15 +73,47 @@ describe('accountSteps', () => {
     expect(byId.alerts).toBeUndefined();
   });
 
-  // The guard for the whole class of bug this fixes. The card is mounted in /my/profile's
-  // LAYOUT, so it is on screen for every profile section — a step landing on one of them
-  // either names a block further down, or AccountSetupCard must refuse to render it as a
-  // link (leadsSomewhere). What must never happen is a step on /my/profile itself with
-  // neither: that one has no page of its own to be "already on".
+  // Belt to the type's braces: `DefaultSectionStep` already makes the anchor mandatory at
+  // compile time, so this only catches someone loosening that type back to optional.
   it('leaves no step pointing at /my/profile without an anchor', () => {
     for (const step of accountSteps(empty)) {
       if (step.href === '/my/profile') expect(step.anchorId).toBeTruthy();
     }
+  });
+});
+
+// The whole class of bug this card was reported for: the card is mounted in /my/profile's
+// LAYOUT, so it is on screen for every profile section, and a step must never be offered
+// as a link to the page the reader is already looking at.
+describe('stepLeadsSomewhere', () => {
+  const byId = (id: string) => {
+    const step = accountSteps(empty).find((s) => s.id === id);
+    if (!step) throw new Error(`no step ${id}`);
+    return step;
+  };
+
+  it('sends an anchored step onward even from the page it lives on', () => {
+    expect(stepLeadsSomewhere(byId('cv'), '/my/profile', '/my/profile')).toBe(true);
+    expect(stepLeadsSomewhere(byId('role'), '/my/profile', '/my/profile')).toBe(true);
+  });
+
+  it('refuses an unanchored step whose route is the one on screen', () => {
+    expect(stepLeadsSomewhere(byId('skills'), '/my/profile/skills', '/my/profile/skills')).toBe(false);
+    expect(stepLeadsSomewhere(byId('location'), '/my/profile/location', '/my/profile/location')).toBe(false);
+  });
+
+  it('sends every step onward from a section that is not its own', () => {
+    for (const step of accountSteps(empty)) {
+      expect(stepLeadsSomewhere(step, step.href, '/my/profile/settings')).toBe(true);
+    }
+  });
+
+  // The card passes the RESOLVED href, so both sides carry any base path and the comparison
+  // stays honest. Were only one side resolved, every step would read as the current one.
+  it('compares the two paths as given, base and all', () => {
+    const skills = byId('skills');
+    expect(stepLeadsSomewhere(skills, '/app/my/profile/skills', '/app/my/profile/skills')).toBe(false);
+    expect(stepLeadsSomewhere(skills, '/app/my/profile/skills', '/app/my/profile')).toBe(true);
   });
 
   it('counts a CV once one is stored', () => {

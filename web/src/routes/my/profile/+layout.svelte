@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { tick, untrack, type Snippet } from 'svelte';
   import {
     Briefcase,
     ClipboardList,
@@ -74,6 +74,30 @@
   // (Re)load once the session resolves.
   $effect(() => {
     if (isAuthenticated()) void load();
+  });
+
+  // Honour the URL's anchor once the gate opens. The browser and the router both resolve a
+  // `#id` at navigation time, and until `status` is 'ready' this layout renders a spinner —
+  // so a RELOAD or a shared link to /my/profile#account-cv would consume the anchor against
+  // nothing and land at the top, which is exactly the "clicking it does nothing" this card's
+  // anchors exist to fix. Following a link from inside the app is unaffected: the tree is
+  // already up, so this fires on a target the browser has just scrolled to anyway.
+  //
+  // Runs once per hash, not per render: `scrolledToHash` is compared before scrolling, so an
+  // unrelated profile refresh cannot yank the reader back to an anchor they scrolled away
+  // from. `untrack` keeps that read from making this effect its own trigger.
+  let scrolledToHash = $state<string | null>(null);
+  $effect(() => {
+    const hash = page.url.hash.slice(1);
+    if (status !== 'ready' || !hash || hash === untrack(() => scrolledToHash)) return;
+    // The section that owns the anchor renders in the same tick this effect runs, so wait
+    // for the DOM to catch up rather than querying a target that does not exist yet.
+    void tick().then(() => {
+      const target = document.getElementById(hash);
+      if (!target) return;
+      scrolledToHash = hash;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   });
 </script>
 

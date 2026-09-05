@@ -78,7 +78,7 @@
 <!-- `account-role` is the anchor the account-setup checklist's role step links to (see
      accountCompleteness.ts). It sits on the whole card, not on either half, because that
      step asks for both together — "what you do, and at what level". `scroll-mt-20` clears
-     the sticky header (`h-14`), same as the other anchored sections. -->
+     the sticky `h-14` TopBar. -->
 <div id="account-role" class="flex scroll-mt-20 flex-col gap-6">
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">

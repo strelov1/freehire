@@ -2,13 +2,13 @@
   import { Check, ArrowRight } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { outstandingOf, type CompletenessStep } from '$lib/accountCompleteness';
+  import { outstandingOf, stepLeadsSomewhere, type CompletenessStep } from '$lib/accountCompleteness';
   import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
   // "How complete is my account", mounted in /my/profile's LAYOUT — so it is on screen for
-  // all eight profile sections, and three of its five steps are done on one of them. That
-  // is what `stepHref` and `leadsSomewhere` below are for: a step must never render as a
-  // link to the page the reader is already looking at.
+  // all eight profile sections, and four of its five steps are done on one of them (only
+  // the alert lives elsewhere). That is why a step is rendered as a link only when
+  // `stepLeadsSomewhere` says following it would move the reader.
   //
   // A funnel beats a choose-your-own-adventure: the onboarding wizard asks these same
   // questions once, and this is what remains of them afterwards for anyone who skipped a
@@ -30,13 +30,10 @@
     return `${resolve(step.href)}${step.anchorId ? `#${step.anchorId}` : ''}`;
   }
 
-  // Whether following this step would move the reader at all. An anchor always counts —
-  // it names a block further down a page this card sits at the top of. Otherwise the step
-  // has to lead off the current route, or it is a link to where the reader already is.
-  // Compares the RESOLVED href, so a configured base path cannot make every step look
-  // like the current one.
+  // The rule itself lives beside the steps (accountCompleteness); this only feeds it the
+  // two paths, which are the part that needs the router.
   function leadsSomewhere(step: CompletenessStep): boolean {
-    return step.anchorId !== undefined || resolve(step.href) !== page.url.pathname;
+    return stepLeadsSomewhere(step, resolve(step.href), page.url.pathname);
   }
 </script>
 
