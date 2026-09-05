@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ChevronRight, Terminal } from '@lucide/svelte';
   import {
     groupTitle,
     isExpandable,
@@ -12,8 +13,9 @@
 
   // The tool calls of one assistant message, rendered as collapsed rows. Ported
   // from the web app's `ToolGroupList.svelte`; the formatting logic is shared
-  // verbatim through `tool-formatters`, only the markup differs — the web's
-  // version uses an icon set this panel has none of, and this one is 400px wide.
+  // verbatim through `tool-formatters` and the two draw the same icons, only the
+  // styling differs — the web has Tailwind's design tokens, this panel is 400px
+  // wide and styles itself.
   let { calls }: { calls: readonly ToolCall[] } = $props();
 
   // Fold the flat list into consecutive runs of the same tool, so a burst of
@@ -32,10 +34,17 @@
 {#each groupTools(calls) as g, t (t)}
   {@const title = groupTitle(g)}
   {#if !isExpandable(g)}
-    <div class="tool">{title}</div>
+    <div class="tool">
+      <Terminal class="size-3.5 shrink-0 opacity-60" />
+      <span class="title">{title}</span>
+    </div>
   {:else}
     <details class="tool">
-      <summary>{title}</summary>
+      <summary>
+        <Terminal class="size-3.5 shrink-0 opacity-60" />
+        <span class="title">{title}</span>
+        <ChevronRight class="chev size-3.5 shrink-0 opacity-50 transition-transform" />
+      </summary>
       <ul>
         {#each g as c, ci (ci)}
           <li>
@@ -62,35 +71,54 @@
     align-self: flex-start;
     max-width: 90%;
     font-size: 12px;
+    line-height: 18px;
     color: var(--muted-foreground);
     background: var(--muted);
     border: 1px solid var(--border);
     border-radius: 8px;
+    /* The summary's hover fill runs to the card's edge; without this it squares off
+       the two top corners. */
+    overflow: hidden;
+  }
+
+  /* The padding sits on the row rather than the card so that an expanded card's list
+     is not indented by it as well. */
+  div.tool,
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 6px 10px;
+  }
+
+  .title {
+    font-weight: 500;
   }
 
   summary {
     cursor: pointer;
     list-style: none;
+    transition: background 120ms;
+  }
+
+  summary:hover {
+    background: var(--background);
   }
 
   summary::-webkit-details-marker {
     display: none;
   }
 
-  /* A disclosure the user can miss is a disclosure they will not open. */
-  summary::after {
-    content: ' ▸';
-    color: var(--muted-foreground);
-  }
-
-  details[open] summary::after {
-    content: ' ▾';
+  /* A disclosure the user can miss is a disclosure they will not open.
+     :global — the class is forwarded onto the icon component's own <svg>, which this
+     file's scope does not reach. */
+  details[open] :global(.chev) {
+    transform: rotate(90deg);
   }
 
   ul {
-    margin: 6px 0 0;
-    padding-left: 14px;
+    margin: 0;
+    padding: 0 10px 8px 24px;
     font-size: 11px;
     line-height: 1.5;
   }
