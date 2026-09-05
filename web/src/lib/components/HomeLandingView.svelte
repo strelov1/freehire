@@ -4,6 +4,7 @@
   import { ArrowRight } from '@lucide/svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
+  import { rolePlaceholders } from '$lib/placeholderRoles';
   import { api } from '$lib/api';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
   import type { ApplyPlan } from '$lib/apiSuggestions';
@@ -236,8 +237,13 @@
 
     <!-- The box's root is `min-w-0 flex-1`, so this wrapper is what sets its width. -->
     <div class="flex w-full">
+      <!-- The rotating example narrows to roles while the accessible name stays broad:
+           this box does search companies and skills too, and an example is a starting
+           point rather than a boundary. Roles are what people actually type first. -->
       <HeaderSearch
         placeholder="Search jobs, companies, skills…"
+        label="Search jobs, companies and skills"
+        rotating={rolePlaceholders()}
         size="hero"
         autofocus
         {counts}

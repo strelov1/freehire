@@ -43,12 +43,25 @@
   // feed. A hero-sized second copy of this component is how the two would drift.
   let {
     placeholder,
+    label,
+    rotating = [],
     size = 'header',
     autofocus = false,
     counts = null,
     onOpenFilters,
   }: {
+    /** The example shown in an empty box. May move (see `rotating`), so it is never
+     *  the field's accessible name — that is `label`. */
     placeholder: string;
+    /** The field's accessible name. Static, and required of every caller rather than
+     *  defaulting to `placeholder`: the two were one prop until the placeholder learned
+     *  to rotate, at which point a screen reader announced the input as whatever example
+     *  happened to be on screen. A default would reinstate that at the next call site. */
+    label: string;
+    /** Placeholder strings to cycle through while the box is empty and untouched,
+     *  fully composed by the caller (see lib/placeholderRoles.ts). Empty — the default —
+     *  means no rotation, which is what a box that is not about roles wants. */
+    rotating?: string[];
     size?: 'header' | 'hero';
     /** Focus the box on mount — desktop only. A page whose whole content is this box
      *  should put the caret in it; on a phone the same call raises the keyboard over
@@ -68,6 +81,54 @@
   } = $props();
 
   const hero = $derived(size === 'hero');
+
+  // ---- the rotating placeholder ----
+  //
+  // Runs only while the box is empty and has never been touched. The first focus or
+  // keystroke stops it for the rest of the visit and freezes it on the entry then
+  // showing: text moving under the cursor while a query is being composed is the failure
+  // an animated placeholder invites, and reverting to a static string on stop would be a
+  // visible jump at the moment the visitor's attention is on the field.
+  //
+  // The list itself is composed in lib/placeholderRoles.ts, from the generated category
+  // vocabulary rather than from hand-written strings.
+  const ROTATE_MS = 2500;
+  // Must stay in step with the ::placeholder transition duration in this component's
+  // style block below: this is how long the text is held invisible before it is swapped,
+  // so a longer fade than this would swap the word while it was still legible.
+  const FADE_MS = 200;
+
+  let rotationIndex = $state(0);
+  let rotationStopped = $state(false);
+  let placeholderFading = $state(false);
+
+  function stopRotation() {
+    rotationStopped = true;
+  }
+
+  $effect(() => {
+    if (rotationStopped || rotating.length < 2) return;
+    // Reduced motion: show the first entry and never start a timer. Same switch the
+    // fifteen other animated components here read.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let swap: ReturnType<typeof setTimeout> | undefined;
+    const tick = setInterval(() => {
+      placeholderFading = true;
+      swap = setTimeout(() => {
+        rotationIndex = (rotationIndex + 1) % rotating.length;
+        placeholderFading = false;
+      }, FADE_MS);
+    }, ROTATE_MS);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(swap);
+    };
+  });
+
+  // `rotating[0]` is what server-rendered markup carries, since the effect above is
+  // client-only — so the box never paints empty and then fills in.
+  const shownPlaceholder = $derived(rotating.length > 0 ? rotating[rotationIndex] : placeholder);
 
   // How long the draft must sit still before the suggestions are refetched.
   //
@@ -638,10 +699,12 @@
         // autofocused hero would stay silent when its own field is clicked.
         dismissed = false;
         activeIndex = -1;
+        stopRotation();
       }}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
+        stopRotation();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         linkStep = null;
@@ -659,18 +722,22 @@
         // box permanently silent for the rest of the visit.
         dismissed = false;
         activeIndex = -1;
+        stopRotation();
       }}
       onkeydown={onKeydown}
       type="text"
-      {placeholder}
-      aria-label={placeholder}
+      placeholder={shownPlaceholder}
+      aria-label={label}
       autocomplete="off"
       spellcheck="false"
       role="combobox"
       aria-expanded={suggestOpen}
       aria-controls="role-suggestions"
       aria-activedescendant={activeIndex >= 0 ? `role-suggestion-${activeIndex}` : undefined}
-      class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+      class={cn(
+        'placeholder-rotates min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground',
+        placeholderFading && 'placeholder-faded',
+      )}
     />
     {#if draft.text}
       <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor
@@ -878,3 +945,24 @@
     </ul>
   {/if}
 </div>
+
+<style>
+  /* The rotating placeholder's crossfade.
+     Transitioning ::placeholder colour rather than overlaying a positioned span keeps
+     the box's flex row untouched — the field, the location prefix, the clear button and
+     the filters trigger already negotiate width in there, and a second element is a
+     layout risk taken for a cosmetic gain. */
+  .placeholder-rotates::placeholder {
+    transition: color 200ms ease;
+  }
+
+  .placeholder-faded::placeholder {
+    color: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .placeholder-rotates::placeholder {
+      transition: none;
+    }
+  }
+</style>
