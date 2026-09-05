@@ -166,7 +166,7 @@ worker is one query and two HTTP calls regardless.
 
 ## Migration Plan
 
-1. Migration `0135` adds `job_daily_views.page_uniques` (`NOT NULL DEFAULT 0`)
+1. Migration `0138` adds `job_daily_views.page_uniques` (`NOT NULL DEFAULT 0`)
    and creates `social_digest_posts`. Both are additive; nothing reads the new
    column until the digest ships.
 2. Ship the `viewlog` split and the `rollup-views` write. From the next nightly

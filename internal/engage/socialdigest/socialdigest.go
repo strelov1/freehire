@@ -5,7 +5,7 @@
 // The number it ranks on is job_daily_views.page_uniques, never uniques. uniques
 // fuses bot-filtered page opens with unfiltered API reads, and crawlers are most of
 // this host's traffic — ranking a public list on it would publish what robots
-// fetched as though it were what people liked. See migration 0135 and
+// fetched as though it were what people liked. See migration 0138 and
 // internal/application/viewlog.
 package socialdigest
 

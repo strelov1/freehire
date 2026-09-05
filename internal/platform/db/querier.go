@@ -4503,7 +4503,7 @@ type Querier interface {
 	// The day's candidates, most-viewed first, ranked on page_uniques — NOT on uniques.
 	// uniques fuses page opens with API reads and API reads carry no bot filtering, so on
 	// a host whose traffic is mostly crawlers it answers "what did robots fetch". See
-	// migration 0135 and internal/application/viewlog.
+	// migration 0138 and internal/application/viewlog.
 	//
 	// The predicates are the same open-posting shape every public listing uses
 	// (closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private), plus ats_absent_at:

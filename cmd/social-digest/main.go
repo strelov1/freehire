@@ -90,7 +90,7 @@ func run() int {
 		// Several different things produce an empty list, and naming only one of them
 		// would send an operator hunting the wrong cause. The one that will actually
 		// happen first is the third: page_uniques is zero for every row written before
-		// migration 0135, so the digest is empty until cmd/rollup-views has run once
+		// migration 0138, so the digest is empty until cmd/rollup-views has run once
 		// with the split — the whole window between deploying this and the next night.
 		log.Printf("social-digest: nothing to publish for %s. Either no posting cleared the floor of %d page views, "+
 			"or every candidate was published within the last %d days, or cmd/rollup-views has not yet run with the "+

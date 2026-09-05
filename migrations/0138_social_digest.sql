@@ -34,7 +34,7 @@ COMMENT ON COLUMN public.job_daily_views.page_uniques IS
     'The `uniques` column beside it fuses page opens with API reads, and API reads '
     'carry no bot filtering — so page_uniques is the only one of the two that '
     'describes people, and the only one safe to rank a public post on. Zero for '
-    'every row written before migration 0135; deliberately not backfilled.';
+    'every row written before migration 0138; deliberately not backfilled.';
 
 -- The digest's ledger: what was published, where, and when.
 --

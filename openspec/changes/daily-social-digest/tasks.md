@@ -1,6 +1,6 @@
 ## 1. Schema
 
-- [x] 1.1 Add migration `0135_social_digest.sql`: `ALTER TABLE job_daily_views ADD COLUMN page_uniques integer NOT NULL DEFAULT 0` (matching the width of `uniques` beside it, which the two are compared against), and `CREATE TABLE social_digest_posts (day date, channel text, job_id bigint, slot int, published_at timestamptz)` keyed `(day, channel, job_id)` with an index on `(job_id, day DESC)` for the quarantine lookup. Verify with `pnpm check:sql`.
+- [x] 1.1 Add migration `0138_social_digest.sql`: `ALTER TABLE job_daily_views ADD COLUMN page_uniques integer NOT NULL DEFAULT 0` (matching the width of `uniques` beside it, which the two are compared against), and `CREATE TABLE social_digest_posts (day date, channel text, job_id bigint, slot int, published_at timestamptz)` keyed `(day, channel, job_id)` with an index on `(job_id, day DESC)` for the quarantine lookup. Verify with `pnpm check:sql`.
 
 ## 2. Split the view signal
 

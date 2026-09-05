@@ -10,7 +10,7 @@ Drained by [cmd/social-digest](../../../cmd/social-digest/main.go), once a day.
 filtered against a known-bot list, and API reads, which deliberately are not — the
 API exists to be read by programs. Crawlers are most of this host's traffic, so a
 public "most popular" list built on `uniques` publishes what robots fetched as though
-it were what people liked. Migration `0135` added `page_uniques` beside `uniques`
+it were what people liked. Migration `0138` added `page_uniques` beside `uniques`
 rather than redefining it, because `uniques` is what `GET /api/v1/stats/catalog`
 already publishes.
 
