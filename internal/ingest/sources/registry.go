@@ -31,10 +31,11 @@ func FullCatalogProviders(reg map[string]Source) []string {
 	return out
 }
 
-// SweepGraceWindows returns the post-run sweep window each adapter in reg declares that is wider
-// than the default (see sweepGrace). cmd/ingest consults this when computing a provider's cutoff;
-// a provider absent from the map is swept on the default window, which is every provider but the
-// slice-crawled few.
+// SweepGraceWindows returns the post-run sweep window each adapter in reg declares in place of
+// the default — wider for a slice-crawled source that can't yet tell drift from removal, narrower
+// for a full-board source whose unseen reading is already evidence (see sweepGrace). cmd/ingest
+// consults this when computing a provider's cutoff; a provider absent from the map is swept on
+// the default window.
 func SweepGraceWindows(reg map[string]Source) map[string]time.Duration {
 	out := make(map[string]time.Duration)
 	for name, src := range reg {
