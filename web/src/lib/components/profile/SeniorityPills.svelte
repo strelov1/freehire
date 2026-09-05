@@ -1,14 +1,13 @@
 <script lang="ts">
   // The Level control: which seniorities the candidate will take, as a plain two-state
   // multi-select. Shared by the onboarding wizard's Confirm step and the profile's Role
-  // card — they asked the same question with two hand-written copies of this markup, and
-  // two copies of a control is how the wizard and the page it feeds start to disagree.
+  // card, which asked the same question through two hand-written copies of this markup —
+  // and two copies is how the wizard and the page it feeds start to disagree.
   //
   // Deliberately NOT facets/PillGroup: that is a three-state FILTER pill (include /
-  // exclude / off, option groups, result counts, unknown-value passthrough) and none of
-  // it applies to stating your own level. It also carries a different look, which is why
-  // this keeps the bordered one both callers already showed rather than quietly
-  // restyling two live surfaces.
+  // exclude / off, option groups, result counts) and none of it applies to stating your
+  // own level. It looks different too, so this keeps the bordered pill both callers
+  // already showed rather than quietly restyling two live surfaces.
   import { SENIORITY_OPTIONS } from '$lib/facets';
 
   let {
