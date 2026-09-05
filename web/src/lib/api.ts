@@ -1080,20 +1080,23 @@ export function createApi(
    *  every refusal about the code itself is the same 404 — telling "no such code" apart
    *  from "out of seats" would make this an oracle for guessing them. */
   async function promoPreview(code: string): Promise<{ percent_off: number }> {
-    return requestData<{ percent_off: number }>('/api/v1/me/promo/preview', {
-      method: 'POST',
-      body: JSON.stringify({ code }),
-    });
+    // jsonBody and not a hand-built init: it carries the Content-Type the server's body
+    // parser requires. Without that header the request is refused before the code is even
+    // read, which looks exactly like a code that does not exist.
+    return requestData<{ percent_off: number }>(
+      '/api/v1/me/promo/preview',
+      jsonBody('POST', { code }),
+    );
   }
 
   /** Spend this account's one lifetime redemption on a code. Durable: once recorded, every
    *  later checkout reads the percentage back, so a provider failure while opening the
    *  payment page costs a retry rather than the offer. */
   async function promoRedeem(code: string): Promise<{ percent_off: number }> {
-    return requestData<{ percent_off: number }>('/api/v1/me/promo/redeem', {
-      method: 'POST',
-      body: JSON.stringify({ code }),
-    });
+    return requestData<{ percent_off: number }>(
+      '/api/v1/me/promo/redeem',
+      jsonBody('POST', { code }),
+    );
   }
 
   /** This account's invite link and what it has earned. */

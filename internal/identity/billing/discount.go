@@ -32,14 +32,25 @@ type Discount struct {
 // none reports whether this is the zero discount.
 func (d Discount) none() bool { return d.PercentOff <= 0 }
 
-// createCoupon mints a one-off percentage discount and returns its id.
+// createCoupon mints a one-off, single-redemption percentage discount and returns its id.
 //
 // `duration=once` on every coupon this package creates: each discount here applies to the
 // first invoice of a subscription and must not follow it into renewals. A recurring coupon
 // created by accident would be indistinguishable from a price change nobody approved.
+//
+// `max_redemptions=1` beside it, because the two bound different things and only together
+// say what the offer means. `duration` bounds how many INVOICES of one subscription a
+// coupon touches; redemptions bound how many SUBSCRIPTIONS may claim it. Without the
+// second, a buyer who subscribes, cancels and subscribes again gets the discount each time
+// — the idempotency key hands their checkout the same coupon back, and an unlimited coupon
+// happily applies again. The offer is a first month, not a first month per attempt.
+//
+// The count moves when a subscription actually claims the coupon, not when a session is
+// created, so an abandoned checkout costs nothing.
 func (c *client) createCoupon(ctx context.Context, percentOff int32, name, idempotencyKey string) (string, error) {
 	form := url.Values{}
 	form.Set("duration", "once")
+	form.Set("max_redemptions", "1")
 	form.Set("percent_off", strconv.FormatInt(int64(percentOff), 10))
 	if name != "" {
 		form.Set("name", name)
@@ -131,6 +142,13 @@ func (c *client) hasCollectedAtLeast(ctx context.Context, customerID string, min
 		minCents = 1
 	}
 
+	// One page, newest first, and deliberately not paginated. The only caller walks rewards
+	// that are still PENDING, and a reward stops being pending at the first invoice meeting
+	// this threshold — so the window this has to cover is from the invitee's signup to their
+	// first real payment. Reaching past a hundred invoices would mean a hundred billing
+	// periods of paying less than half the list price and then paying it, which is not a
+	// case; paginating for it would spend a request per page on every account that has
+	// simply never paid, which is almost all of them.
 	form := url.Values{}
 	form.Set("customer", customerID)
 	form.Set("limit", "100")

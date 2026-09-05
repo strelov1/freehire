@@ -2076,12 +2076,17 @@ type Querier interface {
 	// done" rather than doing it twice. The amount is fixed here and never recomputed, so a
 	// later price change cannot revalue credit that has been earned.
 	//
-	// The CEILING is counted inside this statement rather than read before it, and that is the
-	// difference between a bound and a suggestion. Two passes reading eleven granted rewards
-	// against a ceiling of twelve would each grant one more and produce thirteen. Nothing
-	// prevents two passes: systemd will not stack a Type=oneshot unit on itself, but that
-	// protects the TIMER path only and a run started by hand has no lock at all. The count is
-	// taken under this UPDATE's own lock on the row, so the second statement sees the first.
+	// The CEILING is counted inside this statement, and that is NOT what makes it a bound —
+	// worth saying plainly, because it looks like it should be. This statement locks the reward
+	// row it updates and nothing else, so two passes granting DIFFERENT pending rewards of one
+	// referrer never block each other, and under READ COMMITTED each subquery reads the snapshot
+	// its own statement began with. Both would see eleven against a ceiling of twelve, and both
+	// would grant.
+	//
+	// What actually bounds it is the advisory lock the referral pass takes (cmd/billing-sync,
+	// key 0x66687277, registered in internal/platform/migrate). The count here is the cheap
+	// second guard: with the pass serialized it is always right, and if the lock is ever lost
+	// the damage is one extra reward rather than an unbounded run.
 	GrantInviteReward(ctx context.Context, arg GrantInviteRewardParams) (int64, error)
 	// Whether this account has already spent its one redemption. Asked after a refusal, to turn
 	// the deliberately vague "no" above into the one explanation that is about the caller.

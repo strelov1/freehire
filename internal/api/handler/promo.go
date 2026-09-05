@@ -17,14 +17,24 @@ import (
 // already given up.
 const promoReadTimeout = 5 * time.Second
 
-// promoPreviewPerMinute is how often one account may ask whether a code is valid.
+// promoPreviewPerMinute is how often one account may ask whether a code is valid, and
+// promoPreviewPerAddressPerMinute how often one client address may, across every account it
+// signs in as.
 //
-// The route is authenticated, but an account is free to create, so authentication alone
-// bounds nothing. Codes are short by design — people type them — and a handful of guesses
-// a minute turns a four-character space into an afternoon's work. Keyed by account OR
-// address, so neither a pool of accounts from one machine nor one account across a proxy
-// pool gets the budget of the other.
-const promoPreviewPerMinute = 10
+// Both, because either alone is a hole. An account is free to create, so a per-account
+// bound is a bound on nothing — the cheap attack is a hundred accounts from one machine.
+// And a per-address bound alone would punish everyone behind one office NAT for the first
+// person to mistype a code. The address budget is deliberately looser than a multiple of
+// the account one: several colleagues redeeming a launch offer on the same day is ordinary,
+// and thousands of guesses an hour is not.
+//
+// `KeyByUserOrIP` cannot serve both. It resolves to the account id whenever there IS one,
+// and both these routes sit behind the cookie gate — so its address half is unreachable
+// here, and a second limiter keyed by address is the only way to have one.
+const (
+	promoPreviewPerMinute           = 10
+	promoPreviewPerAddressPerMinute = 30
+)
 
 // promoHandlers serve the discount surfaces: checking a code, and an account's own invite
 // link.
@@ -44,9 +54,13 @@ func (h *promoHandlers) register(api fiber.Router, mw middleware, throttler rate
 	// Cookie only, like the rest of /me. A link that decides who gets credited for a
 	// referral is minted for a browser session, not for a script holding a key.
 	api.Get("/me/invite", mw.cookie, h.Invite)
-	api.Post("/me/promo/preview", mw.cookie,
-		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute),
-		h.PreviewCode)
+
+	perAccount := ratelimit.Middleware(throttler,
+		ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute)
+	perAddress := ratelimit.Middleware(throttler,
+		ratelimit.KeyByIP("promoaddr"), promoPreviewPerAddressPerMinute, time.Minute)
+
+	api.Post("/me/promo/preview", mw.cookie, perAccount, perAddress, h.PreviewCode)
 
 	// POST, and that is a security property rather than a style choice. Redeeming spends
 	// the account's one lifetime redemption, and the first draft did it on the checkout
@@ -54,9 +68,10 @@ func (h *promoHandlers) register(api fiber.Router, mw middleware, throttler rate
 	// top-level navigation. Any page could then burn a visitor's redemption by linking to
 	// it. A GET here must stay read-only; a state change goes through a method the browser
 	// will not issue cross-site without a preflight this deployment does not answer.
-	api.Post("/me/promo/redeem", mw.cookie,
-		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute),
-		h.RedeemCode)
+	//
+	// Limited by the same pair: a redemption that refuses tells a guesser as much as a
+	// preview that refuses, so bounding one and not the other bounds neither.
+	api.Post("/me/promo/redeem", mw.cookie, perAccount, perAddress, h.RedeemCode)
 }
 
 // Invite returns this account's invite link and what it has earned.

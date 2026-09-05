@@ -34,6 +34,11 @@ func TestCreateCouponSendsAOnceOffPercentage(t *testing.T) {
 	if !strings.Contains(gotBody, "percent_off=50") {
 		t.Fatalf("body = %q, want percent_off=50", gotBody)
 	}
+	if !strings.Contains(gotBody, "max_redemptions=1") {
+		t.Fatalf("body = %q, want max_redemptions=1 — `duration` bounds how many invoices of "+
+			"ONE subscription a coupon touches, not how many subscriptions may claim it, so "+
+			"without this a buyer who cancels and resubscribes is discounted again", gotBody)
+	}
 	if gotKey != "key-1" {
 		t.Fatalf("Idempotency-Key = %q, want key-1 — without it a retried checkout mints a "+
 			"second coupon for one purchase", gotKey)

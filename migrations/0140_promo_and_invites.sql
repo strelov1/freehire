@@ -20,8 +20,15 @@ CREATE TABLE public.promo_codes (
     -- code nobody could ever redeem, and the failure would look exactly like a typo on
     -- the buyer's side. The shape also bounds what a guesser has to work through; the
     -- rate limit on the preview route is the other half of that.
+    -- The 'ZZ' exclusion is what makes a guard elsewhere honest rather than decorative.
+    -- A test walks the discount sources for anything this constraint would accept and
+    -- fails the build, exempting only literals with that prefix so that FIXTURES can name
+    -- codes. An exemption the database did not also refuse would be a way to write a real
+    -- code past the guard; here, a code nobody can ever create.
     code         text        PRIMARY KEY
-                             CHECK (code = upper(code) AND code ~ '^[A-Z0-9]{4,32}$'),
+                             CHECK (code = upper(code)
+                                    AND code ~ '^[A-Z0-9]{4,32}$'
+                                    AND code NOT LIKE 'ZZ%'),
 
     -- A percentage and never an amount. An amount off would have to name a currency and
     -- then agree with a price it cannot see; a percentage is right whatever the price

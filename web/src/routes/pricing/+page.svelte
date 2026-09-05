@@ -104,12 +104,18 @@
         checked = (await api.promoRedeem(entered)).percent_off;
         codeError = null;
       } catch (e) {
-        codeError =
-          e instanceof Error && e.message.includes('already')
-            ? 'You have already used a promo code.'
-            : 'That code is not available. Clear it to continue at the usual price.';
-        busy = false;
-        return;
+        // "Already redeemed" does NOT stop the purchase. The discount this account holds is
+        // durable and the checkout below picks it up whatever happens here — refusing to
+        // sell to somebody because they entered a code they had already used would turn a
+        // note into a dead end.
+        const alreadyHeld = e instanceof Error && e.message.includes('already');
+        codeError = alreadyHeld
+          ? 'You have already used a promo code — your existing discount still applies.'
+          : 'That code is not available. Clear it to continue at the usual price.';
+        if (!alreadyHeld) {
+          busy = false;
+          return;
+        }
       }
     }
 
