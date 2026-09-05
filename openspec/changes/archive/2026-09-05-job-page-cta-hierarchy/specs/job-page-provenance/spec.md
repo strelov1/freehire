@@ -36,7 +36,7 @@ else.
 
 The job detail page SHALL render the posting's view and applied counts on the same line as
 its dates, and SHALL NOT render them in the sidebar. They are facts about how the posting is
-doing, like the dates, and each is one icon and one number; a reader weighing "posted 20
+doing, like the dates, and each is an icon and a short count; a reader weighing "posted 20
 minutes ago" against "3 views" should not have to hold that thought across two places.
 
 A count of zero SHALL NOT render. On a posting nobody has opened yet, "0 views" measures

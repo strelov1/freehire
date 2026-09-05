@@ -13,9 +13,10 @@ grey `secondary` button beside a loud green `Apply` that only opens someone else
 
 ## What Changes
 
-- Move the two call-to-action buttons (Auto-apply, Apply) off the tab row and up beside
-  the job title, where the page's primary actions belong. The tab row keeps only the quiet
-  actions — Discussion, Report, Save, Add-to-list — and the tabs get their width back.
+- Move the two call-to-action buttons (Auto-apply, Apply) off the tab row and up under the
+  job title, on a right-aligned row of their own, where the page's primary actions belong.
+  The tab row keeps only the quiet actions — Discussion, Report, Save, Add-to-list — and
+  the tabs get their width back.
 - Promote Auto-apply to the page's primary CTA when it is offered and clickable: the brand
   green fill, plus a small `Pro` marker inside the button naming the plan it needs.
   Non-clickable states (queued, declined, failed, already applied) stay quiet and disabled
@@ -26,8 +27,14 @@ grey `secondary` button beside a loud green `Apply` that only opens someone else
 - Where Auto-apply is not offered (every non-Greenhouse posting, which is most of the
   catalogue), the title row carries the unchanged green `Apply` alone.
 
-Below `lg` nothing moves: the sticky bottom bar already carries Apply there, and the quiet
-strip already rides under the title.
+- Give the phone an auto-apply button. It had none: the sticky bottom bar carried the
+  external link and nothing else, so the feature the desktop page now leads with was
+  invisible to most of this page's traffic. The bar takes whichever control the plan made
+  primary, and the link it displaces joins the quiet strip beside Save.
+- Move the view and applied counters out of the sidebar onto the dates line. Both are facts
+  about how the posting is doing rather than about the role, and each is an icon and a
+  number; in the sidebar a reader weighing "posted 20 minutes ago" against "3 views" had to
+  hold one thought across two places.
 
 The same header states the posting's date three times — the reality badge's age chip, the
 contrast note beside it, and the dates group — and two of those three are the identical
@@ -58,7 +65,7 @@ accessible name and the exact instant in the tooltip.
   tab row).
 - `web/src/lib/autoApplyButton.ts` — gains `JobCtaPlan` and `jobCtaPlan`, the six-state
   table that maps the `kind` it already returns onto what each of the two buttons says and
-  how loud it is, plus the `undemotedExternalCta` constant the mobile sticky bar renders.
+  how loud it is. All four render sites read it; there is no per-bar exception.
 - `web/src/lib/utils.ts` — `timeAgo`/`formatDateOrAgo` gain an optional short style, passed
   through to `Intl.RelativeTimeFormat` so the compact form stays locale-aware.
 - `web/src/lib/reality.ts` — `postingContrast` and its test are removed; `JobView` was its

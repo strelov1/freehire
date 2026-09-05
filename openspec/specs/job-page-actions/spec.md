@@ -131,7 +131,7 @@ Demotion changes only the button's label and treatment. Its destination, its
 #### Scenario: No primary CTA while a submission is in flight
 
 - **WHEN** an auto-apply attempt for the posting is queued
-- **THEN** no button on the page carries the primary (brand fill) treatment
+- **THEN** neither the auto-apply button nor the apply link carries the primary (brand fill) treatment
 
 #### Scenario: Applying by hand does not demote anything
 

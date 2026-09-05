@@ -328,11 +328,14 @@
   }
 </script>
 
-<!-- The link out to the posting's own site. Renders three times: beside the title on
-     desktop, in the pinned header once that title scrolls away, and in the mobile sticky
-     bar at the end of the article. Size, layout classes and the `external` half of the CTA
-     plan are what differ, so all three share this snippet — and only the mobile bar passes
-     a plan of its own (`undemotedExternalCta`), since auto-apply has no button there.
+<!-- The link out to the posting's own site, as a BUTTON. Rendered three times: beside the
+     title on desktop, in the pinned header once that title scrolls away, and in the mobile
+     sticky bar at the end of the article — all three passing `cta.external`, so the same
+     link never reads at two ranks on one page. Size and layout classes are the only
+     difference, which is why they share this snippet.
+     A fourth copy of the link exists and does NOT come through here: the phone-only anchor
+     in `actionStrip`, which is quiet strip furniture rather than a button. It repeats the
+     `rel`/`target`/handler below on purpose — see the note there.
      `external` decides only the word and the loudness — the destination, the target and
      the click handler are the same button either way, which is what keeps the apply-intent
      event comparable across postings whether or not auto-apply offered to do it instead.
@@ -518,7 +521,13 @@
          somewhere else — and this strip is where the quiet things already are. On lg the
          same link is a button up beside the title, so this copy stays hidden rather than
          offering it twice. Same handler as that button: one click, one apply-intent event,
-         whichever copy the reader reached. -->
+         whichever copy the reader reached.
+         An anchor rather than `applyCta`, because a `Button` here would be a fourth loud
+         thing on a strip whose whole job is to be quiet — so it carries `rel` and `target`
+         itself. `nofollow` for the reason the snippet above states in full: the destination
+         is the posting's own site, which the catalogue never vetted, and without it a
+         submitted vacancy buys a followed link from every job page. Change one, change
+         both. -->
     {#if cta.autoApply?.primary}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
         href={job.url}

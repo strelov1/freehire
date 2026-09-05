@@ -36,11 +36,17 @@ own unit test and no Svelte dependency — the convention that file states for i
 - Any change to auto-apply's behaviour: the POST, the statuses, the worker, the error
   surface. Only the button's rank, label and place move.
 - The sub-`lg` layout. The sticky bottom bar and the under-title strip stay as they are.
-- Bringing auto-apply to mobile. It is desktop-only today and stays that way here.
+- ~~Bringing auto-apply to mobile. It is desktop-only today and stays that way here.~~
+  **Reversed during the change.** Leaving the phone without an auto-apply button meant the
+  feature the desktop page now leads with was invisible to most of this page's traffic, and
+  the sticky bottom bar is the phone's one call to action — so it carries whichever control
+  the plan made primary. See "Every bar carries the plan" below. Struck rather than
+  deleted: a non-goal that turned out to be wrong is worth more as a record than as a
+  tidy list.
 
 ## Decisions
 
-### The five-way CTA rank lives in `autoApplyButton.ts`, not in the template
+### The six-state CTA rank lives in `autoApplyButton.ts`, not in the template
 
 A second exported pure function, `jobCtaPlan(state: AutoApplyButtonState)`, maps the
 existing `kind` to what the two buttons look like:
@@ -98,10 +104,10 @@ button exists".
 component is already 800 lines, and the rule that matters would be untestable without a
 mount.
 
-### The pinned header carries the same pair, the mobile sticky bar does not
+### Every bar carries the plan — including the phone's
 
-Three bars render the external link: the title row, the pinned desktop header, and the
-mobile sticky bar. The first two take the plan; only the third overrides it.
+Four places render the external link: the title row, the pinned desktop header, the mobile
+sticky bar, and the quiet strip. All four read `jobCtaPlan`. There is no exception.
 
 The pinned header IS the title row for most of a several-screen description, so a
 brand-filled `Apply` there for the link the title row calls a quiet `Show origin` would put
@@ -109,17 +115,23 @@ one link at two ranks on one page — and the argument against a loud button bes
 attempt applies with full force to the bar the reader actually has in front of them. It
 therefore gains an auto-apply button it did not have before.
 
-The mobile sticky bar keeps `undemotedExternalCta`: auto-apply has no button below `lg` on
-any device, so a demoted label there would step aside for nothing the reader can reach.
-That constant is exported from `autoApplyButton.ts` rather than written out again, so the
-words these buttons say still have exactly one home.
+**This section had an exception, and it was removed.** An `undemotedExternalCta` constant
+held the apply link at full rank for the mobile sticky bar, on the argument that auto-apply
+had no button below `lg`, so a demoted label there would step aside for nothing the reader
+could reach. That argument was sound and it stopped being true within this change: once the
+phone's sticky bar could carry auto-apply itself (see below), the constant described a
+world that no longer existed. It is deleted rather than kept — an exception nobody can
+trigger is worse than no exception, because it reads as a live rule.
 
 ### CTAs move into the existing `<header>` block, right-aligned against the title
 
 The header block (`lg:col-start-2 lg:row-start-2`) already holds the title and the
-`Applied` chip in a `flex flex-wrap items-center gap-2.5` row. The CTA group joins that row
-with `ml-auto`, matching how `postingDates` already claims the right edge of the provenance
-line above it. It renders `hidden lg:flex`, so the sub-`lg` path is untouched.
+`Applied` chip. The CTA group first joined that row with `ml-auto`, which made its position
+a function of how long the title happened to be — a two-word role left the buttons adrift
+mid-page, and a long one wrapped them onto a second line anyway. They now always take that
+second line, right-aligned, so they land above the quiet strip's own right edge on the tab
+row below. It renders `hidden lg:flex`; the phone reaches the same two controls through the
+sticky bar and the quiet strip instead.
 
 **Alternative considered:** a separate full-width action row above the tabs. Rejected —
 it leaves a wide, near-empty band on the page and still separates the primary action from
