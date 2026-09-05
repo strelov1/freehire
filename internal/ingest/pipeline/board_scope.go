@@ -36,6 +36,11 @@ func boardQualifies(e sources.CompanyEntry, st Stats) bool {
 
 // providerBoard identifies a board by name alone, ignoring region — the key the board-scoped
 // close's SQL predicate is forced to use, since externalid.Namespace does not encode region.
+// Deliberately NOT the existing boardKey{provider, board, region}: that type identifies one
+// board WITHIN a run (a specific region-variant, used to key the recovery probe's cache), while
+// providerBoard exists specifically to GROUP a run's entries by (provider, board) so their
+// distinct regions can be counted — reusing boardKey here would make every region its own key
+// and defeat the grouping this type exists for.
 type providerBoard struct{ provider, board string }
 
 // ambiguousRegionBoards returns the (provider, board) pairs that appear under more than one
@@ -66,4 +71,28 @@ func ambiguousRegionBoards(entries []sources.CompanyEntry) map[providerBoard]boo
 		}
 	}
 	return ambiguous
+}
+
+// AmbiguousBoardNames is exported so cmd/ingest can compute region-ambiguity against the
+// FULL, unsharded board list before sources.Config.Shard splits it across processes. Shard
+// groups by company slug, not by board, so two CompanyEntry rows sharing (provider, board)
+// under different regions but
+// different companies — exactly the shape ambiguousRegionBoards guards against — can land in
+// separate shard processes, each running its own Runner.Run with only its own slice. Each
+// shard's own Run() then sees just one region for that board name and concludes it is
+// unambiguous, even though the two regions together are not — a per-Run() check alone cannot
+// catch a split its caller introduced after the check already ran. cmd/ingest calls this on
+// entries loaded straight from the catalog, before Shard, and filters its board-scope close
+// against the result regardless of which shard actually produced a qualifying board.
+//
+// Reports by board name alone, not by (provider, board): a caller crawls one provider per
+// run (cmd/ingest takes a single provider argument), so the provider component carries no
+// information here.
+func AmbiguousBoardNames(entries []sources.CompanyEntry) map[string]bool {
+	ambiguous := ambiguousRegionBoards(entries)
+	names := make(map[string]bool, len(ambiguous))
+	for pb := range ambiguous {
+		names[pb.board] = true
+	}
+	return names
 }

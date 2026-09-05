@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,15 @@ func TestUKGMarkers(t *testing.T) {
 func TestUKGRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["ukg"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include ukg")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestUKGMarkers' fullBoardListing claim rests on.
+func TestUKGFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewUKG(fake).Fetch(context.Background(), CompanyEntry{Board: "recruiting.ultipro.com/acme/guid"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

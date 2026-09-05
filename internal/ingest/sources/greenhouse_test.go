@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,15 @@ func TestGreenhouseMarkers(t *testing.T) {
 func TestGreenhouseRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["greenhouse"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include greenhouse")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestGreenhouseMarkers' fullBoardListing claim rests on.
+func TestGreenhouseFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewGreenhouse(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

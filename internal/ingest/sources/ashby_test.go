@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,6 +27,15 @@ func TestAshbyMarkers(t *testing.T) {
 func TestAshbyRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["ashby"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include ashby")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestAshbyMarkers' fullBoardListing claim rests on.
+func TestAshbyFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

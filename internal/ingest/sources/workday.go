@@ -54,7 +54,7 @@ func (workday) Provider() string { return "workday" }
 // fullBoardListing: listPostings proves completeness on every path — pageAll pages an
 // uncapped board to its own reported total, and splitByFacet either resolves a capped board
 // via facet subdivision or fails the crawl outright rather than return a partial listing as a
-// success (see splitByFacet). Earns the post-run sweep's board-scoped close (freehire#2328).
+// success (see splitByFacet). See the fullBoardListing interface for the bar.
 func (workday) fullBoardListing() {}
 
 // workdayBoard is a configured board parsed into the parts the CXS endpoints need, plus the

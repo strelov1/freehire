@@ -34,8 +34,7 @@ func NewRecruitee(c JSONGetter) Source { return recruitee{http: c} }
 func (recruitee) Provider() string { return "recruitee" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole offers
-// array — no loop that could stop early, so any listing failure aborts the whole Fetch.
-// Earns the post-run sweep's board-scoped close (freehire#2328).
+// array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (recruitee) fullBoardListing() {}
 
 func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

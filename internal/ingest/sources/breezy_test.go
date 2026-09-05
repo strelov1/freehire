@@ -28,6 +28,16 @@ func TestBreezyRegisteredAsFullBoardListing(t *testing.T) {
 	}
 }
 
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestBreezyMarkers' fullBoardListing claim rests on. An unrouted
+// fake (no /json route) fails exactly as a real listing error would.
+func TestBreezyFetchPropagatesAListingError(t *testing.T) {
+	fake := &routedHTTP{}
+	if _, err := NewBreezy(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
+	}
+}
+
 // jobPostingHTML is a position page carrying the schema.org JobPosting ld+json block
 // Breezy server-renders; the adapter reads only the description from it.
 func jobPostingHTML(title, desc string) string {

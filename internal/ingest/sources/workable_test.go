@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -25,6 +26,15 @@ func TestWorkableMarkers(t *testing.T) {
 func TestWorkableRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["workable"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include workable")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestWorkableMarkers' fullBoardListing claim rests on.
+func TestWorkableFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewWorkable(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

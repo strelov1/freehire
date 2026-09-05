@@ -149,6 +149,25 @@ func TestRunReportsOnlyBoardsItActuallyCrawled(t *testing.T) {
 	}
 }
 
+// TestAmbiguousBoardNamesReportsBoardNameAlone: cmd/ingest calls AmbiguousBoardNames on the
+// FULL, unsharded board list before sharding splits it across processes (see its doc comment
+// for why a per-Run() ambiguity check alone cannot catch a region-ambiguous board split across
+// shards). It reports by board name alone since a caller only ever crawls one provider.
+func TestAmbiguousBoardNamesReportsBoardNameAlone(t *testing.T) {
+	entries := []sources.CompanyEntry{
+		{Company: "Acme US", Provider: "workday", Board: "acme", Region: "us"},
+		{Company: "Acme EU", Provider: "workday", Board: "acme", Region: "eu"},
+		{Company: "Globex", Provider: "workday", Board: "globex", Region: "us"},
+	}
+	got := AmbiguousBoardNames(entries)
+	if !got["acme"] {
+		t.Errorf("AmbiguousBoardNames(%v) = %v, want it to contain %q", entries, got, "acme")
+	}
+	if got["globex"] {
+		t.Errorf("AmbiguousBoardNames(%v) = %v, must not contain %q — it has only one region", entries, got, "globex")
+	}
+}
+
 // TestRunReportsNoBoardWhenAStreamDiedMidCrawl is the regression this board scope exists to
 // avoid (see design.md's "the Failed>0 refinement is load-bearing", freehire#725): a streaming
 // board that fails partway through after partial progress is deliberately treated as HEALTHY

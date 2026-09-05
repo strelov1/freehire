@@ -54,6 +54,16 @@ func TestPaylocityRegisteredAsFullBoardListing(t *testing.T) {
 	}
 }
 
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestPaylocityMarkers' fullBoardListing claim rests on. An unrouted
+// fake (no /Recruiting/Jobs/All/ route) fails exactly as a real listing error would.
+func TestPaylocityFetchPropagatesAListingError(t *testing.T) {
+	fake := &routedHTTP{}
+	if _, err := NewPaylocity(fake).Fetch(context.Background(), CompanyEntry{Board: "acme-guid"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
+	}
+}
+
 func TestPaylocityFetch(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("/Recruiting/Jobs/All/", paylocityListingHTML).

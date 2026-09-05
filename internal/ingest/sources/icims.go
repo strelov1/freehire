@@ -32,7 +32,7 @@ func (icims) Provider() string { return "icims" }
 
 // fullBoardListing: jobLocs fails the whole crawl when the root sitemap or any sub-sitemap
 // fetch fails, rather than returning the other sub-sitemaps' postings as a complete board.
-// Earns the post-run sweep's board-scoped close (freehire#2328).
+// See the fullBoardListing interface for the bar.
 func (icims) fullBoardListing() {}
 
 func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

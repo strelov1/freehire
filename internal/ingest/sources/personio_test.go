@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,15 @@ func TestPersonioMarkers(t *testing.T) {
 func TestPersonioRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["personio"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include personio")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestPersonioMarkers' fullBoardListing claim rests on.
+func TestPersonioFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

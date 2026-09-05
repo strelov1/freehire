@@ -49,10 +49,10 @@ func NewTaleo(c taleoHTTP) Source { return taleo{http: c, hosts: newKeyedMutex()
 
 func (taleo) Provider() string { return "taleo" }
 
-// fullBoardListing: listRequisitions proves completeness — totalCount is authoritative (pages
-// until it's reached or an empty page), and a walk that still yields requisitions past the
-// page cap fails rather than returning a truncated result as success. Earns the post-run
-// sweep's board-scoped close (freehire#2328).
+// fullBoardListing: listRequisitions proves completeness — a POSITIVE totalCount is
+// authoritative (pages until it's reached or an empty page), and a walk that still yields
+// requisitions past the page cap fails rather than returning a truncated result as success.
+// See the fullBoardListing interface for the bar.
 func (taleo) fullBoardListing() {}
 
 // taleoBoard is a configured board split into the tenant host and careersection number.

@@ -27,8 +27,8 @@ func NewSmartRecruiters(c JSONGetter) Source { return smartRecruiters{http: c} }
 func (smartRecruiters) Provider() string { return "smartrecruiters" }
 
 // fullBoardListing: listPostings proves completeness — totalFound is authoritative (pages
-// until offset >= totalFound or an empty page, no artificial cap), and any listing error
-// aborts the whole Fetch. Earns the post-run sweep's board-scoped close (freehire#2328).
+// until offset >= totalFound or an empty page, no artificial cap). See the fullBoardListing
+// interface for the bar.
 func (smartRecruiters) fullBoardListing() {}
 
 // smartRecruitersSeniorityMap maps the SmartRecruiters experienceLevel enum onto

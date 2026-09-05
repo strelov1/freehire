@@ -28,9 +28,9 @@ func NewPersonio(c personioHTTP) Source { return personio{http: c} }
 func (personio) Provider() string { return "personio" }
 
 // fullBoardListing: the default-locale feed carries every open position in one document (no
-// pagination), and its fetch failing aborts the whole Fetch — the English-feed and detail-page
-// fallbacks are best-effort and only affect body richness, never whether a position is
-// counted. Earns the post-run sweep's board-scoped close (freehire#2328).
+// pagination) — the English-feed and detail-page fallbacks are best-effort and only affect
+// body richness, never whether a position is counted. See the fullBoardListing interface for
+// the bar.
 func (personio) fullBoardListing() {}
 
 // personioPosition is one open position in a board's XML feed. Personio splits the body

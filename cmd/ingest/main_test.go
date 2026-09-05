@@ -93,10 +93,12 @@ func TestSweepBySource(t *testing.T) {
 // Duplicate board entries (a repeated board-file row, or one board id recurring across regional
 // slices) are de-duplicated so neither the close nor its log line double-counts.
 func TestSweepableBoards(t *testing.T) {
+	noneAmbiguous := map[string]bool{}
 	cases := []struct {
 		name                                    string
 		stats                                   pipeline.Stats
 		hasGrace, fullCatalog, fullBoardListing bool
+		crossShardAmbiguous                     map[string]bool
 		want                                    []string
 	}{
 		{
@@ -117,23 +119,43 @@ func TestSweepableBoards(t *testing.T) {
 			want:  nil,
 		},
 		{
-			name:             "a sweepGrace provider is excluded even if registered",
+			// Distinguishes hasGrace from fullCatalog independently (both otherwise zero the
+			// result the same way), so a future edit transposing them at the call site fails.
+			name:             "a sweepGrace provider is excluded even if registered, and not for the fullCatalog reason",
 			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
 			hasGrace:         true,
+			fullCatalog:      false,
 			fullBoardListing: true,
 			want:             nil,
 		},
 		{
-			name:             "a fullCatalog provider is excluded even if registered",
+			name:             "a fullCatalog provider is excluded even if registered, and not for the sweepGrace reason",
 			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			hasGrace:         false,
 			fullCatalog:      true,
 			fullBoardListing: true,
 			want:             nil,
 		},
+		{
+			// The cross-shard case (freehire#2328 review): a board name this provider's run
+			// saw as unambiguous (it only ever crawled one of its regions) can still be
+			// region-ambiguous across the FULL, unsharded catalog — sources.Config.Shard
+			// groups by company slug, not board, so the other region may be a different
+			// shard's problem entirely. sweepableBoards must refuse it regardless.
+			name:                "a board ambiguous across the full unsharded catalog is excluded even though this run's own Stats saw it as unambiguous",
+			stats:               pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			fullBoardListing:    true,
+			crossShardAmbiguous: map[string]bool{"acme-corp": true},
+			want:                nil,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sweepableBoards(tc.stats, tc.hasGrace, tc.fullCatalog, tc.fullBoardListing)
+			ambiguous := tc.crossShardAmbiguous
+			if ambiguous == nil {
+				ambiguous = noneAmbiguous
+			}
+			got := sweepableBoards(tc.stats, tc.hasGrace, tc.fullCatalog, tc.fullBoardListing, ambiguous)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("sweepableBoards() = %v, want %v", got, tc.want)
 			}

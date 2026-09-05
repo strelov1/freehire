@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,6 +27,15 @@ func TestLeverMarkers(t *testing.T) {
 func TestLeverRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["lever"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include lever")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestLeverMarkers' fullBoardListing claim rests on.
+func TestLeverFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

@@ -124,6 +124,11 @@ func run() int {
 	}
 	sourceCfg := sources.Config{Provider: provider, Sources: boards}
 
+	// Computed against the FULL, unsharded board list — see pipeline.AmbiguousBoardNames for
+	// why sharding (below) can otherwise hide a region-ambiguous board from the board-scoped
+	// close's per-run safety check.
+	crossShardAmbiguousBoards := pipeline.AmbiguousBoardNames(boards)
+
 	// Narrow to this shard's slice, if requested.
 	if shardSpec != "" {
 		i, n, err := sources.ParseShard(shardSpec)
@@ -255,7 +260,7 @@ func run() int {
 		// Reuses this provider's own cutoff: a board-scope candidate is by construction never
 		// a sweepGrace provider, so the window is always the default here.
 		var boardFailed int
-		for _, boardID := range sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider]) {
+		for _, boardID := range sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider], crossShardAmbiguousBoards) {
 			boardClosed, err := queries.CloseUnseenJobsForBoard(ctx, db.CloseUnseenJobsForBoardParams{
 				Source:       provider,
 				Cutoff:       cutoff,
@@ -296,16 +301,29 @@ func run() int {
 // fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). Callers
 // gate on shouldSweep first, same as sweepBySource.
 //
+// crossShardAmbiguous excludes a board name this run's own Stats saw as unambiguous but that
+// is region-ambiguous across the FULL, unsharded catalog (pipeline.AmbiguousBoardNames,
+// computed by the caller before sharding): sources.Config.Shard groups boards by company
+// slug, not by board name, so a board's two region-variant rows can land in separate shard
+// processes — each running its own Runner.Run and seeing only one region, concluding on its
+// own that the board is unambiguous. Refusing here is what catches what a single Run() call
+// structurally cannot.
+//
 // De-duplication guards against a board legitimately appearing twice in one run (a repeated
 // board-file entry, or one board id recurring across independent regional slices) double-
 // counting the close and its log line.
-func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListing bool) []string {
+func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListing bool, crossShardAmbiguous map[string]bool) []string {
 	if !fullBoardListing || hasGrace || fullCatalog {
 		return nil
 	}
 	boards := slices.Clone(stats.QualifyingBoards)
 	sort.Strings(boards)
-	return slices.Compact(boards)
+	boards = slices.Compact(boards)
+	boards = slices.DeleteFunc(boards, func(board string) bool { return crossShardAmbiguous[board] })
+	if len(boards) == 0 {
+		return nil
+	}
+	return boards
 }
 
 // sweepableProviders returns, sorted, the providers in a run that ingested at least one

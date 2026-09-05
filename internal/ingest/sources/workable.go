@@ -20,9 +20,7 @@ func NewWorkable(c JSONGetter) Source { return workable{http: c} }
 func (workable) Provider() string { return "workable" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole jobs
-// array — no loop that could stop early, so any listing failure aborts the whole Fetch
-// rather than returning a partial result. Earns the post-run sweep's board-scoped close
-// (freehire#2328).
+// array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (workable) fullBoardListing() {}
 
 func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

@@ -29,8 +29,8 @@ func NewBreezy(c breezyHTTP) Source { return breezy{http: c} }
 func (breezy) Provider() string { return "breezy" }
 
 // fullBoardListing: the /json listing is a single unpaginated request returning the board's
-// whole postings array, so a listing failure aborts the whole Fetch. Detail fetches are
-// best-effort per posting. Earns the post-run sweep's board-scoped close (freehire#2328).
+// whole postings array. Detail fetches are best-effort per posting. See the fullBoardListing
+// interface for the bar.
 func (breezy) fullBoardListing() {}
 
 // breezyPosting is one item from the /json listing. The description is not here — it

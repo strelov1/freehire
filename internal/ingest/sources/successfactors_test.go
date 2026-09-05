@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,15 @@ func TestSuccessFactorsMarkers(t *testing.T) {
 func TestSuccessFactorsRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["successfactors"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include successfactors")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestSuccessFactorsMarkers' fullBoardListing claim rests on.
+func TestSuccessFactorsFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

@@ -34,9 +34,8 @@ func NewUKG(c ukgHTTP) Source { return ukg{http: c} }
 func (ukg) Provider() string { return "ukg" }
 
 // fullBoardListing: list() proves completeness — totalCount is authoritative (pages until
-// skip >= totalCount or an empty page, no artificial cap), and any listing error aborts the
-// whole Fetch rather than returning what was collected so far as a success. Earns the
-// post-run sweep's board-scoped close (freehire#2328).
+// skip >= totalCount or an empty page, no artificial cap). See the fullBoardListing interface
+// for the bar.
 func (ukg) fullBoardListing() {}
 
 // ukgPageSize is the listing page size. LoadSearchResults reports totalCount, so pagination

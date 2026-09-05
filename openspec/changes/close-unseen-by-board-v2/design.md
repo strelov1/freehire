@@ -99,6 +99,18 @@ solidjobs shape.
 - **The fourth gate**: `provider ∈ FullBoardListingProviders()`, checked alongside the existing
   `sweepGrace`/self-closing/`fullCatalog` exclusions in the `cmd/ingest` sweep loop.
 - `closed_reason` stays `'unseen'` — same mechanism, wider reach, not a new one.
+- **Kept as a second, parallel mechanism beside the company scope, not generalized into one
+  "coverage scope" concept.** `cmd/ingest` derives `hasGrace`/`fullCatalog`/`window` once per
+  provider and applies them to both `sweepProvider` (company scope) and `sweepableBoards` (board
+  scope) separately, so the two closes read as two loops over two near-identical SQL statements
+  rather than one. Considered and rejected: unifying them (e.g. one query taking either a
+  company-slug set or a board pattern as its scope) would touch `CloseUnseenJobs`, a statement
+  every provider's sweep already depends on, for a generalization only this new scope needs —
+  raising the blast radius of this change without removing any of the real complexity (the two
+  scopes still answer different questions, gate on different conditions, and must stay
+  independently correct). The duplication that remains is between two short, independently
+  tested functions, not two independently-maintained copies of complex logic; revisit if a third
+  scope ever needs the same shape.
 
 ### Phase 1 adapter selection is impact-ordered, not alphabetical
 
@@ -114,6 +126,28 @@ unmarked and deferred — never blocks the rest of the wave.
 most of the long tail is low-volume, and a rushed audit across that many files is exactly the
 condition (reviewer fatigue, one comment nobody double-checks) that produced the solidjobs
 incident in the first place.
+
+### A board name shared across regions never qualifies, and that check must survive sharding
+
+The `boards` catalog keys on `(provider, lower(board), region)`, so one board name can
+legitimately exist twice under a provider, distinguished only by region (this is how Adzuna's
+`it-jobs` works today). `CloseUnseenJobsForBoard`'s `external_id LIKE '<board>:%'` predicate has
+no region dimension at all — `externalid.Namespace` never encodes it — so it cannot tell which
+region's crawl proved coverage. Qualifying such a board from one region's outcome alone risks
+closing postings only the OTHER region's crawl keeps alive. `pipeline.ambiguousRegionBoards`
+computes, from a `Run()` call's own entries, which board names span more than one region, and
+`boardQualifies` refuses all of them — falling back to the company scope, which is unaffected
+since it already scopes by `company_slug`, not board.
+
+That check alone is not sufficient, because `sources.Config.Shard` (used to split a huge
+provider like `workday` across several staggered runs) groups by company slug, not by board.
+Two `CompanyEntry` rows sharing `(provider, board)` under different regions but different
+companies can land in separate shard processes, each calling `Runner.Run` with only its own
+slice — so each shard's own ambiguity check sees just one region and concludes, correctly for
+its own view, that the board is unambiguous. `pipeline.AmbiguousBoardNames` is the fix: exported
+so `cmd/ingest` can compute the same ambiguity check against the FULL, unsharded board list
+(loaded from the catalog before `Shard` runs) and filter the board-scoped close against that
+result, regardless of which shard actually produced a qualifying board this run.
 
 ## Risks / Trade-offs
 
@@ -133,6 +167,30 @@ incident in the first place.
   (mirroring the prior design's choice): at board scope, one bad row's blast radius is already one
   board, unlike the provider-wide statement the 2026-08-11 incident exposed — a second fallback
   code path isn't worth it at this narrower scope.
+- **[Trade-off]** Hardening `workday`/`icims`/`taleo`/`careerplug` to hard-fail on an incomplete
+  listing trades resilience for provability: a board that is *structurally* (not transiently)
+  unable to clear the bar — e.g. a workday tenant whose facet dimensions never subdivide within
+  `maxFacetDepth`, or an icims vanity board whose sitemap index still lists a permanently-dead
+  sub-sitemap — now fails every crawl identically instead of degrading to a partial result, and
+  trips `BoardHealth`'s cooldown (up to 24h backoff) repeatedly rather than self-healing. This is
+  the deliberate cost of the opt-in bar, not an oversight: the alternative (keep the silent partial
+  success) is the exact shape that forced #2337's revert. `cmd/ingest`'s existing per-run
+  unhealthy-boards summary (`internal/ingest/pipeline/AGENTS.md`) already surfaces a board stuck in
+  cooldown, so the failure is operationally visible rather than silently accumulating — but a board
+  hitting this needs a human fix (raise `maxFacetDepth`, or a smarter completeness check for that
+  one adapter), not a retry.
+- **[Trade-off, inherited from the company-scoped sweep]** `sweepableProviders` gates the WHOLE
+  per-provider sweep — company scope and board scope alike — on `Ingested > 0` for the run. A
+  provider whose every posting this run was rejected by the catalogue filter (or ATS-covered) never
+  reaches either close, even though `boardQualifies` correctly marked its boards as covered — a
+  rejected/covered posting is one the crawl reached, which is why it counts toward
+  `boardReachedPostings`. This is not new: the company-scoped close already had this gap, and it is
+  accepted for the same reason — the provider gate asks "did this run see enough of the world to
+  justify closing anything," which is a different, and here a more conservative, question than the
+  board gate's "did we read this board." A board caught by it simply waits for a run in which its
+  provider saves something. Widening `shouldSweep` to look inside providers would mean deciding a
+  provider whose entire crawl was filtered away is nevertheless known-good, which is a larger claim
+  than this change needs — it fails safe (under-closes), never the other way.
 
 ## Migration Plan
 

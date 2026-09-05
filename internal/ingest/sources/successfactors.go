@@ -30,8 +30,8 @@ func NewSuccessFactors(c successfactorsHTTP) Source { return successfactors{http
 func (successfactors) Provider() string { return "successfactors" }
 
 // fullBoardListing: Fetch is a single sitemap fetch with no pagination loop — it either
-// succeeds with the whole listing or fails outright. Earns the post-run sweep's board-scoped
-// close (freehire#2328).
+// succeeds with the whole listing or fails outright. See the fullBoardListing interface for
+// the bar.
 func (successfactors) fullBoardListing() {}
 
 func (s successfactors) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

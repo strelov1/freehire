@@ -27,9 +27,7 @@ func NewGreenhouse(c JSONGetter) Source { return greenhouse{http: c} }
 func (greenhouse) Provider() string { return "greenhouse" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole jobs
-// array — no loop that could stop early, so any listing failure aborts the whole Fetch
-// rather than returning a partial result. Earns the post-run sweep's board-scoped close
-// (freehire#2328).
+// array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (greenhouse) fullBoardListing() {}
 
 func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

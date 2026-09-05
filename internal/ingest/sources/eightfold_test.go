@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -106,6 +107,17 @@ func TestEightfoldMarkers(t *testing.T) {
 func TestEightfoldRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["eightfold"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include eightfold")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestEightfoldMarkers' fullBoardListing claim rests on. Both list-API
+// generations fail the same way, so listPositions' pcsx-then-v2 fallback still surfaces an
+// error rather than silently succeeding.
+func TestEightfoldFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewEightfold(fake).Fetch(context.Background(), CompanyEntry{Board: "acme.example.com/acme.com"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

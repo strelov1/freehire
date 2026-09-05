@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,15 @@ func TestJazzHRMarkers(t *testing.T) {
 func TestJazzHRRegisteredAsFullBoardListing(t *testing.T) {
 	if !FullBoardListingProviders(All(nil))["jazzhr"] {
 		t.Error("FullBoardListingProviders(All(nil)) should include jazzhr")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestJazzHRMarkers' fullBoardListing claim rests on.
+func TestJazzHRFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

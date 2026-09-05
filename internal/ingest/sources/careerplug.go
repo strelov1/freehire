@@ -26,8 +26,7 @@ func NewCareerPlug(c HTMLGetter) Source { return careerplug{http: c} }
 func (careerplug) Provider() string { return "careerplug" }
 
 // fullBoardListing: Fetch's crawlAllPagedLinks fails the whole crawl on a mid-listing error or
-// a cap-truncated walk, rather than returning a partial listing as a success. Earns the
-// post-run sweep's board-scoped close (freehire#2328).
+// a cap-truncated walk. See the fullBoardListing interface for the bar.
 func (careerplug) fullBoardListing() {}
 
 // careerplugMaxPages bounds listing pagination so a board that clamps ?page=N to its last
