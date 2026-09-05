@@ -425,3 +425,32 @@ func TestMiddleware_ExternalPeerIsStillLimited(t *testing.T) {
 		t.Errorf("second request status = %d, want 429 — an external caller is still limited", second.StatusCode)
 	}
 }
+
+func ignoringTrustedPeersApp(th Throttler, limit int) *fiber.App {
+	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
+	app.Get("/probe", MiddlewareIgnoringTrustedPeers(th, KeyByIP("test"), limit, time.Minute), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+	return app
+}
+
+// TestMiddlewareIgnoringTrustedPeers_LoopbackIsStillLimited guards the compensating
+// control internal/api/handler's autoApplyOrchestratorGate depends on:
+// ratelimit.Middleware's ordinary trusted-peer exemption would silently exempt 127.0.0.1
+// — exactly the address the orchestrator calls hire from in production — voiding a shared
+// secret's own rate limit entirely.
+func TestMiddlewareIgnoringTrustedPeers_LoopbackIsStillLimited(t *testing.T) {
+	app := ignoringTrustedPeersApp(newMemoryThrottler(), 1)
+
+	first := getAsPeer(t, app, "127.0.0.1")
+	first.Body.Close()
+	if first.StatusCode != fiber.StatusOK {
+		t.Fatalf("first request status = %d, want 200", first.StatusCode)
+	}
+
+	second := getAsPeer(t, app, "127.0.0.1")
+	defer second.Body.Close()
+	if second.StatusCode != fiber.StatusTooManyRequests {
+		t.Errorf("second request status = %d, want 429 — loopback must not be exempt here", second.StatusCode)
+	}
+}

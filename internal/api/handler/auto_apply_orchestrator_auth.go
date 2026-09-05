@@ -48,8 +48,14 @@ func autoApplyOrchestratorLimiterKey(*fiber.Ctx) string { return "auto-apply-orc
 //
 // An empty secret disables the fallback path entirely: the routes then behave exactly as
 // they did under plain keyAuth, with no new code path reachable.
+//
+// Uses ratelimit.MiddlewareIgnoringTrustedPeers, not ratelimit.Middleware: the orchestrator
+// reaches hire over loopback (its own default HireBaseURL is http://127.0.0.1:<port>, the
+// real host-2 deploy shape), and plain Middleware exempts every loopback peer from rate
+// limiting entirely — which would silently void the one compensating control this shared
+// secret has for having no per-caller scoping of its own.
 func autoApplyOrchestratorGate(secret string, humanAuth fiber.Handler, throttler ratelimit.Throttler) fiber.Handler {
-	limiter := ratelimit.Middleware(throttler, autoApplyOrchestratorLimiterKey, autoApplyOrchestratorRequestsPerHour, time.Hour)
+	limiter := ratelimit.MiddlewareIgnoringTrustedPeers(throttler, autoApplyOrchestratorLimiterKey, autoApplyOrchestratorRequestsPerHour, time.Hour)
 	return func(c *fiber.Ctx) error {
 		if secret != "" {
 			if tok, ok := autoApplyBearerToken(c); ok && subtle.ConstantTimeCompare([]byte(tok), []byte(secret)) == 1 {
