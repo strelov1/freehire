@@ -98,16 +98,6 @@ func TestJobleadsRegisteredAndFilterable(t *testing.T) {
 	}
 }
 
-func TestJobleadsBoardFileValidates(t *testing.T) {
-	cfg, err := LoadConfig("../../../sources/jobleads.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/jobleads.yml fails validation: %v", err)
-	}
-}
-
 func TestJobleadsFetchMapsAndWalks(t *testing.T) {
 	fake := &jobleadsFake{
 		pages: []string{

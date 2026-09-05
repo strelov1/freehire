@@ -236,7 +236,7 @@ func (s jobleads) fetchDetail(ctx context.Context, detailID string) (jobleadsDet
 func jobleadsDetailID(jobLink string) string {
 	s := strings.TrimSuffix(jobLink, "/")
 	i := len(s)
-	for i > 0 && strings.ContainsRune(hexDigits, rune(s[i-1])) {
+	for i > 0 && strings.ContainsRune(jobleadsHexDigits, rune(s[i-1])) {
 		i--
 	}
 	run := s[i:]
@@ -245,6 +245,9 @@ func jobleadsDetailID(jobLink string) string {
 	}
 	return run
 }
+
+// jobleadsHexDigits is the alphabet jobleadsDetailID trims a slug's trailing run against.
+const jobleadsHexDigits = "0123456789abcdef"
 
 // toJob maps a feed posting to a Job, returning ok=false for an unusable posting (no id,
 // no company — which would break the slug — or no link). The url is the posting's own page
