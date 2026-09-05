@@ -18,7 +18,12 @@ export const messages = defineMessages(
       runsUntilPrefix: 'Runs until',
       freeSubtitle: 'Same features, daily limits',
       upgrade: 'Upgrade to Pro',
-      manageSubscription: 'Manage subscription',
+      upgradeUltra: 'Upgrade to Ultra',
+      // The provider's portal is where a subscription is changed AND cancelled, so the label
+      // has to cover both — "Cancel" alone would hide the card change, and a separate cancel
+      // button would need a flow of our own that could disagree with what happened to the
+      // money.
+      manageSubscription: 'Manage or cancel',
     },
     subscription: {
       heading: 'Subscription',
@@ -81,7 +86,8 @@ export const messages = defineMessages(
         runsUntilPrefix: 'Действует до',
         freeSubtitle: 'Те же функции, дневные лимиты',
         upgrade: 'Перейти на Pro',
-        manageSubscription: 'Управление подпиской',
+        upgradeUltra: 'Перейти на Ultra',
+        manageSubscription: 'Изменить или отменить',
       },
       subscription: {
         heading: 'Подписка',
