@@ -271,11 +271,8 @@ const isRequired = (r: Requirement) => r.priority?.trim().toLowerCase() === 'req
  *  those facets would put a second normaliser in the SPA, drifting from
  *  internal/dict. Blank text is the one exception: it carries nothing to read.
  *
- *  Which group an entry lands in mirrors enrich's coerceRequirementPriority
- *  exactly — `required` case- and whitespace-insensitively, everything else
- *  `preferred`. The server coerces on write, so a third value should never reach
- *  here; mirroring rather than inventing a second rule is what keeps the page and
- *  the store from disagreeing if one ever does. */
+ *  Which group an entry lands in is isRequired's answer, which mirrors the server's
+ *  own coercion rather than inventing a second rule. */
 export function requirementGroups(reqs: Requirement[] | undefined | null): RequirementGroup[] {
   // Same reasoning as isRequired's optional chaining: `text` is declared required and
   // arrives as untrusted JSON.

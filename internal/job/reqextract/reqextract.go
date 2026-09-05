@@ -132,11 +132,12 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 				priority = "" // only the FIRST list after a heading is the section's
 				return        // nested lists were consumed by listItems
 
-			// Content, not a lead-in: a paragraph too long to be a line, or a table.
-			// Whatever list follows one of these is no longer the heading's, and this
-			// is what keeps "Requirements" over a paragraph of prose from claiming the
+			// Content, not a lead-in. A text block reaching this case has already
+			// failed isHeadingCandidate, so it is one too long to be a title — prose.
+			// Whatever list follows prose or a table is no longer the heading's, and
+			// this is what keeps "Requirements" over a paragraph from claiming the
 			// benefits list further down.
-			case isProse(n), n.DataAtom == atom.Table:
+			case isTextBlock(n), n.DataAtom == atom.Table:
 				priority = ""
 			}
 		}
@@ -149,58 +150,56 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 	return enrich.BoundRequirements(found)
 }
 
-// wrapsAList reports whether an element that could otherwise pass for a heading is
+// isTextBlock reports whether an element is one of the four a posting uses for both
+// its section titles and its paragraphs. Which of the two a given one IS depends on its
+// length, not its tag — see isHeadingCandidate.
+func isTextBlock(n *xhtml.Node) bool {
+	switch n.DataAtom {
+	case atom.P, atom.Strong, atom.B, atom.Div:
+		return true
+	default:
+		return false
+	}
+}
+
+// wrapsAList reports whether a text block that could otherwise pass for a heading is
 // really a container holding the list. `<div><h3>Requirements</h3><ul>…</ul></div>` is
 // one element whose whole text is short, and reading it as a heading discards the list
 // inside it.
 func wrapsAList(n *xhtml.Node) bool {
-	switch n.DataAtom {
-	case atom.P, atom.Strong, atom.B, atom.Div:
-	default:
-		return false
-	}
-	var has func(*xhtml.Node) bool
-	has = func(n *xhtml.Node) bool {
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if c.Type == xhtml.ElementNode {
-				switch c.DataAtom {
-				case atom.Ul, atom.Ol, atom.Table:
-					return true
-				}
-			}
-			if has(c) {
+	return isTextBlock(n) && containsList(n)
+}
+
+// containsList reports whether any descendant is a list or a table.
+func containsList(n *xhtml.Node) bool {
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == xhtml.ElementNode {
+			switch c.DataAtom {
+			case atom.Ul, atom.Ol, atom.Table:
 				return true
 			}
 		}
-		return false
+		if containsList(c) {
+			return true
+		}
 	}
-	return has(n)
+	return false
 }
 
 // isHeadingCandidate reports whether a node is in a position to carry a section title:
-// an h1–h6, which is structurally one, or an inline element short enough to be a line
-// rather than a paragraph. What such a node then DOES to the open section is
-// headingDecision's answer, not this one's.
+// an h1–h6, which is structurally one, or a text block short enough to be a line rather
+// than a paragraph. What such a node then DOES to the open section is headingDecision's
+// answer, not this one's.
+//
+// The length test appears only here. Its other half — "a text block too long to be a
+// title is prose" — is not a second test but the walk reaching its later case, where a
+// text block has already failed this one.
 func isHeadingCandidate(n *xhtml.Node) bool {
 	switch n.DataAtom {
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
 		return true
-	case atom.P, atom.Strong, atom.B, atom.Div:
-		return len([]rune(textOf(n))) <= maxHeadingRunes
 	default:
-		return false
-	}
-}
-
-// isProse reports whether a text element is long enough to be a paragraph rather than
-// a line. It is the same threshold isHeadingCandidate uses, read the other way round:
-// short enough to be a title, or long enough to be content, with nothing in between.
-func isProse(n *xhtml.Node) bool {
-	switch n.DataAtom {
-	case atom.P, atom.Div, atom.Strong, atom.B:
-		return len([]rune(textOf(n))) > maxHeadingRunes
-	default:
-		return false
+		return isTextBlock(n) && len([]rune(textOf(n))) <= maxHeadingRunes
 	}
 }
 
@@ -216,8 +215,8 @@ func isProse(n *xhtml.Node) bool {
 //     editor puts between a heading and its bullets; closing on those cost real
 //     postings their lists.
 //
-// Prose never reaches here: an inline element longer than maxHeadingRunes is not a
-// candidate, and the walk closes the section on it instead (see isProse).
+// Prose never reaches here: a text block longer than maxHeadingRunes is not a
+// candidate, and the walk closes the section on it in a later case instead.
 func headingDecision(n *xhtml.Node, open string) string {
 	heading := normalizeHeading(textOf(n))
 	if matches(heading, preferredHeadings) {
@@ -278,6 +277,7 @@ func matches(heading string, vocabulary []string) bool {
 	return false
 }
 
+// allTail reports whether every word is one headingTail admits.
 func allTail(words []string) bool {
 	for _, w := range words {
 		if !headingTail[w] {
@@ -342,13 +342,14 @@ func textOf(n *xhtml.Node) string {
 		if n.Type == xhtml.TextNode {
 			b.WriteString(n.Data)
 		}
-		if n.Type == xhtml.ElementNode && breaksLine(n.DataAtom) {
+		breaks := n.Type == xhtml.ElementNode && breaksLine(n.DataAtom)
+		if breaks {
 			b.WriteByte(' ')
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
 			walk(c)
 		}
-		if n.Type == xhtml.ElementNode && breaksLine(n.DataAtom) {
+		if breaks {
 			b.WriteByte(' ')
 		}
 	}
