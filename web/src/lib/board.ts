@@ -28,6 +28,14 @@ export function columnOf(item: MyJob): BoardColumnId | null {
   const col = item.stage ? STAGE_COLUMN[item.stage] : undefined;
   if (col) return col;
   if (item.applied_at) return 'applied';
+  // A bookmark is a board card. Saving a job is taking it on, and the board is where a
+  // candidate looks to see what they have taken on — a saved row that showed up nowhere
+  // there meant the product had two places to keep a job and told you about one.
+  //
+  // Read-side only, deliberately: nothing writes a stage on the saver's behalf, so this
+  // needed no migration and applies to every job saved before the rule as well as after.
+  // A stage, when there is one, still decides — this is the fallback, not an override.
+  if (item.saved_at) return 'preparing';
   return null;
 }
 
