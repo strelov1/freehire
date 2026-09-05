@@ -66,11 +66,9 @@ class Notifications extends UserResource<[TelegramStatus, Subscription[], Webhoo
     this.#subs = this.#subs.map((s) => (s.id === id ? { ...s, active: row.active } : s));
   }
 
-  /** Drop a deleted saved search's subscriptions. Deleting a saved search takes its
-   *  subscriptions with it server-side (subscriptions.saved_search_id ON DELETE
-   *  CASCADE); mirroring that here is what stops the per-channel chips from rendering
-   *  a subscription id nothing answers for. Called by savedSearches.remove, so the
-   *  cascade is reflected in one place rather than at each delete site. */
+  /** Drop a deleted saved search's subscriptions. The server takes them with it
+   *  (subscriptions.saved_search_id ON DELETE CASCADE); mirroring that here is what
+   *  stops the per-channel chips rendering a subscription id nothing answers for. */
   forgetSavedSearch(savedSearchId: number): void {
     this.#subs = this.#subs.filter((s) => s.saved_search_id !== savedSearchId);
   }

@@ -48,10 +48,9 @@
     try {
       const query = filtersToParams(filtersFromProfile(profile)).toString();
       search = await savedSearches.create('My profile', query, true);
-      // Through the store, not api.createSubscription: this page also renders the
-      // per-channel chips (AlertChannels) for this very saved search, and they read
-      // the store. Writing past it left the Email chip drawing "off" over a
-      // subscription that existed, so tapping it POSTed a duplicate and 409'd.
+      // Through the store, not api.createSubscription: this page also renders this
+      // search's per-channel chips (AlertChannels), which read the store. Writing past
+      // it drew the Email chip "off" over a live subscription — tapping it 409'd.
       await notifications.subscribe(search.id, 'email');
       flash();
     } catch (e) {

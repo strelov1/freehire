@@ -52,9 +52,8 @@ class SavedSearches extends UserResource<SavedSearch[]> {
   }
 
   /** Delete a set and drop it from the list, along with the subscriptions the server
-   *  cascades away with it (subscriptions.saved_search_id ON DELETE CASCADE) — the
-   *  cascade is a property of this DELETE, so it is reflected here rather than at each
-   *  of the five call sites. */
+   *  cascades away with it — the cascade is a property of this DELETE, so it is
+   *  mirrored here rather than at each delete site. */
   async remove(id: number): Promise<void> {
     await api.deleteSavedSearch(id);
     this.#items = this.#items.filter((s) => s.id !== id);
