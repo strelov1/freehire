@@ -34,11 +34,13 @@ export function ensureAccountSetupLoaded(): void {
 
 /** True once all three inputs have settled.
  *
- *  Both surfaces wait for this rather than rendering from a partial read: every store
- *  starts empty, so a half-loaded account looks exactly like a brand-new one — and
- *  telling somebody who finished setting up that they have five steps left, for the
- *  moment it takes the profile to arrive, is worse than showing nothing. */
-export function accountSetupReady(): boolean {
+ *  Not exported: callers get an empty step list until this is true, which is the same
+ *  answer in the shape they already handle. Both surfaces depend on it rather than
+ *  rendering from a partial read — every store starts empty, so a half-loaded account
+ *  looks exactly like a brand-new one, and telling somebody who finished setting up that
+ *  they have five steps left, for the moment it takes the profile to arrive, is worse
+ *  than showing nothing. */
+function accountSetupReady(): boolean {
   return resumeStore.loaded && profileStore.loaded && notifications.loaded;
 }
 

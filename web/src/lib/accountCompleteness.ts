@@ -16,7 +16,7 @@ import type { UserProfile } from './types';
  *  does not exist fails the build here, instead of rendering a link to a 404. Spelling
  *  the routes out keeps this module free of any SvelteKit import, which is what lets it
  *  be unit-tested in plain Node. */
-export type SetupHref = '/my/cvs' | '/my/profile' | '/my/searches';
+type SetupHref = '/my/cvs' | '/my/profile' | '/my/searches';
 
 export interface CompletenessStep {
   /** Stable key. Used by tests and as the list key — never shown. */
