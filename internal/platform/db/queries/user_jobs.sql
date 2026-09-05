@@ -302,10 +302,21 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        -- application: a job merely viewed or saved is not waiting on anyone.
        (CASE WHEN a.applied_at IS NOT NULL
              THEN GREATEST(a.applied_at, mail.newest_mail_at)
-        END)::timestamptz AS last_activity_at
+        END)::timestamptz AS last_activity_at,
+       -- The raw columns behind the card's auto-apply badge. aaq.id is the presence marker:
+       -- a LEFT JOIN with no match leaves every column NULL, which is indistinguishable from
+       -- a real attempt that has not been tailored yet unless the row's own existence is
+       -- read separately. Status is derived from these in Go (autoapply.DeriveStatus),
+       -- mirroring has_pending_suggestion's own reasoning above: one derivation, read by both
+       -- this list and the drawer's own single-application read (GetUserApplication), so the
+       -- badge and the banner can never disagree about what an entry's state means.
+       aaq.id AS auto_apply_id, aaq.tailored_cv_id AS auto_apply_tailored_cv_id,
+       aaq.review_decision AS auto_apply_review_decision,
+       aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+LEFT JOIN auto_apply_queue aaq ON aaq.user_id = uj.user_id AND aaq.job_id = jobs.id
 -- One pass over this job's mail for all three facts. They were three correlated subqueries
 -- over the same rows with the same predicate written three times; the "pending" test in
 -- particular has to stay the one the follow-up gate, the ghost signal and the inbox's link

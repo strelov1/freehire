@@ -109,6 +109,27 @@ UPDATE auto_apply_queue
 SET tailored_cv_id = sqlc.arg(tailored_cv_id)
 WHERE id = sqlc.arg(id) AND review_decision IS NULL;
 
+-- name: SetAutoApplyResolvedPreview :execrows
+-- Persists the answer-preview snapshot the orchestrator's resolve-preview step computes
+-- right after tailoring (openspec/changes/auto-apply-review-tracking), so the candidate's
+-- review reads an exact, previously-computed snapshot rather than a value approximated or
+-- recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
+-- SetAutoApplyTailoredCV's own guard and for the same reason: a stale or retried step for an
+-- already-decided entry must not overwrite what the candidate already acted on.
+UPDATE auto_apply_queue
+SET resolved_preview = sqlc.arg(resolved_preview)
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;
+
+-- name: GetApplicationStage :one
+-- The caller's own current stage for a job, or pgx.ErrNoRows when no application row
+-- exists yet — the check behind "put the job on the board at stage preparing when auto-apply
+-- starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
+-- stage on an existing row and no row at all are both "not on the board" and both call for
+-- the same preparing default: the difference does not matter to the caller.
+SELECT stage
+FROM applications
+WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
+
 -- name: ApproveAutoApplyReview :execrows
 -- Records an approval. Guarded by review_decision IS NULL so a second attempt at an
 -- already-reviewed entry affects zero rows rather than overwriting a recorded decision —
@@ -146,7 +167,13 @@ RETURNING id;
 -- form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
 -- these two columns, both call sites would read a permanently stuck submission as
 -- indistinguishable from a healthy one still in flight.
-SELECT id, review_decision, failed_at, blocked_at
+--
+-- tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
+-- ride along on the same row read rather than a second query: they are exactly what the
+-- tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+-- unmapped question list), and this is already "the caller's own existing auto-apply entry
+-- for one job."
+SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview
 FROM auto_apply_queue
 WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
 

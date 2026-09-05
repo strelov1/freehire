@@ -1,35 +1,65 @@
 ## 1. Schema
 
-- [ ] 1.1 New migration: `auto_apply_queue.resolved_preview jsonb` (nullable). `sqlc` query
-      additions as needed (set the resolved preview alongside/after setting `tailored_cv_id`;
-      read it wherever the queue entry is read for status derivation). Run `make sqlc` after
-      editing `internal/platform/db/queries/*.sql`.
+- [x] 1.1 New migration `0139_auto_apply_queue_resolved_preview.sql`:
+      `auto_apply_queue.resolved_preview jsonb` (nullable). Added `SetAutoApplyResolvedPreview`,
+      `GetApplicationStage`, extended `GetAutoApplyQueueEntryForJob` with
+      `tailored_cv_id`/`unmapped`/`resolved_preview`, extended `ListUserJobs` with the raw
+      auto-apply columns behind the board badge. `make sqlc` regenerated cleanly; `pnpm
+      check:sql` clean on the new migration.
 
-## 2. Answer-preview resolution (reused, not new, resolve logic)
+## 2. Answer-preview resolution (`internal/api/atsapply`, reused resolve logic, no drafting)
 
-- [ ] 2.1 In `internal/api/atsapply`, add a function that produces a `ResolvedPreview` (field
-      label -> resolved answer, no file contents) for a given job + candidate, calling the
-      existing schema-fetch + `Resolve`/`ResolveWithDrafting` pipeline (`resolve.go`, `draft.go`)
-      but stopping before `fillAndSubmit`. For Greenhouse, this performs the same live DOM render
-      `Client.Submit` already does (`renderedHTML` → `ScanGreenhouseForm`); for the other three
-      providers, prefer the stored `apply_forms` row (`GetApplyFormByJobID`) over a live refetch.
-- [ ] 2.2 RED+GREEN: unit test this function against a fake/stored schema per provider
-      (mirroring `resolve_test.go`'s existing fixtures) — asserts the returned preview matches
-      what `Resolve` would produce, and that no browser call happens for non-Greenhouse
-      providers.
-- [ ] 2.3 RED+GREEN: a resolve failure (e.g. a Greenhouse render error) parks the entry the same
-      way a resolve failure during the real submission already does, rather than leaving it
-      silently stuck without ever reaching `pending_review`.
+- [x] 2.1 Add `PreviewAnswers(fields []MergedField, answers map[string]string, hasApprovedCV
+      bool) ResolvedPreview` (`preview.go`): calls `Resolve` (never `ResolveWithDrafting` — no
+      LLM spend before the candidate approves anything), shapes resolved fields as
+      `{label, value}` (résumé/file fields omitted — the tailored CV reference covers that
+      separately), and shapes unmapped required fields as `{label, will_draft_at_submission}`
+      using `draftable()`'s existing eligibility check (no LLM call).
+- [x] 2.2 RED+GREEN: unit tests for `PreviewAnswers` — a resolved field is labelled, a field
+      with no label falls back to its id, the résumé field is omitted rather than shown blank, a
+      draftable unmapped field is marked `will_draft_at_submission`, a non-draftable (sensitive)
+      one is not, an optional unanswered field is not reported at all.
+- [ ] 2.3 Add `PreviewClient` (`preview_client.go`) and `StoredFormReader` interface: for
+      Greenhouse, launches a browser and scans the live form exactly like `Client.Submit` does
+      (`newBrowserSession`, `renderedHTML`, `hasRecaptchaMarker`, `ScanGreenhouseForm`,
+      `Reconcile`), returning a parked result (no error) for a captcha/unscannable page — the
+      same outcomes `Client.Submit` already classifies. For every other provider, reads the
+      schema from `StoredFormReader` when configured (the `apply_forms` row `cmd/capture-
+      apply-form` already persists) rather than a live refetch, falling back to a live
+      `fetchSchema`-equivalent fetch only when no reader is configured or no row exists yet.
+- [ ] 2.4 RED+GREEN: `PreviewClient.Preview` unit tests — a captcha-listed provider
+      (`requiresCaptcha`) parks without touching a browser or the form reader; a configured
+      `StoredFormReader` is preferred over a fetch for a non-Greenhouse provider (fake fetcher
+      asserts it is never called when the reader has a row).
 
-## 3. Orchestrator: resolve-preview step
+## 3. `cmd/auto-apply`: second claim pass for preview resolution
 
-- [ ] 3.1 In `cmd/auto-apply-orchestrate`'s `auto-apply-tailor-and-review` Inngest function, add
-      a `step.Run` immediately after the existing tailor step and before the entry is marked
-      `pending_review`: calls the new function from §2, persists `resolved_preview`.
-- [ ] 3.2 RED+GREEN: integration test (or the orchestrator's own existing test harness) — a
-      successful tailor step followed by a successful resolve-preview step results in
-      `resolved_preview` set and the entry visible as `pending_review`; a resolve-preview failure
-      results in the entry parked, never reaching `pending_review`.
+Runs in the SAME worker as the existing submit pass, not the orchestrator — see design.md's
+"The preview is computed once..." decision for why `cmd/auto-apply-orchestrate` (no database,
+no browser, by its own existing design) is the wrong place for this.
+
+- [ ] 3.1 New sqlc query `ClaimAutoApplyPreviewBatch`: leases entries with `tailored_cv_id IS
+      NOT NULL AND resolved_preview IS NULL AND review_decision IS NULL AND blocked_at IS NULL
+      AND failed_at IS NULL`, reusing the existing `claimed_at` lease column (safe to share with
+      `ClaimAutoApplyBatch`'s own lease — the two predicates are mutually exclusive on
+      `review_decision`, so an entry is never claimable by both at once). New sqlc query
+      `SetAutoApplyResolvedPreview` (already added in §1) is the write.
+- [ ] 3.2 In `internal/application/autoapply`, add `RunPreviews(ctx, store, answers, sidecar,
+      opts) (PreviewStats, error)`, mirroring `Run`'s own `outbox.RunPool`-based shape: a new
+      `PreviewSidecar` interface (`Preview(ctx, Claimed, answers) (PreviewResult, error)`,
+      implemented by `atsapply.PreviewClient`), and `Store` gains `ClaimForPreview`/`SetPreview`
+      alongside its existing `Park`/`Fail` (reused as-is for a preview-pass failure/park).
+- [ ] 3.3 RED+GREEN: `RunPreviews` unit tests against a fake store/sidecar — a successful
+      preview call results in `SetPreview` called with the sidecar's result; a parked result
+      calls `Park` with no unmapped fields (a form-level park, not a field-level one) and does
+      not call `SetPreview`; a sidecar error is treated as a transient failure (`Fail`), same as
+      `Run`'s own handling.
+- [ ] 3.4 `SetPreview`'s implementation also records the "ready for review" notification
+      (`RecordNotification`, best-effort — see §8), replacing the notification call this task
+      removes from `PostAutoApplyTailor` — see §8.1.
+- [ ] 3.5 Wire `autoapply.RunPreviews` into `cmd/auto-apply/main.go`, alongside the existing
+      `autoapply.Run` call, using the same `atsapply.PreviewClient` (constructed alongside the
+      existing `atsapply.Client`) and the same `answers`/`RunOptions`.
 
 ## 4. Enqueue: put the job on the tracker board
 
@@ -74,11 +104,17 @@
 - [ ] 7.5 Unit-test the status-to-badge/banner-variant mapping, following
       `autoApplyButton.test.ts`'s pattern.
 
-## 8. Notification target
+## 8. Notification: relocate from tailor-completion to preview-ready
 
-- [ ] 8.1 Change the tailoring-complete notification's target from `/tailor/[slug]` to
-      `/my/tracking?job=<id>` (`notificationTarget.ts`).
-- [ ] 8.2 `web/src/routes/my/tracking/+page.svelte` (or `JobBoard.svelte`): on load, if `?job=`
+- [ ] 8.1 Remove the "tailoring ready" `RecordNotification` call from `PostAutoApplyTailor`
+      (`auto_apply_tailor.go`) — it fired too early (before there is a preview to show) and at
+      the wrong target (`/tailor/[slug]`, which has no approve/decline affordance).
+- [ ] 8.2 Add the notification call to `SetPreview`'s implementation (§3.4) instead, targeting
+      `auto_apply_ready_for_review` with the job's tracker slug.
+- [ ] 8.3 `notificationTarget.ts`: map the new notification type to `{kind: 'tracking', job:
+      <id>}` → `/my/tracking?job=<id>` (dropping the old `auto_apply_tailor_ready` → `tailor`
+      mapping this replaces).
+- [ ] 8.4 `web/src/routes/my/tracking/+page.svelte` (or `JobBoard.svelte`): on load, if `?job=`
       is present, open that job's drawer.
 
 ## 9. Verification
@@ -86,9 +122,9 @@
 - [ ] 9.1 `gofmt -l .` clean on every touched file.
 - [ ] 9.2 `go vet ./...` and `go test ./...` green.
 - [ ] 9.3 `go vet -tags=integration ./...` green.
-- [ ] 9.4 `go test -tags=integration ./...` green (this change alters behavior — a new
-      orchestrator step, a new tracked-job field, a new enqueue side effect — not just a
-      signature).
+- [ ] 9.4 `go test -tags=integration ./...` green (this change alters behavior — a new claim
+      pass in `cmd/auto-apply`, a new tracked-job field, a new enqueue side effect, a relocated
+      notification — not just a signature).
 - [ ] 9.5 Frontend: `pnpm check` green.
 - [ ] 9.6 Manual: drive the golden path in the browser — trigger auto-apply, see the job appear
       on the board at `preparing`, see the badge once `pending_review`, open the drawer, review

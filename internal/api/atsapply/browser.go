@@ -45,7 +45,14 @@ const classifyTimeout = 10 * time.Second
 // cancel to tear it down — nothing here pools or reuses a browser across attempts, so one
 // attempt's session can never leak state (cookies, a half-filled form) into the next.
 func (c *Client) newBrowser(ctx context.Context) (context.Context, context.CancelFunc, error) {
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, c.allocatorOpts...)
+	return newBrowserSession(ctx, c.allocatorOpts)
+}
+
+// newBrowserSession is newBrowser's body, free of *Client so PreviewClient (which shares
+// the same allocator options but none of Client's LLM/CV dependencies) can start a session
+// the same way rather than duplicating it.
+func newBrowserSession(ctx context.Context, allocatorOpts []chromedp.ExecAllocatorOption) (context.Context, context.CancelFunc, error) {
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocatorOpts...)
 	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
 	cancel := func() {
 		cancelBrowser()

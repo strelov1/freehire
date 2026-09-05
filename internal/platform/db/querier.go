@@ -1535,6 +1535,12 @@ type Querier interface {
 	// Authentication accepts only active identities. A pending Apple revocation
 	// must not sign the user back in and silently cancel an unlink request.
 	GetActiveUserByIdentity(ctx context.Context, arg GetActiveUserByIdentityParams) (GetActiveUserByIdentityRow, error)
+	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
+	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
+	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
+	// stage on an existing row and no row at all are both "not on the board" and both call for
+	// the same preparing default: the difference does not matter to the caller.
+	GetApplicationStage(ctx context.Context, arg GetApplicationStageParams) (pgtype.Text, error)
 	// Read one job's captured form for display. The only read path over this store, and it
 	// is by primary key — the display surface asks for exactly one posting's form, never a
 	// page of them, which is also why nothing here joins jobs.
@@ -1561,6 +1567,12 @@ type Querier interface {
 	// form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
 	// these two columns, both call sites would read a permanently stuck submission as
 	// indistinguishable from a healthy one still in flight.
+	//
+	// tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
+	// ride along on the same row read rather than a second query: they are exactly what the
+	// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+	// unmapped question list), and this is already "the caller's own existing auto-apply entry
+	// for one job."
 	GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error)
 	// One read backing both the tailoring-trigger and the review-decision endpoints
 	// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
@@ -4257,6 +4269,13 @@ type Querier interface {
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
 	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error
+	// Persists the answer-preview snapshot the orchestrator's resolve-preview step computes
+	// right after tailoring (openspec/changes/auto-apply-review-tracking), so the candidate's
+	// review reads an exact, previously-computed snapshot rather than a value approximated or
+	// recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
+	// SetAutoApplyTailoredCV's own guard and for the same reason: a stale or retried step for an
+	// already-decided entry must not overwrite what the candidate already acted on.
+	SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (int64, error)
 	// Records which tailored CV a queue entry's tailoring run produced. Guarded by
 	// review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
 	// guard: PostAutoApplyTailor's own review_decision check happens before its (potentially

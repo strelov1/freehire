@@ -44,25 +44,64 @@ preview of what the unattended submission would send.
 
 ## Decisions
 
-**The preview is computed once, server-side, inside the existing orchestrator run — not lazily
-on read.** `internal/api/atsapply`'s resolve pipeline is already a pure function over
-`[]MergedField` once a schema is in hand (`resolve.go`, `draft.go`, no chromedp import anywhere in
-either file); the browser is only needed to produce the DOM-scanned field list for Greenhouse
-(`client.go`'s `renderedHTML` → `ScanGreenhouseForm`, itself "a pure function over an HTML
-string" per its own doc comment). For the other three providers, `mergedFromAPIOnly` already
-builds the schema without a browser, and can read the schema `cmd/capture-apply-form` already
-persisted in `apply_forms` instead of re-fetching it. A new orchestrator step (`step.Run`, after
-the existing tailor step, before the entry moves to `pending_review`) calls this same pipeline —
-including, for Greenhouse, one headless render, exactly like the real submission eventually does
-— and persists the result to `auto_apply_queue.resolved_preview jsonb`.
-Alternative considered: resolve lazily when the candidate opens the drawer — rejected because it
-would put a Chrome dependency on the interactive API request path for Greenhouse specifically
-(today only workers own a browser lifecycle), adding request latency and a new failure mode to a
-read.
+**The preview is computed once, off the request path — not lazily on read — by `cmd/auto-apply`
+itself, in a second claim pass alongside its existing submit pass.** `internal/api/atsapply`'s
+deterministic resolve pipeline (`resolve.go`'s `Resolve`, never `draft.go`'s `ResolveWithDrafting`
+— see the next decision for why drafting is excluded) is a pure function over `[]MergedField`
+once a schema is in hand; the browser is only needed to produce the DOM-scanned field list for
+Greenhouse (`client.go`'s `renderedHTML` → `ScanGreenhouseForm`). For the other three providers,
+`mergedFromAPIOnly` already builds the schema without a browser, and can read the schema
+`cmd/capture-apply-form` already persisted in `apply_forms` instead of re-fetching it.
+
+This runs in `cmd/auto-apply`, not `cmd/auto-apply-orchestrate`, because the orchestrator has
+neither capability by its own existing design (`auto-apply-inngest-orchestration`'s own
+proposal.md): it holds no `DATABASE_URL` and calls `cmd/server`'s HTTP endpoints exactly the way
+an external caller would, one `step.Run` per call. Giving the orchestrator a database connection
+and a Chrome dependency just for this preview would duplicate infrastructure `cmd/auto-apply`
+already has and already manages (lease, retry, park) for the structurally identical problem of
+"resolve this attempt's form against a browser, then record the outcome." A new exported
+function, `autoapply.RunPreviews` (mirroring `autoapply.Run`'s own `outbox.RunPool`-based shape),
+claims entries with a tailored CV and no `resolved_preview` yet, calls a new
+`atsapply.PreviewClient.Preview`, and persists the result — called from `cmd/auto-apply/main.go`
+alongside the existing `autoapply.Run` call, in the same run, same process, same Chrome
+dependency, no new binary and no new deploy unit.
+
+The orchestrator's own `step.WaitForEvent` wait for `auto-apply/review.decided` needs no change:
+it already waits for a decision the candidate can only make once the tracker shows them
+something to decide on, and `pending_review` status (assembled in Go, §"Status and preview ride
+on the tracked-job read path") is simply never reported until `resolved_preview` is set —
+whichever one of tailoring or preview-resolution finishes last is a fact the status derivation
+already handles, not something either side needs to coordinate on.
+
+Alternative considered: an orchestrator step, as originally drafted — rejected once
+`auto-apply-inngest-orchestration`'s own proposal.md was reread carefully: the orchestrator's
+whole point is staying database- and browser-free, calling back into `cmd/server` over HTTP the
+same way any future external pipeline would (per that change's own "What Changes" section); a
+step that reached into Postgres or launched Chrome directly would contradict the reason that
+process exists.
+Alternative considered: a new `cmd/server` HTTP endpoint the orchestrator calls, mirroring the
+tailor endpoint — rejected because Greenhouse's preview still needs a live DOM render, which
+would put a Chrome dependency on the API server process (today: zero HTTP handlers import
+`internal/api/atsapply`; only `cmd/auto-apply` does) for every provider, not just the one worker
+already provisioned for it.
+Alternative considered: resolve lazily when the candidate opens the drawer — rejected for the
+same two reasons: a Chrome dependency on the interactive request path, and (per the next
+decision) LLM spend before the candidate has approved anything.
 Alternative considered: always approximate from the cached/API-only schema, skipping the
 Greenhouse DOM render — rejected because a spike measured 36 DOM-scanned fields against 17
 API-declared ones for the same form; an approximation could omit a field the real submission
 requires, which defeats the point of showing the candidate what will actually be sent.
+
+**The preview never runs LLM drafting (`ResolveWithDrafting`), even though the real submission
+does.** `internal/ai/llmkey/scope_test.go` names exactly two binaries allowed to resolve a
+per-user LLM credential (`cmd/server`, `cmd/auto-apply`) and requires a deliberate, justified
+third line for any other. More fundamentally: drafting spends the candidate's own LLM credit,
+and a preview exists BEFORE the candidate has approved anything — drafting at preview time would
+spend on an attempt they might decline. The preview instead reports, for each still-unresolved
+field, whether the real submission will draft one (`draftable()`, the same pure eligibility
+check `ResolveWithDrafting` itself applies before ever calling the drafter — no LLM call, just
+the same required/labeled/kind/non-sensitive predicate) — so the candidate sees "this will be
+filled in automatically" rather than a blank the drafter would in fact have answered.
 
 **Auto-apply gets its own `Track` source, called from the enqueue handler.**
 `jobtracking.Service.Track(ctx, userID, slug, stage, notes, source)` already accepts a `source`
@@ -115,11 +154,16 @@ return struct has no field for it.
   retry path exists → **Mitigation**: the banner copy for these states is explicit that the
   attempt is final for this job (matches `PostJobAutoApply`'s own existing
   "permanently stuck"/"already declined" wording).
-- **[Risk]** The Greenhouse resolve-preview step adds one more headless-browser render to the
-  orchestrator run, between the tailor step and the review wait → **Mitigation**: this reuses the
-  exact render `cmd/auto-apply`'s real submission already performs (same cost, same failure mode,
-  already handled there); a render failure here should park the entry the same way a resolve
-  failure during the real submission already does, rather than leaving it silently stuck.
+- **[Risk]** The Greenhouse preview pass adds one more headless-browser render per attempt to
+  `cmd/auto-apply`'s own run, before the entry is even approved → **Mitigation**: this reuses the
+  exact render `Submit` already performs for the real attempt (same cost, same failure mode,
+  already handled there); a render failure parks the entry via the same `Store.Park` path a
+  resolve failure during the real submission already uses, rather than leaving it silently stuck
+  short of `pending_review` forever.
+- **[Risk]** A window exists between "tailored" and "preview resolved" where the candidate has
+  no action to take yet → **Mitigation**: status derivation reports `tailoring` for that window
+  (not a seventh status), and `cmd/auto-apply`'s preview pass runs in the same cron cadence the
+  submit pass already does, so the window is bounded by that cadence, not by anything new.
 - **[Risk]** `EventSource`/status vocabulary drift: if a future change adds a way to un-park an
   entry, the "final, no retry" banner copy this design writes becomes stale →
   **Mitigation**: none needed structurally now; worth a comment at the banner site
@@ -127,7 +171,7 @@ return struct has no field for it.
 
 ## Migration Plan
 
-One migration: `auto_apply_queue.resolved_preview jsonb` (nullable). Additive-only otherwise: new
-orchestrator step, new use-case function, one new field on an existing read path, new frontend
-banner/badge, notification target change. Rollback is a plain revert — nothing else depends on
-`resolved_preview` or the new field.
+One migration: `auto_apply_queue.resolved_preview jsonb` (nullable). Additive-only otherwise: a
+new claim pass in an existing worker, new use-case functions, one new field on an existing read
+path, new frontend banner/badge, a relocated notification call. Rollback is a plain revert —
+nothing else depends on `resolved_preview` or the new field.
