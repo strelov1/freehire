@@ -56,9 +56,13 @@ WHERE stripe_customer_id = sqlc.arg(stripe_customer_id)::text;
 -- renewal would sit outside the window and never be re-checked — and the renewal whose
 -- webhook was lost, which is the only reason this query exists, would stay lost. Each
 -- provider's window belongs on that provider's own column.
-SELECT id, stripe_customer_id, pro_until_stripe
+-- EITHER tier's own column, because both lapse and both are repaired by the same re-read.
+-- Predicating on the Pro column alone would leave an Ultra subscriber whose renewal webhook
+-- was lost outside the window forever — they hold no Pro entitlement at all, so there is
+-- nothing there to fall due.
+SELECT id, stripe_customer_id, pro_until_stripe, ultra_until_stripe
 FROM users
 WHERE stripe_customer_id IS NOT NULL
-  AND pro_until_stripe >= sqlc.arg(from_time)
-  AND pro_until_stripe < sqlc.arg(to_time)
+  AND ((pro_until_stripe >= sqlc.arg(from_time) AND pro_until_stripe < sqlc.arg(to_time))
+       OR (ultra_until_stripe >= sqlc.arg(from_time) AND ultra_until_stripe < sqlc.arg(to_time)))
 LIMIT sqlc.arg(max_rows);

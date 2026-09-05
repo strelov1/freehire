@@ -101,6 +101,11 @@ SELECT EXISTS (
 --
 -- A non-NULL column is also exactly the footprint HasRevenueCatFootprint looks for, so this
 -- pass can never ask the provider about an account it would thereby create.
+--
+-- Deliberately NOT widened to ultra_until_revenuecat, unlike its Stripe counterpart. No
+-- Ultra product exists in either store, so that column is NULL for every row and the extra
+-- predicate could never match anything — it would be a branch nobody can reach, which is
+-- worse than an absent one. Widen it in the same change that creates the store product.
 SELECT id
 FROM users
 WHERE pro_until_revenuecat >= sqlc.arg(from_time)

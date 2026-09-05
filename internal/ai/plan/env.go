@@ -15,9 +15,17 @@ import (
 // It is the end of the shadow run, feature by feature, and it is spelled as a list rather
 // than a boolean because the features are turned on one at a time, cheapest first.
 //
-// PLAN_FREE_DAILY_<FEATURE> and PLAN_TAILOR_TURNS_PER_SESSION move the numbers themselves.
-// They exist because the shipped values are a reading of three August weeks under no
-// paywall, and the shadow run is expected to contradict them.
+// PLAN_FREE_DAILY_<FEATURE>, PLAN_PRO_DAILY_<FEATURE>, PLAN_ULTRA_DAILY_<FEATURE> and
+// PLAN_TAILOR_TURNS_PER_SESSION move the numbers themselves. They exist because the shipped
+// values are a reading of three August weeks under no paywall, and the shadow run is
+// expected to contradict them. PLAN_PRO_DAILY_AUTO_APPLY earns its keep twice over: that
+// one number is a ceiling under a plan people had already bought, so it has to move without
+// a deploy on the day somebody complains.
+//
+// PLAN_FAIR_USE_<FEATURE> is the older spelling of the pro figure and still works. On every
+// feature but auto-apply that figure IS the fair-use guard; on auto-apply it is pro's real
+// daily ceiling. Same field, same effect, so PLAN_PRO_DAILY_<FEATURE> is simply the name
+// that reads correctly for both.
 //
 // An override that cannot be read keeps the default and says so in the log. The alternative
 // — a typo resolving to zero — would refuse the feature to every free account and look
@@ -30,11 +38,21 @@ func ConfigFromEnv() Config {
 		if enforced[f] {
 			fc.enforce = true
 		}
-		if n, ok := envPositive("PLAN_FREE_DAILY_" + strings.ToUpper(string(f))); ok {
-			fc.freeDaily = n
+		suffix := strings.ToUpper(string(f))
+		if n, ok := envPositive("PLAN_FREE_DAILY_" + suffix); ok {
+			fc.free.daily = n
 		}
-		if n, ok := envPositive("PLAN_FAIR_USE_" + strings.ToUpper(string(f))); ok {
-			fc.proFairUse = n
+		// PLAN_FAIR_USE_<F> keeps its name and its meaning: the pro figure. On every feature
+		// but one that IS pro's fair-use guard, and on auto-apply it is pro's real ceiling —
+		// the same number in the same field, which is why one variable still moves it.
+		if n, ok := envPositive("PLAN_FAIR_USE_" + suffix); ok {
+			fc.pro.daily = n
+		}
+		if n, ok := envPositive("PLAN_PRO_DAILY_" + suffix); ok {
+			fc.pro.daily = n
+		}
+		if n, ok := envPositive("PLAN_ULTRA_DAILY_" + suffix); ok {
+			fc.ultra.daily = n
 		}
 		cfg.features[f] = fc
 	}

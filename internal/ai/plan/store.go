@@ -34,17 +34,20 @@ func NewStore(q *db.Queries, pool *pgxpool.Pool, cfg Config) *Store {
 	return &Store{q: q, pool: pool, cfg: cfg, now: func() time.Time { return time.Now().UTC() }}
 }
 
-// Tier resolves the caller's plan. It reads one column and makes no network call, so a
-// billing provider being slow or unreachable can never delay a metered action.
+// Tier resolves the caller's plan. It reads one ROW and makes no network call, so a billing
+// provider being slow or unreachable can never delay a metered action.
+//
+// One row and not one query per tier: two reads could land either side of a sync, and a tier
+// resolved from two different instants is how somebody momentarily becomes neither.
+//
+// An invalid column is a zero time, which `TierOf` reads as "reaches nothing" — so a NULL
+// needs no branch of its own here.
 func (s *Store) Tier(ctx context.Context, userID int64) (Tier, error) {
-	proUntil, err := s.q.GetProUntil(ctx, userID)
+	untils, err := s.q.GetPlanUntils(ctx, userID)
 	if err != nil {
 		return "", err
 	}
-	if !proUntil.Valid {
-		return TierFree, nil
-	}
-	return TierOf(proUntil.Time, s.now()), nil
+	return TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, s.now()), nil
 }
 
 // Consume reserves one unit of a feature's daily allowance for this reference, atomically

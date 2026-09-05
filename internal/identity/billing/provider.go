@@ -3,8 +3,6 @@ package billing
 import (
 	"context"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // provider is one payment provider, reduced to what the shared engine needs of it.
@@ -81,18 +79,28 @@ type provider interface {
 	knows(ctx context.Context, userID int64) (bool, error)
 
 	// reach reads the provider's CURRENT state for one account and reduces it to how far its
-	// entitlement extends. The zero time means this provider confers nothing, which is not
-	// the same as the account being free — another source may still confer.
+	// entitlement extends FOR EACH TIER. A zero time means this provider confers that tier
+	// on nobody, which is not the same as the account not holding it — another source may
+	// still confer.
+	//
+	// One call answering for every tier, and not one call per tier. The provider is re-read
+	// whole and applied whole (see the package's AGENTS.md); two reads could land either
+	// side of a change and disagree with each other, which is the "derived whole, never
+	// adjusted" rule this package is built on.
 	//
 	// It may return ErrNoSubscription for an account this provider cannot address at all, so
 	// a caller can tell "we asked and there is nothing" from "there was nobody to ask".
-	reach(ctx context.Context, userID int64) (time.Time, error)
+	reach(ctx context.Context, userID int64) (entitlement, error)
 
-	// store writes this provider's own source column of users, and no other. The derived
-	// users.pro_until follows by way of the schema (migration 0135); assigning it directly
-	// is refused by Postgres, which is what makes revoking another origin's grant
-	// unwritable rather than merely discouraged.
-	store(ctx context.Context, userID int64, until pgtype.Timestamptz) error
+	// store writes this provider's own source columns of users, and no others. The derived
+	// users.pro_until and users.ultra_until follow by way of the schema (migrations 0135 and
+	// 0141); assigning either directly is refused by Postgres, which is what makes revoking
+	// another origin's grant unwritable rather than merely discouraged.
+	//
+	// EVERY tier column this provider owns, on every call — including the ones it confers
+	// nothing for. A provider that only wrote the columns it had something to say about
+	// could never take back what it once said, which is the cancellation path.
+	store(ctx context.Context, userID int64, ent entitlement) error
 
 	// dueSoon lists accounts whose entitlement FROM THIS PROVIDER expires inside the window
 	// — the reconciler's second pass, which repairs a renewal whose webhook never arrived.

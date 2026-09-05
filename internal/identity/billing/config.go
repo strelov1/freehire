@@ -35,6 +35,15 @@ type Config struct {
 	// Prices are the price identifiers that confer Pro — usually two, a monthly and an
 	// annual. A subscription for anything else must not make anyone Pro.
 	Prices []string
+	// UltraPrices are the price identifiers that confer Ultra. Which tier a subscription
+	// confers is decided here and nowhere else — no price id ships in the source, and a
+	// deployment naming none of these simply never resolves anybody to ultra while pro and
+	// free behave exactly as they did before.
+	//
+	// A list of its own rather than metadata on the price: metadata would put the tier
+	// definition in the provider's dashboard, where nothing in this repository can test it
+	// and one mis-click silently upgrades everybody.
+	UltraPrices []string
 	// SiteURL is where a customer comes back to after paying or after managing their
 	// subscription. Empty disables checkout: there would be nowhere to return them to.
 	//
@@ -54,6 +63,7 @@ func ConfigFromEnv() Config {
 		APIKey:        strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
 		WebhookSecret: strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		Prices:        priceList(os.Getenv("STRIPE_PRICE_IDS")),
+		UltraPrices:   priceList(os.Getenv("STRIPE_ULTRA_PRICE_IDS")),
 		SiteURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN")), "/"),
 	}
 }

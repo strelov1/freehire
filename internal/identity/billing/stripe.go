@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -85,21 +83,31 @@ func (p *stripeProvider) knows(ctx context.Context, userID int64) (bool, error) 
 }
 
 // reach reads Stripe's current subscriptions for one account and reduces them to the furthest
-// point a Pro-conferring one still stands.
-func (p *stripeProvider) reach(ctx context.Context, userID int64) (time.Time, error) {
+// point a conferring one still stands, per tier.
+//
+// ONE listing answers for both tiers. Asking twice would be two reads of a thing that can
+// change between them, and the tier a subscription confers is only which configured price
+// list its price is in — a filter over the same answer, not a second question.
+func (p *stripeProvider) reach(ctx context.Context, userID int64) (entitlement, error) {
 	customer, err := p.customerOf(ctx, userID)
 	if err != nil {
-		return time.Time{}, err
+		return entitlement{}, err
 	}
 	sub, err := p.client.subscriberState(ctx, customer)
 	if err != nil {
-		return time.Time{}, err
+		return entitlement{}, err
 	}
-	return proUntilFrom(sub, p.cfg.Prices), nil
+	return entitlementFrom(sub, p.cfg.Prices, p.cfg.UltraPrices), nil
 }
 
-func (p *stripeProvider) store(ctx context.Context, userID int64, until pgtype.Timestamptz) error {
-	return p.q.SetProUntilStripe(ctx, db.SetProUntilStripeParams{Until: until, ID: userID})
+// store writes both of Stripe's source columns in one statement — see the query's own note
+// on why not two.
+func (p *stripeProvider) store(ctx context.Context, userID int64, ent entitlement) error {
+	return p.q.SetStripeEntitlement(ctx, db.SetStripeEntitlementParams{
+		ProUntil:   nullable(ent.Pro),
+		UltraUntil: nullable(ent.Ultra),
+		ID:         userID,
+	})
 }
 
 // dueSoon reaches accounts through the customer binding, so the candidate set is the accounts

@@ -23,7 +23,9 @@ func TestTierOf(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := TierOf(tc.proUntil, now); got != tc.want {
+			// No ultra entitlement: these cases are about the pro column alone, and the
+			// three-tier boundaries are covered in tier_test.go.
+			if got := TierOf(tc.proUntil, time.Time{}, now); got != tc.want {
 				t.Errorf("TierOf(%v) = %q, want %q", tc.proUntil, got, tc.want)
 			}
 		})

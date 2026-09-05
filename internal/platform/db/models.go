@@ -1173,6 +1173,14 @@ type User struct {
 	ProUntilRevenuecat         pgtype.Timestamptz `json:"pro_until_revenuecat"`
 	ProUntilGranted            pgtype.Timestamptz `json:"pro_until_granted"`
 	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
+	// How far the WEB Ultra subscription reaches. Written only by the Stripe sync, which tells the tiers apart by which configured price list a subscription's price appears in. Cleared by that sync when the subscription ends, and by nothing else.
+	UltraUntilStripe pgtype.Timestamptz `json:"ultra_until_stripe"`
+	// How far an APP STORE or GOOGLE PLAY Ultra subscription reaches. No such product exists yet and the RevenueCat sync writes NULL here on every pass — deliberately, because a provider that only wrote the columns it had something to say about could never take back what it once said, which is the cancellation path.
+	UltraUntilRevenuecat pgtype.Timestamptz `json:"ultra_until_revenuecat"`
+	// Ultra GIVEN rather than sold: support's manual grant. No provider sync touches it, which is the whole reason it is separate.
+	UltraUntilGranted pgtype.Timestamptz `json:"ultra_until_granted"`
+	// How far the Ultra tier reaches, derived by the schema as the furthest of ultra_until_stripe, ultra_until_revenuecat and ultra_until_granted. Refuses assignment (428C9) — write the source column of the origin that decided it. A future value here outranks pro_until: the tier is the better of the two, so that buying the more expensive plan can never give somebody less.
+	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
 }
 
 type UserEmailCode struct {

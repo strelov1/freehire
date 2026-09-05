@@ -37,6 +37,15 @@ func planDay(t time.Time) pgtype.Date {
 // It moves it through a SOURCE writer, because since migration 0135 pro_until is derived and
 // cannot be assigned. What the metered path reads is unchanged, which is the property worth
 // pinning here — the plan surface must not notice that the column gained three sources.
+// planUntil reads just the pro half of GetPlanUntils, which is what this file's older
+// assertions were written against. The ultra half has its own coverage; folding it in here
+// would restate that rather than test this.
+func planUntil(t *testing.T, q *Queries, ctx context.Context, user int64) (pgtype.Timestamptz, error) {
+	t.Helper()
+	row, err := q.GetPlanUntils(ctx, user)
+	return row.ProUntil, err
+}
+
 func TestProUntilIsTheWholePlan(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -44,32 +53,32 @@ func TestProUntilIsTheWholePlan(t *testing.T) {
 
 	user := seedPlanUser(t, pool, "plan-default@example.test")
 
-	got, err := q.GetProUntil(ctx, user)
+	got, err := planUntil(t, q, ctx, user)
 	if err != nil {
-		t.Fatalf("GetProUntil: %v", err)
+		t.Fatalf("GetPlanUntils: %v", err)
 	}
 	if got.Valid {
 		t.Fatalf("a fresh account reads as pro (%v); every existing account is free, and NULL is how that is said", got.Time)
 	}
 
 	until := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Second)
-	if err := q.SetProUntilStripe(ctx, SetProUntilStripeParams{
-		ID: user, Until: pgtype.Timestamptz{Time: until, Valid: true},
+	if err := q.SetStripeEntitlement(ctx, SetStripeEntitlementParams{
+		ID: user, ProUntil: pgtype.Timestamptz{Time: until, Valid: true},
 	}); err != nil {
-		t.Fatalf("SetProUntilStripe: %v", err)
+		t.Fatalf("SetStripeEntitlement: %v", err)
 	}
-	got, err = q.GetProUntil(ctx, user)
+	got, err = planUntil(t, q, ctx, user)
 	if err != nil {
-		t.Fatalf("GetProUntil after set: %v", err)
+		t.Fatalf("GetPlanUntils after set: %v", err)
 	}
 	if !got.Valid || !got.Time.UTC().Equal(until) {
-		t.Fatalf("GetProUntil = %v (valid=%v), want %v", got.Time, got.Valid, until)
+		t.Fatalf("pro_until = %v (valid=%v), want %v", got.Time, got.Valid, until)
 	}
 
-	if err := q.SetProUntilStripe(ctx, SetProUntilStripeParams{ID: user}); err != nil {
-		t.Fatalf("SetProUntilStripe(NULL): %v", err)
+	if err := q.SetStripeEntitlement(ctx, SetStripeEntitlementParams{ID: user}); err != nil {
+		t.Fatalf("SetStripeEntitlement(NULL): %v", err)
 	}
-	if got, err = q.GetProUntil(ctx, user); err != nil || got.Valid {
+	if got, err = planUntil(t, q, ctx, user); err != nil || got.Valid {
 		t.Fatalf("clearing pro_until left %v (valid=%v), err %v", got.Time, got.Valid, err)
 	}
 }

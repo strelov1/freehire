@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
-	"time"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -70,8 +70,11 @@ func autoApplyQueuedResponse(c *fiber.Ctx) error {
 // /autopilot already uses, at higher stakes here: a fresh entry can end in a REAL
 // submitted job application, not only an unattended CV rewrite.
 //
-// Gates, in order: the job must be a Greenhouse posting, the caller must be on the PRO
-// plan tier, and the caller must already have a base CV. A repeat request for a pair that
+// Gates, in order: the job must be a Greenhouse posting, the caller must already have a base
+// CV, the pair must not already be applied to, and the caller must have auto-apply allowance
+// left today. The allowance is LAST so that everything a request can be refused for on other
+// grounds costs nothing — and it is where the old "must be on the PRO tier" check went, since
+// free is configured to no allowance at all. A repeat request for a pair that
 // already has a live, undecided entry succeeds without creating a second row; a repeat for
 // a pair whose entry was already declined by the candidate is refused permanently.
 func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
@@ -86,14 +89,6 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 	}
 	if job.Source != autoApplyEnqueueSource {
 		return fiber.NewError(fiber.StatusBadRequest, "auto-apply is only available for Greenhouse postings today")
-	}
-
-	proUntil, err := h.queries.GetProUntil(c.Context(), userID)
-	if err != nil {
-		return err
-	}
-	if plan.TierOf(proUntil.Time, time.Now()) != plan.TierPro {
-		return fiber.NewError(fiber.StatusPaymentRequired, "auto-apply is a PRO feature")
 	}
 
 	if h.cv == nil || h.cv.cvStore == nil {
@@ -115,6 +110,22 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		return err
 	} else if applied {
 		return fiber.NewError(fiber.StatusConflict, "already applied to this job")
+	}
+
+	// The allowance, and it replaces the plan-tier check this route used to make: free is
+	// configured to nothing, so "auto-apply is a PRO feature" is now the ordinary refusal
+	// with the day's figures attached rather than a sentence carrying no numbers.
+	//
+	// LAST of the gates, so a request refused for an unsupported platform, a missing CV or an
+	// application already sent spends nothing.
+	//
+	// Charged BEFORE anything is created and keyed by the POSTING. Consume is idempotent by
+	// its reference, so a double-clicked button reads as already charged and costs one
+	// attempt rather than two — and so does a retry after a database error. Charging after
+	// the queue write instead would have to key on the queue row's id, which a repeat request
+	// never gets, so the second click would charge again.
+	if refused, err := h.chargeAutoApply(c, userID, job.ID); err != nil || refused {
+		return err
 	}
 
 	h.ensureTrackedForAutoApply(c.Context(), userID, job)
@@ -177,5 +188,35 @@ func (h *assistantHandlers) ensureTrackedForAutoApply(ctx context.Context, userI
 	stage := "preparing"
 	if _, err := h.tracking.tracking.Track(ctx, userID, job.PublicSlug, &stage, nil, "auto_apply"); err != nil {
 		log.Printf("auto-apply: tracking job %d for user %d: %v", job.ID, userID, err)
+	}
+}
+
+// chargeAutoApply spends one unit of the caller's daily auto-apply allowance for this
+// posting, and reports whether the request was refused.
+//
+// The reference is the POSTING's id, which makes the charge idempotent for the pair by
+// construction: a second request for the same job reads as already charged and costs
+// nothing, whether it came from a double click or a retry after a failure.
+//
+// Unlike the other metered features, a failure to CHARGE does not let the action through.
+// Everywhere else the fallback is "record nothing and continue", because the action is a
+// model call whose cost we absorb. Here the action drives a browser and submits a real
+// application to a real employer under somebody's name, so an unmeasured one is not a
+// rounding error — the honest answer to "we could not tell whether you may" is to say so.
+func (h *assistantHandlers) chargeAutoApply(c *fiber.Ctx, userID, jobID int64) (bool, error) {
+	if h.plans == nil {
+		return false, fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
+	}
+
+	ref := "job:" + strconv.FormatInt(jobID, 10)
+	d, err := h.plans.Consume(c.Context(), userID, plan.FeatureAutoApply, ref)
+	switch {
+	case err == nil:
+		return false, nil
+	case isRefusal(err):
+		return true, refuse(c, d)
+	default:
+		log.Printf("plan: charging an auto-apply for user %d on job %d: %v", userID, jobID, err)
+		return true, fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
 	}
 }
