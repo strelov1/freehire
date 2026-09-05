@@ -53,7 +53,7 @@
 </script>
 
 <div class="space-y-6">
-  <div class="flex items-start justify-between gap-4">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
     <div>
       <h1 class="text-2xl font-semibold">Tailored CVs</h1>
       <p class="text-sm text-muted-foreground">
@@ -61,7 +61,7 @@
         new one by opening the tailoring workspace from any vacancy.
       </p>
     </div>
-    <div class="flex shrink-0 items-center gap-2">
+    <div class="flex shrink-0 flex-wrap items-center gap-2">
       <a
         href={resolve('/my/cvs/appearance')}
         class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
