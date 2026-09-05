@@ -401,7 +401,7 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	}
 	// fitanalysis.ErrNoAnalysis renders as the 409 this endpoint documents; classify maps it
 	// once, at the port boundary, for every route that can meet it.
-	ctx, err := h.fit.TailoringContext(c.Context(), userID, job)
+	ctx, err := h.fit.TailoringContext(c.Context(), userID, job, postingRequirements(job))
 	if err != nil {
 		return err
 	}

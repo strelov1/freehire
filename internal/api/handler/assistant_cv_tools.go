@@ -188,7 +188,9 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 		Name: "cv_context",
 		Description: "Read the fit analysis for the vacancy this CV is being tailored to: the vacancy's " +
 			"requirements split into missing_have (the candidate has the evidence, the CV omits it — reframe an " +
-			"existing bullet) and missing_gap (a real gap — ASK the candidate before writing anything).",
+			"existing bullet) and missing_gap (a real gap — ASK the candidate before writing anything). " +
+			"job.requirements is a separate, fuller list: everything the posting itself asks for, in its own " +
+			"words, including what the CV already covers — those are worth keeping prominent, not editing away.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			var in struct{}
@@ -206,7 +208,7 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			base, err := h.fit.TailoringContext(ctx, userID, job)
+			base, err := h.fit.TailoringContext(ctx, userID, job, postingRequirements(job))
 			if err != nil {
 				return nil, err
 			}

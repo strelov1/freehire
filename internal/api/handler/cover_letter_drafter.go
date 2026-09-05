@@ -86,7 +86,7 @@ func (d letterDrafter) draftStream(
 	// An absent analysis therefore surfaces as ErrNoAnalysis, which the shared error mapper
 	// renders as "run the fit analysis first": a state the candidate can act on in the same
 	// workspace, one tab over.
-	tailoring, err := d.fit.TailoringContext(ctx, userID, job)
+	tailoring, err := d.fit.TailoringContext(ctx, userID, job, postingRequirements(job))
 	if err != nil {
 		return nil, err
 	}
