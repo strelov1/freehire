@@ -33,6 +33,10 @@ func planDay(t time.Time) pgtype.Date {
 
 // TestProUntilIsTheWholePlan covers the one column the metered path reads: absent by
 // default, movable, and clearable.
+//
+// It moves it through a SOURCE writer, because since migration 0135 pro_until is derived and
+// cannot be assigned. What the metered path reads is unchanged, which is the property worth
+// pinning here — the plan surface must not notice that the column gained three sources.
 func TestProUntilIsTheWholePlan(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -49,10 +53,10 @@ func TestProUntilIsTheWholePlan(t *testing.T) {
 	}
 
 	until := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Second)
-	if err := q.SetProUntil(ctx, SetProUntilParams{
-		ID: user, ProUntil: pgtype.Timestamptz{Time: until, Valid: true},
+	if err := q.SetProUntilStripe(ctx, SetProUntilStripeParams{
+		ID: user, Until: pgtype.Timestamptz{Time: until, Valid: true},
 	}); err != nil {
-		t.Fatalf("SetProUntil: %v", err)
+		t.Fatalf("SetProUntilStripe: %v", err)
 	}
 	got, err = q.GetProUntil(ctx, user)
 	if err != nil {
@@ -62,8 +66,8 @@ func TestProUntilIsTheWholePlan(t *testing.T) {
 		t.Fatalf("GetProUntil = %v (valid=%v), want %v", got.Time, got.Valid, until)
 	}
 
-	if err := q.SetProUntil(ctx, SetProUntilParams{ID: user}); err != nil {
-		t.Fatalf("SetProUntil(NULL): %v", err)
+	if err := q.SetProUntilStripe(ctx, SetProUntilStripeParams{ID: user}); err != nil {
+		t.Fatalf("SetProUntilStripe(NULL): %v", err)
 	}
 	if got, err = q.GetProUntil(ctx, user); err != nil || got.Valid {
 		t.Fatalf("clearing pro_until left %v (valid=%v), err %v", got.Time, got.Valid, err)

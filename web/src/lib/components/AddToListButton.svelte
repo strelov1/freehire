@@ -5,6 +5,7 @@
   import { promptSignIn } from '$lib/signin';
   import { jobLists } from '$lib/jobLists.svelte';
   import type { JobListMembership } from '$lib/types';
+  import { cn } from '$lib/ui';
 
   // A self-contained "Add to list" control: an icon button that opens a small
   // hand-rolled popover (no shared Menu/Popover primitive exists in the design
@@ -104,7 +105,16 @@
 
 <svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
-<div class="relative inline-block {className}" bind:this={root}>
+<!-- `cn`, not interpolation. `relative` is only this wrapper's DEFAULT — it is here so the
+     menu below can anchor to it — and a caller that positions the control itself passes
+     `absolute`. Interpolated, both classes landed in the attribute and Tailwind resolved
+     them by CSS source order rather than by the order written, so `relative` won and the
+     caller's placement never applied: the control sat wherever the card's flow left it,
+     which for the job card was under the card rather than in its top-right corner.
+     `cn` is tailwind-merge, so the caller's position now replaces the default instead of
+     fighting it. An absolutely positioned wrapper is still a containing block, so the
+     menu keeps anchoring correctly either way. -->
+<div class={cn('relative inline-block', className)} bind:this={root}>
   <button
     type="button"
     onclick={toggleOpen}

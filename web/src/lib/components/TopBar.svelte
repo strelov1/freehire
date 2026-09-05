@@ -4,6 +4,7 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { signinUrl } from '$lib/signin';
   import HeaderSearch from './HeaderSearch.svelte';
+  import { rolePlaceholders } from '$lib/placeholderRoles';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
   import { isFullBleedRoute } from '$lib/shellLayout';
@@ -19,10 +20,17 @@
   // trigger; everywhere else the same box navigates to the feed carrying the same
   // filter.
   //
-  // `listKind` survives only to word the placeholder — the box asks the page nothing
-  // else. It used to select between two components that shared everything but that one
-  // behaviour and drifted apart in the parts they shared.
-  const listKind = $derived(page.url.pathname === '/companies' ? 'companies' : 'jobs');
+  // How the box words itself is all the page decides — it asks nothing else. This used
+  // to select between two components that shared everything but that one behaviour and
+  // drifted apart in the parts they shared.
+  //
+  // The companies box rotates nothing: the roles the jobs box cycles through would be
+  // answering a question it does not ask.
+  const searchWording = $derived(
+    page.url.pathname === '/companies'
+      ? { placeholder: 'Search companies…', label: 'Search companies' }
+      : { placeholder: rolePlaceholders(), label: 'Search jobs' },
+  );
 
   // The homepage is the one exception: its whole content is a large centred copy of
   // this same box, so the header renders none. Two identical fields on one screen make
@@ -135,9 +143,7 @@
           {/each}
         </nav>
       {:else}
-        <HeaderSearch
-          placeholder={listKind === 'companies' ? 'Search companies…' : 'Search jobs…'}
-        />
+        <HeaderSearch {...searchWording} />
       {/if}
     </div>
 

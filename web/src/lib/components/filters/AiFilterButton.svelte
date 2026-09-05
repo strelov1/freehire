@@ -8,7 +8,13 @@
   // Rendered for everyone, signed in or not. Hiding it from signed-out visitors would
   // hide the feature from exactly the people who have not yet been given a reason to
   // sign in; the gate is on activation, which sends them to /signin.
-  let { store }: { store: FilterStore } = $props();
+  //
+  // `onApplied` fires once the dialog has written its filters. It exists for the host
+  // that DEFERS its own edits — the filter modal — where the dialog's write goes
+  // straight to the live store and would then be overwritten by whatever the modal had
+  // staged. There the host closes itself, which is honest: describing the search in
+  // words replaces the filters, so there is nothing left to stage.
+  let { store, onApplied }: { store: FilterStore; onApplied?: () => void } = $props();
 
   let open = $state(false);
 
@@ -32,5 +38,5 @@
 </button>
 
 {#if open}
-  <AiFilterDialog {store} onclose={() => (open = false)} />
+  <AiFilterDialog {store} {onApplied} onclose={() => (open = false)} />
 {/if}

@@ -2,7 +2,7 @@
 -- Bind an account to the payment provider's customer, ONCE, when it first transacts.
 --
 -- IS NULL, so this writes a binding and never REPLACES one. That is a security property,
--- not a tidiness one. An account's customer is resolved two ways (see Service.resolveUser):
+-- not a tidiness one. An account's customer is resolved two ways (see stripeProvider.account):
 -- from the stored binding, and — only when there is no binding yet — from the account
 -- reference the provider echoes back. That reference is attacker-supplied on one path: a
 -- Stripe Payment Link takes `?client_reference_id=` from whoever opens it. With a bare
@@ -12,7 +12,7 @@
 -- never touches it again — and then hold the victim's plan hostage to their own card.
 --
 -- Refusing the write costs nothing the system needs. The self-healing rebind in
--- Service.Apply is precisely the NULL case, and an account that genuinely has to move to a
+-- engine.Apply is precisely the NULL case, and an account that genuinely has to move to a
 -- new customer is a support ticket and one UPDATE, not a path a webhook should offer.
 --
 -- Also subsumes the cheaper reason the predicate was here before: the webhook and the
@@ -49,9 +49,16 @@ WHERE stripe_customer_id = sqlc.arg(stripe_customer_id)::text;
 -- It walks users rather than billing_events because the binding column is what makes the
 -- question answerable at all — and it is indexed, so the scan is over the accounts that
 -- have transacted rather than over all of them.
-SELECT id, stripe_customer_id, pro_until
+--
+-- The window is a predicate on pro_until_stripe, NEVER on the derived pro_until. Since
+-- migration 0135 the derived column is the FURTHEST reach of three sources, so a Stripe
+-- customer who also holds a store subscription or a manual grant that reaches beyond their
+-- renewal would sit outside the window and never be re-checked — and the renewal whose
+-- webhook was lost, which is the only reason this query exists, would stay lost. Each
+-- provider's window belongs on that provider's own column.
+SELECT id, stripe_customer_id, pro_until_stripe
 FROM users
 WHERE stripe_customer_id IS NOT NULL
-  AND pro_until >= sqlc.arg(from_time)
-  AND pro_until < sqlc.arg(to_time)
+  AND pro_until_stripe >= sqlc.arg(from_time)
+  AND pro_until_stripe < sqlc.arg(to_time)
 LIMIT sqlc.arg(max_rows);

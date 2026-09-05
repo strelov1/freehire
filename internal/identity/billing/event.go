@@ -6,14 +6,10 @@ import (
 	"strconv"
 )
 
-// Provider names the payment provider a stored event came from. It is part of the
-// idempotency key so that a second provider's event identifiers — opaque strings from an
-// unrelated namespace — cannot collide with these.
-//
-// The column exists because a second provider is a real prospect rather than a hypothetical
-// one: mobile purchases cannot go through this provider at all, so the day an app ships,
-// events from somewhere else land in the same table beside these.
-const Provider = "stripe"
+// Which provider a stored event came from is part of the idempotency key, so that two
+// providers' event identifiers — opaque strings from unrelated namespaces — cannot collide.
+// The name belongs to each provider and is read through provider.name(); it stopped being a
+// constant here the moment there were two of them.
 
 // Event is one webhook delivery, reduced to what we store and act on. Note what is NOT
 // here: no status, no period, no price. The event says something about this customer

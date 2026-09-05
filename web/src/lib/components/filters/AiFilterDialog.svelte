@@ -16,7 +16,11 @@
   // canonicalised against the real dictionaries. Nothing is applied until the preview
   // is accepted, and the preview names whatever the server could not place — a drop the
   // user is not told about is indistinguishable from a value that WAS applied.
-  let { store, onclose }: { store: FilterStore; onclose: () => void } = $props();
+  let {
+    store,
+    onclose,
+    onApplied,
+  }: { store: FilterStore; onclose: () => void; onApplied?: () => void } = $props();
 
   /** One previewed value. `exclude` draws it struck through, as the sidebar does; `key`
    *  is its identity in the keyed `{#each}` — `param:value`, never the label, which two
@@ -95,16 +99,34 @@
     if (!result) return;
     store.apply(filtersToParams(filtersFromInterpretation(result)).toString());
     onclose();
+    // After this dialog, not after its host's own apply: the write above is already
+    // live, so a host that defers its edits (the filter modal) has to hear about it —
+    // otherwise it would later apply the filters it staged before this ran, silently
+    // undoing them. See AiFilterButton for why closing is the honest response.
+    onApplied?.();
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
+<!-- Moved to the body: this dialog is opened from the filter modal, and before that from
+     the filter sidebar, which is `sticky` and so opens a stacking context
+     unconditionally. Inside one, `z-50` is scoped to that layer — so the overlay painted
+     UNDER the job cards, which come later in the document. No z-index can climb out of a
+     stacking context.
 
-<!-- Moved to the body: this dialog is rendered from the filter sidebar, and that sidebar
-     is `sticky`, which opens a stacking context unconditionally. Inside one, `z-50` is
-     scoped to the sidebar's layer — so the overlay painted UNDER the job cards, which
-     come later in the document. No z-index can climb out of a stacking context. -->
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4" {@attach portal()}>
+     Escape is handled HERE, on the portalled root, rather than on <svelte:window>. Its
+     host now has an Escape handler of its own (FilterModalShell), and two window
+     listeners both fire for one key — so a single press dismissed this dialog AND the
+     modal behind it. Stopping propagation at this element keeps the key from ever
+     reaching the window, and the focus trap below guarantees the press lands in here. -->
+<div
+  class="fixed inset-0 z-50 flex items-center justify-center p-4"
+  onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    onclose();
+  }}
+  {@attach portal()}
+>
   <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onclose}></button>
 
   <div

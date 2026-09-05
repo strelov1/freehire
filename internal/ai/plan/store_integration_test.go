@@ -40,10 +40,17 @@ func insertUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 	return id
 }
 
+// makePro puts an account on the pro plan. It writes pro_until_granted, not pro_until: since
+// migration 0135 the plan column is derived from three sources and assigning it fails.
+//
+// The granted source is the right one here rather than a convenient one. These tests are
+// about what a plan ALLOWS, and no payment provider is involved in any of them — granted is
+// exactly "pro without a provider". Seeding a provider's column would tie a test about
+// allowances to a subscription that does not exist.
 func makePro(t *testing.T, pool *pgxpool.Pool, userID int64, until time.Time) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`UPDATE users SET pro_until = $2 WHERE id = $1`, userID, until); err != nil {
+		`UPDATE users SET pro_until_granted = $2 WHERE id = $1`, userID, until); err != nil {
 		t.Fatalf("make pro: %v", err)
 	}
 }

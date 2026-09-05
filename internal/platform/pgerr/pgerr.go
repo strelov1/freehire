@@ -15,6 +15,11 @@ const (
 	codeUniqueViolation      = "23505"
 	codeForeignKeyViolation  = "23503"
 	codeSerializationFailure = "40001"
+	// codeDeadlockDetected is 40P01: PostgreSQL broke a lock cycle by killing one of
+	// the transactions in it. Like 40001 it says nothing was wrong with the work —
+	// only that two writers wanted the same rows in opposite orders — so the answer is
+	// to run it again.
+	codeDeadlockDetected = "40P01"
 	// codeDataCorrupted is XX001 (data_corrupted): a row cannot be read because its
 	// on-disk storage is damaged — most visibly a "missing chunk number N for toast
 	// value ..." on a broken TOAST pointer.
@@ -41,6 +46,18 @@ func IsForeignKeyViolation(err error) bool {
 func IsSerializationFailure(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == codeSerializationFailure
+}
+
+// IsDeadlock reports whether err is (or wraps) a deadlock PostgreSQL resolved by
+// aborting this transaction (SQLSTATE 40P01).
+//
+// It is a transient condition, not a defect in the statement: the same work
+// succeeds on a retry once the other writer has moved on. A caller that treats it
+// as a hard failure stops doing its job for as long as nobody reads the log — which
+// is what happened to cmd/rollup-views, silently, for two days.
+func IsDeadlock(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == codeDeadlockDetected
 }
 
 // IsDataCorrupted reports whether err is (or wraps) a Postgres data-corruption error

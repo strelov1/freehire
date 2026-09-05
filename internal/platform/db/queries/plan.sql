@@ -7,12 +7,34 @@ SELECT pro_until
 FROM users
 WHERE id = $1;
 
--- name: SetProUntil :exec
--- Move a user's plan expiry. The only writer today is a hand-run statement; the billing
--- webhook and its reconciler become the writers in the change that adds them, and they
--- write this and nothing else.
+-- name: SetProUntilStripe :exec
+-- How far the WEB subscription reaches. Written only by the Stripe sync, from Stripe's
+-- current view of the customer.
+--
+-- It writes a source, not the plan. users.pro_until is derived by the schema as the furthest
+-- of three sources and refuses assignment outright (428C9) — see migration 0135 — so
+-- clearing this column says "Stripe confers nothing", never "this account is not Pro". The
+-- account may hold a store subscription or a manual grant, and before 0135 this write would
+-- have revoked either without a trace.
 UPDATE users
-SET pro_until = sqlc.narg(pro_until)
+SET pro_until_stripe = sqlc.narg(until)
+WHERE id = sqlc.arg(id);
+
+-- name: SetProUntilRevenueCat :exec
+-- How far the APP STORE or GOOGLE PLAY subscription reaches. Written only by the RevenueCat
+-- sync, and only over its own source column, for the same reason the Stripe setter is
+-- confined to its own: neither provider may answer for a plan it did not sell.
+UPDATE users
+SET pro_until_revenuecat = sqlc.narg(until)
+WHERE id = sqlc.arg(id);
+
+-- name: SetProUntilGranted :exec
+-- Pro GIVEN rather than sold: support's manual grant today, awarded days once add-invites
+-- lands. No provider sync touches it, which is the whole reason it is separate — before
+-- migration 0135 a hand-set value lived in the column the Stripe sync overwrites, and the
+-- next webhook silently undid it.
+UPDATE users
+SET pro_until_granted = sqlc.narg(until)
 WHERE id = sqlc.arg(id);
 
 -- name: EnsureUsageDay :exec
@@ -191,3 +213,13 @@ DELETE FROM usage_ledger WHERE user_id = $1;
 -- name: DeleteUsageDailyForUser :exec
 -- Erase one user's daily counters. See DeleteUsageForUser.
 DELETE FROM usage_daily WHERE user_id = $1;
+
+-- name: GetProUntilSources :one
+-- The plan and where it came from, in one read.
+--
+-- The derived column and its three sources together, because the surface needs both: the
+-- instant to show, and which origin equals it. Two queries would be two round trips for one
+-- row, and — worse — could disagree if a sync landed between them.
+SELECT pro_until, pro_until_stripe, pro_until_revenuecat, pro_until_granted
+FROM users
+WHERE id = $1;

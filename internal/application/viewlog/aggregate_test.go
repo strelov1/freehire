@@ -26,10 +26,7 @@ func TestAggregate(t *testing.T) {
 			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
 			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
 		}, "\n")
-		got := aggregate(t, log)
-		if got["2026-07-21"]["acme"] != 1 {
-			t.Errorf("acme = %d, want 1", got["2026-07-21"]["acme"])
-		}
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 1, Page: 1})
 	})
 
 	t.Run("distinct visitors count separately", func(t *testing.T) {
@@ -37,10 +34,7 @@ func TestAggregate(t *testing.T) {
 			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
 			line("2.2.2.2", "GET", "/jobs/acme", 200, human),
 		}, "\n")
-		got := aggregate(t, log)
-		if got["2026-07-21"]["acme"] != 2 {
-			t.Errorf("acme = %d, want 2", got["2026-07-21"]["acme"])
-		}
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 2, Page: 2})
 	})
 
 	t.Run("same visitor on two days counts once per day", func(t *testing.T) {
@@ -49,9 +43,8 @@ func TestAggregate(t *testing.T) {
 			lineAt("1.1.1.1", "GET", "/jobs/acme", 200, human, "22/Jul/2026:01:00:00 +0000"),
 		}, "\n")
 		got := aggregate(t, log)
-		if got["2026-07-21"]["acme"] != 1 || got["2026-07-22"]["acme"] != 1 {
-			t.Errorf("got 21=%d 22=%d, want 1 and 1", got["2026-07-21"]["acme"], got["2026-07-22"]["acme"])
-		}
+		assertCounts(t, got, "2026-07-21", "acme", Counts{Total: 1, Page: 1})
+		assertCounts(t, got, "2026-07-22", "acme", Counts{Total: 1, Page: 1})
 	})
 
 	t.Run("page and api visitors both count for the same slug", func(t *testing.T) {
@@ -59,10 +52,7 @@ func TestAggregate(t *testing.T) {
 			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
 			line("2.2.2.2", "GET", "/api/v1/jobs/acme", 200, "curl/8"),
 		}, "\n")
-		got := aggregate(t, log)
-		if got["2026-07-21"]["acme"] != 2 {
-			t.Errorf("acme = %d, want 2", got["2026-07-21"]["acme"])
-		}
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 2, Page: 1})
 	})
 
 	t.Run("bot skipped on page but counted on api", func(t *testing.T) {
@@ -70,10 +60,7 @@ func TestAggregate(t *testing.T) {
 			line("1.1.1.1", "GET", "/jobs/acme", 200, "Googlebot/2.1"),
 			line("2.2.2.2", "GET", "/api/v1/jobs/acme", 200, "Googlebot/2.1"),
 		}, "\n")
-		got := aggregate(t, log)
-		if got["2026-07-21"]["acme"] != 1 {
-			t.Errorf("acme = %d, want 1 (bot page skipped, bot api counted)", got["2026-07-21"]["acme"])
-		}
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 1, Page: 0})
 	})
 
 	t.Run("unrelated and malformed lines ignored", func(t *testing.T) {
@@ -87,14 +74,76 @@ func TestAggregate(t *testing.T) {
 			t.Errorf("got %v, want empty", got)
 		}
 	})
+
+	// The two counters are deduplicated independently over the same visitor key, so a
+	// visitor who does both is one visitor in each — NOT two in Total. Adding the signal
+	// kind to a single shared key would inflate Total, and Total is what feeds
+	// job_daily_views.uniques, a figure GET /api/v1/stats/catalog already publishes.
+	t.Run("one visitor doing both counts once in each", func(t *testing.T) {
+		log := strings.Join([]string{
+			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
+			line("1.1.1.1", "GET", "/api/v1/jobs/acme", 200, human),
+		}, "\n")
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 1, Page: 1})
+	})
+
+	// Order must not decide attribution. The same visitor, the same two signals, the
+	// other way round: a dedup that let the first line seen win would report Page: 0.
+	t.Run("api read before page open still counts as a page visitor", func(t *testing.T) {
+		log := strings.Join([]string{
+			line("1.1.1.1", "GET", "/api/v1/jobs/acme", 200, human),
+			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
+		}, "\n")
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 1, Page: 1})
+	})
+
+	t.Run("api-only job has no page uniques", func(t *testing.T) {
+		log := strings.Join([]string{
+			line("1.1.1.1", "GET", "/api/v1/jobs/acme", 200, "curl/8"),
+			line("2.2.2.2", "GET", "/api/v1/jobs/acme", 200, "curl/8"),
+		}, "\n")
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 2, Page: 0})
+	})
+
+	// The SvelteKit client-side navigation is the same page view as a full SSR load,
+	// and must land in Page as well as Total.
+	t.Run("spa data request counts as a page open", func(t *testing.T) {
+		log := strings.Join([]string{
+			line("1.1.1.1", "GET", "/jobs/acme/__data.json", 200, human),
+		}, "\n")
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 1, Page: 1})
+	})
+
+	// Page can never exceed Total: both dedup over the same visitor key, and every
+	// page visitor is by definition a visitor.
+	t.Run("page never exceeds total", func(t *testing.T) {
+		log := strings.Join([]string{
+			line("1.1.1.1", "GET", "/jobs/acme", 200, human),
+			line("2.2.2.2", "GET", "/jobs/acme", 200, human),
+			line("2.2.2.2", "GET", "/api/v1/jobs/acme", 200, human),
+			line("3.3.3.3", "GET", "/api/v1/jobs/acme", 200, "curl/8"),
+		}, "\n")
+		got := aggregate(t, log)["2026-07-21"]["acme"]
+		if got.Page > got.Total {
+			t.Errorf("page %d exceeds total %d", got.Page, got.Total)
+		}
+		assertCounts(t, aggregate(t, log), "2026-07-21", "acme", Counts{Total: 3, Page: 2})
+	})
 }
 
 // aggregate runs Aggregate over a log string and fails the test on error.
-func aggregate(t *testing.T, log string) map[string]map[string]int {
+func aggregate(t *testing.T, log string) map[string]map[string]Counts {
 	t.Helper()
 	got, err := Aggregate(strings.NewReader(log))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return got
+}
+
+func assertCounts(t *testing.T, got map[string]map[string]Counts, day, slug string, want Counts) {
+	t.Helper()
+	if g := got[day][slug]; g != want {
+		t.Errorf("%s/%s = %+v, want %+v", day, slug, g, want)
+	}
 }

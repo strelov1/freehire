@@ -67,11 +67,16 @@ func seedEnqueueJob(t *testing.T, pool *pgxpool.Pool, source, slug string) int64
 	return id
 }
 
+// makePro puts an account on the pro plan. It writes pro_until_granted, not pro_until: since
+// migration 0135 the plan column is derived from three sources and assigning it fails.
+//
+// Granted is the right source rather than a convenient one — this test is about what a plan
+// ALLOWS, and no payment provider is involved in it.
 func makePro(t *testing.T, pool *pgxpool.Pool, userID int64) {
 	t.Helper()
 	q := db.New(pool)
-	if err := q.SetProUntil(context.Background(), db.SetProUntilParams{
-		ID: userID, ProUntil: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
+	if err := q.SetProUntilGranted(context.Background(), db.SetProUntilGrantedParams{
+		ID: userID, Until: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
 	}); err != nil {
 		t.Fatalf("make pro: %v", err)
 	}

@@ -4,14 +4,23 @@ The production host's systemd units and operator scripts, as they run on host-2.
 not built, not imported by anything — this directory is a **record**, and the only reason
 it exists is that the machine was the sole copy.
 
-Snapshot taken 2026-09-01 from `/etc/systemd/system/freehire-*` and `/opt/freehire/bin/*.sh`.
+Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/bin/*.sh` and
+`/etc/nginx/snippets/freehire-app.conf`.
 
 ## What is here
 
 ```
 systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
-bin/        14 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
+bin/        16 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
+nginx/       1 snippet — snippets/freehire-app.conf, hand-edited, not generated
 ```
+
+`nginx/` holds one file on purpose. `freehire-app.conf` decides how `/_app/immutable/` is
+served, which is roughly three quarters of all requests and where the asset attic below
+lives; it was the last load-bearing thing on this host whose only copy was the machine.
+The other `freehire-*` snippets are left out because `freehire-upstream-active.conf` is
+the symlink the flip repoints, so tracking it would report drift after every release and
+teach the reader to ignore the tool.
 
 `systemd/freehire-ingest@.service` is one template; the `freehire-ingest@<provider>.timer`
 files beside it are per-provider schedules, which is why the timer count dwarfs everything
@@ -65,6 +74,55 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   one to verify the other fails every delivery, and the failure looks exactly like a wrong
   key rather than a wrong environment.
 
+- **The stores are a SECOND provider, configured separately and inert without its two
+  credentials.** `REVENUECAT_API_KEY` (a `sk_` SECRET key, server-side only) and
+  `REVENUECAT_WEBHOOK_SECRET` are what a deployment must set. Missing either mounts no store
+  route and skips that reconciler pass, and **leaves Stripe working** — the two providers are
+  independent, so a deployment may sell on the web, in the apps, in both, or in neither.
+
+  `REVENUECAT_ENTITLEMENT` is OPTIONAL and defaults to `pro`; set it only if the dashboard's
+  entitlement is called something else. `Enabled()` does require it to be non-empty, but the
+  default fills it, so leaving it unset switches nothing off — an earlier draft of this note
+  said all three were required, which would have had an operator hunting a variable that was
+  never missing.
+
+  This exists because Apple's guideline 3.1.1 and Google Play's Payments policy require
+  digital content consumed in an app to be sold through in-app purchase. The mobile client
+  cannot use the Stripe checkout, and no amount of configuration changes that.
+
+  What happens in the RevenueCat dashboard and nowhere else:
+
+  1. A project, with an iOS app and an Android app, each holding its store credentials (an
+     App Store Connect API key, a Play service-account JSON).
+  2. An entitlement whose identifier matches `REVENUECAT_ENTITLEMENT`. **This string is the
+     contract**: the backend grants Pro for that entitlement and nothing else, and a mismatch
+     looks exactly like nobody having bought anything.
+  3. An offering with the monthly and annual packages, mapped to the products created in App
+     Store Connect and Play Console. Those products are created in the stores first; the
+     paid-apps agreement and banking details must be in place or they cannot be sold.
+  4. The webhook, pointed at `https://freehire.me/api/v1/billing/revenuecat/webhook`, **with
+     HMAC signing enabled**. If the integration offers only a shared `Authorization` header,
+     stop: that is a bearer credential anyone who sees one delivery can replay, and accepting
+     it is a decision to be made deliberately rather than by default.
+
+  **The signature window is wider here than for Stripe, provisionally.** Stripe re-signs every
+  retry, so its window is five minutes; RevenueCat's documentation does not say whether it
+  does, and its last retry arrives 80 minutes after the first. Until somebody inspects a real
+  retried delivery, the window admits that tail — a too-narrow window would drop paid
+  subscriptions silently, which is the worse failure. See `revenuecatSignatureWindow`.
+
+- **Granting Pro by hand changed.** `UPDATE users SET pro_until = …` now FAILS with SQLSTATE
+  `428C9`, and that is deliberate: since migration 0135 the column is derived from three
+  sources and cannot be assigned. Support grants go to the source that no provider sync can
+  revoke:
+
+  ```sql
+  UPDATE users SET pro_until_granted = now() + interval '30 days' WHERE id = $1;
+  ```
+
+  The other two columns belong to their providers. Writing `pro_until_stripe` by hand means
+  the next Stripe sync overwrites it, which is exactly the confusion the split removed.
+
 - **A new worker needs its binary built on the host.** `release.sh` builds the API, not
   every command in `cmd/`. `billing-sync` is the first addition since that was last true;
   build it where the other worker binaries live before enabling the timer, or the unit
@@ -103,9 +161,53 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   `meilisearch`, `rollup-views`, `seed-from-nginx` are compiled artifacts, and a committed
   binary breaks `git pull` on the host.
 - **The scripts are shellcheck-clean and CI enforces it.** The `artifacts` job runs
-  shellcheck over every tracked `*.sh`, so these 13 are covered the moment they are
+  shellcheck over every tracked `*.sh`, so these 16 are covered the moment they are
   committed. The findings that came with them were all style-level and are suppressed
   inline with the reason beside them — none was a defect.
+
+## The asset attic
+
+`/opt/freehire/asset-attic/_app/immutable/` holds the client chunks of recent builds, and
+nginx falls back to it when the live build does not have the file (`location @attic` in
+`nginx/snippets/freehire-app.conf`). `release.sh` copies each build in and drops what no
+build has shipped for three days; about 39 MB a build.
+
+It exists because `/_app/immutable/` is served off `hire-current`, the symlink the flip
+repoints in one step — so before this, every chunk of the outgoing build stopped existing
+the instant traffic moved, and a tab open across the release 404'd on its next navigation,
+which SvelteKit draws as the 500 page over an HTTP 200. Keeping the files is safe by
+construction: every name under `_app/immutable` carries a content hash, so a kept copy can
+never disagree with a live build about what it contains.
+
+It is the second half of a fix, not a replacement for the first.
+`web/src/routes/+layout.svelte` leaves through a full page load once `updated` reports a
+new build, which took these from 265 a day to about 22; what it cannot catch is a reader
+navigating inside the five-minute version poll, and no client-side guard can. Neither half
+is redundant: the client one also covers a stale tab older than the attic's three days.
+
+**An empty attic protects nobody for one release.** `release.sh` banks the build it is
+about to make live, so the build going *warm* was only ever banked by the release before
+it. The first run after this shipped had nothing behind it, and the same hole opens after
+any hand-wipe of the directory. Seeding it costs one command per colour, and both were run
+on 2026-09-05 when this went in:
+
+```bash
+install -d -o freehire -g freehire /opt/freehire/asset-attic/_app/immutable
+for c in blue green; do
+  cp -rf "/opt/freehire/src/hire-$c/web/build/client/_app/immutable/." \
+         /opt/freehire/asset-attic/_app/immutable/
+done
+chown -R freehire:freehire /opt/freehire/asset-attic
+```
+
+**To undo it**, restore the snippet and reload — the directory can then be deleted at
+leisure, since nothing but that `location` block reads it:
+
+```bash
+ls /etc/nginx/snippets/freehire-app.conf.bak.*   # release.sh never writes these; they are hand-made
+cp /etc/nginx/snippets/freehire-app.conf.bak.<stamp> /etc/nginx/snippets/freehire-app.conf
+nginx -t && systemctl reload nginx
+```
 
 ## Checking for drift
 

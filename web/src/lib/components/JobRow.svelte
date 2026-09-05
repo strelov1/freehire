@@ -36,19 +36,28 @@
   // job, so the browse list shows what's been seen. The My Jobs surfaces (where
   // every card is viewed by definition) pass `dimViewed={false}` to opt out.
   // `newTab` opens the job in a new browser tab (used when the card is rendered
-  // inside the assistant chat, so the conversation stays open). `compact` tightens
-  // the card for the narrow chat column (smaller padding + title, one-line title,
-  // no blurb). Both default off so the jobs list / company pages are unchanged.
+  // inside the assistant chat, so the conversation stays open). Both default off so the
+  // jobs list / company pages are unchanged.
+  //
+  // `compact` is the narrow-chat-column card, and it decides more than density. As well
+  // as the smaller padding and title, the one-line title and the dropped blurb, it
+  // selects the card's whole control inventory: there is no action row, so Save stays
+  // the corner glyph it always was and `onHide` has nowhere to render. The two concerns
+  // are fused on purpose — the column is ~360px wide, and every control that earns a
+  // word on a full card has to give it back here. Splitting them would be a second flag
+  // whose only honest value is the same as this one's.
+  //
   // `footer` is an optional actions row rendered inside the card, below the link
   // content (a sibling of the <a>, never nested in it — so its interactive controls
-  // don't fight the card's navigation). The hidden list passes an un-hide control here.
+  // don't fight the card's navigation). The hidden list passes an un-hide control here,
+  // and gets it as a second row under the card's own Save row.
   //
-  // `onHide` is the feed's hook for the "hide this job" gesture: when set (only the
-  // browse feed passes it), the card shows a hover-revealed hide control, and after
-  // a successful dismiss it calls back with the slug so the feed can surface an undo
-  // affordance. Surfaces that reuse JobRow without it (saved/hidden lists, tracking
-  // board, assistant chat) get no hide control — leaving it out scopes the gesture
-  // to the feed.
+  // `onHide` is the feed's hook for the "hide this job" gesture: when set on a NON-compact
+  // card (only the browse feed passes it), the action row gains a hover-revealed hide
+  // control, and after a successful dismiss it calls back with the slug so the feed can
+  // surface an undo affordance. Surfaces that reuse JobRow without it (saved/hidden
+  // lists, tracking board, assistant chat) get no hide control — leaving it out scopes
+  // the gesture to the feed.
   let {
     job,
     dimViewed = true,
@@ -246,10 +255,11 @@
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-  <!-- pr-20 reserves the top-right corner for the save button AND the "Add to
-       list" button beside it (both overlays outside this link), so the timestamp
-       never slides under either. -->
-  <div class="flex items-center justify-between gap-3 pr-20">
+  <!-- Reserves the top-right corner for the overlays outside this link, so the timestamp
+       never slides under one. A compact card still keeps both Save and "Add to list" up
+       here and needs the wider gutter; a normal card has moved Save into the action row
+       at its foot, leaving only "Add to list". -->
+  <div class={['flex items-center justify-between gap-3', compact ? 'pr-20' : 'pr-11']}>
     <div class="flex min-w-0 items-center gap-2">
       <EntityLogo
         name={job.company || 'Unknown company'}
@@ -353,19 +363,15 @@
     <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
   {/if}
 
-  <!-- sm:pr-9 (when the hide control is present) reserves the bottom-right corner for
-       it — the counterpart to the header's pr-9 for the save button — so the skills
-       tail and the salary never slide under the icon. Only from `sm` up: below it the
-       salary sits on its own line, well clear of the corner.
+  <!-- No corner gutter here any more: Hide moved into the action row at the foot of the
+       card, so nothing overlays this corner and the skills tail and salary can use the
+       full width.
        On a phone the salary is ~160px of the ~360px card, so sharing a row with it
        squeezed the chips into a five-line stack. Stacking the two below `sm` gives the
        chips the full width (three lines become two); from `sm` up the original
        chips-left / salary-right row is unchanged. -->
   <div
-    class={[
-      'mt-3 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3',
-      onHide && 'sm:pr-9',
-    ]}
+    class="mt-3 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3"
   >
     <!-- flex-1 (not the default basis:auto) so the chips get every pixel the salary
          doesn't need. With basis:auto the row's width is derived from its max-content
@@ -411,9 +417,9 @@
   <!-- Card-level profile match: the real client-computed coverage bar for a signed-in
        viewer with a skills profile, the blurred teaser for one without. `blurred` is
        gated on there being no real match too, so the two props cannot contradict each
-       other and render a genuine score under a blur. `gutterRight` keeps the percent
-       clear of the feed's bottom-right hide control. -->
-  <JobMatchBar match={match ?? teaser} blurred={!match && !!teaser} gutterRight={!!onHide} />
+       other and render a genuine score under a blur. No `gutterRight`: the hide control
+       it used to keep clear of now lives in the action row below, not over this corner. -->
+  <JobMatchBar match={match ?? teaser} blurred={!match && !!teaser} />
   {#if teaser}
     <!-- The sighted invitation, under the blurred strip rather than over it — the same
          icon + line the job page's own match block uses below its teaser. `aria-hidden`
@@ -422,7 +428,7 @@
          No button here (unlike the job page's): a second activation target inside this
          <a> would be invalid markup, and the card itself is already the link. -->
     <div
-      class={['mt-1.5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground', onHide && 'pr-9']}
+      class="mt-1.5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
       aria-hidden="true"
     >
       {#if matchState === 'guest'}
@@ -444,54 +450,97 @@
   <span class="sr-only">{matchInvite}</span>
 {/if}
 
-{#if footer}
-  <!-- Optional in-card actions row (e.g. the hidden list's un-hide control, the
-       assistant deck's rationale), divided from the content and rendered outside
-       the <a> so its controls stay clickable. Its inline padding tracks the card's
-       own, or the row would sit 4px out of line in a compact card. -->
-  <div class={['border-t border-border py-2.5', compact ? 'px-3' : 'px-4']}>
+{#if footer && compact}
+  <!-- Optional in-card actions row (e.g. the assistant deck's rationale), divided from
+       the content and rendered outside the <a> so its controls stay clickable. Its
+       inline padding tracks the card's own, or the row would sit 4px out of line.
+       A normal card has an action row of its own, and the caller's controls join it
+       rather than stacking a second bordered row under the first. -->
+  <div class="border-t border-border px-3 py-2.5">
     {@render footer()}
   </div>
 {/if}
 
-<!-- Save toggle: an icon-only overlay in the card's top-right corner. It sits
-     outside the <a> (a sibling, not a descendant), so clicking it toggles the
-     bookmark without navigating to the job. -->
-<button
-  type="button"
-  onclick={toggleSave}
-  disabled={saving}
-  aria-pressed={saved}
-  aria-label={saved ? 'Remove from saved' : 'Save job'}
-  title={saved ? 'Saved' : 'Save'}
-  class={[
-    'absolute right-2.5 top-4 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
-    saved ? 'text-brand' : 'text-muted-foreground',
-  ]}
->
-  <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
-</button>
+<!-- Save toggle. Outside the <a> (a sibling, not a descendant) either way, so activating
+     it never navigates to the posting.
 
-<!-- Add-to-list: a second overlay beside Save, independent of it — a job can be
-     saved, listed, both, or neither. -->
-<AddToListButton jobSlug={job.public_slug} class="absolute right-12 top-4" />
-
-<!-- Hide control: only the browse feed passes `onHide`, so this appears there and
-     nowhere else. A quiet icon in the card's bottom-right corner, revealed on hover
-     (and on keyboard focus). Touch devices have no hover, so `pointer-coarse` keeps it
-     always visible there. It's an overlay sibling of the card link, so hiding never
-     navigates. No background plate — the bottom row reserves a pr-9 gutter for it, so
-     nothing renders underneath and it reads as a bare icon (mirrors the save button). -->
-{#if onHide}
+     Two presentations, one rule: a labelled button on a normal card, the older icon-only
+     overlay in `compact`, where the narrow chat column has no width to spend on a word.
+     The label is the point — saving now puts the job on the tracking board, and an
+     unlabelled glyph in a corner asked people to guess that. It says which of the two
+     states it is in rather than which action it performs, because the state is what a
+     card in a long feed has to answer at a glance. -->
+{#if compact}
   <button
     type="button"
-    onclick={hide}
-    disabled={hiding}
-    aria-label="Hide this job"
-    title="Not interested — hide this job"
-    class="absolute bottom-2.5 right-2.5 grid size-8 place-items-center rounded-lg text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+    onclick={toggleSave}
+    disabled={saving}
+    aria-pressed={saved}
+    aria-label={saved ? 'Remove from your board' : 'Save to your board'}
+    title={saved ? 'On your board' : 'Save to board'}
+    class={[
+      'absolute right-2.5 top-4 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
+      saved ? 'text-brand' : 'text-muted-foreground',
+    ]}
   >
-    <EyeOff class="size-3.5" aria-hidden="true" />
+    <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
   </button>
+{:else}
+  <!-- The card's action row. Save leads it; Hide, where the feed asked for one, sits at
+       the far end. Hide used to be an overlay pinned to the card's bottom-right corner,
+       which is exactly where this row now is — so it moves in here rather than being
+       covered by it, and it keeps its hover-reveal (a destructive-feeling gesture that
+       should not compete with Save for attention). `pointer-coarse` keeps it visible on
+       touch, which has no hover to reveal anything. -->
+  <div class="flex items-center gap-2 border-t border-border px-4 py-2.5">
+    <!-- No `aria-pressed`, unlike the compact glyph: this button's visible name already
+         changes with the state, so the toggle role would announce the same fact twice in
+         two vocabularies. The glyph needs it precisely because its name cannot.
+         But only half of that visible name is an action. "Save to board" says what
+         activating does; "On your board" is a state, and on its own it leaves a screen
+         reader user with a button whose effect is unstated. So the saved case — and only
+         it — overrides the name with the action, while sighted readers keep the state. -->
+    <button
+      type="button"
+      onclick={toggleSave}
+      disabled={saving}
+      aria-label={saved ? 'Remove from your board' : undefined}
+      class={[
+        'flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
+        saved
+          ? 'bg-brand/10 text-brand hover:bg-brand/15'
+          : 'border border-border text-foreground hover:bg-accent',
+      ]}
+    >
+      <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
+      {saved ? 'On your board' : 'Save to board'}
+    </button>
+
+    <!-- The caller's own controls share this row rather than getting a second bordered
+         one under it — two stacked rules under one card read as a layout mistake. -->
+    {@render footer?.()}
+
+    {#if onHide}
+      <button
+        type="button"
+        onclick={hide}
+        disabled={hiding}
+        aria-label="Hide this job"
+        title="Not interested — hide this job"
+        class="ml-auto grid size-8 place-items-center rounded-lg text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+      >
+        <EyeOff class="size-3.5" aria-hidden="true" />
+      </button>
+    {/if}
+  </div>
 {/if}
+
+<!-- Add-to-list: independent of Save — a job can be saved, listed, both, or neither.
+     It sits where Save's overlay used to on a compact card, and takes that corner itself
+     on a normal one, where Save has moved down into the action row. -->
+<AddToListButton
+  jobSlug={job.public_slug}
+  class={compact ? 'absolute right-12 top-4' : 'absolute right-2.5 top-4'}
+/>
+
 </div>

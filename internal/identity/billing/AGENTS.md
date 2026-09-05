@@ -2,10 +2,16 @@
 
 ## Scope
 
-The Pro subscription: where a candidate buys it, and how the provider's record of it
-reaches `users.pro_until` — the one column that decides a plan. Nothing else. What the plan
-then ALLOWS is `internal/ai/plan`'s business, and the two packages never meet: `plan` reads
-the column through `platform/db` and does not import this package.
+The Pro subscription: where a candidate buys it, and how the provider's record of it reaches
+the SOURCE COLUMN that provider owns. Nothing else. What the plan then ALLOWS is
+`internal/ai/plan`'s business, and the two packages never meet: `plan` reads the column
+through `platform/db` and does not import this package.
+
+`users.pro_until` still decides a plan, but since migration 0135 it is derived by the schema
+and refuses assignment (428C9). It is the furthest of three sources — `pro_until_stripe`,
+`pro_until_revenuecat`, `pro_until_granted` — one per origin, each with exactly one writer.
+This package writes a provider's source and never the plan, which is what stops a provider
+that reports "no subscription" from revoking a plan some other origin still confers.
 
 **This is freehire.me's hosted billing and is not supported for self-hosting.** It is in the
 open repository under the same licence as the rest — closing it would protect nothing, since
@@ -17,12 +23,12 @@ answer 404, and its worker exits without opening a connection.
 
 - **A webhook is a SIGNAL, never a fact.** The handler does not branch on the event type,
   and there are hundreds of them. It records the delivery and then re-reads the customer's
-  current subscriptions, deriving `users.pro_until` from that. Two reasons, both stated in
+  current subscriptions, deriving that provider's source column from that. Two reasons, both stated in
   the provider's own documentation: delivery is **not ordered**, so a renewal can arrive
   after the cancellation it superseded; and branching on event types builds a copy of the
   provider's state machine here, which is a second source of truth about money.
 
-- **The column is derived whole, never adjusted.** That is what makes a repeat free, an
+- **The source column is derived whole, never adjusted.** That is what makes a repeat free, an
   out-of-order delivery harmless, and refunds, cancellations and failed cards need no code
   of their own — they are already reflected in what we re-read.
 
@@ -77,7 +83,7 @@ answer 404, and its worker exits without opening a connection.
   disabled, taking the renewals with it. `ErrBadSignature` is what the handler branches on.
 
 - **The customer binding is WRITE-ONCE** (`SetStripeCustomerID` is `AND stripe_customer_id
-  IS NULL`), and that is a security property. `resolveUser` falls back to the account
+  IS NULL`), and that is a security property. `stripeProvider.account` falls back to the account
   reference the provider echoes back whenever no binding exists yet, and on the Payment Link
   path that reference is attacker-supplied — `?client_reference_id=` is a query parameter
   anyone opening the link may set. A binding that could be REPLACED would let somebody paying
@@ -95,11 +101,16 @@ answer 404, and its worker exits without opening a connection.
   rate limit the webhook's own reads need. One refresh is in flight at a time and everyone
   else is served the held answer.
 
-- **The signed timestamp is checked against a five-minute window** — the provider's own
-  default tolerance. Without it a captured delivery is a bearer credential that replays
-  forever. The window bounds the age of the SIGNATURE, not of the event: a retry is
-  re-signed when it is sent, so widening it to admit a late retry would only lengthen a
-  captured delivery's life.
+- **The signed timestamp is checked against a window, and the window is PER PROVIDER.**
+  Without one a captured delivery is a bearer credential that replays forever.
+
+  Five minutes for Stripe — their own default tolerance — because the window bounds the age of
+  the SIGNATURE rather than of the event, and Stripe re-signs every retry. Ninety minutes for
+  RevenueCat, because their documentation does not say whether they re-sign and their last
+  retry lands 80 minutes after the first: a five-minute window there would reject every retry
+  and leave the reconciler as the only path, silently. Widening costs little, since a replay is
+  already idempotent by event id; narrowing wrongly costs paid subscriptions. Narrow it once a
+  real retried delivery has been inspected — task 7.2 of `add-store-purchases`.
 
 - **The account id travels in TWO places, and both earn their keep.**
   `client_reference_id` comes back on the completed checkout — the ONE event that arrives
@@ -148,11 +159,12 @@ may import anything.
 
 ## What is deliberately absent
 
-**A provider interface.** There is one provider on the web. The `billing_events.provider`
-column already carries the seam, because a second one is a real prospect rather than a
-hypothetical: mobile purchases cannot go through Stripe at all, so the day an app ships,
-events from somewhere else land in the same table beside these. Writing the interface before
-that provider is chosen would be a guess at its shape.
+**Checkout, a management portal, prices and receipts behind the provider seam.** They are
+Stripe's alone and live on `Service`, not on the `provider` interface. A store subscription is
+bought, changed, cancelled and refunded inside the App Store or Google Play, where we have no
+API and no business having one — so putting them behind the seam would give RevenueCat four
+methods that can only answer "not applicable", and an interface whose implementations refuse
+half of it is a union type wearing an abstraction's clothes.
 
 **A local subscription state machine.** No status, no period, no price stored. The provider
 owns those and they are one API call away; a copy here could only disagree.

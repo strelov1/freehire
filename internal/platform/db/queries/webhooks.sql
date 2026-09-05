@@ -8,7 +8,7 @@ WHERE user_id = $1;
 
 -- name: UpsertWebhookConfig :one
 -- Creates the account's webhook destination, or updates its URL if one
--- already exists — there is exactly one row per user (see migration 0132).
+-- already exists — there is exactly one row per user (see migration 0135).
 -- Saving re-enables a previously disabled destination and clears
 -- disabled_at, since submitting the form is an explicit re-commitment to
 -- the endpoint.

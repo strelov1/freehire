@@ -27,6 +27,7 @@
   import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
+  import AiFilterButton from './AiFilterButton.svelte';
   import SavedSearches from '../SavedSearches.svelte';
 
   // The job-search filter modal: a thin wrapper over FilterModalShell that supplies the
@@ -220,6 +221,11 @@
 
   const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
 
+  // Whether this modal offers the "describe your filters in words" entry point. It needs
+  // a live store to write into, and it makes no sense in `plain` reuse (the profile
+  // editor), where a facet value is a plain choice rather than a search.
+  const showAiEntry = $derived(Boolean(store) && !plain);
+
   // A non-preset value (hand-edited URL) has no exact stop, so it reads as "Any"
   // (the rightmost stop) rather than snapping to "Today".
   const freshnessIndex = $derived.by(() => {
@@ -265,7 +271,7 @@
   {pane}
   headerAction={showProfileAction ? profileAction : undefined}
   {titleHint}
-  extra={extra ? extraStaged : undefined}
+  extra={extra || showAiEntry ? aboveThePane : undefined}
   {footerNote}
 />
 
@@ -318,7 +324,20 @@
   {/if}
 {/snippet}
 
-{#snippet extraStaged()}
+{#snippet aboveThePane()}
+  <!-- The AI entry point lives here rather than in the filters sidebar, which is
+       `hidden md:block` — so on a phone, where the modal is the ONLY way to reach
+       filters at all, the feature did not exist. Above the pane because it is a way to
+       FILL the filters, so it reads before the controls that refine them.
+
+       `onApplied={onClose}` is not decoration: the dialog writes straight to the live
+       store, while this modal defers its own edits until Apply. Left open, it would
+       later apply what it had staged before the dialog ran and silently undo it. -->
+  {#if showAiEntry && store}
+    <div class="mb-4">
+      <AiFilterButton {store} onApplied={onClose} />
+    </div>
+  {/if}
   {@render extra?.(staged)}
 {/snippet}
 

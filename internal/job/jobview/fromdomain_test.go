@@ -204,7 +204,7 @@ func TestFromDomain_ModelRequirementsWinOverTheDerivation(t *testing.T) {
 	}
 }
 
-// A row that predates migration 0138, or one whose payload is unreadable, must serve no
+// A row that predates migration 0139, or one whose payload is unreadable, must serve no
 // requirements rather than fail the read: the column is a display convenience, and
 // losing a whole posting over it is the worse trade.
 func TestFromDomain_UnreadableDerivedRequirementsAreNotFatal(t *testing.T) {

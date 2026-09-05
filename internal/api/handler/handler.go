@@ -483,7 +483,11 @@ func Register(app *fiber.App, cfg Config) {
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
 	billingSvc := billing.New(cfg.Billing, queries)
-	billingH := newBillingHandlers(billingSvc)
+	// The store provider reads its own environment rather than taking configuration from
+	// cfg: it is enabled, disabled and credentialed independently of Stripe, and threading it
+	// through the handler config would tie the two together for no reason but symmetry.
+	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)
+	billingH := newBillingHandlers(billingSvc, storeSvc)
 	// Public: a pricing page that needs an account cannot do a pricing page's job.
 	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)

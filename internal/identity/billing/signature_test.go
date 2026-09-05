@@ -93,14 +93,14 @@ func TestVerifySignature(t *testing.T) {
 			// window, anyone who ever captures one delivery can replay it forever.
 			name:    "a valid delivery replayed after the window",
 			body:    body,
-			header:  signHeader(body, testSecret, now.Add(-2*signatureWindow)),
+			header:  signHeader(body, testSecret, now.Add(-2*stripeSignatureWindow)),
 			secret:  testSecret,
 			wantErr: true,
 		},
 		{
 			name:    "a timestamp far in the future",
 			body:    body,
-			header:  signHeader(body, testSecret, now.Add(2*signatureWindow)),
+			header:  signHeader(body, testSecret, now.Add(2*stripeSignatureWindow)),
 			secret:  testSecret,
 			wantErr: true,
 		},
@@ -116,7 +116,7 @@ func TestVerifySignature(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := verifySignature(tc.body, tc.header, tc.secret, now)
+			err := verifySignature(tc.body, tc.header, tc.secret, stripeSignatureWindow, now)
 			if tc.wantErr && err == nil {
 				t.Fatal("want an error, got nil")
 			}
@@ -152,7 +152,7 @@ func TestVerifySignatureAcceptsAnyMatchingV1(t *testing.T) {
 	}
 	for name, header := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := verifySignature(body, header, testSecret, now); err != nil {
+			if err := verifySignature(body, header, testSecret, stripeSignatureWindow, now); err != nil {
 				t.Fatalf("a header carrying our signature beside another must verify: %v", err)
 			}
 		})
@@ -161,7 +161,7 @@ func TestVerifySignatureAcceptsAnyMatchingV1(t *testing.T) {
 	// The converse, or the test above proves only that we accept things. A header of
 	// signatures none of which is ours stays a rejection however many there are.
 	none := theirs + "," + sigOf(signHeader(body, "whsec_third", now))
-	if err := verifySignature(body, none, testSecret, now); err == nil {
+	if err := verifySignature(body, none, testSecret, stripeSignatureWindow, now); err == nil {
 		t.Fatal("a header carrying only OTHER secrets' signatures must not verify")
 	}
 }
@@ -181,12 +181,12 @@ func TestVerifySignatureErrorsAreBadSignature(t *testing.T) {
 		"missing t":         "v1=deadbeef",
 		"unparseable t":     "t=yesterday,v1=deadbeef",
 		"signature not hex": fmt.Sprintf("t=%d,v1=not-hex", now.Unix()),
-		"stale":             signHeader(body, testSecret, now.Add(-2*signatureWindow)),
+		"stale":             signHeader(body, testSecret, now.Add(-2*stripeSignatureWindow)),
 		"wrong secret":      signHeader(body, "whsec_other", now),
 	}
 	for name, header := range headers {
 		t.Run(name, func(t *testing.T) {
-			err := verifySignature(body, header, testSecret, now)
+			err := verifySignature(body, header, testSecret, stripeSignatureWindow, now)
 			if err == nil {
 				t.Fatal("want a refusal, got nil")
 			}
@@ -209,10 +209,10 @@ func TestVerifySignatureIsOverRawBytes(t *testing.T) {
 
 	header := signHeader(asReceived, testSecret, now)
 
-	if err := verifySignature(asReceived, header, testSecret, now); err != nil {
+	if err := verifySignature(asReceived, header, testSecret, stripeSignatureWindow, now); err != nil {
 		t.Fatalf("the bytes as received must verify: %v", err)
 	}
-	if err := verifySignature(reserialised, header, testSecret, now); err == nil {
+	if err := verifySignature(reserialised, header, testSecret, stripeSignatureWindow, now); err == nil {
 		t.Fatal("a re-serialised body must not verify — if it does, the test is not proving anything")
 	}
 }

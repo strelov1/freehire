@@ -208,7 +208,7 @@ model to deliver a change the model had no part in.
 
 ## Migration Plan
 
-1. Migration 0138 adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
+1. Migration 0139 adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
    Additive, defaulted, no rewrite of existing rows.
 2. Ship the extractor, the `UpsertJob` write, and the two overlays. From this point
    newly crawled and re-crawled postings carry a derived list, and the served field

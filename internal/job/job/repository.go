@@ -110,7 +110,7 @@ func extrasFromRow(r db.Job) Extras {
 }
 
 // requirementsFromRow decodes the deterministically derived requirements column. A
-// row that yields nothing, a row written before migration 0138, and a row whose
+// row that yields nothing, a row written before migration 0139, and a row whose
 // payload cannot be decoded all come back nil: each means "no derived list", and the
 // projection treats them alike. A decode error is deliberately not fatal — this
 // column is a display convenience, and failing a whole job read over it would trade a

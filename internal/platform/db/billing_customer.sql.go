@@ -46,11 +46,11 @@ func (q *Queries) GetUserIDByStripeCustomer(ctx context.Context, stripeCustomerI
 }
 
 const listSubscribersNearProExpiryStripe = `-- name: ListSubscribersNearProExpiryStripe :many
-SELECT id, stripe_customer_id, pro_until
+SELECT id, stripe_customer_id, pro_until_stripe
 FROM users
 WHERE stripe_customer_id IS NOT NULL
-  AND pro_until >= $1
-  AND pro_until < $2
+  AND pro_until_stripe >= $1
+  AND pro_until_stripe < $2
 LIMIT $3
 `
 
@@ -63,7 +63,7 @@ type ListSubscribersNearProExpiryStripeParams struct {
 type ListSubscribersNearProExpiryStripeRow struct {
 	ID               int64              `json:"id"`
 	StripeCustomerID pgtype.Text        `json:"stripe_customer_id"`
-	ProUntil         pgtype.Timestamptz `json:"pro_until"`
+	ProUntilStripe   pgtype.Timestamptz `json:"pro_until_stripe"`
 }
 
 // The reconciler's second pass: accounts bound to a provider customer whose plan expiry
@@ -73,6 +73,13 @@ type ListSubscribersNearProExpiryStripeRow struct {
 // It walks users rather than billing_events because the binding column is what makes the
 // question answerable at all — and it is indexed, so the scan is over the accounts that
 // have transacted rather than over all of them.
+//
+// The window is a predicate on pro_until_stripe, NEVER on the derived pro_until. Since
+// migration 0135 the derived column is the FURTHEST reach of three sources, so a Stripe
+// customer who also holds a store subscription or a manual grant that reaches beyond their
+// renewal would sit outside the window and never be re-checked — and the renewal whose
+// webhook was lost, which is the only reason this query exists, would stay lost. Each
+// provider's window belongs on that provider's own column.
 func (q *Queries) ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error) {
 	rows, err := q.db.Query(ctx, listSubscribersNearProExpiryStripe, arg.FromTime, arg.ToTime, arg.MaxRows)
 	if err != nil {
@@ -82,7 +89,7 @@ func (q *Queries) ListSubscribersNearProExpiryStripe(ctx context.Context, arg Li
 	items := []ListSubscribersNearProExpiryStripeRow{}
 	for rows.Next() {
 		var i ListSubscribersNearProExpiryStripeRow
-		if err := rows.Scan(&i.ID, &i.StripeCustomerID, &i.ProUntil); err != nil {
+		if err := rows.Scan(&i.ID, &i.StripeCustomerID, &i.ProUntilStripe); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -108,7 +115,7 @@ type SetStripeCustomerIDParams struct {
 // Bind an account to the payment provider's customer, ONCE, when it first transacts.
 //
 // IS NULL, so this writes a binding and never REPLACES one. That is a security property,
-// not a tidiness one. An account's customer is resolved two ways (see Service.resolveUser):
+// not a tidiness one. An account's customer is resolved two ways (see stripeProvider.account):
 // from the stored binding, and — only when there is no binding yet — from the account
 // reference the provider echoes back. That reference is attacker-supplied on one path: a
 // Stripe Payment Link takes `?client_reference_id=` from whoever opens it. With a bare
@@ -118,7 +125,7 @@ type SetStripeCustomerIDParams struct {
 // never touches it again — and then hold the victim's plan hostage to their own card.
 //
 // Refusing the write costs nothing the system needs. The self-healing rebind in
-// Service.Apply is precisely the NULL case, and an account that genuinely has to move to a
+// engine.Apply is precisely the NULL case, and an account that genuinely has to move to a
 // new customer is a support ticket and one UPDATE, not a path a webhook should offer.
 //
 // Also subsumes the cheaper reason the predicate was here before: the webhook and the

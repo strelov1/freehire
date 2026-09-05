@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { routeTabClass, tablist } from '$lib/actions/tablist';
+  import AccountSetupCard from '$lib/components/AccountSetupCard.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -36,6 +37,11 @@
 
 <div class="flex flex-col gap-4">
   <h1 class="text-2xl font-semibold tracking-tight">Tracking</h1>
+
+  <!-- Above the tablist, not inside the panel: what is left to set up belongs to the
+       account, not to whichever view of the board happens to be open — and a card inside
+       the panel would be re-announced on every tab switch. -->
+  <AccountSetupCard />
 
   <div role="tablist" aria-label="Tracking view" use:tablist={path} class="flex items-center gap-1">
     <a

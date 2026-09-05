@@ -64,18 +64,23 @@
   let sessionError = $state<string | null>(null);
 
   // Lay the fetched rows out into the columns and open the deep-linked drawer once.
-  // The 'board' filter returns saved ∪ applied ∪ stage; saved-only rows are dropped
-  // here (they belong to Activity → Saved). Those rows still count toward the 500 cap,
-  // so a user with 500+ tracked jobs, many recently saved, could have older active
-  // applications fall outside the fetched window. Acceptable at this scale; revisit
-  // with a server-side board-minus-saved filter if it bites.
+  // The 'board' filter returns saved ∪ applied ∪ stage, and a saved-only row now lands
+  // in Preparing (see columnOf) rather than being dropped here — saving a job is taking
+  // it on, so the board is where it belongs.
+  //
+  // Those rows always counted toward the 500 cap; showing them makes an existing
+  // consequence visible rather than creating it. A user with hundreds of bookmarks can
+  // push older active applications outside the fetched window, and now sees a wide
+  // Preparing column while it happens. Still acceptable at this scale; the fix if it
+  // bites is the same one as before — a server-side filter that pages the board's
+  // columns separately, so a long backlog cannot crowd out the live applications.
   function build(rows: MyJob[]) {
     const next = emptyColumns();
     const cols: Record<string, BoardColumnId> = {};
     for (const row of rows) {
       const item: BoardItem = { ...row, id: row.id };
       const col = columnOf(item);
-      if (!col) continue; // saved-only rows live in Activity → Saved, not the board
+      if (!col) continue; // neither saved nor tracked — nothing to place
       next[col].push(item);
       cols[item.id] = col;
     }
@@ -83,8 +88,8 @@
     cardCol = cols;
     status = 'ready';
     // Deep link: open the requested application's drawer once, after the board is
-    // built. A slug that isn't on the board (untracked / saved-only) just leaves
-    // the board showing.
+    // built. A slug that isn't on the board — one the user has neither saved nor
+    // tracked — just leaves the board showing.
     if (initialId && !openedInitial) {
       openedInitial = true;
       const found = Object.values(next)
@@ -224,11 +229,15 @@
   async function applyStage(item: BoardItem, stage: string) {
     const prevCol = cardCol[item.id];
     item.stage = stage || null;
-    if (!stage) item.applied_at = null; // "No stage" takes the job off the board (saved-only)
+    // "No stage" clears the pipeline, not the job. A SAVED job then falls back to
+    // Preparing (columnOf), which is where the board says a job you have taken on but
+    // not applied to lives — so this reads as moving the card back to the start rather
+    // than as deleting it. Only a job that was never saved leaves the board.
+    if (!stage) item.applied_at = null;
     const nextCol = columnOf(item);
     if (nextCol === null) {
-      // Off the board now: drop the card and close the drawer. The job keeps its
-      // saved mark and reappears under Activity → Saved.
+      // Never saved, and now untracked: drop the card and close the drawer. Nothing is
+      // lost — the posting is still in the catalogue, it is just not on this board.
       if (prevCol) {
         columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
         Reflect.deleteProperty(cardCol, item.id);

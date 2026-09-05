@@ -23,22 +23,24 @@ import (
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
-// newService builds a Service whose provider is a stub returning whatever the test hands it.
-// The client field is replaced directly rather than through a constructor seam: these are
-// same-package tests, and inventing an exported injection point for them would put a hole in
-// the API for the benefit of nobody outside it.
+// newService builds a Service whose provider is a stub returning whatever the test hands it,
+// through NewWithBase — the seam the package already offers for exactly this.
 func newService(t *testing.T, h http.HandlerFunc) (*Service, *pgxpool.Pool) {
 	t.Helper()
 	pool := testdb.Pool(t)
 	setEnv(t, "sk_test", testSecret, proPrice, "https://freehire.me")
 
-	s := New(ConfigFromEnv(), db.New(pool))
-	if h != nil {
-		srv := httptest.NewServer(h)
-		t.Cleanup(srv.Close)
-		s.client = newClient("sk_test", srv.URL, srv.Client())
+	if h == nil {
+		return New(ConfigFromEnv(), db.New(pool)), pool
 	}
-	return s, pool
+
+	// NewWithBase rather than New-then-replace-the-field. The client is handed to the Stripe
+	// provider when the service is built, so assigning s.client afterwards leaves the provider
+	// holding the real API — a stub the tests set up and the code never calls, which fails as
+	// a 401 from Stripe rather than as anything a reader would recognise.
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return NewWithBase(ConfigFromEnv(), db.New(pool), srv.URL), pool
 }
 
 func insertUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
@@ -174,7 +176,7 @@ func TestRecordBindsTheCustomer(t *testing.T) {
 // TestBindingIsWriteOnce closes the one path on which an outsider chooses which account an
 // event is about.
 //
-// resolveUser falls back to the account reference the provider echoes back whenever there is
+// stripeProvider.account falls back to the account reference the provider echoes back whenever there is
 // no binding yet — and that reference is attacker-supplied on the Payment Link path, where
 // `?client_reference_id=` is a query parameter anyone opening the link may set. If the write
 // REPLACED an existing binding, somebody paying for their own subscription while naming
@@ -207,7 +209,7 @@ func TestBindingIsWriteOnce(t *testing.T) {
 	// And the plan still follows the customer the account actually pays as. Reading it back
 	// through the service is the property that matters — customerOf above only proves the
 	// column, this proves what SyncUser would ask the provider about.
-	bound, err := s.customerOf(ctx, userID)
+	bound, err := s.stripe().customerOf(ctx, userID)
 	if err != nil {
 		t.Fatalf("customerOf: %v", err)
 	}
@@ -277,8 +279,8 @@ func TestSyncClearsALapsedSubscription(t *testing.T) {
 		t.Fatalf("record: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		`UPDATE users SET pro_until = now() + interval '30 days' WHERE id = $1`, userID); err != nil {
-		t.Fatalf("seed pro_until: %v", err)
+		`UPDATE users SET pro_until_stripe = now() + interval '30 days' WHERE id = $1`, userID); err != nil {
+		t.Fatalf("seed pro_until_stripe: %v", err)
 	}
 
 	if err := s.SyncUser(ctx, userID); err != nil {
@@ -286,6 +288,50 @@ func TestSyncClearsALapsedSubscription(t *testing.T) {
 	}
 	if got := proUntil(t, pool, userID); got != nil {
 		t.Fatalf("want pro_until cleared, got %s", got)
+	}
+}
+
+// TestSyncLeavesEveryOtherSourceStanding is the whole reason users.pro_until stopped being a
+// column anybody writes.
+//
+// A Stripe sync that finds no subscription must say "Stripe confers nothing", not "this
+// account is not Pro". The account here holds a store subscription and a manual grant, and
+// before migration 0135 this exact sync — one UPDATE of one column — would have revoked both
+// without leaving a trace. Note what it does NOT assert: nothing about GREATEST, which the
+// schema tests already pin. What it pins is that the SERVICE writes one column and no other.
+func TestSyncLeavesEveryOtherSourceStanding(t *testing.T) {
+	s, pool := newService(t, subscriptionsWith(""))
+	ctx := context.Background()
+	userID := insertUser(t, pool, "other-sources@example.com")
+
+	if _, _, err := s.Record(ctx, event("evt_other", "cus_other", fmt.Sprint(userID))); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET
+		pro_until_stripe     = now() + interval '10 days',
+		pro_until_revenuecat = now() + interval '30 days',
+		pro_until_granted    = now() + interval '20 days'
+		WHERE id = $1`, userID); err != nil {
+		t.Fatalf("seed the three sources: %v", err)
+	}
+	store := readSource(t, pool, userID, "pro_until_revenuecat")
+	granted := readSource(t, pool, userID, "pro_until_granted")
+
+	if err := s.SyncUser(ctx, userID); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	if got := readSource(t, pool, userID, "pro_until_stripe"); got != nil {
+		t.Fatalf("pro_until_stripe = %v, want cleared — Stripe reported no subscription", got)
+	}
+	if got := readSource(t, pool, userID, "pro_until_revenuecat"); got == nil || !got.Equal(*store) {
+		t.Fatalf("pro_until_revenuecat = %v, want %v — a Stripe sync may not revoke a store purchase", got, *store)
+	}
+	if got := readSource(t, pool, userID, "pro_until_granted"); got == nil || !got.Equal(*granted) {
+		t.Fatalf("pro_until_granted = %v, want %v — a Stripe sync may not revoke a manual grant", got, *granted)
+	}
+	if got := proUntil(t, pool, userID); got == nil || !got.Equal(*store) {
+		t.Fatalf("pro_until = %v, want the store subscription's %v — the account is still Pro", got, *store)
 	}
 }
 
@@ -340,8 +386,8 @@ func TestSubscribersNearExpiry(t *testing.T) {
 
 	for _, id := range []int64{subscriber, stranger} {
 		if _, err := pool.Exec(ctx,
-			`UPDATE users SET pro_until = now() + interval '1 hour' WHERE id = $1`, id); err != nil {
-			t.Fatalf("seed pro_until: %v", err)
+			`UPDATE users SET pro_until_stripe = now() + interval '1 hour' WHERE id = $1`, id); err != nil {
+			t.Fatalf("seed pro_until_stripe: %v", err)
 		}
 	}
 	if _, _, err := s.Record(ctx, event("evt_near", "cus_near", fmt.Sprint(subscriber))); err != nil {
@@ -370,8 +416,8 @@ func TestARenewalWithNoWebhookIsRepaired(t *testing.T) {
 		t.Fatalf("record: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		`UPDATE users SET pro_until = now() + interval '1 hour' WHERE id = $1`, userID); err != nil {
-		t.Fatalf("seed pro_until: %v", err)
+		`UPDATE users SET pro_until_stripe = now() + interval '1 hour' WHERE id = $1`, userID); err != nil {
+		t.Fatalf("seed pro_until_stripe: %v", err)
 	}
 
 	ids, err := s.SubscribersNearExpiry(ctx, 24*time.Hour, 100)
