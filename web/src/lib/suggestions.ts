@@ -62,9 +62,15 @@ export function starterSuggestions(
 
   // Each group's own options, busiest first. A category the distribution does not
   // carry is dropped rather than offered with a zero: it would lead to an empty page.
+  //
+  // Absence is read off the value, not with `Object.hasOwn`: the distribution is
+  // decoded JSON, so a key that is present always holds a number and the two say the
+  // same thing — but `Object.hasOwn` is a runtime method no build target polyfills,
+  // and Safari only grew it in 15.4. It threw for the browsers below that, which
+  // takes the header search's whole derived chain down rather than one dropdown.
   const groups = CATEGORY_GROUPS.map((section) =>
     section.options
-      .filter((o) => o.value !== catchAll && Object.hasOwn(dist, o.value))
+      .filter((o) => o.value !== catchAll && dist[o.value] !== undefined)
       .sort((a, b) => (dist[b.value] ?? 0) - (dist[a.value] ?? 0)),
   ).filter((options) => options.length > 0);
 

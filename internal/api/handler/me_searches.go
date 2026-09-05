@@ -71,6 +71,10 @@ func toSavedSearchResponse(s savedsearch.SavedSearch) savedSearchResponse {
 // savedSearchError maps the saved-search sentinels onto HTTP statuses: a bad name is a
 // 400, a duplicate name or the per-user cap is a 409, a missing/non-owned row is a 404.
 // Anything else falls through to RenderError as a 500.
+//
+// Every sentinel the package declares belongs here, and a test walks the list: one left
+// out does not merely render the wrong status, it tells the caller their own mistake was
+// our fault and files a fault report for ordinary traffic.
 func savedSearchError(err error) error {
 	switch {
 	case errors.Is(err, savedsearch.ErrInvalidName):
@@ -83,6 +87,8 @@ func savedSearchError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "saved search not found")
 	case errors.Is(err, savedsearch.ErrInvalidAuthorLabel):
 		return fiber.NewError(fiber.StatusBadRequest, "author label must be at most 60 characters")
+	case errors.Is(err, savedsearch.ErrQueryTooLong):
+		return fiber.NewError(fiber.StatusBadRequest, "query is too long")
 	case errors.Is(err, savedsearch.ErrProfileSearchExists):
 		return fiber.NewError(fiber.StatusConflict, "a profile-derived search already exists")
 	default:
