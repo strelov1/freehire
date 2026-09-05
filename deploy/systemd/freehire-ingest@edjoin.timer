@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest edjoin
 [Timer]
-OnCalendar=*:29:00
+OnCalendar=*:14:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

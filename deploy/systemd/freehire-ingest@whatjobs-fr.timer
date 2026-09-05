@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest whatjobs-fr
 [Timer]
-OnCalendar=*:58:00
+OnCalendar=*:45:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest paycor
 [Timer]
-OnCalendar=*-*-* 02/3:43:00
+OnCalendar=*:17:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest smartrecruiters
 [Timer]
-OnCalendar=*:32:00
+OnCalendar=*:38:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

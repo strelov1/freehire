@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest nofluffjobs
 [Timer]
-OnCalendar=*:27:00
+OnCalendar=*:30:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

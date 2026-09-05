@@ -13,6 +13,14 @@ WorkingDirectory=/opt/freehire/src/hire-current
 # uses — no separate env file, unlike the mail-sending workers' own split (see
 # deploy/AGENTS.md).
 EnvironmentFile=/opt/freehire/.env
+# HIRE_BASE_URL names the CURRENTLY-ACTIVE blue/green color's own API port — release.sh
+# regenerates this file after every flip and restarts this unit right after, so a value
+# here always matches whichever color is actually taking traffic. The `-` tolerates this
+# file not existing yet (first provision, before release.sh has ever run). Without it,
+# HireBaseURL falls back to internal/platform/config's own PORT default (8080), which
+# matches neither blue (8081) nor green (8082) — found 2026-09-05 the hard way: every
+# call this worker made failed with connection refused.
+EnvironmentFile=-/opt/freehire/env/auto-apply-orchestrate.env
 CPUWeight=40
 IOWeight=40
 # Long-lived: an Inngest function must stay reachable between steps for the SDK's

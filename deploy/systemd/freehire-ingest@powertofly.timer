@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest powertofly
 [Timer]
-OnCalendar=*:58:00
+OnCalendar=*:42:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

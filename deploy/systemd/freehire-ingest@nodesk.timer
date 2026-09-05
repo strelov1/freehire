@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest nodesk
 [Timer]
-OnCalendar=*:46:00
+OnCalendar=*:49:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

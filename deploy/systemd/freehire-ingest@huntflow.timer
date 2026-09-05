@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest huntflow
 [Timer]
-OnCalendar=*:35:00
+OnCalendar=*:19:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

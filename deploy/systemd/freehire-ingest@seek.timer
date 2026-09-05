@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest seek
 [Timer]
-OnCalendar=*:10:00
+OnCalendar=*:16:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest rapyd
 [Timer]
-OnCalendar=*:01:00
+OnCalendar=*:26:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

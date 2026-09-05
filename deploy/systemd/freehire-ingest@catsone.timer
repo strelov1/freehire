@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest catsone
 [Timer]
-OnCalendar=*:40:00
+OnCalendar=*:21:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

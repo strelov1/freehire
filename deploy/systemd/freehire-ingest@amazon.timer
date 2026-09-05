@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest amazon
+[Timer]
+OnCalendar=*:49:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

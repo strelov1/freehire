@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest icims
 [Timer]
-OnCalendar=*-*-* 02/3:25:00
+OnCalendar=*-*-* 01/3:08:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

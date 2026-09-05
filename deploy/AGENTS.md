@@ -10,7 +10,7 @@ Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/
 ## What is here
 
 ```
-systemd/   337 files — 46 .service, 286 .timer, 5 drop-in directories
+systemd/   382 files — 53 .service, 324 .timer, 5 drop-in directories
 bin/        16 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 nginx/       1 snippet — snippets/freehire-app.conf, hand-edited, not generated
 ```

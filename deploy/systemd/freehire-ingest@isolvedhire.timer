@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest isolvedhire
 [Timer]
-OnCalendar=*:22:00
+OnCalendar=*:06:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
