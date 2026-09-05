@@ -103,7 +103,12 @@ var blocks = map[string][]string{
 	"job": {
 		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
-		"outboundurl", "privatejob", "silence", "verdict", "ycdir",
+		"outboundurl", "privatejob",
+		// reqextract reads a posting's requirements out of its own description markup
+		// and returns them in the enrichment contract's shape, so it takes enrich the
+		// way jobview does — the block below it, not the model.
+		"reqextract",
+		"silence", "verdict", "ycdir",
 	},
 	"application": {
 		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",

@@ -692,6 +692,7 @@ type Job struct {
 	DuplicateOfRole       pgtype.Int8 `json:"duplicate_of_role"`
 	DuplicateOfFuzzy      pgtype.Int8 `json:"duplicate_of_fuzzy"`
 	RequiresClearance     pgtype.Bool `json:"requires_clearance"`
+	RequirementsDerived   []byte      `json:"requirements_derived"`
 }
 
 type JobDailyStat struct {

@@ -7,6 +7,7 @@
 package job
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
+	"github.com/strelov1/freehire/internal/job/reqextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -251,14 +253,38 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 }
 
 // withDerived stamps the two fingerprints a persisted posting carries onto a mapped
-// params struct. content_hash covers the indexed content (posted_at included), so the
-// upsert can report whether a re-ingest changed anything searchable; role_fingerprint
-// is the repost IDENTITY and deliberately excludes posted_at/url/slug, so a reposted
-// role clusters with its original for the reality signal.
+// params struct, plus the requirements read out of its own description markup.
+// content_hash covers the indexed content (posted_at included), so the upsert can
+// report whether a re-ingest changed anything searchable; role_fingerprint is the
+// repost IDENTITY and deliberately excludes posted_at/url/slug, so a reposted role
+// clusters with its original for the reality signal.
+//
+// requirements_derived belongs here for the same reason the fingerprints do: it is a
+// pure function of the raw fields, and stamping it in the one shared mapping is what
+// keeps a write path from persisting a posting without it by forgetting a step. It is
+// NOT enrichment — nothing here calls a model — even though SetJobEnrichment later
+// overlays it into the served `enrichment.requirements` when the model states none.
 func withDerived(p db.UpsertJobParams) db.UpsertJobParams {
 	p.ContentHash = pgtype.Text{String: jobhash.Of(p), Valid: true}
 	p.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(p), Valid: true}
+	p.RequirementsDerived = marshalRequirements(reqextract.Derive(p.Description))
 	return p
+}
+
+// marshalRequirements encodes a derived requirements list for the jsonb column. A
+// marshal error is impossible for this shape (two strings), and an empty list encodes
+// as `[]` rather than nil so the NOT NULL column takes the same value whether the
+// posting yielded nothing or the encoding fell over — "no requirements found" either
+// way, and never a null the column would reject.
+func marshalRequirements(reqs []enrich.Requirement) []byte {
+	if len(reqs) == 0 {
+		return []byte("[]")
+	}
+	encoded, err := json.Marshal(reqs)
+	if err != nil {
+		return []byte("[]")
+	}
+	return encoded
 }
 
 // UpsertManualParams is the moderator-write analogue of UpsertParams: it maps the
@@ -313,8 +339,9 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		SalaryCurrencyManual: salCurrency,
 		SalaryPeriodManual:   salPeriod,
 
-		ContentHash:     derived.ContentHash,
-		RoleFingerprint: derived.RoleFingerprint,
+		ContentHash:         derived.ContentHash,
+		RoleFingerprint:     derived.RoleFingerprint,
+		RequirementsDerived: derived.RequirementsDerived,
 
 		CreatedBy: actorID,
 		UpdatedBy: actorID,
@@ -370,8 +397,9 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 		EnglishLevel:       f.EnglishLevel,
 		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
 
-		ContentHash:     derived.ContentHash,
-		RoleFingerprint: derived.RoleFingerprint,
+		ContentHash:         derived.ContentHash,
+		RoleFingerprint:     derived.RoleFingerprint,
+		RequirementsDerived: derived.RequirementsDerived,
 
 		UpdatedBy:  actorID,
 		PublicSlug: slug,
@@ -413,8 +441,9 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 		EnglishLevel:       f.EnglishLevel,
 		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
 
-		ContentHash:     derived.ContentHash,
-		RoleFingerprint: derived.RoleFingerprint,
+		ContentHash:         derived.ContentHash,
+		RoleFingerprint:     derived.RoleFingerprint,
+		RequirementsDerived: derived.RequirementsDerived,
 
 		CreatedBy: createdBy,
 	}

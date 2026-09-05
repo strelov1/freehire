@@ -8,7 +8,7 @@
   import { autoApplyButtonState } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
-  import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
+  import { filterHref, formatSalary, requirementGroups, summaryFacets } from '$lib/enrichment';
   import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
@@ -87,6 +87,10 @@
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
+  // What the posting itself asks for, grouped required-then-preferred. Empty for a
+  // job in which neither the model nor the description parser found requirements,
+  // which is what makes the section disappear rather than head an empty list.
+  const requirements = $derived(requirementGroups(e.requirements));
   // Engagement counters (distinct signed-in viewers / applicants), served on the
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
   const views = $derived(job.view_count ?? 0);
@@ -474,6 +478,30 @@
        (internal/enrich), so the body is the only part of this snippet that takes
        the posting's language. -->
   <JobDescription html={job.description} lang={contentLang} />
+
+  {#if requirements.length}
+    <!-- What the posting asks for, lifted from the posting itself. It sits here and
+         not in the sidebar because the entries are sentences (~70 chars on average,
+         ~9 of them): in the 20rem rail they wrap to roughly fifteen lines and the
+         sticky card outgrows the page. Unlike the Summary above, the text is the
+         employer's own, so it takes `contentLang` like the description body. -->
+    <section class="flex flex-col gap-3 border-t border-border pt-4">
+      <h2 class="text-base font-semibold">What they ask for</h2>
+      {#each requirements as group (group.priority)}
+        <div class="flex flex-col gap-1.5">
+          <h3 class="text-sm font-medium text-muted-foreground">{group.label}</h3>
+          <!-- Keyed by index, not by text: two entries of a posting can read the
+               same, and a duplicate key silently breaks the whole block. The list
+               never reorders, so the index is stable. -->
+          <ul class="flex list-disc flex-col gap-1 pl-5 text-sm leading-relaxed">
+            {#each group.items as requirement, i (i)}
+              <li lang={contentLang}>{requirement.text}</li>
+            {/each}
+          </ul>
+        </div>
+      {/each}
+    </section>
+  {/if}
 
   {#if job.skills?.length}
     <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw

@@ -207,7 +207,7 @@ func (e *Enrichment) Sanitize() {
 	e.TimezoneNote = llm.TrimTruncateRunes(e.TimezoneNote, maxTimezoneNoteRunes)
 	e.SalaryCurrency = llm.TrimTruncateRunes(e.SalaryCurrency, maxSalaryCurrencyRunes)
 	e.Cities = boundCities(e.Cities)
-	e.Requirements = boundRequirements(e.Requirements)
+	e.Requirements = BoundRequirements(e.Requirements)
 
 	for _, s := range e.servedScalarEnums() {
 		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {
@@ -257,14 +257,18 @@ func boundCities(cities []string) []string {
 	return kept
 }
 
-// boundRequirements clips each requirement's text to maxRequirementTextRunes and the
+// BoundRequirements clips each requirement's text to maxRequirementTextRunes and the
 // list to maxRequirements entries, the same free-text bound boundCities applies,
 // dropping any entry whose text clips to empty. Priority is coerced into the
 // controlled required/preferred vocabulary rather than validated and rejected — the
 // request schema cannot constrain it (see the Requirements field comment), so this
 // coercion is the only enforcement. Returns nil when nothing survives so the field
 // omits cleanly.
-func boundRequirements(reqs []Requirement) []Requirement {
+//
+// Exported because the model is not the only producer of this field: the
+// deterministic extractor that reads a posting's own requirements list must obey the
+// same ceiling, and one exported bound is the only way two producers cannot drift.
+func BoundRequirements(reqs []Requirement) []Requirement {
 	if len(reqs) > maxRequirements {
 		reqs = reqs[:maxRequirements]
 	}

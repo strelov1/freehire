@@ -5,12 +5,12 @@
 // never renders blank — the SPA never re-validates, it only formats.
 
 import type { Enrichment, Job } from './types';
-import type { Card as JobCard } from './generated/contracts';
+import type { Card as JobCard, Requirement } from './generated/contracts';
 import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
-  RELOCATION_LABELS,
+  RELOCATION_LABELS, REQUIREMENT_PRIORITY_LABELS,
 } from './labels';
 
 /** One value within a facet row: its display text and, when the facet maps to a
@@ -225,4 +225,49 @@ export function summaryFacets(job: Job): Facet[] {
   links('Domains', 'domains', e.domains, (d) => label(DOMAIN_LABELS, d));
 
   return facets;
+}
+
+/** One priority's worth of a posting's stated requirements: the code as stored, a
+ *  heading for it, and the entries in the order the posting stated them. */
+export interface RequirementGroup {
+  priority: 'required' | 'preferred';
+  label: string;
+  items: Requirement[];
+}
+
+/** Mirrors enrich's coerceRequirementPriority: `required` case- and
+ *  whitespace-insensitively, everything else `preferred`. The optional chaining is
+ *  not type-driven — the contract declares `priority` required — but the value
+ *  arrives as untrusted JSON, and a missing key must group the entry rather than
+ *  throw the whole page away. */
+const isRequired = (r: Requirement) => r.priority?.trim().toLowerCase() === 'required';
+
+/** Group a posting's stated requirements for display: `required` first, then
+ *  `preferred`, a group with no entries omitted entirely, and the posting's own
+ *  order kept within each group.
+ *
+ *  Nothing is filtered on content. A quarter of the entries restate a skill chip,
+ *  the experience facet or the education facet already on the page, but the list is
+ *  a quotation from the posting and is only honest whole — matching it against
+ *  those facets would put a second normaliser in the SPA, drifting from
+ *  internal/dict. Blank text is the one exception: it carries nothing to read.
+ *
+ *  Which group an entry lands in mirrors enrich's coerceRequirementPriority
+ *  exactly — `required` case- and whitespace-insensitively, everything else
+ *  `preferred`. The server coerces on write, so a third value should never reach
+ *  here; mirroring rather than inventing a second rule is what keeps the page and
+ *  the store from disagreeing if one ever does. */
+export function requirementGroups(reqs: Requirement[] | undefined | null): RequirementGroup[] {
+  // Same reasoning as isRequired's optional chaining: `text` is declared required and
+  // arrives as untrusted JSON.
+  const stated = (reqs ?? []).filter((r) => r.text?.trim());
+  const groups: RequirementGroup[] = [];
+  const group = (priority: RequirementGroup['priority'], items: Requirement[]) => {
+    if (items.length) groups.push({ priority, label: label(REQUIREMENT_PRIORITY_LABELS, priority), items });
+  };
+
+  group('required', stated.filter(isRequired));
+  group('preferred', stated.filter((r) => !isRequired(r)));
+
+  return groups;
 }

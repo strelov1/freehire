@@ -297,6 +297,12 @@ func mutateField(p db.UpsertJobParams, i int) (db.UpsertJobParams, bool) {
 		f.SetBool(!v)
 	case []string:
 		f.Set(reflect.ValueOf(append(slices.Clone(v), "mutated")))
+	// The jsonb columns. requirements_derived is the only one today: a pure function
+	// of description, which both hashes already read, so it moves neither hash — but
+	// it must still be MUTATED here, because the guard's whole point is that a field
+	// nothing mutates reads as covered when it is not.
+	case []byte:
+		f.SetBytes(append(slices.Clone(v), []byte(`{"mutated":true}`)...))
 	case pgtype.Timestamptz:
 		f.Set(reflect.ValueOf(pgtype.Timestamptz{Time: v.Time.Add(time.Hour), Valid: true}))
 	case pgtype.Int4:

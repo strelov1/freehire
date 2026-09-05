@@ -1,0 +1,301 @@
+// Package reqextract derives a posting's own stated requirements from its
+// description markup, with no model call. It is the second producer of the
+// enrichment contract's `requirements` field: the LLM reads the postings that state
+// their requirements as prose, this reads the ones that state them as a list under a
+// heading, and the two union rather than compete (measured on prod 2026-09-04: the
+// model had reached 2.9% of open postings, a heading-and-list is present in 23%).
+//
+// The extraction is dictionary-gated in the same sense the facet dictionaries are:
+// a heading outside the vocabulary yields nothing, and there is deliberately no
+// fallback that infers which list in a posting is the requirements list. The most
+// common list in a job posting after the requirements is the benefits list, and
+// reading perks as requirements is worse than reading nothing.
+//
+// The bound is enrich.BoundRequirements — its own, not a second copy of the
+// numbers — so the two producers of the field cannot drift apart.
+package reqextract
+
+import (
+	"strings"
+
+	xhtml "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+
+	"github.com/strelov1/freehire/internal/ai/enrich"
+)
+
+// maxHeadingRunes bounds how long a candidate heading may be. Only the inline
+// elements (`p`, `strong`, `b`, `div`) need it: a posting that opens with "The
+// requirements for this role are flexible…" is a sentence, not a section title, and
+// length is what separates the two without a second vocabulary of non-headings.
+// h1–h6 are structurally headings and are not length-checked.
+const maxHeadingRunes = 60
+
+// preferredHeadings and requiredHeadings are the controlled vocabulary the
+// derivation is gated on, normalized the way normalizeHeading normalizes a node's
+// text. A heading matches when its normalized text EQUALS a phrase or BEGINS with
+// one, so "Requirements:" and "Requirements for this role" both match while "What we
+// offer" matches nothing.
+//
+// preferredHeadings is consulted first and must stay first: "preferred
+// qualifications" also begins with nothing in requiredHeadings, but "qualifications
+// (preferred)" would be decided by whichever list is read first, and the optional
+// reading is the safe one — overstating a nice-to-have as a hard requirement is the
+// error a reader cannot detect.
+var preferredHeadings = []string{
+	"nice to have",
+	"nice to haves",
+	"nice if you have",
+	"preferred",
+	"preferred qualifications",
+	"preferred skills",
+	"bonus",
+	"bonus points",
+	"desirable",
+	"desired",
+	"good to have",
+	"pluses",
+	"would be a plus",
+	"a plus",
+	"it would be great if you",
+}
+
+var requiredHeadings = []string{
+	"requirements",
+	"requirement",
+	"required",
+	"required qualifications",
+	"required skills",
+	"qualifications",
+	"minimum qualifications",
+	"basic qualifications",
+	"must have",
+	"must haves",
+	// Contractions reach here with the apostrophe removed (see normalizeHeading), so
+	// the vocabulary spells them the way they arrive: "what you'll need" → "what
+	// youll need".
+	"what youll need",
+	"what you will need",
+	"what you need",
+	"what were looking for",
+	"what we are looking for",
+	"what we expect",
+	"who you are",
+	"your profile",
+	"your qualifications",
+	"skills and experience",
+	"experience required",
+	"we are looking for",
+}
+
+// Derive returns the requirements a posting's description states as a list under a
+// recognized heading, in document order, bounded by the enrichment contract's own
+// ceiling. It returns nil when the description has no such heading — which is the
+// majority of postings and is not an error.
+func Derive(descriptionHTML string) []enrich.Requirement {
+	if strings.TrimSpace(descriptionHTML) == "" {
+		return nil
+	}
+	doc, err := xhtml.Parse(strings.NewReader(descriptionHTML))
+	if err != nil {
+		// x/net/html does not reject malformed markup, so this is unreachable in
+		// practice; an unparseable description simply yields nothing rather than
+		// failing a crawl.
+		return nil
+	}
+
+	var found []enrich.Requirement
+	// priority is the section currently open: the priority of the last recognized
+	// heading, or "" when no section is open. A list closes the section it was found
+	// in, so only the FIRST list after a heading is taken; an unrecognized heading
+	// closes it too, so a "Benefits" list after a "Requirements" heading with nothing
+	// between them is not collected.
+	priority := ""
+
+	var walk func(*xhtml.Node)
+	walk = func(n *xhtml.Node) {
+		if n.Type == xhtml.ElementNode {
+			switch {
+			case isHeading(n):
+				priority = headingPriority(n)
+				return // the heading's own text is never an item
+			case priority != "" && (n.DataAtom == atom.Ul || n.DataAtom == atom.Ol):
+				for _, text := range listItems(n) {
+					found = append(found, enrich.Requirement{Text: text, Priority: priority})
+				}
+				priority = ""
+				return // nested lists were consumed by listItems
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+
+	return enrich.BoundRequirements(found)
+}
+
+// isHeading reports whether a node can carry a section title: an h1–h6, or one of
+// the inline elements a posting uses as a heading when it carries nothing but a
+// short line of text. The length check is what keeps a paragraph that merely
+// mentions requirements from opening a section.
+func isHeading(n *xhtml.Node) bool {
+	switch n.DataAtom {
+	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
+		return true
+	case atom.P, atom.Strong, atom.B, atom.Div:
+		return len([]rune(textOf(n))) <= maxHeadingRunes
+	default:
+		return false
+	}
+}
+
+// headingPriority returns the priority a recognized heading opens its section with,
+// or "" when the heading is outside the vocabulary — which closes any open section.
+func headingPriority(n *xhtml.Node) string {
+	heading := normalizeHeading(textOf(n))
+	if heading == "" {
+		return ""
+	}
+	if matches(heading, preferredHeadings) {
+		return "preferred"
+	}
+	if matches(heading, requiredHeadings) {
+		return "required"
+	}
+	return ""
+}
+
+// headingTail is the closed set of words that may follow a vocabulary phrase without
+// changing what the heading is: connectives, and the nouns a posting uses to name the
+// same section twice ("Requirements & Qualifications", "Preferred competencies and
+// qualifications"). A word outside this set means the line names something else.
+//
+// This set is what separates a section title from a sentence that opens with the same
+// words. Both of these are real prod headings: "Required Qualifications & Skills"
+// heads a requirements list, and "MUST HAVE MORNING/DAYTIME AVAILABILITY" heads a
+// list of employee benefits. Only the tail tells them apart.
+var headingTail = map[string]bool{
+	"a": true, "and": true, "for": true, "of": true, "or": true, "the": true,
+	"this": true, "we": true, "you": true, "your": true,
+	"attributes": true, "background": true, "candidate": true, "competences": true,
+	"competencies": true, "criteria": true, "essential": true, "expertise": true,
+	"experience": true, "have": true, "haves": true, "ideal": true, "job": true,
+	"knowledge": true, "minimum": true, "position": true, "preferred": true,
+	"profile": true, "qualification": true, "qualifications": true, "required": true,
+	"requirement": true, "requirements": true, "role": true, "skill": true,
+	"skills": true, "successful": true,
+}
+
+// matches reports whether a normalized heading is one of the vocabulary's phrases,
+// either exactly or followed only by headingTail words.
+//
+// Prefix matching alone is not enough. It admits "Requirements for this role" — which
+// is wanted — but also "Must have morning availability", which is a sentence, and the
+// list beneath such a line is as likely to be benefits as requirements. Requiring the
+// remainder to be vocabulary is what keeps a statement from opening a section.
+func matches(heading string, vocabulary []string) bool {
+	for _, phrase := range vocabulary {
+		if heading == phrase {
+			return true
+		}
+		rest, found := strings.CutPrefix(heading, phrase+" ")
+		if !found {
+			continue
+		}
+		if allTail(strings.Fields(rest)) {
+			return true
+		}
+	}
+	return false
+}
+
+func allTail(words []string) bool {
+	for _, w := range words {
+		if !headingTail[w] {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeHeading lowercases a heading and reduces it to letters, digits and single
+// spaces, so "Requirements:", "REQUIREMENTS", "Nice-to-have" and "What you'll need"
+// all reach the vocabulary in the one spelling it is written in.
+func normalizeHeading(s string) string {
+	var b strings.Builder
+	space := false
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			if space && b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			space = false
+			b.WriteRune(r)
+		case r == '\'' || r == '’':
+			// An apostrophe joins rather than separates: "what you'll need" becomes
+			// "what youll need", one token, rather than "what you ll need". Both
+			// spellings of the character, since a posting's HTML carries either.
+		default:
+			space = true
+		}
+	}
+	return b.String()
+}
+
+// listItems returns the plain text of a list's items. A nested list's items are part
+// of their parent item's text rather than entries of their own — a posting that
+// qualifies a requirement with a sub-list is stating one requirement, not two.
+func listItems(list *xhtml.Node) []string {
+	var out []string
+	for c := list.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type != xhtml.ElementNode || c.DataAtom != atom.Li {
+			continue
+		}
+		if text := textOf(c); text != "" {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+// textOf returns a node's plain text: descendant markup stripped, entities already
+// decoded by the parser, and whitespace collapsed to single spaces.
+//
+// A block boundary contributes a space of its own. Markup is where the separation
+// lives — "Go<ul><li>generics</li></ul>" carries no whitespace between the two words
+// — so without this a qualified requirement reads "Gogenerics". The extra spaces are
+// harmless: Fields collapses them.
+func textOf(n *xhtml.Node) string {
+	var b strings.Builder
+	var walk func(*xhtml.Node)
+	walk = func(n *xhtml.Node) {
+		if n.Type == xhtml.TextNode {
+			b.WriteString(n.Data)
+		}
+		if n.Type == xhtml.ElementNode && breaksLine(n.DataAtom) {
+			b.WriteByte(' ')
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+		if n.Type == xhtml.ElementNode && breaksLine(n.DataAtom) {
+			b.WriteByte(' ')
+		}
+	}
+	walk(n)
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// breaksLine reports whether an element separates the text around it, the way a
+// browser renders it: a block element, a list item, or an explicit break.
+func breaksLine(a atom.Atom) bool {
+	switch a {
+	case atom.Ul, atom.Ol, atom.Li, atom.P, atom.Div, atom.Br, atom.Tr, atom.Td, atom.Th:
+		return true
+	default:
+		return false
+	}
+}
