@@ -21,22 +21,25 @@ SHALL call the existing tailoring trigger for that entry as its first step.
 
 After tailoring completes, the run SHALL pause — without polling, without holding a
 process, without a wall-clock upper bound shorter than several days — until a decision
-event arrives for the SAME entry, and then resume and call the existing review-decision
-endpoint with that decision. A decision event for a DIFFERENT entry SHALL NOT resume this
-run.
+event arrives for the SAME entry, and then resume and complete with that decision. The
+decision event is published only after the review-decision endpoint has already durably
+recorded the decision, so the run SHALL NOT call that endpoint again on resume — doing so
+would always be refused as an already-reviewed entry. A decision event for a DIFFERENT
+entry SHALL NOT resume this run.
 
 #### Scenario: A decision arrives minutes after tailoring finishes
 
 - **WHEN** tailoring for an entry finishes and a decision event for that same entry is
   published shortly afterward
-- **THEN** the run resumes and records that decision
+- **THEN** the run resumes and completes with that decision, without calling the
+  review-decision endpoint again
 
 #### Scenario: A decision arrives long after tailoring finishes, across a process restart
 
 - **WHEN** tailoring for an entry finishes, the orchestrating process restarts, and a
   decision event for that entry is published after the restart
-- **THEN** the run still resumes from where it paused and records that decision — nothing
-  about the pause is lost by the restart
+- **THEN** the run still resumes from where it paused and completes with that decision —
+  nothing about the pause is lost by the restart
 
 #### Scenario: A decision for a different entry does not resume this run
 

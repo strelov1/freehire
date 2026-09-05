@@ -14,8 +14,9 @@ run, and the decision was recorded in Postgres. It also self-hosts as one proces
 reuse freehire's existing Postgres, which fits the single-bare-metal-host, no-Kubernetes
 deploy model the rest of the fleet already uses (see `deploy/AGENTS.md`).
 
-This change makes that spike a real, freehire-owned worker: something finally calls the two
-endpoints in sequence, durably, in production.
+This change makes that spike a real, freehire-owned worker: something finally calls the
+tailor endpoint automatically, durably, in production, and durably waits for whichever
+caller (today, only the candidate's own browser) records the review decision.
 
 ## What Changes
 
@@ -28,11 +29,14 @@ endpoints in sequence, durably, in production.
     external pipeline was always meant to call — see that change's own design.md), as one
     `step.Run`.
   - Then durably waits (`step.WaitForEvent`, a multi-day timeout) for
-    `auto-apply/review.decided` (data: `queueId`, `decision`) before calling
-    `POST /me/auto-apply/:queueId/review` with that decision, as a second `step.Run`.
-  - A tailor call that fails, or a wait that times out, ends the run without calling review —
-    the entry stays exactly where the existing endpoints already leave it (unreviewed,
-    unclaimed), for a human to notice, matching every other queue in this codebase.
+    `auto-apply/review.decided` (data: `queueId`, `decision`) and completes with that
+    decision — no second HTTP call: `PostAutoApplyReview` (below) already recorded the
+    decision before publishing the event that resumes this wait, so calling it again would
+    always be refused as an already-reviewed entry.
+  - A tailor call that fails, or a wait that times out, ends the run without ever recording
+    a review decision — the entry stays exactly where the existing endpoints already leave
+    it (unreviewed, unclaimed), for a human to notice, matching every other queue in this
+    codebase.
 - `PostAutoApplyReview` (`internal/api/handler/auto_apply_tailor.go`) gains one best-effort
   side effect: after recording the candidate's decision, it publishes
   `auto-apply/review.decided` to the self-hosted Inngest event API so a waiting orchestrator

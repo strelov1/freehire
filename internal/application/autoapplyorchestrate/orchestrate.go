@@ -1,8 +1,12 @@
 // Package autoapplyorchestrate holds the one Inngest function
 // cmd/auto-apply-orchestrate serves: a durable, event-triggered sequence that calls
-// freehire's own auto-apply tailoring trigger, pauses for however long the candidate's
-// review decision takes (surviving a process restart), and then calls the review-decision
-// endpoint with it.
+// freehire's own auto-apply tailoring trigger, then pauses for however long the
+// candidate's review decision takes (surviving a process restart). It does NOT call the
+// review endpoint itself: EventReviewDecided is published by PostAutoApplyReview only
+// AFTER it has already durably recorded the decision (internal/api/handler's own
+// publishReviewDecided runs after the write), so by the time this function's own
+// WaitForEvent resumes, there is nothing left to record — a second call would always 409
+// (already reviewed). The run simply completes with the decision the event carried.
 //
 // See openspec/changes/auto-apply-inngest-orchestration/design.md — in particular why this
 // package calls the existing HTTP endpoints rather than importing internal/candidate/cv or
@@ -178,13 +182,10 @@ func Register(client inngestgo.Client, cfg Config) (inngestgo.ServableFunction, 
 				return nil, fmt.Errorf("wait for review decision on queue entry %s: %w", queueID, err)
 			}
 
-			_, err = step.Run(ctx, "review", func(ctx context.Context) (any, error) {
-				return nil, callHire(ctx, cfg, "/me/auto-apply/"+queueID+"/review",
-					map[string]string{"decision": decided.Data.Decision})
-			})
-			if err != nil {
-				return nil, fmt.Errorf("record review decision for queue entry %s: %w", queueID, err)
-			}
+			// No further HTTP call: PostAutoApplyReview only ever publishes
+			// EventReviewDecided after its own write already recorded the decision (see
+			// this package's own doc comment), so this run's only remaining job is to
+			// note the outcome it was told.
 			return map[string]any{"status": "reviewed", "queueId": queueID, "decision": decided.Data.Decision}, nil
 		},
 	)

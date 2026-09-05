@@ -118,10 +118,16 @@
       call); `POST /me/auto-apply/1/review` recorded the decision AND published
       `auto-apply/review.decided` to the real self-hosted instance (visible in its own
       logs); the paused `step.WaitForEvent` received it and resumed, calling
-      `PostAutoApplyReview` again — which correctly answered 409 (already reviewed, since
-      this manual run recorded the decision directly rather than only through the
-      orchestrator, an artifact of testing both endpoints separately in one pass rather
-      than a defect). One environment quirk found and worked around, not a code bug:
+      `PostAutoApplyReview` again — which answered 409 (already reviewed). **This was
+      misdiagnosed at the time as a testing artifact** (recording the decision directly
+      rather than only through the orchestrator); a later code review caught that it is
+      not one — `PostAutoApplyReview` is the ONLY thing that ever publishes
+      `auto-apply/review.decided`, and it always records the decision before publishing,
+      so this same 409 fires on every real run regardless of who calls `/review`. Fixed by
+      removing the orchestrator's own post-wait call to `/review` entirely: the event's
+      arrival already means the decision is durably recorded, so the run has nothing left
+      to do but complete with it (`orchestrate.go`'s own doc comment explains why). One
+      environment quirk found and worked around, not a code bug:
       `cmd/auto-apply-orchestrate`'s own `selfRegister` PUTs `127.0.0.1<addr>`, whose Host
       header becomes the URL the Inngest server calls back — correct when both processes
       share one host's `localhost` (the real host-2 deploy shape), wrong when the Inngest

@@ -86,7 +86,13 @@ func TestOrchestrate_TailorFailureNeverCallsReview(t *testing.T) {
 	}
 }
 
-func TestOrchestrate_PausesUntilAMatchingDecisionArrives(t *testing.T) {
+// TestOrchestrate_ResumesOnDecisionWithoutCallingReviewAgain guards the bug a code review
+// found: PostAutoApplyReview (the only publisher of EventReviewDecided) records the
+// decision BEFORE it publishes, so by the time this resumes, the decision is already
+// durably recorded — a second call to /review would always 409 (already reviewed). Every
+// real run hit exactly this until the fix; the previous version of this test asserted the
+// erroneous call as the expected behavior.
+func TestOrchestrate_ResumesOnDecisionWithoutCallingReviewAgain(t *testing.T) {
 	hire := newFakeHire()
 	hireServer := hire.server()
 	t.Cleanup(hireServer.Close)
@@ -106,16 +112,12 @@ func TestOrchestrate_PausesUntilAMatchingDecisionArrives(t *testing.T) {
 
 	dev.sendEvent(t, EventReviewDecided, ReviewDecidedEvent{QueueID: "7", Decision: "approved"})
 
-	pollUntil(t, 20*time.Second, func() bool {
-		return countCalls(hire.Calls(), "/me/auto-apply/7/review") == 1
-	})
-
-	for _, c := range hire.Calls() {
-		if c.path == "/me/auto-apply/7/review" {
-			if c.body["decision"] != "approved" {
-				t.Errorf("review body decision = %v, want \"approved\"", c.body["decision"])
-			}
-		}
+	// Give the resumed run a beat to run its course, then confirm it never called
+	// /review — the decision it just received was already recorded by whoever
+	// published the event.
+	time.Sleep(3 * time.Second)
+	if n := countCalls(hire.Calls(), "/me/auto-apply/7/review"); n != 0 {
+		t.Errorf("review calls after the decision event = %d, want 0", n)
 	}
 }
 
