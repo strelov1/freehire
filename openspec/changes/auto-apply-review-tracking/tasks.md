@@ -74,15 +74,15 @@ no browser, by its own existing design) is the wrong place for this.
 
 ## 5. Status derivation + tracked-job read path
 
-- [ ] 5.1 In `internal/application/autoapply`, add the six-value status derivation
+- [x] 5.1 In `internal/application/autoapply`, add the six-value status derivation
       (`tailoring`/`pending_review`/`approved`/`blocked`/`declined`/`failed`) as a pure function
       over `(tailoredCVID, reviewDecision, blockedAt, failedAt)`, mirroring
       `autoApplyEntryStatus`'s existing precedence (declined checked before blocked/failed).
-- [ ] 5.2 RED+GREEN: table-driven unit test, one case per status plus the declined-vs-blocked
+- [x] 5.2 RED+GREEN: table-driven unit test, one case per status plus the declined-vs-blocked
       precedence case from the spec.
-- [ ] 5.3 Add an assembly function returning `{status, resolved_preview, tailored_cv_id,
+- [x] 5.3 Add an assembly function returning `{status, resolved_preview, tailored_cv_id,
       unmapped}` for a job's live auto-apply attempt (never `last_error`), `nil` when none exists.
-- [ ] 5.4 RED+GREEN: wire this into wherever `stage_suggestion` is assembled onto a tracked job
+- [x] 5.4 RED+GREEN: wire this into wherever `stage_suggestion` is assembled onto a tracked job
       today, as a new optional `auto_apply` field, integration-tested alongside the existing
       `stage_suggestion` test for that same read path.
 

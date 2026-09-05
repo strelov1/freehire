@@ -10,6 +10,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/userjob"
 	"github.com/strelov1/freehire/internal/job/applydate"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -122,6 +123,12 @@ type TrackedJob struct {
 	// the second does not soften the first. It is kept out of silence.StateFor's inputs for the same
 	// reason FollowedUpAt is — see internal/application/userjob.
 	CVOpenedAt *time.Time
+	// AutoApplyStatus is the six-value status of this job's live auto-apply attempt, nil
+	// when it has none (openspec/changes/auto-apply-review-tracking). The board's own
+	// "needs your review" badge reads only this — the full answer preview and unmapped
+	// question list are the drawer's own, richer read (GetTrackedApplication), not
+	// shipped in this list.
+	AutoApplyStatus *autoapply.Status
 }
 
 // Listing is the result of ListTracked: a page of tracked jobs for the active

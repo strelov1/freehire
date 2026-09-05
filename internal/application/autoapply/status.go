@@ -62,15 +62,16 @@ type ResolvedAttempt struct {
 }
 
 // AutoApplyReviewInfo is what a tracked job's own read path surfaces about its live
-// auto-apply attempt.
+// auto-apply attempt — serialized directly onto the wire, the same convention
+// jobtracking.StageSuggestion already follows for its own optional field.
 type AutoApplyReviewInfo struct {
-	Status Status
+	Status Status `json:"status"`
 	// ResolvedPreview is set only when Status is StatusPendingReview — the one state
 	// where the candidate has a decision to make and needs to see what it covers.
-	ResolvedPreview *ResolvedPreview
+	ResolvedPreview *ResolvedPreview `json:"resolved_preview,omitempty"`
 	// Unmapped is set only when Status is StatusBlocked — the specific questions that
 	// stopped the attempt, never the internal reason it stopped.
-	Unmapped []UnmappedField
+	Unmapped []UnmappedField `json:"unmapped,omitempty"`
 }
 
 // AssembleReviewInfo builds the candidate-facing view of a job's live auto-apply attempt,
