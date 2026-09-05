@@ -24,6 +24,7 @@ export const messages = defineMessages(
       '/my/submissions': 'My submissions',
       '/my/contributions': 'Contributions',
       '/my/plan': 'Plan',
+      '/my/invite': 'Invite a friend',
       '/my/security': 'Security',
     },
     shell: {
@@ -58,6 +59,10 @@ export const messages = defineMessages(
         // board we don't have yet. A literal "Вклад" says nothing about that.
         '/my/contributions': 'Добавить борд',
         '/my/plan': 'Тариф',
+        // "Пригласить друга" and not "Рефералы": that word is taken by the
+        // employee-referral marketplace above, and two sections sharing a name
+        // is a menu nobody can navigate.
+        '/my/invite': 'Пригласить друга',
         '/my/security': 'Безопасность',
       },
       shell: {
