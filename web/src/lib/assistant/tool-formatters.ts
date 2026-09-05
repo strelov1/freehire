@@ -47,7 +47,6 @@ const LABELS: Record<string, string> = {
   screening_answers_set: 'Saving screening answers',
   interview_context: 'Reading the interview brief',
   request_confirmation: 'Asking you to confirm',
-  read_current_page: 'Reading the page you are on',
   experience_search: 'Searching your experience',
   experience_get: 'Reading an achievement',
   experience_add: 'Banking an achievement',
