@@ -296,6 +296,24 @@ func (q *Queries) RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams
 	return percent_off, err
 }
 
+const redeemedPromoPercent = `-- name: RedeemedPromoPercent :one
+SELECT c.percent_off
+FROM promo_redemptions r
+JOIN promo_codes c ON c.code = r.code
+WHERE r.user_id = $1
+`
+
+// What the code this account redeemed is worth, for the checkout that is about to attach a
+// coupon. Separate from the EXISTS above because a refusal needs only the fact while a
+// checkout needs the number, and reading the join to answer a yes/no question would be
+// work for its own sake on a path that runs far more often.
+func (q *Queries) RedeemedPromoPercent(ctx context.Context, userID int64) (int16, error) {
+	row := q.db.QueryRow(ctx, redeemedPromoPercent, userID)
+	var percent_off int16
+	err := row.Scan(&percent_off)
+	return percent_off, err
+}
+
 const referrerByInviteCode = `-- name: ReferrerByInviteCode :one
 SELECT user_id FROM invite_codes WHERE code = $1::text
 `

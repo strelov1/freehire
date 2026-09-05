@@ -3999,6 +3999,11 @@ type Querier interface {
 	//
 	// No rows back means refused, without saying which bound refused it.
 	RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) (int16, error)
+	// What the code this account redeemed is worth, for the checkout that is about to attach a
+	// coupon. Separate from the EXISTS above because a refusal needs only the fact while a
+	// checkout needs the number, and reading the join to answer a yes/no question would be
+	// work for its own sake on a path that runs far more often.
+	RedeemedPromoPercent(ctx context.Context, userID int64) (int16, error)
 	// Whether a specific member is an approved referrer for a company — the authorization
 	// check for acting on / viewing a request in that company's pool.
 	ReferrerApprovedForCompany(ctx context.Context, arg ReferrerApprovedForCompanyParams) (bool, error)

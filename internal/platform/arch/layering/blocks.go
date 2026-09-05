@@ -75,6 +75,13 @@ var blocks = map[string][]string{
 		// this package, and billing's only callers are the webhook handler in api and a
 		// binary in cmd.
 		"billing",
+		// promo decides what discount an account is owed — a promo code it redeemed, the
+		// first-month discount an invited account is offered, the credit a referrer earned.
+		// It sits beside billing rather than inside it because billing's scope is the
+		// subscription itself, and neither imports the other: promo reads its own tables
+		// through platform/db and returns a plain value, and the handler and the worker that
+		// hold both are in api and cmd, which may import anything.
+		"promo",
 		"userprofile", "username",
 	},
 	"candidate": {

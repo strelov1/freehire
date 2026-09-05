@@ -53,6 +53,16 @@ SELECT claimed.percent_off FROM claimed, recorded;
 -- the deliberately vague "no" above into the one explanation that is about the caller.
 SELECT EXISTS (SELECT 1 FROM promo_redemptions WHERE user_id = $1);
 
+-- name: RedeemedPromoPercent :one
+-- What the code this account redeemed is worth, for the checkout that is about to attach a
+-- coupon. Separate from the EXISTS above because a refusal needs only the fact while a
+-- checkout needs the number, and reading the join to answer a yes/no question would be
+-- work for its own sake on a path that runs far more often.
+SELECT c.percent_off
+FROM promo_redemptions r
+JOIN promo_codes c ON c.code = r.code
+WHERE r.user_id = $1;
+
 -- name: EnsureInviteCode :one
 -- The account's invite code, minted on first ask and never rotated.
 --

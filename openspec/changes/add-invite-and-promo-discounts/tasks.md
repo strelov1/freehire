@@ -16,22 +16,22 @@
 
 ## 2. The promo package
 
-- [ ] 2.1 Register `internal/identity/promo` in the layering table at
+- [x] 2.1 Register `internal/identity/promo` in the layering table at
   `internal/platform/arch/layering/blocks.go` (identity, layer 3) and confirm the arch test
   passes with `-tags=integration`.
-- [ ] 2.2 `promo.Service`: `Preview(ctx, code)` — read-only validity, no side effects — and
+- [x] 2.2 `promo.Service`: `Preview(ctx, code)` — read-only validity, no side effects — and
   `Redeem(ctx, userID, code)` returning the percentage or a typed refusal
   (`ErrUnknownCode`, `ErrCodeExhausted`, `ErrAlreadyRedeemed`). Refusals must not distinguish
   "no such code" from "not eligible" in what reaches a caller.
-- [ ] 2.3 Invite codes: `LinkFor(ctx, userID)` mints on first ask from `crypto/rand`, is
+- [x] 2.3 Invite codes: `LinkFor(ctx, userID)` mints on first ask from `crypto/rand`, is
   idempotent, and never rotates. Uniqueness comes from the constraint, not from a read.
-- [ ] 2.4 `Attribute(ctx, refereeID, code)`: writes a `pending` reward, refuses self-referral,
+- [x] 2.4 `Attribute(ctx, refereeID, code)`: writes a `pending` reward, refuses self-referral,
   and treats an unknown code and a duplicate invitee as no-ops rather than errors.
-- [ ] 2.5 `Stats(ctx, userID)`: invitee count, rewarded count, total credit earned. No invitee
+- [x] 2.5 `Stats(ctx, userID)`: invitee count, rewarded count, total credit earned. No invitee
   identity in the result type at all — not filtered at the edge.
-- [ ] 2.6 `PendingDiscount(ctx, userID)`: the one percentage an account gets on a checkout —
+- [x] 2.6 `PendingDiscount(ctx, userID)`: the one percentage an account gets on a checkout —
   a redeemed promo code or a pending invite — and which of the two it was.
-- [ ] 2.7 Reward-ceiling config: `INVITE_REWARD_MAX_PER_USER`, default 12; an unparseable or
+- [x] 2.7 Reward-ceiling config: `INVITE_REWARD_MAX_PER_USER`, default 12; an unparseable or
   non-positive value logs and falls back rather than failing.
 
 ## 3. Billing: the two provider abilities
