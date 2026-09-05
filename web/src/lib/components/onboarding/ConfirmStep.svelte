@@ -10,9 +10,9 @@
   import { ChevronDown, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { api } from '$lib/api';
-  import { FACETS } from '$lib/facets';
   import { CATEGORY_GROUPS } from '$lib/filterSections';
   import { pillClass, pillTitle } from '$lib/components/facets/pill';
+  import SeniorityPills from '$lib/components/profile/SeniorityPills.svelte';
   import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import ProfileLinksFields from './ProfileLinksFields.svelte';
   import type { ProfileLinks } from '$lib/profileLinks';
@@ -38,8 +38,6 @@
     onSenioritiesChange,
     onLinksChange,
   }: Props = $props();
-
-  const seniorityOptions = FACETS.find((f) => f.param === 'seniority')?.options ?? [];
 
   let specQuery = $state('');
   const specCollapsed = new SvelteSet<string>();
@@ -175,22 +173,7 @@
 <div class="mt-6">
   {@render fieldLabel('Level', seniorities.length, () => onSenioritiesChange([]))}
 </div>
-<div class="flex flex-wrap gap-2">
-  {#each seniorityOptions as o (o.value)}
-    {@const selected = seniorities.includes(o.value)}
-    <button
-      type="button"
-      onclick={() => toggleSeniority(o.value)}
-      aria-pressed={selected}
-      class={[
-        'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-        selected ? 'border-brand bg-brand text-brand-foreground' : 'border-border bg-card hover:bg-accent',
-      ]}
-    >
-      {o.label}
-    </button>
-  {/each}
-</div>
+<SeniorityPills selected={seniorities} onToggle={toggleSeniority} />
 
 <div class="mt-6">
   <ProfileLinksFields value={links} onChange={onLinksChange} prefilled={linksPrefilled} />

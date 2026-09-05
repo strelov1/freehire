@@ -18,19 +18,33 @@ import type { UserProfile } from './types';
  *  be unit-tested in plain Node. */
 type SetupHref = '/my/profile' | '/my/profile/skills' | '/my/profile/location' | '/my/searches';
 
-export interface CompletenessStep {
+interface StepBase {
   /** Stable key. Used by tests and as the list key — never shown. */
   id: string;
   label: string;
-  href: SetupHref;
-  /** Where on `href`'s page to land. Required for `/my/profile`, which is the page this
-   *  card is itself rendered on: without an anchor the link goes to where the reader
-   *  already stands and nothing appears to happen. An opaque string rather than a type
-   *  shared with the page — this module stays free of any SvelteKit import (see
-   *  `SetupHref`) — so it is kept in sync by hand with that element's `id`. */
-  hash?: string;
   done: boolean;
 }
+
+/** A step done on `/my/profile` itself. The anchor is REQUIRED, and required by the type
+ *  rather than by a test, because that route's default section holds three blocks and the
+ *  setup card is the first of them: a step there that named no block would link to the
+ *  page the reader is already looking at. The `id` is an opaque string rather than a type
+ *  shared with the page — this module stays free of any SvelteKit import (see
+ *  `SetupHref`) — so it is kept in sync by hand with that element's `id`. */
+interface DefaultSectionStep extends StepBase {
+  href: '/my/profile';
+  anchorId: string;
+}
+
+/** A step done on a route that IS the step. An anchor would only point at the top of what
+ *  is already the whole page, so there is none — and the card reads its absence as "this
+ *  cannot move a reader who is already here" (see AccountSetupCard). */
+interface OwnRouteStep extends StepBase {
+  href: Exclude<SetupHref, '/my/profile'>;
+  anchorId?: undefined;
+}
+
+export type CompletenessStep = DefaultSectionStep | OwnRouteStep;
 
 export interface CompletenessInput {
   /** Whether a CV is stored (resumeStore.present). */
@@ -71,7 +85,7 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       // has no upload of its own. What this step measures is the stored base résumé, and
       // the only surface under /my/ that takes one is ProfileForm's "Your CV" box.
       href: '/my/profile',
-      hash: 'account-cv',
+      anchorId: 'account-cv',
       done: hasCv,
     },
     {
@@ -84,7 +98,7 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       // The card that carries this step is rendered on /my/profile itself, above two other
       // blocks — so the link has to name the Role card or it is a link to where you already
       // stand.
-      hash: 'account-role',
+      anchorId: 'account-role',
       done: Boolean(profile?.specializations.length && profile?.seniorities.length),
     },
     {
@@ -106,6 +120,22 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       done: alertCount > 0,
     },
   ];
+}
+
+/** Whether following `step` would move the reader at all.
+ *
+ *  The card is mounted in `/my/profile`'s LAYOUT, so it is on screen for every profile
+ *  section — and a step is not allowed to render as a link to the page already open, which
+ *  is what following one felt like when this was first reported. An anchor always counts:
+ *  it names a block further down a page the card sits at the top of. Otherwise the step has
+ *  to lead off the current route.
+ *
+ *  Takes both paths as strings rather than reaching for the router, so the rule lives beside
+ *  the steps it governs and stays testable in plain Node. `stepPath` is `step.href` as the
+ *  router resolves it and `currentPath` the pathname on screen — passing the RESOLVED href
+ *  is what keeps a configured base path from making every step look like the current one. */
+export function stepLeadsSomewhere(step: CompletenessStep, stepPath: string, currentPath: string): boolean {
+  return step.anchorId !== undefined || stepPath !== currentPath;
 }
 
 /** The steps still open. Zero of them means the card and its dot are done showing.

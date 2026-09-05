@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { accountSteps, outstandingOf, type CompletenessInput } from './accountCompleteness';
+import {
+  accountSteps,
+  outstandingOf,
+  stepLeadsSomewhere,
+  type CompletenessInput,
+} from './accountCompleteness';
 import type { UserProfile } from './types';
 
 // What the account card measures. The predicates are the whole point of the module, so
@@ -56,10 +61,11 @@ describe('accountSteps', () => {
     });
   });
 
-  // The card itself is rendered on /my/profile, so a step landing there would otherwise
-  // point at the page the reader is already looking at — the anchor is what makes it move.
-  it('anchors every step that lands on the page the card itself is on', () => {
-    const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.hash]));
+  // /my/profile's default section holds three blocks and only one is the step, so both
+  // steps landing there name which. The other three routes ARE their step, so an anchor
+  // would only point at the top of what is already the whole page.
+  it('anchors the two steps that share the crowded default section', () => {
+    const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.anchorId]));
     expect(byId.cv).toBe('account-cv');
     expect(byId.role).toBe('account-role');
     expect(byId.skills).toBeUndefined();
@@ -67,12 +73,47 @@ describe('accountSteps', () => {
     expect(byId.alerts).toBeUndefined();
   });
 
-  // The guard for the whole class of bug this fixes: a step whose href is the page the
-  // card is rendered on has to name where on it to go, or following it changes nothing.
+  // Belt to the type's braces: `DefaultSectionStep` already makes the anchor mandatory at
+  // compile time, so this only catches someone loosening that type back to optional.
   it('leaves no step pointing at /my/profile without an anchor', () => {
     for (const step of accountSteps(empty)) {
-      if (step.href === '/my/profile') expect(step.hash).toBeTruthy();
+      if (step.href === '/my/profile') expect(step.anchorId).toBeTruthy();
     }
+  });
+});
+
+// The whole class of bug this card was reported for: the card is mounted in /my/profile's
+// LAYOUT, so it is on screen for every profile section, and a step must never be offered
+// as a link to the page the reader is already looking at.
+describe('stepLeadsSomewhere', () => {
+  const byId = (id: string) => {
+    const step = accountSteps(empty).find((s) => s.id === id);
+    if (!step) throw new Error(`no step ${id}`);
+    return step;
+  };
+
+  it('sends an anchored step onward even from the page it lives on', () => {
+    expect(stepLeadsSomewhere(byId('cv'), '/my/profile', '/my/profile')).toBe(true);
+    expect(stepLeadsSomewhere(byId('role'), '/my/profile', '/my/profile')).toBe(true);
+  });
+
+  it('refuses an unanchored step whose route is the one on screen', () => {
+    expect(stepLeadsSomewhere(byId('skills'), '/my/profile/skills', '/my/profile/skills')).toBe(false);
+    expect(stepLeadsSomewhere(byId('location'), '/my/profile/location', '/my/profile/location')).toBe(false);
+  });
+
+  it('sends every step onward from a section that is not its own', () => {
+    for (const step of accountSteps(empty)) {
+      expect(stepLeadsSomewhere(step, step.href, '/my/profile/settings')).toBe(true);
+    }
+  });
+
+  // The card passes the RESOLVED href, so both sides carry any base path and the comparison
+  // stays honest. Were only one side resolved, every step would read as the current one.
+  it('compares the two paths as given, base and all', () => {
+    const skills = byId('skills');
+    expect(stepLeadsSomewhere(skills, '/app/my/profile/skills', '/app/my/profile/skills')).toBe(false);
+    expect(stepLeadsSomewhere(skills, '/app/my/profile/skills', '/app/my/profile')).toBe(true);
   });
 
   it('counts a CV once one is stored', () => {
