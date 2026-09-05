@@ -71,6 +71,14 @@ type Querier interface {
 	// nothing rather than failing: an account is worth one reward for its whole life, and the
 	// table's unique constraint is what says so. Self-referral is refused by the table's own
 	// check constraint too; the service refuses it earlier so the common case is not an error.
+	//
+	// The SELECT rather than a VALUES is the freshness rule, and it is here rather than in Go
+	// deliberately. Attribution belongs to account CREATION: without this, an account that has
+	// existed for two years could open a friend's link, sign in, and collect a first-month
+	// discount plus a reward for its friend — which is a promo code with extra steps, and one
+	// nobody rationed. An hour is far longer than a sign-up takes and far shorter than a
+	// second visit, and being in SQL means a caller who gets the rule wrong still cannot break
+	// it.
 	AttributeInvite(ctx context.Context, arg AttributeInviteParams) (int64, error)
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row

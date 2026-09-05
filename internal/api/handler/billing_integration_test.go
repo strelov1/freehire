@@ -52,7 +52,7 @@ func billingApp(t *testing.T, pool *pgxpool.Pool, cfg billing.Config, providerUR
 	t.Helper()
 	// No store provider: these tests are about Stripe, and an unconfigured RevenueCat mounts
 	// nothing — which is also what the disabled case below asserts about Stripe itself.
-	h := newBillingHandlers(billing.NewWithBase(cfg, db.New(pool), providerURL), nil)
+	h := newBillingHandlers(billing.NewWithBase(cfg, db.New(pool), providerURL), nil, nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
 	return app

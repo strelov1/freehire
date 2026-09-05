@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/identity/promo"
 )
 
 // billingHandlers serve the two ends of the Pro subscription: where a candidate goes to
@@ -20,10 +22,14 @@ import (
 type billingHandlers struct {
 	billing *billing.Service
 	store   *billing.RevenueCat
+	// promo decides what discount the buyer is owed. Held here rather than imported by
+	// billing, because a discount is a reason to buy and billing's scope is the
+	// subscription itself — the two packages meet in this handler and nowhere else.
+	promo *promo.Service
 }
 
-func newBillingHandlers(svc *billing.Service, store *billing.RevenueCat) *billingHandlers {
-	return &billingHandlers{billing: svc, store: store}
+func newBillingHandlers(svc *billing.Service, store *billing.RevenueCat, discounts *promo.Service) *billingHandlers {
+	return &billingHandlers{billing: svc, store: store, promo: discounts}
 }
 
 // webhookProvider is the part of a billing provider a webhook route needs, and it is all the
@@ -173,9 +179,14 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
 	defer cancel()
 
+	discount, err := h.discountFor(ctx, userID, c.Query("code"))
+	if err != nil {
+		return err
+	}
+
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
-	url, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), billing.Discount{})
+	url, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), discount)
 	if err != nil {
 		// Either checkout is unconfigured, or the provider refused. Neither is something a
 		// candidate can act on, and a 404 lets the surface omit the offer rather than render
@@ -183,7 +194,63 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 		log.Printf("billing: no checkout for user %d: %v", userID, err)
 		return fiber.NewError(fiber.StatusNotFound, "checkout is not available")
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
+	return c.JSON(fiber.Map{"data": fiber.Map{
+		"url": url,
+		// Which offer was applied, so the page can say so rather than leaving the buyer to
+		// work it out from the amount on the provider's page. Empty when there was none.
+		"discount_percent": discount.PercentOff,
+		"discount_source":  discount.Label,
+	}})
+}
+
+// discountFor resolves the ONE discount this checkout may carry.
+//
+// A code in the query is redeemed here rather than at a separate endpoint, because
+// redeeming spends the account's single lifetime redemption and that must not happen on a
+// page the buyer only visited. A refusal is returned to the caller instead of being
+// swallowed: somebody who typed a code and was charged full price without being told would
+// reasonably call that a bug.
+//
+// With no code, an account may still be owed the invitee's first-month discount. That path
+// cannot fail the checkout — a discount somebody was offered but that we could not read is
+// not a reason to refuse them the purchase — so it is logged and the sale goes ahead.
+func (h *billingHandlers) discountFor(ctx context.Context, userID int64, code string) (billing.Discount, error) {
+	if h.promo == nil {
+		return billing.Discount{}, nil
+	}
+
+	if code != "" {
+		percent, err := h.promo.Redeem(ctx, userID, code)
+		switch {
+		case err == nil:
+			return billing.Discount{
+				PercentOff: int32(percent),
+				Label:      promo.SourcePromo,
+				Key:        fmt.Sprintf("promo_%d_%d", userID, percent),
+			}, nil
+		case errors.Is(err, promo.ErrAlreadyRedeemed):
+			return billing.Discount{}, fiber.NewError(fiber.StatusConflict, "you have already used a promo code")
+		case errors.Is(err, promo.ErrNotUsable):
+			return billing.Discount{}, fiber.NewError(fiber.StatusNotFound, "that code is not available")
+		default:
+			log.Printf("promo: redeeming a code for user %d: %v", userID, err)
+			return billing.Discount{}, fiber.NewError(fiber.StatusInternalServerError, "could not apply that code")
+		}
+	}
+
+	resolved, err := h.promo.Discount(ctx, userID)
+	if err != nil {
+		log.Printf("promo: resolving the discount of user %d: %v", userID, err)
+		return billing.Discount{}, nil
+	}
+	if resolved.Percent <= 0 {
+		return billing.Discount{}, nil
+	}
+	return billing.Discount{
+		PercentOff: int32(resolved.Percent),
+		Label:      resolved.Source,
+		Key:        fmt.Sprintf("%s_%d_%d", resolved.Source, userID, resolved.Percent),
+	}, nil
 }
 
 // Subscription returns what the caller is paying and what has been charged.

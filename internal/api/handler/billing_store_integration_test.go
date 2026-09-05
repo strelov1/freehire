@@ -80,7 +80,7 @@ func storeApp(t *testing.T, pool *pgxpool.Pool, providerURL string, iss *auth.Is
 	t.Helper()
 	cfg := billing.RevenueCatConfig{APIKey: "sk_rc", WebhookSecret: storeSecret, Entitlement: "pro"}
 	h := newBillingHandlers(billing.New(billing.Config{}, db.New(pool)),
-		billing.NewRevenueCatWithBase(cfg, db.New(pool), providerURL))
+		billing.NewRevenueCatWithBase(cfg, db.New(pool), providerURL), nil)
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
@@ -196,7 +196,7 @@ func TestStoreRoutesAreAbsentWhenUnconfigured(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 
 	h := newBillingHandlers(billing.New(billing.Config{}, db.New(pool)),
-		billing.NewRevenueCat(billing.RevenueCatConfig{}, db.New(pool)))
+		billing.NewRevenueCat(billing.RevenueCatConfig{}, db.New(pool)), nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
 

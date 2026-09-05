@@ -34,6 +34,24 @@ const (
 	SourceInvite = "invite"
 )
 
+// AttributionCookie carries the referrer's code from the invite link to whichever
+// registration path the visitor eventually takes.
+//
+// A cookie and not browser storage, because the majority signup path is OAuth: the visitor
+// leaves for the provider and returns on a GET redirect, which has no body a value could
+// travel in. It is set by the SERVER (see the web app's request hook) rather than by
+// script, because Safari's tracking prevention caps script-written cookies at seven days
+// and the attribution window is thirty.
+//
+// The name lives here rather than in the web app so the two halves of one mechanism cannot
+// drift apart silently — a renamed cookie would simply stop attributing, and nothing would
+// fail.
+const AttributionCookie = "fh_ref"
+
+// PromoCookie carries a promo code arriving in a link, so the pricing page can prefill the
+// field rather than asking somebody to retype what they just clicked.
+const PromoCookie = "fh_promo"
+
 // inviteCodeBytes is how much randomness an invite code carries. This code appears in a
 // URL people paste into chats, so it is a public identifier for an account — short enough
 // to guess would turn the invite link into an account enumerator.

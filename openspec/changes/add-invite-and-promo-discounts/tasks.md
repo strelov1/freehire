@@ -66,16 +66,16 @@
 
 ## 5. HTTP
 
-- [ ] 5.1 `GET /api/v1/me/invite` → link, counts, accrued credit. Behind `RequireAuth`.
-- [ ] 5.2 `POST /api/v1/me/promo/preview` behind `RequireAuth` plus
+- [x] 5.1 `GET /api/v1/me/invite` → link, counts, accrued credit. Behind `RequireAuth`.
+- [x] 5.2 `POST /api/v1/me/promo/preview` behind `RequireAuth` plus
   `ratelimit.Middleware(…, ratelimit.KeyByUserOrIP("promo"), …)`. Assert 401 anonymous, 429
   over the limit, and that a preview consumes no seat.
-- [ ] 5.3 Accept an optional `code` on the existing checkout route: redeem, resolve the single
+- [x] 5.3 Accept an optional `code` on the existing checkout route: redeem, resolve the single
   discount, pass it to `billing`, and state in the response which discount was applied.
-- [ ] 5.4 Read the attribution cookie in the password registration handler and call
+- [x] 5.4 Read the attribution cookie in the password registration handler and call
   `promo.Attribute`, expiring the cookie on success. A failure there must never fail a
   registration.
-- [ ] 5.5 Do the same in the OAuth callback — the majority signup path, and the one that
+- [x] 5.5 Do the same in the OAuth callback — the majority signup path, and the one that
   returns on a bodyless GET redirect, so the cookie is the only thing that can carry the code.
   Assert with a test that an OAuth signup attributes.
 

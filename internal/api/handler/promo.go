@@ -1,0 +1,120 @@
+package handler
+
+import (
+	"context"
+	"errors"
+	"log"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/identity/promo"
+)
+
+// promoReadTimeout bounds one database read on these routes. Everything here is a small
+// indexed query; a longer budget would only hold a connection open for a page that has
+// already given up.
+const promoReadTimeout = 5 * time.Second
+
+// promoPreviewPerMinute is how often one account may ask whether a code is valid.
+//
+// The route is authenticated, but an account is free to create, so authentication alone
+// bounds nothing. Codes are short by design — people type them — and a handful of guesses
+// a minute turns a four-character space into an afternoon's work. Keyed by account OR
+// address, so neither a pool of accounts from one machine nor one account across a proxy
+// pool gets the budget of the other.
+const promoPreviewPerMinute = 10
+
+// promoHandlers serve the discount surfaces: checking a code, and an account's own invite
+// link.
+//
+// The invite routes are mounted whatever billing is doing, because sharing a link and
+// counting who came is not a purchase. Only the checkout, which lives with the other
+// billing routes, needs a configured provider.
+type promoHandlers struct {
+	promo *promo.Service
+}
+
+func newPromoHandlers(svc *promo.Service) *promoHandlers {
+	return &promoHandlers{promo: svc}
+}
+
+func (h *promoHandlers) register(api fiber.Router, mw middleware, throttler ratelimit.Throttler) {
+	// Cookie only, like the rest of /me. A link that decides who gets credited for a
+	// referral is minted for a browser session, not for a script holding a key.
+	api.Get("/me/invite", mw.cookie, h.Invite)
+	api.Post("/me/promo/preview", mw.cookie,
+		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute),
+		h.PreviewCode)
+}
+
+// Invite returns this account's invite link and what it has earned.
+//
+// The counts name nobody. Telling a referrer which of their contacts signed up would
+// disclose that a particular person is looking for work, which is not theirs to know — so
+// the service returns aggregates and there is no query that could return more.
+func (h *promoHandlers) Invite(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), promoReadTimeout)
+	defer cancel()
+
+	link, err := h.promo.Link(ctx, userID)
+	if err != nil {
+		log.Printf("promo: minting an invite link for user %d: %v", userID, err)
+		return fiber.NewError(fiber.StatusInternalServerError, "could not read your invite link")
+	}
+
+	stats, err := h.promo.Stats(ctx, userID)
+	if err != nil {
+		log.Printf("promo: reading invite stats for user %d: %v", userID, err)
+		return fiber.NewError(fiber.StatusInternalServerError, "could not read your invite link")
+	}
+
+	return c.JSON(fiber.Map{"data": fiber.Map{
+		"link":         link,
+		"invitees":     stats.Invitees,
+		"rewarded":     stats.Rewarded,
+		"credit_cents": stats.CreditCents,
+		"percent_off":  promo.InvitePercent,
+	}})
+}
+
+// PreviewCode reports what a code is worth to this caller, without consuming a seat.
+//
+// Rate limited above, and every refusal about the CODE is the same refusal: the route is
+// reachable by anyone who can create an account, and answering "that code exists but is out
+// of seats" differently from "no such code" would turn it into an oracle for guessing.
+func (h *promoHandlers) PreviewCode(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "expected a JSON body with a code")
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), promoReadTimeout)
+	defer cancel()
+
+	percent, err := h.promo.Preview(ctx, userID, body.Code)
+	switch {
+	case err == nil:
+		return c.JSON(fiber.Map{"data": fiber.Map{"percent_off": percent}})
+	case errors.Is(err, promo.ErrAlreadyRedeemed):
+		return fiber.NewError(fiber.StatusConflict, "you have already used a promo code")
+	case errors.Is(err, promo.ErrNotUsable):
+		return fiber.NewError(fiber.StatusNotFound, "that code is not available")
+	default:
+		log.Printf("promo: previewing a code for user %d: %v", userID, err)
+		return fiber.NewError(fiber.StatusInternalServerError, "could not check that code")
+	}
+}

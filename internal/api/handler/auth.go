@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
+	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -58,8 +59,11 @@ type authHandlers struct {
 	// honoured as an OAuth redirect origin; anything else falls back to frontendOrigin.
 	// It is deliberately NOT cookieDomains: a suffix match is right for cookie scope
 	// and wrong for a redirect target (see requestOrigin).
-	servedHosts     []string
-	accounts        *accounts.Service
+	servedHosts []string
+	accounts    *accounts.Service
+	// invites attributes a new account to whoever's link brought it. Optional and nil-safe:
+	// attribution must never be able to fail a sign-up. See withInvites.
+	invites         *promo.Service
 	throttler       ratelimit.Throttler
 	authV2Enabled   bool
 	mobileCallbacks map[string]string
@@ -389,6 +393,9 @@ func (h *authHandlers) Register(c *fiber.Ctx) error {
 	if err := h.setSession(c, user.ID); err != nil {
 		return err
 	}
+	// After the session, never before: the account is made and the person is signed in
+	// whatever happens here.
+	h.attributeInvite(c, user.ID)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toUserResponse(user)})
 }
 

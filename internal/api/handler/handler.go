@@ -45,6 +45,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
@@ -487,7 +488,15 @@ func Register(app *fiber.App, cfg Config) {
 	// cfg: it is enabled, disabled and credentialed independently of Stripe, and threading it
 	// through the handler config would tie the two together for no reason but symmetry.
 	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)
-	billingH := newBillingHandlers(billingSvc, storeSvc)
+	// Discounts read their own environment for the same reason the store provider does: an
+	// invite link works whether or not anything is for sale, and the reward ceiling is an
+	// operational bound rather than a piece of handler configuration.
+	promoSvc := promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv())
+	billingH := newBillingHandlers(billingSvc, storeSvc, promoSvc)
+	promoH := newPromoHandlers(promoSvc)
+	// Both registration paths attribute a new account to whoever's link brought it. Set
+	// here rather than passed to a constructor that already takes ten arguments.
+	authH.withInvites(promoSvc)
 	// Public: a pricing page that needs an account cannot do a pricing page's job.
 	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
@@ -781,6 +790,9 @@ func Register(app *fiber.App, cfg Config) {
 	planH.register(api, mw)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
 	billingH.register(api, mw)
+	// Mounted whatever billing is doing: sharing an invite link and counting who came is
+	// not a purchase, and a deployment that sells nothing can still have a referral page.
+	promoH.register(api, mw, cfg.Throttler)
 	plansH.register(api)
 	usageH.register(api, mw)
 
