@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest hrmdirect
 [Timer]
-OnCalendar=*-*-* 01/3:29:00
+OnCalendar=*:38:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

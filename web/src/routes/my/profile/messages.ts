@@ -16,15 +16,17 @@ export const messages = defineMessages(
     },
   },
   {
-    tabs: {
-      profile: 'Профиль',
-      contacts: 'Контакты',
-      location: 'Локация',
-      skills: 'Навыки',
-      experience: 'Опыт',
-      education: 'Образование',
-      screening: 'Ответы на вопросы',
-      settings: 'Настройки',
+    ru: {
+      tabs: {
+        profile: 'Профиль',
+        contacts: 'Контакты',
+        location: 'Локация',
+        skills: 'Навыки',
+        experience: 'Опыт',
+        education: 'Образование',
+        screening: 'Ответы на вопросы',
+        settings: 'Настройки',
+      },
     },
   },
 );

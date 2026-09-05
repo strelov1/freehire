@@ -1,7 +1,5 @@
 package resumeextract
 
-import "strings"
-
 // This file holds the Talent Network public-profile projections (see
 // openspec/changes/talent-network-profile-visibility). It is deliberately NOT part of
 // structured.go: cmd/gen-contracts generates TypeScript from structured.go alone, and
@@ -15,17 +13,14 @@ import "strings"
 // placeholder to be reworded later.
 const currentEmployerLabel = "Current employer"
 
-// notEndedLabels mirrors internal/candidate/experience/period_sort.go's isPresentLabel exactly
-// (plus the empty string, which import_resume.go treats as "not ended" too): the
-// free-form End labels a CV uses for a role that has not ended. Kept as a separate
-// copy rather than imported — internal/candidate/experience already imports this package, so the
-// reverse import would be circular. Keep the two in sync if the convention ever changes.
-var notEndedLabels = map[string]bool{"": true, "present": true, "current": true, "now": true, "ongoing": true, "today": true}
-
-// isCurrentEntry reports whether an experience entry's End label reads as "not ended",
-// case-insensitively, per notEndedLabels above.
+// isCurrentEntry reports whether an experience entry is ongoing. Current is the model's
+// own signal, but the extraction contract defines an unstated End the same way ("for a
+// role that has not ended ... set current to true and end to null" — resumeextract.go's
+// systemPrompt), so a nil End is treated as ongoing too: a fail-closed guard against a
+// model that complies with end:null but slips on the accompanying current:true, since
+// under-masking a still-current employer is exactly what this feature exists to prevent.
 func isCurrentEntry(e Experience) bool {
-	return notEndedLabels[strings.ToLower(strings.TrimSpace(e.End))]
+	return e.Current || e.End == nil
 }
 
 // stripProjectLinks blanks Link on a copy of every project entry, leaving name and
@@ -61,11 +56,11 @@ func stripProjectLinks(projects []Project) []Project {
 // signal for anyone else the candidate shares the link with (see design.md, "Risks /
 // Trade-offs").
 //
-// The mask is content-based (the End label), not positional: Structured.Experience's
+// The mask is content-based (Current), not positional: Structured.Experience's
 // ordering (newest-first vs. oldest-first) is nowhere documented or enforced by the LLM
 // extraction prompt or schema, so "the newest entry" cannot be determined reliably by
-// array position alone (see design.md, "Masking is content-based (the End label), not
-// positional."). If more than one entry reads as current (concurrent roles, or a
+// array position alone (see design.md, "Masking is content-based, not positional."). If
+// more than one entry reads as current (concurrent roles, or a
 // sloppily-filled CV), every matching entry is masked — there is no reliable signal for
 // picking "the real" one. If zero entries read as current, none are masked.
 func (s Structured) Anonymous() Professional {

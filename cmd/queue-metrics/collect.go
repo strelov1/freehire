@@ -19,9 +19,11 @@ type metricsQueries interface {
 	SearchOutboxMetrics(context.Context) (db.SearchOutboxMetricsRow, error)
 	EnrichmentOutboxMetrics(context.Context) (db.EnrichmentOutboxMetricsRow, error)
 	SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMetricsRow, error)
+	MailClassificationOutboxMetrics(context.Context) (db.MailClassificationOutboxMetricsRow, error)
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
+	NotifyBacklogMetrics(context.Context) (db.NotifyBacklogMetricsRow, error)
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -41,6 +43,10 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	if err != nil {
 		return snapshot{}, fmt.Errorf("semantic outbox metrics: %w", err)
 	}
+	mail, err := q.MailClassificationOutboxMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("mail classification outbox metrics: %w", err)
+	}
 	boards, err := q.BoardHealthMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("board health metrics: %w", err)
@@ -49,6 +55,11 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	newestJob, err := newestJobTime(ctx, q)
 	if err != nil {
 		return snapshot{}, err
+	}
+
+	notifyBacklog, err := q.NotifyBacklogMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("notify backlog metrics: %w", err)
 	}
 
 	health, err := q.ProviderIngestHealth(ctx)
@@ -78,12 +89,15 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			{name: "search_outbox", depth: search.Depth, deadLetters: search.DeadLetters, oldestAgeSeconds: search.OldestAgeSeconds},
 			{name: "enrichment_outbox", depth: enrichment.Depth, deadLetters: enrichment.DeadLetters, oldestAgeSeconds: enrichment.OldestAgeSeconds},
 			{name: "semantic_outbox", depth: semantic.Depth, deadLetters: semantic.DeadLetters, oldestAgeSeconds: semantic.OldestAgeSeconds},
+			{name: "email_classification_outbox", depth: mail.Depth, deadLetters: mail.DeadLetters, oldestAgeSeconds: mail.OldestAgeSeconds},
 		},
-		healthyBoards: boards.Healthy,
-		failingBoards: boards.Failing,
-		cooledBoards:  boards.Cooled,
-		newestJob:     newestJob,
-		providers:     providers,
+		notifyPendingSubscriptions: notifyBacklog.PendingSubscriptions,
+		notifyOldestAgeSeconds:     notifyBacklog.OldestAgeSeconds,
+		healthyBoards:              boards.Healthy,
+		failingBoards:              boards.Failing,
+		cooledBoards:               boards.Cooled,
+		newestJob:                  newestJob,
+		providers:                  providers,
 	}, nil
 }
 

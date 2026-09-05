@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -9,6 +10,31 @@ import (
 func TestBambooHRProvider(t *testing.T) {
 	if got := NewBambooHR(nil).Provider(); got != "bamboohr" {
 		t.Errorf("Provider() = %q, want %q", got, "bamboohr")
+	}
+}
+
+// BambooHR earns fullBoardListing because Fetch's list request is a single unpaginated call
+// returning the board's whole result array — no loop that could stop early, so any listing
+// failure aborts the whole Fetch. Detail fetches are best-effort per posting.
+func TestBambooHRMarkers(t *testing.T) {
+	s := NewBambooHR(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("bamboohr should implement the fullBoardListing marker")
+	}
+}
+
+func TestBambooHRRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["bamboohr"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include bamboohr")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestBambooHRMarkers' fullBoardListing claim rests on.
+func TestBambooHRFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

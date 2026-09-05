@@ -50,8 +50,20 @@ describe('columnOf', () => {
     expect(columnOf(job({ applied_at: '2026-07-12T00:00:00Z' }))).toBe('applied');
   });
 
-  it('returns null for a saved-only row (not on the board)', () => {
-    expect(columnOf(job({ saved_at: '2026-07-12T00:00:00Z' }))).toBeNull();
+  // Saving IS taking a job on, so a bookmark is a board card in the first column. This
+  // is read-side only: nothing writes a stage on the saver's behalf, which is why it
+  // applies to every job saved before the rule existed as well as after.
+  it('maps a saved-only row to preparing', () => {
+    expect(columnOf(job({ saved_at: '2026-07-12T00:00:00Z' }))).toBe('preparing');
+  });
+
+  it('keeps an explicit stage ahead of the saved mark', () => {
+    expect(columnOf(job({ saved_at: '2026-07-12T00:00:00Z', stage: 'interview' }))).toBe(
+      'interview',
+    );
+  });
+
+  it('returns null for a row that is neither saved nor tracked', () => {
     expect(columnOf(job({}))).toBeNull();
   });
 });

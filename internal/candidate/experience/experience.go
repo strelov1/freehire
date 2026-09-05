@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
@@ -97,21 +98,21 @@ func (p Provenance) Publishable() bool {
 	return false
 }
 
-// Employment is a place where evidence was produced. Dates are free-form labels exactly
-// as printed on a CV ("2021-03", "Mar 2021", "Present") — no parsing is attempted, the
-// same convention as resumeextract.Experience and cv.ExperienceItem.
+// Employment is a place where evidence was produced. Start/End are a structured
+// perioddate.PeriodDate (year, optional month) — the same shared type resumeextract.Experience
+// and cv.ExperienceItem use.
 // JSON is kind-aware (see employment_json.go): jobs emit `company`, projects emit `name`
 // for the same stored Company field.
 type Employment struct {
-	ID       uuid.UUID `json:"id"`
-	Kind     string    `json:"kind"`
-	Company  string    `json:"-"` // place label; wire: company (job) or name (project)
-	Role     string    `json:"role,omitempty"`
-	Location string    `json:"location,omitempty"`
-	Start    string    `json:"start,omitempty"`
-	End      string    `json:"end,omitempty"`
-	Current  bool      `json:"current,omitempty"`
-	Summary  string    `json:"summary,omitempty"`
+	ID       uuid.UUID              `json:"id"`
+	Kind     string                 `json:"kind"`
+	Company  string                 `json:"-"` // place label; wire: company (job) or name (project)
+	Role     string                 `json:"role,omitempty"`
+	Location string                 `json:"location,omitempty"`
+	Start    *perioddate.PeriodDate `json:"start,omitempty"`
+	End      *perioddate.PeriodDate `json:"end,omitempty"`
+	Current  bool                   `json:"current,omitempty"`
+	Summary  string                 `json:"summary,omitempty"`
 	// Link is the outbound URL for a portfolio project. Empty for jobs; for projects it
 	// is what Document.Projects.Link needs when seeding a CV from the bank.
 	Link string `json:"link,omitempty"`
@@ -168,8 +169,8 @@ func (e *Employment) Sanitize() {
 	e.Company = clip(e.Company, maxShortRunes)
 	e.Role = clip(e.Role, maxShortRunes)
 	e.Location = clip(e.Location, maxShortRunes)
-	e.Start = clip(e.Start, maxShortRunes)
-	e.End = clip(e.End, maxShortRunes)
+	e.Start = perioddate.Sanitize(e.Start)
+	e.End = perioddate.Sanitize(e.End)
 	e.Summary = clip(e.Summary, maxSummaryRunes)
 	e.Link = clip(e.Link, maxShortRunes)
 	e.Stack = orEmpty(limit(skilltag.Canonicalize(e.Stack, skilltag.WithResumeAcronyms()), maxSkills))

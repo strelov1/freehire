@@ -3,17 +3,27 @@
 // It is not a safety net bolted onto a reliable channel. The provider retries a delivery
 // for up to three days and then stops for good, and an endpoint it decides is broken can be
 // disabled sooner than that — after either, this worker is the ONLY path by which a paid
-// subscription becomes Pro. Two passes:
+// subscription becomes Pro. Three passes:
 //
 //  1. apply events the webhook recorded but could not apply — the provider was
 //     unreachable, the pool was saturated, the process died between the two;
 //  2. re-read subscriber state for accounts whose plan expiry is near, catching a renewal
-//     whose webhook never arrived at all.
+//     whose webhook never arrived at all;
+//  3. settle referral rewards: earn the ones whose invitee has an invoice that actually
+//     collected, then place the earned ones on their referrers' balances. Stripe only —
+//     a store subscription produces no invoice we can read, so there is nothing to earn
+//     a reward from.
 //
-// The second pass reaches its candidates through the stored customer binding, so it walks
-// the accounts that have actually transacted rather than every account on the site.
+// The second pass reaches its candidates through what each provider can address them by —
+// the stored customer binding for Stripe, the store entitlement column for RevenueCat — so it
+// walks the accounts that have actually transacted rather than every account on the site.
 //
-// Needs DATABASE_URL and the STRIPE_* credentials. Without the credentials it is a no-op
+// BOTH PROVIDERS ARE RECONCILED, each against its own events and its own source column, and
+// each independently of the other. One provider being unreachable must not stop the other:
+// they are different companies with different outages, and a Stripe incident that also
+// stalled App Store renewals would be an outage we invented ourselves.
+//
+// Needs DATABASE_URL and the credentials of at least one provider. With neither it is a no-op
 // that never opens the pool.
 package main
 
@@ -25,7 +35,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -49,9 +62,10 @@ func run() int {
 	// reconcile against, and the spec requires an unconfigured deployment to run without
 	// touching the database at all — which is also what keeps this binary harmless in a
 	// checkout that is not freehire.me.
-	cfg := billing.ConfigFromEnv()
-	if !cfg.Enabled() {
-		log.Print("billing-sync: billing is not configured, nothing to reconcile")
+	stripeCfg := billing.ConfigFromEnv()
+	storeCfg := billing.RevenueCatConfigFromEnv()
+	if !stripeCfg.Enabled() && !storeCfg.Enabled() {
+		log.Print("billing-sync: no billing provider is configured, nothing to reconcile")
 		return 0
 	}
 
@@ -62,25 +76,153 @@ func run() int {
 	}
 	defer cleanup()
 
-	svc := billing.New(cfg, db.New(pool))
+	queries := db.New(pool)
 	max := maxPerRun()
 
-	applied, failed := applyPending(ctx, svc, max)
-	refreshed, refreshFailed := refreshNearExpiry(ctx, svc, max)
+	// Named so every log line says which provider it is about. With two of them, "applying
+	// event evt_1 failed" without a name is a line somebody has to go and look up.
+	passes := []struct {
+		name string
+		svc  reconcilable
+	}{
+		{"stripe", billing.New(stripeCfg, queries)},
+		{"revenuecat", billing.NewRevenueCat(storeCfg, queries)},
+	}
 
-	log.Printf("billing-sync: applied=%d refreshed=%d failed=%d", applied, refreshed, failed+refreshFailed)
-	return worker.ExitCode(failed+refreshFailed, 0)
+	var failures int
+	for _, p := range passes {
+		if !p.svc.Enabled() {
+			continue
+		}
+		applied, failed := applyPending(ctx, p.name, p.svc, max)
+		refreshed, refreshFailed := refreshNearExpiry(ctx, p.name, p.svc, max)
+		failures += failed + refreshFailed
+
+		log.Printf("billing-sync: provider=%s applied=%d refreshed=%d failed=%d",
+			p.name, applied, refreshed, failed+refreshFailed)
+	}
+
+	// The referral pass rides here rather than in a binary of its own. It needs the same
+	// database and the same Stripe credentials, it is the same kind of work — repairing what
+	// a webhook could not tell us — and a new binary would need a new systemd unit, which
+	// lives only on the production host and is a manual step easy to forget.
+	//
+	// Stripe only, and not because of an omission: a store subscription produces no invoice
+	// we can read, so there is nothing to earn a reward from.
+	if stripeCfg.Enabled() {
+		failures += settleRewardsLocked(ctx, pool, billing.New(stripeCfg, queries), queries, max)
+	}
+	return worker.ExitCode(failures, 0)
+}
+
+// rewardLockKey serializes the referral pass across processes. Registered in the list in
+// internal/platform/migrate; "fhrw" as bytes.
+const rewardLockKey int64 = 0x66687277
+
+// settleRewardsLocked runs the referral pass under an advisory lock, or skips it.
+//
+// The lock is what makes the per-referrer ceiling a BOUND. Reading a count in one statement
+// and acting on it in another is not atomic under READ COMMITTED — and neither is a count
+// evaluated inside the UPDATE, because the subquery sees the snapshot the statement started
+// with, not another transaction's uncommitted work. Two passes over different pending
+// rewards of one referrer would each see the count below the ceiling and each grant.
+//
+// Non-blocking: a second run gives up rather than queueing. This pass is hourly and
+// idempotent, so waiting buys nothing and a queued run holds a Type=oneshot unit open,
+// which systemd shows as a hang.
+func settleRewardsLocked(ctx context.Context, pool *pgxpool.Pool, provider rewardProvider, queries *db.Queries, max int32) int {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		log.Printf("billing-sync: referrals: acquiring a connection: %v", err)
+		return 1
+	}
+	defer conn.Release()
+
+	var held bool
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", rewardLockKey).Scan(&held); err != nil {
+		log.Printf("billing-sync: referrals: taking the lock: %v", err)
+		return 1
+	}
+	if !held {
+		log.Print("billing-sync: referrals: another run holds the lock, skipping")
+		return 0
+	}
+	defer func() {
+		// context.Background(), because the release must happen even when the run's own
+		// context is already cancelled — a lock left held would skip every later pass until
+		// the connection is reaped.
+		if _, err := conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", rewardLockKey); err != nil {
+			log.Printf("billing-sync: referrals: releasing the lock: %v", err)
+		}
+	}()
+
+	return settleRewards(ctx, provider, queries, max)
+}
+
+// rewardProvider is what the referral pass needs of Stripe. Narrow on purpose: this pass
+// must not be able to touch a subscription.
+type rewardProvider interface {
+	CheckoutPriceCents(ctx context.Context) (int64, error)
+	HasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error)
+	CreditAccount(ctx context.Context, userID, cents int64, idempotencyKey string) error
+}
+
+// settleRewards is the third pass: earn the referral rewards whose invitee has paid, then
+// place the earned ones on their referrers' balances.
+//
+// Both halves are guarded on the row's own state, so the pass is idempotent and stopping it
+// mid-way is free. A failure here is counted but never abandons the run: a referral reward
+// arriving an hour late is a smaller harm than a reconciliation that did not happen.
+func settleRewards(ctx context.Context, provider rewardProvider, queries *db.Queries, max int32) int {
+	svc := promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv())
+
+	// Read once per run rather than per reward. It is one provider call, it cannot change
+	// mid-pass, and a failure to read it must stop the pass rather than let it grant at a
+	// price it guessed.
+	priceCents, err := provider.CheckoutPriceCents(ctx)
+	if err != nil {
+		log.Printf("billing-sync: referrals: reading the sale price: %v", err)
+		return 1
+	}
+
+	var failures int
+	granted, err := svc.GrantEarned(ctx, max, priceCents, provider)
+	if err != nil {
+		log.Printf("billing-sync: referrals: granting: %v", err)
+		failures++
+	}
+
+	delivered, err := svc.DeliverEarned(ctx, max, provider)
+	if err != nil {
+		log.Printf("billing-sync: referrals: delivering: %v", err)
+		failures++
+	}
+
+	log.Printf("billing-sync: referrals granted=%d delivered=%d failed=%d", granted, delivered, failures)
+	return failures
+}
+
+// reconcilable is what this worker needs of a billing provider, and it is exactly the shared
+// engine's surface. Both providers satisfy it; nothing here knows which one it is holding
+// beyond the name it prints.
+type reconcilable interface {
+	Enabled() bool
+	PendingEvents(ctx context.Context, max int32) ([]db.ListUnprocessedBillingEventsRow, error)
+	Apply(ctx context.Context, rowID int64, ev billing.Event) error
+	MarkProcessed(ctx context.Context, rowID int64) error
+	SubscribersNearExpiry(ctx context.Context, window time.Duration, max int32) ([]int64, error)
+	SyncUser(ctx context.Context, userID int64) error
 }
 
 // applyPending is the first pass: events recorded by the webhook but never applied.
 //
-// One account's failure does not abort the run. The rows are independent, and a provider
-// that is refusing one identifier should not stop the other subscriptions from being
-// repaired — the failed row simply stays unprocessed for the next hour.
-func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied, failed int) {
+// One account's failure does not abort the run. The rows are independent, and a provider that
+// is refusing one identifier should not stop the other subscriptions from being repaired — the
+// failed row simply stays unprocessed for the next hour.
+func applyPending(ctx context.Context, name string, svc reconcilable, max int32) (applied, failed int) {
 	pending, err := svc.PendingEvents(ctx, max)
 	if err != nil {
-		log.Printf("billing-sync: reading pending events: %v", err)
+		log.Printf("billing-sync: %s: reading pending events: %v", name, err)
 		return 0, 1
 	}
 
@@ -103,13 +245,13 @@ func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied
 			// Nobody can ever apply this — an event about something we do not meter, or an
 			// object created outside this integration. Stamping it keeps it out of this queue
 			// rather than failing the run every hour forever.
-			log.Printf("billing-sync: event %s (%s) names no account we meter — stamping it", ev.EventID, ev.EventType)
+			log.Printf("billing-sync: %s: event %s (%s) names no account we meter — stamping it", name, ev.EventID, ev.EventType)
 			if markErr := svc.MarkProcessed(ctx, ev.ID); markErr != nil {
-				log.Printf("billing-sync: stamping event %s: %v", ev.EventID, markErr)
+				log.Printf("billing-sync: %s: stamping event %s: %v", name, ev.EventID, markErr)
 				failed++
 			}
 		default:
-			log.Printf("billing-sync: applying event %s: %v", ev.EventID, err)
+			log.Printf("billing-sync: %s: applying event %s: %v", name, ev.EventID, err)
 			failed++
 		}
 	}
@@ -122,16 +264,16 @@ func applyPending(ctx context.Context, svc *billing.Service, max int32) (applied
 // It re-reads even for accounts nothing has changed for. That is the point — the whole
 // design derives the column WHOLE from provider state, so a sync that finds nothing new
 // writes nothing, and the cheapest way to be sure is to ask.
-func refreshNearExpiry(ctx context.Context, svc *billing.Service, max int32) (refreshed, failed int) {
+func refreshNearExpiry(ctx context.Context, name string, svc reconcilable, max int32) (refreshed, failed int) {
 	ids, err := svc.SubscribersNearExpiry(ctx, expiryWindow, max)
 	if err != nil {
-		log.Printf("billing-sync: reading subscribers near expiry: %v", err)
+		log.Printf("billing-sync: %s: reading subscribers near expiry: %v", name, err)
 		return 0, 1
 	}
 
 	for _, id := range ids {
 		if err := svc.SyncUser(ctx, id); err != nil {
-			log.Printf("billing-sync: refreshing user %d: %v", id, err)
+			log.Printf("billing-sync: %s: refreshing user %d: %v", name, id, err)
 			failed++
 			continue
 		}

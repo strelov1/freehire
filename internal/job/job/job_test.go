@@ -1,11 +1,13 @@
 package job_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobderive"
@@ -204,6 +206,44 @@ func TestUpsertParams_FillsDerivedColumns(t *testing.T) {
 	}
 	if !params.RoleFingerprint.Valid || params.RoleFingerprint.String == "" {
 		t.Errorf("RoleFingerprint = %v, want a fingerprint", params.RoleFingerprint)
+	}
+	// A description with no requirements list still fills the column, because the
+	// column is NOT NULL and "found nothing" is the answer, not the absence of one.
+	if string(params.RequirementsDerived) != "[]" {
+		t.Errorf("RequirementsDerived = %s, want []", params.RequirementsDerived)
+	}
+}
+
+// The derived requirements ride the same shared mapping the fingerprints do, so no
+// write path can persist a posting whose description states a requirements list
+// without the list.
+func TestUpsertParams_DerivesTheRequirementsAPostingLists(t *testing.T) {
+	j, err := job.New(job.Draft{Input: jobderive.Input{
+		Source:     "manual",
+		ExternalID: "https://acme.example/jobs/2",
+		Title:      "Senior Go Developer",
+		Company:    "Acme",
+		Description: `<p>Join us.</p>
+		              <h3>Requirements</h3><ul><li>5+ years of Go</li><li>Postgres</li></ul>
+		              <h3>Nice to have</h3><ul><li>Kubernetes</li></ul>
+		              <h3>What we offer</h3><ul><li>Free lunch</li></ul>`,
+	}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	var got []enrich.Requirement
+	if err := json.Unmarshal(j.Fields().UpsertParams().RequirementsDerived, &got); err != nil {
+		t.Fatalf("RequirementsDerived is not a requirements list: %v", err)
+	}
+
+	want := []enrich.Requirement{
+		{Text: "5+ years of Go", Priority: "required"},
+		{Text: "Postgres", Priority: "required"},
+		{Text: "Kubernetes", Priority: "preferred"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("RequirementsDerived = %+v, want %+v (the benefits list must not appear)", got, want)
 	}
 }
 

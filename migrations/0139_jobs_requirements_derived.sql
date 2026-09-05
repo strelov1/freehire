@@ -1,0 +1,18 @@
+-- requirements_derived holds the requirements a posting states as a list under a
+-- recognized heading, read straight out of its own description markup by
+-- internal/job/reqextract. Same shape as the enrichment payload's `requirements`:
+-- a JSON array of {"text", "priority"} with priority in required/preferred.
+--
+-- It is a column of its own rather than a write into the enrichment blob because
+-- SetJobEnrichment assigns that blob wholesale from the model's payload, so a derived
+-- list written there would be erased by the next enrichment run. Kept separate, the
+-- two producers never overwrite one another and the provenance of a served list stays
+-- readable. SetJobEnrichment overlays this column into `enrichment.requirements` only
+-- when the model states none, so consumers still read exactly one field.
+--
+-- Defaulted rather than nullable: a posting whose description yields nothing and one
+-- never processed are the same fact — no requirements list was found — and an empty
+-- array says that without a second state to handle. A DEFAULT on ADD COLUMN is
+-- metadata-only in Postgres 11+, so this is additive: no table rewrite, no long lock.
+-- Backfill existing rows with cmd/backfill-requirements.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb;

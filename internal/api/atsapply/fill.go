@@ -122,6 +122,13 @@ func fillOne(parent context.Context, f ResolvedField) error {
 		// candidate value per question today. See resolveOne's doc comment.
 		optSel := fmt.Sprintf(`input[name=%q][value=%q]`, f.ID, f.Value)
 		return chromedp.Run(ctx, chromedp.Click(optSel, chromedp.ByQuery))
+	case "file":
+		// The only file field resolveOne ever resolves is the résumé/CV upload
+		// (isResumeField, resolve.go), and only once client.go's attachApprovedResume has
+		// rendered the approved tailored CV and overwritten Value with the temp PDF's
+		// path — never a candidate-authored string, so no further validation of Value
+		// belongs here.
+		return chromedp.Run(ctx, chromedp.SetUploadFiles(sel, []string{f.Value}, chromedp.ByID))
 	default:
 		return fmt.Errorf("no fill strategy for kind %q", f.Kind)
 	}

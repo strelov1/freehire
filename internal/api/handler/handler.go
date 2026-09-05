@@ -32,6 +32,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
+	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/referral"
@@ -44,6 +45,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
@@ -132,8 +134,13 @@ type middleware struct {
 	// identity read (/auth/me) mounts it; every other key-accepting route stays
 	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
 	// credential's reach unless it opts in.
-	cvKey  fiber.Handler
-	cookie fiber.Handler
+	cvKey fiber.Handler
+	// autoApplyGate is keyAuth (cookie or full-scope API key) widened with a fallback
+	// to the shared auto-apply orchestrator secret (see
+	// openspec/changes/auto-apply-inngest-orchestration/design.md) — only the two
+	// auto-apply tailor/review routes mount it; every other route stays on key.
+	autoApplyGate fiber.Handler
+	cookie        fiber.Handler
 	// optionalCookie attaches a cookie session when there is one but never rejects.
 	// It exists for provider callbacks, which are browser navigations: a 401 there
 	// renders JSON into the address bar instead of sending the user back to the app.
@@ -343,6 +350,19 @@ type Config struct {
 	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
 	// Empty defaults to the frontend origin's own host.
 	ServedHosts []string
+	// AutoApplyOrchestratorSecret is the shared, static credential
+	// cmd/auto-apply-orchestrate presents to authenticate itself (not any particular
+	// candidate) on POST /me/auto-apply/:queueId/{tailor,review} — see
+	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables the
+	// path entirely: the two routes then behave exactly as they did under plain
+	// cookie/API-key auth, with no fallback.
+	AutoApplyOrchestratorSecret string
+	// InngestEventAPIURL and InngestEventKey point PostAutoApplyReview's best-effort
+	// event publish (auto-apply/review.decided) at the self-hosted Inngest server. Either
+	// empty disables the publish entirely — the review decision itself is still recorded,
+	// exactly as it is today.
+	InngestEventAPIURL string
+	InngestEventKey    string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -400,13 +420,20 @@ func Register(app *fiber.App, cfg Config) {
 	reportsH := newReportHandlers(queries)
 	ghostReportsH := newGhostReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
+	jobListH := newJobListHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
+	webhookH := newWebhookHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
 	// The candidate's own screening answers (visa, salary, notice period, relocation, …) —
 	// a distinct singleton from profileSvc above (search/targeting preferences, a
 	// different lifecycle; see internal/ingest/screeninganswers/AGENTS.md).
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
 	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
+	// The onboarding survey: the candidate's own segmentation answers, and the marker
+	// saying they have been through the wizard. A third singleton beside the two above,
+	// and deliberately so — these answers describe the candidate to us alone, where
+	// profileSvc is the search filter and screeningAnswersSvc is what an employer sees.
+	surveyH := newSurveyHandlers(survey.New(survey.NewQueriesRepository(queries)), queries)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
@@ -457,7 +484,19 @@ func Register(app *fiber.App, cfg Config) {
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
 	billingSvc := billing.New(cfg.Billing, queries)
-	billingH := newBillingHandlers(billingSvc)
+	// The store provider reads its own environment rather than taking configuration from
+	// cfg: it is enabled, disabled and credentialed independently of Stripe, and threading it
+	// through the handler config would tie the two together for no reason but symmetry.
+	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)
+	// Discounts read their own environment for the same reason the store provider does: an
+	// invite link works whether or not anything is for sale, and the reward ceiling is an
+	// operational bound rather than a piece of handler configuration.
+	promoSvc := promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv())
+	billingH := newBillingHandlers(billingSvc, storeSvc, promoSvc)
+	promoH := newPromoHandlers(promoSvc)
+	// Both registration paths attribute a new account to whoever's link brought it. Set
+	// here rather than passed to a constructor that already takes ten arguments.
+	authH.withInvites(promoSvc)
 	// Public: a pricing page that needs an account cannot do a pricing page's job.
 	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
@@ -579,6 +618,9 @@ func Register(app *fiber.App, cfg Config) {
 	if cfg.Realtime != nil {
 		assistantH.realtime = cfg.Realtime
 	}
+	if p := newInngestEventPublisher(cfg.InngestEventAPIURL, cfg.InngestEventKey); p != nil {
+		assistantH.events = p
+	}
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the
@@ -663,6 +705,7 @@ func Register(app *fiber.App, cfg Config) {
 	// handlers resolve it to the internal id before writing user_jobs.
 	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
 	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
+	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth, cfg.Throttler)
 	// cookieAuth is the single cookie-only gate (RequireAuth) for the
 	// browser-convenience surfaces below — key management, saved searches, the CV
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
@@ -672,6 +715,7 @@ func Register(app *fiber.App, cfg Config) {
 		optional:       optionalAuth,
 		key:            keyAuth,
 		cvKey:          cvKeyAuth,
+		autoApplyGate:  autoApplyGate,
 		cookie:         cookieAuth,
 		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
 		moderator:      requireModerator,
@@ -694,6 +738,9 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
 	savedSearchH.register(api, mw)
+	// Job lists: named sets of specific jobs, independent of "save", with an
+	// optional public read-only page (see jobListHandlers).
+	jobListH.register(api, mw)
 
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
@@ -743,6 +790,9 @@ func Register(app *fiber.App, cfg Config) {
 	planH.register(api, mw)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
 	billingH.register(api, mw)
+	// Mounted whatever billing is doing: sharing an invite link and counting who came is
+	// not a purchase, and a deployment that sells nothing can still have a referral page.
+	promoH.register(api, mw, cfg.Throttler)
 	plansH.register(api)
 	usageH.register(api, mw)
 
@@ -754,6 +804,7 @@ func Register(app *fiber.App, cfg Config) {
 	profileH.register(api, mw)
 	// The candidate's own screening answers (see screeningAnswersHandlers).
 	screeningAnswersH.register(api, mw)
+	surveyH.register(api, mw)
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
@@ -780,6 +831,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw)
+	webhookH.register(api, mw)
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	telegramH.register(api, mw)

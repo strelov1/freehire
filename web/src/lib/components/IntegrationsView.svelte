@@ -5,6 +5,7 @@
   import { api, ApiError } from '$lib/api';
   import type { GmailStatus } from '$lib/api';
   import { notifications } from '$lib/notifications.svelte';
+  import { onRouterReady } from '$lib/routerReady';
   import { Badge, Button, ConfirmDialog, ProviderIcon } from '$lib/ui';
   import { Mail, CalendarDays } from '@lucide/svelte';
   import { errorMessage } from '$lib/utils';
@@ -151,8 +152,13 @@
     }
   }
 
+  // The verdict is read through onRouterReady, not onMount: it ends in a shallow
+  // `replaceState` to scrub the OAuth result out of the address bar, and the router
+  // is not ready for one while this component is mounting. Returning from Google is
+  // a full page load onto this exact URL, so that was every single time.
+  onRouterReady(readGoogleVerdict);
+
   onMount(() => {
-    readGoogleVerdict();
     void loadGmail();
     void notifications.ensureLoaded();
   });

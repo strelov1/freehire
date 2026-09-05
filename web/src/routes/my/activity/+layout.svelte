@@ -3,8 +3,13 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { routeTabClass, tablist } from '$lib/actions/tablist';
+  import { messages } from '$lib/components/activity.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   let { children }: { children: Snippet } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // The account shell (my/+layout) owns the container, auth gate, and noindex;
   // this layout adds only Activity's own sub-navigation. Each view is its own URL
@@ -31,13 +36,13 @@
 
 <svelte:head>
   <!-- Base title; the child pages override it with their view name. -->
-  <title>Activity — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <h1 class="text-2xl font-semibold tracking-tight">Activity</h1>
+  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
 
-  <div role="tablist" aria-label="Activity view" use:tablist={path} class="flex items-center gap-1">
+  <div role="tablist" aria-label={s.tablistLabel} use:tablist={path} class="flex items-center gap-1">
     <a
       role="tab"
       id="activity-tab-saved"
@@ -46,7 +51,7 @@
       href={resolve('/my/activity')}
       class={routeTabClass(savedActive)}
     >
-      Saved
+      {s.tabs.saved}
     </a>
     <a
       role="tab"
@@ -56,7 +61,7 @@
       href={resolve('/my/activity/history')}
       class={routeTabClass(historyActive)}
     >
-      History
+      {s.tabs.history}
     </a>
     <a
       role="tab"
@@ -66,7 +71,7 @@
       href={resolve('/my/activity/matches')}
       class={routeTabClass(matchesActive)}
     >
-      Matches
+      {s.tabs.matches}
     </a>
     <a
       role="tab"
@@ -76,7 +81,7 @@
       href={resolve('/my/activity/hidden')}
       class={routeTabClass(hiddenActive)}
     >
-      Hidden
+      {s.tabs.hidden}
     </a>
   </div>
 

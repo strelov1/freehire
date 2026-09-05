@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // fakePDFWithPageCount builds the minimal bytes ledongthuc/pdf accepts as a PDF, with a page
@@ -198,7 +199,7 @@ func TestRenderedCVPageCount_RealToolchain(t *testing.T) {
 	long.Experience = make([]cv.ExperienceItem, 20)
 	for i := range long.Experience {
 		long.Experience[i] = cv.ExperienceItem{
-			Role: "Senior Engineer", Company: "Analytical Engines", Start: "2010", End: "2020",
+			Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2010}, End: &perioddate.PeriodDate{Year: 2020},
 			Bullets: []string{
 				"Built and operated distributed systems handling millions of requests per day.",
 				"Led cross-functional initiatives spanning several engineering teams.",

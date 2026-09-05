@@ -215,13 +215,40 @@ type selfClosing interface{ selfClosing() }
 // this reason. See FullCatalogProviders.
 type fullCatalog interface{ fullCatalog() }
 
-// sweepGrace marks an adapter that needs the post-run unseen sweep to wait longer than the
-// default before closing its jobs, and reports how long. It is the opposite case to fullCatalog:
-// the crawl deliberately reaches only a SLICE of the source's catalogue (a keyword's first N
-// pages of a feed far deeper than any crawl can walk), so a posting that merely drifted past
-// that depth reads as unseen. On the default window it would be closed and then reopened when it
-// drifts back — churn that also lands in job_daily_stats as a phantom removal. A window wider
-// than the drift absorbs it, at the cost of a genuinely withdrawn posting lingering that long.
-// The marker is only sound for a source whose postings CANNOT be probed for liveness; anything
-// verifiable should be closed on evidence instead. See SweepGraceWindows.
+// sweepGrace marks an adapter that needs the post-run unseen sweep to wait a DIFFERENT length of
+// time than the 48h default before closing its jobs, and reports how long. The default is sized
+// for "many crawl cycles at the hourly per-provider cadence" (see DefaultSweepGrace); an adapter
+// declares its own window when that assumption does not hold for it, in either direction:
+//
+//   - WIDER, when the crawl deliberately reaches only a SLICE of the source's catalogue (a
+//     keyword's first N pages of a feed far deeper than any crawl can walk), so a posting that
+//     merely drifted past that depth reads as unseen. On the default window it would be closed
+//     and then reopened when it drifts back — churn that also lands in job_daily_stats as a
+//     phantom removal. A window wider than the drift absorbs it, at the cost of a genuinely
+//     withdrawn posting lingering that long. Sound only for a source whose postings CANNOT be
+//     probed for liveness; anything verifiable should be closed on evidence instead.
+//   - NARROWER, when the crawl lists a board's WHOLE posting set every run, so an unseen posting
+//     is already positive evidence of removal and the 48h default only adds latency nothing
+//     needs (gem: see gemSweepGrace). Sound only when the fleet's own crawl cadence for that
+//     provider is comfortably tighter than the declared window, with room to spare for a missed
+//     run or two — narrowing the SHARED default instead would falsely close the much slower,
+//     jitterier providers that still rely on it (workday, smartrecruiters — see
+//     cmd/ingest/coverage.go's measured per-provider staleness).
+//
+// See SweepGraceWindows.
 type sweepGrace interface{ sweepGrace() time.Duration }
+
+// fullBoardListing marks an adapter whose Fetch structurally proves, for every board it
+// crawls, that it retrieved the board's full posting list — either by verifying a fetched
+// count against the source's own reported total, or by paginating to the source's natural
+// end (an empty page, hasNext=false, or a declared page count reached) with no artificial
+// page or offset cap in adapter code — and treats any failure to establish that proof as a
+// failed Fetch rather than a partial success. Only such an adapter's boards are safe for the
+// post-run sweep's board-scoped close (freehire#2328): a silently truncated crawl reported as
+// an unqualified success would let the sweep close the unreached remainder as if it were
+// gone, which is exactly what happened to a live solidjobs board and forced #2337's revert.
+// The bar is deliberately structural rather than a documented assumption — solidjobs.go
+// recorded its 500-posting cap in a comment nobody's code read; this marker must not be
+// grantable on the same evidence. See habrcareer.go's fullCatalog Fetch for the pattern
+// (any page failure is a hard error, never a partial result) and FullBoardListingProviders.
+type fullBoardListing interface{ fullBoardListing() }

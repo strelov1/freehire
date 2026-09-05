@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Search, Clock, Target, Archive, MessageCircle, Bell } from '@lucide/svelte';
+  import { Search, Clock, Target, Archive, MessageCircle, FileText, Bell } from '@lucide/svelte';
   import { notificationCenter } from '$lib/notificationCenter.svelte';
   import { notificationTarget } from '$lib/notificationTarget';
   import { timeAgo } from '$lib/utils';
@@ -22,6 +22,8 @@
     nudge_follow_up: MessageCircle,
     nudge_interview_prep: Target,
     nudge_job_closed: Archive,
+    auto_apply_tailor_ready: FileText,
+    auto_apply_ready_for_review: FileText,
   };
 
   const target = $derived(notificationTarget(item));
@@ -29,10 +31,17 @@
     target.kind === 'job'
       ? resolve('/jobs/[slug]', { slug: target.slug })
       : target.kind === 'tracking'
-        ? resolve('/my/tracking')
+        ? // A slug opens the same deep-link route the inbox already uses
+          // (/my/tracking/[id] — see JobBoard.svelte's own initialId prop) so the
+          // board paints with that application's drawer open, not just the board.
+          target.slug
+          ? resolve('/my/tracking/[id]', { id: target.slug })
+          : resolve('/my/tracking')
         : target.kind === 'digest'
           ? resolve('/my/notifications/[id]/jobs', { id: String(target.id) })
-          : null,
+          : target.kind === 'tailor'
+            ? resolve('/tailor/[slug]', { slug: target.slug })
+            : null,
   );
   const unread = $derived(item.read_at == null);
   const Icon = $derived(KIND_ICON[item.kind]);

@@ -24,13 +24,8 @@ var (
 	ErrCapExceeded = errors.New("savedsearch: saved-search limit reached")
 	// ErrNotFound is a missing or non-owned target (mapped to 404).
 	ErrNotFound = errors.New("savedsearch: not found")
-	// ErrInvalidAuthorLabel is an over-long board author label (mapped to 400).
-	ErrInvalidAuthorLabel = errors.New("savedsearch: author label must be at most 60 characters")
 	// ErrQueryTooLong is a query string over maxQueryLen (mapped to 400).
 	ErrQueryTooLong = errors.New("savedsearch: query is too long")
-	// ErrSlugTaken is a public-slug UNIQUE collision on share. It is an internal retry
-	// signal (Share regenerates the suffix and tries again), not a client-facing status.
-	ErrSlugTaken = errors.New("savedsearch: public slug already taken")
 	// ErrProfileSearchExists is a create with derivedFromProfile=true when the user
 	// already has one (the partial UNIQUE (user_id) WHERE derived_from_profile;
 	// mapped to 409).
@@ -42,8 +37,6 @@ const (
 	maxNameLen = 100
 	// maxPerUser caps how many saved searches a single user may keep.
 	maxPerUser = 50
-	// maxAuthorLabelLen bounds a board's optional author label.
-	maxAuthorLabelLen = 60
 	// maxQueryLen bounds the stored query string, the same way maxNameLen bounds name.
 	// query is a URL-encoded SPA filter state (facet params, not prose), so real values
 	// run to a few hundred characters even with many facets selected; 2000 leaves
@@ -57,33 +50,21 @@ const (
 // SavedSearch is a stored named filter snapshot: the package domain type, decoupled from
 // the generated db row. The internal owner column (user_id) is dropped — it is never on the
 // wire and scoping is enforced in SQL — while created_at/updated_at are kept as *time.Time
-// because the handler serializes them. PublicSlug/AuthorLabel are plain strings, empty when
-// the board is private / anonymous (a shared board always carries a non-empty slug, so an
-// empty PublicSlug is an unambiguous "not shared").
+// because the handler serializes them.
 type SavedSearch struct {
 	ID                 int64
 	Name               string
 	Query              string
-	PublicSlug         string
-	AuthorLabel        string
 	DerivedFromProfile bool
 	CreatedAt          *time.Time
 	UpdatedAt          *time.Time
-}
-
-// Board is the public read of a shared board: only its display fields (no owner columns).
-// AuthorLabel is empty when the board is anonymous.
-type Board struct {
-	Name        string
-	Query       string
-	AuthorLabel string
 }
 
 // Repository is the persistence contract for saved searches. Every method is
 // user-scoped. Create maps a unique violation to ErrDuplicateName; Update maps a
 // unique violation to ErrDuplicateName and a missing owner-scoped row to ErrNotFound;
 // Delete maps "no row affected" to ErrNotFound. Implementations map the generated db
-// rows to SavedSearch/Board, so the use case never sees db.*.
+// rows to SavedSearch, so the use case never sees db.*.
 type Repository interface {
 	List(ctx context.Context, userID int64) ([]SavedSearch, error)
 	Count(ctx context.Context, userID int64) (int64, error)
@@ -91,16 +72,6 @@ type Repository interface {
 	// Update overwrites the name and/or query (a nil field is left unchanged), owner-scoped.
 	Update(ctx context.Context, id, userID int64, name, query *string) (SavedSearch, error)
 	Delete(ctx context.Context, id, userID int64) error
-	// Get reads one of a user's saved searches, owner-scoped; no row → ErrNotFound.
-	Get(ctx context.Context, id, userID int64) (SavedSearch, error)
-	// SetPublicSlug publishes a board (owner-scoped); a slug UNIQUE collision →
-	// ErrSlugTaken (the service retries), no owner-scoped row → ErrNotFound. An empty
-	// authorLabel is stored NULL (anonymous).
-	SetPublicSlug(ctx context.Context, id, userID int64, publicSlug, authorLabel string) (SavedSearch, error)
-	// ClearPublicSlug unpublishes a board (owner-scoped); no owner-scoped row → ErrNotFound.
-	ClearPublicSlug(ctx context.Context, id, userID int64) error
-	// GetPublicBoard reads a shared board by slug (no auth, no owner-scoping); no row → ErrNotFound.
-	GetPublicBoard(ctx context.Context, slug string) (Board, error)
 }
 
 // Service implements the saved-search use cases.

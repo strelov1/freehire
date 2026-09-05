@@ -12,7 +12,6 @@ package screeninganswers
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -33,11 +32,6 @@ type Answers struct {
 	WillingToRelocate     *bool    `json:"willing_to_relocate,omitempty"`
 	Age18OrOlder          *bool    `json:"age_18_or_older,omitempty"`
 }
-
-// currencyRE matches a well-formed ISO 4217 currency code. There is no closed dictionary
-// to validate against here — internal/dict/vocab documents salary_currency as a deliberately
-// open ISO-standard field — so format is the only guarantee this package can give.
-var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
 
 // Sanitize normalizes the record in place: a country code the dictionary recognizes
 // becomes freehire's canonical lowercase alpha-2 form; one it does not is left as-is
@@ -65,7 +59,7 @@ func (a Answers) Validate() error {
 			return fmt.Errorf("authorized_countries: %q is not a recognized country code", c)
 		}
 	}
-	if a.DesiredSalaryCurrency != nil && !currencyRE.MatchString(*a.DesiredSalaryCurrency) {
+	if a.DesiredSalaryCurrency != nil && !vocab.IsCurrencyCode(*a.DesiredSalaryCurrency) {
 		return fmt.Errorf("desired_salary_currency: %q is not a three-letter ISO 4217 code", *a.DesiredSalaryCurrency)
 	}
 	if a.DesiredSalaryPeriod != nil && !slices.Contains(vocab.SalaryPeriodValues, *a.DesiredSalaryPeriod) {

@@ -15,6 +15,9 @@ export const accountNav = [
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox' },
+  // Named lists of specific jobs — independent of the "Save" star — optionally
+  // shared read-only by link. Replaces the retired public saved-search "boards".
+  { href: '/my/lists', label: 'Job lists' },
   // Personal skill-demand trend: how the market for the candidate's own profile
   // skills is moving, week over week. A check-in section, not a daily one — sits
   // with the occasional group below rather than the four everyday sections above.
@@ -40,12 +43,20 @@ export const accountNav = [
   // duplicating the connect/disconnect UI.
   { href: '/my/integrations', label: 'Integrations' },
   { href: '/my/api-keys', label: 'API keys' },
+  // The saved-search webhook destination: one URL + secret per account, signed
+  // HTTP POSTs on the same matches email/Telegram alerts already carry.
+  { href: '/my/webhook', label: 'Webhook' },
   { href: '/my/submissions', label: 'My submissions' },
   // Paste a job link we don't have yet; a supported, novel link adds a board we don't crawl.
   { href: '/my/contributions', label: 'Contributions' },
   // The plan's daily allowances and what they were spent on (analyses, CV editing,
   // contribution rewards).
   { href: '/my/plan', label: 'Plan' },
+  // The account's own invite link and what it has earned. Named "Invite" and not
+  // "Referrals" because that word is taken above by the employee-referral marketplace,
+  // which is an unrelated feature — two sections sharing a name would be a menu nobody
+  // can navigate.
+  { href: '/my/invite', label: 'Invite a friend' },
   // Password and sessions: change the password, and sign out everywhere when a
   // device is lost or a session is suspect.
   { href: '/my/security', label: 'Security' },

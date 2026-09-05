@@ -9,13 +9,17 @@
 
 import { api } from '$lib/api';
 import { UserResource } from '$lib/userResource.svelte';
-import type { Subscription, TelegramStatus } from '$lib/types';
+import type { Subscription, TelegramStatus, WebhookConfig } from '$lib/types';
 
 const disabled: TelegramStatus = { enabled: false, linked: false };
 
-class Notifications extends UserResource<[TelegramStatus, Subscription[]]> {
+class Notifications extends UserResource<[TelegramStatus, Subscription[], WebhookConfig | null]> {
   #telegram = $state.raw<TelegramStatus>(disabled);
   #subs = $state.raw<Subscription[]>([]);
+  // The account's webhook destination, if any — read here (rather than only on
+  // /my/webhook) so AlertChannels can tell whether the `webhook` chip has anywhere
+  // to point before offering it.
+  #webhook = $state.raw<WebhookConfig | null>(null);
 
   get telegram(): TelegramStatus {
     return this.#telegram;
@@ -25,23 +29,29 @@ class Notifications extends UserResource<[TelegramStatus, Subscription[]]> {
     return this.#subs;
   }
 
+  get webhook(): WebhookConfig | null {
+    return this.#webhook;
+  }
+
   /** The subscription for a saved search on a channel (telegram by default), if any. */
   forSavedSearch(savedSearchId: number, channel = 'telegram'): Subscription | undefined {
     return this.#subs.find((s) => s.saved_search_id === savedSearchId && s.channel === channel);
   }
 
-  protected load(): Promise<[TelegramStatus, Subscription[]]> {
-    return Promise.all([api.telegramStatus(), api.listSubscriptions()]);
+  protected load(): Promise<[TelegramStatus, Subscription[], WebhookConfig | null]> {
+    return Promise.all([api.telegramStatus(), api.listSubscriptions(), api.getWebhook()]);
   }
 
-  protected apply([tg, subs]: [TelegramStatus, Subscription[]]) {
+  protected apply([tg, subs, webhook]: [TelegramStatus, Subscription[], WebhookConfig | null]) {
     this.#telegram = tg;
     this.#subs = subs;
+    this.#webhook = webhook;
   }
 
   protected clearState() {
     this.#telegram = disabled;
     this.#subs = [];
+    this.#webhook = null;
   }
 
   /** Subscribe a saved search to a channel (telegram by default); prepend it. */

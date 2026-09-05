@@ -27,10 +27,9 @@ func EntriesFromResume(st resumeextract.Structured) []ImportEntry {
 				Location: role.Location,
 				Start:    role.Start,
 				End:      role.End,
-				// An empty label is a CV's other way of saying "not ended".
-				Current: role.End == "" || isPresentLabel(role.End),
-				Summary: role.Summary,
-				Stack:   role.Stack,
+				Current:  role.Current,
+				Summary:  role.Summary,
+				Stack:    role.Stack,
 			},
 			Claims: role.Highlights,
 		})

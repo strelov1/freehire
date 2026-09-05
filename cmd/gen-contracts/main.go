@@ -88,6 +88,7 @@ func genStructs() (string, error) {
 	cveditTS := filepath.Join(tmp, "cvedit.ts")
 	applyformTS := filepath.Join(tmp, "applyform.ts")
 	screeninganswersTS := filepath.Join(tmp, "screeninganswers.ts")
+	surveyTS := filepath.Join(tmp, "survey.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -182,6 +183,12 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/candidate/resumeextract",
 				OutputPath:   resumeextractTS,
 				IncludeFiles: []string{"structured.go"},
+				// perioddate.PeriodDate is inlined rather than generated as its own type: it
+				// is two fields, shared by this package and cv below, and — unlike every
+				// other TypeMappings entry here — must NOT be named PeriodDate's Go name
+				// (Date) in TypeScript, since that collides with the language's own global
+				// Date.
+				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
 			},
 			{
 				// The editable CV-builder document wire shape (Document + Header +
@@ -193,6 +200,8 @@ func genStructs() (string, error) {
 				// autopilot.go carries the run report's wire shape; its server-side rules
 				// (sanitizing, the owner-scoped writes) live in autopilot_store.go and stay here.
 				IncludeFiles: []string{"cv.go", "autopilot.go"},
+				// See the resumeextract entry above — same type, same reason to inline it.
+				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
 			},
 			{
 				// One entry in a CV's history feed. Only the wire file: the operations, the
@@ -208,6 +217,17 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/ingest/screeninganswers",
 				OutputPath:   screeninganswersTS,
 				IncludeFiles: []string{"screeninganswers.go"},
+			},
+			{
+				// The onboarding survey wire shape (Responses). Only survey.go — store.go
+				// and repository.go are server-only.
+				//
+				// The type is `Responses` rather than the `Answers` its Go siblings use
+				// because THIS file is a flat namespace: screeninganswers already exports
+				// an `Answers`, and two packages that never collide in Go collide here.
+				Path:         "github.com/strelov1/freehire/internal/candidate/survey",
+				OutputPath:   surveyTS,
+				IncludeFiles: []string{"survey.go"},
 			},
 		},
 	}
@@ -271,11 +291,15 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	surveyBody, err := readBody(surveyTS)
+	if err != nil {
+		return "", err
+	}
 	screeninganswersBody, err := readBody(screeninganswersTS)
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

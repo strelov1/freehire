@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
+	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -58,8 +59,11 @@ type authHandlers struct {
 	// honoured as an OAuth redirect origin; anything else falls back to frontendOrigin.
 	// It is deliberately NOT cookieDomains: a suffix match is right for cookie scope
 	// and wrong for a redirect target (see requestOrigin).
-	servedHosts     []string
-	accounts        *accounts.Service
+	servedHosts []string
+	accounts    *accounts.Service
+	// invites attributes a new account to whoever's link brought it. Optional and nil-safe:
+	// attribution must never be able to fail a sign-up. See withInvites.
+	invites         *promo.Service
 	throttler       ratelimit.Throttler
 	authV2Enabled   bool
 	mobileCallbacks map[string]string
@@ -260,6 +264,12 @@ type userResponse struct {
 	// supportedLanguages, "en" until changed). No UI translation exists yet —
 	// this only records the preference for later (freehire#1836).
 	Language string `json:"language"`
+	// OnboardingCompletedAt is when this account finished (or declined) the onboarding
+	// wizard, null for one that never has. The root layout reads it as the whole gate:
+	// null routes the user to /onboarding, a timestamp never does. It rides along here
+	// rather than on its own endpoint because the layout already makes this read before
+	// it can decide anything at all.
+	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at"`
 }
 
 type credentials struct {
@@ -275,7 +285,7 @@ type credentials struct {
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
 		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt,
-		Timezone: u.Timezone, Language: u.Language}
+		Timezone: u.Timezone, Language: u.Language, OnboardingCompletedAt: u.OnboardingCompletedAt}
 }
 
 // timezoneRequest is the PATCH /me/timezone body.
@@ -383,6 +393,9 @@ func (h *authHandlers) Register(c *fiber.Ctx) error {
 	if err := h.setSession(c, user.ID); err != nil {
 		return err
 	}
+	// After the session, never before: the account is made and the person is signed in
+	// whatever happens here.
+	h.attributeInvite(c, user.ID)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toUserResponse(user)})
 }
 

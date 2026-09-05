@@ -38,9 +38,38 @@ const careerplugList2 = `<html><body><div id="job_table">
 <a href="/jobs/200"><span class="name">Shift Lead</span></a>
 </div></body></html>`
 
+// A listing still yielding new links past the page cap is a truncated walk, not a genuinely
+// exhausted one, and must fail the whole Fetch rather than silently return the links gathered
+// so far — that partial-success shape is exactly what forced freehire#2337's revert (see the
+// fullBoardListing marker's bar, internal/ingest/sources/source.go, and
+// TestCrawlAllPagedLinksErrorsWhenCapTruncatesWalk for the same contract on the shared helper).
+// pagedFake (html_test.go) serves the endless listing; careerplug's own link shape is
+// "/jobs/<numeric-id>", which its numeric-page hrefs coincidentally satisfy.
+func TestCareerPlugFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	_, err := NewCareerPlug(pagedFake{HrefPrefix: "/jobs/"}).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "careerplug", Board: "acme",
+	})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite the listing still yielding new links past the page cap — a truncated walk must not be returned as a partial success")
+	}
+}
+
 func TestCareerPlugProvider(t *testing.T) {
 	if got := NewCareerPlug(nil).Provider(); got != "careerplug" {
 		t.Errorf("Provider() = %q, want %q", got, "careerplug")
+	}
+}
+
+func TestCareerPlugMarkers(t *testing.T) {
+	s := NewCareerPlug(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("careerplug should implement the fullBoardListing marker")
+	}
+}
+
+func TestCareerPlugRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["careerplug"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include careerplug")
 	}
 }
 

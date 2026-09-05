@@ -154,12 +154,13 @@ indexers (`cmd/reindex`, `cmd/search-drain`, `internal/ingest/linkimport`).
    retro-fill 1.36M documents; until the rebuild lands, the match sort returns only
    what has been re-indexed since. It is a thin feed, not an error, so nothing alerts.
 
-That second hazard is why the SPA ships the control dark, behind `PUBLIC_MATCH_SORT`
-(default OFF, read at runtime — see `web/src/lib/features.ts`). The API honours
-`?sort=match` from the moment the binary rolls out whether or not that flag is set,
-which is exactly how the ordering gets verified on production before anyone can click
-it. Reveal order: deploy → settings → rebuild → verify by hand → flip the flag and
-restart web.
+That second hazard used to be handled by shipping the control dark behind a
+`PUBLIC_MATCH_SORT` flag. The rebuild has long since landed and the flag is gone; the
+control is offered to every visitor, and a caller with no skills to rank against is told
+so by the feed rather than having the ordering hidden from them. What survives is the
+ORDER the hazard implies, and it still binds any future change to the vectors: deploy →
+settings → rebuild → verify by hand with `?sort=match`. Rolling out a binary that queries
+an embedder the live settings do not yet declare is still the first hazard above.
 
 `skillvec.Dimensions` is baked into the live settings. **Changing it requires a full
 rebuild**, and until that rebuild finishes the index rejects every document carrying

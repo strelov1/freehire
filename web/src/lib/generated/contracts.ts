@@ -292,6 +292,15 @@ export interface Job {
    * where FromRow leaves it false).
    */
   referral_available?: boolean;
+  /**
+   * AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
+   * live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
+   * — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
+   * detail handler overlays it, keyed by (caller_id, job_id), never joined into the
+   * primary job query every anonymous reader also pays for.
+   * See openspec/changes/auto-apply-submit-trigger.
+   */
+  auto_apply_status?: string;
 }
 
 //////////
@@ -993,16 +1002,18 @@ export interface Professional {
   projects?: Project[];
 }
 /**
- * Experience is one work-history entry. Dates are kept as free-form strings as printed
- * on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
- * Summary is the role/company one-line context; Highlights are the achievement bullets.
+ * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
+ * (year, optional month) that the model interprets from however the CV prints the
+ * range; Current marks an ongoing role instead of a fabricated End. Summary is the
+ * role/company one-line context; Highlights are the achievement bullets.
  */
 export interface Experience {
   title?: string;
   company?: string;
   location?: string;
-  start?: string;
-  end?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
+  current?: boolean;
   summary?: string;
   highlights?: string[];
   stack?: string[];
@@ -1016,12 +1027,14 @@ export interface Project {
   highlights?: string[];
 }
 /**
- * Education is one education entry.
+ * Education is one education entry. Year is the same structured perioddate.PeriodDate as
+ * Experience's Start/End (month is rarely stated for a degree, so it is usually
+ * year-only, but the type stays the one shared shape rather than a bare int).
  */
 export interface Education {
   degree?: string;
   institution?: string;
-  year?: string;
+  year?: { year: number; month?: number };
 }
 
 /**
@@ -1136,15 +1149,17 @@ export interface Header {
   links?: string[];
 }
 /**
- * Experience is one work-history entry. Dates are free-form strings as printed on the
- * CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
+ * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
+ * (year, optional month) — the same shared type experience.Employment and
+ * resumeextract.Experience use. Rendering to PDF formats this back to display text
+ * (see renderer.go); no template deals with the structured value directly.
  */
 export interface ExperienceItem {
   role?: string;
   company?: string;
   location?: string;
-  start?: string;
-  end?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
   current?: boolean;
   /**
    * Summary is the one-line company/role context printed under the role header, before
@@ -1155,14 +1170,14 @@ export interface ExperienceItem {
   stack?: string[];
 }
 /**
- * Education is one education entry.
+ * Education is one education entry. Start/End are the same structured perioddate.PeriodDate.
  */
 export interface EducationItem {
   institution?: string;
   degree?: string;
   field?: string;
-  start?: string;
-  end?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
 }
 /**
  * SkillGroup is a named cluster of skills (e.g. "Languages" → Go, Python). A group with
@@ -1188,12 +1203,13 @@ export interface Project {
   bullets?: string[];
 }
 /**
- * Certification is one certification/credential.
+ * Certification is one certification/credential. Year is the same structured
+ * perioddate.PeriodDate.
  */
 export interface Certification {
   name?: string;
   issuer?: string;
-  year?: string;
+  year?: { year: number; month?: number };
 }
 
 /**
@@ -1311,6 +1327,25 @@ export interface Answers {
   notice_period_days?: number /* int */;
   willing_to_relocate?: boolean;
   age_18_or_older?: boolean;
+}
+
+/**
+ * Responses is one candidate's survey record. Every field is independently optional: a nil
+ * pointer means the candidate has not stated that fact, never a guessed default and never
+ * a zero standing in for silence.
+ */
+export interface Responses {
+  job_search_stage?: string;
+  biggest_challenge?: string;
+  /**
+   * BiggestChallengeNote is free text, and only vocab.JobChallengeOther admits it. A note
+   * beside a coded challenge could contradict it, and nothing downstream would know which
+   * to believe.
+   */
+  biggest_challenge_note?: string;
+  current_income_amount?: number /* int */;
+  current_income_currency?: string;
+  current_income_period?: string;
 }
 
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'applitrack', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'dayforce', 'deel', 'djinni', 'earcu', 'echojobs', 'edjoin', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'hiringthing', 'hrmdirect', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'profession', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotedotcom', 'remotive', 'remotli', 'rippling', 'schoolspring', 'seek', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'wpyoast', 'zohorecruit'] as const;

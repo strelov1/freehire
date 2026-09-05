@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
@@ -79,10 +80,35 @@ type TailoringContext struct {
 
 // TailoringJob is the vacancy as a tailoring reader sees it.
 type TailoringJob struct {
-	Title       string `json:"title"`
-	Company     string `json:"company"`
-	Slug        string `json:"slug"`
-	Description string `json:"description"`
+	Title   string `json:"title"`
+	Company string `json:"company"`
+	Slug    string `json:"slug"`
+	// Requirements is what the POSTING asks for, in its own words — a different thing
+	// from the MissingHave/MissingGap split above, which is what an ANALYSIS decided the
+	// CV lacks. The agent needs both: the split says what to act on, this says what the
+	// employer actually wrote, including the requirements already covered, which are
+	// exactly the ones worth keeping prominent rather than editing away.
+	//
+	// It matters more than it looks. The description below is clipped, and a posting's
+	// requirement list is nearly always at its END — so on a long posting the list was
+	// the first thing to fall off, and the agent could not see the requirements at all.
+	//
+	// Supplied by the caller rather than read from `job` here: the two producers of this
+	// list (the model's enrichment and the markup parser's derived column) are reconciled
+	// in exactly one place, `jobview.FromDomain`, and that lives in a block this one sits
+	// below and may not import. Merging it a second time here is the drift that rule
+	// exists to prevent.
+	//
+	// It is not free. Bounded at write time by enrich.BoundRequirements — 30 entries of at
+	// most 200 runes — so the worst case is about 6000 runes, the same order as the clipped
+	// description beside it, on every tailoring turn. Real postings are far under that, and
+	// a requirement list is the densest thing in a posting per token spent, which is what
+	// makes the trade worth it.
+	//
+	// Absent, not empty, when there is none: `[]` would read to the agent as an employer
+	// who asked for nothing, which no posting means.
+	Requirements []enrich.Requirement `json:"requirements,omitempty"`
+	Description  string               `json:"description"`
 }
 
 // descriptionLimit bounds the posting in a tailoring context. The posting is the largest thing
@@ -92,17 +118,17 @@ const descriptionLimit = 6000
 // TailoringContext assembles what a tailoring reader needs: the cached analysis, projected over
 // the vacancy it is about. The job is supplied rather than read here — every caller has already
 // loaded and authorized it — so this package needs no job port of its own.
-func (s *Service) TailoringContext(ctx context.Context, userID int64, job db.Job) (TailoringContext, error) {
+func (s *Service) TailoringContext(ctx context.Context, userID int64, job db.Job, requirements []enrich.Requirement) (TailoringContext, error) {
 	analysis, err := s.Required(ctx, userID, job.ID)
 	if err != nil {
 		return TailoringContext{}, err
 	}
-	return ProjectTailoring(analysis, job), nil
+	return ProjectTailoring(analysis, job, requirements), nil
 }
 
 // ProjectTailoring splits an analysis's requirements into the reframe-able and the genuine
 // gaps and pairs them with the vacancy. Pure, so the split is unit-testable without a store.
-func ProjectTailoring(a *matchanalysis.Analysis, job db.Job) TailoringContext {
+func ProjectTailoring(a *matchanalysis.Analysis, job db.Job, requirements []enrich.Requirement) TailoringContext {
 	var have, gap []matchanalysis.Requirement
 	for _, r := range a.RequirementMatch {
 		switch r.Status {
@@ -114,9 +140,10 @@ func ProjectTailoring(a *matchanalysis.Analysis, job db.Job) TailoringContext {
 	}
 	return TailoringContext{
 		Job: TailoringJob{
-			Title:   job.Title,
-			Company: job.Company,
-			Slug:    job.PublicSlug,
+			Title:        job.Title,
+			Company:      job.Company,
+			Slug:         job.PublicSlug,
+			Requirements: requirements,
 			// The posting reaches the model as words, bounded, the same way get_job already
 			// serves it. Sending markup spends the context window on tags and widens what
 			// there is to misread.

@@ -220,6 +220,22 @@ func TestGemEmptyBoardYieldsNoJobsNoError(t *testing.T) {
 	}
 }
 
+// Gem lists a board's whole posting set every run, so an unseen posting is already evidence of
+// removal, not drift — the sweep should close it well before the 48h default.
+func TestGemDeclaresNarrowSweepGrace(t *testing.T) {
+	s, ok := NewGem(nil).(sweepGrace)
+	if !ok {
+		t.Fatal("gem should declare a sweepGrace window")
+	}
+	got := s.sweepGrace()
+	if got != 24*time.Hour {
+		t.Errorf("sweepGrace() = %v, want 24h", got)
+	}
+	if got >= DefaultSweepGrace {
+		t.Errorf("sweepGrace() = %v, want narrower than the %v default", got, DefaultSweepGrace)
+	}
+}
+
 func TestParseEpochSeconds(t *testing.T) {
 	if got := parseEpochSeconds(0); got != nil {
 		t.Errorf("parseEpochSeconds(0) = %v, want nil", got)

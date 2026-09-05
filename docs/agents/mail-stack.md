@@ -211,6 +211,19 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   order**: written as one with data-modifying CTEs, every CTE reads the same pre-statement
   snapshot, so the insert's `ON CONFLICT` still sees the row the retract just stamped and
   silently records nothing.
+- **The store rides with the claim, and dropping it stops the whole queue.**
+  `ReconcileMailEvent` needs the mailbox that observed the reply, and `appevent.SourceForMail`
+  refuses an empty one by design — so an unset `Claimed.Source` fails the transaction that
+  persisted the link, and the message dead-letters after three attempts. The field was threaded
+  through the query, the port and the ledger in one change; the only place that never took it
+  was the hand-written copy in `cmd/classify-mail/store.go`, where Go's zero value made the
+  omission legal and invisible. Every message queued between 2026-07-31 and 2026-09-05 died
+  that way (2726 of them, across every user), and nothing said so: dead entries are never
+  re-claimed, so each subsequent run truthfully logged `done failed=0 dead-lettered=0` and the
+  binary kept exiting 0. `store_test.go` now walks `maillink.Claimed` by reflection, so a field
+  added there and not mapped fails a test rather than the queue. **Recovery is not automatic** —
+  `EnqueuePendingEmailClassification` is `ON CONFLICT DO NOTHING`, so a dead row stays dead
+  until `failed_at`/`attempts`/`claimed_at` are cleared by hand.
 - **A linked message counts as a reply whether or not it is classified.** Requiring a
   classification reads as the stricter rule and is the opposite: `external` mail is never
   classified server-side by design, so that tier's replies would never count and their

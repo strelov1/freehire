@@ -7,6 +7,12 @@
 -- parked attempt is never reclaimed by this query — auto_apply_queue_claimable_idx exists
 -- for exactly this predicate.
 --
+-- tailored_cv_id IS NOT NULL AND review_decision = 'approved' (openspec/changes/
+-- auto-apply-tailored-resume): a submission attempt only ever runs for an entry the
+-- candidate has reviewed and approved. An unreviewed or declined entry sits in the queue
+-- but is never claimed — declining also sets blocked_at (via the review endpoint's own
+-- Park-shaped write), so it is additionally excluded by the predicate above.
+--
 -- Returns job.source, job.external_id and job.url because the caller builds the sidecar
 -- request from the row alone — source doubles as the ATS provider name, the same vocabulary
 -- internal/applyform's Provider field already uses, and external_id (board:posting-id) is
@@ -16,6 +22,42 @@ WITH claimable AS (
     SELECT q.id, q.user_id, q.job_id
     FROM auto_apply_queue q
     WHERE q.failed_at IS NULL
+      AND q.blocked_at IS NULL
+      AND q.tailored_cv_id IS NOT NULL
+      AND q.review_decision = 'approved'
+      AND (q.claimed_at IS NULL
+           OR q.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+    ORDER BY q.id
+    FOR UPDATE OF q SKIP LOCKED
+    LIMIT sqlc.arg(batch_size)
+)
+UPDATE auto_apply_queue q
+SET claimed_at = now()
+FROM claimable c
+JOIN jobs j ON j.id = c.job_id
+WHERE q.id = c.id
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url;
+
+-- name: ClaimAutoApplyPreviewBatch :many
+-- Claim a batch of tailored entries that have no resolved answer preview yet, for
+-- cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+-- Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
+-- same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
+-- (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
+-- two passes can safely share the one claimed_at lease column rather than needing a second.
+--
+-- Excludes on preview_failed_at, its OWN dead-letter marker (migration 0140) — not the
+-- submit pass's failed_at, which a still-unreviewed row can never have set anyway
+-- (ClaimAutoApplyBatch only ever claims an approved entry). blocked_at is still shared: a
+-- park during preview resolution (a captcha, an unscannable page) predicts the identical
+-- outcome the real submission would hit, so there is nothing a retry here would fix either.
+WITH claimable AS (
+    SELECT q.id, q.user_id, q.job_id
+    FROM auto_apply_queue q
+    WHERE q.tailored_cv_id IS NOT NULL
+      AND q.resolved_preview IS NULL
+      AND q.review_decision IS NULL
+      AND q.preview_failed_at IS NULL
       AND q.blocked_at IS NULL
       AND (q.claimed_at IS NULL
            OR q.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
@@ -28,7 +70,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN jobs j ON j.id = c.job_id
 WHERE q.id = c.id
-RETURNING q.id, q.user_id, q.job_id, j.source, j.external_id, j.url;
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url;
 
 -- name: DeleteAutoApplyEntry :exec
 -- Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
@@ -63,3 +105,172 @@ SET attempts   = attempts + 1,
                  END
 WHERE id = sqlc.arg(id)
 RETURNING attempts, failed_at;
+
+-- name: RecordAutoApplyPreviewFailure :one
+-- RecordAutoApplyFailure's own counterpart for the preview pass, on its own columns
+-- (migration 0140). Before this query existed, a transient preview-resolution error (a
+-- flaky schema fetch, a browser launch hiccup) called RecordAutoApplyFailure and spent
+-- down the SAME attempts/failed_at budget the real ATS submission depends on — a run of
+-- bad luck during preview resolution could dead-letter a row that never even reached
+-- submission, reported to the candidate as "could not submit after retrying," which never
+-- happened. Same shape otherwise: bump attempts, record the error, dead-letter once
+-- attempts reach the max, leave the lease in place.
+UPDATE auto_apply_queue
+SET preview_attempts = preview_attempts + 1,
+    last_error        = sqlc.arg(last_error),
+    preview_failed_at = CASE
+                            WHEN preview_attempts + 1 >= sqlc.arg(max_attempts)::int THEN now()
+                            ELSE NULL
+                        END
+WHERE id = sqlc.arg(id)
+RETURNING preview_attempts, preview_failed_at;
+
+-- name: GetAutoApplyQueueEntryForReview :one
+-- One read backing both the tailoring-trigger and the review-decision endpoints
+-- (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
+-- id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a
+-- probing caller learns nothing about entries they do not own) and carries enough of the
+-- entry's own state (job_id for tailoring, tailored_cv_id/review_decision for the review
+-- gate) that neither endpoint needs a second query to decide whether to proceed.
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: GetAutoApplyQueueEntryByID :one
+-- The same read as GetAutoApplyQueueEntryForReview, but by id ALONE — no ownership
+-- predicate. This is for the trusted auto-apply orchestrator caller only
+-- (openspec/changes/auto-apply-inngest-orchestration): it authenticates as the
+-- deployment's own shared secret, not as any particular user, so it has no owner of its
+-- own to check the row against — the row's own user_id in the result IS the owner it
+-- acts as. Never used for a caller that presented ownership-scoped credentials; see
+-- resolveAutoApplyEntry in internal/api/handler/auto_apply_tailor.go.
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = sqlc.arg(id);
+
+-- name: SetAutoApplyTailoredCV :execrows
+-- Records which tailored CV a queue entry's tailoring run produced. Guarded by
+-- review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
+-- guard: PostAutoApplyTailor's own review_decision check happens before its (potentially
+-- minutes-long) LLM run, not after, so a candidate can approve or decline an EARLIER
+-- tailored CV while a stale or retried tailor call for the same entry is still in flight.
+-- Without this guard that call's own write here would silently attach a fresh, never-seen
+-- CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
+-- (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
+-- real. Zero rows here means exactly that race happened; the handler checks it.
+--
+-- Also clears resolved_preview and resets the preview pass's own attempts/failed_at
+-- (migration 0140): a deliberate re-tailor (this entry already had a tailored_cv_id) means
+-- the candidate's profile or the tailoring evidence changed, so a preview computed against
+-- the PREVIOUS CV is stale and must be recomputed — leaving it would let the candidate
+-- review an answer preview that no longer matches what would actually be submitted. Reset,
+-- not left exhausted: an entry whose preview pass had already dead-lettered deserves a
+-- fresh attempt budget against the fresh CV, not a permanent unclaimable state.
+UPDATE auto_apply_queue
+SET tailored_cv_id    = sqlc.arg(tailored_cv_id),
+    resolved_preview  = NULL,
+    preview_attempts  = 0,
+    preview_failed_at = NULL
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;
+
+-- name: SetAutoApplyResolvedPreview :one
+-- Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
+-- tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+-- reads an exact, previously-computed snapshot rather than a value approximated or
+-- recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
+-- SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
+-- must not overwrite what the candidate already acted on.
+--
+-- Returns the job's own title/company/slug rather than affected-row-count alone (pgx.ErrNoRows
+-- means the guard fired, exactly like SetAutoApplyTailoredCV's own zero-rows case): the
+-- caller's "ready for review" notification needs those three columns, and this statement
+-- already has the job_id at hand from its own WHERE — a second round trip for exactly what
+-- this write already touched would be a query with no reason to exist.
+--
+-- Also releases the lease (claimed_at = NULL): without this, an approval that lands before
+-- the preview claim's own lease expires would sit unclaimed by ClaimAutoApplyBatch for up
+-- to AUTO_APPLY_LEASE_SECONDS after nothing is actually still working the row — a stale
+-- lease from a claim that already finished successfully, not a live one.
+WITH updated AS (
+    UPDATE auto_apply_queue q
+    SET resolved_preview = sqlc.arg(resolved_preview),
+        claimed_at       = NULL
+    WHERE q.id = sqlc.arg(id) AND q.review_decision IS NULL
+    RETURNING q.job_id, q.user_id
+)
+SELECT j.public_slug, j.title, j.company, u.user_id
+FROM jobs j
+JOIN updated u ON u.job_id = j.id;
+
+-- name: GetApplicationStage :one
+-- The caller's own current stage for a job, or pgx.ErrNoRows when no application row
+-- exists yet — the check behind "put the job on the board at stage preparing when auto-apply
+-- starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
+-- stage on an existing row and no row at all are both "not on the board" and both call for
+-- the same preparing default: the difference does not matter to the caller.
+SELECT stage
+FROM applications
+WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
+
+-- name: ApproveAutoApplyReview :execrows
+-- Records an approval. Guarded by review_decision IS NULL so a second attempt at an
+-- already-reviewed entry affects zero rows rather than overwriting a recorded decision —
+-- the handler reads the row first (GetAutoApplyQueueEntryForReview) to tell "already
+-- reviewed" apart from "not found" before ever reaching this statement, so zero rows here
+-- would only mean a race with a concurrent decision on the same entry.
+UPDATE auto_apply_queue
+SET review_decision = 'approved',
+    reviewed_at     = now()
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;
+
+-- name: EnqueueAutoApply :one
+-- Creates the candidate-facing entry that starts the tailor-then-review sequence
+-- (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+-- existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
+-- double-click or a page reload racing this same request is expected, common traffic here,
+-- not a fault, and the constraint is the only thing that closes the window between a
+-- check and an insert. No row back means the handler's own INSERT lost the race (or the
+-- pair was already queued by an earlier request) — it re-reads via
+-- GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
+INSERT INTO auto_apply_queue (user_id, job_id)
+VALUES (sqlc.arg(user_id), sqlc.arg(job_id))
+ON CONFLICT (user_id, job_id) DO NOTHING
+RETURNING id;
+
+-- name: GetAutoApplyQueueEntryForJob :one
+-- The caller's own existing auto-apply entry for one job, if any — the conflict-read path
+-- for EnqueueAutoApply, and the read behind the job detail response's own auto-apply
+-- status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
+-- a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
+-- exists yet for this (user, job) pair.
+--
+-- failed_at/blocked_at are also read (a code review found their absence): once
+-- cmd/auto-apply claims an approved entry, a dead-letter (RecordAutoApplyFailure) or a
+-- form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
+-- these two columns, both call sites would read a permanently stuck submission as
+-- indistinguishable from a healthy one still in flight.
+--
+-- tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
+-- ride along on the same row read rather than a second query: they are exactly what the
+-- tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+-- unmapped question list), and this is already "the caller's own existing auto-apply entry
+-- for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
+-- is: without it, an entry whose preview pass permanently gave up would read forever as
+-- "tailoring" — no preview, no failure, nothing to tell the candidate anything went wrong.
+SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview,
+       preview_failed_at
+FROM auto_apply_queue
+WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
+
+-- name: DeclineAutoApplyReview :execrows
+-- Records a decline AND parks the entry in one statement — the same fields
+-- MarkAutoApplyBlocked sets (blocked_at, last_error), reusing that park vocabulary rather
+-- than inventing a second one, plus the review columns MarkAutoApplyBlocked has no reason
+-- to know about. unmapped stays NULL: this is not a form-field park. last_error is what
+-- tells the two park reasons apart in the queue's own history, per design.md.
+UPDATE auto_apply_queue
+SET review_decision = 'declined',
+    reviewed_at     = now(),
+    blocked_at      = now(),
+    last_error      = sqlc.arg(last_error)
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;

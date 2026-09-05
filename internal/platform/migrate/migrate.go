@@ -44,6 +44,11 @@ const noTxMarker = "migrate: no-transaction"
 //	0x66686763  cmd/ghost-crosscheck — "fhgc", likewise
 //	0x66687363  cmd/ingest-scheduler — "fhsc", likewise; it makes the fleet's concurrency
 //	                                   cap atomic, which a check-then-act pair is not
+//	0x66687277  cmd/billing-sync     — "fhrw", likewise; it serializes the referral grant
+//	                                   pass, so the per-referrer reward ceiling is a bound
+//	                                   rather than a suggestion. A count read in one
+//	                                   statement and acted on in another is not atomic under
+//	                                   READ COMMITTED, whichever statement holds it
 //
 // The comment here used to say "the project has none", which stopped being true when those two
 // arrived and left the only place anyone would look asserting there was nothing to collide with.

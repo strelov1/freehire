@@ -75,6 +75,37 @@ func (q *Queries) EnrichmentOutboxMetrics(ctx context.Context) (EnrichmentOutbox
 	return i, err
 }
 
+const mailClassificationOutboxMetrics = `-- name: MailClassificationOutboxMetrics :one
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM email_classification_outbox
+`
+
+type MailClassificationOutboxMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same shape and same reasoning as SearchOutboxMetrics.
+//
+// This queue was the one of the four that nothing measured, and it is the one that failed
+// silently for five weeks: cmd/classify-mail dead-lettered every message, then logged
+// "done failed=0 dead-lettered=0" on each subsequent run — accurate, because a dead entry is
+// never claimed again, and indistinguishable from an empty queue. Dead letters here read as
+// mail nobody will ever link to an application.
+func (q *Queries) MailClassificationOutboxMetrics(ctx context.Context) (MailClassificationOutboxMetricsRow, error) {
+	row := q.db.QueryRow(ctx, mailClassificationOutboxMetrics)
+	var i MailClassificationOutboxMetricsRow
+	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
+}
+
 const newestOpenJobCreatedAt = `-- name: NewestOpenJobCreatedAt :one
 SELECT created_at
 FROM jobs
@@ -99,6 +130,40 @@ func (q *Queries) NewestOpenJobCreatedAt(ctx context.Context) (pgtype.Timestampt
 	var created_at pgtype.Timestamptz
 	err := row.Scan(&created_at)
 	return created_at, err
+}
+
+const notifyBacklogMetrics = `-- name: NotifyBacklogMetrics :one
+SELECT
+    COALESCE(count(DISTINCT m.subscription_id), 0)::bigint AS pending_subscriptions,
+    COALESCE(EXTRACT(EPOCH FROM now() - min(m.matched_at)), 0)::float8 AS oldest_age_seconds
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND s.active
+`
+
+type NotifyBacklogMetricsRow struct {
+	PendingSubscriptions int64   `json:"pending_subscriptions"`
+	OldestAgeSeconds     float64 `json:"oldest_age_seconds"`
+}
+
+// The subscription-digest backlog: how many active subscriptions have something
+// undelivered, and how old the oldest undelivered match is.
+//
+// The age is the signal that matters. A pass runs every five minutes, so in steady state
+// the oldest pending match is minutes old. An age that climbs without bound means some
+// subscription is never being served — which is not visible in the worker's own log,
+// because a starved subscription produces no failure: `notify` reported
+// `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
+// subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
+//
+// Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
+// that must publish an explicit zero, because an absent series is how the consuming alert
+// rules recognize a dead exporter.
+func (q *Queries) NotifyBacklogMetrics(ctx context.Context) (NotifyBacklogMetricsRow, error) {
+	row := q.db.QueryRow(ctx, notifyBacklogMetrics)
+	var i NotifyBacklogMetricsRow
+	err := row.Scan(&i.PendingSubscriptions, &i.OldestAgeSeconds)
+	return i, err
 }
 
 const providerIngestHealth = `-- name: ProviderIngestHealth :many

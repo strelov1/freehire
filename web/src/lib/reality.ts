@@ -1,5 +1,4 @@
 import type { Reality } from './generated/contracts';
-import { timeAgo } from './utils';
 
 /** A rendered job-reality badge: a tone and a compact chip label, plus two fuller
  *  strings. `tooltip` is the complete justification (age + evidence) shown on hover;
@@ -36,20 +35,4 @@ export function realityBadge(reality?: Reality | null): RealityBadge | null {
   }
   // stale
   return { tone: 'muted', label: `Open ${reality.age_days}d`, tooltip, evidence };
-}
-
-/** postingContrast returns a "posting dated N ago" note when the source's posting date
- *  reads meaningfully fresher than the job's true age — the refreshed-date story the
- *  age label alone hides ("open 21 days, but posting dated 2 days ago"). '' when there
- *  is no posting date, it is unparseable, or the gap is too small to be worth stating. */
-export function postingContrast(reality: Reality, postedAt?: string | null): string {
-  if (!postedAt) return '';
-  const d = new Date(postedAt);
-  if (Number.isNaN(d.getTime())) return '';
-  const postedDays = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  // The badge only shows for non-fresh jobs (age > 14d); a posting reading a clear
-  // week fresher than that true age is the contrast worth surfacing.
-  if (reality.age_days - postedDays < 7) return '';
-  const ago = timeAgo(postedAt);
-  return ago ? `posting dated ${ago}` : '';
 }

@@ -6,9 +6,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/userjob"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -352,6 +354,9 @@ func (r *QueriesRepository) ListInteractions(
 			HasPendingSuggestion: row.HasPendingSuggestion,
 			FollowedUpAt:         pgconv.TimePtr(row.FollowedUpAt),
 			CVOpenedAt:           pgconv.TimePtr(row.CvOpenedAt),
+			AutoApplyStatus: autoApplyStatusFor(row.AutoApplyID.Valid, row.AutoApplyTailoredCvID,
+				row.AutoApplyHasPreview, row.AutoApplyReviewDecision, row.AutoApplyBlockedAt,
+				row.AutoApplyFailedAt, row.AutoApplyPreviewFailedAt),
 		})
 	}
 
@@ -487,6 +492,22 @@ func textPtr(t pgtype.Text) *string {
 	}
 	v := t.String
 	return &v
+}
+
+// autoApplyStatusFor derives a board row's own auto-apply status from ListUserJobs's raw
+// columns, or nil when hasAttempt is false (no auto_apply_queue row for this (user, job)
+// pair). Mirrors autoApplyReviewInfoForJob's own derivation (internal/api/handler), scoped
+// to just the status this list needs for its badge — the full preview/unmapped detail is
+// the drawer's own, richer read.
+func autoApplyStatusFor(hasAttempt bool, tailoredCVID *uuid.UUID, hasPreview bool, reviewDecision pgtype.Text, blockedAt, failedAt, previewFailedAt pgtype.Timestamptz) *autoapply.Status {
+	if !hasAttempt {
+		return nil
+	}
+	// Either budget exhausting counts as failed — see autoApplyReviewInfoForJob's own
+	// identical reasoning (internal/api/handler/auto_apply_review_info.go).
+	failed := failedAt.Valid || previewFailedAt.Valid
+	status := autoapply.DeriveStatus(tailoredCVID != nil, hasPreview, reviewDecision.String, blockedAt.Valid, failed)
+	return &status
 }
 
 // textFromPtr converts a *string to pgtype.Text. A nil pointer produces an

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // applyingTheDiffReproducesTheTarget is the property that makes the differ trustworthy: the
@@ -180,7 +181,7 @@ func TestDiffHandlesAListThatWasEmpty(t *testing.T) {
 func TestDiffHandlesAWholeSectionAppearing(t *testing.T) {
 	old := sample()
 	want := sample()
-	want.Certifications = []cv.Certification{{Name: "CKA", Issuer: "CNCF", Year: "2024"}}
+	want.Certifications = []cv.Certification{{Name: "CKA", Issuer: "CNCF", Year: &perioddate.PeriodDate{Year: 2024}}}
 	want.Education = []cv.EducationItem{{Institution: "TU Delft", Degree: "MSc"}}
 
 	applyingTheDiffReproducesTheTarget(t, old, want)

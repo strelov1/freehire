@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest globalpayments
 [Timer]
-OnCalendar=*:07:00
+OnCalendar=*:48:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

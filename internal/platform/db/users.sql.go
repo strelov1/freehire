@@ -255,21 +255,22 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, email, role, beta_tester, email_verified,
        (password_hash IS NOT NULL)::boolean AS has_password,
-       created_at, timezone, language
+       created_at, timezone, language, onboarding_completed_at
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID            int64              `json:"id"`
-	Email         string             `json:"email"`
-	Role          string             `json:"role"`
-	BetaTester    bool               `json:"beta_tester"`
-	EmailVerified bool               `json:"email_verified"`
-	HasPassword   bool               `json:"has_password"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	Timezone      pgtype.Text        `json:"timezone"`
-	Language      string             `json:"language"`
+	ID                    int64              `json:"id"`
+	Email                 string             `json:"email"`
+	Role                  string             `json:"role"`
+	BetaTester            bool               `json:"beta_tester"`
+	EmailVerified         bool               `json:"email_verified"`
+	HasPassword           bool               `json:"has_password"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	Timezone              pgtype.Text        `json:"timezone"`
+	Language              string             `json:"language"`
+	OnboardingCompletedAt pgtype.Timestamptz `json:"onboarding_completed_at"`
 }
 
 // Profile lookup for the authenticated user. role is included so /auth/me can tell a
@@ -278,7 +279,9 @@ type GetUserByIDRow struct {
 // change to password accounts and explain itself to OAuth-only ones. timezone is NULL
 // until the user sets one on their profile (internal/application/deliverywindow reads NULL as UTC).
 // language is never NULL — it has a NOT NULL DEFAULT, so every account has one from
-// creation.
+// creation. onboarding_completed_at is NULL until the account has been through the
+// wizard, and it rides along here rather than on its own endpoint because the root
+// layout's gate needs it on the same read it already makes to decide anything at all.
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
@@ -292,6 +295,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.CreatedAt,
 		&i.Timezone,
 		&i.Language,
+		&i.OnboardingCompletedAt,
 	)
 	return i, err
 }
@@ -622,6 +626,22 @@ func (q *Queries) ListUsersForResumeGeoBackfill(ctx context.Context, userID int6
 		return nil, err
 	}
 	return items, nil
+}
+
+const markOnboardingComplete = `-- name: MarkOnboardingComplete :exec
+UPDATE users
+SET onboarding_completed_at = now()
+WHERE id = $1 AND onboarding_completed_at IS NULL
+`
+
+// Record that this account has been through the onboarding wizard, so it is never routed
+// there again. Guarded on IS NULL rather than written unconditionally: the useful fact is
+// WHEN the account first finished, and a second call (a re-submit, a double click, a
+// decline after a finish) must not overwrite it. That guard is also what makes the
+// endpoint idempotent — a repeat call affects no rows and is still a success.
+func (q *Queries) MarkOnboardingComplete(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markOnboardingComplete, id)
+	return err
 }
 
 const resetUserPassword = `-- name: ResetUserPassword :one

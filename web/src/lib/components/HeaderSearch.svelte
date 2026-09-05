@@ -13,12 +13,20 @@
   import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '$lib/types';
   import { listSearchTarget, type ListSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
+  import { keyboardFit, NO_FIT, type KeyboardFit } from '$lib/keyboardFit';
   import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
   import { fromApi, applyParams, type ApplyPlan } from '$lib/apiSuggestions';
   import { pastedJobLink, type PastedJobLink } from '$lib/jobLink';
   import { runLinkIntake, type LinkIntakeStep } from '$lib/linkIntake';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
   import { starterSuggestions, type Suggestion } from '$lib/suggestions';
+  import {
+    completeWord,
+    typedTail,
+    typewriterStart,
+    typewriterStep,
+    type TypewriterState,
+  } from '$lib/placeholderRoles';
   import { cn } from '$lib/ui';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
   import IntakeOutcome from './IntakeOutcome.svelte';
@@ -26,9 +34,9 @@
   // The header's search box — the ONE of them, on every page.
   //
   // There were two: this, which filtered the list under it, and a launcher on every
-  // other page, which navigated to the feed. They shared the debounce, the
-  // stale-response token, the arrow keys, the hotkeys, the dismissal and the row
-  // rendering, in two copies, and differed in exactly one thing: what a pick DOES. So
+  // other page, which navigated to the feed. They shared the debounce, the stale-answer
+  // guard, the arrow keys, the hotkeys, the dismissal and the row rendering, in two
+  // copies, and differed in exactly one thing: what a pick DOES. So
   // that one thing is a target now (see `target` below), and everything else is
   // written once.
   //
@@ -43,12 +51,28 @@
   // feed. A hero-sized second copy of this component is how the two would drift.
   let {
     placeholder,
+    label,
     size = 'header',
     autofocus = false,
     counts = null,
     onOpenFilters,
   }: {
-    placeholder: string;
+    /** What an empty box shows.
+     *
+     *  A plain string is static. `{ prefix, roles }` types the roles one after another
+     *  into the tail of a sentence whose `prefix` never moves — see lib/placeholderRoles.ts,
+     *  which owns both the words and the stepping.
+     *
+     *  One prop rather than a static one plus an animated override, because an override
+     *  would always win and leave the static string dead at every animating call site —
+     *  the reader would have two candidates and no way to tell which one ships. Either
+     *  way this is never the field's accessible name; that is `label`. */
+    placeholder: string | { prefix: string; roles: string[] };
+    /** The field's accessible name. Static, and required of every caller rather than
+     *  defaulting to `placeholder`: the two were one prop until the placeholder learned
+     *  to rotate, at which point a screen reader announced the input as whatever example
+     *  happened to be on screen. A default would reinstate that at the next call site. */
+    label: string;
     size?: 'header' | 'hero';
     /** Focus the box on mount — desktop only. A page whose whole content is this box
      *  should put the caret in it; on a phone the same call raises the keyboard over
@@ -69,11 +93,108 @@
 
   const hero = $derived(size === 'hero');
 
-  // How long the draft must sit still before the suggestions are recomputed. A pass
-  // costs ~10 ms over the catalogue on a warm desktop, more on a phone. Short enough
-  // to read as instant, long enough that a fast typist pays for it once rather than
-  // per letter.
-  const SUGGEST_DEBOUNCE_MS = 120;
+  // ---- the typed placeholder ----
+  //
+  // Runs only while the box is empty and has never been touched. The first focus or
+  // keystroke stops it for the rest of the visit — text moving under the cursor while a
+  // query is being composed is the failure an animated placeholder invites.
+  //
+  // Only the tail moves; `prefix` is never rewritten, so the sentence stays readable and
+  // the eye has one place to look. The words and the stepping both live in
+  // lib/placeholderRoles.ts, which is where they can be tested without a browser.
+  const typing = $derived(typeof placeholder === 'string' ? null : placeholder);
+
+  // Capturing just the initial value is the intent: this is where the animation STARTS,
+  // and the server renders it. A caller that later swaps its word list is handled by the
+  // stepper instead — a role index the new list has no word for steps past on the next
+  // tick rather than needing this seed to be recomputed.
+  // svelte-ignore state_referenced_locally
+  let typewriter = $state<TypewriterState>(
+    typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles),
+  );
+  let typingStopped = $state(false);
+
+  function stopTyping() {
+    if (typingStopped || !typing) return;
+    // Finish the word on the way out. Freezing on "Devo" reads as a typo rather than as
+    // an animation that stopped, and it would do so at the exact moment the visitor's
+    // attention arrived on the field.
+    typewriter = completeWord(typewriter, typing.roles);
+    typingStopped = true;
+  }
+
+  /** Undo a stop that no visitor asked for — see the autofocus effect below. */
+  function resumeTyping() {
+    if (!typing) return;
+    // Both halves, not just the flag: stopTyping also FILLED IN the current word, so
+    // clearing the flag alone would leave the animation resuming from a finished word
+    // and skip typing the very first one — on the homepage hero, the one surface this
+    // exists for.
+    typewriter = typewriterStart(typing.roles);
+    typingStopped = false;
+  }
+
+  // Sampled AND subscribed: the OS-level setting can be turned on mid-visit, and reading
+  // it once would leave that visitor with a timer already running for the rest of it.
+  let reduceMotion = $state(false);
+  $effect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reduceMotion = query.matches;
+    const onChange = (e: MediaQueryListEvent) => (reduceMotion = e.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  });
+
+  $effect(() => {
+    if (typingStopped || !typing) return;
+    const roles = typing.roles;
+    // Under reduced motion nothing is scheduled at all and the first role simply stands.
+    if (reduceMotion || roles.length === 0) return;
+
+    // One chained timeout rather than an interval: every step has its own delay (a typed
+    // character, a faster deleted one, and the long hold on a finished word), so a fixed
+    // tick would have to be the shortest of them and then count its way to the others.
+    //
+    // `untrack` is what makes that chain real. Read plainly, the seed below would
+    // subscribe this effect to the very state its own callback writes: each character
+    // would invalidate the effect, the cleanup would cancel the link already scheduled,
+    // and the animation would be driven by re-runs at the mercy of flush latency rather
+    // than by the delays computed here.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = (from: TypewriterState) => {
+      const { next, delayMs } = typewriterStep(from, roles);
+      timer = setTimeout(() => {
+        typewriter = next;
+        schedule(next);
+      }, delayMs);
+    };
+    schedule(untrack(() => typewriter));
+    return () => clearTimeout(timer);
+  });
+
+  // Server-rendered markup carries the prefix with an empty tail, since the effect above
+  // is client-only — so the sentence is already there and only its last word arrives.
+  // Under reduced motion the first role is shown whole instead.
+  const shownPlaceholder = $derived.by(() => {
+    if (!typing) return placeholder as string;
+    if (reduceMotion && !typingStopped) return typing.prefix + (typing.roles[0] ?? '');
+    return typing.prefix + typedTail(typewriter, typing.roles);
+  });
+
+  // How long the draft must sit still before the suggestions are refetched.
+  //
+  // A settled draft costs THREE requests (completions, postings, companies), so the
+  // window is not sized against one cheap pass — it is sized against the gap between
+  // keystrokes. At 120ms it sat inside that gap: a fast typist's 18 characters fired
+  // six rounds, eighteen requests, for one query they had not finished writing. 300ms
+  // is past the gap and is the window the filter store already debounces its reload by
+  // (see urlSynced.svelte.ts) — one answer to "how long is a pause" across the app.
+  const SUGGEST_DEBOUNCE_MS = 300;
+
+  // Below this, the box asks nothing. A single character matches a large fraction of
+  // the catalogue, so the round trip buys a list nobody can act on — and it is the one
+  // round that fires with certainty, since every query passes through its first letter.
+  const SUGGEST_MIN_CHARS = 2;
 
   // Section caps. The dropdown is a shortcut, not a results page: past a handful each
   // section stops being scannable and the whole thing stops fitting on a phone.
@@ -95,15 +216,25 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
 
+  /** Tailwind's `sm`. Two things below ask it — whether to place the caret on mount, and
+   *  how this box's panel is drawn — and they must get one answer, since the markup they
+   *  are reasoning about switches on the same breakpoint. */
+  const WIDE_QUERY = '(min-width: 640px)';
+
   $effect(() => {
     if (!autofocus) return;
-    if (!window.matchMedia('(min-width: 640px)').matches) return;
+    if (!window.matchMedia(WIDE_QUERY).matches) return;
     inputEl?.focus();
     // Focusing normally opens the dropdown, and on a landing page that would drop a
     // ten-row panel over the page on every load, covering the very shortcuts printed
     // underneath it. A caret the visitor did not place is not the question "what can I
     // put here", so close it back: their first click or keystroke opens it as usual.
     dismissed = true;
+    // Same reasoning, and the same undo: the focus above fires the field's own handler,
+    // which stops the placeholder animation. On the homepage — where this box IS the
+    // page, and the one surface the animation exists for — that killed it before the
+    // first character. A caret nobody placed has not interrupted anything.
+    resumeTyping();
   });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
@@ -208,44 +339,56 @@
     return () => clearTimeout(timer);
   });
 
-  // An empty box offers the catalogue's shape; a typed one offers what matches.
+  // A box with nothing to complete offers the catalogue's shape; a typed one offers
+  // what matches.
   //
-  // The empty case is the whole point of opening on focus, and it is answered LOCALLY:
+  // The first case is the whole point of opening on focus, and it is answered LOCALLY:
   // the curated group order lives in the filter modal's own grouping, checked there
   // against the category vocabulary at compile time, so asking a server for it would
   // be a second copy of that order. The typed case is the endpoint's — it completes a
   // phrase against the catalogue's real vocabulary, which no dictionary shipped to the
   // browser can do.
+  //
+  // The threshold is SUGGEST_MIN_CHARS, the same one the fetch below gates on, and
+  // deliberately not a separate `=== ''`. Two thresholds opened a state nobody designed:
+  // at exactly one character the box was past "empty" but short of "asked", so it showed
+  // neither the starters nor completions it had not fetched — a ten-row panel collapsing
+  // to the single free-text row, then refilling on the next keystroke. One predicate
+  // answers "is there a query yet", so there is no gap for a state to fall into.
   const starters = $derived(suggest ? starterSuggestions(suggest.counts()) : []);
   let completions = $state.raw<Suggestion[]>([]);
-  const suggestions = $derived(settledQuery.trim() === '' ? starters : completions);
+  const suggestions = $derived(
+    settledQuery.trim().length < SUGGEST_MIN_CHARS ? starters : completions,
+  );
   // The parts each completion applies, by row key — kept beside the rows rather than
   // inside them because a Suggestion is what the dropdown RENDERS, and these are what
   // choosing it DOES.
   let completionParts = $state.raw(new Map<string, ApiSuggestionPart[]>());
   // Postings and companies for the typed text, fetched exactly the way the launcher
-  // dropdown (HeaderSearch) fetches them — same endpoints, same stale-response token,
-  // same row rendering below. A second implementation of "show me matching jobs" is
-  // how the two would drift.
+  // dropdown (HeaderSearch) fetches them — same endpoints, same abandonment rule, same
+  // row rendering below. A second implementation of "show me matching jobs" is how the
+  // two would drift.
   //
   // These matter MORE now than before, not less: the list below no longer narrows as
   // you type, so these rows are the only live evidence the query finds anything.
   let jobs = $state.raw<Job[]>([]);
   let companies = $state.raw<CompanyListItem[]>([]);
-  // Bumped on every fetch; a response for an older token is stale and dropped, so a
-  // slow request cannot overwrite a fresher one.
-  let previewToken = 0;
 
   $effect(() => {
     const q = settledQuery.trim();
-    const mine = ++previewToken;
-    if (q === '' || !suggest) {
+    if (q.length < SUGGEST_MIN_CHARS || !suggest) {
       completions = [];
       completionParts = new Map();
       jobs = [];
       companies = [];
       return;
     }
+    // One controller per settled query, aborted by this effect's own cleanup. It
+    // replaced a stale-response counter, which dropped the ANSWER after the request had
+    // already gone out and the server had already worked for it. The signal doubles as
+    // the staleness check below: abandoned and stale are the same condition here, so a
+    // counter beside it would be a second answer to one question.
+    const ac = new AbortController();
     void (async () => {
       // allSettled, not all: the three sections are independent, so one endpoint
       // failing still shows the sections that succeeded instead of blanking all of
@@ -253,14 +396,16 @@
       // a schedule — a cold or missing one must cost the box its completions, not its
       // postings.
       const [s, j, c] = await Promise.allSettled([
-        api.suggest(q, completionsLimit),
-        api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0),
+        api.suggest(q, completionsLimit, ac.signal),
+        api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0, ac.signal),
         // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
         // asking for exactly three would leave the section empty whenever the fourth
         // was the only real match.
-        api.listCompanies(q, companiesFetch, 0),
+        api.listCompanies(q, companiesFetch, 0, undefined, ac.signal),
       ]);
-      if (mine !== previewToken) return;
+      // An abort rejects all three, and `allSettled` would otherwise report that as
+      // three empty sections — blanking the panel a fresher query is about to fill.
+      if (ac.signal.aborted) return;
       const rows = s.status === 'fulfilled' ? s.value : [];
       completions = fromApi(rows);
       completionParts = new Map(completions.map((row, i) => [row.slug, rows[i]?.parts ?? []]));
@@ -268,6 +413,7 @@
       companies =
         c.status === 'fulfilled' ? namedCompanies(c.value.items, q, companiesLimit) : [];
     })();
+    return () => ac.abort();
   });
 
   // ── A pasted link ─────────────────────────────────────────────────────────
@@ -316,8 +462,9 @@
     // The box may have moved on while the intake was out: a paste over the old text, or
     // the text cleared entirely. The answer is about the URL we asked with, so applying
     // it now would navigate to a posting nobody is asking about any more — the same
-    // stale-response hazard the suggestion fetches guard with `previewToken`, answered
-    // here by the question itself rather than by a counter.
+    // stale-answer hazard the suggestion fetches guard with their AbortController, held
+    // off here by comparing the question instead, because this runs from a click rather
+    // than from an effect with a cleanup to hang the abort on.
     if (link?.url !== pasted.url) return;
     if (step.kind === 'open') {
       openPosting(step.slug);
@@ -341,48 +488,45 @@
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
   const rowCount = $derived(suggestOpen ? rows.length : 0);
 
-  /** How much of the screen's bottom the on-screen keyboard is covering, in pixels.
-   *
-   *  Neither mobile browser shrinks the PAGE for the keyboard on its own — it is drawn
-   *  over the bottom of a viewport that stays full height — so the panel below, pinned
-   *  from the header to `bottom: 0`, ran under the keys with its last rows unreachable.
-   *  Which is the worst place to lose: the visitor has just typed, and the rows they are
-   *  reading are the ones the typing produced.
-   *
-   *  `visualViewport` is the part of the page actually left visible, so the difference
-   *  between it and the window is the keyboard. `app.html` also asks Chrome to shrink the
-   *  page itself (`interactive-widget=resizes-content`), and the two do not double up:
-   *  where the browser honours that, the window shrinks with it and this measures 0.
-   *
-   *  Held here rather than in a shared store because this panel is the only thing that
-   *  reaches the bottom edge today; a second one (a composer, a sheet) is when it earns
-   *  a module of its own. */
-  let keyboardInset = $state(0);
+  /** Where this panel may sit with the on-screen keyboard up: a lift for the one that is
+   *  pinned to the bottom of the screen, a ceiling for the one that hangs off the box,
+   *  and why one number cannot serve both — see $lib/keyboardFit. */
+  let fit = $state.raw<KeyboardFit>(NO_FIT);
 
   $effect(() => {
-    // Nothing to lift while the panel is shut, and no listener to keep either.
+    // Nothing to place while the panel is shut, and no listener to keep either.
     if (!suggestOpen) return;
     const viewport = window.visualViewport;
     if (!viewport) return;
+    const box = wrapEl;
+    if (!box) return;
     const measure = () => {
-      // Only the phone-width panel has a bottom edge to lift: at `sm` and up it hangs off
-      // the box and is sized by `max-height`. Read the breakpoint the same way the
-      // autofocus check above reads it, so there is one answer to "is this a phone".
-      const wide = window.matchMedia('(min-width: 640px)').matches;
-      keyboardInset = wide
-        ? 0
-        : Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      fit = keyboardFit({
+        windowHeight: window.innerHeight,
+        viewportHeight: viewport.height,
+        viewportOffsetTop: viewport.offsetTop,
+        // The ceiling is measured from the bottom of the box the panel hangs off.
+        anchorBottom: box.getBoundingClientRect().bottom,
+        // Exactly the case the class list below pins to `bottom-0`: the header's box, on
+        // a phone. The hero hangs its panel off the box at every width, and so does the
+        // header at `sm` and up.
+        bottomAnchored: !hero && !window.matchMedia(WIDE_QUERY).matches,
+      });
     };
     measure();
     // `scroll` as well as `resize`: iOS scrolls the visual viewport inside the layout one
     // to keep the focused field visible, which moves the keyboard's top edge without
-    // changing its height.
+    // changing its height. The window's own scroll counts too — a ceiling is measured
+    // from where the box IS, and scrolling the page moves it under a keyboard that has
+    // not budged.
     viewport.addEventListener('resize', measure);
     viewport.addEventListener('scroll', measure);
+    window.addEventListener('scroll', measure, { passive: true });
     return () => {
       viewport.removeEventListener('resize', measure);
       viewport.removeEventListener('scroll', measure);
-      keyboardInset = 0;
+      window.removeEventListener('scroll', measure);
+      fit = NO_FIT;
     };
   });
 
@@ -613,10 +757,12 @@
         // autofocused hero would stay silent when its own field is clicked.
         dismissed = false;
         activeIndex = -1;
+        stopTyping();
       }}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
+        stopTyping();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         linkStep = null;
@@ -634,11 +780,12 @@
         // box permanently silent for the rest of the visit.
         dismissed = false;
         activeIndex = -1;
+        stopTyping();
       }}
       onkeydown={onKeydown}
       type="text"
-      {placeholder}
-      aria-label={placeholder}
+      placeholder={shownPlaceholder}
+      aria-label={label}
       autocomplete="off"
       spellcheck="false"
       role="combobox"
@@ -752,7 +899,8 @@
     <ul
       id="role-suggestions"
       role="listbox"
-      style:bottom={keyboardInset > 0 ? `${keyboardInset}px` : null}
+      style:bottom={fit.lift > 0 ? `${fit.lift}px` : null}
+      style:max-height={fit.ceiling > 0 ? `${fit.ceiling}px` : null}
       aria-label="Search suggestions"
       class={cn(
         'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',

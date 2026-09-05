@@ -148,6 +148,36 @@ func (q *Queries) GetProUntil(ctx context.Context, id int64) (pgtype.Timestamptz
 	return pro_until, err
 }
 
+const getProUntilSources = `-- name: GetProUntilSources :one
+SELECT pro_until, pro_until_stripe, pro_until_revenuecat, pro_until_granted
+FROM users
+WHERE id = $1
+`
+
+type GetProUntilSourcesRow struct {
+	ProUntil           pgtype.Timestamptz `json:"pro_until"`
+	ProUntilStripe     pgtype.Timestamptz `json:"pro_until_stripe"`
+	ProUntilRevenuecat pgtype.Timestamptz `json:"pro_until_revenuecat"`
+	ProUntilGranted    pgtype.Timestamptz `json:"pro_until_granted"`
+}
+
+// The plan and where it came from, in one read.
+//
+// The derived column and its three sources together, because the surface needs both: the
+// instant to show, and which origin equals it. Two queries would be two round trips for one
+// row, and — worse — could disagree if a sync landed between them.
+func (q *Queries) GetProUntilSources(ctx context.Context, id int64) (GetProUntilSourcesRow, error) {
+	row := q.db.QueryRow(ctx, getProUntilSources, id)
+	var i GetProUntilSourcesRow
+	err := row.Scan(
+		&i.ProUntil,
+		&i.ProUntilStripe,
+		&i.ProUntilRevenuecat,
+		&i.ProUntilGranted,
+	)
+	return i, err
+}
+
 const getUsageDay = `-- name: GetUsageDay :one
 SELECT used
 FROM usage_daily
@@ -450,22 +480,66 @@ func (q *Queries) ReleaseConsumption(ctx context.Context, arg ReleaseConsumption
 	return result.RowsAffected(), nil
 }
 
-const setProUntil = `-- name: SetProUntil :exec
+const setProUntilGranted = `-- name: SetProUntilGranted :exec
 UPDATE users
-SET pro_until = $1
+SET pro_until_granted = $1
 WHERE id = $2
 `
 
-type SetProUntilParams struct {
-	ProUntil pgtype.Timestamptz `json:"pro_until"`
-	ID       int64              `json:"id"`
+type SetProUntilGrantedParams struct {
+	Until pgtype.Timestamptz `json:"until"`
+	ID    int64              `json:"id"`
 }
 
-// Move a user's plan expiry. The only writer today is a hand-run statement; the billing
-// webhook and its reconciler become the writers in the change that adds them, and they
-// write this and nothing else.
-func (q *Queries) SetProUntil(ctx context.Context, arg SetProUntilParams) error {
-	_, err := q.db.Exec(ctx, setProUntil, arg.ProUntil, arg.ID)
+// Pro GIVEN rather than sold: support's manual grant today, awarded days once add-invites
+// lands. No provider sync touches it, which is the whole reason it is separate — before
+// migration 0135 a hand-set value lived in the column the Stripe sync overwrites, and the
+// next webhook silently undid it.
+func (q *Queries) SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error {
+	_, err := q.db.Exec(ctx, setProUntilGranted, arg.Until, arg.ID)
+	return err
+}
+
+const setProUntilRevenueCat = `-- name: SetProUntilRevenueCat :exec
+UPDATE users
+SET pro_until_revenuecat = $1
+WHERE id = $2
+`
+
+type SetProUntilRevenueCatParams struct {
+	Until pgtype.Timestamptz `json:"until"`
+	ID    int64              `json:"id"`
+}
+
+// How far the APP STORE or GOOGLE PLAY subscription reaches. Written only by the RevenueCat
+// sync, and only over its own source column, for the same reason the Stripe setter is
+// confined to its own: neither provider may answer for a plan it did not sell.
+func (q *Queries) SetProUntilRevenueCat(ctx context.Context, arg SetProUntilRevenueCatParams) error {
+	_, err := q.db.Exec(ctx, setProUntilRevenueCat, arg.Until, arg.ID)
+	return err
+}
+
+const setProUntilStripe = `-- name: SetProUntilStripe :exec
+UPDATE users
+SET pro_until_stripe = $1
+WHERE id = $2
+`
+
+type SetProUntilStripeParams struct {
+	Until pgtype.Timestamptz `json:"until"`
+	ID    int64              `json:"id"`
+}
+
+// How far the WEB subscription reaches. Written only by the Stripe sync, from Stripe's
+// current view of the customer.
+//
+// It writes a source, not the plan. users.pro_until is derived by the schema as the furthest
+// of three sources and refuses assignment outright (428C9) — see migration 0135 — so
+// clearing this column says "Stripe confers nothing", never "this account is not Pro". The
+// account may hold a store subscription or a manual grant, and before 0135 this write would
+// have revoked either without a trace.
+func (q *Queries) SetProUntilStripe(ctx context.Context, arg SetProUntilStripeParams) error {
+	_, err := q.db.Exec(ctx, setProUntilStripe, arg.Until, arg.ID)
 	return err
 }
 

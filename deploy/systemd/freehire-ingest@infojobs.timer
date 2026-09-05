@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest infojobs
 [Timer]
-OnCalendar=*:38:00
+OnCalendar=*:22:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

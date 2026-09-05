@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest successfactors
 [Timer]
-OnCalendar=*:19:00
+OnCalendar=*:25:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

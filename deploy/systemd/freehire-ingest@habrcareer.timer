@@ -1,8 +1,0 @@
-[Unit]
-Description=timer ingest habrcareer
-[Timer]
-OnCalendar=*:10:00
-Persistent=true
-RandomizedDelaySec=180
-[Install]
-WantedBy=timers.target

@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest vagas
 [Timer]
-OnCalendar=*-*-* 00/3:24:00
+OnCalendar=*-*-* 02/3:07:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

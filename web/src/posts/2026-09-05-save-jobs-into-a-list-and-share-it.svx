@@ -1,0 +1,32 @@
+---
+title: Save jobs into a list, and share it
+date: 2026-09-05
+summary: A new way to keep a shortlist of specific postings — separate from the quick "save" star — and, if you want, publish it as a public read-only page.
+type: changelog
+tags:
+  - job-seekers
+  - product
+draft: false
+---
+
+The star on a job card has always meant "come back to this later." It's one flat
+pile, and that's the point — until you want to hand someone a curated three, or
+keep "roles I'm actually applying to" apart from "roles I might."
+
+**Lists** are for that. Open **+ Add to list** on any job card, drop it into an
+existing list or start a new one, and it stays there. If the posting closes
+later, it doesn't disappear from the list — it just shows as closed, because
+the list is your own record of what you looked at, not a live search.
+
+Manage them from **My lists**: rename, write a description, remove jobs,
+delete the whole thing.
+
+Any list can be shared. Turn sharing on and you get a public, read-only link —
+`freehire.me/l/<slug>` — showing the list's name, its description, and the
+jobs in it. No sign-in needed to view it, and nobody but you can edit it.
+
+This replaces the old board-sharing feature (publishing a saved *search*, at
+`/b/<slug>`). Those links are gone: a saved search is a live query that keeps
+changing underneath whoever you sent it to, which is a strange thing to call
+"curated." A list is the jobs you actually picked. If you had a board link out
+in the wild, rebuild it as a list.

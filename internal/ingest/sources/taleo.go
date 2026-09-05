@@ -49,6 +49,12 @@ func NewTaleo(c taleoHTTP) Source { return taleo{http: c, hosts: newKeyedMutex()
 
 func (taleo) Provider() string { return "taleo" }
 
+// fullBoardListing: listRequisitions proves completeness — a POSITIVE totalCount is
+// authoritative (pages until it's reached or an empty page), and a walk that still yields
+// requisitions past the page cap fails rather than returning a truncated result as success.
+// See the fullBoardListing interface for the bar.
+func (taleo) fullBoardListing() {}
+
 // taleoBoard is a configured board split into the tenant host and careersection number.
 type taleoBoard struct {
 	host, section string
@@ -157,6 +163,7 @@ func (s taleo) listRequisitions(ctx context.Context, b taleoBoard, portal string
 	// indefinitely (cf. the yandex runaway-cursor incident). 200 pages ≈ 5k jobs covers every
 	// board we onboard; the loop normally stops far earlier on totalCount or an empty page.
 	const taleoMaxPages = 200
+	reachedNaturalEnd := false
 	for page := 1; page <= taleoMaxPages; page++ {
 		body := taleoSearchBody(page)
 		var resp taleoListResponse
@@ -164,12 +171,25 @@ func (s taleo) listRequisitions(ctx context.Context, b taleoBoard, portal string
 			return nil, fmt.Errorf("taleo: searchjobs %s page %d: %w", b.host, page, err)
 		}
 		if len(resp.RequisitionList) == 0 {
+			reachedNaturalEnd = true
 			break
 		}
 		reqs = append(reqs, resp.RequisitionList...)
-		if len(reqs) >= resp.PagingData.TotalCount {
+		// A non-positive totalCount is not authoritative — a tenant that omits or zeroes it
+		// on an otherwise real page must not have that read as "the whole board fits here";
+		// only an actual empty page (or the cap above) may end the walk in that case.
+		if resp.PagingData.TotalCount > 0 && len(reqs) >= resp.PagingData.TotalCount {
+			reachedNaturalEnd = true
 			break
 		}
+	}
+	if !reachedNaturalEnd {
+		// The cap — not an empty page or totalCount — ended the walk: the listing was still
+		// yielding requisitions, so it stopped short of the tail rather than exhausting it.
+		// Returning what was gathered would look like a genuinely small board and let the
+		// sweep's board-scoped close retire everything past the cap (the same partial-success
+		// shape that forced freehire#2337's revert) — fail instead.
+		return nil, fmt.Errorf("taleo: %s/%s: still yielding requisitions after the %d-page cap: walk truncated, not exhausted", b.host, b.section, taleoMaxPages)
 	}
 	return reqs, nil
 }

@@ -2,12 +2,24 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
-  import { api } from '$lib/api';
+  import {
+    ArrowRight,
+    Bookmark,
+    Check,
+    CheckCircle2,
+    Clock,
+    ExternalLink,
+    Eye,
+    Flag,
+    MessageSquare,
+    RefreshCw,
+  } from '@lucide/svelte';
+  import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
-  import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
+  import { filterHref, formatSalary, requirementGroups, summaryFacets } from '$lib/enrichment';
   import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
@@ -17,7 +29,8 @@
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
-  import { formatDate } from '$lib/utils';
+  import { formatDate, formatDateOrAgo, formatDateTime } from '$lib/utils';
+  import AddToListButton from './AddToListButton.svelte';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
@@ -73,10 +86,22 @@
   const saved = $derived(interaction?.saved_at != null);
 
   // Presentational values derived from the (server-rendered) job.
-  const posted = $derived(formatDate(job.posted_at));
+  // Both read as an age for their first day ("20 minutes ago") and as a date after it —
+  // the same label the feed's card already gives a posting, so a reader arriving from
+  // the list meets the answer in the form they just left.
+  const posted = $derived(formatDateOrAgo(job.posted_at, 'short'));
+  // When the posting's own content last changed. `jobs.updated_at` is deliberately left
+  // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
+  // means "the words moved", not "the crawler came back" — which is the only reading that
+  // earns a line beside the posting date.
+  const updated = $derived(formatDateOrAgo(job.updated_at, 'short'));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
+  // What the posting itself asks for, grouped required-then-preferred. Empty for a
+  // job in which neither the model nor the description parser found requirements,
+  // which is what makes the section disappear rather than head an empty list.
+  const requirements = $derived(requirementGroups(e.requirements));
   // Engagement counters (distinct signed-in viewers / applicants), served on the
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
   const views = $derived(job.view_count ?? 0);
@@ -268,18 +293,59 @@
       // Leave the current state; the user can retry.
     }
   }
+
+  // Auto-apply (openspec/changes/auto-apply-submit-trigger): PRO-only, Greenhouse-only.
+  // Eligibility (plan tier, base CV) is not known client-side — the button stays
+  // clickable and the backend's own 402/409 message is what tells an ineligible
+  // caller why, surfaced below rather than pre-empted here.
+  let autoApplyOverrideStatus = $state<string | null>(null);
+  let autoApplySubmitting = $state(false);
+  let autoApplyError = $state<string | null>(null);
+  const autoApplyState = $derived(
+    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied),
+  );
+  // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
+  // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
+  // where they unit-test without mounting this component.
+  const cta = $derived(jobCtaPlan(autoApplyState));
+
+  async function onAutoApplyClick() {
+    if (!isAuthenticated()) {
+      promptSignIn();
+      return;
+    }
+    autoApplyError = null;
+    autoApplySubmitting = true;
+    try {
+      await api.autoApplyJob(job.public_slug);
+      autoApplyOverrideStatus = 'queued';
+      track('job_auto_apply', { slug: job.public_slug });
+    } catch (err) {
+      autoApplyError = err instanceof ApiError ? err.message : 'Something went wrong — please try again.';
+    } finally {
+      autoApplySubmitting = false;
+    }
+  }
 </script>
 
-<!-- The apply CTA renders twice: inline in the header on desktop, and in the
-     mobile sticky bar at the end of the article. Sole difference is size + layout
-     classes, so both share this snippet.
+<!-- The link out to the posting's own site, as a BUTTON. Rendered three times: beside the
+     title on desktop, in the pinned header once that title scrolls away, and in the mobile
+     sticky bar at the end of the article — all three passing `cta.external`, so the same
+     link never reads at two ranks on one page. Size and layout classes are the only
+     difference, which is why they share this snippet.
+     A fourth copy of the link exists and does NOT come through here: the phone-only anchor
+     in `actionStrip`, which is quiet strip furniture rather than a button. It repeats the
+     `rel`/`target`/handler below on purpose — see the note there.
+     `external` decides only the word and the loudness — the destination, the target and
+     the click handler are the same button either way, which is what keeps the apply-intent
+     event comparable across postings whether or not auto-apply offered to do it instead.
      nofollow: the destination is the posting's own site, which the catalogue never
      vetted — the same stance the description sanitizer takes on in-body links
      (internal/sources/sanitize.go). Without it a submitted vacancy buys a followed
      link from every job page, which is what the SEO submissions are actually after. -->
-{#snippet applyCta(size: 'md' | 'lg', className: string)}
+{#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   <Button
-    variant="primary"
+    variant={external.primary ? 'primary' : 'outline'}
     {size}
     href={job.url}
     target="_blank"
@@ -287,13 +353,48 @@
     onclick={onApplyClick}
     class={className}
   >
-    Apply <ArrowRight class="size-4" />
+    {external.label} <ArrowRight class="size-4" />
   </Button>
 {/snippet}
 
-<!-- Save, a quiet peer of the apply CTA rather than the full-width button it was in the
-     sidebar: it belongs beside "Apply", because keeping a job and opening it are the two
-     things a reader does with one. The filled bookmark is the state.
+<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside the apply link, not a
+     replacement for it — auto-apply still goes through the same ATS in the end, this
+     button only starts the tailor-then-review sequence. What it says and how loud it is
+     both come from the CTA plan; the only thing decided here is that a submission already
+     in flight also disables it, which is a fact about THIS component's request rather than
+     about the posting.
+     The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
+     background and foreground, none of which read as a plan marker on `bg-brand`. It takes
+     the PAGE's `foreground` for its fill and `background` for its text — near-black on
+     white in the light theme, near-white on black in the dark one — so it stays the highest
+     contrast thing on a brand-green button in either. A tint of the button's own foreground
+     was the first try and it dissolved into the fill. -->
+{#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
+  {#if cta.autoApply}
+    {@const autoApply = cta.autoApply}
+    <Button
+      variant={autoApply.primary ? 'primary' : 'secondary'}
+      {size}
+      disabled={autoApply.disabled || autoApplySubmitting}
+      onclick={onAutoApplyClick}
+      class={className}
+    >
+      {autoApply.label}
+      {#if autoApply.pro}
+        <span
+          class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
+        >
+          Pro
+        </span>
+      {/if}
+    </Button>
+  {/if}
+{/snippet}
+
+<!-- Save, a quiet action rather than the full-width button it was in the sidebar: keeping a
+     posting is something a reader does in passing, not the thing the page is for. It sits
+     with the other quiet ones on the tab row, and beside the apply CTA in the pinned header,
+     which has room for one bookmark and not for four. The filled bookmark is the state.
      `iconOnly` is for the pinned header, whose one line already holds the company, the
      title and the CTA; aria-label and the tooltip name the button either way. -->
 {#snippet saveButton(className = '', iconOnly = false)}
@@ -328,16 +429,80 @@
   </Button>
 {/snippet}
 
-<!-- The action strip: everything a reader does WITH the posting — talk about it, flag
-     it, keep it, open it — on one line, sharing the tab row's rule. It carries the
+<!-- How this posting is doing: when it went up, when its words last moved, and how many
+     people have opened it or told us they applied. Facts ABOUT the posting rather than
+     about the role, so they ride the provenance line with the company and the badges,
+     rather than the sidebar, where a reader comparing "posted 20 minutes ago" against "3
+     views" had to hold one thought across two places — past the match score and the salary
+     to reach either.
+     Every one of them is an icon and a number, which is what lets four of them share a line
+     the words would have filled on their own. The icons carry the word they replaced in an
+     `sr-only` span, so the line reads the same to a screen reader as it did when it was
+     spelled out.
+     "Updated" is dropped when it renders to the same label as the posting date: a job
+     written once and never touched would otherwise say the same thing twice. Comparing
+     the LABELS rather than the timestamps is the point — two edits an hour apart on one
+     day are a real difference while both read as ages, and stop being one the day they
+     both collapse into that date.
+     The exact clock time rides the `title` on both dates, since a reader who has read "2
+     hours ago" off a server-rendered page may want to know how old the page is.
+     Rendered twice, one visible at a time (the caller passes the display class): to the
+     right of the provenance line from lg, and under the title below it, where that line is
+     a single non-wrapping row whose company name is already truncating to fit. -->
+{#snippet postingMeta(className: string)}
+  {#if posted || views > 0 || applies > 0}
+    <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
+      {#if posted}
+        <span
+          class="inline-flex items-center gap-1 whitespace-nowrap"
+          title={`Posted ${formatDateTime(job.posted_at)}`}
+        >
+          <Clock class="size-3.5 shrink-0" aria-hidden="true" />
+          <span class="sr-only">Posted</span>
+          <time datetime={job.posted_at}>{posted}</time>
+        </span>
+        {#if updated && updated !== posted}
+          <span
+            class="inline-flex items-center gap-1 whitespace-nowrap"
+            title={`Updated ${formatDateTime(job.updated_at)}`}
+          >
+            <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
+            <span class="sr-only">Updated</span>
+            <time datetime={job.updated_at}>{updated}</time>
+          </span>
+        {/if}
+      {/if}
+      <!-- A zero counter is omitted rather than drawn: "0 views" on a posting nobody has
+           opened yet measures our own traffic, not the job. -->
+      {#if views > 0}
+        <span class="inline-flex items-center gap-1 whitespace-nowrap">
+          <Eye class="size-3.5 shrink-0" aria-hidden="true" />
+          {views}
+          {views === 1 ? 'view' : 'views'}
+        </span>
+      {/if}
+      {#if applies > 0}
+        <span class="inline-flex items-center gap-1 whitespace-nowrap">
+          <Check class="size-3.5 shrink-0" aria-hidden="true" />
+          {applies} applied
+        </span>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+<!-- The action strip: the QUIET things a reader does with a posting — talk about it, flag
+     it, keep it, file it — on one line, sharing the tab row's rule. It carries the
      rule itself (`border-b`) rather than sitting above one, so the line reads as a
      single edge across the column: the strip and the TabStrip beside it are aligned on
      their bottoms, and each draws its own half of it.
+     The two loud things — auto-apply and the apply link — are NOT here; they are ctaGroup,
+     up beside the title. They shared this row until there were six controls on it, at which
+     point the TabStrip, the only half that yields, had been squeezed to a scrolling sliver.
      Rendered in two places, one visible at a time (the caller passes the display class):
      the tab row on lg, and directly under the title below it, where the sidebar stacks
      between the title and the description and a strip left on the tab row would put Save
-     a whole screen away from the job it saves. Only the apply CTA drops out below lg — the sticky
-     bottom bar carries it there, which is also what leaves the phone room for the labels. -->
+     a whole screen away from the job it saves. -->
 {#snippet actionStrip(className: string)}
   <div class={`shrink-0 items-center gap-1.5 ${className}`}>
     <a
@@ -350,7 +515,45 @@
     </a>
     {@render reportButton()}
     {@render saveButton()}
-    {@render applyCta('md', 'ml-1 hidden shrink-0 lg:inline-flex')}
+    <AddToListButton jobSlug={job.public_slug} />
+    <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
+         whenever auto-apply can be started, so the posting's own page needs a door
+         somewhere else — and this strip is where the quiet things already are. On lg the
+         same link is a button up beside the title, so this copy stays hidden rather than
+         offering it twice. Same handler as that button: one click, one apply-intent event,
+         whichever copy the reader reached.
+         An anchor rather than `applyCta`, because a `Button` here would be a fourth loud
+         thing on a strip whose whole job is to be quiet — so it carries `rel` and `target`
+         itself. `nofollow` for the reason the snippet above states in full: the destination
+         is the posting's own site, which the catalogue never vetted, and without it a
+         submitted vacancy buys a followed link from every job page. Change one, change
+         both. -->
+    {#if cta.autoApply?.primary}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
+        href={job.url}
+        class="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground lg:hidden"
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        onclick={onApplyClick}
+      >
+        <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
+        {cta.external.label}
+      </a>
+    {/if}
+  </div>
+{/snippet}
+
+<!-- The two call-to-action buttons, auto-apply first: the page's answer to "what do I do
+     with this posting". They ride the title's own row rather than the tab row below it,
+     because the tab row's other half is the content TabStrip and the strip is the half
+     that cannot shrink — every control added here used to come straight out of the tab
+     labels, which had been squeezed to a scrolling sliver by the time there were six.
+     `hidden lg:flex`: below lg the sticky bottom bar carries the apply CTA instead, and
+     auto-apply has no button there at all. -->
+{#snippet ctaGroup()}
+  <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
+    {@render autoApplyCta('md', 'shrink-0')}
+    {@render applyCta('md', 'shrink-0', cta.external)}
   </div>
 {/snippet}
 
@@ -371,6 +574,30 @@
        (internal/enrich), so the body is the only part of this snippet that takes
        the posting's language. -->
   <JobDescription html={job.description} lang={contentLang} />
+
+  {#if requirements.length}
+    <!-- What the posting asks for, lifted from the posting itself. It sits here and
+         not in the sidebar because the entries are sentences (~70 chars on average,
+         ~9 of them): in the 20rem rail they wrap to roughly fifteen lines and the
+         sticky card outgrows the page. Unlike the Summary above, the text is the
+         employer's own, so it takes `contentLang` like the description body. -->
+    <section class="flex flex-col gap-3 border-t border-border pt-4">
+      <h2 class="text-base font-semibold">What they ask for</h2>
+      {#each requirements as group (group.priority)}
+        <div class="flex flex-col gap-1.5">
+          <h3 class="text-sm font-medium text-muted-foreground">{group.label}</h3>
+          <!-- Keyed by index, not by text: two entries of a posting can read the
+               same, and a duplicate key silently breaks the whole block. The list
+               never reorders, so the index is stable. -->
+          <ul class="flex list-disc flex-col gap-1 pl-5 text-sm leading-relaxed">
+            {#each group.items as requirement, i (i)}
+              <li lang={contentLang}>{requirement.text}</li>
+            {/each}
+          </ul>
+        </div>
+      {/each}
+    </section>
+  {/if}
 
   {#if job.skills?.length}
     <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw
@@ -442,7 +669,7 @@
            the title — it is a disclosure with a criteria list inside, not a chip, and it
            supersedes this badge rather than joining it. -->
       {#if !supersedesReality(job.ghost)}
-        <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
+        <RealityBadge reality={job.reality} detailed />
       {/if}
 
       <!-- Freshness rides the same provenance line: like the backer and the reality
@@ -459,6 +686,10 @@
         </span>
       {/each}
     </div>
+
+    <!-- `ml-auto` rather than a grid column: the badges above are a variable-width group,
+         so the dates take whatever is left of the line and sit against its right edge. -->
+    {@render postingMeta('ml-auto hidden shrink-0 lg:flex')}
   </div>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
@@ -473,6 +704,18 @@
       {/if}
     </div>
 
+    <!-- The CTAs take a row of their own under the title rather than riding its right
+         edge: the title is the longest string on the page and the buttons are the widest
+         fixed thing beside it, so sharing a line meant a two-word title left them adrift in
+         the middle of the page and a long one pushed them down anyway. Right-aligned, so
+         they land above the quiet strip's own right edge on the tab row below. -->
+    {@render ctaGroup()}
+
+    <!-- Below lg the provenance line is a single non-wrapping row already truncating the
+         company name, so the dates read here instead — a caption under the title rather
+         than right-aligned, which on one phone-width column would only look adrift. -->
+    {@render postingMeta('flex lg:hidden')}
+
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
          would put Save a full screen of match card and metadata away from the job it
@@ -481,7 +724,13 @@
          between the employer and the role. Right-aligned like the lg copy beside the
          tabs, so the strip reads the same on both; `-mr-2` cancels the last button's
          own padding, lining its right edge up with the column's. -->
-    {@render actionStrip('-mr-2 flex w-full justify-end border-b border-border pb-2 lg:hidden')}
+    <!-- `flex-wrap` only on this copy: the phone's strip carries a fifth item the tab row's
+         does not (the link out), and five labels do not fit one phone-width line — without
+         it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
+         a line with the TabStrip and must not wrap. -->
+    {@render actionStrip(
+      '-mr-2 flex w-full flex-wrap justify-end border-b border-border pb-2 lg:hidden',
+    )}
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
          once for the whole page: a gauge and the hedged wording here, the criteria and
@@ -549,34 +798,26 @@
         </dl>
       {/if}
 
-      <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+      <!-- Where the posting came from. One row since the engagement counters left it for
+           the provenance line up beside the title; the `flex-col` wrapper that held the two
+           apart went with them. -->
+      <div
+        class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-border pt-4 text-xs text-muted-foreground first:border-t-0 first:pt-0"
+      >
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-          <a href={filterHref('source', job.source)} class="inline-flex">
-            <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
-              {job.source}
-            </Badge>
-          </a>
-          {#if job.source === 'adzuna'}
-            <!-- Required by Adzuna's API terms, not a courtesy credit — see the component. It
-                 sits in the provenance row beside the source chip, which is where a reader
-                 already looks to find out where a posting came from. -->
-            <AdzunaAttribution jobUrl={job.url} />
-          {/if}
-          {#if job.manually_added}
-            <Badge variant="secondary">Manually added</Badge>
-          {/if}
-          {#if posted}<span>Posted {posted}</span>{/if}
-        </div>
-        {#if views > 0 || applies > 0}
-          <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">
-            {#if views > 0}
-              <span class="inline-flex items-center gap-1"><Eye class="size-3.5 shrink-0" />{views} {views === 1 ? 'view' : 'views'}</span>
-            {/if}
-            {#if applies > 0}
-              <span class="inline-flex items-center gap-1"><Check class="size-3.5 shrink-0" />{applies} applied</span>
-            {/if}
-          </div>
+        <a href={filterHref('source', job.source)} class="inline-flex">
+          <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
+            {job.source}
+          </Badge>
+        </a>
+        {#if job.source === 'adzuna'}
+          <!-- Required by Adzuna's API terms, not a courtesy credit — see the component. It
+               sits in the provenance row beside the source chip, which is where a reader
+               already looks to find out where a posting came from. -->
+          <AdzunaAttribution jobUrl={job.url} />
+        {/if}
+        {#if job.manually_added}
+          <Badge variant="secondary">Manually added</Badge>
         {/if}
       </div>
 
@@ -649,10 +890,14 @@
           <!-- Hidden below lg for the same reason as the action strip's own copy: on
                mobile the CTA is the sticky bottom bar, and two pinned buttons would
                fight. Save comes along, since this bar is what a reader has in front of
-               them for most of a description several screens long. -->
+               them for most of a description several screens long.
+               It carries the SAME pair as the header, plan and all — this bar is the header
+               for most of the read, and a brand-filled `Apply` here for the link the title
+               row calls a quiet `Show origin` would be one link at two ranks on one page. -->
           <div class="hidden shrink-0 items-center gap-2 lg:flex">
             {@render saveButton('size-9 rounded-md px-0', true)}
-            {@render applyCta('md', 'shrink-0')}
+            {@render autoApplyCta('md', 'shrink-0')}
+            {@render applyCta('md', 'shrink-0', cta.external)}
           </div>
         </div>
       </div>
@@ -687,12 +932,14 @@
       {@render actionStrip('hidden border-b border-border pb-2 lg:flex')}
     </div>
 
-    <!-- The three states of one exchange, below the action strip because that strip is
-         what raised the question: Apply was clicked there, so the answer belongs under
-         the hand that asked rather than back up beside the title. They share one slot so
-         that answering "Yes, save" replaces the question in place — split across the
-         page, the confirmation would read as a second, unrelated banner appearing
-         somewhere the reader was not looking. -->
+    <!-- The three states of one exchange. They sit at the top of the content column rather
+         than beside the CTA that raised them: the question follows a click that opened a
+         NEW TAB, so the reader meets it on returning to this one, and the first thing under
+         the tabs is what a returning eye lands on. It is also the widest slot on the page,
+         which a two-button question needs and the title row — already carrying the CTAs —
+         does not have. They share one slot so that answering "Yes, save" replaces the
+         question in place; split across the page, the confirmation would read as a second,
+         unrelated banner appearing somewhere the reader was not looking. -->
     {#if showApplyPrompt && !applied}
       <div
         class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
@@ -719,6 +966,20 @@
           View on your board →
         </a>
       </div>
+    {/if}
+
+    {#if autoApplyState.kind === 'queued'}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
+      >
+        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
+          a notification to review it.
+        </span>
+      </div>
+    {/if}
+    {#if autoApplyError}
+      <p class="text-sm text-destructive">{autoApplyError}</p>
     {/if}
 
     {#if showSignInPrompt}
@@ -769,11 +1030,24 @@
        frosted-glass panel (semi-transparent bg + backdrop-blur), full-bleed via
        negative margins that cancel the page gutter. pointer-events-none lets the
        description scroll under the glass, with pointer-events-auto re-enabling the
-       button. Desktop uses the inline header button instead (hidden at lg). -->
+       button. Desktop uses the inline header button instead (hidden at lg).
+       It carries whichever of the two controls the plan made primary — auto-apply where
+       that can be started, the apply link everywhere else — because this bar IS the phone's
+       call to action, and naming exactly one is the plan's whole job. The other control
+       does not vanish: the quiet strip under the title picks the apply link up whenever
+       auto-apply has taken this bar. -->
   <div
     class="pointer-events-none sticky bottom-0 z-30 -mx-5 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
   >
-    {@render applyCta('lg', 'pointer-events-auto w-full rounded-xl font-semibold shadow-lg')}
+    {#if cta.autoApply?.primary}
+      {@render autoApplyCta('lg', 'pointer-events-auto w-full rounded-xl font-semibold shadow-lg')}
+    {:else}
+      {@render applyCta(
+        'lg',
+        'pointer-events-auto w-full rounded-xl font-semibold shadow-lg',
+        cta.external,
+      )}
+    {/if}
   </div>
 </article>
 

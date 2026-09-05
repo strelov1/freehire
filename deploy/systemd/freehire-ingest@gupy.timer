@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest gupy
 [Timer]
-OnCalendar=*-*-* 01/3:08:00
+OnCalendar=*-*-* 00/3:51:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

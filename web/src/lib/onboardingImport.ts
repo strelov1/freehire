@@ -1,3 +1,4 @@
+import { capSpecializations } from './profileLimits';
 import type { ResumeProfile } from './types';
 
 /** What the onboarding wizard is holding for the confirm step, before anything is saved. */
@@ -12,6 +13,10 @@ export interface StagedFacets {
  *  "filled in what we found" and "couldn't read details". */
 export interface MergedFacets extends StagedFacets {
   resolved: boolean;
+  /** How many resolved specializations the cap left out, so the wizard can say so. An
+   *  import that resolves more roles than a profile may hold is not an error — but a value
+   *  that vanishes without a word reads as one. */
+  specializationsDropped: number;
 }
 
 /** Folds what a CV or a LinkedIn profile resolved into what the wizard already holds.
@@ -28,11 +33,16 @@ export interface MergedFacets extends StagedFacets {
  */
 export function mergeFacets(staged: StagedFacets, incoming: ResumeProfile): MergedFacets {
   const resolved = incoming.categories.length > 0 || incoming.skills.length > 0 || !!incoming.seniority;
+  // Specializations merge under the profile's cap, unlike the other two fields: the server
+  // rejects the whole save past it, so an uncapped union here turns a good import into a
+  // profile that will not save at all.
+  const specializations = capSpecializations(staged.specializations, incoming.categories);
   return {
-    specializations: union(staged.specializations, incoming.categories),
+    specializations: specializations.kept,
     seniorities: union(staged.seniorities, incoming.seniority ? [incoming.seniority] : []),
     skills: union(staged.skills, incoming.skills),
     resolved,
+    specializationsDropped: specializations.dropped,
   };
 }
 

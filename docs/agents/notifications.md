@@ -11,8 +11,44 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 | `internal/engage/emailnotify` | Email channel (SES) — implements `notify.Notifier` (the `reminder`/`nudge`-side email transports live in their own `transports.go`) | — |
 | `internal/engage/telegramnotify` | Telegram channel (Bot API, deep-link token) | — |
 | `internal/engage/pushnotify` | Mobile push channel (Expo relay) — the bare Expo transport; each of `notify`/`reminder`/`nudge` has its own thin `PushNotifier` on top, same as Telegram/email | — |
+| `internal/engage/webhooknotify` | Webhook channel (plain, unsigned HTTP POST to an account's own URL) — implements `notify.Notifier` for `notify` ONLY, see the bullet below | — |
 
 ## Always true
+
+- **Every subscription with something pending gets served in a pass — the claim is capped
+  PER SUBSCRIPTION, not globally.** `ClaimSubscriptionMatches` takes at most `SnapshotCap`
+  rows per subscription through a `LATERAL`; `ClaimBatch` is a backstop above
+  `SnapshotCap x active subscriptions`, not the working bound. Set it low and the cut
+  lands on whichever subscriptions the scan reached last, which is the failure this
+  replaced: the claim used to be one flat `ORDER BY subscription_id, matched_at LIMIT
+  batch_size`, which reads as "oldest first" and is really "lowest subscription id
+  first". Measured on prod 2026-09-04, reported as "I get no Telegram notifications":
+
+  ```
+  subscription  26 ->    1 118 pending
+  subscription  95 ->  248 147   <- saved search with an EMPTY query
+  subscription  97 ->  104 069
+  the reporter's   ->    8 324    attempts = 0
+  queue total      -> 1 141 757
+  ```
+
+  Nothing failed. `notify` ran every five minutes and logged `delivered=1 failed=0` —
+  one digest, to the same low id, pass after pass, for weeks. Every subscription above it
+  had `attempts = 0` since the day it was created: not retried, not dead-lettered, never
+  in a batch. **`failed=0` is not evidence that delivery works**; `delivered` far below
+  the number of subscriptions with pending matches is what says it does not.
+
+- **A subscription must carry a filter.** An empty saved search is legitimate — it is the
+  "show all" view, and `internal/search/savedsearch` says so. SUBSCRIBING to one asks to
+  be notified about every posting in the catalogue, which is never what anyone means, and
+  is where the 248k above came from. `subscription.Service.Create` refuses it with
+  `ErrUnfilteredSearch` (400). The guard is at subscribe time, not at save time, because
+  that is where the meaning changes.
+
+- **A non-positive per-subscription cap claims nothing and reports success.** It becomes
+  `LIMIT 0` inside the `LATERAL`: no rows, no error, the worker quietly idle. It is
+  floored at the call site for the same reason `SEARCH_DRAIN_BATCH_SIZE` is — a silent
+  no-op is worse than a crash.
 
 - **All three engines deliver in GROUPS, and a group is the unit of everything.**
   `notify` groups a subscription's matched jobs; `internal/engage/reminder` groups an
@@ -60,6 +96,19 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   three small, near-identical `PushNotifier`s (a few lines of message-rendering each) rather than
   three copies of anything structurally significant. Revisit if a fourth channel makes the
   per-engine cost look different.
+  **The fourth channel (webhook, `add-saved-search-webhooks`) answers that by landing in
+  only ONE of the three engines** — a saved search's "matched a job" alert is what a
+  candidate's own tooling wants pushed to it; a saved-job reminder or a lifecycle nudge is
+  not. So there is no `webhooknotify` transport for `reminder`/`nudge`, and neither one's
+  `cmd` main ever registers `notify.ChannelWebhook` in its `Router`. But `notify.Channels`
+  is shared vocabulary (see the bullet below), and `reminder.go`'s create-time gate reads
+  it too — so an account's `notification_settings.channels` will validate `"webhook"` as an
+  accepted value even though nothing ever delivers over it there. This is not a new failure
+  mode: it is the same "valid channel, no registered `Notifier`" soft-skip described below,
+  just permanent rather than until a credential is configured. The product UI never offers
+  `webhook` as a `notification_settings` choice (only the saved-search subscription control
+  does), so this is reachable only by a direct API call — accepted as the cost of one shared
+  vocabulary constant rather than a per-engine one.
   **Grouping made the duplication bigger, and that is the seam to watch.** `reminder` and
   `nudge` now each carry a near-identical `collect` + `deliverBatch` pair — claim, validate
   per item, group, send once, finalize every member — differing only in their ledger's

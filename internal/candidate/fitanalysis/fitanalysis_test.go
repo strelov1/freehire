@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
@@ -521,7 +522,7 @@ func TestProjectTailoring(t *testing.T) {
 	job := db.Job{Title: "Senior Backend", Company: "Acme", PublicSlug: "senior-backend-acme",
 		Description: "<p>We need <strong>Kafka</strong> in production.</p>"}
 
-	got := fitanalysis.ProjectTailoring(a, job)
+	got := fitanalysis.ProjectTailoring(a, job, nil)
 
 	if len(got.MissingHave) != 2 || got.MissingHave[0].Text != "Kafka in production" {
 		t.Errorf("MissingHave = %+v, want the two reframe-able requirements", got.MissingHave)
@@ -541,6 +542,56 @@ func TestProjectTailoring(t *testing.T) {
 	}
 	if got.Job.Slug != "senior-backend-acme" || got.Verdict != "Good Fit" || got.OverallScore != 71 {
 		t.Errorf("projection = %+v, want the vacancy and verdict carried through", got)
+	}
+}
+
+// TestProjectTailoringCarriesThePostingsOwnRequirements pins the second requirement source.
+// The split above is what an ANALYSIS decided is missing; this is what the POSTING itself
+// asks for, read out of its own markup. The agent needs both: the split tells it what to act
+// on, the list tells it what the employer actually wrote — including the requirements the
+// analysis found already covered, which are exactly the ones worth keeping prominent in a CV.
+func TestProjectTailoringCarriesThePostingsOwnRequirements(t *testing.T) {
+	a := &matchanalysis.Analysis{Verdict: "Good Fit"}
+	job := db.Job{Title: "Senior Backend", Description: "<p>irrelevant</p>"}
+	reqs := []enrich.Requirement{
+		{Text: "5 years of Go", Priority: "required"},
+		{Text: "Kafka", Priority: "preferred"},
+	}
+
+	got := fitanalysis.ProjectTailoring(a, job, reqs)
+
+	if len(got.Job.Requirements) != 2 {
+		t.Fatalf("Job.Requirements = %+v, want the posting's own two", got.Job.Requirements)
+	}
+	if got.Job.Requirements[0].Text != "5 years of Go" || got.Job.Requirements[0].Priority != "required" {
+		t.Errorf("Job.Requirements[0] = %+v, want the text and priority carried through", got.Job.Requirements[0])
+	}
+}
+
+// A posting that states no requirements — or one whose caller could not read them — must
+// reach the model with the key ABSENT, not as an empty list dressed up as an answer: the agent
+// reads `"requirements": []` as "this employer asked for nothing", which no posting means.
+// Asserted through the JSON, because `omitempty` is the whole mechanism and a struct
+// comparison would pass with the tag deleted.
+func TestProjectTailoringOmitsRequirementsItDoesNotHave(t *testing.T) {
+	got := fitanalysis.ProjectTailoring(&matchanalysis.Analysis{}, db.Job{}, nil)
+
+	encoded, err := json.Marshal(got.Job)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(encoded), "requirements") {
+		t.Errorf("job encoded as %s, want no requirements key when the posting states none", encoded)
+	}
+
+	withOne := fitanalysis.ProjectTailoring(&matchanalysis.Analysis{}, db.Job{},
+		[]enrich.Requirement{{Text: "Go", Priority: "required"}})
+	encoded, err = json.Marshal(withOne.Job)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"requirements"`) {
+		t.Errorf("job encoded as %s, want the requirements key when the posting states some", encoded)
 	}
 }
 

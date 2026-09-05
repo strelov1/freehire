@@ -4,7 +4,6 @@
   import { experienceLabel, freshnessLabel } from '$lib/filterControls';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
-  import AiFilterButton from './AiFilterButton.svelte';
 
   // The job filters sidebar: a summary of the *applied* filters as chips grouped by
   // facet, over the reusable FilterSummaryShell. Removing a chip edits the live store
@@ -99,9 +98,6 @@
 </script>
 
 <FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen} {description}>
-  {#snippet beforeButton()}
-    <AiFilterButton {store} />
-  {/snippet}
   {#snippet afterButton()}
     {#if canSave}
       <SaveSearchAlert query={current} variant="full" alerts="manage" />

@@ -44,8 +44,8 @@ func draftable(f MergedField) bool {
 //
 // drafter may be nil (an unconfigured deployment, or a caller that has not wired one in
 // yet) — the deterministic Plan is returned unchanged, the same outcome as today.
-func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[string]string, drafter Drafter, grounding GroundingContext) (Plan, error) {
-	plan := Resolve(fields, answers)
+func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[string]string, drafter Drafter, grounding GroundingContext, hasApprovedCV bool) (Plan, error) {
+	plan := Resolve(fields, answers, hasApprovedCV)
 	if drafter == nil {
 		return plan, nil
 	}

@@ -14,15 +14,20 @@ import (
 
 func TestClassifiersRecogniseTheirOwnSQLSTATEAndNothingElse(t *testing.T) {
 	tests := []struct {
-		name                      string
-		err                       error
-		unique, fk, serial, corpt bool
+		name                            string
+		err                             error
+		unique, fk, serial, dead, corpt bool
 	}{
 		{name: "nil"},
 		{name: "plain error", err: errors.New("boom")},
 		{name: "unique violation", err: &pgconn.PgError{Code: "23505"}, unique: true},
 		{name: "foreign key violation", err: &pgconn.PgError{Code: "23503"}, fk: true},
 		{name: "serialization failure", err: &pgconn.PgError{Code: "40001"}, serial: true},
+		// 40P01 is a sibling of 40001, not the same code: both say "nothing was wrong
+		// with the work, run it again", and a classifier that conflated them would let a
+		// caller retry one while treating the other as fatal.
+		{name: "deadlock detected", err: &pgconn.PgError{Code: "40P01"}, dead: true},
+		{name: "wrapped deadlock", err: fmt.Errorf("apply batch: %w", &pgconn.PgError{Code: "40P01"}), dead: true},
 		{name: "data corrupted", err: &pgconn.PgError{Code: "XX001"}, corpt: true},
 		// Wrapping is the case that matters in practice: a repository returns
 		// fmt.Errorf("read batch: %w", err) and the caller still has to classify it.
@@ -40,6 +45,9 @@ func TestClassifiersRecogniseTheirOwnSQLSTATEAndNothingElse(t *testing.T) {
 			}
 			if got := IsSerializationFailure(tt.err); got != tt.serial {
 				t.Errorf("IsSerializationFailure = %v, want %v", got, tt.serial)
+			}
+			if got := IsDeadlock(tt.err); got != tt.dead {
+				t.Errorf("IsDeadlock = %v, want %v", got, tt.dead)
 			}
 			if got := IsDataCorrupted(tt.err); got != tt.corpt {
 				t.Errorf("IsDataCorrupted = %v, want %v", got, tt.corpt)

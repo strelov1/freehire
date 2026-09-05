@@ -172,16 +172,22 @@ type AssistantSession struct {
 }
 
 type AutoApplyQueue struct {
-	ID        int64              `json:"id"`
-	UserID    int64              `json:"user_id"`
-	JobID     int64              `json:"job_id"`
-	Attempts  int32              `json:"attempts"`
-	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
-	FailedAt  pgtype.Timestamptz `json:"failed_at"`
-	BlockedAt pgtype.Timestamptz `json:"blocked_at"`
-	LastError string             `json:"last_error"`
-	Unmapped  []byte             `json:"unmapped"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID              int64              `json:"id"`
+	UserID          int64              `json:"user_id"`
+	JobID           int64              `json:"job_id"`
+	Attempts        int32              `json:"attempts"`
+	ClaimedAt       pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt        pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt       pgtype.Timestamptz `json:"blocked_at"`
+	LastError       string             `json:"last_error"`
+	Unmapped        []byte             `json:"unmapped"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
+	ReviewDecision  pgtype.Text        `json:"review_decision"`
+	ResolvedPreview []byte             `json:"resolved_preview"`
+	PreviewAttempts int32              `json:"preview_attempts"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
 }
 
 type BillingEvent struct {
@@ -242,6 +248,17 @@ type BroadcastEmail struct {
 	Campaign string             `json:"campaign"`
 	SentAt   pgtype.Timestamptz `json:"sent_at"`
 	Error    string             `json:"error"`
+}
+
+type CandidateSurvey struct {
+	UserID                int64              `json:"user_id"`
+	JobSearchStage        pgtype.Text        `json:"job_search_stage"`
+	BiggestChallenge      pgtype.Text        `json:"biggest_challenge"`
+	BiggestChallengeNote  pgtype.Text        `json:"biggest_challenge_note"`
+	CurrentIncomeAmount   pgtype.Int4        `json:"current_income_amount"`
+	CurrentIncomeCurrency pgtype.Text        `json:"current_income_currency"`
+	CurrentIncomePeriod   pgtype.Text        `json:"current_income_period"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CommunityPersona struct {
@@ -481,20 +498,24 @@ type ExperienceAtom struct {
 }
 
 type ExperienceEmployment struct {
-	ID          uuid.UUID          `json:"id"`
-	UserID      int64              `json:"user_id"`
-	Kind        string             `json:"kind"`
-	Company     string             `json:"company"`
-	Role        string             `json:"role"`
-	Location    string             `json:"location"`
-	PeriodStart string             `json:"period_start"`
-	PeriodEnd   string             `json:"period_end"`
-	IsCurrent   bool               `json:"is_current"`
-	Summary     string             `json:"summary"`
-	Stack       []string           `json:"stack"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Link        string             `json:"link"`
+	ID               uuid.UUID          `json:"id"`
+	UserID           int64              `json:"user_id"`
+	Kind             string             `json:"kind"`
+	Company          string             `json:"company"`
+	Role             string             `json:"role"`
+	Location         string             `json:"location"`
+	PeriodStart      string             `json:"period_start"`
+	PeriodEnd        string             `json:"period_end"`
+	IsCurrent        bool               `json:"is_current"`
+	Summary          string             `json:"summary"`
+	Stack            []string           `json:"stack"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	Link             string             `json:"link"`
+	PeriodStartYear  pgtype.Int4        `json:"period_start_year"`
+	PeriodStartMonth pgtype.Int2        `json:"period_start_month"`
+	PeriodEndYear    pgtype.Int4        `json:"period_end_year"`
+	PeriodEndMonth   pgtype.Int2        `json:"period_end_month"`
 }
 
 type GhostReport struct {
@@ -612,6 +633,25 @@ type InsightsVelocityDaily struct {
 	Removed    int32       `json:"removed"`
 }
 
+// One invite code per account, minted from crypto/rand the first time the account asks for its link, and never rotated. Uniqueness is the constraint here rather than a read-then-write, because a read-then-write is a race.
+type InviteCode struct {
+	UserID    int64              `json:"user_id"`
+	Code      string             `json:"code"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Who invited whom, and whether it earned anything. Written pending at the invitee's registration; moved to granted by cmd/billing-sync only once one of that invitee's invoices collected a non-zero amount — an active subscription that collected nothing never grants. referee_id is UNIQUE, so an account is worth one reward for life.
+type InviteReward struct {
+	ID          int64              `json:"id"`
+	ReferrerID  int64              `json:"referrer_id"`
+	RefereeID   int64              `json:"referee_id"`
+	Status      string             `json:"status"`
+	AmountCents int64              `json:"amount_cents"`
+	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
+	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Job struct {
 	ID                    int64              `json:"id"`
 	Source                string             `json:"source"`
@@ -678,6 +718,7 @@ type Job struct {
 	DuplicateOfRole       pgtype.Int8 `json:"duplicate_of_role"`
 	DuplicateOfFuzzy      pgtype.Int8 `json:"duplicate_of_fuzzy"`
 	RequiresClearance     pgtype.Bool `json:"requires_clearance"`
+	RequirementsDerived   []byte      `json:"requirements_derived"`
 }
 
 type JobDailyStat struct {
@@ -691,6 +732,24 @@ type JobDailyView struct {
 	Day     pgtype.Date `json:"day"`
 	JobID   int64       `json:"job_id"`
 	Uniques int32       `json:"uniques"`
+	// Unique daily visitors counted from PAGE opens only, which are bot-filtered. The `uniques` column beside it fuses page opens with API reads, and API reads carry no bot filtering — so page_uniques is the only one of the two that describes people, and the only one safe to rank a public post on. Zero for every row written before migration 0138; deliberately not backfilled.
+	PageUniques int32 `json:"page_uniques"`
+}
+
+type JobList struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	PublicSlug  pgtype.Text        `json:"public_slug"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type JobListItem struct {
+	ListID  int64              `json:"list_id"`
+	JobID   int64              `json:"job_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
 }
 
 type JobReminder struct {
@@ -833,6 +892,25 @@ type ProcessedViewLog struct {
 	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
 }
 
+// Operator-created discount codes. Written by INSERT only — no code path creates a row, and a test fails the build if a redeemable code appears in the repository. Seats are claimed by the same UPDATE that tests them, so two accounts cannot both take the last one. Setting active = false stops new redemptions without a deploy.
+type PromoCode struct {
+	Code       string             `json:"code"`
+	PercentOff int16              `json:"percent_off"`
+	MaxUses    pgtype.Int4        `json:"max_uses"`
+	Uses       int32              `json:"uses"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	Active     bool               `json:"active"`
+	Note       string             `json:"note"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// One row per account, ever: user_id is the primary key, so an account redeems at most one promo code in its lifetime. This is what stops two percentage discounts stacking on a subscription that only admits one coupon per checkout session.
+type PromoRedemption struct {
+	UserID     int64              `json:"user_id"`
+	Code       string             `json:"code"`
+	RedeemedAt pgtype.Timestamptz `json:"redeemed_at"`
+}
+
 type PrunedJob struct {
 	ID          int64              `json:"id"`
 	Source      string             `json:"source"`
@@ -897,8 +975,6 @@ type SavedSearch struct {
 	Query              string             `json:"query"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	PublicSlug         pgtype.Text        `json:"public_slug"`
-	AuthorLabel        pgtype.Text        `json:"author_label"`
 	DerivedFromProfile bool               `json:"derived_from_profile"`
 }
 
@@ -952,6 +1028,15 @@ type SemanticOutbox struct {
 	LastError   string             `json:"last_error"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	JobPostedAt pgtype.Timestamptz `json:"job_posted_at"`
+}
+
+// Ledger of published daily social digests. Unique on (day, channel, job_id): the publish-once check reads the (day, channel) prefix, the quarantine scans a day RANGE across all channels — [digest day - 7, digest day), the upper bound exclusive so that a digest cannot quarantine itself. Written only after a channel publishes successfully; a dry run never writes here.
+type SocialDigestPost struct {
+	Day         pgtype.Date        `json:"day"`
+	Channel     string             `json:"channel"`
+	JobID       int64              `json:"job_id"`
+	Slot        int32              `json:"slot"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
 type Subscription struct {
@@ -1080,10 +1165,14 @@ type User struct {
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Language                   string             `json:"language"`
 	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
-	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 	Username                   pgtype.Text        `json:"username"`
 	UsernameUpdatedAt          pgtype.Timestamptz `json:"username_updated_at"`
 	StripeCustomerID           pgtype.Text        `json:"stripe_customer_id"`
+	OnboardingCompletedAt      pgtype.Timestamptz `json:"onboarding_completed_at"`
+	ProUntilStripe             pgtype.Timestamptz `json:"pro_until_stripe"`
+	ProUntilRevenuecat         pgtype.Timestamptz `json:"pro_until_revenuecat"`
+	ProUntilGranted            pgtype.Timestamptz `json:"pro_until_granted"`
+	ProUntil                   pgtype.Timestamptz `json:"pro_until"`
 }
 
 type UserEmailCode struct {
@@ -1154,4 +1243,14 @@ type UserPushToken struct {
 	Platform   string             `json:"platform"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+}
+
+type WebhookConfig struct {
+	UserID        int64              `json:"user_id"`
+	URL           string             `json:"url"`
+	Enabled       bool               `json:"enabled"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	LastSuccessAt pgtype.Timestamptz `json:"last_success_at"`
+	DisabledAt    pgtype.Timestamptz `json:"disabled_at"`
 }

@@ -52,10 +52,73 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
 
+  // Prefilled from a code that arrived in a link. Nothing is spent by filling the field —
+  // the code is only redeemed when the buy button is pressed, because a redemption spends
+  // the account's one lifetime code and must not happen to somebody who merely looked.
+  let code = $state(data.promo ?? '');
+  let checking = $state(false);
+  let checked = $state<number | null>(null);
+  let codeError = $state<string | null>(null);
+
+  // What the code is worth, checked without spending it. Deliberately a button rather than
+  // something that fires as you type: the route is rate limited server-side, and firing on
+  // every keystroke would spend a real caller's budget rendering "not available" over and
+  // over while they are still typing.
+  async function checkCode() {
+    const entered = code.trim();
+    if (!entered || checking) return;
+    checking = true;
+    checked = null;
+    codeError = null;
+    try {
+      const { percent_off } = await api.promoPreview(entered);
+      checked = percent_off;
+    } catch (e) {
+      // Every refusal about the code itself reads the same on the server, so there is one
+      // message here too. 409 is the one exception: it is about this account, not the code.
+      codeError =
+        e instanceof Error && e.message.includes('already')
+          ? 'You have already used a promo code.'
+          : 'That code is not available.';
+    } finally {
+      checking = false;
+    }
+  }
+
   async function buy() {
     if (!chosen || busy) return;
     busy = true;
     error = null;
+
+    // Redeem first, as its own POST. The checkout call is a GET and must stay read-only —
+    // `SameSite=Lax` sends the session cookie on a cross-site navigation, so a GET that
+    // spent a code would let any page burn a visitor's one redemption.
+    //
+    // A refusal here stops the purchase and SAYS so. Charging somebody full price after
+    // they entered an offer, without telling them, is the version of this they would
+    // rightly call a bug. Redemption is durable, so if the checkout below then fails, the
+    // discount still applies on their next attempt.
+    const entered = code.trim();
+    if (entered) {
+      try {
+        checked = (await api.promoRedeem(entered)).percent_off;
+        codeError = null;
+      } catch (e) {
+        // "Already redeemed" does NOT stop the purchase. The discount this account holds is
+        // durable and the checkout below picks it up whatever happens here — refusing to
+        // sell to somebody because they entered a code they had already used would turn a
+        // note into a dead end.
+        const alreadyHeld = e instanceof Error && e.message.includes('already');
+        codeError = alreadyHeld
+          ? 'You have already used a promo code — your existing discount still applies.'
+          : 'That code is not available. Clear it to continue at the usual price.';
+        if (!alreadyHeld) {
+          busy = false;
+          return;
+        }
+      }
+    }
+
     try {
       const { url } = await api.billingCheckout(chosen.id);
       window.location.href = url;
@@ -160,9 +223,44 @@
 
       {#if chosen}
         {#if isAuthenticated()}
+          <div class="mt-auto flex flex-col gap-2">
+            <label class="text-sm text-muted-foreground" for="promo-code">
+              Have a promo code?
+            </label>
+            <div class="flex gap-2">
+              <!-- The placeholder is deliberately not shaped like a code. A public
+                   repository showing an example that looks redeemable is showing a code,
+                   as far as anyone reading it is concerned. -->
+              <input
+                id="promo-code"
+                type="text"
+                bind:value={code}
+                placeholder="Enter your code"
+                autocomplete="off"
+                spellcheck="false"
+                class="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase"
+              />
+              <button
+                type="button"
+                class="shrink-0 rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
+                disabled={checking || !code.trim()}
+                onclick={checkCode}
+              >
+                {checking ? 'Checking…' : 'Check'}
+              </button>
+            </div>
+            {#if checked !== null}
+              <p class="text-sm text-muted-foreground">
+                {checked}% off your first month. It is applied when you continue.
+              </p>
+            {/if}
+            {#if codeError}
+              <p class="text-sm text-destructive">{codeError}</p>
+            {/if}
+          </div>
           <button
             type="button"
-            class="mt-auto rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            class="rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
             disabled={busy}
             onclick={buy}
           >

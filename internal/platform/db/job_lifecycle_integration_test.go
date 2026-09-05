@@ -15,6 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
 func pgTimestamptz(t time.Time) pgtype.Timestamptz {
@@ -185,6 +187,175 @@ func TestCloseUnseenJobsScopedToCrawledCompanies(t *testing.T) {
 	}
 	if none != 0 {
 		t.Fatalf("empty-scope sweep closed %d jobs, want 0", none)
+	}
+}
+
+// TestCloseUnseenJobsForBoardClosesOnlyThatBoard pins the board-scoped sweep contract
+// (freehire#2328): it closes a board's own stale rows and leaves a recently-seen row of the
+// same board alone.
+func TestCloseUnseenJobsForBoardClosesOnlyThatBoard(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	stale, err := ingestUpsert(ctx, q, ingestParams(externalid.Namespace("workday_it", "1"), "Stale"))
+	if err != nil {
+		t.Fatalf("upsert stale: %v", err)
+	}
+	fresh, err := ingestUpsert(ctx, q, ingestParams(externalid.Namespace("workday_it", "2"), "Fresh"))
+	if err != nil {
+		t.Fatalf("upsert fresh: %v", err)
+	}
+	ageJob(t, pool, stale.ID, 49*time.Hour)
+	ageJob(t, pool, fresh.ID, 6*time.Hour)
+
+	closed, err := q.CloseUnseenJobsForBoard(ctx, CloseUnseenJobsForBoardParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		BoardPattern: externalid.BoardPattern("workday_it"),
+	})
+	if err != nil {
+		t.Fatalf("board sweep: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("board sweep closed %d jobs, want 1", closed)
+	}
+
+	staleAfter, err := q.GetJob(ctx, stale.ID)
+	if err != nil {
+		t.Fatalf("get stale: %v", err)
+	}
+	if !staleAfter.ClosedAt.Valid {
+		t.Fatal("stale job on the swept board must be closed")
+	}
+	freshAfter, err := q.GetJob(ctx, fresh.ID)
+	if err != nil {
+		t.Fatalf("get fresh: %v", err)
+	}
+	if freshAfter.ClosedAt.Valid {
+		t.Fatal("recently-seen job on the swept board must stay open")
+	}
+}
+
+// TestCloseUnseenJobsForBoardDoesNotCrossBoards pins the isolation the board scope exists
+// for: a sibling board of the same provider is untouched, and — the sharp edge — a board
+// whose id is a PREFIX of the swept board's id is not caught by the LIKE pattern. Only the
+// ":" namespace terminator in externalid.BoardPattern prevents "it" from matching "it2"'s rows.
+func TestCloseUnseenJobsForBoardDoesNotCrossBoards(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	swept, err := ingestUpsert(ctx, q, ingestParams(externalid.Namespace("it", "1"), "Swept board"))
+	if err != nil {
+		t.Fatalf("upsert swept: %v", err)
+	}
+	sibling, err := ingestUpsert(ctx, q, ingestParams(externalid.Namespace("assist-rx", "1"), "Sibling board"))
+	if err != nil {
+		t.Fatalf("upsert sibling: %v", err)
+	}
+	prefixSharing, err := ingestUpsert(ctx, q, ingestParams(externalid.Namespace("it2", "1"), "Prefix-sharing board"))
+	if err != nil {
+		t.Fatalf("upsert prefix-sharing: %v", err)
+	}
+	ageJob(t, pool, swept.ID, 49*time.Hour)
+	ageJob(t, pool, sibling.ID, 49*time.Hour)
+	ageJob(t, pool, prefixSharing.ID, 49*time.Hour)
+
+	closed, err := q.CloseUnseenJobsForBoard(ctx, CloseUnseenJobsForBoardParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		BoardPattern: externalid.BoardPattern("it"),
+	})
+	if err != nil {
+		t.Fatalf("board sweep: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("board sweep closed %d jobs, want 1 (only board \"it\")", closed)
+	}
+
+	sweptAfter, err := q.GetJob(ctx, swept.ID)
+	if err != nil {
+		t.Fatalf("get swept: %v", err)
+	}
+	if !sweptAfter.ClosedAt.Valid {
+		t.Fatal("stale job on the swept board must be closed")
+	}
+	siblingAfter, err := q.GetJob(ctx, sibling.ID)
+	if err != nil {
+		t.Fatalf("get sibling: %v", err)
+	}
+	if siblingAfter.ClosedAt.Valid {
+		t.Fatal("a sibling board of the same provider must stay open")
+	}
+	prefixAfter, err := q.GetJob(ctx, prefixSharing.ID)
+	if err != nil {
+		t.Fatalf("get prefix-sharing: %v", err)
+	}
+	if prefixAfter.ClosedAt.Valid {
+		t.Fatal("a board whose id is a prefix of the swept board's id must stay open")
+	}
+}
+
+// TestCloseUnseenJobsForBoardClosesACompanyTheCompanyScopeCannotReach pins the exact leak
+// freehire#2328 reports and CloseUnseenJobsForBoard exists to close: two companies share one
+// board, and this "run" wrote nothing for the second (its last posting simply stopped being
+// listed) — so CloseUnseenJobs' company scope, which the caller would derive from what this
+// run actually crawled, would never even consider it. The board-scoped close carries no
+// company_slug predicate at all, so it reaches company B's row anyway, through the board it
+// shares with A.
+func TestCloseUnseenJobsForBoardClosesACompanyTheCompanyScopeCannotReach(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	aParams := ingestParams(externalid.Namespace("workday_acme", "1"), "A's posting")
+	aParams.Company, aParams.CompanySlug = "Company A", "company-a"
+	a, err := ingestUpsert(ctx, q, aParams)
+	if err != nil {
+		t.Fatalf("upsert company A: %v", err)
+	}
+
+	bParams := ingestParams(externalid.Namespace("workday_acme", "2"), "B's posting")
+	bParams.Company, bParams.CompanySlug = "Company B", "company-b"
+	b, err := ingestUpsert(ctx, q, bParams)
+	if err != nil {
+		t.Fatalf("upsert company B: %v", err)
+	}
+
+	// This run crawled the board and re-saw A (fresh) but not B — exactly the shape
+	// CloseUnseenJobs' crawled-company scope would leak forever.
+	ageJob(t, pool, a.ID, 1*time.Hour)
+	ageJob(t, pool, b.ID, 49*time.Hour)
+
+	closed, err := q.CloseUnseenJobsForBoard(ctx, CloseUnseenJobsForBoardParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		BoardPattern: externalid.BoardPattern("workday_acme"),
+	})
+	if err != nil {
+		t.Fatalf("board sweep: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("board sweep closed %d jobs, want 1 (only B, the leak)", closed)
+	}
+
+	bAfter, err := q.GetJob(ctx, b.ID)
+	if err != nil {
+		t.Fatalf("get B: %v", err)
+	}
+	if !bAfter.ClosedAt.Valid {
+		t.Fatal("company B's stale job must be closed — this is the leak the board scope exists to close")
+	}
+	aAfter, err := q.GetJob(ctx, a.ID)
+	if err != nil {
+		t.Fatalf("get A: %v", err)
+	}
+	if aAfter.ClosedAt.Valid {
+		t.Fatal("company A's freshly-seen job must stay open")
 	}
 }
 

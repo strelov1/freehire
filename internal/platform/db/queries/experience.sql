@@ -1,15 +1,17 @@
 -- name: ListExperienceEmployments :many
 -- The caller's places of work, current roles first and most recent within that. Owner-scoped
--- by construction — another user's employments can never appear.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
+-- by construction — another user's employments can never appear. Ordered natively on the
+-- structured columns (see migration 0135) rather than the lexicographic free-text column
+-- 0047 originally indexed — period_sort.go's Go-side re-sort no longer exists.
+SELECT id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE user_id = $1
-ORDER BY is_current DESC, period_start DESC, id;
+ORDER BY is_current DESC, period_start_year DESC NULLS LAST, period_start_month DESC NULLS LAST, id;
 
 -- name: GetExperienceEmployment :one
 -- One employment owned by the caller. A foreign or missing id returns no row, which the
 -- handler maps to 404 — so a probe cannot tell the two apart.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
+SELECT id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE id = $1 AND user_id = $2;
 
@@ -18,49 +20,85 @@ WHERE id = $1 AND user_id = $2;
 -- insensitively because a CV, a chat and a form will each capitalise them differently.
 -- There is no unique constraint behind this on purpose (a second stint at the same employer
 -- in the same role is a real career shape), so the oldest match wins and stays stable.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
+SELECT id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE user_id = @user_id AND lower(company) = lower(@company) AND lower(role) = lower(@role)
 ORDER BY created_at, id
 LIMIT 1;
 
 -- name: CreateExperienceEmployment :one
-INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, link)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link;
+INSERT INTO experience_employments (user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, link)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link;
 
 -- name: UpdateExperienceEmployment :one
 -- A full owner-scoped replacement, used by the profile UI where the user is editing the
 -- fields directly and means what they typed — including blanking one.
 UPDATE experience_employments
-SET kind = $3, company = $4, role = $5, location = $6, period_start = $7, period_end = $8,
-    is_current = $9, summary = $10, stack = $11, link = $12, updated_at = now()
+SET kind = $3, company = $4, role = $5, location = $6,
+    period_start_year = $7, period_start_month = $8, period_end_year = $9, period_end_month = $10,
+    is_current = $11, summary = $12, stack = $13, link = $14, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link;
+RETURNING id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link;
 
 -- name: FillExperienceEmploymentBlanks :one
 -- Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 -- already there. A user who corrected their job title must not have that correction undone by
 -- re-uploading the CV it came from. is_current is not touched at all — a CV that still says
--- "Present" for a role the user has left would otherwise resurrect it.
+-- "Present" for a role the user has left would otherwise resurrect it. A period fills as a
+-- whole pair (year and month together) exactly when its year is currently NULL — filling just
+-- a month onto a year the user already entered would silently change a date they set.
 UPDATE experience_employments
-SET company      = coalesce(nullif(company, ''), @company),
-    role         = coalesce(nullif(role, ''), @role),
-    location     = coalesce(nullif(location, ''), @location),
-    period_start = coalesce(nullif(period_start, ''), @period_start),
-    period_end   = coalesce(nullif(period_end, ''), @period_end),
-    summary      = coalesce(nullif(summary, ''), @summary),
-    link         = coalesce(nullif(link, ''), @link),
+SET company            = coalesce(nullif(company, ''), @company),
+    role               = coalesce(nullif(role, ''), @role),
+    location           = coalesce(nullif(location, ''), @location),
+    period_start_month = CASE WHEN period_start_year IS NULL THEN @period_start_month ELSE period_start_month END,
+    period_start_year  = coalesce(period_start_year, @period_start_year),
+    period_end_month   = CASE WHEN period_end_year IS NULL THEN @period_end_month ELSE period_end_month END,
+    period_end_year    = coalesce(period_end_year, @period_end_year),
+    summary            = coalesce(nullif(summary, ''), @summary),
+    link               = coalesce(nullif(link, ''), @link),
     -- The stack is unioned, not filled-if-blank: a CV listing one more technology for a
     -- role is new knowledge, and import must never take a technology away. coalesce
     -- guards the empty case — array_agg over no rows is NULL, and the column is NOT NULL.
-    stack        = coalesce(
+    stack              = coalesce(
                        (SELECT array_agg(DISTINCT s ORDER BY s) FROM unnest(stack || @stack::text[]) AS s),
                        '{}'::text[]
                    ),
-    updated_at   = now()
+    updated_at         = now()
 WHERE id = @id AND user_id = @user_id
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link;
+RETURNING id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link;
+
+-- name: ListExperienceEmploymentDatesForBackfill :many
+-- cmd/backfill-experience-dates' input: every employment still missing at least one of the
+-- structured boundaries migration 0135 added, alongside the legacy free-text labels to
+-- parse, the row's own created_at (the approved fallback for a label that fails to
+-- parse), and is_current — the pre-migration sort key (period_sort.go, since deleted)
+-- read a present-reading period_end as "ongoing" independently of is_current, so a row
+-- where the two disagree needs is_current corrected in the same pass (see
+-- SetExperienceEmploymentBackfilledDates), or that row silently loses its "ongoing" sort
+-- position once the free-text column backing the old check is gone. OR, not AND: a row
+-- where an ordinary write path (deployed ahead of this pass) already filled one boundary
+-- but not the other must still be visited, or the other boundary's only surviving copy —
+-- the free-text column — is never migrated.
+SELECT id, user_id, period_start, period_end, is_current, created_at
+FROM experience_employments
+WHERE period_start_year IS NULL OR period_end_year IS NULL
+ORDER BY id;
+
+-- name: SetExperienceEmploymentBackfilledDates :execrows
+-- cmd/backfill-experience-dates' write: the four structured columns, each filled only
+-- when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
+-- uses, so a boundary an ordinary write path already populated is never clobbered by a
+-- backfill pass racing behind it — plus is_current, which this only ever turns TRUE, never
+-- back to false, when the caller found a present-reading label is_current disagreed with.
+UPDATE experience_employments
+SET period_start_year  = CASE WHEN period_start_year IS NULL THEN @period_start_year ELSE period_start_year END,
+    period_start_month = CASE WHEN period_start_year IS NULL THEN @period_start_month ELSE period_start_month END,
+    period_end_year    = CASE WHEN period_end_year IS NULL THEN @period_end_year ELSE period_end_year END,
+    period_end_month   = CASE WHEN period_end_year IS NULL THEN @period_end_month ELSE period_end_month END,
+    is_current         = is_current OR @set_current::boolean
+WHERE id = @id AND (period_start_year IS NULL OR period_end_year IS NULL);
 
 -- name: DeleteExperienceEmployment :execrows
 -- Remove an owned employment; its atoms go with it (ON DELETE CASCADE) because they are

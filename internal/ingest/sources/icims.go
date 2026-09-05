@@ -30,6 +30,11 @@ func NewICIMS(c icimsHTTP) Source { return icims{http: c} }
 
 func (icims) Provider() string { return "icims" }
 
+// fullBoardListing: jobLocs fails the whole crawl when the root sitemap or any sub-sitemap
+// fetch fails, rather than returning the other sub-sitemaps' postings as a complete board.
+// See the fullBoardListing interface for the bar.
+func (icims) fullBoardListing() {}
+
 func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	host := icimsHost(e.Board)
 	locs, err := s.jobLocs(ctx, host, e.Board)
@@ -72,10 +77,12 @@ func (s icims) jobLocs(ctx context.Context, host, board string) ([]string, error
 	for _, sm := range root.Sitemaps {
 		sub, err := getSitemap(ctx, s.http, sm.Loc)
 		if err != nil {
-			// Skip a flaky sub-sitemap rather than losing the whole board — the same
-			// per-entry isolation the detail fan-out uses; the missed postings reappear
-			// on the next crawl. Only a failed ROOT sitemap fails the board.
-			continue
+			// A sub-sitemap's postings are part of the board's full listing, so a failure
+			// here must fail the whole crawl rather than silently return the other
+			// sub-sitemaps' postings as if they were the complete board — the same
+			// partial-success shape that forced freehire#2337's revert (see the
+			// fullBoardListing marker's bar, source.go).
+			return nil, fmt.Errorf("icims: sub-sitemap %s: %w", sm.Loc, err)
 		}
 		entries = append(entries, sub.URLs...)
 	}

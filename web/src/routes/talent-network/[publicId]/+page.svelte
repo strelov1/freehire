@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Award, Briefcase, FolderKanban, GraduationCap, Languages, Tags, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import { dateRange } from '$lib/cv';
+  import { formatPeriodDate } from '$lib/periodDate';
   import type { Experience } from '$lib/generated/contracts';
   import { companyLogoUrl } from '$lib/logo';
   import { EntityLogo } from '$lib/ui';
@@ -110,11 +112,6 @@
   const description = $derived(
     cv.headline || 'A candidate profile shared via freehire’s Talent Network.',
   );
-
-  // A work/education entry's date range, printed as the CV wrote it ("2021 — Present").
-  function dateRange(start?: string, end?: string): string {
-    return [start, end].filter(Boolean).join(' — ');
-  }
 </script>
 
 <Seo title={pageTitle} {description} />
@@ -216,9 +213,9 @@
                 <div class="flex min-w-0 flex-1 flex-col gap-1">
                   <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <span class="text-sm font-semibold">{job.title || job.company}</span>
-                    {#if dateRange(job.start, job.end)}
+                    {#if dateRange(job.start, job.end, job.current)}
                       <span class="text-xs text-muted-foreground tabular-nums"
-                        >{dateRange(job.start, job.end)}</span
+                        >{dateRange(job.start, job.end, job.current)}</span
                       >
                     {/if}
                   </div>
@@ -269,7 +266,7 @@
                   {/if}
                 </div>
                 {#if ed.year}
-                  <span class="text-xs text-muted-foreground tabular-nums">{ed.year}</span>
+                  <span class="text-xs text-muted-foreground tabular-nums">{formatPeriodDate(ed.year)}</span>
                 {/if}
               </li>
             {/each}

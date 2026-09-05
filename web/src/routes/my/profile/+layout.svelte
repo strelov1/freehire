@@ -18,6 +18,7 @@
   import { t } from '$lib/i18n/t';
   import { resumeStore } from '$lib/resume.svelte';
   import AccountPreferences from '$lib/components/AccountPreferences.svelte';
+  import AccountSetupCard from '$lib/components/AccountSetupCard.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import States from '$lib/components/States.svelte';
   import { profileStore } from '$lib/profile.svelte';
@@ -107,6 +108,13 @@
     <AccountPreferences class="mt-6" />
   </div>
 {:else}
+  <!-- Above the tab strip: what is left to set up belongs to the account, not to
+       whichever section happens to be open, and a card inside a section would be
+       re-announced on every tab switch. -->
+  <div class="mb-6">
+    <AccountSetupCard />
+  </div>
+
   <!-- Underline tabs, same style as the Inbox page's Inbox/Settings switch. -->
   <div class="mb-6 flex items-end justify-between gap-4 border-b border-border text-sm">
     <div

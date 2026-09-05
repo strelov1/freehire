@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // sampleDocument is the fixed résumé rendered into every template's preview thumbnail. It is
@@ -21,15 +23,15 @@ func sampleDocument() Document {
 		},
 		Summary: "Senior software engineer with 8+ years building reliable backends and developer tooling.",
 		Experience: []ExperienceItem{
-			{Role: "Senior Software Engineer", Company: "Northwind", Location: "Remote", Start: "2021", End: "Present",
+			{Role: "Senior Software Engineer", Company: "Northwind", Location: "Remote", Start: &perioddate.PeriodDate{Year: 2021}, Current: true,
 				Summary: "SaaS platform serving 5M+ users.",
 				Bullets: []string{"Cut API latency 40% by reworking hot query paths.", "Led migration to event-driven services with zero downtime."},
 				Stack:   []string{"Go", "PostgreSQL", "Kafka"}},
-			{Role: "Software Engineer", Company: "Acme Corp", Location: "Berlin", Start: "2017", End: "2021",
+			{Role: "Software Engineer", Company: "Acme Corp", Location: "Berlin", Start: &perioddate.PeriodDate{Year: 2017}, End: &perioddate.PeriodDate{Year: 2021},
 				Bullets: []string{"Built the billing service from scratch, now core revenue infra."},
 				Stack:   []string{"Python", "React"}},
 		},
-		Education: []EducationItem{{Degree: "BSc", Field: "Computer Science", Institution: "State University", Start: "2013", End: "2017"}},
+		Education: []EducationItem{{Degree: "BSc", Field: "Computer Science", Institution: "State University", Start: &perioddate.PeriodDate{Year: 2013}, End: &perioddate.PeriodDate{Year: 2017}}},
 		Skills: []SkillGroup{
 			{Group: "Languages", Items: []string{"Go", "Python", "TypeScript", "SQL"}},
 			{Group: "Infra", Items: []string{"Kubernetes", "Docker", "AWS"}},

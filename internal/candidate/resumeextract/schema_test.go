@@ -67,6 +67,44 @@ func TestRequestSchema_AsksForTotalYearsAsText(t *testing.T) {
 	}
 }
 
+// perioddate.PeriodDate carries its own lowercase `json:"year"`/`json:"month"` tags
+// specifically so the schema (derived from Structured by reflection) asks the model
+// for {"year":...,"month":...} rather than the Go field names {"Year":...,"Month":...}
+// an untagged struct would produce.
+func TestRequestSchema_DateFieldsAreLowercase(t *testing.T) {
+	props := schemaProperties(t)
+	experience, ok := props["experience"].(map[string]any)
+	if !ok {
+		t.Fatal("schema carries no experience")
+	}
+	items, ok := experience["items"].(map[string]any)
+	if !ok {
+		t.Fatal("experience has no items schema")
+	}
+	itemProps, ok := items["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("experience items carry no properties")
+	}
+	start, ok := itemProps["start"].(map[string]any)
+	if !ok {
+		t.Fatal("experience items carry no start")
+	}
+	dateProps, ok := start["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("start has no nested properties — perioddate.PeriodDate did not schema as an object")
+	}
+	for _, field := range []string{"year", "month"} {
+		if _, ok := dateProps[field]; !ok {
+			t.Errorf("start's schema is missing lowercase %q: %#v", field, dateProps)
+		}
+	}
+	for _, field := range []string{"Year", "Month"} {
+		if _, ok := dateProps[field]; ok {
+			t.Errorf("start's schema asks for %q (Go field name, untagged) instead of the lowercase JSON tag", field)
+		}
+	}
+}
+
 // The schema constrains the type; the truncation is still the decoder's job, and this
 // is the pairing that keeps a fractional year count from rounding up.
 func TestStructured_FractionalYearsStillTruncate(t *testing.T) {

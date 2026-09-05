@@ -12,6 +12,20 @@ func TestSolidJobsProvider(t *testing.T) {
 	}
 }
 
+// Negative control for the fullBoardListing marker (freehire#2328, freehire#2337): solidjobs
+// caps its board at the first 500 of a much larger catalogue and returns that as an
+// unqualified success — the exact silent-truncation shape the marker's structural bar exists
+// to exclude. It must never earn the marker as the adapter stands today.
+func TestSolidJobsIsNotFullBoardListing(t *testing.T) {
+	s := NewSolidJobs(nil)
+	if _, ok := s.(fullBoardListing); ok {
+		t.Error("solidjobs must not implement the fullBoardListing marker — its 500-item pagination cap is silent, not a hard failure")
+	}
+	if FullBoardListingProviders(All(nil))["solidjobs"] {
+		t.Error("FullBoardListingProviders(All(nil)) must not include solidjobs")
+	}
+}
+
 func TestSolidJobsIsAggregatorNotBoardless(t *testing.T) {
 	s := NewSolidJobs(nil)
 	if _, ok := s.(boardless); ok {

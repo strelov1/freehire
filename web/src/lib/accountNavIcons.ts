@@ -9,6 +9,7 @@ import {
   User,
   Bot,
   LayoutList,
+  ListPlus,
   Activity,
   BellRing,
   Key,
@@ -18,9 +19,11 @@ import {
   Link2,
   Handshake,
   Coins,
+  Gift,
   ShieldCheck,
   TrendingUp,
   Plug,
+  Webhook,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -31,14 +34,17 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/cvs': ScrollText,
   '/my/referrals': Handshake,
   '/my/tracking': LayoutList,
+  '/my/lists': ListPlus,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
   '/my/market-pulse': TrendingUp,
   '/my/notifications': BellRing,
   '/my/integrations': Plug,
   '/my/api-keys': Key,
+  '/my/webhook': Webhook,
   '/my/submissions': FileText,
   '/my/contributions': Link2,
   '/my/plan': Coins,
+  '/my/invite': Gift,
   '/my/security': ShieldCheck,
 };

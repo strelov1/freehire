@@ -5,8 +5,7 @@
   // Purely presentational — the owning JobRow computes the client-side match (exact
   // overlap of the job's skills and the signed-in viewer's profile skills) and passes it
   // in, so the chips it colours and this bar can't disagree on the score. `match` is null
-  // when there is nothing to show, in which case nothing renders. `gutterRight` reserves
-  // the feed's bottom-right hide control so the percent never slides under that icon.
+  // when there is nothing to show, in which case nothing renders.
   //
   // `blurred` renders the same strip as a teaser for a viewer who has no match yet — a
   // guest, or a signed-in viewer with no profile skills. The figures are then the job's
@@ -17,16 +16,14 @@
   // name of a card-wide link.
   let {
     match,
-    gutterRight = false,
     blurred = false,
-  }: { match: ClientMatch | null; gutterRight?: boolean; blurred?: boolean } = $props();
+  }: { match: ClientMatch | null; blurred?: boolean } = $props();
 </script>
 
 {#if match}
   <div
     class={[
       'mt-3 flex items-center gap-2 border-t border-dashed border-border pt-2.5',
-      gutterRight && 'pr-9',
       blurred && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
     ]}
     aria-label={blurred

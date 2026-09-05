@@ -26,6 +26,11 @@ func NewLever(c JSONGetter) Source { return lever{http: c} }
 
 func (lever) Provider() string { return "lever" }
 
+// fullBoardListing: Fetch is a single unpaginated request returning the board's whole
+// postings array — no loop that could stop early. See the fullBoardListing interface for
+// the bar.
+func (lever) fullBoardListing() {}
+
 func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base := leverBaseURL
 	if e.Region == "eu" {

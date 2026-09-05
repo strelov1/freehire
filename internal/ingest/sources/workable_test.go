@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -9,6 +10,31 @@ import (
 func TestWorkableProvider(t *testing.T) {
 	if got := NewWorkable(nil).Provider(); got != "workable" {
 		t.Errorf("Provider() = %q, want %q", got, "workable")
+	}
+}
+
+// Workable earns fullBoardListing because Fetch is a single unpaginated request that returns
+// the board's whole jobs array in one response — there is no loop that could stop early, so
+// any listing failure aborts the whole Fetch rather than returning a partial result.
+func TestWorkableMarkers(t *testing.T) {
+	s := NewWorkable(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("workable should implement the fullBoardListing marker")
+	}
+}
+
+func TestWorkableRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["workable"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include workable")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestWorkableMarkers' fullBoardListing claim rests on.
+func TestWorkableFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewWorkable(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

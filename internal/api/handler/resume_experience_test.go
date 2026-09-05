@@ -50,7 +50,7 @@ func (f *fakeBank) Import(_ context.Context, _ int64, entries []experience.Impor
 func bankFixture() resumeextract.Structured {
 	return resumeextract.Structured{
 		Experience: []resumeextract.Experience{
-			{Title: "Senior Software Engineer", Company: "RingCentral", End: "Present",
+			{Title: "Senior Software Engineer", Company: "RingCentral", Current: true,
 				Highlights: []string{"Cut latency 20s to 1s"}},
 		},
 	}

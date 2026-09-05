@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -634,7 +635,7 @@ func atomEntry(m experience.Match) map[string]any {
 		} else {
 			entry["company"] = m.Employment.Company
 		}
-		entry["period"] = strings.TrimSpace(m.Employment.Start + " – " + m.Employment.End)
+		entry["period"] = perioddate.FormatRange(m.Employment.Start, m.Employment.End, m.Employment.Current)
 	}
 	return entry
 }

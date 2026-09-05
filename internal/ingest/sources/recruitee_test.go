@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +11,31 @@ import (
 func TestRecruiteeProvider(t *testing.T) {
 	if got := NewRecruitee(nil).Provider(); got != "recruitee" {
 		t.Errorf("Provider() = %q, want %q", got, "recruitee")
+	}
+}
+
+// Recruitee earns fullBoardListing because Fetch is a single unpaginated request returning
+// the board's whole offers array — no loop that could stop early, so any listing failure
+// aborts the whole Fetch.
+func TestRecruiteeMarkers(t *testing.T) {
+	s := NewRecruitee(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("recruitee should implement the fullBoardListing marker")
+	}
+}
+
+func TestRecruiteeRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["recruitee"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include recruitee")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestRecruiteeMarkers' fullBoardListing claim rests on.
+func TestRecruiteeFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

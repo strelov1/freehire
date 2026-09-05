@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,6 +90,34 @@ var eightfoldEntry = CompanyEntry{
 func TestEightfoldProvider(t *testing.T) {
 	if got := NewEightfold(nil).Provider(); got != "eightfold" {
 		t.Errorf("Provider() = %q, want %q", got, "eightfold")
+	}
+}
+
+// Eightfold earns fullBoardListing because pageList proves completeness on both list-API
+// generations — the server's own count is authoritative, no artificial cap exists, and any
+// page error discards what was collected and fails the whole listing (never a partial
+// result). Detail fetches are best-effort per posting (list-only fallback, logged).
+func TestEightfoldMarkers(t *testing.T) {
+	s := NewEightfold(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("eightfold should implement the fullBoardListing marker")
+	}
+}
+
+func TestEightfoldRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["eightfold"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include eightfold")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestEightfoldMarkers' fullBoardListing claim rests on. Both list-API
+// generations fail the same way, so listPositions' pcsx-then-v2 fallback still surfaces an
+// error rather than silently succeeding.
+func TestEightfoldFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewEightfold(fake).Fetch(context.Background(), CompanyEntry{Board: "acme.example.com/acme.com"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

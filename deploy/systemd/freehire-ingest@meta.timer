@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest meta
+[Timer]
+OnCalendar=*:11:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

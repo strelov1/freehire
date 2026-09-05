@@ -122,17 +122,23 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 			stats.SoftSkips++
 			return
 		}
-		// The recipient is gone for good — the Telegram bot was blocked or removed,
-		// and no retry reaches that chat again. Forget the link and soft-skip: the
-		// subscription survives (relinking the bot resumes it) while every other
-		// telegram delivery for this user, in this worker and in remind/nudge alike,
-		// now reads as "not linked" and soft-skips too.
+		// The recipient is gone for good — a blocked/removed Telegram bot, or (per
+		// webhooknotify's own mapping) a webhook destination that answered 410
+		// Gone — and no retry reaches it again. Forget the recipient for whichever
+		// channel reported it and soft-skip: the subscription survives (relinking
+		// Telegram, or re-enabling the webhook, resumes it) while every other
+		// delivery to that same recipient, in this worker and (for Telegram) in
+		// remind/nudge alike, now reads as "not linked"/"disabled" and soft-skips
+		// too.
 		//
-		// Without this one blocked user failed a digest per pass forever, and the
-		// exit code that failure produces turned the whole run red — which is how a
-		// stranger's choice to mute a bot became a worker in a failed state.
+		// Without this one blocked/gone recipient failed a digest per pass forever,
+		// and the exit code that failure produces turned the whole run red — which
+		// is how a stranger's choice to mute a bot, or retire an endpoint, became a
+		// worker in a failed state. This must dispatch on info.Channel: an
+		// unconditional unlinkTelegram here would disable a user's Telegram link
+		// over an unrelated webhook's 410.
 		if errors.Is(err, ErrRecipientGone) {
-			r.unlinkTelegram(ctx, subID, info.UserID, err)
+			r.forgetRecipient(ctx, subID, info, err)
 			r.release(ctx, subID, jobIDs)
 			stats.SoftSkips++
 			return
@@ -157,6 +163,14 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// Delivered but not stamped: the lease expiry will re-deliver (a rare
 		// duplicate), which is preferable to losing the notification.
 		log.Printf("notify: mark notified for subscription %d: %v", subID, err)
+	}
+
+	if info.Channel == ChannelWebhook {
+		if err := r.store.RecordWebhookDeliverySuccess(ctx, info.UserID); err != nil {
+			// Read-side only (the settings page's "last delivered" line) — never a
+			// reason to treat an otherwise-successful send as a failure.
+			log.Printf("notify: record webhook delivery success for user %d (subscription %d): %v", info.UserID, subID, err)
+		}
 	}
 
 	if daily {
@@ -226,6 +240,37 @@ func (r *Runner) unlinkTelegram(ctx context.Context, subID, userID int64, cause 
 		return
 	}
 	log.Printf("notify: unlinked telegram for user %d after subscription %d: %v", userID, subID, cause)
+}
+
+// forgetRecipient dispatches an ErrRecipientGone side effect by channel: which
+// stored recipient to forget differs per channel, so this cannot be one call.
+// Anything other than telegram/webhook has no such record to forget — for those,
+// the soft-skip in deliverOne is already the whole response.
+func (r *Runner) forgetRecipient(ctx context.Context, subID int64, info db.GetSubscriptionForDeliveryRow, cause error) {
+	switch info.Channel {
+	case ChannelTelegram:
+		r.unlinkTelegram(ctx, subID, info.UserID, cause)
+	case ChannelWebhook:
+		r.disableWebhook(ctx, subID, info.UserID, cause)
+	}
+}
+
+// disableWebhook turns off a user's webhook destination after a send reported
+// it permanently gone (an HTTP 410) — the webhook channel's counterpart to
+// unlinkTelegram, and, like it, a visible change to the user's settings made
+// without them asking, so it should not happen silently.
+func (r *Runner) disableWebhook(ctx context.Context, subID, userID int64, cause error) {
+	rows, err := r.store.DisableWebhookConfig(ctx, userID)
+	if err != nil {
+		log.Printf("notify: disable webhook for user %d (subscription %d): %v", userID, subID, err)
+		return
+	}
+	if rows == 0 {
+		// Already disabled by an earlier subscription in this same pass — every
+		// webhook subscription this user has meets the same 410.
+		return
+	}
+	log.Printf("notify: disabled webhook for user %d after subscription %d: %v", userID, subID, cause)
 }
 
 // release drops the lease on a subscription's claimed matches so they are retried

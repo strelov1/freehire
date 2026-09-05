@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +40,30 @@ func sfSitemapXML(locs ...string) string {
 func TestSuccessFactorsProvider(t *testing.T) {
 	if got := NewSuccessFactors(nil).Provider(); got != "successfactors" {
 		t.Errorf("Provider() = %q, want %q", got, "successfactors")
+	}
+}
+
+// SuccessFactors earns fullBoardListing because Fetch is a single sitemap fetch with no
+// pagination loop — it either succeeds with the whole listing or fails outright.
+func TestSuccessFactorsMarkers(t *testing.T) {
+	s := NewSuccessFactors(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("successfactors should implement the fullBoardListing marker")
+	}
+}
+
+func TestSuccessFactorsRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["successfactors"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include successfactors")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestSuccessFactorsMarkers' fullBoardListing claim rests on.
+func TestSuccessFactorsFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

@@ -41,6 +41,16 @@ type fakeStore struct {
 	unlinkedTelegram  []int64
 	unlinkTelegramErr error
 
+	// disabledWebhooks records the user ids a delivery disabled the webhook
+	// destination for, mirroring unlinkedTelegram for the webhook channel's own
+	// "recipient gone" signal (a 410 response).
+	disabledWebhooks  []int64
+	disableWebhookErr error
+
+	// recordedWebhookSuccesses records the user ids a successful webhook
+	// delivery stamped last_success_at for.
+	recordedWebhookSuccesses []int64
+
 	active      []db.ListActiveSubscriptionsRow
 	recorded    []recordedMatch
 	recordCalls int // how many times RecordSubscriptionMatches was called, not how many pairs
@@ -165,6 +175,19 @@ func (s *fakeStore) DeleteTelegramLink(_ context.Context, userID int64) (int64, 
 		return 0, s.unlinkTelegramErr
 	}
 	return 1, nil
+}
+
+func (s *fakeStore) DisableWebhookConfig(_ context.Context, userID int64) (int64, error) {
+	s.disabledWebhooks = append(s.disabledWebhooks, userID)
+	if s.disableWebhookErr != nil {
+		return 0, s.disableWebhookErr
+	}
+	return 1, nil
+}
+
+func (s *fakeStore) RecordWebhookDeliverySuccess(_ context.Context, userID int64) error {
+	s.recordedWebhookSuccesses = append(s.recordedWebhookSuccesses, userID)
+	return nil
 }
 
 type fakeNotifier struct {
@@ -619,7 +642,7 @@ func TestValidChannel(t *testing.T) {
 			t.Errorf("ValidChannel(%q) = false for a declared channel", c)
 		}
 	}
-	for _, c := range []string{"", "webhook", "Telegram", "e-mail"} {
+	for _, c := range []string{"", "sms", "Telegram", "e-mail"} {
 		if ValidChannel(c) {
 			t.Errorf("ValidChannel(%q) = true for an undeclared channel", c)
 		}
@@ -633,6 +656,16 @@ func TestValidChannel_Push(t *testing.T) {
 	}
 	if !ValidChannel(ChannelPush) {
 		t.Error("ValidChannel(ChannelPush) = false, want true")
+	}
+}
+
+// Webhook is the fourth delivery channel, added alongside Telegram/email/push.
+func TestValidChannel_Webhook(t *testing.T) {
+	if ChannelWebhook != "webhook" {
+		t.Errorf("ChannelWebhook = %q, want %q", ChannelWebhook, "webhook")
+	}
+	if !ValidChannel(ChannelWebhook) {
+		t.Error("ValidChannel(ChannelWebhook) = false, want true")
 	}
 }
 
@@ -651,6 +684,54 @@ func TestRecipient_PushWithDevice(t *testing.T) {
 	}
 	if dest != "42" {
 		t.Errorf("recipient dest = %q, want %q (the user id)", dest, "42")
+	}
+}
+
+// recipient's webhook case resolves the account's configured destination URL
+// rather than a per-subscription value.
+func TestRecipient_WebhookEnabledAndConfigured(t *testing.T) {
+	info := db.GetSubscriptionForDeliveryRow{
+		UserID:         42,
+		Channel:        ChannelWebhook,
+		WebhookUrl:     pgtype.Text{String: "https://example.com/hook", Valid: true},
+		WebhookEnabled: true,
+	}
+	dest, ok := recipient(info)
+	if !ok {
+		t.Fatal("recipient: ok = false, want true when a webhook destination is configured and enabled")
+	}
+	if dest != "https://example.com/hook" {
+		t.Errorf("recipient dest = %q, want the webhook URL", dest)
+	}
+}
+
+func TestRecipient_WebhookDisabledIsNotDeliverable(t *testing.T) {
+	info := db.GetSubscriptionForDeliveryRow{
+		UserID:         42,
+		Channel:        ChannelWebhook,
+		WebhookUrl:     pgtype.Text{String: "https://example.com/hook", Valid: true},
+		WebhookEnabled: false,
+	}
+	dest, ok := recipient(info)
+	if ok {
+		t.Errorf("recipient: ok = true, want false when the webhook destination is disabled")
+	}
+	if dest != "" {
+		t.Errorf("recipient dest = %q, want empty", dest)
+	}
+}
+
+func TestRecipient_WebhookUnconfiguredIsNotDeliverable(t *testing.T) {
+	info := db.GetSubscriptionForDeliveryRow{
+		UserID:  42,
+		Channel: ChannelWebhook,
+	}
+	dest, ok := recipient(info)
+	if ok {
+		t.Errorf("recipient: ok = true, want false when no webhook destination exists")
+	}
+	if dest != "" {
+		t.Errorf("recipient dest = %q, want empty", dest)
 	}
 }
 
@@ -843,6 +924,84 @@ func TestDeliverOne_DailyIgnoresQuietHours(t *testing.T) {
 func deliverySubscription() map[int64]db.GetSubscriptionForDeliveryRow {
 	return map[int64]db.GetSubscriptionForDeliveryRow{
 		1: {ID: 1, UserID: 42, Channel: ChannelTelegram, SavedSearchName: "Go", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+	}
+}
+
+// ErrRecipientGone means different things on different channels: a Telegram bot
+// that was blocked, or (per the webhook channel's own mapping, see
+// internal/engage/webhooknotify) a destination that answered 410 Gone. deliverOne
+// must dispatch the "forget this recipient" side effect by channel — a webhook's
+// 410 must disable the webhook config, never the user's unrelated Telegram link.
+func TestDeliver_RecipientGoneOnWebhookDisablesWebhookNotTelegram(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {
+				ID: 1, UserID: 42, Channel: ChannelWebhook, SavedSearchName: "Go",
+				WebhookUrl: pgtype.Text{String: "https://example.com/hook", Valid: true}, WebhookEnabled: true,
+			},
+		},
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrRecipientGone}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.SoftSkips != 1 || stats.Failed != 0 {
+		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0", stats.SoftSkips, stats.Failed)
+	}
+	if len(store.disabledWebhooks) != 1 || store.disabledWebhooks[0] != 42 {
+		t.Errorf("disabledWebhooks = %v, want [42]", store.disabledWebhooks)
+	}
+	if len(store.unlinkedTelegram) != 0 {
+		t.Errorf("unlinkedTelegram = %v, want none — a webhook 410 must not touch the Telegram link", store.unlinkedTelegram)
+	}
+}
+
+// A successful webhook delivery stamps the destination's last_success_at, so
+// the settings page can show "last delivered …" — the counterpart to
+// disableWebhook on the failure side.
+func TestDeliver_SuccessfulWebhookRecordsDeliverySuccess(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {
+				ID: 1, UserID: 42, Channel: ChannelWebhook, SavedSearchName: "Go",
+				WebhookUrl: pgtype.Text{String: "https://example.com/hook", Valid: true}, WebhookEnabled: true,
+			},
+		},
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedWebhookSuccesses) != 1 || store.recordedWebhookSuccesses[0] != 42 {
+		t.Errorf("recordedWebhookSuccesses = %v, want [42]", store.recordedWebhookSuccesses)
+	}
+}
+
+// A successful Telegram (or any non-webhook) delivery must not touch the
+// webhook success stamp — it belongs only to the webhook channel.
+func TestDeliver_SuccessfulTelegramDoesNotRecordWebhookSuccess(t *testing.T) {
+	store := &fakeStore{
+		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:           deliverySubscription(),
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedWebhookSuccesses) != 0 {
+		t.Errorf("recordedWebhookSuccesses = %v, want none for a telegram delivery", store.recordedWebhookSuccesses)
 	}
 }
 

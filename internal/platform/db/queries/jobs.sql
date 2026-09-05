@@ -256,7 +256,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech, requires_clearance,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint
+    content_hash, role_fingerprint, requirements_derived
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
@@ -266,7 +266,12 @@ INSERT INTO jobs (
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(salary_min_source), sqlc.arg(salary_max_source), sqlc.arg(salary_currency_source), sqlc.arg(salary_period_source),
-    sqlc.arg(content_hash), sqlc.arg(role_fingerprint)
+    sqlc.arg(content_hash), sqlc.arg(role_fingerprint),
+    -- The requirements the posting states as a list under a recognized heading
+    -- (internal/job/reqextract), derived from the same description the dictionary
+    -- facets above are. COALESCE keeps the column NOT NULL when a posting yields
+    -- none: an empty array and "never processed" are the same fact here.
+    COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -312,6 +317,21 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- role_fingerprint is the repost-identity (internal/job/jobhash.RoleFingerprint):
     -- refreshed on re-ingest so a title/description edit re-clusters the role.
     role_fingerprint = EXCLUDED.role_fingerprint,
+    -- Re-derived on every write, like the dictionary facets above, so an edited
+    -- description refreshes the list — including to EMPTY, when the edit removed the
+    -- posting's requirements section.
+    --
+    -- The guard keys on the incoming DESCRIPTION, not on the incoming derivation, and
+    -- the difference is the whole point. What must not wipe a stored list is a failed
+    -- detail fetch, which is exactly the empty-description case `description` guards
+    -- against one branch up. Keying on the empty derivation instead would ALSO keep the
+    -- list when a real edit deleted the section, and the page would then quote a
+    -- posting that no longer says it — a false claim the reader cannot detect, arriving
+    -- through the guard meant to prevent one.
+    requirements_derived = CASE
+        WHEN EXCLUDED.description <> '' THEN EXCLUDED.requirements_derived
+        ELSE jobs.requirements_derived
+    END,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
     -- reopen (the row was closed) resets the strike count so a single later expired
     -- probe can't immediately re-close it — the two-strike grace survives a reopen.
@@ -1057,7 +1077,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech, requires_clearance,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, enrichment,
-    content_hash, role_fingerprint,
+    content_hash, role_fingerprint, requirements_derived,
     created_by
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
@@ -1082,6 +1102,10 @@ INSERT INTO jobs (
         ELSE '{}'::jsonb
     END,
     sqlc.arg(content_hash), sqlc.arg(role_fingerprint),
+    -- Derived from the moderator's own description by the same mapping the crawl uses
+    -- (internal/job/job's withDerived), so a hand-curated posting is not the one kind
+    -- of posting whose requirements never appear.
+    COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     sqlc.arg(created_by)::bigint
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
@@ -1117,6 +1141,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- what lets a hand-curated posting cluster with the crawled copy of its role.
     content_hash     = EXCLUDED.content_hash,
     role_fingerprint = EXCLUDED.role_fingerprint,
+    -- Same rule the crawl path uses, and keyed on the same signal: an empty incoming
+    -- description means the write carries no content to derive from, anything else
+    -- means the derivation is current — including when it is empty because the edit
+    -- removed the section.
+    requirements_derived = CASE
+        WHEN EXCLUDED.description <> '' THEN EXCLUDED.requirements_derived
+        ELSE jobs.requirements_derived
+    END,
     -- Overlay the (possibly changed) manual salary onto the existing enrichment so a
     -- re-create reflects it immediately while preserving any prior LLM enrichment.
     enrichment = CASE
@@ -1167,7 +1199,7 @@ INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech, requires_clearance,
     posting_language, employment_type, education_level, english_level, experience_years_min,
-    content_hash, role_fingerprint,
+    content_hash, role_fingerprint, requirements_derived,
     created_by, is_private
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
@@ -1179,6 +1211,9 @@ INSERT INTO jobs (
     sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(content_hash), sqlc.arg(role_fingerprint),
+    -- A pasted private JD is exactly the text the tailor reads requirements out of,
+    -- so it derives them like every other write path.
+    COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     sqlc.arg(created_by)::bigint, true
 )
 RETURNING *;
@@ -1233,6 +1268,11 @@ SET title        = sqlc.arg(title),
     -- behind would freeze the vector on the pre-edit text.
     content_hash     = sqlc.arg(content_hash),
     role_fingerprint = sqlc.arg(role_fingerprint),
+    -- Re-derived from the edited description too, and written unconditionally rather
+    -- than with the crawl path's keep-the-stored-value guard: a moderator DELETING a
+    -- requirements list from a posting means it no longer has one, unlike a detail
+    -- fetch that failed.
+    requirements_derived = COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     updated_by   = sqlc.arg(updated_by)::bigint,
     -- Same reasoning as UpsertJob: a company correction invalidates this job's
     -- already-precomputed similar-jobs list (it may have been computed excluding the
@@ -1272,6 +1312,57 @@ WITH closed AS (
       AND source = sqlc.arg(source)
       AND last_seen_at < sqlc.arg(cutoff)
       AND company_slug = ANY(sqlc.arg(company_slugs)::text[])
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
+-- name: CloseUnseenJobsForBoard :one
+-- Board-scoped post-ingest sweep (see job-lifecycle spec, freehire#2328): close every open
+-- job of ONE board not seen since the cutoff, regardless of which company_slug the run wrote
+-- a job for. This is what CloseUnseenJobs' company scope structurally cannot reach: a company
+-- whose LAST posting drops off a board the fleet still crawls never re-enters the crawled-slug
+-- set, so its row stays open forever under the company scope alone. The board scope answers a
+-- narrower, board-level question instead — "did this run prove it listed this board's content"
+-- — which is answerable even when a company wrote nothing this run.
+--
+-- cmd/ingest gates this to a board whose run proved coverage (crawl did not fail, the board
+-- yielded at least one posting) AND whose provider is registered as fullBoardListing — an
+-- adapter that structurally proves it lists a board to completion rather than silently
+-- truncating it. Without that gate this statement is unsafe: an adapter that returns a
+-- partial listing as an unqualified success (the solidjobs shape that forced #2337's revert)
+-- would have this close everything past the point it stopped reaching.
+--
+-- board_pattern is externalid.BoardPattern(board) — the same escaped LIKE prefix
+-- ExistingExternalIDsByBoard and BackfillBoardCompany already use, riding the
+-- (source, external_id text_pattern_ops) index so this reads one board's rows, not the
+-- provider's whole catalogue. The ":" namespace terminator inside the pattern is what keeps a
+-- board whose id is a prefix of another's (e.g. "it" vs "it2") from also matching the other's
+-- rows.
+--
+-- The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+-- this statement so it stays atomic with the close (a rolled-back sweep queues nothing) and
+-- exact (only rows that actually closed are queued) — without it a board-scoped close would
+-- retire rows in Postgres and leave every one of them in the search index until the next full
+-- rebuild.
+--
+-- closed_reason stays 'unseen', not a new value: this is the same mechanism — a crawl of the
+-- place this posting lived did not list it — reaching rows its scope previously could not.
+--
+-- :one rather than :execrows because the CTE moves the row count out of the command tag.
+-- count(*) over the closed rows is the same int64 the caller already had.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND last_seen_at < sqlc.arg(cutoff)
+      AND external_id LIKE sqlc.arg(board_pattern)
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -1612,6 +1703,15 @@ ON CONFLICT (job_id, target_version) DO NOTHING;
 -- jsonb_strip_nulls drops an unstated bound so an overlay firing on just one of
 -- min/max does not blank the other's payload value; each overlay only fires at all
 -- when at least one of its own bounds is set (the presence signal).
+--
+-- There is deliberately NO overlay for requirements_derived here, though one lived in
+-- this statement briefly. It would MATERIALISE the derived list into the blob, and
+-- nothing revises a blob: a later crawl rewrites the column and leaves the copy, so a
+-- description edit that deleted the requirements section would leave the page quoting
+-- a posting that no longer says it — and the backfill could not reach it either. The
+-- fold belongs on the read path, where it re-reads the column every time
+-- (jobview.FromDomain). The column stays the single source; the blob holds only what
+-- the model itself said.
 UPDATE jobs
 SET enrichment         =
         sqlc.arg(enrichment)::jsonb
@@ -1962,3 +2062,52 @@ UPDATE jobs
 SET requires_clearance = sqlc.arg(requires_clearance)
 WHERE id = sqlc.arg(id)
   AND requires_clearance IS DISTINCT FROM sqlc.arg(requires_clearance);
+
+-- name: RequirementsDerivedBackfillBounds :one
+-- The id span cmd/backfill-requirements walks. MIN/MAX over the primary key are two
+-- index probes, so this stays cheap on an 11M-row table — deliberately unfiltered,
+-- because counting the open rows would be a scan and the chunk query filters anyway.
+SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
+       COALESCE(MAX(id), 0)::bigint AS max_id
+FROM jobs;
+
+-- name: ListJobsForRequirementsBackfill :many
+-- One chunk of the requirements backfill: the open postings in an id range, with the
+-- description the derivation reads.
+--
+-- Open rows only, unlike SetJobRequiresClearance's companion: a closed posting is not
+-- served on a job page and cannot be applied to, so deriving for it would pay the
+-- de-TOAST of its description for a list nothing reads.
+--
+-- There is deliberately NO predicate on `description` (not even `<> ''`): a WHERE over
+-- that column de-TOASTs it for every row examined, which is the trap cmd/backfill-clearance
+-- documents. The rows are already bounded by id here, and an empty description simply
+-- derives nothing, so the filter would cost the same read it is trying to avoid.
+-- The LIMIT is what bounds MEMORY, and the id range is what bounds the number of
+-- statements. Both are needed: pgx buffers a :many result whole, descriptions run to
+-- ~1 MB on some sources, and an id RANGE puts no ceiling at all on how many rows fall
+-- inside it. The caller resumes from the last id it saw when a chunk comes back full,
+-- so a dense stretch is walked in bounded steps rather than materialised at once.
+SELECT id, description FROM jobs
+WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
+  AND closed_at IS NULL
+ORDER BY id
+LIMIT sqlc.arg(row_limit);
+
+-- name: SetJobsRequirementsDerived :execrows
+-- Write one chunk's derived requirements, for cmd/backfill-requirements. Batched
+-- through unnest rather than a statement per row: the pass covers millions of rows and
+-- a round trip each would dominate its runtime.
+--
+-- The IS DISTINCT FROM guard is what makes the pass idempotent, for the same reason
+-- SetJobRequiresClearance's does: a row already carrying the derived value is not
+-- rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
+-- backfill needs no record of which rows it has visited.
+UPDATE jobs AS j
+SET requirements_derived = v.payload
+FROM (
+    SELECT unnest(sqlc.arg(ids)::bigint[]) AS id,
+           unnest(sqlc.arg(payloads)::jsonb[]) AS payload
+) AS v
+WHERE j.id = v.id
+  AND j.requirements_derived IS DISTINCT FROM v.payload;

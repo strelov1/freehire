@@ -23,6 +23,10 @@ func NewJazzHR(c HTMLGetter) Source { return jazzhr{http: c} }
 
 func (jazzhr) Provider() string { return "jazzhr" }
 
+// fullBoardListing: the /apply listing is a single page linking every open posting (no
+// pagination). See the fullBoardListing interface for the bar.
+func (jazzhr) fullBoardListing() {}
+
 func (s jazzhr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	host := fmt.Sprintf("%s.applytojob.com", e.Board)
 	base, err := url.Parse(fmt.Sprintf("https://%s/", host))

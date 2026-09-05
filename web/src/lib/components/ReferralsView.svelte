@@ -13,11 +13,16 @@
     ReferralRequestStatus,
     SeekerReferralRequest,
   } from '$lib/types';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t, tokenLabel } from '$lib/i18n/t';
   import { companyLogoUrl } from '$lib/logo';
   import { Button, ConfirmDialog, EntityLogo, FormField, Table } from '$lib/ui';
   import { isLinkedInUrl, timeAgo } from '$lib/utils';
   import CompanyPicker from './CompanyPicker.svelte';
+  import { messages } from './ReferralsView.messages';
   import States from './States.svelte';
+
+  const s = $derived(t(messages, locale()));
 
   type Tab = 'requests' | 'offers' | 'incoming';
   const tabs: Tab[] = ['requests', 'offers', 'incoming'];
@@ -25,8 +30,9 @@
   // Open on the tab named in `?tab=` so deep-links land right — notably the
   // "new referral request" ping, which links approved referrers to `?tab=incoming`.
   function readTab(): Tab {
-    const t = page.url.searchParams.get('tab');
-    return tabs.includes(t as Tab) ? (t as Tab) : 'requests';
+    // Not `t` — that name is the catalog resolver imported above.
+    const requested = page.url.searchParams.get('tab');
+    return tabs.includes(requested as Tab) ? (requested as Tab) : 'requests';
   }
   let tab = $state<Tab>(readTab());
   function selectTab(next: Tab) {
@@ -52,11 +58,6 @@
     contacted: 'border-brand/30 bg-brand-muted text-brand-strong',
     declined: 'bg-muted text-muted-foreground line-through',
   };
-  const pillLabel: Record<ReferralRequestStatus, string> = {
-    sent: 'Sent',
-    contacted: 'Contacted',
-    declined: 'Declined',
-  };
   const offerPill: Record<string, string> = {
     approved: 'border-brand/30 bg-brand-muted text-brand-strong',
     pending: 'bg-muted text-muted-foreground',
@@ -78,12 +79,12 @@
 
   function offerErrorMessage(err: unknown): string {
     if (err instanceof ApiError) {
-      if (err.status === 409) return 'You already offered to refer for this company.';
-      if (err.status === 404) return "We don't have that company — check the slug in its page URL.";
-      if (err.status === 422) return 'Enter a valid LinkedIn profile URL.';
-      if (err.status === 503) return 'File upload is unavailable right now.';
+      if (err.status === 409) return s.offers.errors.duplicate;
+      if (err.status === 404) return s.offers.errors.unknownCompany;
+      if (err.status === 422) return s.offers.errors.badLinkedin;
+      if (err.status === 503) return s.offers.errors.uploadUnavailable;
     }
-    return 'Could not submit the offer. Please try again.';
+    return s.offers.errors.generic;
   }
 
   async function submitOffer(e: SubmitEvent) {
@@ -150,18 +151,18 @@
        itself as one widget and then cannot be stepped through: every tab stays in the
        Tab sequence and the arrow keys do nothing — the promise without the behaviour. -->
   <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={tab}>
-    {#each [['requests', 'My requests'], ['offers', 'Offers to refer'], ['incoming', 'Incoming']] as [id, label] (id)}
+    {#each tabs as id (id)}
       <button
         type="button"
         role="tab"
         aria-selected={tab === id}
-        onclick={() => selectTab(id as Tab)}
+        onclick={() => selectTab(id)}
         class={[
           '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
           tab === id ? 'border-brand text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
         ]}
       >
-        {label}
+        {s.tabs[id]}
         {#if id === 'incoming' && incoming.value.length > 0}
           <span class="ml-1.5 rounded-full bg-brand px-1.5 py-0.5 text-xs font-bold text-brand-foreground">
             {incoming.value.length}
@@ -179,15 +180,15 @@
   {:else if requests.status === 'error'}
     <States state="error" />
   {:else if requests.value.length === 0}
-    <States state="empty" message="You haven't requested any referrals yet." />
+    <States state="empty" message={s.requests.empty} />
   {:else}
     <Table class="mt-4">
       {#snippet header()}
         <tr class="text-xs uppercase tracking-wide text-muted-foreground">
-          <th class="pb-2 pr-4 text-left font-semibold">Company</th>
-          <th class="pb-2 pr-4 text-left font-semibold">CV shared</th>
-          <th class="pb-2 pr-4 text-left font-semibold">Status</th>
-          <th class="pb-2 text-left font-semibold">Sent</th>
+          <th class="pb-2 pr-4 text-left font-semibold">{s.requests.columns.company}</th>
+          <th class="pb-2 pr-4 text-left font-semibold">{s.requests.columns.cvShared}</th>
+          <th class="pb-2 pr-4 text-left font-semibold">{s.requests.columns.status}</th>
+          <th class="pb-2 text-left font-semibold">{s.requests.columns.sent}</th>
         </tr>
       {/snippet}
       {#each requests.value as r (r.id)}
@@ -204,42 +205,42 @@
             </a>
           </td>
           <td class="py-3 pr-4 text-muted-foreground">
-            {r.cv_kind === 'built' ? 'Tailored CV' : 'Uploaded CV'}
+            {r.cv_kind === 'built' ? s.requests.cvBuilt : s.requests.cvUploaded}
           </td>
           <td class="py-3 pr-4">
             <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {pillClass[r.status]}">
-              {pillLabel[r.status]}
+              {tokenLabel(s.requests.status, r.status)}
             </span>
           </td>
           <td class="py-3 text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : ''}</td>
         </tr>
       {/each}
     </Table>
-    <p class="mt-4 text-xs text-muted-foreground">
-      No notifications here — the referrer contacts you over the channel you left.
-    </p>
+    <p class="mt-4 text-xs text-muted-foreground">{s.requests.footnote}</p>
   {/if}
 
 <!-- ── Offers to refer ── -->
 {:else if tab === 'offers'}
   <div class="mt-4 flex items-center justify-between">
-    <p class="text-sm text-muted-foreground">Companies you can refer into.</p>
-    <Button variant="primary" size="sm" onclick={() => (offerOpen = !offerOpen)}>+ Offer to refer</Button>
+    <p class="text-sm text-muted-foreground">{s.offers.lead}</p>
+    <Button variant="primary" size="sm" onclick={() => (offerOpen = !offerOpen)}>
+      {s.offers.openForm}
+    </Button>
   </div>
 
   {#if offerOpen}
     <form onsubmit={submitOffer} class="mt-3 flex flex-col gap-3 rounded-lg border border-border p-4">
       <div class="flex flex-col gap-1.5 text-sm">
-        <span class="font-medium">Company</span>
+        <span class="font-medium">{s.offers.companyLabel}</span>
         <CompanyPicker onSelect={(c) => (offerSlug = c?.slug ?? '')} />
-        <span class="text-xs text-muted-foreground">Search and pick the company you work at.</span>
+        <span class="text-xs text-muted-foreground">{s.offers.companyHint}</span>
       </div>
       <FormField
-        label="Your LinkedIn profile"
+        label={s.offers.linkedinLabel}
         error={offerLinkedin.trim() !== '' && !offerLinkedinValid
-          ? 'Enter a full linkedin.com/in/… profile URL.'
+          ? s.offers.linkedinInvalid
           : undefined}
-        hint="Helps the moderator confirm you work there."
+        hint={s.offers.linkedinHint}
       >
         {#snippet children({ id, describedBy, invalid })}
           <input
@@ -254,14 +255,14 @@
         {/snippet}
       </FormField>
       <label class="flex flex-col gap-1.5 text-sm">
-        <span class="font-medium">Proof of employment (PDF)</span>
+        <span class="font-medium">{s.offers.proofLabel}</span>
         <input type="file" accept="application/pdf" bind:files={offerFile} class="text-sm" />
-        <span class="text-xs text-muted-foreground">A CV or letter showing you work there. A moderator reviews it.</span>
+        <span class="text-xs text-muted-foreground">{s.offers.proofHint}</span>
       </label>
       {#if offerError}<p class="text-sm text-destructive">{offerError}</p>{/if}
       <div class="flex justify-end">
         <Button type="submit" variant="primary" size="sm" disabled={offerBusy || !canSubmitOffer}>
-          {offerBusy ? 'Submitting…' : 'Submit for review'}
+          {offerBusy ? s.offers.submitting : s.offers.submit}
         </Button>
       </div>
     </form>
@@ -272,7 +273,7 @@
   {:else if offers.status === 'error'}
     <States state="error" />
   {:else if offers.value.length === 0}
-    <States state="empty" message="You haven't offered to refer anywhere yet." />
+    <States state="empty" message={s.offers.empty} />
   {:else}
     <ul class="mt-3">
       {#each offers.value as o (o.id)}
@@ -285,7 +286,7 @@
           />
           <span class="min-w-0 truncate font-medium">{o.company_name || o.company_slug}</span>
           <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {offerPill[o.status] ?? 'bg-muted text-muted-foreground'}">
-            {o.status}
+            {tokenLabel(s.offers.status, o.status)}
           </span>
           <Button
             variant="ghost"
@@ -294,7 +295,7 @@
             disabled={withdrawing === o.id}
             onclick={() => requestWithdraw(o)}
           >
-            {withdrawing === o.id ? 'Removing…' : 'Stop referring'}
+            {withdrawing === o.id ? s.offers.withdrawing : s.offers.withdraw}
           </Button>
         </li>
       {/each}
@@ -308,7 +309,7 @@
   {:else if incoming.status === 'error'}
     <States state="error" />
   {:else if incoming.value.length === 0}
-    <States state="empty" message="No incoming referral requests." />
+    <States state="empty" message={s.incoming.empty} />
   {:else}
     <div class="mt-4 flex flex-col gap-3">
       {#each incoming.value as req (req.id)}
@@ -321,42 +322,48 @@
                 shape="square"
                 size="xs"
               />
-              <span class="min-w-0 truncate">Someone wants a referral into {req.company_name || req.company_slug}</span>
+              <span class="min-w-0 truncate">
+                {s.incoming.wantsReferralPrefix}
+                {req.company_name || req.company_slug}
+              </span>
             </b>
             <span class="shrink-0 text-xs text-muted-foreground">{req.created_at ? timeAgo(req.created_at) : ''}</span>
           </div>
           <div class="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-            <span>Contact:</span>
+            <span>{s.incoming.contactLabel}</span>
             {#if req.contact_telegram}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_telegram}</code>{/if}
             {#if req.contact_email}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_email}</code>{/if}
             {#if req.linkedin_url}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external LinkedIn URL, not an internal route -->
-              <a href={req.linkedin_url} target="_blank" rel="noopener" class="text-brand-strong hover:underline">LinkedIn ↗</a>
+              <a href={req.linkedin_url} target="_blank" rel="noopener" class="text-brand-strong hover:underline">{s.incoming.linkedin}</a>
             {/if}
           </div>
           {#if req.note}<p class="mt-1 text-sm italic text-muted-foreground">“{req.note}”</p>{/if}
           <div class="mt-3 flex items-center gap-2">
             <Button variant="outline" size="sm" href={api.referralCvUrl(req.id)} target="_blank" rel="noopener">
-              <FileText class="size-4" /> View CV
+              <FileText class="size-4" />
+              {s.incoming.viewCv}
             </Button>
             <span class="flex-1"></span>
-            <Button variant="primary" size="sm" onclick={() => resolveRequest(req, 'contacted')}>Mark contacted</Button>
-            <Button variant="outline" size="sm" onclick={() => resolveRequest(req, 'declined')}>Decline</Button>
+            <Button variant="primary" size="sm" onclick={() => resolveRequest(req, 'contacted')}>
+              {s.incoming.markContacted}
+            </Button>
+            <Button variant="outline" size="sm" onclick={() => resolveRequest(req, 'declined')}>
+              {s.incoming.decline}
+            </Button>
           </div>
         </div>
       {/each}
     </div>
-    <p class="mt-4 text-xs text-muted-foreground">
-      The seeker's identity is never shown — only the contact they chose to share. You reach out directly.
-    </p>
+    <p class="mt-4 text-xs text-muted-foreground">{s.incoming.footnote}</p>
   {/if}
 {/if}
 
 <ConfirmDialog
   bind:open={confirmWithdrawOpen}
-  title={`Stop being a referrer for ${withdrawTarget?.company_name || withdrawTarget?.company_slug || ''}?`}
-  description="You can offer again later."
-  confirmLabel="Stop referring"
+  title={`${s.offers.withdrawDialog.titlePrefix} ${withdrawTarget?.company_name || withdrawTarget?.company_slug || ''}${s.offers.withdrawDialog.titleSuffix}`}
+  description={s.offers.withdrawDialog.description}
+  confirmLabel={s.offers.withdrawDialog.confirmLabel}
   variant="destructive"
   onConfirm={withdrawOffer}
 />

@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -47,6 +49,10 @@ type applicationDetail struct {
 	// itself: mail never settles an application, and this is how that rule is said out loud
 	// rather than left for the reader to infer from a stage that did not move.
 	StageSuggestion *jobtracking.StageSuggestion `json:"stage_suggestion,omitempty"`
+	// AutoApply is the caller's live auto-apply attempt for this job, and null when none
+	// exists (openspec/changes/auto-apply-review-tracking). The drawer's own approve/
+	// decline banner reads this; it never carries the attempt's internal error text.
+	AutoApply *autoapply.AutoApplyReviewInfo `json:"auto_apply,omitempty"`
 }
 
 // GetTrackedApplication returns the caller's application for a job slug together
@@ -107,6 +113,15 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 		events = nil
 	}
 
+	// A failure here must not cost the caller the rest of the panel either — the same
+	// degrade-to-absent convention the history (events) and the stage-set read
+	// (lastStageSet) above already follow.
+	autoApply, err := autoApplyReviewInfoForJob(c.Context(), h.queries, userID, job.ID)
+	if err != nil {
+		log.Printf("auto-apply: reading review info for user %d job %d: %v", userID, job.ID, err)
+		autoApply = nil
+	}
+
 	return c.JSON(fiber.Map{"data": applicationDetail{
 		Job:             jv,
 		ViewedAt:        tsPtr(app.ViewedAt),
@@ -118,6 +133,7 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 		Emails:          emails,
 		Events:          timelineEvents(events),
 		StageSuggestion: jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time),
+		AutoApply:       autoApply,
 	}})
 }
 

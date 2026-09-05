@@ -1,0 +1,16 @@
+[Unit]
+Description=timer: freehire-similarw every 20 min
+[Timer]
+# Monotonic, and the GAP is the feature. A 500-job slice took 9m45s on this host (measured
+# 2026-09-05) and the next starts 20 minutes after the last one BEGAN, so about ten
+# minutes in every twenty nothing holds a lock on `jobs` and a DDL migration can take the
+# ACCESS EXCLUSIVE it needs.
+#
+# OnUnitActiveSec, not OnCalendar: the gap has to follow the run, and a wall-clock slot
+# would start the next slice while a slow one was still going — exactly the overlap this
+# unit exists to remove.
+OnBootSec=5min
+OnUnitActiveSec=20min
+Persistent=true
+[Install]
+WantedBy=timers.target

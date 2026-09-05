@@ -31,15 +31,30 @@ func FullCatalogProviders(reg map[string]Source) []string {
 	return out
 }
 
-// SweepGraceWindows returns the post-run sweep window each adapter in reg declares that is wider
-// than the default (see sweepGrace). cmd/ingest consults this when computing a provider's cutoff;
-// a provider absent from the map is swept on the default window, which is every provider but the
-// slice-crawled few.
+// SweepGraceWindows returns the post-run sweep window each adapter in reg declares in place of
+// the default — wider for a slice-crawled source that can't yet tell drift from removal, narrower
+// for a full-board source whose unseen reading is already evidence (see sweepGrace). cmd/ingest
+// consults this when computing a provider's cutoff; a provider absent from the map is swept on
+// the default window.
 func SweepGraceWindows(reg map[string]Source) map[string]time.Duration {
 	out := make(map[string]time.Duration)
 	for name, src := range reg {
 		if s, ok := src.(sweepGrace); ok {
 			out[name] = s.sweepGrace()
+		}
+	}
+	return out
+}
+
+// FullBoardListingProviders returns, as a set, the provider names in reg whose adapter is
+// registered as structurally proving it lists a board to completion (see fullBoardListing).
+// cmd/ingest consults this as the sweep's fourth board-scope qualification gate: a provider
+// absent from this set never contributes to the board-scoped close, however its crawl went.
+func FullBoardListingProviders(reg map[string]Source) map[string]bool {
+	out := make(map[string]bool)
+	for name, src := range reg {
+		if _, ok := src.(fullBoardListing); ok {
+			out[name] = true
 		}
 	}
 	return out

@@ -14,4 +14,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`applydate` `collections` `ghost` `ghostreport` `job` `jobdedup` `jobderive` `jobfacts` `jobhash` `jobreality` `jobview` `liveness` `outboundurl` `privatejob` `silence` `verdict` `ycdir`
+`applydate` `collections` `ghost` `ghostreport` `job` `jobdedup` `jobderive` `jobfacts` `jobhash` `jobreality` `jobview` `liveness` `outboundurl` `privatejob` `reqextract` `silence` `verdict` `ycdir`

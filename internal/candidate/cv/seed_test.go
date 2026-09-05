@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 )
 
@@ -18,11 +19,11 @@ func TestSeedMapsStructured(t *testing.T) {
 		Links:    []string{"github.com/ada"},
 		Skills:   []string{"Go", "PostgreSQL"},
 		Experience: []resumeextract.Experience{
-			{Title: "Senior Engineer", Company: "Analytical Engines", Location: "London", Start: "2018", End: "Present",
+			{Title: "Senior Engineer", Company: "Analytical Engines", Location: "London", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 				Summary: "Pioneering computing company.", Highlights: []string{"Built the difference engine."}, Stack: []string{"Assembly"}},
 		},
 		Education: []resumeextract.Education{
-			{Degree: "BSc Mathematics", Institution: "Cambridge", Year: "1835"},
+			{Degree: "BSc Mathematics", Institution: "Cambridge", Year: &perioddate.PeriodDate{Year: 1835}},
 		},
 		Languages: []string{"English", "French"},
 		Projects: []resumeextract.Project{
@@ -56,7 +57,8 @@ func TestSeedMapsStructured(t *testing.T) {
 		t.Fatalf("experience not seeded: %+v", doc.Experience)
 	}
 	e := doc.Experience[0]
-	if e.Role != "Senior Engineer" || e.Company != "Analytical Engines" || e.Location != "London" || e.Start != "2018" || e.End != "Present" {
+	if e.Role != "Senior Engineer" || e.Company != "Analytical Engines" || e.Location != "London" ||
+		e.Start == nil || *e.Start != (perioddate.PeriodDate{Year: 2018}) || !e.Current {
 		t.Errorf("experience fields not seeded: %+v", e)
 	}
 	if e.Summary != "Pioneering computing company." {
@@ -68,7 +70,8 @@ func TestSeedMapsStructured(t *testing.T) {
 	if len(e.Stack) != 1 || e.Stack[0] != "Assembly" {
 		t.Errorf("experience stack not seeded: %+v", e.Stack)
 	}
-	if len(doc.Education) != 1 || doc.Education[0].Degree != "BSc Mathematics" || doc.Education[0].End != "1835" {
+	if len(doc.Education) != 1 || doc.Education[0].Degree != "BSc Mathematics" ||
+		doc.Education[0].End == nil || *doc.Education[0].End != (perioddate.PeriodDate{Year: 1835}) {
 		t.Errorf("education not seeded: %+v", doc.Education)
 	}
 	if len(doc.Languages) != 2 || doc.Languages[0].Name != "English" {

@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest freshteam
 [Timer]
-OnCalendar=*:39:00
+OnCalendar=*:20:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

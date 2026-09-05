@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest emagine
 [Timer]
-OnCalendar=*:14:00
+OnCalendar=*:55:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

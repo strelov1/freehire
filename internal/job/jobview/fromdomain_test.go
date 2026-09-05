@@ -140,3 +140,99 @@ func TestFromDomain_RequirementsPassThroughUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// The whole point of storing a deterministic derivation: a posting the model has never
+// reached must still SERVE its requirements. The SQL overlay in SetJobEnrichment
+// cannot deliver that — it runs only when the model runs — so the fold has to happen
+// on the read path, and this is the test that says so.
+func TestFromDomain_DerivedRequirementsServeAnUnenrichedJob(t *testing.T) {
+	row := db.Job{
+		ID: 6, Source: "greenhouse", ExternalID: "acme:6", Title: "Backend Engineer",
+		Company: "Acme", CompanySlug: "acme", PublicSlug: "backend-engineer-acme-6",
+		CreatedAt: pgtype.Timestamptz{Time: time.Date(2026, 1, 7, 0, 0, 0, 0, time.UTC), Valid: true},
+		// Never enriched: no payload, version 0.
+		RequirementsDerived: json.RawMessage(
+			`[{"text":"5+ years of Go","priority":"required"},{"text":"Kubernetes","priority":"preferred"}]`),
+	}
+
+	j, x, err := job.FromRow(row)
+	if err != nil {
+		t.Fatalf("job.FromRow: %v", err)
+	}
+	got, err := jobview.FromDomain(j, x)
+	if err != nil {
+		t.Fatalf("FromDomain: %v", err)
+	}
+
+	if len(got.Enrichment.Requirements) != 2 {
+		t.Fatalf("Requirements = %v, want the two derived entries", got.Enrichment.Requirements)
+	}
+	if got.Enrichment.Requirements[0].Text != "5+ years of Go" ||
+		got.Enrichment.Requirements[1].Priority != "preferred" {
+		t.Errorf("Requirements = %+v, want the derived list verbatim", got.Enrichment.Requirements)
+	}
+	// The derivation is not enrichment: it must not make an unenriched job look
+	// enriched, because the enrichment queue is gated on exactly that stamp.
+	if got.EnrichmentVersion != 0 || got.EnrichedAt != nil {
+		t.Errorf("provenance = version %d / %v, want an unenriched job", got.EnrichmentVersion, got.EnrichedAt)
+	}
+}
+
+// The model wins where it has a reading: it reaches the postings whose requirements are
+// prose with no list markup, which the extractor cannot.
+func TestFromDomain_ModelRequirementsWinOverTheDerivation(t *testing.T) {
+	row := db.Job{
+		ID: 7, Source: "greenhouse", ExternalID: "acme:7", Title: "Backend Engineer",
+		Company: "Acme", CompanySlug: "acme", PublicSlug: "backend-engineer-acme-7",
+		CreatedAt:  pgtype.Timestamptz{Time: time.Date(2026, 1, 7, 0, 0, 0, 0, time.UTC), Valid: true},
+		Enrichment: json.RawMessage(`{"requirements":[{"text":"Rust","priority":"required"}]}`),
+		RequirementsDerived: json.RawMessage(
+			`[{"text":"5+ years of Go","priority":"required"}]`),
+	}
+
+	j, x, err := job.FromRow(row)
+	if err != nil {
+		t.Fatalf("job.FromRow: %v", err)
+	}
+	got, err := jobview.FromDomain(j, x)
+	if err != nil {
+		t.Fatalf("FromDomain: %v", err)
+	}
+
+	if len(got.Enrichment.Requirements) != 1 || got.Enrichment.Requirements[0].Text != "Rust" {
+		t.Errorf("Requirements = %+v, want the model's own list", got.Enrichment.Requirements)
+	}
+}
+
+// A row that predates migration 0139, or one whose payload is unreadable, must serve no
+// requirements rather than fail the read: the column is a display convenience, and
+// losing a whole posting over it is the worse trade.
+func TestFromDomain_UnreadableDerivedRequirementsAreNotFatal(t *testing.T) {
+	for name, payload := range map[string]json.RawMessage{
+		"absent":        nil,
+		"empty array":   json.RawMessage(`[]`),
+		"not a list":    json.RawMessage(`{"text":"Go"}`),
+		"not even json": json.RawMessage(`{`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			row := db.Job{
+				ID: 8, Source: "greenhouse", ExternalID: "acme:8", Title: "Backend Engineer",
+				Company: "Acme", CompanySlug: "acme", PublicSlug: "backend-engineer-acme-8",
+				CreatedAt:           pgtype.Timestamptz{Time: time.Date(2026, 1, 7, 0, 0, 0, 0, time.UTC), Valid: true},
+				RequirementsDerived: payload,
+			}
+
+			j, x, err := job.FromRow(row)
+			if err != nil {
+				t.Fatalf("job.FromRow: %v", err)
+			}
+			got, err := jobview.FromDomain(j, x)
+			if err != nil {
+				t.Fatalf("FromDomain: %v", err)
+			}
+			if len(got.Enrichment.Requirements) != 0 {
+				t.Errorf("Requirements = %v, want none", got.Enrichment.Requirements)
+			}
+		})
+	}
+}

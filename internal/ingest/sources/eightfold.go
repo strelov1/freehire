@@ -45,6 +45,12 @@ func NewEightfold(c JSONGetter) Source { return eightfold{http: c, retryBase: ei
 
 func (eightfold) Provider() string { return "eightfold" }
 
+// fullBoardListing: pageList proves completeness on both list-API generations — the server's
+// own count is authoritative, no artificial cap exists, and any page error discards what was
+// collected and fails the whole listing. Detail fetches are best-effort per posting (list-only
+// fallback, logged). See the fullBoardListing interface for the bar.
+func (eightfold) fullBoardListing() {}
+
 // eightfoldBoard is a configured board split into the host and tenant domain the endpoints need.
 type eightfoldBoard struct {
 	host, domain string

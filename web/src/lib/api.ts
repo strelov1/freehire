@@ -10,7 +10,10 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
-import type { Answers, Display, RevisionView } from '$lib/generated/contracts';
+// `Responses` is the onboarding survey's record. Aliased on the way in because the
+// generated contracts are one flat namespace and the name says nothing on its own there —
+// see cmd/gen-contracts for why it is not called `Answers` like its Go siblings.
+import type { Answers, Display, Responses as SurveyAnswers, RevisionView } from '$lib/generated/contracts';
 import type {
   CvAppearanceDefaults,
   CvAtsDelta,
@@ -47,9 +50,12 @@ import type {
   VoteResult,
   ApiKey,
   CreatedApiKey,
+  WebhookConfig,
   ConnectedIdentities,
   SavedSearch,
-  Board,
+  JobList,
+  PublicJobList,
+  JobListMembership,
   UserProfile,
   Subscription,
   TelegramStatus,
@@ -73,6 +79,8 @@ import type {
   Allowance,
   AiUsage,
   BillingOverview,
+  CheckoutSession,
+  InviteSummary,
   PlansMatrix,
   PlanState,
   UsageHistoryEntry,
@@ -344,6 +352,13 @@ export function createApi(
     };
     // Assigned after the spread, so a timeout is added to the init rather than
     // substituted for it. A caller that brought its own signal keeps it.
+    //
+    // `== null` is LOAD-BEARING, not a loose-equality slip: the abortable reads
+    // (searchJobs/suggest/listCompanies) pass `{ signal }` unconditionally, so a caller
+    // that named no signal arrives here with `signal: undefined` rather than with no
+    // `signal` key at all. Tighten this to `===` and those three quietly stop getting
+    // the SSR timeout above — which is the ~8 `+page.server.ts` callers, and exactly the
+    // failure that comment describes.
     const timeout = timeoutMs != null && request.signal == null ? AbortSignal.timeout(timeoutMs) : undefined;
     if (timeout) {
       request.signal = timeout;
@@ -482,11 +497,16 @@ export function createApi(
    *  would score every job by similarity, so a query like "devops" would return the
    *  whole catalogue reordered rather than the handful that match — which reads as
    *  "search is broken". */
-  async function searchJobs(facets: URLSearchParams, limit: number, offset: number): Promise<Slice<Job>> {
+  async function searchJobs(
+    facets: URLSearchParams,
+    limit: number,
+    offset: number,
+    signal?: AbortSignal,
+  ): Promise<Slice<Job>> {
     const params = new URLSearchParams(facets);
     params.set('limit', String(limit));
     params.set('offset', String(offset));
-    return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`), offset);
+    return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`, { signal }), offset);
   }
 
   /** Complete a partly-typed query against the catalogue's own vocabulary: the
@@ -497,9 +517,13 @@ export function createApi(
    *  Engineer Google" carries the role AND the company, and applying only one of them
    *  discards what was typed. An empty query returns nothing: what an empty box offers
    *  is a curated starting point the client owns (see starterSuggestions). */
-  async function suggest(q: string, limit: number): Promise<ApiSuggestion[]> {
+  async function suggest(
+    q: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<ApiSuggestion[]> {
     const params = new URLSearchParams({ q, limit: String(limit) });
-    return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`);
+    return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`, { signal });
   }
 
   /** Turn a written description of a job search into filter values (the AI filter).
@@ -617,12 +641,16 @@ export function createApi(
     limit: number,
     offset: number,
     facets?: URLSearchParams,
+    signal?: AbortSignal,
   ): Promise<Slice<CompanyListItem>> {
     const params = new URLSearchParams(facets);
     if (q) params.set('q', q);
     params.set('limit', String(limit));
     params.set('offset', String(offset));
-    return toSlice(await request<Page<CompanyListItem>>(`/api/v1/companies?${params}`), offset);
+    return toSlice(
+      await request<Page<CompanyListItem>>(`/api/v1/companies?${params}`, { signal }),
+      offset,
+    );
   }
 
   async function getCompany(
@@ -923,6 +951,28 @@ export function createApi(
     return jobInteraction(slug, 'save', 'DELETE');
   }
 
+  /** Start an auto-apply attempt for the current user and this job
+   *  (openspec/changes/auto-apply-submit-trigger). Idempotent for a live, undecided
+   *  attempt; rejects with an ApiError (402 not PRO, 409 no base CV or already declined,
+   *  400 not a Greenhouse posting) whose `message` is the caller-facing reason. */
+  function autoApplyJob(slug: string): Promise<{ status: string }> {
+    return requestData<{ status: string }>(`/api/v1/jobs/${encodeURIComponent(slug)}/auto-apply`, {
+      method: 'POST',
+    });
+  }
+
+  /** Record the candidate's approve/decline decision on a tailored-but-not-yet-reviewed
+   *  auto-apply queue entry (openspec/changes/auto-apply-review-tracking, calling the
+   *  endpoint auto-apply-tailored-resume already built). Rejects with an ApiError (404
+   *  foreign/missing entry, 409 no tailored CV yet or already reviewed) whose `message` is
+   *  the caller-facing reason. */
+  function reviewAutoApply(queueId: string, decision: 'approved' | 'declined'): Promise<{ decision: string }> {
+    return requestData<{ decision: string }>(
+      `/api/v1/me/auto-apply/${encodeURIComponent(queueId)}/review`,
+      jsonBody('POST', { decision }),
+    );
+  }
+
   /** Dismiss (swipe away) a job in the swipe deck. Keeps it out of the deck only;
    *  the job stays visible in the normal list and search. */
   function dismissJob(slug: string): Promise<UserJob> {
@@ -1029,9 +1079,41 @@ export function createApi(
    *  Throws when billing is not configured on this deployment, or when no paywall is set
    *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
    *  entry point, never as an error to show. */
-  async function billingCheckout(priceID?: string): Promise<{ url: string }> {
+  async function billingCheckout(priceID?: string): Promise<CheckoutSession> {
     const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
-    return requestData<{ url: string }>(`/api/v1/billing/checkout${q}`);
+    // No code here. This is a GET, and `SameSite=Lax` sends the session cookie on a
+    // cross-site top-level navigation — so a GET that redeemed a code would let any page
+    // burn a visitor's one lifetime redemption by linking to it. Redemption is its own
+    // POST; this call only reads back what the account already holds.
+    return requestData<CheckoutSession>(`/api/v1/billing/checkout${q}`);
+  }
+
+  /** Check what a promo code is worth without spending it. Rate limited server-side, and
+   *  every refusal about the code itself is the same 404 — telling "no such code" apart
+   *  from "out of seats" would make this an oracle for guessing them. */
+  async function promoPreview(code: string): Promise<{ percent_off: number }> {
+    // jsonBody and not a hand-built init: it carries the Content-Type the server's body
+    // parser requires. Without that header the request is refused before the code is even
+    // read, which looks exactly like a code that does not exist.
+    return requestData<{ percent_off: number }>(
+      '/api/v1/me/promo/preview',
+      jsonBody('POST', { code }),
+    );
+  }
+
+  /** Spend this account's one lifetime redemption on a code. Durable: once recorded, every
+   *  later checkout reads the percentage back, so a provider failure while opening the
+   *  payment page costs a retry rather than the offer. */
+  async function promoRedeem(code: string): Promise<{ percent_off: number }> {
+    return requestData<{ percent_off: number }>(
+      '/api/v1/me/promo/redeem',
+      jsonBody('POST', { code }),
+    );
+  }
+
+  /** This account's invite link and what it has earned. */
+  async function myInvite(): Promise<InviteSummary> {
+    return requestData<InviteSummary>('/api/v1/me/invite');
   }
 
   /** What the caller is paying and what has been charged. 404 when there is no
@@ -1183,6 +1265,32 @@ export function createApi(
     await call(`/api/v1/me/api-keys/${id}`, { method: 'DELETE' });
   }
 
+  // --- Webhook (saved-search alerts) -----------------------------------------
+  //
+  // The account's single webhook destination for saved-search matches (the
+  // `webhook` subscription channel). Management is cookie-only. Deliveries
+  // are plain, unsigned POSTs.
+
+  /** The current user's webhook destination, or null if none is configured. */
+  async function getWebhook(): Promise<WebhookConfig | null> {
+    return requestData<WebhookConfig | null>('/api/v1/me/webhook');
+  }
+
+  /** Create the destination, or update its URL if one already exists. */
+  async function createOrUpdateWebhook(url: string): Promise<WebhookConfig> {
+    return requestData<WebhookConfig>('/api/v1/me/webhook', jsonBody('POST', { url }));
+  }
+
+  /** Enable or disable the destination without changing its URL. */
+  async function setWebhookEnabled(enabled: boolean): Promise<WebhookConfig> {
+    return requestData<WebhookConfig>('/api/v1/me/webhook', jsonBody('PATCH', { enabled }));
+  }
+
+  /** Delete the destination entirely. */
+  async function deleteWebhook(): Promise<void> {
+    await call('/api/v1/me/webhook', { method: 'DELETE' });
+  }
+
   // Saved searches: named snapshots of the filter state (cookie-only on the server).
 
   /** The current user's saved searches, most recently updated first. */
@@ -1218,22 +1326,69 @@ export function createApi(
     await call(`/api/v1/me/searches/${id}`, { method: 'DELETE' });
   }
 
-  /** Publish a saved search as a public board (cookie-only). Returns the updated set,
-   *  now carrying `public_slug`. An optional `authorLabel` is shown on the board; blank
-   *  renders it anonymously. Re-sharing keeps the existing slug. */
-  async function shareSavedSearch(id: number, authorLabel = ''): Promise<SavedSearch> {
-    return requestData<SavedSearch>(`/api/v1/me/searches/${id}/share`, jsonBody('POST', { author_label: authorLabel }));
+  // Job lists: named sets of specific jobs (cookie-only on the server), independent
+  // of the "save" star and of saved searches.
+
+  /** The current user's job lists, most recently updated first. */
+  async function listJobLists(): Promise<JobList[]> {
+    return requestData<JobList[]>('/api/v1/me/lists');
   }
 
-  /** Make a shared board private again (cookie-only). Idempotent. */
-  async function unshareSavedSearch(id: number): Promise<void> {
-    await call(`/api/v1/me/searches/${id}/share`, { method: 'DELETE' });
+  /** Create a named job list. `description` is optional (defaults to ""). A
+   *  duplicate name or the per-user cap is a 409. */
+  async function createJobList(name: string, description = ''): Promise<JobList> {
+    return requestData<JobList>('/api/v1/me/lists', jsonBody('POST', { name, description }));
   }
 
-  /** Public read of a shared board by slug — unauthenticated. Returns only display
-   *  fields (name, query, author_label). An unknown/unshared slug throws (404). */
-  async function getBoard(slug: string): Promise<Board> {
-    return requestData<Board>(`/api/v1/boards/${encodeURIComponent(slug)}`);
+  /** Overwrite a job list's name and/or description; an omitted field is unchanged. */
+  async function updateJobList(
+    id: number,
+    patch: { name?: string; description?: string },
+  ): Promise<JobList> {
+    return requestData<JobList>(`/api/v1/me/lists/${id}`, jsonBody('PATCH', patch));
+  }
+
+  /** Delete a job list by id. Its jobs and the user's separate "save" flags are
+   *  untouched. */
+  async function deleteJobList(id: number): Promise<void> {
+    await call(`/api/v1/me/lists/${id}`, { method: 'DELETE' });
+  }
+
+  /** Add a job (by its public slug) to one of the caller's lists. Idempotent: adding
+   *  an already-present job succeeds without duplicating membership. */
+  async function addJobToList(id: number, jobSlug: string): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/jobs`, jsonBody('POST', { job_slug: jobSlug }));
+  }
+
+  /** Remove a job (by its public slug) from one of the caller's lists. Idempotent. */
+  async function removeJobFromList(id: number, jobSlug: string): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/jobs/${encodeURIComponent(jobSlug)}`, { method: 'DELETE' });
+  }
+
+  /** Publish a job list as a public, read-only page (cookie-only). Returns the
+   *  updated list, now carrying `public_slug`. Re-sharing keeps the existing slug. */
+  async function shareJobList(id: number): Promise<JobList> {
+    return requestData<JobList>(`/api/v1/me/lists/${id}/share`, { method: 'POST' });
+  }
+
+  /** Make a shared job list private again (cookie-only). Idempotent. */
+  async function unshareJobList(id: number): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/share`, { method: 'DELETE' });
+  }
+
+  /** Public read of a shared job list by slug — unauthenticated. An unknown/unshared
+   *  slug throws (404). */
+  async function getPublicJobList(slug: string): Promise<PublicJobList> {
+    return requestData<PublicJobList>(`/api/v1/lists/${encodeURIComponent(slug)}`);
+  }
+
+  /** Every one of the caller's job lists, flagged with whether the given job (by its
+   *  public slug) already belongs to it — what the job card's "Add to list" control
+   *  reads to render its toggle state. An unknown slug throws (404). */
+  async function listJobListMembership(jobSlug: string): Promise<JobListMembership[]> {
+    return requestData<JobListMembership[]>(
+      `/api/v1/me/lists/membership?job_slug=${encodeURIComponent(jobSlug)}`,
+    );
   }
 
   // The experience bank: what the product has recorded about what the user has done.
@@ -1340,6 +1495,35 @@ export function createApi(
    *  400 naming the invalid field. */
   async function updateScreeningAnswers(patch: Partial<Answers>): Promise<Answers> {
     return requestData<Answers>('/api/v1/me/screening-answers', jsonBody('PUT', patch));
+  }
+
+  // The onboarding survey — what the candidate told us about their SEARCH (how far along it
+  // is, what is blocking it, what they earn today). Distinct from the screening answers
+  // above, which are what an employer sees; and from the profile, which is a search filter.
+  // What they WANT to be paid is a screening answer, not one of these.
+
+  /** The current user's survey answers. Never null and never a 404: an account that has
+   *  answered nothing reads an object with every field absent, which is what lets the
+   *  wizard decide field by field whether it still has something to ask. */
+  async function getSurvey(): Promise<SurveyAnswers> {
+    return requestData<SurveyAnswers>('/api/v1/me/survey');
+  }
+
+  /** Partially update the user's survey answers: a field the patch omits keeps whatever was
+   *  already stored, and there is no way to clear one back to unstated. A value outside its
+   *  vocabulary, a note alongside a challenge other than `other`, a malformed currency, or a
+   *  non-positive income is a 400 naming the offending field. */
+  async function updateSurvey(patch: Partial<SurveyAnswers>): Promise<SurveyAnswers> {
+    return requestData<SurveyAnswers>('/api/v1/me/survey', jsonBody('PUT', patch));
+  }
+
+  /** Record that this account has been through the onboarding wizard, so the layout stops
+   *  routing it there. Idempotent — a second call keeps the original timestamp. */
+  async function completeOnboarding(): Promise<void> {
+    await requestData<{ onboarding_complete: boolean }>(
+      '/api/v1/me/onboarding/complete',
+      jsonBody('POST', {}),
+    );
   }
 
   // Talent Network: the caller's own opt-in visibility setting (distinct from the public,
@@ -2241,6 +2425,8 @@ export function createApi(
     markJobApplied,
     saveJob,
     unsaveJob,
+    autoApplyJob,
+    reviewAutoApply,
     dismissJob,
     undismissJob,
     voteJob,
@@ -2261,6 +2447,9 @@ export function createApi(
     myPlan,
     plans,
     billingCheckout,
+    promoPreview,
+    promoRedeem,
+    myInvite,
     billingManageUrl,
     billingSubscription,
     myPlanHistory,
@@ -2279,13 +2468,24 @@ export function createApi(
     listApiKeys,
     createApiKey,
     revokeApiKey,
+    getWebhook,
+    createOrUpdateWebhook,
+    setWebhookEnabled,
+    deleteWebhook,
     listSavedSearches,
     createSavedSearch,
     updateSavedSearch,
     deleteSavedSearch,
-    shareSavedSearch,
-    unshareSavedSearch,
-    getBoard,
+    listJobLists,
+    createJobList,
+    updateJobList,
+    deleteJobList,
+    addJobToList,
+    removeJobFromList,
+    shareJobList,
+    unshareJobList,
+    getPublicJobList,
+    listJobListMembership,
     getExperience,
     updateExperienceAtom,
     mergeExperienceAtoms,
@@ -2297,6 +2497,9 @@ export function createApi(
     saveProfile,
     getScreeningAnswers,
     updateScreeningAnswers,
+    getSurvey,
+    updateSurvey,
+    completeOnboarding,
     getTalentNetwork,
     setTalentNetworkVisibility,
     getTalentNetworkProfile,

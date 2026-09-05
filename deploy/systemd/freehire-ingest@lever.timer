@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest lever
 [Timer]
-OnCalendar=*:37:00
+OnCalendar=*:40:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

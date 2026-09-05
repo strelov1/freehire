@@ -34,7 +34,14 @@ type providerHealth struct {
 // the catalogue holds no open job at all, which render treats as "publish nothing"
 // rather than as a 1970 timestamp.
 type snapshot struct {
-	queues        []queueMetrics
+	queues []queueMetrics
+	// notifyPendingSubscriptions/notifyOldestAgeSeconds are the subscription-digest
+	// backlog. The AGE is the one that catches a starved subscription: a pass runs every
+	// five minutes, so an age climbing without bound means someone is never served — and
+	// that produces no failure in the worker's own log to notice.
+	notifyPendingSubscriptions int64
+	notifyOldestAgeSeconds     float64
+
 	healthyBoards int64
 	failingBoards int64
 	cooledBoards  int64
@@ -60,6 +67,13 @@ func render(s snapshot) string {
 		func(q queueMetrics) string { return fmt.Sprintf("%d", q.deadLetters) }, s.queues)
 	writeFamily(&b, "freehire_queue_oldest_age_seconds", "Age of the oldest live entry in a pipeline outbox queue.",
 		func(q queueMetrics) string { return fmt.Sprintf("%.3f", q.oldestAgeSeconds) }, s.queues)
+
+	writeHeader(&b, "freehire_notify_pending_subscriptions",
+		"Active subscriptions with at least one undelivered match.")
+	fmt.Fprintf(&b, "freehire_notify_pending_subscriptions %d\n", s.notifyPendingSubscriptions)
+	writeHeader(&b, "freehire_notify_oldest_pending_age_seconds",
+		"Age of the oldest undelivered subscription match.")
+	fmt.Fprintf(&b, "freehire_notify_oldest_pending_age_seconds %.3f\n", s.notifyOldestAgeSeconds)
 
 	writeHeader(&b, "freehire_boards_total", "Ingest boards by health state.")
 	for _, st := range boardStates(s.healthyBoards, s.failingBoards, s.cooledBoards) {

@@ -120,7 +120,18 @@ an analysis that does not exist would put a query on the commonest read there is
   in a turn and the least trusted; sending markup spends the context window on tags and widens
   what there is to misread.
 - `TailoringContext` takes the job rather than reading it, so this package needs no job port —
-  every caller has already loaded and authorized that row.
+  every caller has already loaded and authorized that row. **It also takes the posting's own
+  requirements** for a sharper reason: the model's enrichment list and the markup parser's
+  `requirements_derived` column are reconciled in exactly one place, `jobview.FromDomain`, and
+  `jobview` sits in the `job` block, which this one is BELOW and may not import. Merging them a
+  second time here is precisely the drift that one-place rule exists to prevent, so the caller
+  (`internal/api/handler`'s `postingRequirements`) does it and passes the answer in.
+- **Two requirement lists reach a tailoring reader and they are not the same thing.**
+  `MissingHave`/`MissingGap` is what an ANALYSIS decided the CV lacks; `Job.Requirements` is what
+  the POSTING asks for, including what the CV already covers. The second matters because
+  `descriptionLimit` clips the posting and a requirement list is nearly always at its end — so on
+  a long posting the requirements were the first thing to fall off, and a reader that had no
+  cached analysis saw none at all.
 - `Refresh` claims nothing, on purpose: by the time it runs the turn is over, so there is no
   concurrent caller for that pair to coalesce with.
 - `Run` with a nil `emit` runs the sync chain; non-nil streams it. That is the only difference

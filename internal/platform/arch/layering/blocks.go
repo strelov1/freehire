@@ -46,7 +46,7 @@ var blocks = map[string][]string{
 	},
 	"dict": {
 		"classify", "companyname", "industrytag", "lang", "location", "normalize",
-		"roletype", "skilladjacency", "skillbundle", "skilltag",
+		"roletype", "skilladjacency", "skillbundle", "skilltag", "slugmint",
 		// skillvec/gen is the registry generator — a main package that reads skilltag
 		// and writes skillvec's source. It never ships in a binary, but it is a package
 		// in the repo, so it needs a block like any other.
@@ -75,6 +75,13 @@ var blocks = map[string][]string{
 		// this package, and billing's only callers are the webhook handler in api and a
 		// binary in cmd.
 		"billing",
+		// promo decides what discount an account is owed — a promo code it redeemed, the
+		// first-month discount an invited account is offered, the credit a referrer earned.
+		// It sits beside billing rather than inside it because billing's scope is the
+		// subscription itself, and neither imports the other: promo reads its own tables
+		// through platform/db and returns a plain value, and the handler and the worker that
+		// hold both are in api and cmd, which may import anything.
+		"promo",
 		"userprofile", "username",
 	},
 	"candidate": {
@@ -93,18 +100,28 @@ var blocks = map[string][]string{
 		// platform and derives nothing itself — the caller runs the same dictionaries
 		// the CV path runs, which is what keeps one text from resolving two ways.
 		"linkedinprofile",
-		"matchanalysis", "pii", "resume", "resumeextract",
+		"matchanalysis", "pii", "perioddate", "resume", "resumeextract",
+		// survey holds the candidate's self-reported segmentation answers (job-search
+		// stage, biggest challenge, current income). It sits here rather than in engage,
+		// whose digests are its most likely future reader, because it states what a
+		// candidate IS — engage is layer 7 and may import this, but not the reverse.
+		"survey",
 	},
 	"job": {
 		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
-		"outboundurl", "privatejob", "silence", "verdict", "ycdir",
+		"outboundurl", "privatejob",
+		// reqextract reads a posting's requirements out of its own description markup
+		// and returns them in the enrichment contract's shape, so it takes enrich the
+		// way jobview does — the block below it, not the model.
+		"reqextract",
+		"silence", "verdict", "ycdir",
 	},
 	"application": {
-		"appevent", "apptimeline", "autoapply", "calmatch", "calsync", "deliverywindow",
-		"followup", "gmailsync", "ical", "inbox", "jobtracking", "mailbox", "mailclassify",
-		"mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl", "userjob",
-		"viewlog",
+		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
+		"deliverywindow", "followup", "gmailsync", "ical", "inbox", "jobtracking", "joblists",
+		"mailbox", "mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl",
+		"userjob", "viewlog",
 	},
 	"search": {
 		"facetsnapshot", "savedsearch", "search", "searchdrain", "searchintent",
@@ -121,10 +138,15 @@ var blocks = map[string][]string{
 		"catalogstats", "contribution", "ingestsched", "jdresolve", "linkimport", "linksource",
 		"moderation", "pipeline", "screeninganswers", "sources", "submission", "telegram",
 	},
+	// socialdigest is here and not in ingest because it is outbound engagement — the
+	// same shape as broadcast and notify, differing only in that its audience is the
+	// public rather than an account. It reads the catalogue (job) and the view rollup
+	// (application), both below it.
 	"engage": {
 		"broadcast", "community", "companyfeedback", "emailnotify",
 		"mailpreview", "notify", "nudge", "onboarding", "pushnotify", "referral",
-		"reminder", "report", "subscription", "telegramnotify", "vote",
+		"reminder", "report", "socialdigest", "subscription", "telegramnotify", "vote",
+		"webhooknotify",
 	},
 	// atsapply and candidateprofile sit here, not lower, because both need to reach
 	// ingest (applyform, screeninganswers) as well as candidate (experience, cv,

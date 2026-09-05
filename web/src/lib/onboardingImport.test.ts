@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mergeFacets, type StagedFacets } from './onboardingImport';
+import { MAX_SPECIALIZATIONS } from './profileLimits';
 import type { ResumeProfile } from './types';
 
 function staged(over: Partial<StagedFacets> = {}): StagedFacets {
@@ -48,6 +49,33 @@ describe('mergeFacets', () => {
   it('adds a second level rather than replacing the first', () => {
     const got = mergeFacets(staged({ seniorities: ['mid'] }), imported({ seniority: 'senior' }));
     expect(got.seniorities).toEqual(['mid', 'senior']);
+  });
+
+  // The server rejects the whole save past the cap, so an uncapped union here turned a good
+  // import into a profile that could not be saved at all — the 400 a candidate hit on prod.
+  describe('the specialization cap', () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => `category-${i}`);
+
+    it('keeps at most the cap and reports what it left out', () => {
+      const got = mergeFacets(staged(), imported({ categories: many(MAX_SPECIALIZATIONS + 3) }));
+
+      expect(got.specializations).toHaveLength(MAX_SPECIALIZATIONS);
+      expect(got.specializationsDropped).toBe(3);
+    });
+
+    it('drops the overflow from the import, never what the user already picked', () => {
+      const mine = ['backend', 'data'];
+      const got = mergeFacets(staged({ specializations: mine }), imported({ categories: many(MAX_SPECIALIZATIONS) }));
+
+      expect(got.specializations.slice(0, 2)).toEqual(mine);
+      expect(got.specializations).toHaveLength(MAX_SPECIALIZATIONS);
+      expect(got.specializationsDropped).toBe(2);
+    });
+
+    it('reports nothing dropped when the import fits', () => {
+      const got = mergeFacets(staged({ specializations: ['backend'] }), imported({ categories: ['data'] }));
+      expect(got.specializationsDropped).toBe(0);
+    });
   });
 
   describe('resolved', () => {

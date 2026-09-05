@@ -127,6 +127,42 @@ func TestICIMSJobLocationAsSingleObject(t *testing.T) {
 	}
 }
 
+// A vanity board's sitemap index names two sub-sitemaps; the second has no route (fetch
+// fails). The board's full posting list depends on both, so the whole Fetch must fail rather
+// than silently return only the first sub-sitemap's postings as a complete board — the same
+// partial-success shape that forced freehire#2337's revert (see the fullBoardListing marker's
+// bar, internal/ingest/sources/source.go).
+func TestICIMSFetchFailsWhenASubSitemapFails(t *testing.T) {
+	loc := "https://careers.docusign.com/jobs/1?lang=en-us"
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", icimsSitemapIndexXML(
+			"https://careers.docusign.com/sitemap1.xml",
+			"https://careers.docusign.com/sitemap2.xml",
+		)).
+		route("/sitemap1.xml", icimsSitemapXML(loc))
+		// sitemap2.xml has no route — its fetch fails.
+
+	_, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Docusign", Provider: "icims", Board: "careers.docusign.com",
+	})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite a sub-sitemap failing — a board whose full listing depends on it must not return a partial result as success")
+	}
+}
+
+func TestICIMSMarkers(t *testing.T) {
+	s := NewICIMS(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("icims should implement the fullBoardListing marker")
+	}
+}
+
+func TestICIMSRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["icims"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include icims")
+	}
+}
+
 func TestICIMSProvider(t *testing.T) {
 	if got := NewICIMS(nil).Provider(); got != "icims" {
 		t.Errorf("Provider() = %q, want %q", got, "icims")

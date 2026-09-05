@@ -24,7 +24,7 @@ func TestResolveWithDrafting_DraftsAnOtherwiseUnmappedFreeTextField(t *testing.T
 	fields := []MergedField{{ID: "question_1", Label: "Where did you hear about us?", Kind: "text", Required: true}}
 	drafter := &fakeDrafter{answer: "Found it on the freehire job board.", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestResolveWithDrafting_NeverDraftsASensitiveField(t *testing.T) {
 	fields := []MergedField{{ID: "question_2", Label: "What is your desired salary?", Kind: "text", Required: true}}
 	drafter := &fakeDrafter{answer: "should never be used", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestResolveWithDrafting_UngroundableDraftStillParks(t *testing.T) {
 	fields := []MergedField{{ID: "question_3", Label: "Describe a niche hobby", Kind: "text", Required: true}}
 	drafter := &fakeDrafter{ok: false} // the drafter found no basis for an answer
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestResolveWithDrafting_ADraftMatchingNoOfferedOptionStillParks(t *testing.
 	}}
 	drafter := &fakeDrafter{answer: "Maybe, depends on the offer", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestResolveWithDrafting_ADraftMatchingAnOfferedOptionUsesThePlatformValue(t
 	}}
 	drafter := &fakeDrafter{answer: "Yes", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestResolveWithDrafting_AnOptionalFieldIsNeverDrafted(t *testing.T) {
 	fields := []MergedField{{ID: "question_6", Label: "Anything else?", Kind: "text", Required: false}}
 	drafter := &fakeDrafter{answer: "should never be used", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestResolveWithDrafting_ADeterministicallyResolvedFieldIsNeverSentToTheDraf
 	fields := []MergedField{{ID: "first_name", Kind: "text", Required: true}}
 	drafter := &fakeDrafter{answer: "should never be used", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{"first_name": "Ada"}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{"first_name": "Ada"}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestResolveWithDrafting_ADeterministicallyResolvedFieldIsNeverSentToTheDraf
 func TestResolveWithDrafting_ANilDrafterLeavesTheDeterministicPlanUnchanged(t *testing.T) {
 	fields := []MergedField{{ID: "question_7", Label: "Anything else?", Kind: "text", Required: true}}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, nil, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, nil, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestResolveWithDrafting_ADrafterErrorPropagates(t *testing.T) {
 	fields := []MergedField{{ID: "question_8", Label: "Anything else?", Kind: "text", Required: true}}
 	drafter := &fakeDrafter{err: errors.New("model unavailable")}
 
-	if _, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}); err == nil {
+	if _, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false); err == nil {
 		t.Fatal("want the drafter's error surfaced, not swallowed into a park")
 	}
 }
@@ -170,7 +170,7 @@ func TestResolveWithDrafting_AFieldWithNoLabelIsNeverDrafted(t *testing.T) {
 	fields := []MergedField{{ID: "42736", Label: "", Kind: "text", Required: true}}
 	drafter := &fakeDrafter{answer: "should never be used", ok: true}
 
-	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{})
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
 	if err != nil {
 		t.Fatalf("ResolveWithDrafting: %v", err)
 	}

@@ -16,6 +16,19 @@ func TestTaleoProvider(t *testing.T) {
 	}
 }
 
+func TestTaleoMarkers(t *testing.T) {
+	s := NewTaleo(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("taleo should implement the fullBoardListing marker")
+	}
+}
+
+func TestTaleoRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["taleo"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include taleo")
+	}
+}
+
 func TestTaleoInRegistry(t *testing.T) {
 	if s, ok := All(nil)["taleo"]; !ok || s.Provider() != "taleo" {
 		t.Fatal("All() missing provider taleo")
@@ -338,5 +351,57 @@ func TestTaleoPaginates(t *testing.T) {
 	}
 	if fake.posts != 3 {
 		t.Errorf("made %d searchjobs POSTs, want 3", fake.posts)
+	}
+}
+
+// taleoEndlessFake serves an endless requisition list: every searchjobs POST returns one new
+// requisition and a totalCount far beyond what taleoMaxPages could ever reach, so the loop
+// never reaches a natural end on its own — only the page cap can stop it. Mirrors
+// html_test.go's pagedFake for the shared "cap must not be a silent success" contract.
+type taleoEndlessFake struct{ posts int }
+
+func (f *taleoEndlessFake) PostJSONWithHeaders(_ context.Context, _ string, _ map[string]string, _, v any) error {
+	f.posts++
+	body := fmt.Sprintf(`{"requisitionList":[{"jobId":"%d","contestNo":"%d","column":["Role"]}],"pagingData":{"totalCount":999999}}`, f.posts, f.posts)
+	return json.Unmarshal([]byte(body), v)
+}
+
+// GetText is unused by this test (it targets listRequisitions directly, before any detail
+// fetch), but taleoHTTP requires it.
+func (f *taleoEndlessFake) GetText(context.Context, string) (string, error) {
+	return "", fmt.Errorf("taleoEndlessFake: GetText not needed for this test")
+}
+
+// A listing still yielding new requisitions past taleoMaxPages is a truncated walk, not a
+// genuinely exhausted one, and must fail rather than silently return the requisitions
+// gathered so far — the same partial-success shape that forced freehire#2337's revert (see
+// the fullBoardListing marker's bar, internal/ingest/sources/source.go).
+func TestTaleoListRequisitionsFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &taleoEndlessFake{}
+	_, err := taleo{http: fake}.listRequisitions(context.Background(), taleoBoard{host: "acme.taleo.net", section: "2"}, "12345")
+	if err == nil {
+		t.Fatal("listRequisitions succeeded despite the listing still yielding new requisitions past the page cap — a truncated walk must not be returned as a partial success")
+	}
+}
+
+// A tenant whose API omits or zeroes pagingData.totalCount despite returning real
+// requisitions must not have that zero read as "the whole board fits on this page" — the
+// original code's `len(reqs) >= resp.PagingData.TotalCount` is trivially true against a zero
+// total after page 1, which would silently truncate the board while still reporting success.
+// Only an actual empty page (or the page cap, which now fails loudly) may end the walk.
+func TestTaleoIgnoresABogusZeroTotalCount(t *testing.T) {
+	page := func(contest string) string {
+		return fmt.Sprintf(`{"requisitionList":[{"jobId":"%s","contestNo":"%s","column":["Role %s"]}],"pagingData":{"totalCount":0}}`, contest, contest, contest)
+	}
+	fake := &taleoPagingFake{
+		pages: []string{page("1"), page("2"), `{"requisitionList":[],"pagingData":{"totalCount":0}}`},
+	}
+
+	reqs, err := taleo{http: fake}.listRequisitions(context.Background(), taleoBoard{host: "acme.taleo.net", section: "2"}, "12345")
+	if err != nil {
+		t.Fatalf("listRequisitions: %v", err)
+	}
+	if len(reqs) != 2 {
+		t.Fatalf("got %d requisitions, want 2 — a bogus totalCount:0 must not stop the walk after page 1", len(reqs))
 	}
 }

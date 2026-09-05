@@ -1,0 +1,15 @@
+[Unit]
+Description=freehire worker: drain auto_apply_queue (headless Chrome fill+submit)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Headless Chrome + a real page load/fill/submit per entry, so this is heavier per-item
+# than any other timer-driven drain in this fleet — AUTO_APPLY_CONCURRENCY's own default
+# (2) is deliberately conservative until real host2 volume is observed, same posture
+# capture-apply-form started from.
+CPUWeight=40
+IOWeight=40
+ExecStart=/opt/freehire/src/hire-current/auto-apply

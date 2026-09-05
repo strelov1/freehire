@@ -206,7 +206,10 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	created, err := q.CreateExperienceEmployment(ctx, CreateExperienceEmploymentParams{
 		UserID: alice, Kind: "job",
 		Company: "RingCentral", Role: "Staff Engineer", // the user's own correction
-		Location: "", PeriodStart: "2023-09", PeriodEnd: "", IsCurrent: false, Summary: "",
+		Location:        "",
+		PeriodStartYear: pgtype.Int4{Int32: 2023, Valid: true}, PeriodStartMonth: pgtype.Int2{Int16: 9, Valid: true},
+		// PeriodEndYear/Month left invalid (NULL) — no end recorded yet.
+		IsCurrent: false, Summary: "",
 		Stack: []string{"go"},
 	})
 	if err != nil {
@@ -216,9 +219,11 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	filled, err := q.FillExperienceEmploymentBlanks(ctx, FillExperienceEmploymentBlanksParams{
 		ID: created.ID, UserID: alice,
 		Company: "RingCentral", Role: "Senior Software Engineer", // what the CV says
-		Location: "USA, Remote", PeriodStart: "2023-01", PeriodEnd: "Present",
-		Summary: "Global SaaS leader in business communications",
-		Stack:   []string{"kubernetes", "go"},
+		Location:        "USA, Remote",
+		PeriodStartYear: pgtype.Int4{Int32: 2023, Valid: true}, PeriodStartMonth: pgtype.Int2{Int16: 1, Valid: true},
+		PeriodEndYear: pgtype.Int4{Int32: 2024, Valid: true},
+		Summary:       "Global SaaS leader in business communications",
+		Stack:         []string{"kubernetes", "go"},
 	})
 	if err != nil {
 		t.Fatalf("FillExperienceEmploymentBlanks: %v", err)
@@ -227,14 +232,14 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	if filled.Role != "Staff Engineer" {
 		t.Errorf("role = %q, want the user's correction preserved", filled.Role)
 	}
-	if filled.PeriodStart != "2023-09" {
-		t.Errorf("period_start = %q, want the existing value preserved", filled.PeriodStart)
+	if filled.PeriodStartYear.Int32 != 2023 || filled.PeriodStartMonth.Int16 != 9 {
+		t.Errorf("period_start = %d-%d, want the existing 2023-09 preserved", filled.PeriodStartYear.Int32, filled.PeriodStartMonth.Int16)
 	}
 	if filled.Location != "USA, Remote" {
 		t.Errorf("location = %q, want the blank filled from the CV", filled.Location)
 	}
-	if filled.PeriodEnd != "Present" {
-		t.Errorf("period_end = %q, want the blank filled from the CV", filled.PeriodEnd)
+	if !filled.PeriodEndYear.Valid || filled.PeriodEndYear.Int32 != 2024 || filled.PeriodEndMonth.Valid {
+		t.Errorf("period_end = %+v/%+v, want year-only 2024 filled from the CV", filled.PeriodEndYear, filled.PeriodEndMonth)
 	}
 	if filled.Summary == "" {
 		t.Error("summary is still blank, want it filled from the CV")
@@ -244,9 +249,11 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	withLink, err := q.FillExperienceEmploymentBlanks(ctx, FillExperienceEmploymentBlanksParams{
 		ID: created.ID, UserID: alice,
 		Company: "RingCentral", Role: "Staff Engineer",
-		Location: "USA, Remote", PeriodStart: "2023-09", PeriodEnd: "Present",
-		Summary: "Global SaaS leader in business communications",
-		Stack:   []string{"go"}, Link: "https://example.test/role",
+		Location:        "USA, Remote",
+		PeriodStartYear: pgtype.Int4{Int32: 2023, Valid: true}, PeriodStartMonth: pgtype.Int2{Int16: 9, Valid: true},
+		PeriodEndYear: pgtype.Int4{Int32: 2024, Valid: true},
+		Summary:       "Global SaaS leader in business communications",
+		Stack:         []string{"go"}, Link: "https://example.test/role",
 	})
 	if err != nil {
 		t.Fatalf("FillExperienceEmploymentBlanks link: %v", err)
@@ -257,9 +264,11 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	kept, err := q.FillExperienceEmploymentBlanks(ctx, FillExperienceEmploymentBlanksParams{
 		ID: created.ID, UserID: alice,
 		Company: "RingCentral", Role: "Staff Engineer",
-		Location: "USA, Remote", PeriodStart: "2023-09", PeriodEnd: "Present",
-		Summary: "Global SaaS leader in business communications",
-		Stack:   []string{"go"}, Link: "https://other.example",
+		Location:        "USA, Remote",
+		PeriodStartYear: pgtype.Int4{Int32: 2023, Valid: true}, PeriodStartMonth: pgtype.Int2{Int16: 9, Valid: true},
+		PeriodEndYear: pgtype.Int4{Int32: 2024, Valid: true},
+		Summary:       "Global SaaS leader in business communications",
+		Stack:         []string{"go"}, Link: "https://other.example",
 	})
 	if err != nil {
 		t.Fatalf("FillExperienceEmploymentBlanks preserve link: %v", err)
@@ -268,7 +277,7 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 		t.Errorf("link = %q, want existing value preserved", kept.Link)
 	}
 	if filled.IsCurrent {
-		t.Error("is_current became true — a CV reading \"Present\" must not resurrect an ended role")
+		t.Error("is_current became true — FillExperienceEmploymentBlanks must never touch it")
 	}
 	// The stack unions rather than fills-if-blank: the CV adds a technology, and the one
 	// already banked survives.

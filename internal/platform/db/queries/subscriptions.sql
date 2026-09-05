@@ -115,16 +115,20 @@ RETURNING m.subscription_id, m.job_id;
 -- channel's live recipient), the user's linked Telegram chat (NULL when unlinked
 -- → the worker soft-skips telegram delivery rather than failing it), whether
 -- the user has at least one registered push device (the push channel's live
--- deliverability check, same soft-skip role as the Telegram link), and the
--- delivery-timing context (live, not snapshotted, same as the channel checks
--- above) — the account's timezone and its saved-search digest frequency
--- settings, read via internal/application/deliverywindow before a digest is sent.
+-- deliverability check, same soft-skip role as the Telegram link), the user's
+-- webhook destination (URL, NULL or disabled → the worker soft-skips webhook
+-- delivery the same way), and the delivery-timing context
+-- (live, not snapshotted, same as the channel checks above) — the account's
+-- timezone and its saved-search digest frequency settings, read via
+-- internal/application/deliverywindow before a digest is sent.
 SELECT s.id, s.user_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        u.email AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
        EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,
+       wc.url AS webhook_url,
+       COALESCE(wc.enabled, false) AS webhook_enabled,
        COALESCE(ns.digest_frequency, 'instant')::text AS digest_frequency,
        ns.digest_time AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
@@ -133,6 +137,7 @@ FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
 LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
+LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.id = $1;
 

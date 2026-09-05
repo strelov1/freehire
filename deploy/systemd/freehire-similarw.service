@@ -1,0 +1,42 @@
+[Unit]
+Description=freehire worker: similar-jobs backfill (bounded slice)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Light: this is catch-up work with no deadline, and it runs beside a live API.
+CPUWeight=10
+IOWeight=10
+# THE POINT OF THIS UNIT IS THAT IT ENDS.
+#
+# This backfill used to run as one unbounded transient unit (`systemd-run`, started by
+# hand 2026-08-31). Its page query holds ACCESS SHARE on `jobs` for ~95s at a time and
+# with several workers overlapping there was, in practice, never a moment when nobody
+# held it. An ALTER TABLE needs ACCESS EXCLUSIVE, so `cmd/migrate` sat behind those
+# readers until its lock_timeout expired: on 2026-09-05 the release script failed twice
+# in a row on migration 0139 (55P03), and the only way through was stopping this worker
+# by hand. At its observed rate it had WEEKS left to run, so that was not a one-off — it
+# was every migration for the next month, including the autodeploy's.
+#
+# A bounded run ends, the connection closes, and the lock goes with it. The gap the timer
+# leaves is what a DDL migration gets in through.
+#
+# 500 is measured, not guessed: on 2026-09-05 a slice at these exact settings ran 500 jobs
+# in 9m45s on this host — about 51 a minute — so the 20-minute timer leaves roughly ten
+# quiet minutes after each one. That costs perhaps a third of the unbounded worker's
+# throughput (~36k jobs a day against ~51k measured the same afternoon), which is the
+# price of every migration in the next month not failing.
+#
+# NOT RuntimeMaxSec: systemd ignores it for Type=oneshot and says so
+# (`systemd-analyze verify`). TimeoutStartSec is the one that bounds a oneshot, and it is
+# set at nearly twice the expected run so it fires only when something is genuinely
+# stuck — a slice ending on the timeout would be marked failed, and a unit that shows red
+# in normal operation is a unit nobody reads.
+#
+# Being killed mid-slice costs nothing either way. The worker asks for jobs that still
+# NEED the backfill, so an interrupted run leaves them for the next one — the same
+# property that made stopping it by hand safe.
+TimeoutStartSec=20min
+ExecStart=/opt/freehire/src/hire-current/similar-backfill -limit 500 -batch 200 -workers 3

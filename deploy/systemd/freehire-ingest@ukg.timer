@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest ukg
 [Timer]
-OnCalendar=*-*-* 02/3:07:00
+OnCalendar=*-*-* 01/3:50:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

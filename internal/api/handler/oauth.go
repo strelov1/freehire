@@ -137,6 +137,12 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
 	}
 
+	// The majority sign-up path, and the reason attribution rides in a cookie at all: this
+	// is a GET redirect back from the provider, so there is no request body a code could
+	// have travelled in. Safe to call for a returning user — the SQL only attributes an
+	// account created within the hour.
+	h.attributeInvite(c, userID)
+
 	if mobile {
 		// Hand the app a single-use code instead of a cookie; the app exchanges
 		// it over its own client so the session cookie lands in its jar.

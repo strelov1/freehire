@@ -85,13 +85,14 @@ func jobFromRow(r db.Job) (Job, error) {
 		ClosedAt:          tsPtr(r.ClosedAt),
 		EnrichmentVersion: r.EnrichmentVersion,
 
-		ID:            r.ID,
-		ManuallyAdded: r.CreatedBy.Valid,
-		Enrichment:    e,
-		EnrichedAt:    tsPtr(r.EnrichedAt),
-		CreatedAt:     tsPtr(r.CreatedAt),
-		UpdatedAt:     tsPtr(r.UpdatedAt),
-		LastSeenAt:    tsPtr(r.LastSeenAt),
+		ID:                  r.ID,
+		ManuallyAdded:       r.CreatedBy.Valid,
+		Enrichment:          e,
+		RequirementsDerived: requirementsFromRow(r),
+		EnrichedAt:          tsPtr(r.EnrichedAt),
+		CreatedAt:           tsPtr(r.CreatedAt),
+		UpdatedAt:           tsPtr(r.UpdatedAt),
+		LastSeenAt:          tsPtr(r.LastSeenAt),
 	}}, nil
 }
 
@@ -106,6 +107,23 @@ func extrasFromRow(r db.Job) Extras {
 		DownvoteCount: r.DownvoteCount,
 		Collections:   r.Collections,
 	}
+}
+
+// requirementsFromRow decodes the deterministically derived requirements column. A
+// row that yields nothing, a row written before migration 0139, and a row whose
+// payload cannot be decoded all come back nil: each means "no derived list", and the
+// projection treats them alike. A decode error is deliberately not fatal — this
+// column is a display convenience, and failing a whole job read over it would trade a
+// missing section for a missing posting.
+func requirementsFromRow(r db.Job) []enrich.Requirement {
+	if len(r.RequirementsDerived) == 0 {
+		return nil
+	}
+	var reqs []enrich.Requirement
+	if err := json.Unmarshal(r.RequirementsDerived, &reqs); err != nil {
+		return nil
+	}
+	return reqs
 }
 
 // manualSalaryFromRow projects the authoritative manual-salary columns onto a Salary,

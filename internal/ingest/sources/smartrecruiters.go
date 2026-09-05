@@ -26,6 +26,11 @@ func NewSmartRecruiters(c JSONGetter) Source { return smartRecruiters{http: c} }
 
 func (smartRecruiters) Provider() string { return "smartrecruiters" }
 
+// fullBoardListing: listPostings proves completeness — totalFound is authoritative (pages
+// until offset >= totalFound or an empty page, no artificial cap). See the fullBoardListing
+// interface for the bar.
+func (smartRecruiters) fullBoardListing() {}
+
 // smartRecruitersSeniorityMap maps the SmartRecruiters experienceLevel enum onto
 // freehire's seniority vocabulary. Values not in the map (notably "not_applicable",
 // the plurality, plus any unknown/empty id) yield "" so the Job carries no structured

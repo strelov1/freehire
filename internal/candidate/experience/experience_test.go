@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 func TestProvenancePublishable(t *testing.T) {
@@ -160,8 +162,7 @@ func TestEmploymentSanitizeAndValidate(t *testing.T) {
 		Company:  "  RingCentral  ",
 		Role:     strings.Repeat("r", maxShortRunes+20),
 		Location: "USA, Remote",
-		Start:    "2023-09",
-		End:      "Present",
+		Start:    &perioddate.PeriodDate{Year: 2023, Month: 9},
 		Current:  true,
 		Summary:  strings.Repeat("s", maxSummaryRunes+20),
 	}

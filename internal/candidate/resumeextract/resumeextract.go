@@ -116,12 +116,18 @@ Rules:
 - Fields: headline (current role/title line), summary (1-3 sentences),
   total_years (years of professional experience as a plain number written as a string, e.g. "6";
     best estimate; "0" if unclear),
-  experience (array of {title, company, location, start, end, summary, highlights, stack}; keep dates as
-    written, e.g. "2021-03" or "Present"; summary is the one-line company/role context; highlights is the
+  experience (array of {title, company, location, start, end, current, summary, highlights, stack};
+    start/end are objects {"year": <integer>, "month": <integer 1-12, omit if the CV gives no month>} —
+    interpret whatever the CV prints ("2021-03" -> {"year":2021,"month":3}, "2021" -> {"year":2021},
+    "March 2021" -> {"year":2021,"month":3}); for a role that has not ended ("Present", "Current", or no
+    end stated), set current to true and end to null — never invent an end year for an ongoing role;
+    summary is the one-line company/role context; highlights is the
     array of achievement bullet points for that role, each a full sentence copied faithfully from the CV;
     stack is the array of technologies listed for that role, e.g. from a "Stack:" line;
     location here is the employer's office for that role, not the candidate's residence),
-  education (array of {degree, institution, year}), languages (array of strings),
+  education (array of {degree, institution, year}; year is the same {"year","month"} object as
+    experience's start/end, month omitted — a degree's completion is almost always stated as a bare year),
+  languages (array of strings),
   skills (array of strings — technologies/tools stated in the CV, properly cased, e.g. "Go", "PostgreSQL", "Kafka"),
   certifications (array of strings — professional certifications/licenses the CV states the person holds, e.g. "AWS Certified Solutions Architect", "CISSP", "PMP"),
   projects (array of {name, link, highlights} — personal/side projects with their bullet points).

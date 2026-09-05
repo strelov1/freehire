@@ -25,6 +25,10 @@ func NewCareerPlug(c HTMLGetter) Source { return careerplug{http: c} }
 
 func (careerplug) Provider() string { return "careerplug" }
 
+// fullBoardListing: Fetch's crawlAllPagedLinks fails the whole crawl on a mid-listing error or
+// a cap-truncated walk. See the fullBoardListing interface for the bar.
+func (careerplug) fullBoardListing() {}
+
 // careerplugMaxPages bounds listing pagination so a board that clamps ?page=N to its last
 // page (serving the same links forever) cannot loop; the no-new-links check ends it sooner.
 const careerplugMaxPages = 100
@@ -39,8 +43,11 @@ func (s careerplug) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 
 	// Page through the listing until a page adds no new links (an empty page, or a board that
-	// clamps ?page=N past its last page — de-dup turns the repeat into zero new).
-	urls, err := crawlPagedLinks(ctx, s.http, careerplugMaxPages,
+	// clamps ?page=N past its last page — de-dup turns the repeat into zero new). Uses
+	// crawlAllPagedLinks, not crawlPagedLinks: a mid-listing failure or a cap-truncated walk
+	// must fail the whole Fetch rather than return a partial listing as a success, which is
+	// what earns careerplug the fullBoardListing marker (freehire#2328).
+	urls, err := crawlAllPagedLinks(ctx, s.http, careerplugMaxPages,
 		func(page int) string {
 			if page > 1 {
 				return fmt.Sprintf("https://%s/jobs?page=%d", host, page)

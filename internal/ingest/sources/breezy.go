@@ -28,6 +28,11 @@ func NewBreezy(c breezyHTTP) Source { return breezy{http: c} }
 
 func (breezy) Provider() string { return "breezy" }
 
+// fullBoardListing: the /json listing is a single unpaginated request returning the board's
+// whole postings array. Detail fetches are best-effort per posting. See the fullBoardListing
+// interface for the bar.
+func (breezy) fullBoardListing() {}
+
 // breezyPosting is one item from the /json listing. The description is not here — it
 // lives on the position page (see detail).
 type breezyPosting struct {

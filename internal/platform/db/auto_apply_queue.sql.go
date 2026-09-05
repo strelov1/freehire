@@ -8,8 +8,29 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const approveAutoApplyReview = `-- name: ApproveAutoApplyReview :execrows
+UPDATE auto_apply_queue
+SET review_decision = 'approved',
+    reviewed_at     = now()
+WHERE id = $1 AND review_decision IS NULL
+`
+
+// Records an approval. Guarded by review_decision IS NULL so a second attempt at an
+// already-reviewed entry affects zero rows rather than overwriting a recorded decision —
+// the handler reads the row first (GetAutoApplyQueueEntryForReview) to tell "already
+// reviewed" apart from "not found" before ever reaching this statement, so zero rows here
+// would only mean a race with a concurrent decision on the same entry.
+func (q *Queries) ApproveAutoApplyReview(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, approveAutoApplyReview, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
 
 const claimAutoApplyBatch = `-- name: ClaimAutoApplyBatch :many
 WITH claimable AS (
@@ -17,6 +38,8 @@ WITH claimable AS (
     FROM auto_apply_queue q
     WHERE q.failed_at IS NULL
       AND q.blocked_at IS NULL
+      AND q.tailored_cv_id IS NOT NULL
+      AND q.review_decision = 'approved'
       AND (q.claimed_at IS NULL
            OR q.claimed_at < now() - make_interval(secs => $1::int))
     ORDER BY q.id
@@ -28,7 +51,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN jobs j ON j.id = c.job_id
 WHERE q.id = c.id
-RETURNING q.id, q.user_id, q.job_id, j.source, j.external_id, j.url
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url
 `
 
 type ClaimAutoApplyBatchParams struct {
@@ -37,12 +60,13 @@ type ClaimAutoApplyBatchParams struct {
 }
 
 type ClaimAutoApplyBatchRow struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	JobID      int64  `json:"job_id"`
-	Source     string `json:"source"`
-	ExternalID string `json:"external_id"`
-	URL        string `json:"url"`
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	JobID        int64      `json:"job_id"`
+	TailoredCvID *uuid.UUID `json:"tailored_cv_id"`
+	Source       string     `json:"source"`
+	ExternalID   string     `json:"external_id"`
+	URL          string     `json:"url"`
 }
 
 // Claim a batch of live, unleased submission attempts by stamping claimed_at. Mirrors
@@ -52,6 +76,12 @@ type ClaimAutoApplyBatchRow struct {
 // separate reaper process is needed. failed_at/blocked_at excluded so a dead-lettered or
 // parked attempt is never reclaimed by this query — auto_apply_queue_claimable_idx exists
 // for exactly this predicate.
+//
+// tailored_cv_id IS NOT NULL AND review_decision = 'approved' (openspec/changes/
+// auto-apply-tailored-resume): a submission attempt only ever runs for an entry the
+// candidate has reviewed and approved. An unreviewed or declined entry sits in the queue
+// but is never claimed — declining also sets blocked_at (via the review endpoint's own
+// Park-shaped write), so it is additionally excluded by the predicate above.
 //
 // Returns job.source, job.external_id and job.url because the caller builds the sidecar
 // request from the row alone — source doubles as the ATS provider name, the same vocabulary
@@ -71,6 +101,7 @@ func (q *Queries) ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBat
 			&i.ID,
 			&i.UserID,
 			&i.JobID,
+			&i.TailoredCvID,
 			&i.Source,
 			&i.ExternalID,
 			&i.URL,
@@ -85,6 +116,111 @@ func (q *Queries) ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBat
 	return items, nil
 }
 
+const claimAutoApplyPreviewBatch = `-- name: ClaimAutoApplyPreviewBatch :many
+WITH claimable AS (
+    SELECT q.id, q.user_id, q.job_id
+    FROM auto_apply_queue q
+    WHERE q.tailored_cv_id IS NOT NULL
+      AND q.resolved_preview IS NULL
+      AND q.review_decision IS NULL
+      AND q.preview_failed_at IS NULL
+      AND q.blocked_at IS NULL
+      AND (q.claimed_at IS NULL
+           OR q.claimed_at < now() - make_interval(secs => $1::int))
+    ORDER BY q.id
+    FOR UPDATE OF q SKIP LOCKED
+    LIMIT $2
+)
+UPDATE auto_apply_queue q
+SET claimed_at = now()
+FROM claimable c
+JOIN jobs j ON j.id = c.job_id
+WHERE q.id = c.id
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url
+`
+
+type ClaimAutoApplyPreviewBatchParams struct {
+	LeaseSeconds int32 `json:"lease_seconds"`
+	BatchSize    int32 `json:"batch_size"`
+}
+
+type ClaimAutoApplyPreviewBatchRow struct {
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	JobID        int64      `json:"job_id"`
+	TailoredCvID *uuid.UUID `json:"tailored_cv_id"`
+	Source       string     `json:"source"`
+	ExternalID   string     `json:"external_id"`
+	URL          string     `json:"url"`
+}
+
+// Claim a batch of tailored entries that have no resolved answer preview yet, for
+// cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+// Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
+// same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
+// (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
+// two passes can safely share the one claimed_at lease column rather than needing a second.
+//
+// Excludes on preview_failed_at, its OWN dead-letter marker (migration 0140) — not the
+// submit pass's failed_at, which a still-unreviewed row can never have set anyway
+// (ClaimAutoApplyBatch only ever claims an approved entry). blocked_at is still shared: a
+// park during preview resolution (a captcha, an unscannable page) predicts the identical
+// outcome the real submission would hit, so there is nothing a retry here would fix either.
+func (q *Queries) ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error) {
+	rows, err := q.db.Query(ctx, claimAutoApplyPreviewBatch, arg.LeaseSeconds, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimAutoApplyPreviewBatchRow{}
+	for rows.Next() {
+		var i ClaimAutoApplyPreviewBatchRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.JobID,
+			&i.TailoredCvID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const declineAutoApplyReview = `-- name: DeclineAutoApplyReview :execrows
+UPDATE auto_apply_queue
+SET review_decision = 'declined',
+    reviewed_at     = now(),
+    blocked_at      = now(),
+    last_error      = $1
+WHERE id = $2 AND review_decision IS NULL
+`
+
+type DeclineAutoApplyReviewParams struct {
+	LastError string `json:"last_error"`
+	ID        int64  `json:"id"`
+}
+
+// Records a decline AND parks the entry in one statement — the same fields
+// MarkAutoApplyBlocked sets (blocked_at, last_error), reusing that park vocabulary rather
+// than inventing a second one, plus the review columns MarkAutoApplyBlocked has no reason
+// to know about. unmapped stays NULL: this is not a form-field park. last_error is what
+// tells the two park reasons apart in the queue's own history, per design.md.
+func (q *Queries) DeclineAutoApplyReview(ctx context.Context, arg DeclineAutoApplyReviewParams) (int64, error) {
+	result, err := q.db.Exec(ctx, declineAutoApplyReview, arg.LastError, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteAutoApplyEntry = `-- name: DeleteAutoApplyEntry :exec
 DELETE FROM auto_apply_queue
 WHERE id = $1
@@ -96,6 +232,186 @@ WHERE id = $1
 func (q *Queries) DeleteAutoApplyEntry(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteAutoApplyEntry, id)
 	return err
+}
+
+const enqueueAutoApply = `-- name: EnqueueAutoApply :one
+INSERT INTO auto_apply_queue (user_id, job_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id, job_id) DO NOTHING
+RETURNING id
+`
+
+type EnqueueAutoApplyParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// Creates the candidate-facing entry that starts the tailor-then-review sequence
+// (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+// existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
+// double-click or a page reload racing this same request is expected, common traffic here,
+// not a fault, and the constraint is the only thing that closes the window between a
+// check and an insert. No row back means the handler's own INSERT lost the race (or the
+// pair was already queued by an earlier request) — it re-reads via
+// GetAutoApplyQueueEntryForJob rather than treating an empty result as an error.
+func (q *Queries) EnqueueAutoApply(ctx context.Context, arg EnqueueAutoApplyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, enqueueAutoApply, arg.UserID, arg.JobID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getApplicationStage = `-- name: GetApplicationStage :one
+SELECT stage
+FROM applications
+WHERE user_id = $1 AND job_id = $2
+`
+
+type GetApplicationStageParams struct {
+	UserID int64       `json:"user_id"`
+	JobID  pgtype.Int8 `json:"job_id"`
+}
+
+// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
+// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
+// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
+// stage on an existing row and no row at all are both "not on the board" and both call for
+// the same preparing default: the difference does not matter to the caller.
+func (q *Queries) GetApplicationStage(ctx context.Context, arg GetApplicationStageParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getApplicationStage, arg.UserID, arg.JobID)
+	var stage pgtype.Text
+	err := row.Scan(&stage)
+	return stage, err
+}
+
+const getAutoApplyQueueEntryByID = `-- name: GetAutoApplyQueueEntryByID :one
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = $1
+`
+
+type GetAutoApplyQueueEntryByIDRow struct {
+	ID             int64       `json:"id"`
+	UserID         int64       `json:"user_id"`
+	JobID          int64       `json:"job_id"`
+	TailoredCvID   *uuid.UUID  `json:"tailored_cv_id"`
+	ReviewDecision pgtype.Text `json:"review_decision"`
+}
+
+// The same read as GetAutoApplyQueueEntryForReview, but by id ALONE — no ownership
+// predicate. This is for the trusted auto-apply orchestrator caller only
+// (openspec/changes/auto-apply-inngest-orchestration): it authenticates as the
+// deployment's own shared secret, not as any particular user, so it has no owner of its
+// own to check the row against — the row's own user_id in the result IS the owner it
+// acts as. Never used for a caller that presented ownership-scoped credentials; see
+// resolveAutoApplyEntry in internal/api/handler/auto_apply_tailor.go.
+func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (GetAutoApplyQueueEntryByIDRow, error) {
+	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryByID, id)
+	var i GetAutoApplyQueueEntryByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.TailoredCvID,
+		&i.ReviewDecision,
+	)
+	return i, err
+}
+
+const getAutoApplyQueueEntryForJob = `-- name: GetAutoApplyQueueEntryForJob :one
+SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview,
+       preview_failed_at
+FROM auto_apply_queue
+WHERE user_id = $1 AND job_id = $2
+`
+
+type GetAutoApplyQueueEntryForJobParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+type GetAutoApplyQueueEntryForJobRow struct {
+	ID              int64              `json:"id"`
+	ReviewDecision  pgtype.Text        `json:"review_decision"`
+	FailedAt        pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt       pgtype.Timestamptz `json:"blocked_at"`
+	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
+	Unmapped        []byte             `json:"unmapped"`
+	ResolvedPreview []byte             `json:"resolved_preview"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+}
+
+// The caller's own existing auto-apply entry for one job, if any — the conflict-read path
+// for EnqueueAutoApply, and the read behind the job detail response's own auto-apply
+// status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
+// a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
+// exists yet for this (user, job) pair.
+//
+// failed_at/blocked_at are also read (a code review found their absence): once
+// cmd/auto-apply claims an approved entry, a dead-letter (RecordAutoApplyFailure) or a
+// form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
+// these two columns, both call sites would read a permanently stuck submission as
+// indistinguishable from a healthy one still in flight.
+//
+// tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
+// ride along on the same row read rather than a second query: they are exactly what the
+// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+// unmapped question list), and this is already "the caller's own existing auto-apply entry
+// for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
+// is: without it, an entry whose preview pass permanently gave up would read forever as
+// "tailoring" — no preview, no failure, nothing to tell the candidate anything went wrong.
+func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error) {
+	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryForJob, arg.UserID, arg.JobID)
+	var i GetAutoApplyQueueEntryForJobRow
+	err := row.Scan(
+		&i.ID,
+		&i.ReviewDecision,
+		&i.FailedAt,
+		&i.BlockedAt,
+		&i.TailoredCvID,
+		&i.Unmapped,
+		&i.ResolvedPreview,
+		&i.PreviewFailedAt,
+	)
+	return i, err
+}
+
+const getAutoApplyQueueEntryForReview = `-- name: GetAutoApplyQueueEntryForReview :one
+SELECT id, user_id, job_id, tailored_cv_id, review_decision
+FROM auto_apply_queue
+WHERE id = $1 AND user_id = $2
+`
+
+type GetAutoApplyQueueEntryForReviewParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type GetAutoApplyQueueEntryForReviewRow struct {
+	ID             int64       `json:"id"`
+	UserID         int64       `json:"user_id"`
+	JobID          int64       `json:"job_id"`
+	TailoredCvID   *uuid.UUID  `json:"tailored_cv_id"`
+	ReviewDecision pgtype.Text `json:"review_decision"`
+}
+
+// One read backing both the tailoring-trigger and the review-decision endpoints
+// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
+// id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a
+// probing caller learns nothing about entries they do not own) and carries enough of the
+// entry's own state (job_id for tailoring, tailored_cv_id/review_decision for the review
+// gate) that neither endpoint needs a second query to decide whether to proceed.
+func (q *Queries) GetAutoApplyQueueEntryForReview(ctx context.Context, arg GetAutoApplyQueueEntryForReviewParams) (GetAutoApplyQueueEntryForReviewRow, error) {
+	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryForReview, arg.ID, arg.UserID)
+	var i GetAutoApplyQueueEntryForReviewRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.TailoredCvID,
+		&i.ReviewDecision,
+	)
+	return i, err
 }
 
 const markAutoApplyBlocked = `-- name: MarkAutoApplyBlocked :exec
@@ -154,4 +470,135 @@ func (q *Queries) RecordAutoApplyFailure(ctx context.Context, arg RecordAutoAppl
 	var i RecordAutoApplyFailureRow
 	err := row.Scan(&i.Attempts, &i.FailedAt)
 	return i, err
+}
+
+const recordAutoApplyPreviewFailure = `-- name: RecordAutoApplyPreviewFailure :one
+UPDATE auto_apply_queue
+SET preview_attempts = preview_attempts + 1,
+    last_error        = $1,
+    preview_failed_at = CASE
+                            WHEN preview_attempts + 1 >= $2::int THEN now()
+                            ELSE NULL
+                        END
+WHERE id = $3
+RETURNING preview_attempts, preview_failed_at
+`
+
+type RecordAutoApplyPreviewFailureParams struct {
+	LastError   string `json:"last_error"`
+	MaxAttempts int32  `json:"max_attempts"`
+	ID          int64  `json:"id"`
+}
+
+type RecordAutoApplyPreviewFailureRow struct {
+	PreviewAttempts int32              `json:"preview_attempts"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+}
+
+// RecordAutoApplyFailure's own counterpart for the preview pass, on its own columns
+// (migration 0140). Before this query existed, a transient preview-resolution error (a
+// flaky schema fetch, a browser launch hiccup) called RecordAutoApplyFailure and spent
+// down the SAME attempts/failed_at budget the real ATS submission depends on — a run of
+// bad luck during preview resolution could dead-letter a row that never even reached
+// submission, reported to the candidate as "could not submit after retrying," which never
+// happened. Same shape otherwise: bump attempts, record the error, dead-letter once
+// attempts reach the max, leave the lease in place.
+func (q *Queries) RecordAutoApplyPreviewFailure(ctx context.Context, arg RecordAutoApplyPreviewFailureParams) (RecordAutoApplyPreviewFailureRow, error) {
+	row := q.db.QueryRow(ctx, recordAutoApplyPreviewFailure, arg.LastError, arg.MaxAttempts, arg.ID)
+	var i RecordAutoApplyPreviewFailureRow
+	err := row.Scan(&i.PreviewAttempts, &i.PreviewFailedAt)
+	return i, err
+}
+
+const setAutoApplyResolvedPreview = `-- name: SetAutoApplyResolvedPreview :one
+WITH updated AS (
+    UPDATE auto_apply_queue q
+    SET resolved_preview = $1,
+        claimed_at       = NULL
+    WHERE q.id = $2 AND q.review_decision IS NULL
+    RETURNING q.job_id, q.user_id
+)
+SELECT j.public_slug, j.title, j.company, u.user_id
+FROM jobs j
+JOIN updated u ON u.job_id = j.id
+`
+
+type SetAutoApplyResolvedPreviewParams struct {
+	ResolvedPreview []byte `json:"resolved_preview"`
+	ID              int64  `json:"id"`
+}
+
+type SetAutoApplyResolvedPreviewRow struct {
+	PublicSlug string `json:"public_slug"`
+	Title      string `json:"title"`
+	Company    string `json:"company"`
+	UserID     int64  `json:"user_id"`
+}
+
+// Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
+// tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+// reads an exact, previously-computed snapshot rather than a value approximated or
+// recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
+// SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
+// must not overwrite what the candidate already acted on.
+//
+// Returns the job's own title/company/slug rather than affected-row-count alone (pgx.ErrNoRows
+// means the guard fired, exactly like SetAutoApplyTailoredCV's own zero-rows case): the
+// caller's "ready for review" notification needs those three columns, and this statement
+// already has the job_id at hand from its own WHERE — a second round trip for exactly what
+// this write already touched would be a query with no reason to exist.
+//
+// Also releases the lease (claimed_at = NULL): without this, an approval that lands before
+// the preview claim's own lease expires would sit unclaimed by ClaimAutoApplyBatch for up
+// to AUTO_APPLY_LEASE_SECONDS after nothing is actually still working the row — a stale
+// lease from a claim that already finished successfully, not a live one.
+func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error) {
+	row := q.db.QueryRow(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.ID)
+	var i SetAutoApplyResolvedPreviewRow
+	err := row.Scan(
+		&i.PublicSlug,
+		&i.Title,
+		&i.Company,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const setAutoApplyTailoredCV = `-- name: SetAutoApplyTailoredCV :execrows
+UPDATE auto_apply_queue
+SET tailored_cv_id    = $1,
+    resolved_preview  = NULL,
+    preview_attempts  = 0,
+    preview_failed_at = NULL
+WHERE id = $2 AND review_decision IS NULL
+`
+
+type SetAutoApplyTailoredCVParams struct {
+	TailoredCvID *uuid.UUID `json:"tailored_cv_id"`
+	ID           int64      `json:"id"`
+}
+
+// Records which tailored CV a queue entry's tailoring run produced. Guarded by
+// review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
+// guard: PostAutoApplyTailor's own review_decision check happens before its (potentially
+// minutes-long) LLM run, not after, so a candidate can approve or decline an EARLIER
+// tailored CV while a stale or retried tailor call for the same entry is still in flight.
+// Without this guard that call's own write here would silently attach a fresh, never-seen
+// CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
+// (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
+// real. Zero rows here means exactly that race happened; the handler checks it.
+//
+// Also clears resolved_preview and resets the preview pass's own attempts/failed_at
+// (migration 0140): a deliberate re-tailor (this entry already had a tailored_cv_id) means
+// the candidate's profile or the tailoring evidence changed, so a preview computed against
+// the PREVIOUS CV is stale and must be recomputed — leaving it would let the candidate
+// review an answer preview that no longer matches what would actually be submitted. Reset,
+// not left exhausted: an entry whose preview pass had already dead-lettered deserves a
+// fresh attempt budget against the fresh CV, not a permanent unclaimable state.
+func (q *Queries) SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAutoApplyTailoredCV, arg.TailoredCvID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

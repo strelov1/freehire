@@ -30,10 +30,12 @@ WHERE lower(email) = lower($1);
 -- change to password accounts and explain itself to OAuth-only ones. timezone is NULL
 -- until the user sets one on their profile (internal/application/deliverywindow reads NULL as UTC).
 -- language is never NULL — it has a NOT NULL DEFAULT, so every account has one from
--- creation.
+-- creation. onboarding_completed_at is NULL until the account has been through the
+-- wizard, and it rides along here rather than on its own endpoint because the root
+-- layout's gate needs it on the same read it already makes to decide anything at all.
 SELECT id, email, role, beta_tester, email_verified,
        (password_hash IS NOT NULL)::boolean AS has_password,
-       created_at, timezone, language
+       created_at, timezone, language, onboarding_completed_at
 FROM users
 WHERE id = $1;
 
@@ -451,3 +453,13 @@ WHERE id = $1;
 UPDATE users
 SET experience_require_context = $2
 WHERE id = $1;
+
+-- name: MarkOnboardingComplete :exec
+-- Record that this account has been through the onboarding wizard, so it is never routed
+-- there again. Guarded on IS NULL rather than written unconditionally: the useful fact is
+-- WHEN the account first finished, and a second call (a re-submit, a double click, a
+-- decline after a finish) must not overwrite it. That guard is also what makes the
+-- endpoint idempotent — a repeat call affects no rows and is still a success.
+UPDATE users
+SET onboarding_completed_at = now()
+WHERE id = $1 AND onboarding_completed_at IS NULL;

@@ -51,6 +51,12 @@ func NewWorkday(c workdayHTTP) Source { return workday{http: c, retryBase: workd
 
 func (workday) Provider() string { return "workday" }
 
+// fullBoardListing: listPostings proves completeness on every path — pageAll pages an
+// uncapped board to its own reported total, and splitByFacet either resolves a capped board
+// via facet subdivision or fails the crawl outright rather than return a partial listing as a
+// success (see splitByFacet). See the fullBoardListing interface for the bar.
+func (workday) fullBoardListing() {}
+
 // workdayBoard is a configured board parsed into the parts the CXS endpoints need, plus the
 // board's prefix on the public careers site — which is not the CXS path, and differs between
 // the two host shapes.
@@ -253,14 +259,20 @@ func (s workday) pageAll(ctx context.Context, url string, appliedFacets map[stri
 func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, appliedFacets map[string]any, capped workdayListPage, used map[string]bool, depth int) ([]workdayPosting, error) {
 	dim := pickSplitDimension(capped.Facets, used)
 	if dim == nil {
-		log.Printf("workday: board %s/%s capped at %d with no further facet dimension to split on; results may be incomplete",
+		// Paging the capped response as-is would return fewer postings than the board
+		// actually has and report success — indistinguishable from the board having shrunk,
+		// and exactly the shape that let solidjobs' undetected truncation force freehire#2337's
+		// revert. A board this size cannot be proven complete without a usable dimension, so
+		// the crawl must fail loudly instead.
+		return nil, fmt.Errorf("workday: board %s/%s capped at %d with no further facet dimension to split on",
 			b.tenant, b.site, workdayCapTotal)
-		return s.pageAll(ctx, url, appliedFacets, capped)
 	}
 	if depth >= maxFacetDepth {
-		log.Printf("workday: board %s/%s still capped at %d after splitting %d facet dimensions deep; results may be incomplete",
+		// Same reasoning as the no-dimension case above: a still-capped slice this deep cannot
+		// be proven complete, so it must fail rather than silently return the depth limit's
+		// leaf slice as the whole board.
+		return nil, fmt.Errorf("workday: board %s/%s still capped at %d after splitting %d facet dimensions deep",
 			b.tenant, b.site, workdayCapTotal, maxFacetDepth)
-		return s.pageAll(ctx, url, appliedFacets, capped)
 	}
 
 	nextUsed := make(map[string]bool, len(used)+1)

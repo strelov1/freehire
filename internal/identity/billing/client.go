@@ -53,7 +53,11 @@ func newClient(apiKey, baseURL string, httpc *http.Client) *client {
 //
 // The provider's API is form-encoded on the way in and JSON on the way out — an asymmetry
 // worth stating once here rather than rediscovering at each call site.
-func (c *client) do(ctx context.Context, method, path string, form url.Values, out any) error {
+//
+// idempotencyKey is empty for every read and for anything the provider treats as repeatable.
+// It is a named parameter rather than a general header map because there is exactly one
+// header we ever add, and a map would invite a second, unreviewed one.
+func (c *client) do(ctx context.Context, method, path string, form url.Values, idempotencyKey string, out any) error {
 	var body io.Reader
 	if form != nil {
 		body = strings.NewReader(form.Encode())
@@ -67,6 +71,12 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, o
 	req.Header.Set("Accept", "application/json")
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	if idempotencyKey != "" {
+		// The provider replays the first response for 24 hours against this key, which is
+		// what makes a retried credit or a double-clicked checkout cost nothing. Without it
+		// a retry after a timeout we never saw the answer to credits twice.
+		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
 
 	resp, err := c.http.Do(req)
@@ -130,7 +140,7 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 	form.Set("expand[]", "data.items.data.price")
 
 	var raw stripeSubscriptionList
-	if err := c.do(ctx, http.MethodGet, "/subscriptions?"+form.Encode(), nil, &raw); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/subscriptions?"+form.Encode(), nil, "", &raw); err != nil {
 		return subscriber{}, err
 	}
 
@@ -168,7 +178,7 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 // comes back on the completion event, which is how a first purchase is attributed before
 // any customer binding exists. The customer's metadata survives that event, which is how
 // every later renewal is attributed once the binding does exist.
-func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer string) (string, error) {
+func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer, couponID string) (string, error) {
 	id := strconv.FormatInt(userID, 10)
 
 	form := url.Values{}
@@ -196,10 +206,18 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 		}
 	}
 
+	// Set only when there is one, so an ordinary purchase sends exactly the request it sent
+	// before discounts existed. The provider admits ONE coupon per session — which is why
+	// the caller resolves a single discount rather than handing over everything an account
+	// might be owed.
+	if couponID != "" {
+		form.Set("discounts[0][coupon]", couponID)
+	}
+
 	var out struct {
 		URL string `json:"url"`
 	}
-	if err := c.do(ctx, http.MethodPost, "/checkout/sessions", form, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/checkout/sessions", form, "", &out); err != nil {
 		return "", err
 	}
 	if out.URL == "" {
@@ -222,7 +240,7 @@ func (c *client) createPortalSession(ctx context.Context, customerID, returnURL 
 	var out struct {
 		URL string `json:"url"`
 	}
-	if err := c.do(ctx, http.MethodPost, "/billing_portal/sessions", form, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/billing_portal/sessions", form, "", &out); err != nil {
 		return "", err
 	}
 	if out.URL == "" {

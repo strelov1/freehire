@@ -20,6 +20,7 @@ hire
 /apple-revoke
 /auth-cleanup
 /auto-apply
+/auto-apply-orchestrate
 /backfill-application-events
 /backfill-applications
 /backfill-blank-company
@@ -32,6 +33,8 @@ hire
 /backfill-duplicate-marker-owner
 /backfill-echojobs
 /backfill-experience
+/backfill-experience-dates
+/backfill-requirements
 /backfill-resume-geo
 /backfill-resume-structured
 /backfill-slug-folded
@@ -71,6 +74,7 @@ hire
 /rollup-company
 /rollup-views
 /schedule-board
+/social-digest
 /search-drain
 /seed-adzuna-description-queue
 /similar-backfill

@@ -1252,7 +1252,13 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'differs is the daily amount, and it resets at `resets_at`. A pro caller reads as ' +
           '`unlimited` rather than as a number. `enforced` says whether that ceiling turns ' +
           'anybody away yet — while it is `false` a spent allowance is counted and the ' +
-          'action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM.',
+          'action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM. ' +
+          'A pro caller also carries `pro_until` and `pro_source` — `stripe`, `revenuecat` ' +
+          'or `granted` — both absent on the free plan and on a plan that has ended. ' +
+          '`pro_source` is behavioural: a client offering an in-app purchase must not offer ' +
+          'one to a `stripe` subscriber, who would be charged twice for one plan, and a ' +
+          '`revenuecat` subscriber must be sent to their store to cancel rather than to a ' +
+          'web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.',
         curl: `curl "${BASE_URL}/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
@@ -1264,6 +1270,24 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
     ]
   }
 }`,
+      },
+      {
+        method: 'POST',
+        path: '/billing/revenuecat/sync',
+        auth: 'cookie',
+        summary: 'Re-read your own store subscription now.',
+        description:
+          'For a mobile client that has just completed an App Store or Google Play ' +
+          'purchase. The purchase finishes on the device before the provider’s webhook ' +
+          'reaches us, and if that delivery is lost the provider stops retrying after 80 ' +
+          'minutes — so without this route a paid subscriber can be left looking at a ' +
+          'paywall. It names nobody: the account is the session’s, and a user id in the ' +
+          'request is ignored. Rate-limited per caller, and absent entirely where the store ' +
+          'provider is unconfigured. `status` is `synced` when the plan was written, or ' +
+          '`no_subscription` when RevenueCat holds nothing for this account; a 503 means ' +
+          'the provider could not be reached and the hourly reconciler will finish the job.',
+        curl: `curl -X POST "${BASE_URL}/billing/revenuecat/sync" -b cookies.txt`,
+        responseExample: `{ "data": { "status": "synced" } }`,
       },
       {
         method: 'GET',
@@ -2155,12 +2179,78 @@ data: {"type":"result","stop_reason":"completed"}
     ],
   },
   {
-    title: 'Activity & shared boards',
+    title: 'Onboarding survey',
     intro:
-      'Two public reads — the catalogue-activity time series and a shared saved-' +
-      'search “board” by slug — plus the session-only publish/unpublish actions that ' +
-      'turn one of your saved searches into such a board. A published board exposes ' +
-      'no owner identity.',
+      'What you told us about your search when you signed up: how far along it is, ' +
+      'the single biggest thing in its way, and what you earn today. A singleton per ' +
+      'user — no id in the path. These answers describe you to us and reach no ' +
+      'employer and no job search; what you WANT to be paid is a screening answer ' +
+      '(`desired_salary_*`), not one of these. `PUT` is a partial update: a field the ' +
+      'body omits keeps its stored value, and there is no way to clear one back to ' +
+      'unstated.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/survey',
+        auth: 'cookie-or-key',
+        summary: 'Your stored survey answers. Every field is absent until you answer it.',
+        curl: `curl "${BASE_URL}/me/survey" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "job_search_stage": "searching",
+    "biggest_challenge": "technical_interviews",
+    "current_income_amount": 5000,
+    "current_income_currency": "USD",
+    "current_income_period": "month"
+  }
+}`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/survey',
+        auth: 'cookie',
+        summary: 'Update one or more survey answers.',
+        description:
+          'A field the body omits is left unchanged. A stage or challenge outside its ' +
+          'vocabulary, a note alongside any challenge other than `other`, a currency ' +
+          'that is not a three-letter ISO 4217 code, a period outside the vocabulary, ' +
+          'or a non-positive income is a `400` naming the offending field.',
+        body: [
+          { name: 'job_search_stage', type: 'string', description: 'One of `not_started`, `searching`, `employed_looking`, `exploring`.', example: 'searching' },
+          { name: 'biggest_challenge', type: 'string', description: 'One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`.', example: 'technical_interviews' },
+          { name: 'biggest_challenge_note', type: 'string', description: 'Free text. Accepted only alongside `biggest_challenge: "other"`.' },
+          { name: 'current_income_amount', type: 'integer', description: 'What you earn today, in the currency and period below.', example: '5000' },
+          { name: 'current_income_currency', type: 'string', description: 'Three-letter ISO 4217 currency code.', example: 'USD' },
+          { name: 'current_income_period', type: 'string', description: 'Income period, e.g. `year`, `month`.', example: 'month' },
+        ],
+        curl: `curl -X PUT "${BASE_URL}/me/survey" \\
+  -b cookies.txt -H 'Content-Type: application/json' \\
+  -d '{"job_search_stage":"searching"}'`,
+        responseExample: `{
+  "data": {
+    "job_search_stage": "searching"
+  }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/me/onboarding/complete',
+        auth: 'cookie',
+        summary: 'Record that you have been through the onboarding wizard.',
+        description:
+          'Sets `onboarding_completed_at` on your account, which is what stops the app ' +
+          'routing you into the wizard again. Idempotent: calling it a second time ' +
+          'keeps the original timestamp and still answers `200`.',
+        curl: `curl -X POST "${BASE_URL}/me/onboarding/complete" -b cookies.txt`,
+        responseExample: `{ "data": { "onboarding_complete": true } }`,
+      },
+    ],
+  },
+  {
+    title: 'Activity & shared job lists',
+    intro:
+      'Two public reads — the catalogue-activity time series and a shared job list ' +
+      'by slug. A published list exposes no owner identity.',
     endpoints: [
       {
         method: 'GET',
@@ -2188,43 +2278,16 @@ data: {"type":"result","stop_reason":"completed"}
       },
       {
         method: 'GET',
-        path: '/boards/{slug}',
+        path: '/lists/{slug}',
         auth: 'none',
-        summary: 'A shared saved-search board by its public slug.',
+        summary: 'A shared job list by its public slug.',
         description:
-          'Public, no owner-scoping — returns only display fields (`name`, the ' +
-          'canonical filter `query`, and an optional `author_label`). An unknown or ' +
-          'unshared slug is a `404`.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The board public slug.', example: 'senior-go-remote-3f9a' }],
-        curl: `curl "${BASE_URL}/boards/senior-go-remote-3f9a"`,
-        responseExample: `{ "data": { "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "author_label": "Jane D." } }`,
-      },
-      {
-        method: 'POST',
-        path: '/me/searches/{id}/share',
-        auth: 'cookie',
-        summary: 'Publish one of your saved searches as a public board.',
-        description:
-          'Mints (or keeps) the board slug and sets the optional author label. Owner-' +
-          'scoped; a missing/non-owned id is a `404`. Returns the saved search, now ' +
-          'carrying `public_slug`.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' }],
-        body: [
-          { name: 'author_label', type: 'string', description: 'Label shown on the board; blank/omitted renders it anonymously.', example: 'Jane D.' },
-        ],
-        curl: `curl -X POST "${BASE_URL}/me/searches/2/share" \\
-  -H 'Content-Type: application/json' -b cookies.txt \\
-  -d '{"author_label":"Jane D."}'`,
-        responseExample: `{ "data": { "id": 2, "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "public_slug": "senior-go-remote-3f9a", "author_label": "Jane D." } }`,
-      },
-      {
-        method: 'DELETE',
-        path: '/me/searches/{id}/share',
-        auth: 'cookie',
-        summary: 'Make a shared board private again.',
-        description: 'Owner-scoped and idempotent (already-private is a no-op). Returns `204 No Content`.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' }],
-        curl: `curl -X DELETE "${BASE_URL}/me/searches/2/share" -b cookies.txt`,
+          'Public, no owner-scoping — returns display fields (`name`, `description`) ' +
+          'plus the jobs it contains (a closed/expired job stays listed, marked as ' +
+          'such). An unknown or unshared slug is a `404`.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job-list public slug.', example: 'backend-jobs-a3f1' }],
+        curl: `curl "${BASE_URL}/lists/backend-jobs-a3f1"`,
+        responseExample: `{ "data": { "name": "Backend jobs", "description": "Shortlist for this round", "jobs": [ { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." } ] } }`,
       },
     ],
   },
@@ -2233,7 +2296,8 @@ data: {"type":"result","stop_reason":"completed"}
     intro:
       'Browser conveniences, session-only. A saved search stores a canonical ' +
       'filter query string; a subscription turns one into a recurring digest ' +
-      '(e.g. Telegram). Each operation is owner-scoped — a non-owned id is a 404.',
+      '(Telegram, email, or your own webhook). Each operation is owner-scoped — ' +
+      'a non-owned id is a 404.',
     endpoints: [
       {
         method: 'GET',
@@ -2346,6 +2410,155 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie',
         summary: 'Unlink your Telegram account.',
         curl: `curl -X DELETE "${BASE_URL}/me/telegram" -b cookies.txt`,
+        responseExample: `(204 No Content)`,
+      },
+      {
+        method: 'GET',
+        path: '/me/webhook',
+        auth: 'cookie',
+        summary: 'Your webhook destination for saved-search matches, or null if none is configured.',
+        curl: `curl "${BASE_URL}/me/webhook" -b cookies.txt`,
+        responseExample: `{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/webhook',
+        auth: 'cookie',
+        summary: 'Create your webhook destination, or update its URL if one already exists.',
+        description:
+          'There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a ' +
+          'saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here.',
+        body: [
+          { name: 'url', type: 'string', required: true, description: 'Destination URL — must be http or https.', example: 'https://example.com/hook' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/webhook" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"url":"https://example.com/hook"}'`,
+        responseExample: `{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }`,
+      },
+      {
+        method: 'PATCH',
+        path: '/me/webhook',
+        auth: 'cookie',
+        summary: 'Enable or disable your webhook destination without changing its URL.',
+        body: [{ name: 'enabled', type: 'boolean', required: true, description: 'Whether the destination is enabled.', example: 'false' }],
+        curl: `curl -X PATCH "${BASE_URL}/me/webhook" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"enabled":false}'`,
+        responseExample: `{ "data": { "url": "https://example.com/hook", "enabled": false, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": "2026-09-04T13:00:00Z" } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/webhook',
+        auth: 'cookie',
+        summary: 'Delete your webhook destination.',
+        curl: `curl -X DELETE "${BASE_URL}/me/webhook" -b cookies.txt`,
+        responseExample: `(204 No Content)`,
+      },
+    ],
+  },
+  {
+    title: 'Job lists',
+    intro:
+      'Named lists of specific jobs — independent of the single-flag "save" — that ' +
+      'you can optionally publish read-only by slug (see the public read under ' +
+      '"Activity & shared job lists"). Browser conveniences, session-only. Each ' +
+      'operation is owner-scoped — a non-owned id is a 404.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/lists',
+        auth: 'cookie',
+        summary: 'List your job lists.',
+        curl: `curl "${BASE_URL}/me/lists" -b cookies.txt`,
+        responseExample: `{ "data": [ { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 4 } ] }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/lists',
+        auth: 'cookie',
+        summary: 'Create a job list.',
+        body: [
+          { name: 'name', type: 'string', required: true, description: 'Display name.', example: 'Backend jobs' },
+          { name: 'description', type: 'string', description: 'Optional free-text description.', example: 'Shortlist for this round' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/lists" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"name":"Backend jobs","description":"Shortlist for this round"}'`,
+        responseExample: `{ "data": { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 0 } }`,
+      },
+      {
+        method: 'PATCH',
+        path: '/me/lists/{id}',
+        auth: 'cookie',
+        summary: 'Rename or re-describe a job list.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
+        body: [
+          { name: 'name', type: 'string', description: 'New name (optional).' },
+          { name: 'description', type: 'string', description: 'New description (optional).' },
+        ],
+        curl: `curl -X PATCH "${BASE_URL}/me/lists/3" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"name":"Backend jobs — Q3"}'`,
+        responseExample: `{ "data": { "id": 3, "name": "Backend jobs — Q3", "description": "...", "public_slug": "", "job_count": 4 } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/lists/{id}',
+        auth: 'cookie',
+        summary: 'Delete a job list.',
+        description: 'The referenced jobs and your separate "save" flags are untouched.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/lists/3" -b cookies.txt`,
+        responseExample: `(204 No Content)`,
+      },
+      {
+        method: 'POST',
+        path: '/me/lists/{id}/jobs',
+        auth: 'cookie',
+        summary: 'Add a job to a list.',
+        description:
+          'Jobs are addressed by `job_slug` (the public slug), the same identifier ' +
+          'every job carries elsewhere. Idempotent: adding an already-present job ' +
+          'changes nothing. An unknown slug is a `404`.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
+        body: [{ name: 'job_slug', type: 'string', required: true, description: 'The job to add.', example: 'senior-go-engineer-acme-1a2b' }],
+        curl: `curl -X POST "${BASE_URL}/me/lists/3/jobs" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"job_slug":"senior-go-engineer-acme-1a2b"}'`,
+        responseExample: `(204 No Content)`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/lists/{id}/jobs/{job_slug}',
+        auth: 'cookie',
+        summary: 'Remove a job from a list.',
+        description: 'Idempotent: a job not in the list, or a slug that resolves to no job at all, is a no-op.',
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' },
+          { name: 'job_slug', type: 'string', required: true, description: 'The job to remove.', example: 'senior-go-engineer-acme-1a2b' },
+        ],
+        curl: `curl -X DELETE "${BASE_URL}/me/lists/3/jobs/senior-go-engineer-acme-1a2b" -b cookies.txt`,
+        responseExample: `(204 No Content)`,
+      },
+      {
+        method: 'POST',
+        path: '/me/lists/{id}/share',
+        auth: 'cookie',
+        summary: 'Publish a job list as a public, read-only page.',
+        description: 'Mints (or keeps) the public slug. Returns the list, now carrying `public_slug`.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
+        curl: `curl -X POST "${BASE_URL}/me/lists/3/share" -b cookies.txt`,
+        responseExample: `{ "data": { "id": 3, "name": "Backend jobs", "description": "...", "public_slug": "backend-jobs-a3f1", "job_count": 4 } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/lists/{id}/share',
+        auth: 'cookie',
+        summary: 'Make a shared job list private again.',
+        description: 'Idempotent (already-private is a no-op).',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/lists/3/share" -b cookies.txt`,
         responseExample: `(204 No Content)`,
       },
     ],
@@ -3375,12 +3588,18 @@ data: {"type":"result","stop_reason":"completed"}
           'your history already covers but the CV buries — reframe those — and ' +
           '`missing_gap` are the ones it does not, which an agent must ask about ' +
           'rather than invent. Served from cache; calls no LLM. 409 when the CV is ' +
-          'not a tailored copy or has no analysis.',
+          'not a tailored copy or has no analysis. `job.requirements` is what the posting ' +
+          'itself asks for, in its own words — a fuller list than the missing_* split, ' +
+          'which is only what the analysis found the CV lacks. Absent when the posting ' +
+          'states none.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The tailored CV id.' }],
         curl: `curl "${BASE_URL}/me/cvs/7d1a…/tailor-context" -H "Authorization: Bearer fhk_…"`,
         responseExample: `{
   "data": {
-    "job": { "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme" },
+    "job": {
+      "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme",
+      "requirements": [ { "text": "5+ years with Go", "priority": "required" } ]
+    },
     "verdict": "worth_applying",
     "overall_score": 72,
     "recommendation": "Lead with the payments migration …",

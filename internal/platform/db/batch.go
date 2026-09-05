@@ -19,10 +19,11 @@ var (
 
 const applyDailyView = `-- name: ApplyDailyView :batchexec
 WITH ins AS (
-    INSERT INTO job_daily_views (day, job_id, uniques)
-    VALUES ($3, $2, $1)
+    INSERT INTO job_daily_views (day, job_id, uniques, page_uniques)
+    VALUES ($3, $2, $1, $4)
     ON CONFLICT (day, job_id)
-        DO UPDATE SET uniques = job_daily_views.uniques + EXCLUDED.uniques
+        DO UPDATE SET uniques      = job_daily_views.uniques + EXCLUDED.uniques,
+                      page_uniques = job_daily_views.page_uniques + EXCLUDED.page_uniques
 )
 UPDATE jobs SET view_count = view_count + $1
 WHERE id = $2
@@ -35,23 +36,32 @@ type ApplyDailyViewBatchResults struct {
 }
 
 type ApplyDailyViewParams struct {
-	Delta int32       `json:"delta"`
-	JobID int64       `json:"job_id"`
-	Day   pgtype.Date `json:"day"`
+	TotalDelta int32       `json:"total_delta"`
+	JobID      int64       `json:"job_id"`
+	Day        pgtype.Date `json:"day"`
+	PageDelta  int32       `json:"page_delta"`
 }
 
 // Apply one (day, job) unique count additively: upsert the daily rollup and add the
-// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
+// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 // though the primary query does not read it. Issued as a pgx batch (one call per
 // tuple) so a file's rows land in a single round trip; view_count accumulates across
 // a job's day-rows, and additivity lets a day spanning two rotated files sum right.
+//
+// Two deltas, not one plus a breakdown. `total_delta` counts the visitors who
+// produced EITHER signal and is what `uniques` has always held — jobs.view_count and
+// GET /api/v1/stats/catalog both read from it, so it must not move. `page_delta`
+// counts the visitors who opened the PAGE, the only bot-filtered signal of the two.
+// A visitor who did both is one visitor in each, so the two do not sum with an API
+// count; the only relation between them is page_delta <= total_delta.
 func (q *Queries) ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
 		vals := []interface{}{
-			a.Delta,
+			a.TotalDelta,
 			a.JobID,
 			a.Day,
+			a.PageDelta,
 		}
 		batch.Queue(applyDailyView, vals...)
 	}
@@ -76,6 +86,65 @@ func (b *ApplyDailyViewBatchResults) Exec(f func(int, error)) {
 }
 
 func (b *ApplyDailyViewBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
+const recordDigestPost = `-- name: RecordDigestPost :batchexec
+INSERT INTO social_digest_posts (day, channel, job_id, slot)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (day, channel, job_id) DO NOTHING
+`
+
+type RecordDigestPostBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type RecordDigestPostParams struct {
+	Day     pgtype.Date `json:"day"`
+	Channel string      `json:"channel"`
+	JobID   int64       `json:"job_id"`
+	Slot    int32       `json:"slot"`
+}
+
+// Ledger write, one row per posting in the published list. Written only AFTER a
+// channel has published; a dry run never reaches here. ON CONFLICT DO NOTHING so a
+// retry that races itself cannot fail the run over a row that already says what we
+// were about to say.
+func (q *Queries) RecordDigestPost(ctx context.Context, arg []RecordDigestPostParams) *RecordDigestPostBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.Day,
+			a.Channel,
+			a.JobID,
+			a.Slot,
+		}
+		batch.Queue(recordDigestPost, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &RecordDigestPostBatchResults{br, len(arg), false}
+}
+
+func (b *RecordDigestPostBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *RecordDigestPostBatchResults) Close() error {
 	b.closed = true
 	return b.br.Close()
 }

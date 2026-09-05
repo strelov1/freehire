@@ -16,6 +16,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
@@ -503,7 +504,7 @@ func TestResetCVFromResume_RefusesWhenTheBankSeedExceedsTheBulletCap(t *testing.
 
 	emp, err := bank.CreateEmployment(ctx, userID, experience.Employment{
 		Kind: experience.KindJob, Company: "Neon", Role: "Staff Engineer",
-		Start: "2018", End: "2024",
+		Start: &perioddate.PeriodDate{Year: 2018}, End: &perioddate.PeriodDate{Year: 2024},
 	})
 	if err != nil {
 		t.Fatalf("CreateEmployment: %v", err)

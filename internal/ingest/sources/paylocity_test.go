@@ -37,6 +37,33 @@ func TestPaylocityProvider(t *testing.T) {
 	}
 }
 
+// Paylocity earns fullBoardListing because Fetch's listing GET is a single request whose
+// window.pageData embeds the company's whole Jobs array (no pagination), so a listing
+// failure aborts the whole Fetch. Per-job detail fetches are best-effort (only downgrade the
+// description, never drop the posting).
+func TestPaylocityMarkers(t *testing.T) {
+	s := NewPaylocity(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("paylocity should implement the fullBoardListing marker")
+	}
+}
+
+func TestPaylocityRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["paylocity"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include paylocity")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestPaylocityMarkers' fullBoardListing claim rests on. An unrouted
+// fake (no /Recruiting/Jobs/All/ route) fails exactly as a real listing error would.
+func TestPaylocityFetchPropagatesAListingError(t *testing.T) {
+	fake := &routedHTTP{}
+	if _, err := NewPaylocity(fake).Fetch(context.Background(), CompanyEntry{Board: "acme-guid"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
+	}
+}
+
 func TestPaylocityFetch(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("/Recruiting/Jobs/All/", paylocityListingHTML).

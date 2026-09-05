@@ -15,12 +15,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -401,7 +403,7 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	}
 	// fitanalysis.ErrNoAnalysis renders as the 409 this endpoint documents; classify maps it
 	// once, at the port boundary, for every route that can meet it.
-	ctx, err := h.fit.TailoringContext(c.Context(), userID, job)
+	ctx, err := h.fit.TailoringContext(c.Context(), userID, job, postingRequirements(job))
 	if err != nil {
 		return err
 	}
@@ -414,6 +416,29 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 func (h *cvHandlers) optionalAnalysis(ctx context.Context, userID, jobID int64) *matchanalysis.Analysis {
 	analysis, _ := h.fit.Optional(ctx, userID, jobID)
 	return analysis
+}
+
+// postingRequirements is what a posting asks for, in its own words: the model's enrichment
+// list, or the markup parser's derived column when the model stated none.
+//
+// It reads through jobview rather than off the row because those two producers are
+// reconciled in exactly ONE place — jobview.FromDomain — and a second copy of that rule
+// here is the drift its own documentation warns about. It lives in the handler rather than
+// beside the reader that wants it (fitanalysis, in the candidate block) because candidate
+// sits BELOW job in the layering and may not import jobview at all.
+//
+// A row the projection cannot read yields no requirements rather than an error: the
+// tailoring context is worth serving without them, and refusing it over one unreadable
+// enrichment blob would trade a complete answer for none. Logged, though — the only way
+// here is a corrupt blob, and that must not look to us like a posting that stated nothing
+// (the same distinction fitanalysis.Optional draws for a failed analysis read).
+func postingRequirements(job db.Job) []enrich.Requirement {
+	view, err := jobview.FromRow(job)
+	if err != nil {
+		log.Printf("handler: requirements for job %d: %v", job.ID, err)
+		return nil
+	}
+	return view.Enrichment.Requirements
 }
 
 // tailoredCVTitle names a tailored copy from the vacancy title (bounded/defaulted like any CV

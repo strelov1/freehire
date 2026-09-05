@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { Clock, Mail, MessageSquare } from '@lucide/svelte';
+  import { Clock, FileCheck, Mail, MessageSquare } from '@lucide/svelte';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, EntityLogo } from '$lib/ui';
   import { humanizeStage } from '$lib/stages';
   import { chasedLabel, cvOpenedLabel } from '$lib/followup';
+  import { autoApplyNeedsReviewBadge } from '$lib/autoApplyReview';
   import type { MyJob } from '$lib/types';
 
   let {
@@ -15,6 +16,9 @@
   } = $props();
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
+  // pending_review (a decision to make) or blocked (a submission attempt stopped) —
+  // see autoApplyReview.ts for why the other four statuses show no badge here.
+  const needsAutoApplyReview = $derived(autoApplyNeedsReviewBadge(item.auto_apply_status));
   // Both readings of a chased application, side by side: the badge says the employer
   // is still quiet, the label says we already prodded them. Neither replaces the other.
   const chased = $derived(chasedLabel(item));
@@ -82,6 +86,16 @@
   <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
+    {/if}
+    {#if needsAutoApplyReview}
+      <span
+        class="flex items-center gap-0.5 text-xs font-medium text-warning-strong"
+        title="Auto-apply needs your review"
+        aria-label="Auto-apply needs your review"
+      >
+        <FileCheck class="size-3 shrink-0" aria-hidden="true" />
+        Review
+      </span>
     {/if}
     {#if item.silence_state === 'silent'}
       <span

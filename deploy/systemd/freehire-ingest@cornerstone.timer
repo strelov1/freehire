@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest cornerstone
 [Timer]
-OnCalendar=*:05:00
+OnCalendar=*:46:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -16,8 +16,10 @@ import (
 // pagedFake serves an endless listing: every page up to a caller-chosen ceiling carries one new
 // job link, so a paging loop never reaches a natural end (an empty page) on its own — only a
 // maxPages cap can stop it. It exists to exercise the cap-exhaustion path of pagedLinks, as
-// opposed to routedHTTP's fixed per-URL routes.
-type pagedFake struct{}
+// opposed to routedHTTP's fixed per-URL routes. HrefPrefix lets a caller match its own
+// adapter's link shape (empty defaults to "/job/"); a request whose URL omits the page query
+// param entirely (an adapter whose own page-1 URL omits it, e.g. careerplug) is read as page 1.
+type pagedFake struct{ HrefPrefix string }
 
 func (f pagedFake) GetHTML(_ context.Context, rawURL string) (*html.Node, error) {
 	u, err := url.Parse(rawURL)
@@ -25,7 +27,14 @@ func (f pagedFake) GetHTML(_ context.Context, rawURL string) (*html.Node, error)
 		return nil, err
 	}
 	page := u.Query().Get("page")
-	body := fmt.Sprintf(`<html><body><a href="/job/%s">Role</a></body></html>`, page)
+	if page == "" {
+		page = "1"
+	}
+	prefix := f.HrefPrefix
+	if prefix == "" {
+		prefix = "/job/"
+	}
+	body := fmt.Sprintf(`<html><body><a href="%s%s">Role</a></body></html>`, prefix, page)
 	return html.Parse(strings.NewReader(body))
 }
 

@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -9,6 +10,32 @@ import (
 func TestPersonioProvider(t *testing.T) {
 	if got := NewPersonio(nil).Provider(); got != "personio" {
 		t.Errorf("Provider() = %q, want %q", got, "personio")
+	}
+}
+
+// Personio earns fullBoardListing because Fetch's default-locale feed carries every open
+// position in one document (no pagination), and its fetch failing aborts the whole Fetch —
+// the English-feed and detail-page fallbacks are best-effort and only affect body richness,
+// never whether a position is counted.
+func TestPersonioMarkers(t *testing.T) {
+	s := NewPersonio(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("personio should implement the fullBoardListing marker")
+	}
+}
+
+func TestPersonioRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["personio"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include personio")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestPersonioMarkers' fullBoardListing claim rests on.
+func TestPersonioFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

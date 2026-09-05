@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // gemGraphQLURL is Gem's public (unauthenticated) GraphQL endpoint.
@@ -33,6 +34,21 @@ const (
 }`
 )
 
+// gemSweepGrace narrows the unseen sweep below the 48h default: unlike a slice-crawled source,
+// gem lists a board's WHOLE posting set on every run (confirmed live 2026-09-05 — a 3054-posting
+// crawl every hour, one board's disappearance immediately reflected in the next), so an unseen
+// posting is real evidence of removal, not a page the crawl merely hasn't reached yet, without
+// needing to touch the shared default that workday/smartrecruiters rely on for their own, much
+// slower crawl completion (see cmd/ingest/coverage.go's measured jitter).
+//
+// 24h, not something tighter to match the hourly cadence, for two reasons that have no measured
+// number behind them yet (unlike whatjobs' drift-depth-derived window): the shared ingest-slot
+// pool can skip a run outright when the fleet's 10 concurrency slots are all busy (observed twice
+// in one day), and cmd/ingest's sweep cutoff is a single `now()` taken after the whole crawl
+// finishes while each job's own `last_seen_at` is stamped mid-crawl — a slow run narrows that gap
+// further still. Revisit with a real measurement if either bound turns out to matter in practice.
+const gemSweepGrace = 24 * time.Hour
+
 // gem adapts Gem's public job-board GraphQL API. Its list endpoint carries no description,
 // so it fetches each posting's detail (bounded-concurrency) to assemble the body, like the
 // SmartRecruiters and Rippling adapters.
@@ -44,6 +60,8 @@ type gem struct {
 func NewGem(c JSONPoster) Source { return gem{http: c} }
 
 func (gem) Provider() string { return "gem" }
+
+func (gem) sweepGrace() time.Duration { return gemSweepGrace }
 
 // gemRequest is a GraphQL request body. Both operations share this shape; the variables
 // carry boardId (and, for detail, extId).

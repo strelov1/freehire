@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest solides
 [Timer]
-OnCalendar=*:54:00
+OnCalendar=*:00:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

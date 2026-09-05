@@ -5,11 +5,9 @@
   // on every change, the same way the Skills view does.
   import { CATEGORY_OPTIONS } from '$lib/facets';
   import { profileStore } from '$lib/profile.svelte';
+  import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import type { UserProfile } from '$lib/types';
   import SearchSelect from '../facets/SearchSelect.svelte';
-
-  // Mirror of the server's specialization cap (searchprofile.maxSpecializations).
-  const MAX_SPECIALIZATIONS = 5;
 
   let {
     profile,

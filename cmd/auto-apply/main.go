@@ -41,12 +41,12 @@ func run() int {
 
 	acfg := config.LoadAutoApply()
 
-	// blobStore is nil when S3_* is unconfigured, and that is fine here: the only résumé
-	// read this worker makes is candidateprofile's Structured(), which reads the parsed
-	// structure from Postgres and never touches object storage (resume.Store.Structured
-	// reads only its repo). Object storage only matters once this package attaches a
-	// résumé file to a submission, which it does not do yet — see resolve.go's file-kind
-	// handling and internal/atsapply/AGENTS.md's known gaps.
+	// blobStore is nil when S3_* is unconfigured, and that is fine here: résumé attachment
+	// (openspec/changes/auto-apply-tailored-resume) renders the approved tailored CV
+	// on demand through the Typst renderer and never touches object storage — the only
+	// résumé-adjacent read this worker makes elsewhere is candidateprofile's Structured(),
+	// which reads the parsed structure from Postgres (resume.Store.Structured reads only
+	// its repo). S3_* stays optional here.
 	blobStore, err := blobstore.New(blobstore.Config{
 		Endpoint:  cfg.S3Endpoint,
 		Bucket:    cfg.S3Bucket,
@@ -95,13 +95,29 @@ func run() int {
 	llmKeyResolver := llmkey.NewResolver(queries, llmKeys)
 	atoms := experience.NewStore(experience.NewQueriesRepository(queries))
 
+	// cvRenderer is nil when no typst binary is configured (config.resolveTypstBin), the
+	// same nil-safe gating internal/api/handler's PDF-download endpoint uses. A résumé file
+	// field then simply cannot be filled — Client.attachApprovedResume degrades that to a
+	// park, the same outcome an unresolved field already produces, never a crash.
+	//
+	// Left as the untyped nil interface rather than the nil *TypstRenderer directly: a nil
+	// concrete pointer assigned into the cv.Renderer INTERFACE parameter is not a nil
+	// interface (boundRunner's own comment in internal/api/handler/assistant.go documents
+	// the same trap), so Client's own `c.renderer == nil` check would never see it as
+	// unconfigured and would panic on the first call instead.
+	var cvRenderer cv.Renderer
+	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
+		cvRenderer = r
+	}
+
 	// The same HTTP client the crawl and internal/applyform's own capture worker use: the
 	// Greenhouse/Ashby endpoints internal/atsapply reuses via applyform.Fetchers are the
 	// platforms' own public job-board APIs, so its user agent, timeouts and size caps are
 	// exactly right here too.
-	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms)
+	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, cvStore, cvRenderer)
 
-	stats, err := autoapply.Run(ctx, newDBStore(pool), answers, sidecar, autoapply.RunOptions{
+	store := newDBStore(pool)
+	stats, err := autoapply.Run(ctx, store, answers, sidecar, autoapply.RunOptions{
 		BatchSize:    acfg.BatchSize,
 		LeaseSeconds: acfg.LeaseSeconds,
 		MaxAttempts:  acfg.MaxAttempts,
@@ -114,11 +130,35 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("auto-apply done: applied=%d blocked=%d failed=%d dead_lettered=%d",
-		stats.Applied, stats.Blocked, stats.Failed, stats.DeadLettered)
-	// Deliberately not worker.ExitCode: see autoapply.RunStats.Degraded for why a parked
-	// attempt is not a fault this worker's exit code should alert on.
-	if stats.Degraded() {
+	// The second, independent claim pass this same run makes (openspec/changes/
+	// auto-apply-review-tracking): resolves the answer preview for entries a tailoring run
+	// already produced a CV for, reusing this worker's own browser dependency rather than
+	// giving cmd/auto-apply-orchestrate one it was deliberately built without (design.md).
+	// previewSidecar shares no state with sidecar above — separate LLM/CV dependencies it
+	// never touches (no drafting, no résumé rendering) — but the same transport and the
+	// same stored-form reader, so a non-Greenhouse preview costs a Postgres read, not a
+	// second network fetch of what cmd/capture-apply-form already persisted.
+	previewSidecar := atsapply.NewPreviewClient(sources.NewClient(), &dbApplyFormReader{q: queries})
+	previewStats, err := autoapply.RunPreviews(ctx, store, answers, previewSidecar, autoapply.RunOptions{
+		BatchSize:    acfg.BatchSize,
+		LeaseSeconds: acfg.LeaseSeconds,
+		MaxAttempts:  acfg.MaxAttempts,
+		Concurrency:  acfg.Concurrency,
+		MaxPerRun:    acfg.MaxPerRun,
+		CallTimeout:  acfg.CallTimeout,
+	})
+	if err != nil {
+		log.Printf("auto-apply previews: %v", err)
+		return 1
+	}
+
+	log.Printf("auto-apply done: applied=%d blocked=%d failed=%d dead_lettered=%d; previews resolved=%d parked=%d failed=%d dead_lettered=%d",
+		stats.Applied, stats.Blocked, stats.Failed, stats.DeadLettered,
+		previewStats.Resolved, previewStats.Parked, previewStats.Failed, previewStats.DeadLettered)
+	// Deliberately not worker.ExitCode: see autoapply.RunStats.Degraded (and
+	// PreviewStats.Degraded, the same reasoning) for why a parked attempt is not a fault
+	// this worker's exit code should alert on.
+	if stats.Degraded() || previewStats.Degraded() {
 		return 1
 	}
 	return 0

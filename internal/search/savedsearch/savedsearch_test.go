@@ -25,24 +25,7 @@ type updateArgs struct {
 	Query  *string
 }
 
-type getArgs struct {
-	ID     int64
-	UserID int64
-}
-
-type setArgs struct {
-	ID          int64
-	UserID      int64
-	PublicSlug  string
-	AuthorLabel string
-}
-
 type deleteArgs struct {
-	ID     int64
-	UserID int64
-}
-
-type clearArgs struct {
 	ID     int64
 	UserID int64
 }
@@ -68,49 +51,6 @@ type fakeRepo struct {
 	deleteErr    error
 
 	listRet []savedsearch.SavedSearch
-
-	getRet    savedsearch.SavedSearch
-	getErr    error
-	getParams getArgs
-
-	setRet    savedsearch.SavedSearch
-	setErrs   []error // consumed one per SetPublicSlug call (nil = success)
-	setCalls  int
-	setParams []setArgs
-
-	clearErr    error
-	clearCalled bool
-	clearParams clearArgs
-
-	boardRet    savedsearch.Board
-	boardErr    error
-	boardSlug   string
-	boardCalled bool
-}
-
-func (f *fakeRepo) Get(_ context.Context, id, userID int64) (savedsearch.SavedSearch, error) {
-	f.getParams = getArgs{ID: id, UserID: userID}
-	return f.getRet, f.getErr
-}
-
-func (f *fakeRepo) SetPublicSlug(_ context.Context, id, userID int64, publicSlug, authorLabel string) (savedsearch.SavedSearch, error) {
-	f.setParams = append(f.setParams, setArgs{ID: id, UserID: userID, PublicSlug: publicSlug, AuthorLabel: authorLabel})
-	i := f.setCalls
-	f.setCalls++
-	if i < len(f.setErrs) && f.setErrs[i] != nil {
-		return savedsearch.SavedSearch{}, f.setErrs[i]
-	}
-	return f.setRet, nil
-}
-
-func (f *fakeRepo) ClearPublicSlug(_ context.Context, id, userID int64) error {
-	f.clearParams, f.clearCalled = clearArgs{ID: id, UserID: userID}, true
-	return f.clearErr
-}
-
-func (f *fakeRepo) GetPublicBoard(_ context.Context, slug string) (savedsearch.Board, error) {
-	f.boardSlug, f.boardCalled = slug, true
-	return f.boardRet, f.boardErr
 }
 
 func (f *fakeRepo) List(_ context.Context, _ int64) ([]savedsearch.SavedSearch, error) {
@@ -347,143 +287,6 @@ func TestDelete_NotFound(t *testing.T) {
 	repo := &fakeRepo{deleteErr: savedsearch.ErrNotFound}
 	err := savedsearch.New(repo).Delete(context.Background(), 7, 999)
 	if !errors.Is(err, savedsearch.ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
-}
-
-func TestShare_MintsReadableSlugFromName(t *testing.T) {
-	repo := &fakeRepo{
-		getRet: savedsearch.SavedSearch{ID: 5, Name: "Remote Go"}, // private (no slug)
-		setRet: savedsearch.SavedSearch{ID: 5, PublicSlug: "remote-go-a3f1"},
-	}
-	svc := savedsearch.New(repo)
-
-	got, err := svc.Share(context.Background(), 7, 5, "strelov")
-	if err != nil {
-		t.Fatalf("Share: %v", err)
-	}
-	if repo.getParams.ID != 5 || repo.getParams.UserID != 7 {
-		t.Errorf("Get scope = id %d user %d, want id 5 user 7", repo.getParams.ID, repo.getParams.UserID)
-	}
-	if repo.setCalls != 1 {
-		t.Fatalf("SetPublicSlug calls = %d, want 1", repo.setCalls)
-	}
-	p := repo.setParams[0]
-	if p.ID != 5 || p.UserID != 7 {
-		t.Errorf("set scope = id %d user %d, want id 5 user 7", p.ID, p.UserID)
-	}
-	if p.PublicSlug == "" || !strings.HasPrefix(p.PublicSlug, "remote-go-") {
-		t.Errorf("minted slug = %q, want readable prefix %q", p.PublicSlug, "remote-go-")
-	}
-	if p.PublicSlug == "remote-go-" {
-		t.Error("minted slug has no random suffix")
-	}
-	if p.AuthorLabel != "strelov" {
-		t.Errorf("author label param = %q, want %q", p.AuthorLabel, "strelov")
-	}
-	if got.PublicSlug != "remote-go-a3f1" {
-		t.Errorf("returned slug = %q, want the persisted row's", got.PublicSlug)
-	}
-}
-
-func TestShare_KeepsExistingSlugOnReshare(t *testing.T) {
-	repo := &fakeRepo{
-		getRet: savedsearch.SavedSearch{ID: 5, Name: "Remote Go", PublicSlug: "remote-go-old1"}, // already shared
-		setRet: savedsearch.SavedSearch{ID: 5, PublicSlug: "remote-go-old1"},
-	}
-	_, err := savedsearch.New(repo).Share(context.Background(), 7, 5, "new label")
-	if err != nil {
-		t.Fatalf("re-share: %v", err)
-	}
-	if repo.setParams[0].PublicSlug != "remote-go-old1" {
-		t.Errorf("re-share slug = %q, want existing %q kept", repo.setParams[0].PublicSlug, "remote-go-old1")
-	}
-	if repo.setParams[0].AuthorLabel != "new label" {
-		t.Errorf("re-share author label = %q, want updated %q", repo.setParams[0].AuthorLabel, "new label")
-	}
-}
-
-func TestShare_EmptyLabelIsAnonymous(t *testing.T) {
-	repo := &fakeRepo{getRet: savedsearch.SavedSearch{ID: 5, Name: "X"}, setRet: savedsearch.SavedSearch{ID: 5}}
-	if _, err := savedsearch.New(repo).Share(context.Background(), 7, 5, "   "); err != nil {
-		t.Fatalf("Share: %v", err)
-	}
-	if repo.setParams[0].AuthorLabel != "" {
-		t.Errorf("author label = %q, want empty (anonymous) for blank input", repo.setParams[0].AuthorLabel)
-	}
-}
-
-func TestShare_RejectsOverLongLabel(t *testing.T) {
-	repo := &fakeRepo{getRet: savedsearch.SavedSearch{ID: 5, Name: "X"}}
-	_, err := savedsearch.New(repo).Share(context.Background(), 7, 5, strings.Repeat("x", 61))
-	if !errors.Is(err, savedsearch.ErrInvalidAuthorLabel) {
-		t.Errorf("err = %v, want ErrInvalidAuthorLabel", err)
-	}
-	if repo.setCalls != 0 {
-		t.Error("SetPublicSlug should not be called on an invalid label")
-	}
-}
-
-func TestShare_NotOwned(t *testing.T) {
-	repo := &fakeRepo{getErr: savedsearch.ErrNotFound}
-	_, err := savedsearch.New(repo).Share(context.Background(), 7, 999, "")
-	if !errors.Is(err, savedsearch.ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
-	if repo.setCalls != 0 {
-		t.Error("SetPublicSlug should not be called when the set is not owned")
-	}
-}
-
-func TestShare_RetriesOnSlugCollision(t *testing.T) {
-	repo := &fakeRepo{
-		getRet:  savedsearch.SavedSearch{ID: 5, Name: "Remote Go"},
-		setErrs: []error{savedsearch.ErrSlugTaken}, // first attempt collides, second succeeds
-		setRet:  savedsearch.SavedSearch{ID: 5, PublicSlug: "remote-go-b2c3"},
-	}
-	_, err := savedsearch.New(repo).Share(context.Background(), 7, 5, "")
-	if err != nil {
-		t.Fatalf("Share with one collision: %v", err)
-	}
-	if repo.setCalls != 2 {
-		t.Errorf("SetPublicSlug calls = %d, want 2 (retry after collision)", repo.setCalls)
-	}
-}
-
-func TestUnshare_ScopedToOwner(t *testing.T) {
-	repo := &fakeRepo{}
-	if err := savedsearch.New(repo).Unshare(context.Background(), 7, 5); err != nil {
-		t.Fatalf("Unshare: %v", err)
-	}
-	if !repo.clearCalled || repo.clearParams.ID != 5 || repo.clearParams.UserID != 7 {
-		t.Errorf("clear scope = id %d user %d, want id 5 user 7", repo.clearParams.ID, repo.clearParams.UserID)
-	}
-}
-
-func TestUnshare_NotFound(t *testing.T) {
-	repo := &fakeRepo{clearErr: savedsearch.ErrNotFound}
-	if err := savedsearch.New(repo).Unshare(context.Background(), 7, 999); !errors.Is(err, savedsearch.ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
-}
-
-func TestGetPublicBoard_ReturnsBoard(t *testing.T) {
-	repo := &fakeRepo{boardRet: savedsearch.Board{Name: "Remote Go", Query: "q=go"}}
-	got, err := savedsearch.New(repo).GetPublicBoard(context.Background(), "remote-go-a3f1")
-	if err != nil {
-		t.Fatalf("GetPublicBoard: %v", err)
-	}
-	if repo.boardSlug != "remote-go-a3f1" {
-		t.Errorf("looked up slug = %q, want %q", repo.boardSlug, "remote-go-a3f1")
-	}
-	if got.Name != "Remote Go" || got.Query != "q=go" {
-		t.Errorf("board = %+v, want name/query carried through", got)
-	}
-}
-
-func TestGetPublicBoard_NotFound(t *testing.T) {
-	repo := &fakeRepo{boardErr: savedsearch.ErrNotFound}
-	if _, err := savedsearch.New(repo).GetPublicBoard(context.Background(), "nope"); !errors.Is(err, savedsearch.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }

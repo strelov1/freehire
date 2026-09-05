@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -102,7 +103,7 @@ func TestTalentNetworkProfile_PublicMode(t *testing.T) {
 		Links:    []string{"https://linkedin.com/in/ada"},
 		Skills:   []string{"go", "algorithms"},
 		Experience: []resumeextract.Experience{
-			{Company: "Analytical Engines Inc", Title: "Engineer", End: "2020-01"},
+			{Company: "Analytical Engines Inc", Title: "Engineer", End: &perioddate.PeriodDate{Year: 2020, Month: 1}},
 		},
 	}
 	store := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{
@@ -137,8 +138,8 @@ func TestTalentNetworkProfile_AnonymousMode(t *testing.T) {
 		Phone:    "+1-555-0100",
 		Links:    []string{"https://linkedin.com/in/ada"},
 		Experience: []resumeextract.Experience{
-			{Company: "Current Corp", Title: "Staff Engineer", End: ""},
-			{Company: "Past Co", Title: "Engineer", End: "2019-06"},
+			{Company: "Current Corp", Title: "Staff Engineer", Current: true},
+			{Company: "Past Co", Title: "Engineer", End: &perioddate.PeriodDate{Year: 2019, Month: 6}},
 		},
 	}
 	store := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{

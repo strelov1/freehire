@@ -22,7 +22,9 @@ BACKUP_DIR=/var/backups/freehire
 S3_REMOTE=hz
 BACKUP_BUCKET=freehire-backups
 S3_PREFIX=pg
-# Keep only the newest local dump — S3 (below) is the authoritative backup with
+# Bounds what an upload OUTAGE leaves behind. A SUCCESSFUL upload now deletes its own
+# local copy (see the verified delete after rclone copyto), so in the ordinary case this
+# directory holds nothing between runs. S3 (below) is the authoritative backup with
 # S3_MAX_AGE history. On host-2's 301G disk, Meili (~128G) + PG (~70G) + a facet
 # reindex's ~2x transient index leave no room for a stack of ~19G dumps; three of
 # them once filled the disk mid-reindex (2026-07-20), aborting it on `unexpected
@@ -178,6 +180,26 @@ for db in "${DATABASES[@]}"; do
   dest="${S3_REMOTE}:${BACKUP_BUCKET}/${S3_PREFIX}/${db}/${db}_${ts}.dump"
   log "uploading -> $dest"
   rclone copyto "$file" "$dest"
+
+  # The local copy exists to reach S3. Once it is there, keeping it costs 27G and grows
+  # about a gigabyte a day (24G on 2026-08-31, 27.6G on 2026-09-04) on a disk that has
+  # twice run a facet reindex out of room — the header above records three dumps filling
+  # it in 2026-07-20, and on 2026-09-04 free space was 42G against the reindex's own 40G
+  # floor. LOCAL_KEEP still bounds what an upload OUTAGE leaves behind; this removes what
+  # a successful upload leaves behind.
+  #
+  # Guarded by asking S3 what it actually holds, not by assuming rclone's exit code means
+  # the object is intact: this deletes the only local copy, so the check is worth one
+  # extra call. A mismatch keeps the file and says so rather than failing the run — the
+  # backup itself succeeded, and disk is the lesser problem.
+  remote_size=$(rclone size --json "$dest" 2>/dev/null | jq -r '.bytes // empty')
+  local_size=$(stat -c %s "$file")
+  if [ "$remote_size" = "$local_size" ]; then
+    rm -f -- "$file"
+    log "local copy removed; S3 holds ${remote_size} bytes"
+  else
+    log "WARNING: S3 reports '${remote_size}' bytes against ${local_size} local — keeping the local dump"
+  fi
 
   # S3 retention: drop objects older than S3_MAX_AGE.
   rclone delete --min-age "$S3_MAX_AGE" \

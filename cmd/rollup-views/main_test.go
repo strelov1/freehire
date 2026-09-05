@@ -102,14 +102,33 @@ func TestProcessAppliesAndIsIdempotent(t *testing.T) {
 		t.Errorf("globex view_count = %d, want 1", v)
 	}
 
-	// The daily rollup carries the same per-(day, job) uniques.
-	var daily int32
+	// The daily rollup carries the same per-(day, job) uniques, and page_uniques
+	// carries only the page opens. acme had one page visitor and one API visitor, so
+	// the two columns must disagree — a `page_uniques = uniques` write would pass a
+	// test that only read one of them, and would then rank the digest on crawler
+	// traffic in public.
+	var daily, pageDaily int32
 	if err := pool.QueryRow(ctx,
-		"SELECT uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'", j1).Scan(&daily); err != nil {
+		"SELECT uniques, page_uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'",
+		j1).Scan(&daily, &pageDaily); err != nil {
 		t.Fatalf("read job_daily_views: %v", err)
 	}
 	if daily != 2 {
 		t.Errorf("acme daily uniques = %d, want 2", daily)
+	}
+	if pageDaily != 1 {
+		t.Errorf("acme daily page_uniques = %d, want 1 (the API visitor is not a page open)", pageDaily)
+	}
+
+	// globex was opened only through the page, so both columns agree there.
+	var globexUniques, globexPage int32
+	if err := pool.QueryRow(ctx,
+		"SELECT uniques, page_uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'",
+		j2).Scan(&globexUniques, &globexPage); err != nil {
+		t.Fatalf("read job_daily_views: %v", err)
+	}
+	if globexUniques != 1 || globexPage != 1 {
+		t.Errorf("globex = %d/%d uniques/page_uniques, want 1/1", globexUniques, globexPage)
 	}
 
 	// Re-running over the same file must NOT double-count (processed-file cursor).
@@ -176,5 +195,54 @@ func TestProcessSkipsGzippedCopyOfProcessedFile(t *testing.T) {
 	}
 	if v := viewCount(t, pool, j); v != 2 {
 		t.Errorf("view_count after gzip re-run = %d, want 2 (no double-count across compression)", v)
+	}
+}
+
+// A day whose lines span two rotated files must sum across both, in BOTH counters.
+// This is what the additive ON CONFLICT buys, and page_uniques is a separate term in
+// that statement — a version that carried only `uniques` would pass every other test
+// here and then quietly report half a day's page views to the digest.
+func TestProcessSumsBothCountersAcrossTwoFiles(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	job := seedJob(t, pool, "acme")
+	const day = "21/Jul/2026:12:00:00 +0000"
+
+	// First file: one page visitor and one API visitor.
+	dir1 := writeLog(t, "access.log.1",
+		logLine("1.1.1.1", "/jobs/acme", "human1", day),
+		logLine("2.2.2.2", "/api/v1/jobs/acme", "curl", day),
+	)
+	// Second file, same calendar day: two more page visitors.
+	dir2 := writeLog(t, "access.log.1",
+		logLine("3.3.3.3", "/jobs/acme", "human3", day),
+		logLine("4.4.4.4", "/jobs/acme", "human4", day),
+	)
+
+	for _, dir := range []string{dir1, dir2} {
+		files, err := viewlog.RotatedFiles(dir, "access.log")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := process(ctx, pool, files); err != nil {
+			t.Fatalf("process %s: %v", dir, err)
+		}
+	}
+
+	var uniques, pageUniques int32
+	if err := pool.QueryRow(ctx,
+		"SELECT uniques, page_uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'",
+		job).Scan(&uniques, &pageUniques); err != nil {
+		t.Fatalf("read job_daily_views: %v", err)
+	}
+	if uniques != 4 {
+		t.Errorf("uniques = %d, want 4 (2 + 2 across both files)", uniques)
+	}
+	if pageUniques != 3 {
+		t.Errorf("page_uniques = %d, want 3 (1 + 2; the API visitor is not a page open)", pageUniques)
+	}
+	if v := viewCount(t, pool, job); v != 4 {
+		t.Errorf("view_count = %d, want 4", v)
 	}
 }

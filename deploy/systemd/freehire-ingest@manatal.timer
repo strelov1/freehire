@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest manatal
 [Timer]
-OnCalendar=*:21:00
+OnCalendar=*:24:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

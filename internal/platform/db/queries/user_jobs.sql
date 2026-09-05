@@ -302,10 +302,23 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        -- application: a job merely viewed or saved is not waiting on anyone.
        (CASE WHEN a.applied_at IS NOT NULL
              THEN GREATEST(a.applied_at, mail.newest_mail_at)
-        END)::timestamptz AS last_activity_at
+        END)::timestamptz AS last_activity_at,
+       -- The raw columns behind the card's auto-apply badge. aaq.id is the presence marker:
+       -- a LEFT JOIN with no match leaves every column NULL, which is indistinguishable from
+       -- a real attempt that has not been tailored yet unless the row's own existence is
+       -- read separately. Status is derived from these in Go (autoapply.DeriveStatus),
+       -- mirroring has_pending_suggestion's own reasoning above: one derivation, read by both
+       -- this list and the drawer's own single-application read (GetUserApplication), so the
+       -- badge and the banner can never disagree about what an entry's state means.
+       aaq.id AS auto_apply_id, aaq.tailored_cv_id AS auto_apply_tailored_cv_id,
+       aaq.review_decision AS auto_apply_review_decision,
+       aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at,
+       aaq.preview_failed_at AS auto_apply_preview_failed_at,
+       (aaq.resolved_preview IS NOT NULL)::boolean AS auto_apply_has_preview
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+LEFT JOIN auto_apply_queue aaq ON aaq.user_id = uj.user_id AND aaq.job_id = jobs.id
 -- One pass over this job's mail for all three facts. They were three correlated subqueries
 -- over the same rows with the same predicate written three times; the "pending" test in
 -- particular has to stay the one the follow-up gate, the ghost signal and the inbox's link
@@ -452,6 +465,17 @@ RETURNING upvote_count, downvote_count;
 -- The caller's current vote for a job (0 when none), for my_vote on auth-aware
 -- detail reads. Always returns one row via the COALESCE'd scalar subquery.
 SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2), 0)::smallint AS my_vote;
+
+-- name: GetUserJobApplied :one
+-- Whether the caller already applied to a job (applications.applied_at set — the process
+-- table, not user_jobs, holds this column; see RecordJobView's own comment above), the
+-- durable signal cmd/auto-apply/store.go's Submit stamps via MarkJobApplied on a real ATS
+-- submission. The guard PostJobAutoApply consults so a re-click after a successful
+-- auto-apply cannot start a second one; auto_apply_queue's own row is gone by then (Submit
+-- deletes it in the same transaction). Same COALESCE'd-scalar-subquery idiom as GetJobVote,
+-- for the same reason: always exactly one row, so a miss reads as "not applied" rather than
+-- needing its own pgx.ErrNoRows branch.
+SELECT ((SELECT applied_at FROM applications WHERE user_id = $1 AND job_id = $2) IS NOT NULL)::boolean AS applied;
 
 -- name: CountMyJobsByStage :many
 -- Per-stage application counts for the Pipeline snapshot. An application is any

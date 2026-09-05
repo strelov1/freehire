@@ -127,6 +127,13 @@ type Job struct {
 	// read-time projection attached only by the detail handler (omitted on list rows,
 	// where FromRow leaves it false).
 	ReferralAvailable bool `json:"referral_available,omitempty"`
+	// AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
+	// live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
+	// — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
+	// detail handler overlays it, keyed by (caller_id, job_id), never joined into the
+	// primary job query every anonymous reader also pays for.
+	// See openspec/changes/auto-apply-submit-trigger.
+	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`
 }
 
 // FromRow maps a database job row to the public wire shape. It is a thin shim: it
@@ -167,6 +174,21 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	e.EducationLevel = f.EducationLevel
 	e.EnglishLevel = f.EnglishLevel
 	e.ExperienceYearsMin = f.ExperienceYearsMin
+	// requirements has two producers and this is where they meet on the read path.
+	// The model wins when it stated a list — it reads the postings whose requirements
+	// are prose with no list markup, which the deterministic extractor cannot reach —
+	// and the derivation fills in otherwise.
+	//
+	// The fold has to happen HERE and not only in SetJobEnrichment's overlay, which is
+	// where it lived first. That overlay runs only when the model runs, so a posting
+	// the model has never reached stored a derived list and served nothing, and a
+	// posting already enriched at the current version is never re-queued and so would
+	// have served it never rather than eventually. Since the coverage this feature
+	// exists for is precisely the postings the model has NOT reached, the overlay alone
+	// delivered none of it.
+	if len(e.Requirements) == 0 {
+		e.Requirements = f.RequirementsDerived
+	}
 	skills := normalizeSet(f.Skills)
 	collections := normalizeSet(x.Collections)
 	cities := cityFacet(f.Cities, e.Cities)

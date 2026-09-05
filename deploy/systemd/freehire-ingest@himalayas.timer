@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest himalayas
 [Timer]
-OnCalendar=*:13:00
+OnCalendar=*:35:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

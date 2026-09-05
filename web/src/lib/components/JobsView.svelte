@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { Layers } from '@lucide/svelte';
+  import { ArrowRight, Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { profileStore } from '$lib/profile.svelte';
   import { env } from '$env/dynamic/public';
-  import { matchSortEnabled, openWithinEnabled } from '$lib/features';
+  import { openWithinEnabled } from '$lib/features';
   import { computeClientMatch } from '$lib/jobMatch';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
@@ -21,6 +22,7 @@
   import {
     FilterStore,
     filtersToParams,
+    matchSortNeedsSkills,
     selectedSortFor,
     sortOptionsFor,
     type JobSort,
@@ -193,24 +195,30 @@
     if (!matchFilterAvailable) minMatch = null;
   });
 
-  // The match SORT rides the same profile precondition as the match slider, plus a
-  // runtime flag. It ships dark: the API accepts ?sort=match as soon as the binary is
-  // out, but it ranks against skill vectors that only exist once a full index rebuild
-  // has written them — before that the sort returns a near-empty feed, which reads as
-  // broken rather than new. The flag is what reveals the option once the rebuild has
-  // landed, and flipping it is an env change plus a restart, not a redeploy.
-  //
-  // The URL param stays honoured either way, which is deliberate: it is how the sort
-  // gets verified on production before anyone can click it.
-  const matchSortAvailable = $derived(matchFilterAvailable && matchSortEnabled(env));
-
   // The orderings this caller can choose between, and which one the control shows —
   // both pure, both in facetModel so they can be tested (see sortOptionsFor).
-  const sortOptions = $derived(sortOptionsFor(filters.value.q, matchSortAvailable));
-  const selectedSort = $derived(selectedSortFor(filters.value, matchSortAvailable));
-  // A one-option select is a label wearing a control's clothes: there is nothing to
-  // choose, and the feed already IS that ordering.
-  const sortSelectVisible = $derived(sortOptions.length > 1);
+  //
+  // Match is offered to everyone. It used to need the same profile the match SLIDER
+  // does, which meant the one ordering that answers "which of these actually suit me"
+  // was invisible to every visitor who had not filled a profile in — and nothing told
+  // them it existed. Choosing it without skills on file is now answered out loud
+  // instead, by the notice below the toolbar.
+  const sortOptions = $derived(sortOptionsFor(filters.value.q));
+  const selectedSort = $derived(selectedSortFor(filters.value));
+
+  // Whether that notice is showing: match is the ordering in force and there are no
+  // skills to rank against, so the server has quietly served newest instead.
+  //
+  // Three states, not two — "has skills", "has none", and "we do not know yet".
+  // `matchFilterAvailable` folds the third into the second, and the profile arrives one
+  // round trip after the page does, so asking it alone would put this notice in the
+  // server-rendered HTML for a signed-in user WITH skills and take it away a moment
+  // later. `loaded` exists for exactly this (see userResource.svelte.ts). Signed out
+  // there is nothing to wait for: no account means no profile, and that is known at once.
+  const skillsSettled = $derived(!isAuthenticated() || profileStore.loaded);
+  const matchNeedsSkills = $derived(
+    skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
+  );
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
   // value read once at module load, and it cannot change while the page is mounted.
@@ -727,7 +735,11 @@
      bound it belongs with. -->
 {#snippet listControls()}
   {@render postedSelect()}
-  {#if sortSelectVisible}{@render sortSelect()}{/if}
+  <!-- Unconditional. This used to be guarded against a one-option select - a label
+       wearing a control's clothes - which could happen when match was hidden from a
+       viewer with no profile. Every caller is now offered newest, most-viewed and match,
+       so the guard could never be false. -->
+  {@render sortSelect()}
 {/snippet}
 
 <div class="flex gap-6">
@@ -767,6 +779,55 @@
             onDismiss={() => (alertBanner = null)}
           />
         {/if}
+      </div>
+    {/if}
+
+    <!-- Match was chosen and there is nothing to rank against. Sits with the nudges
+         above and, like them, never replaces the feed: the server degrades this request
+         to newest rather than refusing it, so there ARE jobs below — taking them away
+         would punish someone for pressing a button we offered them. What was missing
+         was only the explanation. -->
+    {#if matchNeedsSkills}
+      <!-- `role="status"` because this appears in response to changing the Sort control,
+           and a screen-reader user who just did that gets no other signal that the
+           ordering they picked was not the one served. -->
+      <!-- `my-4`, not the nudges' `mt-3`: the feed below sets no top margin of its own,
+           so a block sitting between the toolbar and the first job row has to carry the
+           air on BOTH sides or it reads as glued to the list. -->
+      <div
+        role="status"
+        class="my-4 rounded-xl border border-brand/30 bg-brand/5 p-4 text-sm sm:p-5"
+      >
+        <p class="font-medium text-foreground">Sorted by match needs to know about you</p>
+        <p class="mt-1 text-muted-foreground">
+          We rank these against your own skills, and we don't have them yet. Showing the
+          newest first for now.
+        </p>
+        <!-- The way out of this state is the whole point of the notice, so it is a
+             centred solid button rather than a link trailing the paragraph — the same
+             shape "Broaden search" uses below for the same kind of one-way-out. -->
+        <div class="mt-4 flex justify-center">
+          {#if isAuthenticated()}
+            <a
+              href={resolve('/my/profile')}
+              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+            >
+              Add your CV or skills
+              <ArrowRight class="size-4" aria-hidden="true" />
+            </a>
+          {:else}
+            <!-- Signed out there is no profile to fill in yet, so the first step is the
+                 account that would hold one. -->
+            <button
+              type="button"
+              onclick={() => promptSignIn()}
+              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+            >
+              Sign in to add your CV
+              <ArrowRight class="size-4" aria-hidden="true" />
+            </button>
+          {/if}
+        </div>
       </div>
     {/if}
 

@@ -28,8 +28,10 @@ Base URL: `https://freehire.me/api/v1`
 - [Moderator jobs](#moderator-jobs)
 - [Profile & résumé](#profile--rsum)
 - [Screening answers](#screening-answers)
-- [Activity & shared boards](#activity--shared-boards)
+- [Onboarding survey](#onboarding-survey)
+- [Activity & shared job lists](#activity--shared-job-lists)
 - [Saved searches & subscriptions](#saved-searches--subscriptions)
+- [Job lists](#job-lists)
 - [Push notifications & alerts](#push-notifications--alerts)
 - [Account, plan & extension](#account-plan--extension)
 - [Link intake & discovery](#link-intake--discovery)
@@ -1703,7 +1705,7 @@ curl "https://freehire.me/api/v1/me/tracking/analyses" -H "Authorization: Bearer
 
 Your plan and what it allows today.
 
-Which plan you are on and, for every metered AI feature, how much of today you have used against what the day allows. Every plan offers every feature; what differs is the daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM.
+Which plan you are on and, for every metered AI feature, how much of today you have used against what the day allows. Every plan offers every feature; what differs is the daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and on a plan that has ended. `pro_source` is behavioural: a client offering an in-app purchase must not offer one to a `stripe` subscriber, who would be charged twice for one plan, and a `revenuecat` subscriber must be sent to their store to cancel rather than to a web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.
 
 ```bash
 curl "https://freehire.me/api/v1/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"
@@ -1720,6 +1722,22 @@ curl "https://freehire.me/api/v1/me/plan" -H "Authorization: Bearer $FREEHIRE_AP
     ]
   }
 }
+```
+
+### `POST /billing/revenuecat/sync`
+
+**Auth:** Session only
+
+Re-read your own store subscription now.
+
+For a mobile client that has just completed an App Store or Google Play purchase. The purchase finishes on the device before the provider’s webhook reaches us, and if that delivery is lost the provider stops retrying after 80 minutes — so without this route a paid subscriber can be left looking at a paywall. It names nobody: the account is the session’s, and a user id in the request is ignored. Rate-limited per caller, and absent entirely where the store provider is unconfigured. `status` is `synced` when the plan was written, or `no_subscription` when RevenueCat holds nothing for this account; a 503 means the provider could not be reached and the hourly reconciler will finish the job.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/billing/revenuecat/sync" -b cookies.txt
+```
+
+```json
+{ "data": { "status": "synced" } }
 ```
 
 ### `GET /me/tracking/saved`
@@ -2889,9 +2907,84 @@ curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \
 }
 ```
 
-## Activity & shared boards
+## Onboarding survey
 
-Two public reads — the catalogue-activity time series and a shared saved-search “board” by slug — plus the session-only publish/unpublish actions that turn one of your saved searches into such a board. A published board exposes no owner identity.
+What you told us about your search when you signed up: how far along it is, the single biggest thing in its way, and what you earn today. A singleton per user — no id in the path. These answers describe you to us and reach no employer and no job search; what you WANT to be paid is a screening answer (`desired_salary_*`), not one of these. `PUT` is a partial update: a field the body omits keeps its stored value, and there is no way to clear one back to unstated.
+
+### `GET /me/survey`
+
+**Auth:** Session or API key
+
+Your stored survey answers. Every field is absent until you answer it.
+
+```bash
+curl "https://freehire.me/api/v1/me/survey" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_search_stage": "searching",
+    "biggest_challenge": "technical_interviews",
+    "current_income_amount": 5000,
+    "current_income_currency": "USD",
+    "current_income_period": "month"
+  }
+}
+```
+
+### `PUT /me/survey`
+
+**Auth:** Session only
+
+Update one or more survey answers.
+
+A field the body omits is left unchanged. A stage or challenge outside its vocabulary, a note alongside any challenge other than `other`, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a non-positive income is a `400` naming the offending field.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job_search_stage` | string | no | One of `not_started`, `searching`, `employed_looking`, `exploring`. (e.g. `searching`) |
+| `biggest_challenge` | string | no | One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`. (e.g. `technical_interviews`) |
+| `biggest_challenge_note` | string | no | Free text. Accepted only alongside `biggest_challenge: "other"`. |
+| `current_income_amount` | integer | no | What you earn today, in the currency and period below. (e.g. `5000`) |
+| `current_income_currency` | string | no | Three-letter ISO 4217 currency code. (e.g. `USD`) |
+| `current_income_period` | string | no | Income period, e.g. `year`, `month`. (e.g. `month`) |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/survey" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"job_search_stage":"searching"}'
+```
+
+```json
+{
+  "data": {
+    "job_search_stage": "searching"
+  }
+}
+```
+
+### `POST /me/onboarding/complete`
+
+**Auth:** Session only
+
+Record that you have been through the onboarding wizard.
+
+Sets `onboarding_completed_at` on your account, which is what stops the app routing you into the wizard again. Idempotent: calling it a second time keeps the original timestamp and still answers `200`.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/onboarding/complete" -b cookies.txt
+```
+
+```json
+{ "data": { "onboarding_complete": true } }
+```
+
+## Activity & shared job lists
+
+Two public reads — the catalogue-activity time series and a shared job list by slug. A published list exposes no owner identity.
 
 ### `GET /stats/jobs-activity`
 
@@ -2923,79 +3016,31 @@ curl "https://freehire.me/api/v1/stats/jobs-activity?granularity=week"
 }
 ```
 
-### `GET /boards/{slug}`
+### `GET /lists/{slug}`
 
 **Auth:** Public
 
-A shared saved-search board by its public slug.
+A shared job list by its public slug.
 
-Public, no owner-scoping — returns only display fields (`name`, the canonical filter `query`, and an optional `author_label`). An unknown or unshared slug is a `404`.
+Public, no owner-scoping — returns display fields (`name`, `description`) plus the jobs it contains (a closed/expired job stays listed, marked as such). An unknown or unshared slug is a `404`.
 
 **Path parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `slug` | string | yes | The board public slug. (e.g. `senior-go-remote-3f9a`) |
+| `slug` | string | yes | The job-list public slug. (e.g. `backend-jobs-a3f1`) |
 
 ```bash
-curl "https://freehire.me/api/v1/boards/senior-go-remote-3f9a"
+curl "https://freehire.me/api/v1/lists/backend-jobs-a3f1"
 ```
 
 ```json
-{ "data": { "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "author_label": "Jane D." } }
-```
-
-### `POST /me/searches/{id}/share`
-
-**Auth:** Session only
-
-Publish one of your saved searches as a public board.
-
-Mints (or keeps) the board slug and sets the optional author label. Owner-scoped; a missing/non-owned id is a `404`. Returns the saved search, now carrying `public_slug`.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | integer | yes | The saved-search id. (e.g. `2`) |
-
-**Body**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `author_label` | string | no | Label shown on the board; blank/omitted renders it anonymously. (e.g. `Jane D.`) |
-
-```bash
-curl -X POST "https://freehire.me/api/v1/me/searches/2/share" \
-  -H 'Content-Type: application/json' -b cookies.txt \
-  -d '{"author_label":"Jane D."}'
-```
-
-```json
-{ "data": { "id": 2, "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "public_slug": "senior-go-remote-3f9a", "author_label": "Jane D." } }
-```
-
-### `DELETE /me/searches/{id}/share`
-
-**Auth:** Session only
-
-Make a shared board private again.
-
-Owner-scoped and idempotent (already-private is a no-op). Returns `204 No Content`.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | integer | yes | The saved-search id. (e.g. `2`) |
-
-```bash
-curl -X DELETE "https://freehire.me/api/v1/me/searches/2/share" -b cookies.txt
+{ "data": { "name": "Backend jobs", "description": "Shortlist for this round", "jobs": [ { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." } ] } }
 ```
 
 ## Saved searches & subscriptions
 
-Browser conveniences, session-only. A saved search stores a canonical filter query string; a subscription turns one into a recurring digest (e.g. Telegram). Each operation is owner-scoped — a non-owned id is a 404.
+Browser conveniences, session-only. A saved search stores a canonical filter query string; a subscription turns one into a recurring digest (Telegram, email, or your own webhook). Each operation is owner-scoped — a non-owned id is a 404.
 
 ### `GET /me/searches`
 
@@ -3204,6 +3249,269 @@ Unlink your Telegram account.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/telegram" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+### `GET /me/webhook`
+
+**Auth:** Session only
+
+Your webhook destination for saved-search matches, or null if none is configured.
+
+```bash
+curl "https://freehire.me/api/v1/me/webhook" -b cookies.txt
+```
+
+```json
+{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }
+```
+
+### `POST /me/webhook`
+
+**Auth:** Session only
+
+Create your webhook destination, or update its URL if one already exists.
+
+There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | yes | Destination URL — must be http or https. (e.g. `https://example.com/hook`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/webhook" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"url":"https://example.com/hook"}'
+```
+
+```json
+{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }
+```
+
+### `PATCH /me/webhook`
+
+**Auth:** Session only
+
+Enable or disable your webhook destination without changing its URL.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | yes | Whether the destination is enabled. (e.g. `false`) |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/me/webhook" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"enabled":false}'
+```
+
+```json
+{ "data": { "url": "https://example.com/hook", "enabled": false, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": "2026-09-04T13:00:00Z" } }
+```
+
+### `DELETE /me/webhook`
+
+**Auth:** Session only
+
+Delete your webhook destination.
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/webhook" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+## Job lists
+
+Named lists of specific jobs — independent of the single-flag "save" — that you can optionally publish read-only by slug (see the public read under "Activity & shared job lists"). Browser conveniences, session-only. Each operation is owner-scoped — a non-owned id is a 404.
+
+### `GET /me/lists`
+
+**Auth:** Session only
+
+List your job lists.
+
+```bash
+curl "https://freehire.me/api/v1/me/lists" -b cookies.txt
+```
+
+```json
+{ "data": [ { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 4 } ] }
+```
+
+### `POST /me/lists`
+
+**Auth:** Session only
+
+Create a job list.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | yes | Display name. (e.g. `Backend jobs`) |
+| `description` | string | no | Optional free-text description. (e.g. `Shortlist for this round`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/lists" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"name":"Backend jobs","description":"Shortlist for this round"}'
+```
+
+```json
+{ "data": { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 0 } }
+```
+
+### `PATCH /me/lists/{id}`
+
+**Auth:** Session only
+
+Rename or re-describe a job list.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | no | New name (optional). |
+| `description` | string | no | New description (optional). |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/me/lists/3" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"name":"Backend jobs — Q3"}'
+```
+
+```json
+{ "data": { "id": 3, "name": "Backend jobs — Q3", "description": "...", "public_slug": "", "job_count": 4 } }
+```
+
+### `DELETE /me/lists/{id}`
+
+**Auth:** Session only
+
+Delete a job list.
+
+The referenced jobs and your separate "save" flags are untouched.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/lists/3" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+### `POST /me/lists/{id}/jobs`
+
+**Auth:** Session only
+
+Add a job to a list.
+
+Jobs are addressed by `job_slug` (the public slug), the same identifier every job carries elsewhere. Idempotent: adding an already-present job changes nothing. An unknown slug is a `404`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job_slug` | string | yes | The job to add. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/lists/3/jobs" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"job_slug":"senior-go-engineer-acme-1a2b"}'
+```
+
+```json
+(204 No Content)
+```
+
+### `DELETE /me/lists/{id}/jobs/{job_slug}`
+
+**Auth:** Session only
+
+Remove a job from a list.
+
+Idempotent: a job not in the list, or a slug that resolves to no job at all, is a no-op.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+| `job_slug` | string | yes | The job to remove. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/lists/3/jobs/senior-go-engineer-acme-1a2b" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+### `POST /me/lists/{id}/share`
+
+**Auth:** Session only
+
+Publish a job list as a public, read-only page.
+
+Mints (or keeps) the public slug. Returns the list, now carrying `public_slug`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/lists/3/share" -b cookies.txt
+```
+
+```json
+{ "data": { "id": 3, "name": "Backend jobs", "description": "...", "public_slug": "backend-jobs-a3f1", "job_count": 4 } }
+```
+
+### `DELETE /me/lists/{id}/share`
+
+**Auth:** Session only
+
+Make a shared job list private again.
+
+Idempotent (already-private is a no-op).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/lists/3/share" -b cookies.txt
 ```
 
 ```json
@@ -4772,7 +5080,7 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/reset-from-resume" -b co
 
 The match analysis a tailored CV should reframe toward.
 
-The split that keeps tailoring honest: `missing_have` are requirements your history already covers but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a tailored copy or has no analysis.
+The split that keeps tailoring honest: `missing_have` are requirements your history already covers but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a tailored copy or has no analysis. `job.requirements` is what the posting itself asks for, in its own words — a fuller list than the missing_* split, which is only what the analysis found the CV lacks. Absent when the posting states none.
 
 **Path parameters**
 
@@ -4787,7 +5095,10 @@ curl "https://freehire.me/api/v1/me/cvs/7d1a…/tailor-context" -H "Authorizatio
 ```json
 {
   "data": {
-    "job": { "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme" },
+    "job": {
+      "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme",
+      "requirements": [ { "text": "5+ years with Go", "priority": "required" } ]
+    },
     "verdict": "worth_applying",
     "overall_score": 72,
     "recommendation": "Lead with the payments migration …",

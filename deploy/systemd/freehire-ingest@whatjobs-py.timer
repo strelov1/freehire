@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest whatjobs-py
 [Timer]
-OnCalendar=*:00:00
+OnCalendar=*:47:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

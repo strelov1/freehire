@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest cleverstaff
 [Timer]
-OnCalendar=*:21:00
+OnCalendar=*:02:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

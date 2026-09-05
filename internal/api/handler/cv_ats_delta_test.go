@@ -15,6 +15,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 )
 
@@ -171,13 +172,13 @@ func TestScoreRenderedCV_AFieldTheTemplateDropsDoesNotScore(t *testing.T) {
 		Header:  cv.Header{FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+1 415 555 0134"},
 		Summary: "Backend engineer with a decade of systems work.",
 		Experience: []cv.ExperienceItem{
-			{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+			{Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 				Bullets: []string{"Cut p99 latency by 40% across 12 services."}},
 		},
-		Education: []cv.EducationItem{{Degree: "BSc Mathematics", Institution: "Cambridge", Start: "2010", End: "2014"}},
+		Education: []cv.EducationItem{{Degree: "BSc Mathematics", Institution: "Cambridge", Start: &perioddate.PeriodDate{Year: 2010}, End: &perioddate.PeriodDate{Year: 2014}}},
 		Skills:    []cv.SkillGroup{{Group: "Languages", Items: []string{"Go", "Python", "SQL"}}},
 		Certifications: []cv.Certification{
-			{Name: "Certified Kubernetes Administrator", Issuer: "CNCF", Year: "2023"},
+			{Name: "Certified Kubernetes Administrator", Issuer: "CNCF", Year: &perioddate.PeriodDate{Year: 2023}},
 		},
 	}
 	classic, err := cv.ResolveTemplate("classic-ats")
@@ -259,16 +260,16 @@ func TestScoreRenderedCV_RealToolchainDelta(t *testing.T) {
 		Header:  cv.Header{FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+1 415 555 0134"},
 		Summary: "Backend engineer.",
 		Experience: []cv.ExperienceItem{
-			{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+			{Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 				Bullets: []string{"Built Go services."}},
 		},
-		Education: []cv.EducationItem{{Degree: "BSc Mathematics", Institution: "Cambridge", Start: "2010", End: "2014"}},
+		Education: []cv.EducationItem{{Degree: "BSc Mathematics", Institution: "Cambridge", Start: &perioddate.PeriodDate{Year: 2010}, End: &perioddate.PeriodDate{Year: 2014}}},
 		Skills:    []cv.SkillGroup{{Group: "Languages", Items: []string{"Go"}}},
 	}
 	tailored := base
 	tailored.Summary = "Backend engineer. Core stack: Go, Kafka."
 	tailored.Experience = []cv.ExperienceItem{
-		{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+		{Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 			Bullets: []string{"Built Go services handling 2M requests/day.", "Ran Kafka pipelines for 4 teams."}},
 	}
 	tailored.Skills = []cv.SkillGroup{{Group: "Languages", Items: []string{"Go", "Kafka"}}}

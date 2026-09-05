@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest odoo
 [Timer]
-OnCalendar=*:49:00
+OnCalendar=*:52:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -233,6 +233,13 @@ type Settings struct {
 	AWSRegion       string
 	NotifyEmailFrom string
 
+	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the
+	// daily "most viewed" list to. Optional and silently disabling, like the rest of
+	// this worker fleet: an unset value means the channel is not configured, not that
+	// the run failed. A webhook URL is itself the credential and does not expire,
+	// which is why this channel needs nothing else here.
+	DiscordDigestWebhookURL string
+
 	// OnboardingReplyTo is the human inbox that answers the founder signup sequence
 	// (internal/engage/onboarding). Those mails ask a question, so an unset value disables
 	// the sequence rather than sending letters whose replies reach nobody — the send
@@ -249,6 +256,33 @@ type Settings struct {
 	// may hand back a minted token: only https://<id>.chromiumapp.org redirects
 	// whose <id> is listed here are accepted. Empty disables the connect flow.
 	ExtensionRedirectAllowlist []string
+
+	// AutoApplyOrchestratorSecret is the shared, static credential
+	// cmd/auto-apply-orchestrate presents on POST /me/auto-apply/:queueId/{tailor,review}
+	// to authenticate itself (not any particular candidate) — see
+	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables that
+	// fallback path entirely; the two routes then accept only a session cookie or a live
+	// api_keys row, exactly as before this existed.
+	AutoApplyOrchestratorSecret string
+
+	// InngestEventAPIURL, InngestEventKey and InngestSigningKey point PostAutoApplyReview's
+	// best-effort event publish (auto-apply/review.decided) at the self-hosted Inngest
+	// server. InngestSigningKey is unused by the publish itself (that call carries only
+	// InngestEventKey) but lives beside the other two because every Inngest setting this
+	// deployment carries is one self-hosted instance's own config — cmd/auto-apply-orchestrate
+	// is the actual signing-key consumer. Any of the three empty degrades the publish to
+	// "log and continue" (see PostAutoApplyReview) rather than failing the request; the
+	// orchestrator worker itself has no such degraded mode and fails its own startup loudly
+	// on a missing value instead (see cmd/auto-apply-orchestrate).
+	InngestEventAPIURL string
+	InngestEventKey    string
+	InngestSigningKey  string
+
+	// AutoApplyOrchestratePort is the port cmd/auto-apply-orchestrate listens on to serve
+	// the Inngest SDK callback protocol (internal-only — never exposed publicly, reached
+	// solely by the self-hosted Inngest server at InngestEventAPIURL, which this deployment
+	// runs on the SAME host per design.md).
+	AutoApplyOrchestratePort string
 }
 
 // OAuthCredentials is one OAuth provider's credentials. Google/GitHub/LinkedIn
@@ -333,6 +367,12 @@ func Load() Settings {
 		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
 		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
 
+		AutoApplyOrchestratorSecret: os.Getenv("AUTO_APPLY_ORCHESTRATOR_SECRET"),
+		InngestEventAPIURL:          os.Getenv("INNGEST_EVENT_API_URL"),
+		InngestEventKey:             os.Getenv("INNGEST_EVENT_KEY"),
+		InngestSigningKey:           os.Getenv("INNGEST_SIGNING_KEY"),
+		AutoApplyOrchestratePort:    env("AUTO_APPLY_ORCHESTRATE_PORT", "3010"),
+
 		LLMAdminURL:         os.Getenv("LLM_ADMIN_URL"),
 		LLMAdminUsername:    os.Getenv("LLM_ADMIN_USERNAME"),
 		LLMAdminPassword:    os.Getenv("LLM_ADMIN_PASSWORD"),
@@ -385,6 +425,8 @@ func Load() Settings {
 
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
+
+		DiscordDigestWebhookURL: os.Getenv("DISCORD_DIGEST_WEBHOOK_URL"),
 
 		OnboardingReplyTo: os.Getenv("ONBOARDING_REPLY_TO"),
 

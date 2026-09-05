@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 )
 
@@ -86,7 +87,7 @@ func professionalOf(t *testing.T, s *Store) resumeextract.Professional {
 func TestProfessionalTakesExperienceFromTheBank(t *testing.T) {
 	s := seedBank(t, []Employment{{
 		Kind: KindJob, Company: "RingCentral", Role: "Senior Software Engineer",
-		Location: "USA, Remote", Start: "2023-09", End: "Present", Current: true,
+		Location: "USA, Remote", Start: &perioddate.PeriodDate{Year: 2023, Month: 9}, Current: true,
 		Summary: "Global SaaS leader", Stack: []string{"go", "mongodb"},
 	}}, []Atom{
 		{Claim: "Cut latency 20s to 1s", Provenance: ProvenanceCVImport},
@@ -154,8 +155,8 @@ func TestProfessionalWithholdsUnpublishableAtoms(t *testing.T) {
 // while free-form period labels still order roles correctly for Reset / stale-base reseed.
 func TestWorkHistory_ChronologyKeepsProvenanceGate(t *testing.T) {
 	s := seedBank(t, []Employment{
-		{Kind: KindJob, Company: "Northwind", Role: "Staff", Start: "October 2018", End: "2024"},
-		{Kind: KindJob, Company: "Fabrikam", Role: "Staff", Start: "2024", End: "2025"},
+		{Kind: KindJob, Company: "Northwind", Role: "Staff", Start: &perioddate.PeriodDate{Year: 2018, Month: 10}, End: &perioddate.PeriodDate{Year: 2024}},
+		{Kind: KindJob, Company: "Fabrikam", Role: "Staff", Start: &perioddate.PeriodDate{Year: 2024}, End: &perioddate.PeriodDate{Year: 2025}},
 	}, []Atom{
 		{Claim: "Confirmed at Fabrikam", Provenance: ProvenanceCVImport},
 		{Claim: "Model paraphrase at Fabrikam", Provenance: ProvenanceAgentInferred},

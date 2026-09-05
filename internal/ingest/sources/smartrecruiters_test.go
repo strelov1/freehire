@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -113,6 +114,31 @@ func detailBody(id, title string) string {
 func TestSmartRecruitersProvider(t *testing.T) {
 	if got := NewSmartRecruiters(nil).Provider(); got != "smartrecruiters" {
 		t.Errorf("Provider() = %q, want %q", got, "smartrecruiters")
+	}
+}
+
+// SmartRecruiters earns fullBoardListing because listPostings proves completeness:
+// totalFound is authoritative (pages until offset >= totalFound or an empty page), no
+// artificial cap exists, and any listing error aborts the whole Fetch.
+func TestSmartRecruitersMarkers(t *testing.T) {
+	s := NewSmartRecruiters(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("smartrecruiters should implement the fullBoardListing marker")
+	}
+}
+
+func TestSmartRecruitersRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["smartrecruiters"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include smartrecruiters")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestSmartRecruitersMarkers' fullBoardListing claim rests on.
+func TestSmartRecruitersFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewSmartRecruiters(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 

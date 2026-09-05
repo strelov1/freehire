@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest briefhq
 [Timer]
-OnCalendar=*:56:00
+OnCalendar=*:37:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

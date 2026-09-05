@@ -59,6 +59,18 @@ export const EMPLOYMENT_LABELS: Record<string, string> = {
   part_time: 'Part-time',
 };
 
+// Both values of the requirement-priority vocabulary, not just an override: a job
+// page reads "Preferred" while the tailor page prints the raw `preferred`, and the
+// two are the same word about the same posting. Spelling the pair out here is what
+// lets the second surface stop disagreeing. Deliberately NOT "Nice to have" — that
+// phrase is a source heading the extractor maps INTO `preferred`
+// (internal/job/reqextract), and reusing it as the display label would conflate what
+// a posting said with what we decided it meant.
+export const REQUIREMENT_PRIORITY_LABELS: Record<string, string> = {
+  required: 'Required',
+  preferred: 'Preferred',
+};
+
 export const WORK_MODE_LABELS: Record<string, string> = { onsite: 'On-site' };
 
 // All three relocation values, not just the overrides: the filter panel and the

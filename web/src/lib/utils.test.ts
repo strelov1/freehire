@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { formatCount } from './utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatCount, formatDate, formatDateOrAgo, timeAgo } from './utils';
 
 // formatCount lives here rather than in activityChart because its callers share nothing
 // with a chart module: two axis labels (activity bars, skill pulse) and the job card's
@@ -42,5 +42,69 @@ describe('formatCount', () => {
   it('trims a trailing zero decimal', () => {
     expect(formatCount(2000)).toBe('2K');
     expect(formatCount(2000000)).toBe('2M');
+  });
+});
+
+// The job header prints a posting's two timestamps through this one helper, so the
+// day boundary it switches on is the whole of its behaviour. Time is faked rather
+// than measured: a test that builds "23 hours ago" from the real clock is a test
+// that fails at whatever hour the boundary lands on.
+describe('formatDateOrAgo', () => {
+  const NOW = new Date('2026-09-04T12:00:00Z');
+  const at = (hoursAgo: number) =>
+    new Date(NOW.getTime() - hoursAgo * 3600 * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('reads as an age inside the last day', () => {
+    expect(formatDateOrAgo(at(0.5))).toBe('30 minutes ago');
+    expect(formatDateOrAgo(at(3))).toBe('3 hours ago');
+  });
+
+  // The switch is at exactly 24h: "yesterday" is where the relative form stops
+  // beating the date, so the date must already be showing when it would be said.
+  it('switches to the date at the day boundary', () => {
+    expect(formatDateOrAgo(at(23))).toBe('23 hours ago');
+    expect(formatDateOrAgo(at(24))).toBe(formatDate(at(24)));
+    expect(formatDateOrAgo(at(72))).toBe(formatDate(at(72)));
+  });
+
+  // Clock skew between a source's stated date and ours would otherwise print
+  // "in 2 hours" as a posting's age.
+  it('gives a future timestamp the date, not an age', () => {
+    expect(formatDateOrAgo(at(-2))).toBe(formatDate(at(-2)));
+  });
+
+  it('has nothing to say about a missing or unparseable timestamp', () => {
+    expect(formatDateOrAgo(null)).toBe('');
+    expect(formatDateOrAgo(undefined)).toBe('');
+    expect(formatDateOrAgo('not a date')).toBe('');
+  });
+
+  // The short style is for a label an icon has already named, so the unit may be
+  // abbreviated but the NUMBER and the direction must survive. Asserted by shape rather
+  // than by string: `Intl` owns the abbreviation, and pinning "30 min. ago" here would be
+  // this repo asserting a CLDR spelling it does not control.
+  it('abbreviates the unit in the short style without losing the number', () => {
+    const long = formatDateOrAgo(at(0.5));
+    const short = formatDateOrAgo(at(0.5), 'short');
+    expect(short).toContain('30');
+    expect(short.length).toBeLessThan(long.length);
+    expect(timeAgo(at(3), 'short')).toContain('3');
+  });
+
+  // Past the day boundary the short style has nothing to shorten — it is a date either
+  // way, and a date the reader compares against another posting's must not be abbreviated
+  // out from under them.
+  it('leaves the date branch alone', () => {
+    expect(formatDateOrAgo(at(24), 'short')).toBe(formatDate(at(24)));
+  });
+
+  it('defaults to the long style', () => {
+    expect(formatDateOrAgo(at(3))).toBe(timeAgo(at(3)));
   });
 });

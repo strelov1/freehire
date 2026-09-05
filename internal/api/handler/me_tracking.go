@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
@@ -43,6 +44,11 @@ type myJobResponse struct {
 	// FollowedUpAt it sits beside the silence fields and not inside them: a recruiter reading a CV
 	// is not a reply, and the card shows both — still unanswered, and read yesterday.
 	CVOpenedAt *time.Time `json:"cv_opened_at"`
+	// AutoApplyStatus is the six-value status of this job's live auto-apply attempt, null
+	// when it has none (openspec/changes/auto-apply-review-tracking) — the board card's own
+	// "needs your review" badge. The full answer preview lives in the drawer's own read
+	// (GET /me/tracking/:slug), not here.
+	AutoApplyStatus *autoapply.Status `json:"auto_apply_status,omitempty"`
 }
 
 // ListTrackedJobs returns the authenticated user's job interactions joined with the
@@ -71,18 +77,19 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 	items := make([]myJobResponse, 0, len(listing.Items))
 	for _, it := range listing.Items {
 		item := myJobResponse{
-			ID:           it.ID,
-			Company:      it.CompanySlug,
-			RoleTitle:    it.RoleTitle,
-			Job:          it.Job,
-			ViewedAt:     it.ViewedAt,
-			SavedAt:      it.SavedAt,
-			AppliedAt:    it.AppliedAt,
-			Stage:        it.Stage,
-			Notes:        it.Notes,
-			EmailCount:   it.EmailCount,
-			FollowedUpAt: it.FollowedUpAt,
-			CVOpenedAt:   it.CVOpenedAt,
+			ID:              it.ID,
+			Company:         it.CompanySlug,
+			RoleTitle:       it.RoleTitle,
+			Job:             it.Job,
+			ViewedAt:        it.ViewedAt,
+			SavedAt:         it.SavedAt,
+			AppliedAt:       it.AppliedAt,
+			Stage:           it.Stage,
+			Notes:           it.Notes,
+			EmailCount:      it.EmailCount,
+			FollowedUpAt:    it.FollowedUpAt,
+			CVOpenedAt:      it.CVOpenedAt,
+			AutoApplyStatus: it.AutoApplyStatus,
 		}
 		if s := it.Silence(now); s != nil {
 			item.LastActivityAt = &s.LastActivityAt

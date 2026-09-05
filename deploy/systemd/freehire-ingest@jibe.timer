@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest jibe
 [Timer]
-OnCalendar=*-*-* 01/3:59:00
+OnCalendar=*-*-* 00/3:42:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

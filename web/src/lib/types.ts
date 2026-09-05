@@ -15,6 +15,12 @@ import type {
 /** @public — the app's vocabulary for the generated contract; a name is carried here
  *  whether or not a screen reads it yet. */
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
+/** @public — the app's name for the onboarding survey record, carried here whether or not
+ *  a screen reads it yet, like the contract re-exports above. It is `Responses` in the
+ *  generated file only because that file is one flat namespace and `Answers` is already the
+ *  screening answers' — see cmd/gen-contracts — so the useful name has to be given
+ *  somewhere, and this facade is where the app gives it. */
+export type { Responses as SurveyAnswers } from './generated/contracts';
 // The list-row projection of a job: the same names and derivations as Job, minus the posting
 // text and everything else a row does not draw.
 export type { Card as JobCard } from './generated/contracts';
@@ -85,6 +91,33 @@ export interface PublicPrice {
   interval: 'month' | 'year';
   /** The price a new subscriber is sold unless they choose otherwise. */
   default: boolean;
+}
+
+/** Where a buyer goes to pay, and which offer was applied on the way
+ *  (`GET /api/v1/billing/checkout`).
+ *
+ *  A session carries at most one discount, so this is a single percentage rather than a
+ *  list: the provider admits one coupon, and stacking two offers is how a subscription
+ *  becomes free by accident. `discount_percent` is 0 when there was none. */
+export interface CheckoutSession {
+  url: string;
+  discount_percent: number;
+  /** `'promo'` or `'invite'`, or empty when nothing was applied. */
+  discount_source: string;
+}
+
+/** This account's invite link and what it has earned (`GET /api/v1/me/invite`).
+ *
+ *  Counts and a total, naming nobody. Telling a referrer which of their contacts signed up
+ *  would disclose that a particular person is looking for work, which is not theirs to
+ *  know — so there is no field here that could carry it. */
+export interface InviteSummary {
+  link: string;
+  invitees: number;
+  rewarded: number;
+  credit_cents: number;
+  /** What both sides of an invite are worth, so the page states one number from one place. */
+  percent_off: number;
 }
 
 /** What each plan allows and what Pro costs (`GET /api/v1/plans`). Public and
@@ -370,6 +403,12 @@ export interface User {
   // Never empty ('en' until changed). No UI translation ships yet — this only
   // records the preference for the profile page's language field.
   language: string;
+  // When this account was walked through the onboarding wizard, null if it never has been.
+  // The root layout's gate reads exactly this: null routes the account to /onboarding, a
+  // timestamp never does. It replaced "does this account have a CV", which was a fair
+  // stand-in while the wizard was about the CV and stopped being one the moment it grew
+  // questions a CV cannot answer.
+  onboarding_completed_at: string | null;
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
@@ -640,6 +679,62 @@ export interface MyJob {
   /** When somebody last opened a CV sent for this application. Outside the silence derivation:
    *  a recruiter reading a CV is not a reply. */
   cv_opened_at: string | null;
+  /** The six-value status of this job's live auto-apply attempt — the board card's own
+   *  "needs your review" badge (openspec/changes/auto-apply-review-tracking). Absent when
+   *  there is no live attempt. The full answer preview lives on `TrackedApplication.auto_apply`
+   *  instead, which the drawer fetches separately. */
+  auto_apply_status?: AutoApplyStatus;
+}
+
+/** The six-value candidate-facing status for a live auto-apply attempt. */
+type AutoApplyStatus =
+  | 'tailoring'
+  | 'pending_review'
+  | 'approved'
+  | 'blocked'
+  | 'declined'
+  | 'failed';
+
+/** One resolved question/answer pair in an auto-apply answer preview. */
+interface AutoApplyPreviewField {
+  label: string;
+  value: string;
+}
+
+/** One required question an auto-apply answer preview has no answer for yet.
+ *  `will_draft_at_submission` distinguishes "the real submission will fill this in
+ *  automatically" from "nothing can answer this". */
+interface AutoApplyPreviewPending {
+  label: string;
+  will_draft_at_submission: boolean;
+}
+
+/** The candidate-facing snapshot of what an unattended auto-apply submission would send —
+ *  computed once, before review, never a live guess made when the drawer opens. */
+interface AutoApplyResolvedPreview {
+  fields: AutoApplyPreviewField[];
+  pending?: AutoApplyPreviewPending[];
+}
+
+/** One application question an auto-apply attempt could not answer — candidate-facing
+ *  detail only; the attempt's internal error text is never part of this shape. */
+interface AutoApplyUnmappedField {
+  id: string;
+  label: string;
+  required: boolean;
+  reason: string;
+}
+
+/** What a tracked job's own drawer read (`TrackedApplication.auto_apply`) surfaces about
+ *  its live auto-apply attempt (openspec/changes/auto-apply-review-tracking).
+ *  `resolved_preview` is present only when `status` is `pending_review`; `unmapped` only
+ *  when `status` is `blocked`. */
+export interface AutoApplyReviewInfo {
+  status: AutoApplyStatus;
+  /** Addresses the attempt for `api.reviewAutoApply(queue_id, decision)`. */
+  queue_id: number;
+  resolved_preview?: AutoApplyResolvedPreview;
+  unmapped?: AutoApplyUnmappedField[];
 }
 
 /** The account-level notification rule: whether notifications are on, and the
@@ -658,15 +753,22 @@ export interface NotificationSettings {
   quiet_hours_end: string | null;
 }
 
-/** The five notification-center event kinds a `user_notifications` row can carry —
- *  matches internal/notify/reminder/nudge's kind strings exactly (see
- *  openspec/changes/add-notification-center/design.md decision 1). */
+/** The notification-center event kinds a `user_notifications` row can carry — matches
+ *  internal/notify/reminder/nudge's kind strings exactly (see
+ *  openspec/changes/add-notification-center/design.md decision 1), plus two recorded
+ *  directly by auto-apply's own write paths rather than by one of those background
+ *  engines: `auto_apply_tailor_ready` (auto-apply-tailored-resume; historical rows only —
+ *  auto-apply-review-tracking moved this notification to fire later, as
+ *  `auto_apply_ready_for_review`, once there is an answer preview to review, not merely a
+ *  tailored CV) and `auto_apply_ready_for_review` itself. */
 export type NotificationKind =
   | 'subscription_digest'
   | 'reminder'
   | 'nudge_follow_up'
   | 'nudge_interview_prep'
-  | 'nudge_job_closed';
+  | 'nudge_job_closed'
+  | 'auto_apply_tailor_ready'
+  | 'auto_apply_ready_for_review';
 
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this
@@ -776,6 +878,10 @@ export interface TrackedApplication {
   /** The application's history from the ledger, newest first — what happened to it, as
    *  against the marks on the posting the listing row carries. Empty when nothing has. */
   events: TimelineEvent[];
+  /** The caller's live auto-apply attempt for this job, absent when none exists
+   *  (openspec/changes/auto-apply-review-tracking). The drawer's own approve/decline
+   *  banner reads this. */
+  auto_apply?: AutoApplyReviewInfo;
 }
 
 /** The assembled follow-up message for a silent application. Deterministic and
@@ -946,6 +1052,18 @@ export interface CreatedApiKey extends ApiKey {
   token: string;
 }
 
+/** The account's single saved-search webhook destination. Deliveries are
+ *  plain, unsigned POSTs. Timestamps are RFC3339 strings or null;
+ *  `disabled_at` is set once a delivery got a definitive 410 from the
+ *  destination or the user turned it off. */
+export interface WebhookConfig {
+  url: string;
+  enabled: boolean;
+  created_at: string | null;
+  last_success_at: string | null;
+  disabled_at: string | null;
+}
+
 interface ConnectedIdentity {
   provider: string;
   linked_at: string;
@@ -966,11 +1084,6 @@ export interface SavedSearch {
   id: number;
   name: string;
   query: string;
-  /** Public board slug when the set is shared, or "" when private. Shared boards are
-   *  readable by anyone at /b/<public_slug>. */
-  public_slug: string;
-  /** Optional attribution shown on the public board; "" renders the board anonymously. */
-  author_label: string;
   /** True for the single search auto-generated by the "notify me about jobs matching
    *  my profile" toggle — at most one per user. */
   derived_from_profile: boolean;
@@ -978,13 +1091,35 @@ export interface SavedSearch {
   updated_at: string | null;
 }
 
-/** A public "board": a shared saved search readable by anyone at /b/<slug>. Carries only
- *  display fields — no owner identity. `query` is the canonical search query string, applied
- *  to the jobs list to render the board's results. `author_label` is "" when anonymous. */
-export interface Board {
+/** A user's named list of specific jobs — independent of the "save" star, and
+ *  distinct from a saved search (a query snapshot, not a set of jobs). A job may
+ *  belong to any number of lists. `public_slug` is "" when private; a shared list is
+ *  readable by anyone at /l/<public_slug>. Timestamps are RFC3339 strings or null. */
+export interface JobList {
+  id: number;
   name: string;
-  query: string;
-  author_label: string;
+  description: string;
+  public_slug: string;
+  job_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** A public shared job list readable by anyone at /l/<slug>: display fields and its
+ *  jobs (the same Card projection job-search results use), no owner identity. A
+ *  closed/expired job stays in the list, carrying its usual closed status. */
+export interface PublicJobList {
+  name: string;
+  description: string;
+  jobs: JobCard[];
+}
+
+/** One of the caller's job lists, flagged with whether a given job already belongs
+ *  to it — what the job card's "Add to list" control renders as a toggle. */
+export interface JobListMembership {
+  id: number;
+  name: string;
+  in_list: boolean;
 }
 
 /** A user's single profile: their professional self — a non-empty set of
@@ -1159,6 +1294,10 @@ export interface CandidateContacts {
   languages?: string[];
   certifications?: string[];
   education?: ResumeEducation[];
+  /** Years of experience as the CANDIDATE states them, overlaying whatever the CV extract
+   *  computed. Captured on the onboarding wizard's experience step, pre-filled from the
+   *  extract's own figure. */
+  total_years?: number;
   // The five body fields above are owned per field, and a non-empty value has always
   // implied that. But clearing one to "" leaves no non-empty value to signal it, so the
   // editor that owns that field sends its *_set flag alongside a save that empties it —
@@ -1168,6 +1307,10 @@ export interface CandidateContacts {
   languages_set?: boolean;
   certifications_set?: boolean;
   education_set?: boolean;
+  /** The same explicit-clear signal for the numeric field, where it matters more: 0 is a
+   *  real answer ("less than a year"), so without this flag a deliberate zero would be
+   *  indistinguishable from never having answered and the CV's figure would come back. */
+  total_years_set?: boolean;
 }
 
 /** The résumé status (`GET /me/resume`): storage flags, owned contacts, parse status,
@@ -1239,8 +1382,14 @@ export interface CommunityReply {
   created_at: string;
 }
 
-/** One place where evidence was produced: a job or a project. Dates are free-form labels
- *  exactly as printed on a CV ("2021-03", "Mar 2021", "Present").
+/** A work-history/CV period boundary: a year, and optionally a month (1-12; absent means
+ *  the CV gave no month). Named PeriodDate, not Date, so it never shadows the language's
+ *  own global `Date` wherever this file's types are imported — mirrors the Go type
+ *  (internal/candidate/perioddate.PeriodDate) this is the wire shape of. */
+export type PeriodDate = { year: number; month?: number };
+
+/** One place where evidence was produced: a job or a project. Start/end are a structured
+ *  PeriodDate, matching the Go domain type — no parsing needed on this side either.
  *  Jobs expose `company`; projects expose the place label as `name` (same storage column). */
 export type ExperienceEmployment = {
   id: string;
@@ -1251,8 +1400,8 @@ export type ExperienceEmployment = {
   name?: string;
   role?: string;
   location?: string;
-  start?: string;
-  end?: string;
+  start?: PeriodDate;
+  end?: PeriodDate;
   current?: boolean;
   summary?: string;
   /** Portfolio URL — typically set on projects. */

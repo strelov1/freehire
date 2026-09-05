@@ -105,6 +105,12 @@ type assistantHandlers struct {
 	// convention: the mint endpoint answers 501 and the interview session view offers
 	// no voice mode, rather than the composer discovering the absence on first use.
 	realtime realtimeMinter
+
+	// events best-effort publishes auto-apply/review.decided so a paused
+	// cmd/auto-apply-orchestrate run resumes (openspec/changes/auto-apply-inngest-orchestration).
+	// Nil is the unconfigured deployment: PostAutoApplyReview then publishes nothing,
+	// exactly as it did before this existed.
+	events autoApplyEventPublisher
 }
 
 // assistantModels names the model client the assistant runs on and the resolver that
@@ -203,6 +209,18 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, h.PostAssistantAutopilot)
+
+	// The external auto-apply pipeline's own two endpoints (openspec/changes/
+	// auto-apply-tailored-resume) — API key or cookie, never a session id from the caller.
+	// See auto_apply_tailor.go's own doc comment for why these are not variants of
+	// /autopilot above.
+	api.Post("/me/auto-apply/:queueId/tailor", mw.autoApplyGate, h.PostAutoApplyTailor)
+	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, h.PostAutoApplyReview)
+
+	// The candidate-facing trigger for the sequence above (openspec/changes/
+	// auto-apply-submit-trigger) — cookie-only, never mw.key or mw.autoApplyGate: see
+	// auto_apply_enqueue.go's own doc comment for why.
+	api.Post("/jobs/:slug/auto-apply", mw.cookie, h.PostJobAutoApply)
 }
 
 // defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is
@@ -918,21 +936,34 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	return h.streamSSE(c, sess, h.meterTurn, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
 		// The pre-run happens HERE rather than in the handler above, because a handler that
 		// has not returned has written no byte and a cold-start chain takes minutes — see
-		// autopilotAnalysis for what that cost. Order is the order it had: the analysis
-		// first, because the run plan is written from it and cv_context reads it on the run's
-		// first step. Surface alignment gets its own system revision — not the run's edit
-		// batch — so undoing the run leaves the vacancy's wording in place.
-		analysis.ensure(ctx)
-		h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, jobDescription)
-		h.layDownRunPlan(ctx, sess)
-
-		err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
-		// The refresh is unconditional — it must run even when the candidate cancelled the
-		// run partway through (CancelAssistantTurn cancels this very ctx) — so it runs on a
-		// detached copy, the same way boundRunner's credential-forget already does.
-		analysis.refresh(context.WithoutCancel(ctx))
-		return err
+		// autopilotAnalysis for what that cost.
+		return h.runAutopilotToCompletion(ctx, analysis, sess, jobDescription, runner, reg, system, emit)
 	})
+}
+
+// runAutopilotToCompletion runs the pre-run analysis fill, lays down the run plan, executes
+// the autopilot pass to completion (or until the step cap or an error stops it), and
+// refreshes the analysis afterward — the exact body PostAssistantAutopilot's stream callback
+// runs, extracted so the queue-scoped auto-apply tailoring endpoint (PostAutoApplyTailor,
+// openspec/changes/auto-apply-tailored-resume) shares it rather than duplicating it. Order
+// is the order PostAssistantAutopilot always had: the analysis first, because the run plan
+// is written from it and cv_context reads it on the run's first step; surface alignment gets
+// its own system revision, not the run's edit batch, so undoing the run leaves the vacancy's
+// wording in place.
+//
+// analysis may be nil (no match surface wired) — every method on it is a no-op then.
+func (h *assistantHandlers) runAutopilotToCompletion(ctx context.Context, analysis *autopilotAnalysis, sess assistant.Session, jobDescription string, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
+	analysis.ensure(ctx)
+	h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, jobDescription)
+	h.layDownRunPlan(ctx, sess)
+
+	err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
+	// The refresh is unconditional — it must run even when the caller cancelled the run
+	// partway through (CancelAssistantTurn cancels this very ctx for the streamed case) —
+	// so it runs on a detached copy, the same way boundRunner's credential-forget already
+	// does.
+	analysis.refresh(context.WithoutCancel(ctx))
+	return err
 }
 
 // prepareAutopilotAnalysis delegates to matchHandlers.prepareAutopilotRun, which assembles

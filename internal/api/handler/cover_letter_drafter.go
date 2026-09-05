@@ -86,7 +86,13 @@ func (d letterDrafter) draftStream(
 	// An absent analysis therefore surfaces as ErrNoAnalysis, which the shared error mapper
 	// renders as "run the fit analysis first": a state the candidate can act on in the same
 	// workspace, one tab over.
-	tailoring, err := d.fit.TailoringContext(ctx, userID, job)
+	// No posting requirements: the letter's prompt builds its own vacancy block from the
+	// title, company and description alone (coverletter.vacancyBlock) and reads that field
+	// nowhere, so supplying it would be a jobview projection paid for on every draft and
+	// thrown away. Worth wiring up — a letter that answers what the employer asked for is
+	// a better letter — but that is a change to what the model is told, with its own
+	// prompt tests, and not this one.
+	tailoring, err := d.fit.TailoringContext(ctx, userID, job, nil)
 	if err != nil {
 		return nil, err
 	}

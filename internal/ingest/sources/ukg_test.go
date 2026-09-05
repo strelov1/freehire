@@ -2,9 +2,36 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
+
+// UKG earns fullBoardListing because list() proves completeness: totalCount is authoritative
+// (the loop pages until skip >= totalCount or an empty page), no artificial page cap exists,
+// and any listing error aborts the whole Fetch rather than returning what was collected so
+// far as a success.
+func TestUKGMarkers(t *testing.T) {
+	s := NewUKG(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Error("ukg should implement the fullBoardListing marker")
+	}
+}
+
+func TestUKGRegisteredAsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["ukg"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include ukg")
+	}
+}
+
+// A listing fetch failure must abort the whole Fetch, never return a partial result as
+// success — the property TestUKGMarkers' fullBoardListing claim rests on.
+func TestUKGFetchPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewUKG(fake).Fetch(context.Background(), CompanyEntry{Board: "recruiting.ultipro.com/acme/guid"}); err == nil {
+		t.Fatal("Fetch succeeded despite a listing error")
+	}
+}
 
 func TestSplitUKGBoard(t *testing.T) {
 	cases := []struct {

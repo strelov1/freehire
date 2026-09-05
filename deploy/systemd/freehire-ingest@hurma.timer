@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest hurma
 [Timer]
-OnCalendar=*:16:00
+OnCalendar=*:00:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
