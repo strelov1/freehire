@@ -30,6 +30,7 @@
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
   import NotificationBell from './NotificationBell.svelte';
+  import { ensureAccountSetupLoaded, setupOutstanding } from '$lib/accountSetup.svelte';
   import { ProviderIcon } from '$lib/ui';
   import { NAV } from '$lib/siteNav';
 
@@ -119,6 +120,12 @@
     { href: '/my/api-keys', label: 'API keys', icon: KeyRound },
     { href: '/my/submissions', label: 'My submissions', icon: FileText },
   ] as const;
+
+  // What the setup dot reads. The three stores behind it load once per session and are
+  // shared, so asking here costs nothing that the account pages were not going to pay.
+  $effect(() => {
+    if (isAuthenticated()) ensureAccountSetupLoaded();
+  });
 
   // Mobile only: the open panel is a full-screen overlay, so lock the page behind
   // it. Desktop keeps the small anchored dropdown and stays scrollable.
@@ -264,12 +271,27 @@
       e.stopPropagation();
       open = !open;
     }}
-    class={cn('inline-flex', iconButton)}
+    class={cn('relative inline-flex', iconButton)}
   >
     {#if open}
       <X class="size-5" />
     {:else}
       <Menu class="size-5" />
+    {/if}
+    <!-- Setup still outstanding. On the MENU button rather than the profile icon beside
+         it, because that icon is `hidden sm:inline-flex` — on a phone it is not there to
+         carry anything, and this is the one account control at every width.
+
+         No count, deliberately: the notification bell is two controls away and does carry
+         one, and a second numbered badge beside it would make two signals compete for one
+         glance. The bell wins on urgency; this is a nudge, and a nudge only has to be
+         noticeable. Hidden while the menu is open — by then it has been acted on. -->
+    {#if isAuthenticated() && !open && setupOutstanding() > 0}
+      <span
+        class="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-background"
+        aria-hidden="true"
+      ></span>
+      <span class="sr-only">Your account setup is unfinished</span>
     {/if}
   </button>
 
