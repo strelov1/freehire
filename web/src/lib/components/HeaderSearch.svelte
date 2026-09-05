@@ -13,6 +13,7 @@
   import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '$lib/types';
   import { listSearchTarget, type ListSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
+  import { keyboardFit, NO_FIT, type KeyboardFit } from '$lib/keyboardFit';
   import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
   import { fromApi, applyParams, type ApplyPlan } from '$lib/apiSuggestions';
   import { pastedJobLink, type PastedJobLink } from '$lib/jobLink';
@@ -184,9 +185,14 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
 
+  /** Tailwind's `sm`. Two things below ask it — whether to place the caret on mount, and
+   *  how this box's panel is drawn — and they must get one answer, since the markup they
+   *  are reasoning about switches on the same breakpoint. */
+  const WIDE_QUERY = '(min-width: 640px)';
+
   $effect(() => {
     if (!autofocus) return;
-    if (!window.matchMedia('(min-width: 640px)').matches) return;
+    if (!window.matchMedia(WIDE_QUERY).matches) return;
     inputEl?.focus();
     // Focusing normally opens the dropdown, and on a landing page that would drop a
     // ten-row panel over the page on every load, covering the very shortcuts printed
@@ -451,48 +457,45 @@
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
   const rowCount = $derived(suggestOpen ? rows.length : 0);
 
-  /** How much of the screen's bottom the on-screen keyboard is covering, in pixels.
-   *
-   *  Neither mobile browser shrinks the PAGE for the keyboard on its own — it is drawn
-   *  over the bottom of a viewport that stays full height — so the panel below, pinned
-   *  from the header to `bottom: 0`, ran under the keys with its last rows unreachable.
-   *  Which is the worst place to lose: the visitor has just typed, and the rows they are
-   *  reading are the ones the typing produced.
-   *
-   *  `visualViewport` is the part of the page actually left visible, so the difference
-   *  between it and the window is the keyboard. `app.html` also asks Chrome to shrink the
-   *  page itself (`interactive-widget=resizes-content`), and the two do not double up:
-   *  where the browser honours that, the window shrinks with it and this measures 0.
-   *
-   *  Held here rather than in a shared store because this panel is the only thing that
-   *  reaches the bottom edge today; a second one (a composer, a sheet) is when it earns
-   *  a module of its own. */
-  let keyboardInset = $state(0);
+  /** Where this panel may sit with the on-screen keyboard up: a lift for the one that is
+   *  pinned to the bottom of the screen, a ceiling for the one that hangs off the box,
+   *  and why one number cannot serve both — see $lib/keyboardFit. */
+  let fit = $state.raw<KeyboardFit>(NO_FIT);
 
   $effect(() => {
-    // Nothing to lift while the panel is shut, and no listener to keep either.
+    // Nothing to place while the panel is shut, and no listener to keep either.
     if (!suggestOpen) return;
     const viewport = window.visualViewport;
     if (!viewport) return;
+    const box = wrapEl;
+    if (!box) return;
     const measure = () => {
-      // Only the phone-width panel has a bottom edge to lift: at `sm` and up it hangs off
-      // the box and is sized by `max-height`. Read the breakpoint the same way the
-      // autofocus check above reads it, so there is one answer to "is this a phone".
-      const wide = window.matchMedia('(min-width: 640px)').matches;
-      keyboardInset = wide
-        ? 0
-        : Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      fit = keyboardFit({
+        windowHeight: window.innerHeight,
+        viewportHeight: viewport.height,
+        viewportOffsetTop: viewport.offsetTop,
+        // The ceiling is measured from the bottom of the box the panel hangs off.
+        anchorBottom: box.getBoundingClientRect().bottom,
+        // Exactly the case the class list below pins to `bottom-0`: the header's box, on
+        // a phone. The hero hangs its panel off the box at every width, and so does the
+        // header at `sm` and up.
+        bottomAnchored: !hero && !window.matchMedia(WIDE_QUERY).matches,
+      });
     };
     measure();
     // `scroll` as well as `resize`: iOS scrolls the visual viewport inside the layout one
     // to keep the focused field visible, which moves the keyboard's top edge without
-    // changing its height.
+    // changing its height. The window's own scroll counts too — a ceiling is measured
+    // from where the box IS, and scrolling the page moves it under a keyboard that has
+    // not budged.
     viewport.addEventListener('resize', measure);
     viewport.addEventListener('scroll', measure);
+    window.addEventListener('scroll', measure, { passive: true });
     return () => {
       viewport.removeEventListener('resize', measure);
       viewport.removeEventListener('scroll', measure);
-      keyboardInset = 0;
+      window.removeEventListener('scroll', measure);
+      fit = NO_FIT;
     };
   });
 
@@ -869,7 +872,8 @@
     <ul
       id="role-suggestions"
       role="listbox"
-      style:bottom={keyboardInset > 0 ? `${keyboardInset}px` : null}
+      style:bottom={fit.lift > 0 ? `${fit.lift}px` : null}
+      style:max-height={fit.ceiling > 0 ? `${fit.ceiling}px` : null}
       aria-label="Search suggestions"
       class={cn(
         'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
