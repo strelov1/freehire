@@ -38,6 +38,37 @@ JOIN jobs j ON j.id = c.job_id
 WHERE q.id = c.id
 RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url;
 
+-- name: ClaimAutoApplyPreviewBatch :many
+-- Claim a batch of tailored entries that have no resolved answer preview yet, for
+-- cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+-- Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
+-- same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
+-- (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
+-- two passes can safely share the one claimed_at lease column rather than needing a second.
+--
+-- blocked_at/failed_at excluded for the same reason ClaimAutoApplyBatch excludes them: a
+-- parked or dead-lettered entry needs new data or a human, not another resolve attempt.
+WITH claimable AS (
+    SELECT q.id, q.user_id, q.job_id
+    FROM auto_apply_queue q
+    WHERE q.tailored_cv_id IS NOT NULL
+      AND q.resolved_preview IS NULL
+      AND q.review_decision IS NULL
+      AND q.failed_at IS NULL
+      AND q.blocked_at IS NULL
+      AND (q.claimed_at IS NULL
+           OR q.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+    ORDER BY q.id
+    FOR UPDATE OF q SKIP LOCKED
+    LIMIT sqlc.arg(batch_size)
+)
+UPDATE auto_apply_queue q
+SET claimed_at = now()
+FROM claimable c
+JOIN jobs j ON j.id = c.job_id
+WHERE q.id = c.id
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url;
+
 -- name: DeleteAutoApplyEntry :exec
 -- Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
 -- the same transaction, alongside LockJobForApply) is the durable record; the queue entry

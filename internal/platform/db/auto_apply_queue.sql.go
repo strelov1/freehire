@@ -116,6 +116,81 @@ func (q *Queries) ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBat
 	return items, nil
 }
 
+const claimAutoApplyPreviewBatch = `-- name: ClaimAutoApplyPreviewBatch :many
+WITH claimable AS (
+    SELECT q.id, q.user_id, q.job_id
+    FROM auto_apply_queue q
+    WHERE q.tailored_cv_id IS NOT NULL
+      AND q.resolved_preview IS NULL
+      AND q.review_decision IS NULL
+      AND q.failed_at IS NULL
+      AND q.blocked_at IS NULL
+      AND (q.claimed_at IS NULL
+           OR q.claimed_at < now() - make_interval(secs => $1::int))
+    ORDER BY q.id
+    FOR UPDATE OF q SKIP LOCKED
+    LIMIT $2
+)
+UPDATE auto_apply_queue q
+SET claimed_at = now()
+FROM claimable c
+JOIN jobs j ON j.id = c.job_id
+WHERE q.id = c.id
+RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, j.url
+`
+
+type ClaimAutoApplyPreviewBatchParams struct {
+	LeaseSeconds int32 `json:"lease_seconds"`
+	BatchSize    int32 `json:"batch_size"`
+}
+
+type ClaimAutoApplyPreviewBatchRow struct {
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	JobID        int64      `json:"job_id"`
+	TailoredCvID *uuid.UUID `json:"tailored_cv_id"`
+	Source       string     `json:"source"`
+	ExternalID   string     `json:"external_id"`
+	URL          string     `json:"url"`
+}
+
+// Claim a batch of tailored entries that have no resolved answer preview yet, for
+// cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+// Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
+// same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
+// (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
+// two passes can safely share the one claimed_at lease column rather than needing a second.
+//
+// blocked_at/failed_at excluded for the same reason ClaimAutoApplyBatch excludes them: a
+// parked or dead-lettered entry needs new data or a human, not another resolve attempt.
+func (q *Queries) ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error) {
+	rows, err := q.db.Query(ctx, claimAutoApplyPreviewBatch, arg.LeaseSeconds, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimAutoApplyPreviewBatchRow{}
+	for rows.Next() {
+		var i ClaimAutoApplyPreviewBatchRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.JobID,
+			&i.TailoredCvID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const declineAutoApplyReview = `-- name: DeclineAutoApplyReview :execrows
 UPDATE auto_apply_queue
 SET review_decision = 'declined',

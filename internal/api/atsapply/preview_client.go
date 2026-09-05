@@ -24,17 +24,6 @@ type StoredFormReader interface {
 	GetStoredForm(ctx context.Context, jobID int64) (applyform.Form, bool, error)
 }
 
-// PreviewResult is what PreviewClient.Preview returns for one attempt.
-type PreviewResult struct {
-	Preview ResolvedPreview
-	// Parked is set when the attempt's form cannot be previewed at all — a captcha-gated
-	// provider, or (for Greenhouse) a page that could not be scanned — the same class of
-	// outcome autoapply.StatusParked describes for a real submission, before any candidate
-	// review is even possible. Preview is the zero value when Parked is true.
-	Parked bool
-	Reason string
-}
-
 // PreviewClient computes a ResolvedPreview for one auto-apply attempt: the same
 // deterministic answer resolution the real submission starts from, without ever running an
 // LLM draft (no spend before the candidate has approved anything — see design.md) or
@@ -63,11 +52,11 @@ func NewPreviewClient(transport applyform.Transport, forms StoredFormReader) *Pr
 // Preview resolves what an unattended submission of claimed would currently send, without
 // submitting anything. hasApprovedCV mirrors Client.resolve's own parameter: whether claimed
 // carries an approved tailored CV, the one fact that lets the résumé field resolve at all.
-func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (PreviewResult, error) {
+func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (autoapply.PreviewResult, error) {
 	if requiresCaptcha[claimed.Provider] {
 		// Submit will always park this provider before touching a browser or a fetcher;
 		// there is nothing to preview and nothing here should pretend otherwise.
-		return PreviewResult{Parked: true, Reason: "requires_captcha"}, nil
+		return autoapply.PreviewResult{Parked: true, Reason: "requires_captcha"}, nil
 	}
 
 	if claimed.Provider == "greenhouse" {
@@ -76,9 +65,9 @@ func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, 
 
 	apiForm, err := p.schemaFor(ctx, claimed)
 	if err != nil {
-		return PreviewResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
+		return autoapply.PreviewResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
 	}
-	return PreviewResult{Preview: PreviewAnswers(mergedFromAPIOnly(apiForm), answers, hasApprovedCV)}, nil
+	return autoapply.PreviewResult{Preview: PreviewAnswers(mergedFromAPIOnly(apiForm), answers, hasApprovedCV)}, nil
 }
 
 // schemaFor prefers a stored form over a live fetch, matching design.md's own reasoning:
@@ -105,32 +94,32 @@ func (p *PreviewClient) schemaFor(ctx context.Context, claimed autoapply.Claimed
 // previewGreenhouse scans the live form exactly the way Client.Submit does for its own
 // Greenhouse branch, then closes the browser immediately — a preview never fills or
 // submits, so nothing here needs the session to outlive the scan.
-func (p *PreviewClient) previewGreenhouse(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (PreviewResult, error) {
+func (p *PreviewClient) previewGreenhouse(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (autoapply.PreviewResult, error) {
 	apiForm, err := p.schemaFor(ctx, claimed)
 	if err != nil {
-		return PreviewResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
+		return autoapply.PreviewResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
 	}
 
 	browserCtx, cancel, err := newBrowserSession(ctx, p.allocatorOpts)
 	if err != nil {
-		return PreviewResult{}, fmt.Errorf("launch browser: %w", err)
+		return autoapply.PreviewResult{}, fmt.Errorf("launch browser: %w", err)
 	}
 	defer cancel()
 
 	pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, greenhouseFormReadySelector)
 	if err != nil {
 		if result, parked := unscannableFormResult(err); parked {
-			return PreviewResult{Parked: true, Reason: result.Reason}, nil
+			return autoapply.PreviewResult{Parked: true, Reason: result.Reason}, nil
 		}
-		return PreviewResult{}, fmt.Errorf("render application page: %w", err)
+		return autoapply.PreviewResult{}, fmt.Errorf("render application page: %w", err)
 	}
 	if hasRecaptchaMarker(pageHTML) {
-		return PreviewResult{Parked: true, Reason: string(reasonCaptchaProtected)}, nil
+		return autoapply.PreviewResult{Parked: true, Reason: string(reasonCaptchaProtected)}, nil
 	}
 	dom, err := ScanGreenhouseForm(pageHTML)
 	if err != nil {
-		return PreviewResult{}, fmt.Errorf("scan application form: %w", err)
+		return autoapply.PreviewResult{}, fmt.Errorf("scan application form: %w", err)
 	}
 	merged := Reconcile(dom, apiForm)
-	return PreviewResult{Preview: PreviewAnswers(merged, answers, hasApprovedCV)}, nil
+	return autoapply.PreviewResult{Preview: PreviewAnswers(merged, answers, hasApprovedCV)}, nil
 }

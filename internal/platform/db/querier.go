@@ -242,6 +242,16 @@ type Querier interface {
 	// what internal/applyform's own schema fetchers need to reuse their existing per-provider
 	// API calls rather than re-deriving them.
 	ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBatchParams) ([]ClaimAutoApplyBatchRow, error)
+	// Claim a batch of tailored entries that have no resolved answer preview yet, for
+	// cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+	// Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
+	// same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
+	// (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
+	// two passes can safely share the one claimed_at lease column rather than needing a second.
+	//
+	// blocked_at/failed_at excluded for the same reason ClaimAutoApplyBatch excludes them: a
+	// parked or dead-lettered entry needs new data or a human, not another resolve attempt.
+	ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error)
 	// Lease a batch of pending nudges, oldest first. FOR UPDATE OF n + SKIP LOCKED
 	// lets overlapping worker passes take disjoint rows so a nudge fires at most
 	// once; the lease predicate reclaims rows whose sender died (stale claimed_at).
