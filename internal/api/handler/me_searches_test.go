@@ -22,7 +22,6 @@ func TestSavedSearchError_MapsEverySentinel(t *testing.T) {
 		want int
 	}{
 		{"invalid name", savedsearch.ErrInvalidName, fiber.StatusBadRequest},
-		{"invalid author label", savedsearch.ErrInvalidAuthorLabel, fiber.StatusBadRequest},
 		{"query too long", savedsearch.ErrQueryTooLong, fiber.StatusBadRequest},
 		{"duplicate name", savedsearch.ErrDuplicateName, fiber.StatusConflict},
 		{"cap exceeded", savedsearch.ErrCapExceeded, fiber.StatusConflict},
