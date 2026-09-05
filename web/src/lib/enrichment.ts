@@ -5,7 +5,7 @@
 // never renders blank — the SPA never re-validates, it only formats.
 
 import type { Enrichment, Job } from './types';
-import type { Card as JobCard, Requirement } from './generated/contracts';
+import type { Card as JobCard } from './generated/contracts';
 import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
@@ -225,6 +225,25 @@ export function summaryFacets(job: Job): Facet[] {
   links('Domains', 'domains', e.domains, (d) => label(DOMAIN_LABELS, d));
 
   return facets;
+}
+
+/** One requirement a posting states: the text as stored and its priority.
+ *
+ *  Declared here rather than imported from generated/contracts, and that is not a
+ *  preference — the generated module exports `Requirement` TWICE (contracts.ts:81 from
+ *  internal/ai/enrich, contracts.ts:870 from internal/candidate/matchanalysis, both
+ *  emitted into one file by cmd/gen-contracts). TypeScript merges same-name interfaces,
+ *  so the exported name demands all five members and the two-field enrichment shape
+ *  does not satisfy it. types.ts:52 sidesteps this by aliasing the second one as
+ *  MatchRequirement; nothing had imported the bare name until now.
+ *
+ *  Fixing that properly means disambiguating the two in the generator, which is a
+ *  change to every consumer of the alias and not this feature's to make. Structural
+ *  typing makes this local declaration interchangeable with the generated one at every
+ *  call site. */
+export interface Requirement {
+  text: string;
+  priority: string;
 }
 
 /** One priority's worth of a posting's stated requirements: the code as stored, a

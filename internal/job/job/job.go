@@ -123,9 +123,18 @@ type Fields struct {
 	ID            int64
 	ManuallyAdded bool
 	Enrichment    enrich.Enrichment
-	EnrichedAt    *time.Time
-	CreatedAt     *time.Time
-	UpdatedAt     *time.Time
+	// RequirementsDerived is the posting's own requirements read out of its
+	// description markup (internal/job/reqextract), nil when it states none. It is the
+	// second producer of the served enrichment.requirements: the projection folds it in
+	// when the model stated none, the same dict-wins-over-LLM fold the other facets get.
+	//
+	// It is a read-only projection field like Enrichment, NOT part of the write
+	// surface: the write path derives its own copy in UpsertParams, from the same
+	// description, so a caller cannot persist a list that disagrees with the text.
+	RequirementsDerived []enrich.Requirement
+	EnrichedAt          *time.Time
+	CreatedAt           *time.Time
+	UpdatedAt           *time.Time
 	// LastSeenAt is when a re-crawl last confirmed this posting still live (see
 	// docs/agents/job-lifecycle.md) — the freshest "still open" evidence available
 	// for an open job, used to estimate a rolling JobPosting.validThrough.

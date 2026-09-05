@@ -144,6 +144,40 @@ func TestSetJobEnrichment_DerivedRequirementsOverlay(t *testing.T) {
 		}
 	})
 
+	// jsonb_array_length RAISES on a non-array, and COALESCE catches only SQL NULL,
+	// not a JSON `null`. Unguarded, any of these turns every enrichment write for that
+	// job into a permanent 22023 — retry, retry, dead-letter. None can arrive today;
+	// that is why the guard is cheap and why this test is what keeps it.
+	t.Run("a non-array requirements value does not raise", func(t *testing.T) {
+		for name, payload := range map[string]string{
+			"json null": `{"requirements":null}`,
+			"an object": `{"requirements":{"text":"Go"}}`,
+			"a string":  `{"requirements":"Go"}`,
+			"a number":  `{"requirements":3}`,
+		} {
+			t.Run(name, func(t *testing.T) {
+				truncate(t, pool)
+				id := insertJobWithDerivedRequirements(t, pool, "nonarray", derivedGo)
+				set(t, id, payload)
+
+				// The payload states no usable list, so the derivation fills.
+				if got := readRequirements(t, pool, id); len(got.Requirements) != 2 {
+					t.Errorf("requirements = %v, want the derived two", texts(got))
+				}
+			})
+		}
+	})
+
+	t.Run("a derived column holding json null does not raise", func(t *testing.T) {
+		truncate(t, pool)
+		id := insertJobWithDerivedRequirements(t, pool, "nullcolumn", `null`)
+		set(t, id, `{"summary":"a synopsis"}`)
+
+		if got := readRequirements(t, pool, id); len(got.Requirements) != 0 {
+			t.Errorf("requirements = %v, want none", texts(got))
+		}
+	})
+
 	// The point of the overlay: the statement assigns the blob wholesale, so without
 	// it every enrichment run would silently erase what ingest derived.
 	t.Run("a second run cannot erase the derived list", func(t *testing.T) {
@@ -181,33 +215,90 @@ func TestUpsertJob_RequirementsDerived(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 
-	t.Run("a re-ingest that derives nothing keeps the stored list", func(t *testing.T) {
-		truncate(t, pool)
-		id := insertJobWithDerivedRequirements(t, pool, "keepstored", derivedGo)
+	q := New(pool)
 
-		// The shape of a failed detail fetch: the row is rewritten with an empty
-		// derivation because the description came back empty.
-		_, err := pool.Exec(ctx,
-			`UPDATE jobs SET requirements_derived = CASE
-			     WHEN jsonb_array_length($2::jsonb) > 0 THEN $2::jsonb
-			     ELSE requirements_derived
-			 END WHERE id = $1`, id, `[]`)
+	// These call the real UpsertJob. An earlier version of this test executed a
+	// hand-written UPDATE restating the conflict branch's own CASE, which meant
+	// deleting that branch from the query left the test green.
+	upsert := func(t *testing.T, externalID, description, derived string) {
+		t.Helper()
+		_, err := q.UpsertJob(ctx, UpsertJobParams{
+			Source:              "test",
+			ExternalID:          externalID,
+			URL:                 "http://example.test",
+			Title:               "A job",
+			Company:             "Acme",
+			CompanySlug:         "acme",
+			PublicSlug:          "job-" + externalID,
+			Description:         description,
+			RequirementsDerived: []byte(derived),
+		})
 		if err != nil {
-			t.Fatalf("simulated re-ingest: %v", err)
+			t.Fatalf("UpsertJob: %v", err)
 		}
+	}
 
+	storedFor := func(t *testing.T, externalID string) string {
+		t.Helper()
 		var stored []byte
-		if err := pool.QueryRow(ctx, "SELECT requirements_derived FROM jobs WHERE id = $1", id).Scan(&stored); err != nil {
+		err := pool.QueryRow(ctx,
+			"SELECT requirements_derived FROM jobs WHERE source = 'test' AND external_id = $1",
+			externalID).Scan(&stored)
+		if err != nil {
 			t.Fatalf("read requirements_derived: %v", err)
 		}
+		return string(stored)
+	}
+
+	t.Run("the first write stores what the description derived", func(t *testing.T) {
+		truncate(t, pool)
+		upsert(t, "first", "<h3>Requirements</h3><ul><li>Go</li></ul>", derivedGo)
+
+		if got := storedFor(t, "first"); got == "[]" {
+			t.Errorf("requirements_derived = %s, want the derived list", got)
+		}
+	})
+
+	// A failed detail fetch upserts the job with an empty description, which derives
+	// an empty list. Writing that would wipe a good one.
+	t.Run("a re-ingest with an empty description keeps the stored list", func(t *testing.T) {
+		truncate(t, pool)
+		upsert(t, "keepstored", "<h3>Requirements</h3><ul><li>Go</li></ul>", derivedGo)
+		upsert(t, "keepstored", "", `[]`)
+
 		var got []struct {
 			Text string `json:"text"`
 		}
-		if err := json.Unmarshal(stored, &got); err != nil {
+		stored := storedFor(t, "keepstored")
+		if err := json.Unmarshal([]byte(stored), &got); err != nil {
 			t.Fatalf("decode %s: %v", stored, err)
 		}
 		if len(got) != 2 {
 			t.Errorf("requirements_derived = %s, want the stored two kept", stored)
+		}
+	})
+
+	// The other side of the same guard, and the reason it keys on the description
+	// rather than on the derivation: an edit that REMOVED the requirements section
+	// must clear the list, or the page quotes a posting that no longer says it.
+	t.Run("a re-ingest whose description dropped the list clears it", func(t *testing.T) {
+		truncate(t, pool)
+		upsert(t, "cleared", "<h3>Requirements</h3><ul><li>Go</li></ul>", derivedGo)
+		upsert(t, "cleared", "<p>We would rather talk it through than screen on a checklist.</p>", `[]`)
+
+		if got := storedFor(t, "cleared"); got != "[]" {
+			t.Errorf("requirements_derived = %s, want [] — the posting no longer states a list", got)
+		}
+	})
+
+	t.Run("a re-ingest with a new list replaces the stored one", func(t *testing.T) {
+		truncate(t, pool)
+		upsert(t, "replaced", "<h3>Requirements</h3><ul><li>Go</li></ul>", derivedGo)
+		upsert(t, "replaced", "<h3>Requirements</h3><ul><li>Rust</li></ul>",
+			`[{"text":"Rust","priority":"required"}]`)
+
+		if got := storedFor(t, "replaced"); got == derivedGo {
+			t.Errorf("requirements_derived = %s, want the new list", got)
 		}
 	})
 
@@ -254,7 +345,7 @@ func TestRequirementsBackfillQueries(t *testing.T) {
 		closeJob(t, closed)
 
 		rows, err := q.ListJobsForRequirementsBackfill(ctx, ListJobsForRequirementsBackfillParams{
-			FromID: 0, ToID: closed + 1,
+			FromID: 0, ToID: closed + 1, RowLimit: 100,
 		})
 		if err != nil {
 			t.Fatalf("ListJobsForRequirementsBackfill: %v", err)
@@ -270,13 +361,34 @@ func TestRequirementsBackfillQueries(t *testing.T) {
 		second := insertJobWithDerivedRequirements(t, pool, "second", `[]`)
 
 		rows, err := q.ListJobsForRequirementsBackfill(ctx, ListJobsForRequirementsBackfillParams{
-			FromID: second, ToID: second + 1,
+			FromID: second, ToID: second + 1, RowLimit: 100,
 		})
 		if err != nil {
 			t.Fatalf("ListJobsForRequirementsBackfill: %v", err)
 		}
 		if len(rows) != 1 || rows[0].ID != second {
 			t.Errorf("rows = %+v, want only %d (not %d)", rows, second, first)
+		}
+	})
+
+	// The LIMIT is what bounds the worker's memory, and the loop relies on a full
+	// chunk meaning "there is more inside this id range" — so it must actually cap,
+	// and it must return the LOWEST ids so resuming from the last one skips nothing.
+	t.Run("the chunk read caps at its row limit, lowest ids first", func(t *testing.T) {
+		truncate(t, pool)
+		var ids []int64
+		for _, ext := range []string{"a", "b", "c"} {
+			ids = append(ids, insertJobWithDerivedRequirements(t, pool, ext, `[]`))
+		}
+
+		rows, err := q.ListJobsForRequirementsBackfill(ctx, ListJobsForRequirementsBackfillParams{
+			FromID: 0, ToID: ids[2] + 1, RowLimit: 2,
+		})
+		if err != nil {
+			t.Fatalf("ListJobsForRequirementsBackfill: %v", err)
+		}
+		if len(rows) != 2 || rows[0].ID != ids[0] || rows[1].ID != ids[1] {
+			t.Errorf("rows = %+v, want the first two ids %v", rows, ids[:2])
 		}
 	})
 

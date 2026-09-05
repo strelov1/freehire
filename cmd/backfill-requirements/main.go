@@ -24,9 +24,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/job/reqextract"
@@ -59,11 +61,27 @@ const defaultMaxPerRun = 200_000
 // is that same shape of load.
 const pauseBetweenChunks = 200 * time.Millisecond
 
-func envInt64(name string, fallback int64) int64 {
-	if v, err := strconv.ParseInt(os.Getenv(name), 10, 64); err == nil && v > 0 {
-		return v
+// rowsPerChunk bounds how many rows ONE statement materialises, independently of how
+// wide its id range is. pgx buffers a :many result whole and a description runs to
+// ~1 MB on some sources, so without this a dense id range decides the worker's memory.
+// The loop resumes from the last id it saw whenever a chunk comes back full, so this
+// bounds memory without skipping anything.
+const rowsPerChunk = 500
+
+// envInt64 reads a positive tuning knob. An unset value takes the default; a SET but
+// unparseable or non-positive one fails the run rather than falling back, the same
+// reasoning HYDRATION_RETRY_DAYS uses: a typo in BACKFILL_REQUIREMENTS_FROM_ID would
+// otherwise silently re-walk the whole table and look exactly like a normal run.
+func envInt64(name string, fallback int64) (int64, error) {
+	raw, ok := os.LookupEnv(name)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return fallback, nil
 	}
-	return fallback
+	v, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("%s=%q: want a positive integer", name, raw)
+	}
+	return v, nil
 }
 
 func main() { worker.Main(run) }
@@ -76,6 +94,24 @@ func run() int {
 	}
 	defer cleanup()
 
+	// Read the knobs BEFORE touching the database, so a typo fails in a second rather
+	// than after a bounds scan.
+	step, err := envInt64("BACKFILL_REQUIREMENTS_CHUNK", defaultChunkSize)
+	if err != nil {
+		log.Printf("backfill-requirements: %v", err)
+		return 1
+	}
+	maxPerRun, err := envInt64("BACKFILL_REQUIREMENTS_MAX", defaultMaxPerRun)
+	if err != nil {
+		log.Printf("backfill-requirements: %v", err)
+		return 1
+	}
+	resume, err := envInt64("BACKFILL_REQUIREMENTS_FROM_ID", 0)
+	if err != nil {
+		log.Printf("backfill-requirements: %v", err)
+		return 1
+	}
+
 	q := db.New(pool)
 	bounds, err := q.RequirementsDerivedBackfillBounds(ctx)
 	if err != nil {
@@ -87,13 +123,11 @@ func run() int {
 		return 0
 	}
 
-	step := envInt64("BACKFILL_REQUIREMENTS_CHUNK", defaultChunkSize)
-	maxPerRun := envInt64("BACKFILL_REQUIREMENTS_MAX", defaultMaxPerRun)
 	from := bounds.MinID
 	// A run resumes where a previous one stopped rather than re-deriving the span it
 	// already covered. Only ever forward: a start id past the table simply finds
 	// nothing, which is a no-op, not a wrong answer.
-	if resume := envInt64("BACKFILL_REQUIREMENTS_FROM_ID", 0); resume > from {
+	if resume > from {
 		from = resume
 	}
 	log.Printf("backfill-requirements: ids %d..%d from %d, chunk=%d, max=%d",
@@ -101,7 +135,7 @@ func run() int {
 
 	var examined, filled int64
 	lastLog := time.Now()
-	for ; from <= bounds.MaxID; from += step {
+	for from <= bounds.MaxID {
 		if examined >= maxPerRun {
 			log.Printf("backfill-requirements: reached max=%d, stopping at id=%d — "+
 				"re-run with BACKFILL_REQUIREMENTS_FROM_ID=%d", maxPerRun, from, from)
@@ -109,14 +143,22 @@ func run() int {
 		}
 
 		rows, err := q.ListJobsForRequirementsBackfill(ctx, db.ListJobsForRequirementsBackfillParams{
-			FromID: from,
-			ToID:   from + step,
+			FromID:   from,
+			ToID:     from + step,
+			RowLimit: rowsPerChunk,
 		})
 		if err != nil {
 			log.Printf("backfill-requirements: read chunk %d..%d after %d filled: %v", from, from+step, filled, err)
 			return 1
 		}
 		examined += int64(len(rows))
+		// A full chunk means the LIMIT, not the id range, ended it: the range holds
+		// more rows than one statement should materialise. Resume from the last id
+		// seen rather than stepping past the rest of the range, which would skip them.
+		next := from + step
+		if len(rows) == int(rowsPerChunk) {
+			next = rows[len(rows)-1].ID + 1
+		}
 
 		ids, payloads := derive(rows)
 		if len(ids) > 0 {
@@ -138,6 +180,7 @@ func run() int {
 				examined, filled, from, bounds.MaxID)
 			lastLog = time.Now()
 		}
+		from = next
 		select {
 		case <-ctx.Done():
 			log.Printf("backfill-requirements: cancelled at id=%d after %d filled — "+
@@ -150,25 +193,33 @@ func run() int {
 	return 0
 }
 
-// derive runs the extractor over a chunk and returns the rows worth writing: those
-// whose description yields at least one requirement. A row that yields none is skipped
-// rather than written as '[]' — that is already its value, and the chunk statement's
-// IS DISTINCT FROM guard would discard the write anyway, so sending it would only make
-// the batch bigger.
+// derive runs the extractor over a chunk and returns what to write for every row,
+// INCLUDING the rows that now yield nothing.
+//
+// Sending the empty ones looks wasteful — the chunk statement's IS DISTINCT FROM guard
+// discards them, and most rows already hold `[]`. It is what makes this worker a
+// repair path rather than a one-way door. A heading-vocabulary fix that removes a false
+// positive reaches new postings through ingest and reaches stored ones through nothing
+// else: the crawl keeps the stored list whenever the incoming description is empty,
+// RefreshUnchangedJob skips the column when content_hash has not moved, and a
+// vocabulary change does not move that hash. Without this, a list wrongly derived once
+// is served forever.
 func derive(rows []db.ListJobsForRequirementsBackfillRow) ([]int64, [][]byte) {
 	ids := make([]int64, 0, len(rows))
 	payloads := make([][]byte, 0, len(rows))
 	for _, r := range rows {
 		reqs := reqextract.Derive(r.Description)
-		if len(reqs) == 0 {
-			continue
-		}
-		payload, err := json.Marshal(reqs)
-		if err != nil {
-			// Impossible for this shape (two strings per entry). Skip the row rather
-			// than fail the pass: a posting without its list is what it has today.
-			log.Printf("backfill-requirements: encode job %d: %v", r.ID, err)
-			continue
+		payload := []byte("[]")
+		if len(reqs) > 0 {
+			encoded, err := json.Marshal(reqs)
+			if err != nil {
+				// Impossible for this shape (two strings per entry). Skip the row
+				// rather than clear it: writing '[]' on an encoding failure would
+				// delete a good stored list over a bug that is not the posting's.
+				log.Printf("backfill-requirements: encode job %d: %v", r.ID, err)
+				continue
+			}
+			payload = encoded
 		}
 		ids = append(ids, r.ID)
 		payloads = append(payloads, payload)

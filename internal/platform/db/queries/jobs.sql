@@ -318,13 +318,18 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- refreshed on re-ingest so a title/description edit re-clusters the role.
     role_fingerprint = EXCLUDED.role_fingerprint,
     -- Re-derived on every write, like the dictionary facets above, so an edited
-    -- description refreshes the list. It follows the same rule `description` does
-    -- one branch up: a detail fetch that failed yields an empty description, which
-    -- derives an empty list, and writing that would wipe a good one. Keep the stored
-    -- value when the incoming derivation is empty.
+    -- description refreshes the list — including to EMPTY, when the edit removed the
+    -- posting's requirements section.
+    --
+    -- The guard keys on the incoming DESCRIPTION, not on the incoming derivation, and
+    -- the difference is the whole point. What must not wipe a stored list is a failed
+    -- detail fetch, which is exactly the empty-description case `description` guards
+    -- against one branch up. Keying on the empty derivation instead would ALSO keep the
+    -- list when a real edit deleted the section, and the page would then quote a
+    -- posting that no longer says it — a false claim the reader cannot detect, arriving
+    -- through the guard meant to prevent one.
     requirements_derived = CASE
-        WHEN jsonb_array_length(EXCLUDED.requirements_derived) > 0
-        THEN EXCLUDED.requirements_derived
+        WHEN EXCLUDED.description <> '' THEN EXCLUDED.requirements_derived
         ELSE jobs.requirements_derived
     END,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
@@ -1136,12 +1141,12 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- what lets a hand-curated posting cluster with the crawled copy of its role.
     content_hash     = EXCLUDED.content_hash,
     role_fingerprint = EXCLUDED.role_fingerprint,
-    -- Same rule the crawl path uses: re-derived on every write so an edited
-    -- description refreshes the list, but an incoming empty derivation never wipes a
-    -- stored one.
+    -- Same rule the crawl path uses, and keyed on the same signal: an empty incoming
+    -- description means the write carries no content to derive from, anything else
+    -- means the derivation is current — including when it is empty because the edit
+    -- removed the section.
     requirements_derived = CASE
-        WHEN jsonb_array_length(EXCLUDED.requirements_derived) > 0
-        THEN EXCLUDED.requirements_derived
+        WHEN EXCLUDED.description <> '' THEN EXCLUDED.requirements_derived
         ELSE jobs.requirements_derived
     END,
     -- Overlay the (possibly changed) manual salary onto the existing enrichment so a
@@ -1677,9 +1682,25 @@ SET enrichment         =
             ))
             ELSE '{}'::jsonb
         END
+        -- Both sides are coerced to an array BEFORE their length is asked for, because
+        -- jsonb_array_length RAISES on anything else and COALESCE catches only SQL
+        -- NULL, not a JSON `null`. A payload carrying `"requirements": null`, or a
+        -- column holding jsonb `null`, would otherwise turn every enrichment write for
+        -- that job into a permanent 22023 — retry, retry, dead-letter. The guard is on
+        -- the VALUE rather than in the WHEN because Postgres does not promise to
+        -- short-circuit an OR/AND, so a type test beside the length call is not a
+        -- guarantee that the length call is skipped.
         || CASE
-            WHEN jsonb_array_length(COALESCE(sqlc.arg(enrichment)::jsonb -> 'requirements', '[]'::jsonb)) = 0
-                 AND jsonb_array_length(requirements_derived) > 0
+            WHEN jsonb_array_length(CASE
+                     WHEN jsonb_typeof(sqlc.arg(enrichment)::jsonb -> 'requirements') = 'array'
+                     THEN sqlc.arg(enrichment)::jsonb -> 'requirements'
+                     ELSE '[]'::jsonb
+                 END) = 0
+             AND jsonb_array_length(CASE
+                     WHEN jsonb_typeof(requirements_derived) = 'array'
+                     THEN requirements_derived
+                     ELSE '[]'::jsonb
+                 END) > 0
             THEN jsonb_build_object('requirements', requirements_derived)
             ELSE '{}'::jsonb
         END,
@@ -2031,10 +2052,16 @@ FROM jobs;
 -- that column de-TOASTs it for every row examined, which is the trap cmd/backfill-clearance
 -- documents. The rows are already bounded by id here, and an empty description simply
 -- derives nothing, so the filter would cost the same read it is trying to avoid.
+-- The LIMIT is what bounds MEMORY, and the id range is what bounds the number of
+-- statements. Both are needed: pgx buffers a :many result whole, descriptions run to
+-- ~1 MB on some sources, and an id RANGE puts no ceiling at all on how many rows fall
+-- inside it. The caller resumes from the last id it saw when a chunk comes back full,
+-- so a dense stretch is walked in bounded steps rather than materialised at once.
 SELECT id, description FROM jobs
 WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
   AND closed_at IS NULL
-ORDER BY id;
+ORDER BY id
+LIMIT sqlc.arg(row_limit);
 
 -- name: SetJobsRequirementsDerived :execrows
 -- Write one chunk's derived requirements, for cmd/backfill-requirements. Batched

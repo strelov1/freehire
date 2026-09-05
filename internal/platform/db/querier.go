@@ -2757,6 +2757,11 @@ type Querier interface {
 	// that column de-TOASTs it for every row examined, which is the trap cmd/backfill-clearance
 	// documents. The rows are already bounded by id here, and an empty description simply
 	// derives nothing, so the filter would cost the same read it is trying to avoid.
+	// The LIMIT is what bounds MEMORY, and the id range is what bounds the number of
+	// statements. Both are needed: pgx buffers a :many result whole, descriptions run to
+	// ~1 MB on some sources, and an id RANGE puts no ceiling at all on how many rows fall
+	// inside it. The caller resumes from the last id it saw when a chunk comes back full,
+	// so a dense stretch is walked in bounded steps rather than materialised at once.
 	ListJobsForRequirementsBackfill(ctx context.Context, arg ListJobsForRequirementsBackfillParams) ([]ListJobsForRequirementsBackfillRow, error)
 	// Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
 	// rows changed at or after the cutoff. Every write path (UpsertJob, the close

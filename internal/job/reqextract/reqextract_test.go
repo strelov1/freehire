@@ -137,6 +137,54 @@ func TestDerive(t *testing.T) {
 			html: `<h3>Requirements &amp; Qualifications</h3><ul><li>Go</li></ul>`,
 			want: []enrich.Requirement{req("Go")},
 		},
+		// An open section must survive the markup an ATS rich-text editor leaves
+		// between a heading and its list. A spacer paragraph and a lead-in line are
+		// both everywhere in real descriptions, and both used to close the section.
+		{
+			name: "an empty spacer element does not close the section",
+			html: `<h3>Requirements</h3><p></p><ul><li>Go</li></ul>`,
+			want: []enrich.Requirement{req("Go")},
+		},
+		{
+			name: "a short lead-in line does not close the section",
+			html: `<h3>Requirements</h3><p>You will need:</p><ul><li>Go</li></ul>`,
+			want: []enrich.Requirement{req("Go")},
+		},
+		// The mirror image: the section must not stay open across real prose. "A
+		// matching heading with prose after it yields nothing" has to hold even when a
+		// list appears further down, which is the case that makes it matter.
+		{
+			name: "prose after the heading closes the section even when a list follows",
+			html: `<h3>Requirements</h3>
+			       <p>We are not going to list these, because we would rather talk it through
+			          with you during the first conversation than screen on a checklist.</p>
+			       <ul><li>Free lunch</li><li>Gym membership</li></ul>`,
+			want: nil,
+		},
+		{
+			name: "a table between the heading and a list closes the section",
+			html: `<h3>Requirements</h3><table><tr><td>Grade</td><td>Senior</td></tr></table>
+			       <ul><li>Free lunch</li></ul>`,
+			want: nil,
+		},
+		// A wrapper element short enough to look like a heading must not swallow the
+		// list inside it. Whether a posting yielded anything used to depend on how long
+		// its bullets happened to be.
+		{
+			name: "a wrapper div around the heading and its list is not itself a heading",
+			html: `<div><h3>Requirements</h3><ul><li>Go</li></ul></div>`,
+			want: []enrich.Requirement{req("Go")},
+		},
+		{
+			name: "a bolded heading and its list inside one short wrapper still yield",
+			html: `<div class="content"><p><strong>Requirements</strong></p><ul><li>Go</li></ul></div>`,
+			want: []enrich.Requirement{req("Go")},
+		},
+		{
+			name: "a heading and its list in sibling divs still yield",
+			html: `<div>Requirements</div><div><ul><li>Go</li></ul></div>`,
+			want: []enrich.Requirement{req("Go")},
+		},
 	}
 
 	for _, tt := range tests {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatSalary, requirementGroups } from './enrichment';
+import type { Requirement } from './enrichment';
 import type { Enrichment } from './types';
-import type { Requirement } from './generated/contracts';
 
 const req = (text: string, priority: string): Requirement => ({ text, priority });
 

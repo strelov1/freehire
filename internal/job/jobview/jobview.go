@@ -174,6 +174,21 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	e.EducationLevel = f.EducationLevel
 	e.EnglishLevel = f.EnglishLevel
 	e.ExperienceYearsMin = f.ExperienceYearsMin
+	// requirements has two producers and this is where they meet on the read path.
+	// The model wins when it stated a list — it reads the postings whose requirements
+	// are prose with no list markup, which the deterministic extractor cannot reach —
+	// and the derivation fills in otherwise.
+	//
+	// The fold has to happen HERE and not only in SetJobEnrichment's overlay, which is
+	// where it lived first. That overlay runs only when the model runs, so a posting
+	// the model has never reached stored a derived list and served nothing, and a
+	// posting already enriched at the current version is never re-queued and so would
+	// have served it never rather than eventually. Since the coverage this feature
+	// exists for is precisely the postings the model has NOT reached, the overlay alone
+	// delivered none of it.
+	if len(e.Requirements) == 0 {
+		e.Requirements = f.RequirementsDerived
+	}
 	skills := normalizeSet(f.Skills)
 	collections := normalizeSet(x.Collections)
 	cities := cityFacet(f.Cities, e.Cities)

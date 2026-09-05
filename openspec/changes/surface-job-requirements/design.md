@@ -93,6 +93,23 @@ Rejected because the value is not only on the page. `matchanalysis` and
 97% of postings; a request-path derivation would not reach them. Storing it once
 serves both.
 
+### The fold happens on the READ path, not only at write time
+
+`jobview.FromDomain` folds `requirements_derived` into `enrichment.requirements` when
+the model stated none — the same dict-wins-over-LLM fold `seniority`, `category` and
+`cities` already get there.
+
+The first version of this change had only the `SetJobEnrichment` overlay, and that was
+wrong in a way worth recording: **the overlay runs only when the model runs.** A
+posting the model has never reached stored a derived list and served nothing, and a
+posting already enriched at the current version is never re-queued (the version
+deliberately stays at 2), so it would have served its list never rather than
+eventually. Since the coverage this feature exists for IS the postings the model has
+not reached, the overlay alone delivered none of it.
+
+The overlay stays, for anything reading `jobs.enrichment` directly, but the projection
+is what makes the feature true.
+
 ### Two producers, one served field
 
 The derived list lives in its own column, `jobs.requirements_derived`, and is
