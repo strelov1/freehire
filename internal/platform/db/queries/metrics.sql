@@ -132,3 +132,24 @@ SELECT
 FROM board_health
 GROUP BY provider
 ORDER BY provider;
+
+-- name: NotifyBacklogMetrics :one
+-- The subscription-digest backlog: how many active subscriptions have something
+-- undelivered, and how old the oldest undelivered match is.
+--
+-- The age is the signal that matters. A pass runs every five minutes, so in steady state
+-- the oldest pending match is minutes old. An age that climbs without bound means some
+-- subscription is never being served — which is not visible in the worker's own log,
+-- because a starved subscription produces no failure: `notify` reported
+-- `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
+-- subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
+--
+-- Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
+-- that must publish an explicit zero, because an absent series is how the consuming alert
+-- rules recognize a dead exporter.
+SELECT
+    COALESCE(count(DISTINCT m.subscription_id), 0)::bigint AS pending_subscriptions,
+    COALESCE(EXTRACT(EPOCH FROM now() - min(m.matched_at)), 0)::float8 AS oldest_age_seconds
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND s.active;

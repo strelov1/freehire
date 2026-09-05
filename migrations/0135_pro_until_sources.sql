@@ -37,7 +37,7 @@
 -- is affordable here and a trigger, which would hide the rule from anyone reading \d users,
 -- is not worth what it saves.
 --
--- Applied to a fresh volume by initdb after 0131; on an existing prod volume this file must
+-- Applied to a fresh volume by initdb in name order, after 0134; on an existing prod volume this file must
 -- be run manually BEFORE deploying code that reads or writes the new columns. The deployed
 -- old code keeps working across the gap in the one direction that matters: it can still READ
 -- pro_until, which does not go away — it becomes unassignable — and its only write,

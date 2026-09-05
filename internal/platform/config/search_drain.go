@@ -21,7 +21,18 @@ type SearchDrain struct {
 // cmd/embed), so this never fails.
 func LoadSearchDrain() SearchDrain {
 	c := SearchDrain{
-		BatchSize:    envInt("SEARCH_DRAIN_BATCH_SIZE", 500),
+		// 2500, measured rather than guessed. A push costs what it costs almost
+		// regardless of size (see CallTimeout below), so the batch is throughput:
+		// on prod 2026-09-04, with a 136k backlog, 200 rows per push drained a NET
+		// 38/min and the queue grew; 1000 drained 1234/min and it fell. The backlog
+		// had reached 136k with entries two days old, and no new vacancy was
+		// reaching search — a batch of 200 was most of why.
+		//
+		// The 200 was not a considered value either. It was set on the host on
+		// 2026-08-05 as "generous timeout + small batch while re-validating" after
+		// an incident whose actual cause was the client timeout (below), and it
+		// stayed a month after the re-validating ended.
+		BatchSize:    envInt("SEARCH_DRAIN_BATCH_SIZE", 2500),
 		LeaseSeconds: envInt("SEARCH_DRAIN_LEASE_SECONDS", 180),
 		MaxAttempts:  envInt("SEARCH_DRAIN_MAX_ATTEMPTS", 3),
 		// Prod measurement (2026-08-05, ~2.7M-doc jobs index): a single push costs

@@ -49,13 +49,13 @@ export default ts.config(
     },
   },
 
-  // The change-array-by-copy methods reach the browser untranspiled — they are
-  // runtime methods, so no build target polyfills them, and Safari only grew them
-  // in 16.4. One `.toSorted()` evaluated while `facets.ts` was initialising threw
-  // on iOS 15, which takes the module down and with it the whole page — not the
-  // one sorted list. Every call we had ran on an array a `.map`/`.filter`/spread
-  // had just produced, so `.sort()` in place is the same thing without the floor
-  // on who can open the site. Lift this once the analytics say iOS 15 is gone.
+  // Built-ins newer than our floor reach the browser untranspiled — they are runtime
+  // methods, so no build target polyfills them. One `.toSorted()` evaluated while
+  // `facets.ts` was initialising threw on iOS 15, which takes the module down and with
+  // it the whole page — not the one sorted list. `Object.hasOwn` then did the same to
+  // the header search's suggestions, which is why the rule names a class rather than
+  // the one method that got us. Add to it when the next one is found in the wild, and
+  // lift the whole block once the analytics say iOS 15 is gone.
   {
     files: ['**/*.{ts,svelte,svelte.ts}'],
     ignores: ['**/*.test.ts', 'scripts/**', 'src/lib/server/**'],
@@ -63,10 +63,20 @@ export default ts.config(
       'no-restricted-syntax': [
         'error',
         {
+          // Change-array-by-copy: Safari 16.4. Every call we had ran on an array a
+          // `.map`/`.filter`/spread had just produced, so sorting in place is the
+          // same thing without the floor on who can open the site.
           selector:
             "MemberExpression[property.name=/^(toSorted|toReversed|toSpliced)$/][computed=false]",
           message:
             'Not in Safari before 16.4, and a throw here kills the whole module. Use [...x].sort() — or .sort() when the array is already a fresh copy.',
+        },
+        {
+          // Safari 15.4. Every use we had asked about decoded JSON, where a present
+          // key always holds a value, so reading the value answers the same question.
+          selector: "MemberExpression[object.name='Object'][property.name='hasOwn']",
+          message:
+            'Not in Safari before 15.4, and a throw here kills the whole module. Use `obj[k] !== undefined`, or `Object.prototype.hasOwnProperty.call(obj, k)` when a key holding undefined must still count.',
         },
       ],
     },

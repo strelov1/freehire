@@ -19,6 +19,7 @@
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
   import { formatDate, formatDateOrAgo, formatDateTime } from '$lib/utils';
+  import AddToListButton from './AddToListButton.svelte';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
@@ -450,6 +451,7 @@
     </a>
     {@render reportButton()}
     {@render saveButton()}
+    <AddToListButton jobSlug={job.public_slug} />
     {@render autoApplyCta('ml-1 hidden shrink-0 lg:inline-flex')}
     {@render applyCta('md', 'ml-1 hidden shrink-0 lg:inline-flex')}
   </div>

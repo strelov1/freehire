@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Wrench } from '@lucide/svelte';
+  import { ChevronRight, Terminal } from '@lucide/svelte';
   import {
     groupTitle,
     isExpandable,
@@ -40,6 +40,11 @@
     }
     return groups;
   }
+
+  // One chip shape for both the flat card and the expandable summary, so the two never
+  // drift apart by a padding step. The expandable one adds only its hover affordance.
+  const chip =
+    'self-start inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5 text-sm leading-5 text-muted-foreground';
 </script>
 
 {#each groupTools(calls) as g, t (t)}
@@ -75,24 +80,22 @@
       {/if}
     {/each}
   {:else if !isExpandable(g)}
-    <div
-      class="self-start flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
-    >
-      <Wrench class="size-4 shrink-0" />
-      <span>{title}</span>
+    <div class={chip}>
+      <Terminal class="size-3.5 shrink-0 opacity-60" />
+      <span class="font-medium">{title}</span>
     </div>
   {:else}
-    <details class="self-start max-w-[90%]">
+    <!-- `group` so the chevron can read the details' own open state; a variant hung on
+         the summary cannot — `[open]` sits on the <details>, never on its summary. -->
+    <details class="group self-start max-w-[90%]">
       <summary
-        class="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/70 [&::-webkit-details-marker]:hidden [&::marker]:hidden [&[open]>span>svg.chev]:rotate-90"
+        class="{chip} cursor-pointer transition-colors hover:border-border hover:bg-muted/70 [&::-webkit-details-marker]:hidden [&::marker]:hidden"
       >
-        <Wrench class="size-4 shrink-0" />
-        <span class="flex items-center gap-1.5">
-          {title}
-          <ChevronRight class="chev size-3.5 shrink-0 transition-transform" />
-        </span>
+        <Terminal class="size-3.5 shrink-0 opacity-60" />
+        <span class="font-medium">{title}</span>
+        <ChevronRight class="size-3.5 shrink-0 opacity-50 transition-transform group-open:rotate-90" />
       </summary>
-      <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
+      <ul class="mt-1.5 ml-5 space-y-1 text-xs text-muted-foreground">
         {#each g as c, ci (ci)}
           <li class="flex flex-wrap items-baseline gap-1.5">
             <span class={c.isError ? 'text-destructive' : ''}>{callLine(c)}</span>

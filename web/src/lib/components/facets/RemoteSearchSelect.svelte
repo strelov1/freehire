@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import type { FacetOption } from '$lib/facets';
+  import { dedupeByKey } from '$lib/paginated.svelte';
   import { Input } from '$lib/ui';
   import SkillIcon from '../SkillIcon.svelte';
   import { SvelteMap } from 'svelte/reactivity';
@@ -75,7 +76,12 @@
       const opts = await search(q);
       if (mine !== gen) return;
       for (const o of opts) seen.set(o.value, o.label);
-      results = opts;
+      // The option list is keyed by `value`, and a repeated key is not a duplicated
+      // row — Svelte answers it by tearing down the whole block, so one doubled entry
+      // empties the picker. `search` is a prop, so what it returns is outside this
+      // component's reach; keeping the promise is therefore this component's job, and
+      // it keeps the first of each value because that is the better-ranked one.
+      results = dedupeByKey(opts, (o) => o.value, new Set());
     } catch {
       if (mine === gen) results = [];
     } finally {

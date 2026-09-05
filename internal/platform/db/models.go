@@ -707,6 +707,22 @@ type JobDailyView struct {
 	Uniques int32       `json:"uniques"`
 }
 
+type JobList struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	PublicSlug  pgtype.Text        `json:"public_slug"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type JobListItem struct {
+	ListID  int64              `json:"list_id"`
+	JobID   int64              `json:"job_id"`
+	AddedAt pgtype.Timestamptz `json:"added_at"`
+}
+
 type JobReminder struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -911,8 +927,6 @@ type SavedSearch struct {
 	Query              string             `json:"query"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	PublicSlug         pgtype.Text        `json:"public_slug"`
-	AuthorLabel        pgtype.Text        `json:"author_label"`
 	DerivedFromProfile bool               `json:"derived_from_profile"`
 }
 

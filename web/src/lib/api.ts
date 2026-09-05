@@ -53,7 +53,9 @@ import type {
   WebhookConfig,
   ConnectedIdentities,
   SavedSearch,
-  Board,
+  JobList,
+  PublicJobList,
+  JobListMembership,
   UserProfile,
   Subscription,
   TelegramStatus,
@@ -348,6 +350,13 @@ export function createApi(
     };
     // Assigned after the spread, so a timeout is added to the init rather than
     // substituted for it. A caller that brought its own signal keeps it.
+    //
+    // `== null` is LOAD-BEARING, not a loose-equality slip: the abortable reads
+    // (searchJobs/suggest/listCompanies) pass `{ signal }` unconditionally, so a caller
+    // that named no signal arrives here with `signal: undefined` rather than with no
+    // `signal` key at all. Tighten this to `===` and those three quietly stop getting
+    // the SSR timeout above — which is the ~8 `+page.server.ts` callers, and exactly the
+    // failure that comment describes.
     const timeout = timeoutMs != null && request.signal == null ? AbortSignal.timeout(timeoutMs) : undefined;
     if (timeout) {
       request.signal = timeout;
@@ -486,11 +495,16 @@ export function createApi(
    *  would score every job by similarity, so a query like "devops" would return the
    *  whole catalogue reordered rather than the handful that match — which reads as
    *  "search is broken". */
-  async function searchJobs(facets: URLSearchParams, limit: number, offset: number): Promise<Slice<Job>> {
+  async function searchJobs(
+    facets: URLSearchParams,
+    limit: number,
+    offset: number,
+    signal?: AbortSignal,
+  ): Promise<Slice<Job>> {
     const params = new URLSearchParams(facets);
     params.set('limit', String(limit));
     params.set('offset', String(offset));
-    return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`), offset);
+    return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`, { signal }), offset);
   }
 
   /** Complete a partly-typed query against the catalogue's own vocabulary: the
@@ -501,9 +515,13 @@ export function createApi(
    *  Engineer Google" carries the role AND the company, and applying only one of them
    *  discards what was typed. An empty query returns nothing: what an empty box offers
    *  is a curated starting point the client owns (see starterSuggestions). */
-  async function suggest(q: string, limit: number): Promise<ApiSuggestion[]> {
+  async function suggest(
+    q: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<ApiSuggestion[]> {
     const params = new URLSearchParams({ q, limit: String(limit) });
-    return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`);
+    return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`, { signal });
   }
 
   /** Turn a written description of a job search into filter values (the AI filter).
@@ -621,12 +639,16 @@ export function createApi(
     limit: number,
     offset: number,
     facets?: URLSearchParams,
+    signal?: AbortSignal,
   ): Promise<Slice<CompanyListItem>> {
     const params = new URLSearchParams(facets);
     if (q) params.set('q', q);
     params.set('limit', String(limit));
     params.set('offset', String(offset));
-    return toSlice(await request<Page<CompanyListItem>>(`/api/v1/companies?${params}`), offset);
+    return toSlice(
+      await request<Page<CompanyListItem>>(`/api/v1/companies?${params}`, { signal }),
+      offset,
+    );
   }
 
   async function getCompany(
@@ -1258,22 +1280,69 @@ export function createApi(
     await call(`/api/v1/me/searches/${id}`, { method: 'DELETE' });
   }
 
-  /** Publish a saved search as a public board (cookie-only). Returns the updated set,
-   *  now carrying `public_slug`. An optional `authorLabel` is shown on the board; blank
-   *  renders it anonymously. Re-sharing keeps the existing slug. */
-  async function shareSavedSearch(id: number, authorLabel = ''): Promise<SavedSearch> {
-    return requestData<SavedSearch>(`/api/v1/me/searches/${id}/share`, jsonBody('POST', { author_label: authorLabel }));
+  // Job lists: named sets of specific jobs (cookie-only on the server), independent
+  // of the "save" star and of saved searches.
+
+  /** The current user's job lists, most recently updated first. */
+  async function listJobLists(): Promise<JobList[]> {
+    return requestData<JobList[]>('/api/v1/me/lists');
   }
 
-  /** Make a shared board private again (cookie-only). Idempotent. */
-  async function unshareSavedSearch(id: number): Promise<void> {
-    await call(`/api/v1/me/searches/${id}/share`, { method: 'DELETE' });
+  /** Create a named job list. `description` is optional (defaults to ""). A
+   *  duplicate name or the per-user cap is a 409. */
+  async function createJobList(name: string, description = ''): Promise<JobList> {
+    return requestData<JobList>('/api/v1/me/lists', jsonBody('POST', { name, description }));
   }
 
-  /** Public read of a shared board by slug — unauthenticated. Returns only display
-   *  fields (name, query, author_label). An unknown/unshared slug throws (404). */
-  async function getBoard(slug: string): Promise<Board> {
-    return requestData<Board>(`/api/v1/boards/${encodeURIComponent(slug)}`);
+  /** Overwrite a job list's name and/or description; an omitted field is unchanged. */
+  async function updateJobList(
+    id: number,
+    patch: { name?: string; description?: string },
+  ): Promise<JobList> {
+    return requestData<JobList>(`/api/v1/me/lists/${id}`, jsonBody('PATCH', patch));
+  }
+
+  /** Delete a job list by id. Its jobs and the user's separate "save" flags are
+   *  untouched. */
+  async function deleteJobList(id: number): Promise<void> {
+    await call(`/api/v1/me/lists/${id}`, { method: 'DELETE' });
+  }
+
+  /** Add a job (by its public slug) to one of the caller's lists. Idempotent: adding
+   *  an already-present job succeeds without duplicating membership. */
+  async function addJobToList(id: number, jobSlug: string): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/jobs`, jsonBody('POST', { job_slug: jobSlug }));
+  }
+
+  /** Remove a job (by its public slug) from one of the caller's lists. Idempotent. */
+  async function removeJobFromList(id: number, jobSlug: string): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/jobs/${encodeURIComponent(jobSlug)}`, { method: 'DELETE' });
+  }
+
+  /** Publish a job list as a public, read-only page (cookie-only). Returns the
+   *  updated list, now carrying `public_slug`. Re-sharing keeps the existing slug. */
+  async function shareJobList(id: number): Promise<JobList> {
+    return requestData<JobList>(`/api/v1/me/lists/${id}/share`, { method: 'POST' });
+  }
+
+  /** Make a shared job list private again (cookie-only). Idempotent. */
+  async function unshareJobList(id: number): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/share`, { method: 'DELETE' });
+  }
+
+  /** Public read of a shared job list by slug — unauthenticated. An unknown/unshared
+   *  slug throws (404). */
+  async function getPublicJobList(slug: string): Promise<PublicJobList> {
+    return requestData<PublicJobList>(`/api/v1/lists/${encodeURIComponent(slug)}`);
+  }
+
+  /** Every one of the caller's job lists, flagged with whether the given job (by its
+   *  public slug) already belongs to it — what the job card's "Add to list" control
+   *  reads to render its toggle state. An unknown slug throws (404). */
+  async function listJobListMembership(jobSlug: string): Promise<JobListMembership[]> {
+    return requestData<JobListMembership[]>(
+      `/api/v1/me/lists/membership?job_slug=${encodeURIComponent(jobSlug)}`,
+    );
   }
 
   // The experience bank: what the product has recorded about what the user has done.
@@ -2357,9 +2426,16 @@ export function createApi(
     createSavedSearch,
     updateSavedSearch,
     deleteSavedSearch,
-    shareSavedSearch,
-    unshareSavedSearch,
-    getBoard,
+    listJobLists,
+    createJobList,
+    updateJobList,
+    deleteJobList,
+    addJobToList,
+    removeJobFromList,
+    shareJobList,
+    unshareJobList,
+    getPublicJobList,
+    listJobListMembership,
     getExperience,
     updateExperienceAtom,
     mergeExperienceAtoms,

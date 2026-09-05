@@ -20,10 +20,12 @@ func fullSnapshot() snapshot {
 			{name: "enrichment_outbox", depth: 1049297, deadLetters: 41, oldestAgeSeconds: 5529600},
 			{name: "semantic_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
 		},
-		healthyBoards: 74894,
-		failingBoards: 7002,
-		cooledBoards:  1882,
-		newestJob:     time.Unix(1786821346, 0),
+		healthyBoards:              74894,
+		failingBoards:              7002,
+		cooledBoards:               1882,
+		newestJob:                  time.Unix(1786821346, 0),
+		notifyPendingSubscriptions: 12,
+		notifyOldestAgeSeconds:     184.25,
 	}
 }
 
@@ -46,6 +48,12 @@ freehire_queue_dead_letters{queue="semantic_outbox"} 0
 freehire_queue_oldest_age_seconds{queue="search_outbox"} 21600.500
 freehire_queue_oldest_age_seconds{queue="enrichment_outbox"} 5529600.000
 freehire_queue_oldest_age_seconds{queue="semantic_outbox"} 0.000
+# HELP freehire_notify_pending_subscriptions Active subscriptions with at least one undelivered match.
+# TYPE freehire_notify_pending_subscriptions gauge
+freehire_notify_pending_subscriptions 12
+# HELP freehire_notify_oldest_pending_age_seconds Age of the oldest undelivered subscription match.
+# TYPE freehire_notify_oldest_pending_age_seconds gauge
+freehire_notify_oldest_pending_age_seconds 184.250
 # HELP freehire_boards_total Ingest boards by health state.
 # TYPE freehire_boards_total gauge
 freehire_boards_total{state="healthy"} 74894
@@ -122,6 +130,8 @@ func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 		"freehire_queue_oldest_age_seconds":               3,
 		"freehire_boards_total":                           3,
 		"freehire_catalogue_newest_job_timestamp_seconds": 1,
+		"freehire_notify_pending_subscriptions":           1,
+		"freehire_notify_oldest_pending_age_seconds":      1,
 	}
 	for name, wantSamples := range want {
 		family, ok := families[name]

@@ -55,22 +55,6 @@ class SavedSearches extends UserResource<SavedSearch[]> {
     await api.deleteSavedSearch(id);
     this.#items = this.#items.filter((s) => s.id !== id);
   }
-
-  /** Publish a set as a public board and replace it in place (keeping its position, so
-   *  toggling share doesn't reorder the list). Returns the updated set with its slug. */
-  async share(id: number, authorLabel = ''): Promise<SavedSearch> {
-    const row = await api.shareSavedSearch(id, authorLabel);
-    this.#items = this.#items.map((s) => (s.id === id ? row : s));
-    return row;
-  }
-
-  /** Make a shared set private again and clear its board fields in place. */
-  async unshare(id: number): Promise<void> {
-    await api.unshareSavedSearch(id);
-    this.#items = this.#items.map((s) =>
-      s.id === id ? { ...s, public_slug: '', author_label: '' } : s,
-    );
-  }
 }
 
 export const savedSearches = new SavedSearches();

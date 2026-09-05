@@ -22,6 +22,7 @@ type metricsQueries interface {
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
+	NotifyBacklogMetrics(context.Context) (db.NotifyBacklogMetricsRow, error)
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -49,6 +50,11 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	newestJob, err := newestJobTime(ctx, q)
 	if err != nil {
 		return snapshot{}, err
+	}
+
+	notifyBacklog, err := q.NotifyBacklogMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("notify backlog metrics: %w", err)
 	}
 
 	health, err := q.ProviderIngestHealth(ctx)
@@ -79,11 +85,13 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			{name: "enrichment_outbox", depth: enrichment.Depth, deadLetters: enrichment.DeadLetters, oldestAgeSeconds: enrichment.OldestAgeSeconds},
 			{name: "semantic_outbox", depth: semantic.Depth, deadLetters: semantic.DeadLetters, oldestAgeSeconds: semantic.OldestAgeSeconds},
 		},
-		healthyBoards: boards.Healthy,
-		failingBoards: boards.Failing,
-		cooledBoards:  boards.Cooled,
-		newestJob:     newestJob,
-		providers:     providers,
+		notifyPendingSubscriptions: notifyBacklog.PendingSubscriptions,
+		notifyOldestAgeSeconds:     notifyBacklog.OldestAgeSeconds,
+		healthyBoards:              boards.Healthy,
+		failingBoards:              boards.Failing,
+		cooledBoards:               boards.Cooled,
+		newestJob:                  newestJob,
+		providers:                  providers,
 	}, nil
 }
 

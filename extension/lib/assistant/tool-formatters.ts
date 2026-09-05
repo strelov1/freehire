@@ -30,21 +30,53 @@ const LABELS: Record<string, string> = {
   search_jobs: 'Searching jobs',
   get_job: 'Reading a job posting',
   get_company: 'Reading a company',
+  present_jobs: 'Showing jobs',
   market_fit: 'Analysing market fit',
+  job_match: 'Scoring the match',
   save_job: 'Saving a job',
   unsave_job: 'Removing a bookmark',
   apply_job: 'Marking as applied',
   track_job: 'Updating your board',
   my_jobs: 'Reading your tracked jobs',
+  get_profile: 'Reading your profile',
   cv_context: 'Reading the fit analysis',
   cv_get: 'Reading your CV',
   cv_edit: 'Updating your CV',
+  cv_page_count: 'Measuring your CV',
+  tailor_report: 'Updating the tailoring report',
+  cover_letter_draft: 'Drafting a cover letter',
+  check_evidence_fidelity: 'Checking the evidence',
+  screening_answers_set: 'Saving screening answers',
+  interview_context: 'Reading the interview brief',
+  request_confirmation: 'Asking you to confirm',
+  experience_search: 'Searching your experience',
+  experience_get: 'Reading an achievement',
+  experience_add: 'Banking an achievement',
+  experience_update: 'Updating an achievement',
+  experience_merge: 'Merging achievements',
+  experience_employments: 'Reading your work history',
+  experience_set_require_context: 'Flagging an achievement',
+  inbox_overview: 'Reading your inbox',
+  inbox_search: 'Searching your inbox',
+  inbox_triage: 'Triaging your inbox',
+  inbox_link: 'Linking an email to a job',
+  inbox_unlink: 'Unlinking an email',
+  inbox_record_application: 'Recording an application',
+  inbox_resolve_suggestion: 'Resolving a suggestion',
 };
 
-/** The intent label for one call, falling back to the tool's own name so a tool
- *  added on the backend still renders sensibly before this map catches up. */
+/** The intent label for one call. A tool the backend added before this map caught
+ *  up falls back to its own name made readable — `experience_search` reads as
+ *  "Experience search", never as a raw identifier in the middle of a sentence. */
 export function toolLabel(call: ToolCall): string {
-  return LABELS[call.name] ?? call.name;
+  return LABELS[call.name] ?? humanise(call.name);
+}
+
+/** `snake_case` → `Sentence case`. */
+function humanise(name: string): string {
+  const words = name.replace(/_/g, ' ').trim();
+  if (words === '') return name;
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** Title shown in the collapsed header: the distinct intents in the group, capped

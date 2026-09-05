@@ -25,9 +25,11 @@ describe('toolLabel', () => {
     expect(toolLabel(call('cv_edit'))).toBe('Updating your CV');
   });
 
-  it('falls back to the tool name for a tool the map does not know yet', () => {
-    // A tool added on the backend must still render rather than showing blank.
-    expect(toolLabel(call('brand_new_tool'))).toBe('brand_new_tool');
+  it('reads the tool name as a sentence for a tool the map does not know yet', () => {
+    // A tool added on the backend must still render — and must not render as a raw
+    // identifier, which is what put `experience_search` in front of users lowercased
+    // and underscored while every labelled call beside it read as English.
+    expect(toolLabel(call('brand_new_tool'))).toBe('Brand new tool');
   });
 });
 
