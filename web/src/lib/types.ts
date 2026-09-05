@@ -182,10 +182,13 @@ export interface BillingOverview {
 export interface PlanState {
   plan: 'free' | 'pro' | 'ultra';
   resets_at: string;
-  /** When the Pro plan lapses. Absent on the free plan, and absent once it has lapsed —
-   *  the server omits a past value, so a date here is always still in force. Read from the
-   *  stored column, never from the billing provider, so this endpoint keeps answering when
-   *  the provider does not. */
+  /** When the caller's PAID plan lapses — whichever tier they are on, Pro or Ultra. Absent
+   *  on the free plan, and absent once it has lapsed: the server omits a past value, so a
+   *  date here is always still in force. Read from the stored column, never from the billing
+   *  provider, so this endpoint keeps answering when the provider does not.
+   *
+   *  The `pro_` spelling is historical and stays because clients read it; what it has always
+   *  meant is "when does the plan you are paying for run out". */
   pro_until?: string;
   allowances: Allowance[];
 }
