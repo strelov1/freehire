@@ -27,13 +27,24 @@ func (h *plansHandlers) register(api fiber.Router) {
 	api.Get("/plans", h.GetPlans)
 }
 
+// planTierView is what one tier allows for one feature in a day. Unlimited makes Daily the
+// fair-use guard behind it rather than a ceiling, exactly as the allowance itself does.
+type planTierView struct {
+	Daily     int  `json:"daily"`
+	Unlimited bool `json:"unlimited"`
+}
+
 // planFeatureView is one metered feature as the comparison shows it.
+//
+// One entry per tier rather than the earlier `free_daily` plus `pro_unlimited`. That pair
+// carried an assumption its own comment predicted would not last — "pro_unlimited is always
+// true today" — and auto-apply is where it stopped being true: pro has a real ceiling there.
+// The page had no way to render that, and would have shown the FREE number in pro's column.
 type planFeatureView struct {
-	Feature   string `json:"feature"`
-	FreeDaily int    `json:"free_daily"`
-	// ProUnlimited is always true today and is sent anyway, so the page renders from the
-	// answer rather than from an assumption that will outlive it.
-	ProUnlimited bool `json:"pro_unlimited"`
+	Feature string       `json:"feature"`
+	Free    planTierView `json:"free"`
+	Pro     planTierView `json:"pro"`
+	Ultra   planTierView `json:"ultra"`
 }
 
 type plansResponse struct {
@@ -58,9 +69,10 @@ func (h *plansHandlers) GetPlans(c *fiber.Ctx) error {
 	}
 	for _, f := range plan.AllFeatures() {
 		out.Features = append(out.Features, planFeatureView{
-			Feature:      string(f),
-			FreeDaily:    h.plans.FreeDaily(f),
-			ProUnlimited: h.plans.Allowance(plan.TierPro, f).Unlimited,
+			Feature: string(f),
+			Free:    tierView(h.plans, plan.TierFree, f),
+			Pro:     tierView(h.plans, plan.TierPro, f),
+			Ultra:   tierView(h.plans, plan.TierUltra, f),
 		})
 		if h.plans.Enforced(f) {
 			out.Enforced = append(out.Enforced, string(f))
@@ -75,4 +87,13 @@ func (h *plansHandlers) GetPlans(c *fiber.Ctx) error {
 		out.Prices = []billing.PublicPrice{}
 	}
 	return c.JSON(fiber.Map{"data": out})
+}
+
+// tierView reads one tier's allowance for one feature out of the SAME configuration the
+// metering path reads. Hard-coding any of it into the page would create a second source of
+// truth about what a plan gives, and it would drift the first time a number moved — in the
+// most expensive place, since a promise on a pricing page is one a customer can hold us to.
+func tierView(cfg plan.Config, tier plan.Tier, f plan.Feature) planTierView {
+	a := cfg.Allowance(tier, f)
+	return planTierView{Daily: a.Limit, Unlimited: a.Unlimited}
 }

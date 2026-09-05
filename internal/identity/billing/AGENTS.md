@@ -28,6 +28,21 @@ answer 404, and its worker exits without opening a connection.
   after the cancellation it superseded; and branching on event types builds a copy of the
   provider's state machine here, which is a second source of truth about money.
 
+- **A provider answers for EVERY tier it could sell, from one read, in one write.** `reach`
+  returns a per-tier value and `store` writes every column that provider owns — including
+  the ones it confers nothing for. Two reads could land either side of a change and disagree,
+  which is what "derived whole" prevents; two writes leave an instant where an upgrading
+  subscriber holds neither tier, visible to any request landing in it on every sync. And a
+  provider that only wrote the columns it had something to say about could never take back
+  what it once said, which is the cancellation path — RevenueCat writes NULL to the Ultra
+  column on every pass precisely because no such product exists yet.
+
+- **Which tier a subscription confers is which configured price list its price is in.** No
+  price id ships in the source, and a deployment naming no Ultra prices resolves nobody to
+  ultra while pro and free behave exactly as before. Not metadata on the provider's price:
+  that would put the tier definition in a dashboard nothing here can test, where one mis-click
+  upgrades everybody.
+
 - **The source column is derived whole, never adjusted.** That is what makes a repeat free, an
   out-of-order delivery harmless, and refunds, cancellations and failed cards need no code
   of their own — they are already reflected in what we re-read.

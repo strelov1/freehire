@@ -12,6 +12,31 @@ transaction. `store.go` is the transaction around it and nothing else.
 
 ## Always true
 
+- **Three tiers, and the better one still live wins.** `TierOf` checks ultra first and it
+  wins even when a pro entitlement reaches FURTHER: both can be live at once — the provider's
+  portal makes that ordinary during an upgrade — and a resolution that could go DOWN when
+  somebody spends more is a bug people notice in the worst possible way.
+
+- **A rule meaning "somebody is paying" is `Tier.Paid()`, never `== TierPro`.** That shape
+  is what excluded Ultra from the tailoring turn ceiling the first time it was written, so
+  buying the more expensive plan would have cut a session short where the cheaper one ran
+  on. Written as "paid", a fourth tier gets the rule for free.
+
+- **One allowance per tier, and where a tier is unlimited its number is the FAIR-USE guard
+  rather than a ceiling.** That convention is why `decide` names no tier at all: it reads
+  `Unlimited` off the allowance and applies the guard to whichever tier has one. The shape
+  replaced a free number plus a pro fair-use figure, which could only say "free has a
+  ceiling, pro does not" — and auto-apply needs the third shape, a real daily ceiling on pro.
+
+- **auto-apply is the one feature that enforces on arrival.** Every other metered feature
+  ships with `enforce: false` and is read in shadow first, because that protects people from
+  ceilings nobody has verified. It cannot apply here: pro's ceiling is what the tier above is
+  sold on, and one that only counts leaves Ultra selling nothing. It is also less of a break
+  than it looks — that route already refused the whole free tier with 402, and the allowance
+  took that gate's place. Its Ultra fair-use figure is deliberately loose and admittedly
+  unmeasured: it guards the HOST, since each attempt is a browser, and the feature has run
+  twice in its life.
+
 - **Two bounds on tailoring, and they stop different things.** A daily session count bounds
   how many vacancies a candidate works on; a per-session turn ceiling bounds how far one of
   them goes. Measured on production over three August weeks the median session ran 2.7

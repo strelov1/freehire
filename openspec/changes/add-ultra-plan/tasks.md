@@ -46,38 +46,38 @@
 - [x] 4.2 `PostJobAutoApply`: replace the `!= TierPro` check with `Consume`, keyed by the
   posting's id, placed after the platform / CV / already-applied checks and before the queue
   write.
-- [ ] 4.3 Assert the spend rules: a second request for the same posting spends nothing; a
+- [x] 4.3 Assert the spend rules: a second request for the same posting spends nothing; a
   request refused for no CV spends nothing; a free account is refused; an ultra account is
   never refused.
-- [ ] 4.4 Assert the refusal names auto-apply and carries the day's figures.
+- [x] 4.4 Assert the refusal names auto-apply and carries the day's figures.
 
 ## 5. Web
 
-- [ ] 5.1 `PlansMatrix` in `web/src/lib/types.ts` carries a third number per feature, and the
+- [x] 5.1 `PlansMatrix` in `web/src/lib/types.ts` carries a third number per feature, and the
   plans endpoint returns it.
-- [ ] 5.2 `/pricing` renders three plans. Nothing about a tier is hard-coded in the page —
+- [x] 5.2 `/pricing` renders three plans. Nothing about a tier is hard-coded in the page —
   the numbers stay the API's.
-- [ ] 5.3 The upgrade button picks the right price per plan, and a deployment offering no
+- [x] 5.3 The upgrade button picks the right price per plan, and a deployment offering no
   Ultra price shows two plans rather than a dead third column.
-- [ ] 5.4 `pnpm --dir web lint` and `pnpm --dir web test` green (a fresh worktree needs
+- [x] 5.4 `pnpm --dir web lint` and `pnpm --dir web test` green (a fresh worktree needs
   `svelte-kit sync` first).
 
 ## 6. Docs
 
-- [ ] 6.1 `internal/ai/plan/AGENTS.md`: three tiers, the per-tier allowance shape, and why
+- [x] 6.1 `internal/ai/plan/AGENTS.md`: three tiers, the per-tier allowance shape, and why
   auto-apply is the one feature that enforces on arrival.
-- [ ] 6.2 `internal/identity/billing/AGENTS.md`: a provider answers for every tier it can
+- [x] 6.2 `internal/identity/billing/AGENTS.md`: a provider answers for every tier it can
   sell, and writes every column it owns on every sync.
-- [ ] 6.3 Record `STRIPE_ULTRA_PRICE_IDS`, `PLAN_PRO_DAILY_*` and `PLAN_ULTRA_DAILY_*` where
+- [x] 6.3 Record `STRIPE_ULTRA_PRICE_IDS`, `PLAN_PRO_DAILY_*` and `PLAN_ULTRA_DAILY_*` where
   the other environment variables are documented in `CLAUDE.md`.
 
 ## 7. Verification
 
-- [ ] 7.1 `gofmt -l .` silent, `go vet ./...`, `go test ./...`,
+- [x] 7.1 `gofmt -l .` silent, `go vet ./...`, `go test ./...`,
   `go vet -tags=integration ./...`.
-- [ ] 7.2 `go test -tags=integration ./internal/ai/plan/ ./internal/identity/billing/
+- [x] 7.2 `go test -tags=integration ./internal/ai/plan/ ./internal/identity/billing/
   ./internal/api/handler/`.
-- [ ] 7.3 `pnpm check:sql`, `pnpm check:links`, `golangci-lint run --new-from-rev=origin/main`.
+- [x] 7.3 `pnpm check:sql`, `pnpm check:links`, `golangci-lint run --new-from-rev=origin/main`.
 - [ ] 7.4 Walk it against a Stripe stub: an Ultra price resolves to ultra, auto-apply is
   unbounded there and refuses on pro at the fourth attempt in a day, and a store sync leaves
   the web entitlement alone.

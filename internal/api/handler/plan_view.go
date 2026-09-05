@@ -84,12 +84,23 @@ func isRefusal(err error) bool { return errors.Is(err, plan.ErrRefused) }
 // refuse writes the 402 a spent allowance answers with: what ran out, where the caller
 // stands, when it resets, and where to upgrade.
 //
-// Upgrade is omitted for a fair-use refusal, and for a caller who already pays. Selling a
-// bigger plan at the moment an infrastructure guard stopped somebody reads as a shakedown,
-// and there is nothing to sell a pro account anyway.
+// Upgrade is omitted for a fair-use refusal, and for a caller already on the top tier.
+// Selling a bigger plan at the moment an infrastructure guard stopped somebody reads as a
+// shakedown, and there is nothing to sell somebody who has bought everything.
+//
+// It used to be offered to the FREE tier alone, which was right while pro was the top of the
+// range and wrong the moment Ultra existed: a pro subscriber refused for auto-apply is the
+// one person for whom the next plan is worth something, and that refusal is the exact moment
+// it is worth it.
 func refuse(c *fiber.Ctx, d plan.Decision) error {
-	return write402(c, viewDecision(d), refusalMessage(d.Feature, d.FairUse), !d.FairUse && d.Tier == plan.TierFree)
+	return write402(c, viewDecision(d), refusalMessage(d.Feature, d.FairUse), !d.FairUse && hasSomethingToBuy(d.Tier))
 }
+
+// hasSomethingToBuy reports whether a tier has a bigger one above it.
+//
+// Written as "not the top" rather than as a list of tiers below it, so that adding a tier
+// does not silently stop offering an upgrade to the one it displaced.
+func hasSomethingToBuy(tier plan.Tier) bool { return tier != plan.TierUltra }
 
 // refuseStanding is refuse for a caller stopped by a PRE-CHECK, which holds a Standing
 // rather than the Decision a consumption returns. Same body and same rules: a pre-check's
@@ -98,7 +109,7 @@ func refuse(c *fiber.Ctx, d plan.Decision) error {
 // It exists so a caller does not have to assemble a Decision it never made — a fake one
 // filled in field by field is a lie that reads as fact at the next call site.
 func refuseStanding(c *fiber.Ctx, st plan.Standing) error {
-	return write402(c, viewStanding(st), refusalMessage(st.Feature, false), st.Tier == plan.TierFree)
+	return write402(c, viewStanding(st), refusalMessage(st.Feature, false), hasSomethingToBuy(st.Tier))
 }
 
 // upgradePath is where a refused free caller is sent. It is the plan page rather than a

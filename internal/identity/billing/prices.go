@@ -25,7 +25,22 @@ type PublicPrice struct {
 	Interval string `json:"interval"`
 	// Default marks the price a new subscriber is sold unless they choose otherwise.
 	Default bool `json:"default"`
+	// Tier is which plan this price buys — "pro" or "ultra". It is derived from which
+	// configured list the id appears in, which is the same thing that decides what a
+	// subscription confers, so a page can never offer a price under the wrong heading.
+	//
+	// A string rather than plan.Tier because this package does not import internal/ai/plan
+	// and must not start: plan reads users.pro_until through platform/db and the two never
+	// meet. The vocabulary is shared through the wire, where it already was.
+	Tier string `json:"tier"`
 }
+
+// Price tier names as they travel on the wire. They match internal/ai/plan's own spellings
+// deliberately — a page reading both would otherwise need a translation table.
+const (
+	tierPro   = "pro"
+	tierUltra = "ultra"
+)
 
 // priceCacheTTL bounds how stale a displayed price may be.
 //
@@ -114,14 +129,25 @@ func (s *Service) PublicPrices(ctx context.Context) []PublicPrice {
 // All or nothing. A partial list is worse than none, because a page showing one of two
 // plans looks complete — so a single failure discards what was already read.
 func (s *Service) fetchPrices(ctx context.Context) ([]PublicPrice, error) {
-	out := make([]PublicPrice, 0, len(s.cfg.Prices))
-	for i, id := range s.cfg.Prices {
-		p, err := s.client.price(ctx, id)
-		if err != nil {
-			return nil, err
+	out := make([]PublicPrice, 0, len(s.cfg.Prices)+len(s.cfg.UltraPrices))
+	for _, list := range []struct {
+		tier string
+		ids  []string
+	}{
+		{tierPro, s.cfg.Prices},
+		{tierUltra, s.cfg.UltraPrices},
+	} {
+		for i, id := range list.ids {
+			p, err := s.client.price(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			// The first of each list is that tier's default, so a page offering two
+			// intervals knows which one to open on for each plan.
+			p.Default = i == 0
+			p.Tier = list.tier
+			out = append(out, p)
 		}
-		p.Default = i == 0
-		out = append(out, p)
 	}
 	return out, nil
 }
@@ -151,5 +177,5 @@ func (c *client) price(ctx context.Context, id string) (PublicPrice, error) {
 // a session, because the price arrives from the browser and a caller who could name any
 // price could name one costing nothing.
 func (c Config) Sells(priceID string) bool {
-	return slices.Contains(c.Prices, priceID)
+	return slices.Contains(c.Prices, priceID) || slices.Contains(c.UltraPrices, priceID)
 }

@@ -89,8 +89,11 @@ export interface PublicPrice {
   amount_cents: number;
   currency: string;
   interval: 'month' | 'year';
-  /** The price a new subscriber is sold unless they choose otherwise. */
+  /** The price a new subscriber is sold unless they choose otherwise — one per tier. */
   default: boolean;
+  /** Which plan this price buys. Derived on the server from the same lists that decide what
+   *  a subscription confers, so a column can never offer another plan's price. */
+  tier: 'pro' | 'ultra';
 }
 
 /** Where a buyer goes to pay, and which offer was applied on the way
@@ -127,8 +130,16 @@ export interface InviteSummary {
  *  cannot drift from the limits actually enforced. `enforced` names the features whose
  *  ceiling really refuses today; while the shadow run is on it is empty, and a page claiming
  *  otherwise would be selling a limit nobody meets. */
+/** What one tier allows for one feature in a day. `unlimited` makes `daily` the fair-use
+ *  guard behind it rather than a ceiling — the same convention the allowance itself uses,
+ *  so a page never has to decide which of the two a number is. */
+export interface PlanTierAllowance {
+  daily: number;
+  unlimited: boolean;
+}
+
 export interface PlansMatrix {
-  features: { feature: string; free_daily: number; pro_unlimited: boolean }[];
+  features: { feature: string; free: PlanTierAllowance; pro: PlanTierAllowance; ultra: PlanTierAllowance }[];
   prices: PublicPrice[];
   enforced: string[];
 }
