@@ -105,7 +105,7 @@ func TestCreditCustomerBalanceSendsANegativeAmount(t *testing.T) {
 	}
 }
 
-func TestHasCollectedPaymentReadsAmountPaid(t *testing.T) {
+func TestHasCollectedAtLeastReadsAmountPaid(t *testing.T) {
 	body := `{"data":[{"amount_paid":0,"amount_due":500,"status":"open"},
 	                  {"amount_paid":500,"amount_due":500,"status":"paid"}]}`
 	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
@@ -113,25 +113,25 @@ func TestHasCollectedPaymentReadsAmountPaid(t *testing.T) {
 		_, _ = w.Write([]byte(body))
 	})
 
-	collected, err := c.hasCollectedPayment(context.Background(), "cus_9")
+	collected, err := c.hasCollectedAtLeast(context.Background(), "cus_9", 250)
 	if err != nil {
-		t.Fatalf("hasCollectedPayment: %v", err)
+		t.Fatalf("hasCollectedAtLeast: %v", err)
 	}
 	if !collected {
 		t.Fatal("an invoice that collected 500 was not recognised")
 	}
 }
 
-func TestHasCollectedPaymentIgnoresAnInvoiceThatOnlyOwes(t *testing.T) {
+func TestHasCollectedAtLeastIgnoresAnInvoiceThatOnlyOwes(t *testing.T) {
 	body := `{"data":[{"amount_paid":0,"amount_due":500,"status":"open"}]}`
 	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	})
 
-	collected, err := c.hasCollectedPayment(context.Background(), "cus_9")
+	collected, err := c.hasCollectedAtLeast(context.Background(), "cus_9", 250)
 	if err != nil {
-		t.Fatalf("hasCollectedPayment: %v", err)
+		t.Fatalf("hasCollectedAtLeast: %v", err)
 	}
 	if collected {
 		t.Fatal("an unpaid invoice was read as a payment — an active subscription that " +
@@ -140,12 +140,47 @@ func TestHasCollectedPaymentIgnoresAnInvoiceThatOnlyOwes(t *testing.T) {
 	}
 }
 
-func TestHasCollectedPaymentSurfacesAFailure(t *testing.T) {
+func TestHasCollectedAtLeastIsAThresholdAndNotATestForAnyMoney(t *testing.T) {
+	// A 90% code against a 500-cent price. Money moved, and it is not enough.
+	body := `{"data":[{"amount_paid":50,"amount_due":50,"status":"paid"}]}`
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	collected, err := c.hasCollectedAtLeast(context.Background(), "cus_9", 250)
+	if err != nil {
+		t.Fatalf("hasCollectedAtLeast: %v", err)
+	}
+	if collected {
+		t.Fatal("a 50-cent sale satisfied a 250-cent threshold — a referral that pays out " +
+			"more than it brought in is a hole, not a growth channel")
+	}
+}
+
+func TestHasCollectedAtLeastRefusesToTreatZeroAsNoThreshold(t *testing.T) {
+	body := `{"data":[{"amount_paid":0,"amount_due":500,"status":"open"}]}`
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	collected, err := c.hasCollectedAtLeast(context.Background(), "cus_9", 0)
+	if err != nil {
+		t.Fatalf("hasCollectedAtLeast: %v", err)
+	}
+	if collected {
+		t.Fatal("a threshold of zero matched an unpaid invoice — `amount_paid >= 0` is true " +
+			"of every invoice ever issued, which is the opposite of the question")
+	}
+}
+
+func TestHasCollectedAtLeastSurfacesAFailure(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
-	if _, err := c.hasCollectedPayment(context.Background(), "cus_9"); err == nil {
+	if _, err := c.hasCollectedAtLeast(context.Background(), "cus_9", 250); err == nil {
 		t.Fatal("a provider failure was reported as 'collected nothing' — the receipt list " +
 			"may swallow its errors because a missing receipt costs nothing, but a reward " +
 			"denied by a network blip is money somebody earned and never sees")

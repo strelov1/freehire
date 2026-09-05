@@ -283,7 +283,9 @@ cannot be satisfied by weakening it.
 2. Deploy. With no rows in `promo_codes` and no minted invite codes, every new surface is
    inert: checkout behaves exactly as it does today.
 3. Set `INVITE_REWARD_MAX_PER_USER` in the host `.env` if the default is not wanted.
-4. `INSERT` the launch code (`EARLY90`, 90%, capped seats, expiry) when the offer starts.
+4. `INSERT` the launch code (90%, capped seats, an expiry) when the offer starts. Its
+   spelling is chosen then and lives only in the database — naming it here would put a
+   redeemable code in a public repository, which is the one thing this design forbids.
 5. **Rollback** is `UPDATE promo_codes SET active = false` — it stops new redemptions
    immediately without a deploy. Rewards already granted stay granted; that is the point of
    granting on money.

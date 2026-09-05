@@ -66,15 +66,17 @@ func (f *fakeLedger) MarkDelivered(_ context.Context, id int64) (bool, error) {
 	return true, nil
 }
 
-// fakePayments answers whether an invitee's money actually moved.
+// fakePayments answers how much of an invitee's money actually moved. It stores an AMOUNT
+// rather than a flag, so a test can express the case the flag version could not: an invitee
+// who paid, but paid less than the reward is worth.
 type fakePayments struct {
-	collected map[string]bool
+	collected map[string]int64
 	asked     []string
 }
 
-func (f *fakePayments) HasCollectedPayment(_ context.Context, customerID string) (bool, error) {
+func (f *fakePayments) HasCollectedAtLeast(_ context.Context, customerID string, minCents int64) (bool, error) {
 	f.asked = append(f.asked, customerID)
-	return f.collected[customerID], nil
+	return f.collected[customerID] >= minCents, nil
 }
 
 // fakeCredits records what was placed on a referrer's balance.
@@ -105,7 +107,7 @@ func TestGrantPaysOnlyForAnInvoiceThatCollected(t *testing.T) {
 		{ID: 1, ReferrerID: 10, RefereeCustomer: "cus_paid"},
 		{ID: 2, ReferrerID: 11, RefereeCustomer: "cus_free"},
 	}
-	payments := &fakePayments{collected: map[string]bool{"cus_paid": true}}
+	payments := &fakePayments{collected: map[string]int64{"cus_paid": 500}}
 	svc := newRewardService(ledger, Config{RewardCeiling: 12})
 
 	if _, err := svc.GrantEarned(context.Background(), 100, 500, payments); err != nil {
@@ -121,10 +123,28 @@ func TestGrantPaysOnlyForAnInvoiceThatCollected(t *testing.T) {
 	}
 }
 
+func TestGrantRefusesAnInviteeWhoPaidLessThanTheReward(t *testing.T) {
+	ledger := newFakeLedger()
+	ledger.pending = []PendingReward{{ID: 1, ReferrerID: 10, RefereeCustomer: "cus_discounted"}}
+	// A 90% code against a 500-cent price: the sale brought in 50 cents, and the reward is
+	// worth 250. Paying it would cost us 200 cents per referral, repeatably, for as long as
+	// that code has seats.
+	payments := &fakePayments{collected: map[string]int64{"cus_discounted": 50}}
+	svc := newRewardService(ledger, Config{RewardCeiling: 12})
+
+	if _, err := svc.GrantEarned(context.Background(), 100, 500, payments); err != nil {
+		t.Fatalf("GrantEarned: %v", err)
+	}
+	if _, ok := ledger.granted[1]; ok {
+		t.Fatal("a reward was granted for a sale that brought in less than the reward is " +
+			"worth — a referral must never pay out more than it brought in")
+	}
+}
+
 func TestGrantFixesTheAmountAtHalfTheListPrice(t *testing.T) {
 	ledger := newFakeLedger()
 	ledger.pending = []PendingReward{{ID: 1, ReferrerID: 10, RefereeCustomer: "cus_paid"}}
-	payments := &fakePayments{collected: map[string]bool{"cus_paid": true}}
+	payments := &fakePayments{collected: map[string]int64{"cus_paid": 500}}
 	svc := newRewardService(ledger, Config{RewardCeiling: 12})
 
 	if _, err := svc.GrantEarned(context.Background(), 100, 500, payments); err != nil {
@@ -140,7 +160,7 @@ func TestGrantStopsAtTheCeiling(t *testing.T) {
 	ledger := newFakeLedger()
 	ledger.pending = []PendingReward{{ID: 1, ReferrerID: 10, RefereeCustomer: "cus_paid"}}
 	ledger.countByRef[10] = 12
-	payments := &fakePayments{collected: map[string]bool{"cus_paid": true}}
+	payments := &fakePayments{collected: map[string]int64{"cus_paid": 500}}
 	svc := newRewardService(ledger, Config{RewardCeiling: 12})
 
 	if _, err := svc.GrantEarned(context.Background(), 100, 500, payments); err != nil {
@@ -154,7 +174,7 @@ func TestGrantStopsAtTheCeiling(t *testing.T) {
 func TestGrantIsANoOpOnASecondRun(t *testing.T) {
 	ledger := newFakeLedger()
 	ledger.pending = []PendingReward{{ID: 1, ReferrerID: 10, RefereeCustomer: "cus_paid"}}
-	payments := &fakePayments{collected: map[string]bool{"cus_paid": true}}
+	payments := &fakePayments{collected: map[string]int64{"cus_paid": 500}}
 	svc := newRewardService(ledger, Config{RewardCeiling: 12})
 
 	first, err := svc.GrantEarned(context.Background(), 100, 500, payments)

@@ -23,23 +23,47 @@ var promoShape = regexp.MustCompile(`^[A-Z0-9]{4,32}$`)
 // literal finds double-quoted strings, which is where a code would be.
 var literal = regexp.MustCompile(`"([^"\n]{4,32})"`)
 
-// notCodes are the upper-case literals that appear in the discount sources for reasons of
-// their own. Every entry is a word this code says about itself, never a value redeemable
-// against money — which is the line the allowlist may not cross.
+// fixturePrefix marks a code that exists only to be redeemed by a test. Tests need codes —
+// one that could name none would be testing nothing — so they carry a prefix no offer will
+// ever use, and the guard covers test files like everything else. The alternative, exempting
+// test files, leaves the largest body of code-shaped literals unwatched.
+const fixturePrefix = "ZZ"
+
+// notCodes are the upper-case literals that appear in the discount sources and its documents
+// for reasons of their own. Every entry is a word this feature says about itself, never a
+// value redeemable against money — which is the line the allowlist may not cross.
 var notCodes = map[string]bool{
 	"GET": true, "POST": true, "PUT": true, "HEAD": true,
 	"JSON": true, "HTTP": true, "HTTPS": true, "SQL": true, "URL": true,
 	"USD": true, "EUR": true, "UTC": true, "ID": true, "API": true,
+	"NULL": true, "TRUE": true, "FALSE": true, "CHECK": true, "UNIQUE": true,
+	"SELECT": true, "INSERT": true, "UPDATE": true, "DELETE": true,
+	"SHALL": true, "WHEN": true, "THEN": true, "AND": true, "OR": true,
 }
 
 // discountSources are the files where a code would plausibly be written: the package that
-// decides discounts, the one that applies them, and the page that asks for one.
+// decides discounts, the one that applies them, the page that asks for one, the migration
+// that creates the tables, and the documents that describe all of it.
+//
+// The documents are in the list because they are the easiest place to leak a code and the
+// least likely to be reviewed for it — "insert EARLY90 when the offer starts" reads like
+// instructions and ships like a credential.
 var discountSources = []string{
 	"internal/identity/promo",
-	"internal/identity/billing",
+	// The discount files of billing, and not the whole package. The rest of it speaks a
+	// provider vocabulary full of upper-case words — event types, SQLSTATEs — and
+	// allowlisting them one at a time would grow an exception list that eventually excuses
+	// a real code. A promo code would be written where discounts are, and that is here.
+	"internal/identity/billing/discount.go",
+	"internal/identity/billing/discount_test.go",
+	"internal/identity/billing/credit_integration_test.go",
 	"internal/api/handler/promo.go",
+	"internal/api/handler/promo_test.go",
 	"web/src/routes/pricing",
 	"web/src/lib/referral.ts",
+	"web/src/lib/referral.test.ts",
+	"migrations/0140_promo_and_invites.sql",
+	"openspec/changes/add-invite-and-promo-discounts",
 }
 
 func TestNoRedeemableCodeShipsInTheRepository(t *testing.T) {
@@ -47,16 +71,18 @@ func TestNoRedeemableCodeShipsInTheRepository(t *testing.T) {
 
 	for _, rel := range discountSources {
 		walk(t, filepath.Join(root, rel), func(path string, body []byte) {
-			// Test files are exempt: a test needs codes to redeem, and one that could not
-			// name any would be testing nothing. They are also not reachable from a running
-			// deployment, which is what makes the exemption safe rather than convenient.
-			if strings.HasSuffix(path, "_test.go") || strings.Contains(path, ".test.") {
+			// This file is the exception, and only this one: it has to name a code-shaped
+			// value to prove the guard can still see one.
+			if strings.HasSuffix(path, "nocodes_test.go") {
 				return
 			}
 
 			for _, match := range literal.FindAllStringSubmatch(string(body), -1) {
 				value := match[1]
-				if notCodes[value] || !promoShape.MatchString(value) {
+				if notCodes[value] || strings.HasPrefix(value, fixturePrefix) {
+					continue
+				}
+				if !promoShape.MatchString(value) {
 					continue
 				}
 				t.Errorf("%s carries %q, which promo_codes would accept as a code. "+
@@ -99,14 +125,15 @@ func TestNothingInTheRepositoryCreatesAPromoCode(t *testing.T) {
 func TestTheGuardWouldCatchACode(t *testing.T) {
 	// Assembled rather than written, so this file does not contain the thing it forbids.
 	sample := "EARLY" + "90"
-	if notCodes[sample] || !promoShape.MatchString(sample) {
+	if notCodes[sample] || strings.HasPrefix(sample, fixturePrefix) || !promoShape.MatchString(sample) {
 		t.Fatalf("the guard would not notice %q", sample)
 	}
-	for word := range notCodes {
-		if promoShape.MatchString(word) && len(word) < 4 {
-			t.Fatalf("%q is allowlisted but the shape would never have matched it — the "+
-				"allowlist is drifting away from what it excuses", word)
-		}
+
+	// And the fixture prefix must not be a way to smuggle one past it: it is only an
+	// exemption because no offer will ever be spelled that way.
+	if !strings.HasPrefix(fixturePrefix, "ZZ") {
+		t.Fatalf("fixturePrefix = %q — it has to be something an operator would never "+
+			"choose for a real offer", fixturePrefix)
 	}
 }
 
@@ -143,7 +170,7 @@ func walk(t *testing.T, root string, visit func(path string, body []byte)) {
 			return nil
 		}
 		switch filepath.Ext(path) {
-		case ".go", ".sql", ".ts", ".svelte", ".js", ".mjs":
+		case ".go", ".sql", ".ts", ".svelte", ".js", ".mjs", ".md":
 		default:
 			return nil
 		}

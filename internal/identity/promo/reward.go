@@ -33,13 +33,16 @@ type EarnedReward struct {
 	AmountCents int64
 }
 
-// Payments answers the one question that decides whether a referral earned anything.
+// Payments answers the one question that decides whether a referral earned anything: did
+// this invitee pay us at least what the reward is worth?
 //
-// It is deliberately about money COLLECTED and not about a subscription being active: a
-// subscription can be active having collected nothing — a trial, or a total discount — and
-// paying a reward for that turns the discount into a way to mint credit.
+// About money COLLECTED and not about a subscription being active, because a subscription
+// can be active having collected nothing — a trial, or a total discount. And about ENOUGH
+// money rather than any: an invitee who redeemed a 90% code pays a tenth of the list price,
+// so a reward worth half of it would cost four times what the sale brought in, repeatably,
+// for as long as that code has seats.
 type Payments interface {
-	HasCollectedPayment(ctx context.Context, customerID string) (bool, error)
+	HasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error)
 }
 
 // Credits places a reward on a referrer's balance. The implementation creates a provider
@@ -80,7 +83,9 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 			continue
 		}
 
-		collected, err := payments.HasCollectedPayment(ctx, reward.RefereeCustomer)
+		// The threshold is the reward itself, which is the rule stated as arithmetic: a
+		// referral never pays out more than it brought in.
+		collected, err := payments.HasCollectedAtLeast(ctx, reward.RefereeCustomer, amount)
 		if err != nil {
 			// One unreachable customer must not end the pass: the row stays pending and the
 			// next run tries again, which is the same shape as every other retry here.

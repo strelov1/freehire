@@ -345,18 +345,21 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID, couponID)
 }
 
-// HasCollectedPayment reports whether this customer has ever had an invoice that actually
-// collected money.
+// HasCollectedAtLeast reports whether this customer has had an invoice collecting at least
+// minCents.
 //
 // Exposed for the referral reward, which must be earned by money rather than by a
-// subscription existing. It takes a customer id and not an account id because its caller
-// already holds one — the worker reads the binding to decide whether asking is worth an
-// API call at all.
-func (s *Service) HasCollectedPayment(ctx context.Context, customerID string) (bool, error) {
+// subscription existing — and by ENOUGH money: an invitee who redeemed a large discount can
+// pay less than the reward is worth, and a referral that pays out more than it brought in
+// is a hole rather than a growth channel.
+//
+// It takes a customer id and not an account id because its caller already holds one: the
+// worker reads the binding to decide whether asking is worth an API call at all.
+func (s *Service) HasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error) {
 	if !s.cfg.Enabled() {
 		return false, ErrDisabled
 	}
-	return s.client.hasCollectedPayment(ctx, customerID)
+	return s.client.hasCollectedAtLeast(ctx, customerID, minCents)
 }
 
 // CreditAccount places credit on this account's provider customer, creating and binding one

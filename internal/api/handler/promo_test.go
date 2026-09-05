@@ -98,8 +98,8 @@ func postPreview(t *testing.T, app *fiber.App, body string) int {
 }
 
 func TestPreviewRefusesAnAnonymousCaller(t *testing.T) {
-	repo := &stubPromoRepo{usable: map[string]int16{"EARLY90": 90}, redeemed: map[int64]bool{}}
-	status := postPreview(t, promoApp(t, repo, 0), `{"code":"EARLY90"}`)
+	repo := &stubPromoRepo{usable: map[string]int16{"ZZTEST90": 90}, redeemed: map[int64]bool{}}
+	status := postPreview(t, promoApp(t, repo, 0), `{"code":"ZZTEST90"}`)
 
 	if status != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", status)
@@ -111,8 +111,8 @@ func TestPreviewRefusesAnAnonymousCaller(t *testing.T) {
 }
 
 func TestPreviewAnswersWithThePercentage(t *testing.T) {
-	repo := &stubPromoRepo{usable: map[string]int16{"EARLY90": 90}, redeemed: map[int64]bool{}}
-	status := postPreview(t, promoApp(t, repo, 7), `{"code":"early90"}`)
+	repo := &stubPromoRepo{usable: map[string]int16{"ZZTEST90": 90}, redeemed: map[int64]bool{}}
+	status := postPreview(t, promoApp(t, repo, 7), `{"code":"zztest90"}`)
 
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
@@ -120,11 +120,11 @@ func TestPreviewAnswersWithThePercentage(t *testing.T) {
 }
 
 func TestPreviewConsumesNoSeat(t *testing.T) {
-	repo := &stubPromoRepo{usable: map[string]int16{"EARLY90": 90}, redeemed: map[int64]bool{}}
+	repo := &stubPromoRepo{usable: map[string]int16{"ZZTEST90": 90}, redeemed: map[int64]bool{}}
 	app := promoApp(t, repo, 7)
 
-	_ = postPreview(t, app, `{"code":"EARLY90"}`)
-	_ = postPreview(t, app, `{"code":"EARLY90"}`)
+	_ = postPreview(t, app, `{"code":"ZZTEST90"}`)
+	_ = postPreview(t, app, `{"code":"ZZTEST90"}`)
 
 	if repo.redeems != 0 {
 		t.Fatalf("redeems = %d, want 0 — previewing is what somebody does while typing, and "+
@@ -133,10 +133,10 @@ func TestPreviewConsumesNoSeat(t *testing.T) {
 }
 
 func TestPreviewGivesOneAnswerToEveryRefusalAboutTheCode(t *testing.T) {
-	repo := &stubPromoRepo{usable: map[string]int16{"EARLY90": 90}, redeemed: map[int64]bool{}}
+	repo := &stubPromoRepo{usable: map[string]int16{"ZZTEST90": 90}, redeemed: map[int64]bool{}}
 	app := promoApp(t, repo, 7)
 
-	unknown := postPreview(t, app, `{"code":"NOSUCH00"}`)
+	unknown := postPreview(t, app, `{"code":"ZZNONE00"}`)
 	malformed := postPreview(t, app, `{"code":"!!"}`)
 
 	if unknown != http.StatusNotFound || malformed != http.StatusNotFound {
@@ -147,8 +147,8 @@ func TestPreviewGivesOneAnswerToEveryRefusalAboutTheCode(t *testing.T) {
 }
 
 func TestPreviewSaysWhenTheCallerHasAlreadyRedeemed(t *testing.T) {
-	repo := &stubPromoRepo{usable: map[string]int16{"EARLY90": 90}, redeemed: map[int64]bool{7: true}}
-	status := postPreview(t, promoApp(t, repo, 7), `{"code":"EARLY90"}`)
+	repo := &stubPromoRepo{usable: map[string]int16{"ZZTEST90": 90}, redeemed: map[int64]bool{7: true}}
+	status := postPreview(t, promoApp(t, repo, 7), `{"code":"ZZTEST90"}`)
 
 	if status != http.StatusConflict {
 		t.Fatalf("status = %d, want 409 — this one is about the caller, discloses nothing "+

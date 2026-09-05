@@ -115,10 +115,10 @@ func newTestService(repo *fakeRepo) *Service {
 
 func TestPreviewFoldsTheCodeUp(t *testing.T) {
 	repo := newFakeRepo()
-	repo.codes["EARLY90"] = 90
+	repo.codes["ZZTEST90"] = 90
 	svc := newTestService(repo)
 
-	pct, err := svc.Preview(context.Background(), 1, "  early90 ")
+	pct, err := svc.Preview(context.Background(), 1, "  zztest90 ")
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestPreviewFoldsTheCodeUp(t *testing.T) {
 func TestPreviewRefusesAnUnknownCodeWithoutSayingWhy(t *testing.T) {
 	svc := newTestService(newFakeRepo())
 
-	_, err := svc.Preview(context.Background(), 1, "NOSUCH")
+	_, err := svc.Preview(context.Background(), 1, "ZZNONE00")
 	if !errors.Is(err, ErrNotUsable) {
 		t.Fatalf("err = %v, want ErrNotUsable — the refusal must not distinguish "+
 			"'no such code' from 'not eligible', or it is an oracle for guessing codes", err)
@@ -139,11 +139,11 @@ func TestPreviewRefusesAnUnknownCodeWithoutSayingWhy(t *testing.T) {
 
 func TestPreviewTellsAnAccountThatHasAlreadyRedeemed(t *testing.T) {
 	repo := newFakeRepo()
-	repo.codes["EARLY90"] = 90
+	repo.codes["ZZTEST90"] = 90
 	repo.redeemedBy[7] = true
 	svc := newTestService(repo)
 
-	_, err := svc.Preview(context.Background(), 7, "EARLY90")
+	_, err := svc.Preview(context.Background(), 7, "ZZTEST90")
 	if !errors.Is(err, ErrAlreadyRedeemed) {
 		t.Fatalf("err = %v, want ErrAlreadyRedeemed — this is a fact about the caller, "+
 			"not about the code, so saying it leaks nothing", err)
@@ -165,10 +165,10 @@ func TestPreviewRejectsAMalformedCodeWithoutAQuery(t *testing.T) {
 
 func TestRedeemReturnsThePercentage(t *testing.T) {
 	repo := newFakeRepo()
-	repo.codes["EARLY90"] = 90
+	repo.codes["ZZTEST90"] = 90
 	svc := newTestService(repo)
 
-	pct, err := svc.Redeem(context.Background(), 1, "early90")
+	pct, err := svc.Redeem(context.Background(), 1, "zztest90")
 	if err != nil {
 		t.Fatalf("Redeem: %v", err)
 	}
@@ -179,14 +179,14 @@ func TestRedeemReturnsThePercentage(t *testing.T) {
 
 func TestRedeemRefusesASecondCodeForOneAccount(t *testing.T) {
 	repo := newFakeRepo()
-	repo.codes["EARLY90"] = 90
-	repo.codes["OTHER50"] = 50
+	repo.codes["ZZTEST90"] = 90
+	repo.codes["ZZTEST50"] = 50
 	svc := newTestService(repo)
 
-	if _, err := svc.Redeem(context.Background(), 1, "EARLY90"); err != nil {
+	if _, err := svc.Redeem(context.Background(), 1, "ZZTEST90"); err != nil {
 		t.Fatalf("first Redeem: %v", err)
 	}
-	_, err := svc.Redeem(context.Background(), 1, "OTHER50")
+	_, err := svc.Redeem(context.Background(), 1, "ZZTEST50")
 	if !errors.Is(err, ErrAlreadyRedeemed) {
 		t.Fatalf("err = %v, want ErrAlreadyRedeemed — stacking two percentages is how a "+
 			"subscription becomes free by accident", err)
@@ -286,9 +286,9 @@ func TestAttributeRefusesSelfReferralBeforeWriting(t *testing.T) {
 
 func TestDiscountPrefersTheLargerPercentage(t *testing.T) {
 	repo := newFakeRepo()
-	repo.codes["SMALL10"] = 10
+	repo.codes["ZZTEST10"] = 10
 	svc := newTestService(repo)
-	if _, err := svc.Redeem(context.Background(), 5, "SMALL10"); err != nil {
+	if _, err := svc.Redeem(context.Background(), 5, "ZZTEST10"); err != nil {
 		t.Fatalf("Redeem: %v", err)
 	}
 	repo.pending[5] = true // also invited

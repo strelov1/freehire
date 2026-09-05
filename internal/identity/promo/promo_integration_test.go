@@ -53,7 +53,7 @@ func TestTheLastSeatIsWonOnce(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
 	one := int32(1)
-	addCode(t, pool, "LASTSEAT", 50, &one)
+	addCode(t, pool, "ZZTESTSEAT", 50, &one)
 
 	first := addUser(t, pool, "one@example.test")
 	second := addUser(t, pool, "two@example.test")
@@ -66,7 +66,7 @@ func TestTheLastSeatIsWonOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, results[i] = repo.Redeem(ctx, userID, "LASTSEAT")
+			_, results[i] = repo.Redeem(ctx, userID, "ZZTESTSEAT")
 		}()
 	}
 	wg.Wait()
@@ -86,7 +86,7 @@ func TestTheLastSeatIsWonOnce(t *testing.T) {
 	}
 
 	var uses int32
-	if err := pool.QueryRow(ctx, `SELECT uses FROM promo_codes WHERE code = 'LASTSEAT'`).Scan(&uses); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT uses FROM promo_codes WHERE code = 'ZZTESTSEAT'`).Scan(&uses); err != nil {
 		t.Fatalf("reading uses: %v", err)
 	}
 	if uses != 1 {
@@ -98,19 +98,19 @@ func TestTheLastSeatIsWonOnce(t *testing.T) {
 func TestASecondCodeNeverTouchesItsSeatCount(t *testing.T) {
 	repo, pool := newRepo(t)
 	ctx := context.Background()
-	addCode(t, pool, "FIRSTONE", 50, nil)
-	addCode(t, pool, "SECONDONE", 90, nil)
+	addCode(t, pool, "ZZTESTONE", 50, nil)
+	addCode(t, pool, "ZZTESTTWO", 90, nil)
 
 	userID := addUser(t, pool, "greedy@example.test")
-	if _, err := repo.Redeem(ctx, userID, "FIRSTONE"); err != nil {
+	if _, err := repo.Redeem(ctx, userID, "ZZTESTONE"); err != nil {
 		t.Fatalf("first redemption: %v", err)
 	}
-	if _, err := repo.Redeem(ctx, userID, "SECONDONE"); !errors.Is(err, ErrNotUsable) {
+	if _, err := repo.Redeem(ctx, userID, "ZZTESTTWO"); !errors.Is(err, ErrNotUsable) {
 		t.Fatalf("second redemption: %v, want ErrNotUsable", err)
 	}
 
 	var uses int32
-	if err := pool.QueryRow(ctx, `SELECT uses FROM promo_codes WHERE code = 'SECONDONE'`).Scan(&uses); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT uses FROM promo_codes WHERE code = 'ZZTESTTWO'`).Scan(&uses); err != nil {
 		t.Fatalf("reading uses: %v", err)
 	}
 	if uses != 0 {
@@ -333,11 +333,11 @@ func TestAnInviteCodeIsMintedOnceAndNeverRotates(t *testing.T) {
 	ctx := context.Background()
 
 	userID := addUser(t, pool, "sharer@example.test")
-	first, err := repo.EnsureInviteCode(ctx, userID, "AAAAAAAAAAAAAAAA")
+	first, err := repo.EnsureInviteCode(ctx, userID, "ZZINVITEAAAAAAAA")
 	if err != nil {
 		t.Fatalf("first EnsureInviteCode: %v", err)
 	}
-	second, err := repo.EnsureInviteCode(ctx, userID, "BBBBBBBBBBBBBBBB")
+	second, err := repo.EnsureInviteCode(ctx, userID, "ZZINVITEBBBBBBBB")
 	if err != nil {
 		t.Fatalf("second EnsureInviteCode: %v", err)
 	}

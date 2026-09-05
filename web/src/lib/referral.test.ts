@@ -26,13 +26,13 @@ describe('captureRef', () => {
 
 describe('capturePromo', () => {
   it('folds a code up, the way the table stores it', () => {
-    expect(capturePromo(' early90 ')).toEqual({ name: PROMO_COOKIE, value: 'EARLY90' });
+    expect(capturePromo(' zztest90 ')).toEqual({ name: PROMO_COOKIE, value: 'ZZTEST90' });
   });
 
   it('lets a later code win', () => {
     // Unlike the invite code: this one only prefills a form field, so the most recent
     // offer somebody clicked is the one they meant.
-    expect(capturePromo('OTHER50')).toEqual({ name: PROMO_COOKIE, value: 'OTHER50' });
+    expect(capturePromo('ZZTEST50')).toEqual({ name: PROMO_COOKIE, value: 'ZZTEST50' });
   });
 
   it('ignores a code the promo table could never hold', () => {

@@ -10,7 +10,7 @@ import (
 type stubProvider struct {
 	priceCents int64
 	priceErr   error
-	collected  map[string]bool
+	collected  map[string]int64
 	credited   map[int64]int64
 }
 
@@ -18,8 +18,8 @@ func (s *stubProvider) CheckoutPriceCents(context.Context) (int64, error) {
 	return s.priceCents, s.priceErr
 }
 
-func (s *stubProvider) HasCollectedPayment(_ context.Context, customerID string) (bool, error) {
-	return s.collected[customerID], nil
+func (s *stubProvider) HasCollectedAtLeast(_ context.Context, customerID string, minCents int64) (bool, error) {
+	return s.collected[customerID] >= minCents, nil
 }
 
 func (s *stubProvider) CreditAccount(_ context.Context, userID, cents int64, _ string) error {
@@ -30,7 +30,7 @@ func (s *stubProvider) CreditAccount(_ context.Context, userID, cents int64, _ s
 func TestSettleRewardsStopsWhenThePriceCannotBeRead(t *testing.T) {
 	provider := &stubProvider{
 		priceErr:  errors.New("provider unreachable"),
-		collected: map[string]bool{},
+		collected: map[string]int64{},
 		credited:  map[int64]int64{},
 	}
 

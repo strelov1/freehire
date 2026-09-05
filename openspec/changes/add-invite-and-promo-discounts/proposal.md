@@ -14,7 +14,7 @@ host environment, and the source carries only the rules for reading them.
 
 - **A promo code redeemed at checkout.** A row in `promo_codes` names a percentage off the
   first month, an optional seat limit, and an expiry. The launch offer for early adopters is
-  one such row (`EARLY90`, 90% off, capped seats) — not a second mechanism and not a
+  one such row — 90% off, capped seats — not a second mechanism and not a
   constant in the source.
 - **A personal invite link per account.** `/r/<code>` remembers the referrer for 30 days.
   Whoever signs up through it gets 50% off their first month.
@@ -22,9 +22,10 @@ host environment, and the source carries only the rules for reading them.
   invoices actually collects (`amount_paid > 0`), the referrer earns 50% of the list price.
   Any, not the first: an invitee whose first month was free under a total discount and who
   then paid for a second has still paid us. A
-  referrer who already has a provider customer receives it as a customer balance credit the
-  next invoice consumes; a referrer who has never bought carries it until their own first
-  checkout, where it applies as an amount-off discount.
+  reward is always a credit on the referrer's provider customer, which the next invoice
+  consumes — and a referrer who has never bought has a customer created for them, because a
+  reward held until their own checkout would have to be marked consumed by a session that is
+  abandoned far more often than it is completed. Reward credit never becomes a coupon.
 - **One discount per checkout session, and one code per account for life.** The provider
   admits a single coupon per session, and stacking a promo code onto a referral discount
   onto accrued credit is how a $5 subscription becomes free by accident.

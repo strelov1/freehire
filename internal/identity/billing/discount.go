@@ -104,8 +104,14 @@ func (c *client) creditCustomerBalance(ctx context.Context, customerID string, c
 	return c.do(ctx, http.MethodPost, path, form, idempotencyKey, nil)
 }
 
-// hasCollectedPayment reports whether any of this customer's invoices actually collected
-// money.
+// hasCollectedAtLeast reports whether any of this customer's invoices collected at least
+// minCents.
+//
+// A THRESHOLD and not "more than nothing", because the two discounts stack in the customer's
+// favour across different invoices: an invitee redeeming a 90% code pays a tenth of the list
+// price, and a reward worth half of it would cost us four times what the sale brought in —
+// repeatably, for as long as that code has seats. The rule the threshold states is that a
+// referral never pays out more than it brought in.
 //
 // Deliberately NOT built on `invoices` in overview.go, which serves the receipt list. That
 // one returns an empty slice when the provider fails, and falls back to `amount_due` when
@@ -114,10 +120,17 @@ func (c *client) creditCustomerBalance(ctx context.Context, customerID string, c
 // "collected nothing" and silently deny a reward somebody earned, and the second would read
 // an unpaid invoice as a payment.
 //
-// The question is `amount_paid > 0` and not "is the subscription active", because a
-// subscription can be active having collected nothing — a trial, or a total discount — and
-// rewarding that turns a discount into a way to mint credit.
-func (c *client) hasCollectedPayment(ctx context.Context, customerID string) (bool, error) {
+// It asks about money COLLECTED and not about the subscription being active, because a
+// subscription can be active having collected nothing — a trial, or a total discount.
+func (c *client) hasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error) {
+	// A threshold of zero would make `amount_paid >= 0` true of an UNPAID invoice, which is
+	// the exact opposite of the question. Callers pass a reward amount and it is always
+	// positive; the floor is here so that a future caller passing nothing cannot silently
+	// turn this into "has any invoice at all".
+	if minCents < 1 {
+		minCents = 1
+	}
+
 	form := url.Values{}
 	form.Set("customer", customerID)
 	form.Set("limit", "100")
@@ -131,7 +144,7 @@ func (c *client) hasCollectedPayment(ctx context.Context, customerID string) (bo
 		return false, err
 	}
 	for _, invoice := range raw.Data {
-		if invoice.AmountPaid > 0 {
+		if invoice.AmountPaid >= minCents {
 			return true, nil
 		}
 	}

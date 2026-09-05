@@ -117,7 +117,7 @@ func run() int {
 // must not be able to touch a subscription.
 type rewardProvider interface {
 	CheckoutPriceCents(ctx context.Context) (int64, error)
-	HasCollectedPayment(ctx context.Context, customerID string) (bool, error)
+	HasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error)
 	CreditAccount(ctx context.Context, userID, cents int64, idempotencyKey string) error
 }
 

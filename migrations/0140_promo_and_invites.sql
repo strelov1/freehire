@@ -4,7 +4,8 @@
 -- Everything here exists because THIS REPOSITORY IS PUBLIC. A discount whose codes,
 -- seat limits or reward amounts can be read out of the source is a discount that gets
 -- drained the day somebody greps it, so the source carries only the rules for reading
--- these tables and never a value they hold. `EARLY90` is a row, not a constant.
+-- these tables and never a value they hold. A launch offer is a row, not a constant --
+-- including its spelling, which is why no document in this repository names one.
 --
 -- Four tables and one shape: a discount on an account's next invoice. Two of them are
 -- offers (promo_codes, invite_codes), two are what happened (promo_redemptions,
@@ -65,7 +66,7 @@ CREATE TABLE public.promo_redemptions (
 );
 
 -- The unindexed side of the foreign key. Without it, deactivating or reworking a code
--- takes a sequential scan of every redemption ever made, and "how did EARLY90 do?" —
+-- takes a sequential scan of every redemption ever made, and "how did that offer do?" —
 -- the one question an operator actually asks of this table — has no index to answer it.
 CREATE INDEX promo_redemptions_code_idx ON public.promo_redemptions (code);
 
