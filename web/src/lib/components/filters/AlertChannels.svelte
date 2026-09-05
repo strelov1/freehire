@@ -17,6 +17,11 @@
   //
   // A chip is "on" when a subscription exists for that channel; tapping an on chip turns
   // it off. Telegram hides itself when the feature isn't configured server-side.
+  //
+  // No handler here special-cases a 409: subscribing is idempotent in the store (see
+  // notifications.subscribe), which is where the spec's "already subscribed is success"
+  // belongs. Holding it per-chip is what let email and push render the server's
+  // conflict string at the user while telegram and webhook quietly ignored it.
   let { savedSearchId, showLabel = true }: { savedSearchId: number; showLabel?: boolean } = $props();
 
   let busy = $state<'telegram' | 'email' | 'push' | 'webhook' | null>(null);
@@ -39,9 +44,7 @@
       if (tgSub) await notifications.unsubscribe(tgSub.id);
       else await notifications.subscribe(savedSearchId, 'telegram');
     } catch (e) {
-      if (!(e instanceof ApiError) || e.status !== 409) {
-        error = e instanceof ApiError ? e.message : 'Could not update the Telegram alert. Please try again.';
-      }
+      error = e instanceof ApiError ? e.message : 'Could not update the Telegram alert. Please try again.';
     } finally {
       busy = null;
     }
@@ -89,9 +92,7 @@
       if (webhookSub) await notifications.unsubscribe(webhookSub.id);
       else await notifications.subscribe(savedSearchId, 'webhook');
     } catch (e) {
-      if (!(e instanceof ApiError) || e.status !== 409) {
-        error = e instanceof ApiError ? e.message : 'Could not update the webhook alert. Please try again.';
-      }
+      error = e instanceof ApiError ? e.message : 'Could not update the webhook alert. Please try again.';
     } finally {
       busy = null;
     }

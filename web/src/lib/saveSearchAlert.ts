@@ -9,7 +9,7 @@
 import { ApiError } from './api';
 import { canonicalQuery, filtersFromParams } from './facetModel';
 import { FACETS, dynamicLabel } from './facets';
-import type { SavedSearch } from './types';
+import type { SavedSearch, Subscription } from './types';
 
 // ---- auto-name ----
 
@@ -71,6 +71,43 @@ export async function ensureSaved(query: string, ss: SavedSearchesPort): Promise
     const raced = matchedSavedSearch(query, ss.items);
     if (raced) return raced;
     return ss.create(`${base.slice(0, 90)} (${ss.items.length + 1})`, query);
+  }
+}
+
+// ---- the subscribe ----
+
+export interface SubscriptionsPort {
+  ensureLoaded(): Promise<void>;
+  /** The held subscription for this saved search and channel, if any. */
+  find(savedSearchId: number, channel: string): Subscription | undefined;
+  /** Create the subscription and keep the row the server returns. */
+  add(savedSearchId: number, channel: string): Promise<void>;
+  /** Re-read every subscription and replace what is held. */
+  refresh(): Promise<void>;
+}
+
+/** Subscribe a saved search to a channel, tolerating a 409 the way the spec asks:
+ *  "an 'already subscribed' conflict is treated as success". The save half's rule
+ *  (ensureSaved, above) written for the other half of the same flow.
+ *
+ *  A conflict is repaired by re-reading rather than ignored. Ignoring it leaves the
+ *  caller holding a list without the row the server has, so whatever renders from that
+ *  list still draws the channel "off" and the next tap conflicts again — which is how
+ *  this reached a user as a raw "already subscribed to this saved search on this
+ *  channel". The load is awaited first for the same reason: a write racing an in-flight
+ *  load is discarded by the snapshot that lands after it. */
+export async function ensureSubscribed(
+  savedSearchId: number,
+  channel: string,
+  subs: SubscriptionsPort,
+): Promise<void> {
+  await subs.ensureLoaded();
+  if (subs.find(savedSearchId, channel)) return;
+  try {
+    await subs.add(savedSearchId, channel);
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 409) throw e;
+    await subs.refresh();
   }
 }
 

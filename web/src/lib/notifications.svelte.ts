@@ -8,6 +8,7 @@
 // and leaves empty/disabled state for signed-out users.
 
 import { api } from '$lib/api';
+import { ensureSubscribed } from '$lib/saveSearchAlert';
 import { UserResource } from '$lib/userResource.svelte';
 import type { Subscription, TelegramStatus, WebhookConfig } from '$lib/types';
 
@@ -54,10 +55,25 @@ class Notifications extends UserResource<[TelegramStatus, Subscription[], Webhoo
     this.#webhook = null;
   }
 
-  /** Subscribe a saved search to a channel (telegram by default); prepend it. */
-  async subscribe(savedSearchId: number, channel = 'telegram'): Promise<void> {
-    const sub = await api.createSubscription(savedSearchId, channel);
-    this.#subs = [sub, ...this.#subs];
+  /** Subscribe a saved search to a channel (telegram by default); prepend it.
+   *
+   *  The idempotence rule lives in ensureSubscribed, beside ensureSaved — the same rule
+   *  for the other half of the same flow, and the half a plain-Node test can reach (a
+   *  runes store cannot; see vitest.config.ts). This wires the singleton to its port;
+   *  callers get "an 'already subscribed' conflict is treated as success" for free
+   *  instead of each holding its own answer, which is how two chips ended up rendering
+   *  the server's 409 string while two others quietly ignored it. */
+  subscribe(savedSearchId: number, channel = 'telegram'): Promise<void> {
+    return ensureSubscribed(savedSearchId, channel, {
+      ensureLoaded: () => this.ensureLoaded(),
+      find: (id, ch) => this.forSavedSearch(id, ch),
+      add: async (id, ch) => {
+        this.#subs = [await api.createSubscription(id, ch), ...this.#subs];
+      },
+      refresh: async () => {
+        this.#subs = await api.listSubscriptions();
+      },
+    });
   }
 
   /** Pause/resume a subscription in place. */
