@@ -228,8 +228,8 @@ func TestGemDeclaresNarrowSweepGrace(t *testing.T) {
 		t.Fatal("gem should declare a sweepGrace window")
 	}
 	got := s.sweepGrace()
-	if got != 12*time.Hour {
-		t.Errorf("sweepGrace() = %v, want 12h", got)
+	if got != 24*time.Hour {
+		t.Errorf("sweepGrace() = %v, want 24h", got)
 	}
 	if got >= DefaultSweepGrace {
 		t.Errorf("sweepGrace() = %v, want narrower than the %v default", got, DefaultSweepGrace)

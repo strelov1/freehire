@@ -37,8 +37,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// staleAfter is the DEFAULT grace window before an unseen job is closed. An adapter that
-// crawls only a slice of its catalogue widens it for its own provider — see sweepWindowFor.
+// staleAfter is the DEFAULT grace window before an unseen job is closed. An adapter declares
+// its own window instead — wider for one that crawls only a slice of its catalogue, narrower
+// for one whose full-board crawl makes an unseen reading positive evidence — see sweepWindowFor.
 // Shared with cmd/liveness's staleCutoff via sources.DefaultSweepGrace, since liveness's
 // probeDespiteRegistered backstop only picks up what this sweep has already had a chance
 // to close and must not drift out of sync with it.
