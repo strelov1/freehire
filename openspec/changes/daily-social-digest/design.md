@@ -1,0 +1,186 @@
+## Context
+
+`cmd/rollup-views` already counts, per day and per job, two distinct signals it
+takes from the nginx access log: a page open (`GET /jobs/<slug>` and its
+SvelteKit `__data.json` twin, filtered against a known-bot list) and an API read
+(`GET /api/v1/jobs/<slug>`, deliberately **not** bot-filtered — the API is meant
+to be read by programs). `viewlog.Aggregate` sums the two into one number per
+`(day, slug)` and that number becomes `job_daily_views.uniques`.
+
+For the transparency figure that number serves today, fusing them is fine. For
+ranking a post we publish under our own name, it is not: AI crawlers are the
+majority of this host's traffic, and the bot list in `viewlog/bot.go` is
+deliberately small — it errs toward counting a person, not toward excluding a
+crawler. A "most viewed today" list built on `uniques` would be a list of what
+crawlers fetched, presented to humans as what humans liked.
+
+The rest is plumbing this repository already has a shape for: a run-once worker
+under `cmd/`, a domain package under `internal/engage`, a systemd oneshot and
+timer under `deploy/systemd/`.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Materialize the page-open signal separately, without moving the value that
+  `GET /api/v1/stats/catalog` reads.
+- Publish one honest, readable daily post to Discord and to the LinkedIn company
+  page, on a schedule, unattended.
+- Make the run safe to repeat: a second run for the same day publishes nothing.
+- Make the rendered post inspectable before it is ever sent.
+
+**Non-Goals:**
+
+- **Backfilling `page_uniques` over history.** The `.gz` log history exists and
+  could be re-read, but the digest only reads the freshest day. Re-reading months
+  of logs to fill a column nothing queries would be work for its own sake.
+- **LinkedIn token refresh.** The organization token expires every 60 days. A
+  refresh worker is its own change; here the token is an env var.
+- **A web surface for the digest.** No page, no archive, no feed. If the archive
+  turns out to be wanted, `social_digest_posts` already holds it.
+- **Per-audience variants.** One list, rendered per channel's format. Not one
+  list per region or per category.
+
+## Decisions
+
+### Add a column rather than change what `uniques` means
+
+`uniques` keeps counting both signals. `page_uniques` is added beside it.
+
+The alternative — redefining `uniques` as page-only and adding `api_uniques` —
+reads better on a blank page, but `uniques` is read by
+`catalogstats` and by the archived `view-count-aggregation` spec, and its value
+is already accumulated across months. Redefining it would silently restate a
+public figure and would require a backfill to make the old rows agree with the
+new meaning. Adding a column beside it changes nothing that already works.
+
+### `Aggregate` returns a struct, not a second map
+
+`Aggregate` currently returns `map[day]map[slug]int`. It will return
+`map[day]map[slug]Counts` where `Counts` holds `Total` and `Page`.
+
+The alternative — returning two parallel maps — makes it possible for a caller
+to walk one and index the other, which is exactly the bug this split exists to
+prevent. One value per `(day, slug)` cannot drift apart.
+
+Dedup stays where it is: the existing `(IP, UA, slug, day)` tuple already
+collapses repeats, and the page/API distinction is a property of the signal, not
+of the visitor. A visitor who both opens the page and calls the API on the same
+day counts once in each — which is what "uniques per signal" means.
+
+### Eligibility rides the repository's existing open-posting predicate
+
+`closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private` is the predicate
+every public listing already uses, and `duplicate_of` is derived from the three
+owned marker columns (migration 0115), so it covers all three markers without
+naming them. The digest adds one term: `ats_absent_at IS NULL`, so a posting the
+source's own ATS has stopped listing is never promoted.
+
+The full ghost verdict (`internal/job/ghost`) is a hedged classification that
+needs evidence the digest query has no reason to gather. `ats_absent_at` is the
+strongest single piece of that evidence and is a plain column.
+
+### The day is discovered, not computed
+
+`cmd/rollup-views` fires at 02:30 UTC and reads `access.log.1`. Whether that
+file is yesterday or the day before depends on when logrotate runs on the host —
+which is not recorded anywhere in this repository and must be checked on the
+machine. Rather than encode an assumption that would fail silently by publishing
+a two-day-old list, the digest asks the database for the freshest day it has.
+
+The staleness guard (fail if that day is more than three days old) is what keeps
+"discover the day" from degrading into "publish whatever is there" when the view
+pipeline breaks. Three days, not one, because `rollup-views` missing a single
+night is normal operational noise.
+
+### Publishers are an interface, and the ledger is per-channel
+
+```go
+type Publisher interface {
+    Name() string
+    Publish(ctx context.Context, d Digest) error
+}
+```
+
+The ledger key is `(day, channel)`, not `(day)`. A run that posts to Discord and
+then fails on LinkedIn must, on its next attempt, skip Discord and retry
+LinkedIn. Keying on the day alone would either re-post to Discord or abandon
+LinkedIn, and both are wrong.
+
+The quarantine reads the same ledger across channels: a posting shown on Discord
+yesterday is quarantined for LinkedIn today too. The list is the editorial unit;
+the channel is only how it is delivered.
+
+### The floor and the quarantine are constants
+
+Ten page uniques and seven days. Both are editorial judgements about what the
+public sees, and both are guesses until a week of `-dry-run` output says
+otherwise. Constants in the package mean changing them is a commit that is
+reviewed; env vars would mean changing them is an SSH session nobody sees.
+
+### The timer names the timezone
+
+`OnCalendar=*-*-* 10:00:00 America/Sao_Paulo` rather than `13:00:00` UTC. Brazil
+has had no DST since 2019, so today the two are the same instant. If that
+changes, the named zone follows and the hard-coded UTC hour silently drifts by
+an hour. The unit costs nothing to write correctly.
+
+13:00 UTC is clear of this host's heavy cron block (03:00–10:00 UTC), and this
+worker is one query and two HTTP calls regardless.
+
+## Risks / Trade-offs
+
+- **`page_uniques` is zero for every historical row** → The digest never reads
+  them. Anything later that wants historical page/API split must re-run
+  `rollup-views --backfill` against a cleared cursor, which is possible but is
+  not this change's problem.
+- **The LinkedIn publisher cannot be smoke-tested** until LinkedIn approves the
+  application → Its client is unit-tested against a fake HTTP server, and the
+  worker's `-dry-run` renders the exact payload. Discord is verified live first,
+  which proves the selection and rendering; only the LinkedIn transport stays
+  unproven, and it is the last task.
+- **The LinkedIn token expires every 60 days** and the first expiry will look
+  exactly like a broken worker → The publisher must report an authentication
+  failure distinctly enough to recognize, and the deployment notes must record
+  the expiry date. Automatic refresh is a follow-up change.
+- **A publish that succeeds but whose ledger write fails** would re-post the next
+  day → The ledger write and the publish cannot be one transaction across an
+  HTTP boundary. The ledger is written immediately after a successful publish,
+  and the residual window is one failed database write wide. Accepted: the cost
+  is one duplicated post, and the alternative (write first, publish after) risks
+  a day that is silently never published, which is worse and harder to notice.
+- **Ten postings from a thin day could still look thin** even above the floor →
+  The floor is a constant precisely so the first week of dry runs can move it.
+- **`viewlog.Aggregate`'s signature change touches every caller** → There is one
+  production caller (`cmd/rollup-views`) plus tests. `go build ./...` finds them
+  all; this is a compile error, not a silent one.
+
+## Migration Plan
+
+1. Migration `0135` adds `job_daily_views.page_uniques` (`NOT NULL DEFAULT 0`)
+   and creates `social_digest_posts`. Both are additive; nothing reads the new
+   column until the digest ships.
+2. Ship the `viewlog` split and the `rollup-views` write. From the next nightly
+   run, `page_uniques` is correct for new days.
+3. Ship the selection package and the worker with **no timer installed**. Run
+   `-dry-run` by hand for a week and read the lists.
+4. Configure the Discord webhook, install the unit and timer, enable Discord.
+5. Configure LinkedIn once its application clears review.
+
+**Rollback:** stop the timer. The column and the ledger are inert without the
+worker; nothing else reads them.
+
+**Deployment note that is easy to miss:** `deploy/bin/release.sh` holds the list
+of worker binaries to build, and the copy that runs lives on the host. Editing
+the repository copy does not deploy it — the host's copy must be updated by hand
+or the new binary is simply never built.
+
+## Open Questions
+
+- **When does logrotate run on the production host, relative to `rollup-views`
+  at 02:30 UTC?** To be answered with one command on the machine during
+  implementation. The "discover the freshest day" design means the answer cannot
+  break the digest — it only tells us whether the post is about yesterday or the
+  day before, which decides how the post is worded.
+- **The floor (10) and the quarantine (7 days)** are starting values, to be
+  revisited after the week of dry runs in step 3.

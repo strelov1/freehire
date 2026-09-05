@@ -103,7 +103,7 @@ func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (
 // aggregateFile opens a rotated file, aggregates its views, and computes the cursor
 // signature (FNV-64 over the decompressed content) in the same pass. The signature
 // is stable across rename and gzip, so a re-run recognizes an already-applied file.
-func aggregateFile(f viewlog.LogFile) (map[string]map[string]int, int64, error) {
+func aggregateFile(f viewlog.LogFile) (map[string]map[string]viewlog.Counts, int64, error) {
 	rc, err := f.Open()
 	if err != nil {
 		return nil, 0, err
@@ -121,7 +121,7 @@ func aggregateFile(f viewlog.LogFile) (map[string]map[string]int, int64, error) 
 // processed — all in one transaction, so a crash leaves neither a double-count nor
 // a lost mark. It returns the total views applied. A file with no resolvable views
 // is still marked (so it is not rescanned).
-func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog.LogFile, counts map[string]map[string]int, sig int64) (int, error) {
+func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog.LogFile, counts map[string]map[string]viewlog.Counts, sig int64) (int, error) {
 	ids, err := resolveSlugs(ctx, q, counts)
 	if err != nil {
 		return 0, err
@@ -134,15 +134,20 @@ func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog
 		if err != nil {
 			return 0, err
 		}
-		for slug, n := range perSlug {
+		for slug, c := range perSlug {
 			id, ok := ids[slug]
 			if !ok {
 				continue
 			}
 			params = append(params, db.ApplyDailyViewParams{
-				Day: pgtype.Date{Time: d, Valid: true}, JobID: id, Delta: int32(n),
+				Day:        pgtype.Date{Time: d, Valid: true},
+				JobID:      id,
+				TotalDelta: int32(c.Total),
+				PageDelta:  int32(c.Page),
 			})
-			total += n
+			// The reported figure stays the total: it is what jobs.view_count accrues
+			// and what this worker has always logged.
+			total += c.Total
 		}
 	}
 
@@ -180,7 +185,7 @@ func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog
 }
 
 // resolveSlugs maps every slug appearing in counts to its job id in one query.
-func resolveSlugs(ctx context.Context, q *db.Queries, counts map[string]map[string]int) (map[string]int64, error) {
+func resolveSlugs(ctx context.Context, q *db.Queries, counts map[string]map[string]viewlog.Counts) (map[string]int64, error) {
 	set := make(map[string]struct{})
 	for _, perSlug := range counts {
 		for slug := range perSlug {

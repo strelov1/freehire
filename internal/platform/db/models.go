@@ -705,6 +705,8 @@ type JobDailyView struct {
 	Day     pgtype.Date `json:"day"`
 	JobID   int64       `json:"job_id"`
 	Uniques int32       `json:"uniques"`
+	// Unique daily visitors counted from PAGE opens only, which are bot-filtered. The `uniques` column beside it fuses page opens with API reads, and API reads carry no bot filtering — so page_uniques is the only one of the two that describes people, and the only one safe to rank a public post on. Zero for every row written before migration 0135; deliberately not backfilled.
+	PageUniques int32 `json:"page_uniques"`
 }
 
 type JobList struct {
@@ -980,6 +982,15 @@ type SemanticOutbox struct {
 	LastError   string             `json:"last_error"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	JobPostedAt pgtype.Timestamptz `json:"job_posted_at"`
+}
+
+// Ledger of published daily social digests. Unique on (day, channel, job_id): the publish-once check reads the (day, channel) prefix, the quarantine reads job_id + day across all channels. Written only after a channel publishes successfully; a dry run never writes here.
+type SocialDigestPost struct {
+	Day         pgtype.Date        `json:"day"`
+	Channel     string             `json:"channel"`
+	JobID       int64              `json:"job_id"`
+	Slot        int32              `json:"slot"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
 type Subscription struct {

@@ -47,10 +47,17 @@ type Querier interface {
 	// key rejects a duplicate rather than silently reordering the conversation.
 	AppendAssistantMessage(ctx context.Context, arg AppendAssistantMessageParams) (AssistantMessage, error)
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
-	// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
+	// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per
 	// tuple) so a file's rows land in a single round trip; view_count accumulates across
 	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
+	//
+	// Two deltas, not one plus a breakdown. `total_delta` counts the visitors who
+	// produced EITHER signal and is what `uniques` has always held — jobs.view_count and
+	// GET /api/v1/stats/catalog both read from it, so it must not move. `page_delta`
+	// counts the visitors who opened the PAGE, the only bot-filtered signal of the two.
+	// A visitor who did both is one visitor in each, so the two do not sum with an API
+	// count; the only relation between them is page_delta <= total_delta.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
 	// Records an approval. Guarded by review_decision IS NULL so a second attempt at an
 	// already-reviewed entry affects zero rows rather than overwriting a recorded decision —

@@ -19,10 +19,11 @@ var (
 
 const applyDailyView = `-- name: ApplyDailyView :batchexec
 WITH ins AS (
-    INSERT INTO job_daily_views (day, job_id, uniques)
-    VALUES ($3, $2, $1)
+    INSERT INTO job_daily_views (day, job_id, uniques, page_uniques)
+    VALUES ($3, $2, $1, $4)
     ON CONFLICT (day, job_id)
-        DO UPDATE SET uniques = job_daily_views.uniques + EXCLUDED.uniques
+        DO UPDATE SET uniques      = job_daily_views.uniques + EXCLUDED.uniques,
+                      page_uniques = job_daily_views.page_uniques + EXCLUDED.page_uniques
 )
 UPDATE jobs SET view_count = view_count + $1
 WHERE id = $2
@@ -35,23 +36,32 @@ type ApplyDailyViewBatchResults struct {
 }
 
 type ApplyDailyViewParams struct {
-	Delta int32       `json:"delta"`
-	JobID int64       `json:"job_id"`
-	Day   pgtype.Date `json:"day"`
+	TotalDelta int32       `json:"total_delta"`
+	JobID      int64       `json:"job_id"`
+	Day        pgtype.Date `json:"day"`
+	PageDelta  int32       `json:"page_delta"`
 }
 
 // Apply one (day, job) unique count additively: upsert the daily rollup and add the
-// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
+// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 // though the primary query does not read it. Issued as a pgx batch (one call per
 // tuple) so a file's rows land in a single round trip; view_count accumulates across
 // a job's day-rows, and additivity lets a day spanning two rotated files sum right.
+//
+// Two deltas, not one plus a breakdown. `total_delta` counts the visitors who
+// produced EITHER signal and is what `uniques` has always held — jobs.view_count and
+// GET /api/v1/stats/catalog both read from it, so it must not move. `page_delta`
+// counts the visitors who opened the PAGE, the only bot-filtered signal of the two.
+// A visitor who did both is one visitor in each, so the two do not sum with an API
+// count; the only relation between them is page_delta <= total_delta.
 func (q *Queries) ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
 		vals := []interface{}{
-			a.Delta,
+			a.TotalDelta,
 			a.JobID,
 			a.Day,
+			a.PageDelta,
 		}
 		batch.Queue(applyDailyView, vals...)
 	}

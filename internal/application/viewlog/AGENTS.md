@@ -30,9 +30,19 @@ SSR→backend boundary) — lets us filter bots and cover anonymous + API unifor
 change. It tolerates both formats, so parser-first is a no-op until nginx catches
 up; nginx-first would feed lines the old pattern cannot match, and a day that
 parses as nothing silently counts nothing.
-- `Aggregate(reader) map[day]map[slug]int` — dedups by the raw `(IP, UA, slug, day)`
+- `Aggregate(reader) map[day]map[slug]Counts` — dedups by the raw `(IP, UA, slug, day)`
   tuple (NUL-joined, no hashing), the day taken from each line's timestamp (UTC);
   page opens from known bots are dropped, API reads are not bot-filtered.
+  `Counts` holds **two** independently-deduplicated visitor counts over that same
+  key: `Total` (either signal) and `Page` (page opens only). They are two counts,
+  not a count and a breakdown — a visitor who opens the page *and* reads the API on
+  the same day is one visitor in each, so they never sum with an API figure, and the
+  only relation between them is `Page <= Total`. Putting the signal kind into the
+  shared dedup key instead would count that visitor twice in `Total`, and `Total` is
+  `job_daily_views.uniques`, which `GET /api/v1/stats/catalog` already publishes.
+  `Page` exists because the API signal carries no bot filtering and this host's
+  traffic is mostly crawlers: it is the only one of the two safe to rank a public
+  list on (`internal/engage/socialdigest`).
 - `RotatedFiles(dir, base)` / `LogFile.Open()` — lists rotated files (skips the live
   `access.log`) and opens gzip transparently. `LogFile` is just a path; the worker's
   cursor key across numeric-suffix rotation is an FNV-64 hash over the file's
