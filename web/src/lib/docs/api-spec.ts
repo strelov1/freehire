@@ -3588,12 +3588,18 @@ data: {"type":"result","stop_reason":"completed"}
           'your history already covers but the CV buries — reframe those — and ' +
           '`missing_gap` are the ones it does not, which an agent must ask about ' +
           'rather than invent. Served from cache; calls no LLM. 409 when the CV is ' +
-          'not a tailored copy or has no analysis.',
+          'not a tailored copy or has no analysis. `job.requirements` is what the posting ' +
+          'itself asks for, in its own words — a fuller list than the missing_* split, ' +
+          'which is only what the analysis found the CV lacks. Absent when the posting ' +
+          'states none.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The tailored CV id.' }],
         curl: `curl "${BASE_URL}/me/cvs/7d1a…/tailor-context" -H "Authorization: Bearer fhk_…"`,
         responseExample: `{
   "data": {
-    "job": { "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme" },
+    "job": {
+      "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme",
+      "requirements": [ { "text": "5+ years with Go", "priority": "required" } ]
+    },
     "verdict": "worth_applying",
     "overall_score": 72,
     "recommendation": "Lead with the payments migration …",

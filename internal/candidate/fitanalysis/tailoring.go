@@ -99,6 +99,12 @@ type TailoringJob struct {
 	// below and may not import. Merging it a second time here is the drift that rule
 	// exists to prevent.
 	//
+	// It is not free. Bounded at write time by enrich.BoundRequirements — 30 entries of at
+	// most 200 runes — so the worst case is about 6000 runes, the same order as the clipped
+	// description beside it, on every tailoring turn. Real postings are far under that, and
+	// a requirement list is the densest thing in a posting per token spent, which is what
+	// makes the trade worth it.
+	//
 	// Absent, not empty, when there is none: `[]` would read to the agent as an employer
 	// who asked for nothing, which no posting means.
 	Requirements []enrich.Requirement `json:"requirements,omitempty"`

@@ -5080,7 +5080,7 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/reset-from-resume" -b co
 
 The match analysis a tailored CV should reframe toward.
 
-The split that keeps tailoring honest: `missing_have` are requirements your history already covers but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a tailored copy or has no analysis.
+The split that keeps tailoring honest: `missing_have` are requirements your history already covers but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a tailored copy or has no analysis. `job.requirements` is what the posting itself asks for, in its own words — a fuller list than the missing_* split, which is only what the analysis found the CV lacks. Absent when the posting states none.
 
 **Path parameters**
 
@@ -5095,7 +5095,10 @@ curl "https://freehire.me/api/v1/me/cvs/7d1a…/tailor-context" -H "Authorizatio
 ```json
 {
   "data": {
-    "job": { "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme" },
+    "job": {
+      "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme",
+      "requirements": [ { "text": "5+ years with Go", "priority": "required" } ]
+    },
     "verdict": "worth_applying",
     "overall_score": 72,
     "recommendation": "Lead with the payments migration …",

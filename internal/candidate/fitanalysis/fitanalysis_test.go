@@ -569,12 +569,29 @@ func TestProjectTailoringCarriesThePostingsOwnRequirements(t *testing.T) {
 }
 
 // A posting that states no requirements — or one whose caller could not read them — must
-// project an ABSENT list, not an empty one dressed up as an answer. The agent reads a `[]` as
-// "this employer asked for nothing", which no posting means.
+// reach the model with the key ABSENT, not as an empty list dressed up as an answer: the agent
+// reads `"requirements": []` as "this employer asked for nothing", which no posting means.
+// Asserted through the JSON, because `omitempty` is the whole mechanism and a struct
+// comparison would pass with the tag deleted.
 func TestProjectTailoringOmitsRequirementsItDoesNotHave(t *testing.T) {
 	got := fitanalysis.ProjectTailoring(&matchanalysis.Analysis{}, db.Job{}, nil)
-	if got.Job.Requirements != nil {
-		t.Errorf("Job.Requirements = %+v, want nil when the posting states none", got.Job.Requirements)
+
+	encoded, err := json.Marshal(got.Job)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(encoded), "requirements") {
+		t.Errorf("job encoded as %s, want no requirements key when the posting states none", encoded)
+	}
+
+	withOne := fitanalysis.ProjectTailoring(&matchanalysis.Analysis{}, db.Job{},
+		[]enrich.Requirement{{Text: "Go", Priority: "required"}})
+	encoded, err = json.Marshal(withOne.Job)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"requirements"`) {
+		t.Errorf("job encoded as %s, want the requirements key when the posting states some", encoded)
 	}
 }
 
