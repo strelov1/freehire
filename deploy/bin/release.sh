@@ -232,7 +232,12 @@ if [ "$app" = freehire ]; then
   # auto-apply joined the same day, found missing entirely: the timer-driven drain of
   # auto_apply_queue (headless Chrome fill+submit) had never actually been built or
   # provisioned on this host, so an approved entry would sit in the queue forever.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint billing-sync build-suggestions merge-companies add-board harvest-orphans recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest; do
+  # backfill-requirements joined 2026-09-05, and this list is why: the worker shipped with
+  # migration 0139 and its binary simply was not here, so the operator built it by hand to
+  # run the first batches. A one-off pass still needs to survive the next release — it is
+  # taken in bounded runs over days, and half a backlog with no binary left to finish it is
+  # the failure this line prevents.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,
