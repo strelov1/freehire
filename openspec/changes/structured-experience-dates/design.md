@@ -65,11 +65,18 @@ only one with real columns rather than a jsonb blob.
   objects for `start`/`end` instead of free strings, and the prompt asks the
   model to interpret the CV's printed range rather than "keep dates as
   written". `resumeextract.Experience` gains `Current bool`.
-- **Typst stays untouched.** `internal/candidate/cv/renderer.go` formats the
-  structured field to the same display string it produces today when building
-  `data.json`; the render-time projection to typst is a plain string wire, same
-  as before this change, in both directions verified against the "structured
-  résumé" and "CV document" delta specs' scenarios above.
+- **Typst stays untouched as an interface; the rendered text is
+  canonicalized, not preserved verbatim.** `internal/candidate/cv/renderer.go`
+  formats the structured field via `perioddate.Format` when building
+  `data.json`; typst still receives a plain string, unchanged as a wire shape.
+  The string's content is NOT guaranteed byte-identical to an existing entry's
+  original free text: `Format` emits one canonical style ("Mar 2021"), so a
+  pre-existing entry stored as "October 2018" renders as "Oct 2018" after this
+  change. This is a one-time cosmetic normalization on first read after the
+  backfill, not a functional regression — the "CV document" delta spec's own
+  scenario for this compares against an already-canonical value rather than
+  claiming universal byte-identical output, and a second scenario there covers
+  the canonicalization explicitly.
 - **Frontend: `<input type="month">` + a "year only" toggle**, one shared
   component replacing the plain text inputs at `ExperienceBankView.svelte` and
   `CvSectionForm.svelte`. Rejected alternative: a fully custom picker — more
@@ -92,6 +99,15 @@ only one with real columns rather than a jsonb blob.
   unknown reliability, and `created_at` is a real, non-arbitrary date about
   that row, confirmed rare in practice (`period_sort_test.go`'s real-world
   fixtures are all cleanly parseable).
+- [`perioddate.Format`'s canonical style ("Mar 2021") does not reproduce every
+  existing entry's original free-text wording (e.g. "October 2018"), so any
+  CV or CV/experience-bank display rendered after this change can show
+  different text for the same date than it did before, for entries that were
+  never edited or re-rendered before now] → accepted as a one-time, purely
+  cosmetic normalization: the underlying year/month is unchanged, only the
+  formatting is; earlier drafts of this document and the delta specs
+  overstated this as "no external behavior change" / "rendered output is
+  unchanged", which was inaccurate and has been corrected.
 - [Three independent consumers changing together is a wide diff] → the task
   list sequences one consumer at a time (bank → resumeextract → cv →
   frontend), each with its own tests green before moving to the next.

@@ -34,10 +34,16 @@ Work history editor and the CV section form, with no date-picker.
   `PeriodDate.UnmarshalJSON` accepts either the old free-text string (best-effort
   parsed) or the new object shape, self-healing on the next read/write of each
   row; `MarshalJSON` always emits the new shape.
-- **BREAKING (internal only, no external behavior change for typst)**: the CV
-  renderer (`internal/candidate/cv/renderer.go`) formats the structured date
-  into the same display string it produces today before building `data.json` —
-  the 9 typst templates are unchanged.
+- **BREAKING (internal only for the typst interface; a one-time cosmetic
+  change for existing data)**: the CV renderer
+  (`internal/candidate/cv/renderer.go`) formats the structured date into
+  display text via `perioddate.Format` before building `data.json` — the 9
+  typst templates still receive a plain string and are unchanged. `Format`
+  emits one canonical style ("Mar 2021"); an existing entry whose stored free
+  text used a different style (e.g. "October 2018") renders in the canonical
+  style after this change, not its original wording — a one-time
+  normalization, not a functional regression or a change to what information
+  is shown.
 - `/my/profile`'s Work history editor and the CV section form get a real
   month/year picker (`<input type="month">` plus a "year only" toggle) in place
   of a plain text input.
@@ -62,8 +68,10 @@ Work history editor and the CV section form, with no date-picker.
   requirement's `dates` becomes the same structured `{year, month?}` value
   (plus `current`), replacing today's implicit free-text string.
 - `cv-builder`: the CV document's experience/education entries carry the same
-  structured date value; rendering to PDF is unaffected (the renderer formats
-  it to display text before the typst template ever sees it, same as today).
+  structured date value; the renderer still formats it to a plain display
+  string before the typst template ever sees it, but that string is now the
+  renderer's one canonical style, which can differ from an existing entry's
+  original free-text wording (see What Changes above).
 
 ## Impact
 
