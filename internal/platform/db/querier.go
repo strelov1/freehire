@@ -2068,12 +2068,20 @@ type Querier interface {
 	// unverified account should be told to confirm its address rather than that somebody
 	// already reported the job.
 	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
-	// Move one reward to granted at the amount it is worth today.
+	// Move one reward to granted at the amount it is worth today, if the referrer is below the
+	// ceiling.
 	//
 	// Guarded on the current status, which is what makes the pass idempotent: a re-run over a
 	// row somebody else already granted affects no rows, and the caller reads that as "already
 	// done" rather than doing it twice. The amount is fixed here and never recomputed, so a
 	// later price change cannot revalue credit that has been earned.
+	//
+	// The CEILING is counted inside this statement rather than read before it, and that is the
+	// difference between a bound and a suggestion. Two passes reading eleven granted rewards
+	// against a ceiling of twelve would each grant one more and produce thirteen. Nothing
+	// prevents two passes: systemd will not stack a Type=oneshot unit on itself, but that
+	// protects the TIMER path only and a run started by hand has no lock at all. The count is
+	// taken under this UPDATE's own lock on the row, so the second statement sees the first.
 	GrantInviteReward(ctx context.Context, arg GrantInviteRewardParams) (int64, error)
 	// Whether this account has already spent its one redemption. Asked after a refusal, to turn
 	// the deliberately vague "no" above into the one explanation that is about the caller.

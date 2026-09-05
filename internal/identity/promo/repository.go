@@ -171,8 +171,16 @@ func (r *QueriesRepository) CountGranted(ctx context.Context, referrerID int64) 
 }
 
 // Grant moves one reward to earned, reporting whether this call was the one that moved it.
-func (r *QueriesRepository) Grant(ctx context.Context, id, amountCents int64) (bool, error) {
-	rows, err := r.q.GrantInviteReward(ctx, db.GrantInviteRewardParams{ID: id, AmountCents: amountCents})
+//
+// No rows means either that somebody else granted it or that the referrer is at the
+// ceiling. The two are not distinguished here because the caller does the same thing with
+// both: leave the row alone and move on.
+func (r *QueriesRepository) Grant(ctx context.Context, id, amountCents, ceiling int64) (bool, error) {
+	rows, err := r.q.GrantInviteReward(ctx, db.GrantInviteRewardParams{
+		ID:          id,
+		AmountCents: amountCents,
+		Ceiling:     ceiling,
+	})
 	if err != nil {
 		return false, fmt.Errorf("promo: granting reward %d: %w", id, err)
 	}

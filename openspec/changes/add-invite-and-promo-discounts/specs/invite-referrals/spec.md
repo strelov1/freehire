@@ -117,8 +117,15 @@ reward.
 
 #### Scenario: The invitee pays
 
-- **WHEN** the invitee's first invoice collects a non-zero amount
+- **WHEN** ANY of the invitee's invoices collects a non-zero amount
 - **THEN** the reward becomes `granted` with an amount equal to 50% of the list price
+
+#### Scenario: The first invoice was free but a renewal was not
+
+- **WHEN** the invitee's first invoice collected nothing — a total discount — and a later
+  renewal collects
+- **THEN** the reward is granted, because the rule is that the invitee paid us, not that
+  they paid us immediately
 
 #### Scenario: The invitee's subscription is active but collected nothing
 

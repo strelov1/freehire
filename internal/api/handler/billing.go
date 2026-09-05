@@ -179,10 +179,7 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
 	defer cancel()
 
-	discount, err := h.discountFor(ctx, userID, c.Query("code"))
-	if err != nil {
-		return err
-	}
+	discount := h.discountFor(ctx, userID)
 
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
@@ -203,54 +200,37 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 	}})
 }
 
-// discountFor resolves the ONE discount this checkout may carry.
+// discountFor reads the ONE discount this checkout may carry, and writes nothing.
 //
-// A code in the query is redeemed here rather than at a separate endpoint, because
-// redeeming spends the account's single lifetime redemption and that must not happen on a
-// page the buyer only visited. A refusal is returned to the caller instead of being
-// swallowed: somebody who typed a code and was charged full price without being told would
-// reasonably call that a bug.
+// This route is a GET, so it must have no side effects — and `SameSite=Lax` is exactly why
+// that is a security rule here rather than a stylistic one: the session cookie IS sent on a
+// cross-site top-level navigation, so any page linking here would act as this visitor. An
+// earlier draft redeemed a code from the query string on this path, which meant a link
+// could burn somebody's one lifetime redemption. Redeeming now lives on its own POST
+// (`/me/promo/redeem`) and is durable, so what reaches here is only what the account
+// already holds.
 //
-// With no code, an account may still be owed the invitee's first-month discount. That path
-// cannot fail the checkout — a discount somebody was offered but that we could not read is
-// not a reason to refuse them the purchase — so it is logged and the sale goes ahead.
-func (h *billingHandlers) discountFor(ctx context.Context, userID int64, code string) (billing.Discount, error) {
+// It cannot fail the checkout either. A discount somebody was offered but that we could not
+// read is not a reason to refuse them the purchase, so a failure is logged and the sale
+// goes ahead at list price.
+func (h *billingHandlers) discountFor(ctx context.Context, userID int64) billing.Discount {
 	if h.promo == nil {
-		return billing.Discount{}, nil
-	}
-
-	if code != "" {
-		percent, err := h.promo.Redeem(ctx, userID, code)
-		switch {
-		case err == nil:
-			return billing.Discount{
-				PercentOff: int32(percent),
-				Label:      promo.SourcePromo,
-				Key:        fmt.Sprintf("promo_%d_%d", userID, percent),
-			}, nil
-		case errors.Is(err, promo.ErrAlreadyRedeemed):
-			return billing.Discount{}, fiber.NewError(fiber.StatusConflict, "you have already used a promo code")
-		case errors.Is(err, promo.ErrNotUsable):
-			return billing.Discount{}, fiber.NewError(fiber.StatusNotFound, "that code is not available")
-		default:
-			log.Printf("promo: redeeming a code for user %d: %v", userID, err)
-			return billing.Discount{}, fiber.NewError(fiber.StatusInternalServerError, "could not apply that code")
-		}
+		return billing.Discount{}
 	}
 
 	resolved, err := h.promo.Discount(ctx, userID)
 	if err != nil {
 		log.Printf("promo: resolving the discount of user %d: %v", userID, err)
-		return billing.Discount{}, nil
+		return billing.Discount{}
 	}
 	if resolved.Percent <= 0 {
-		return billing.Discount{}, nil
+		return billing.Discount{}
 	}
 	return billing.Discount{
 		PercentOff: int32(resolved.Percent),
 		Label:      resolved.Source,
 		Key:        fmt.Sprintf("%s_%d_%d", resolved.Source, userID, resolved.Percent),
-	}, nil
+	}
 }
 
 // Subscription returns what the caller is paying and what has been charged.

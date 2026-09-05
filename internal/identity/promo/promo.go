@@ -140,8 +140,10 @@ type Repository interface {
 	// CountGranted is how many rewards a referrer has already earned, for the ceiling.
 	CountGranted(ctx context.Context, referrerID int64) (int64, error)
 	// Grant moves one reward to earned at the given amount, reporting whether this call
-	// was the one that moved it. Guarded on the current status, so a repeat moves nothing.
-	Grant(ctx context.Context, id, amountCents int64) (bool, error)
+	// was the one that moved it. Guarded on the current status AND on the referrer being
+	// below ceiling, both inside the one statement — a ceiling read before the write is a
+	// suggestion rather than a bound, since two passes can read the same count.
+	Grant(ctx context.Context, id, amountCents, ceiling int64) (bool, error)
 	// UndeliveredRewards are earned rewards not yet placed on a referrer's balance.
 	UndeliveredRewards(ctx context.Context, max int32) ([]EarnedReward, error)
 	// MarkDelivered stamps a reward as placed, reporting whether this call stamped it.

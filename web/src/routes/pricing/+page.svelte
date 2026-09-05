@@ -89,17 +89,35 @@
     if (!chosen || busy) return;
     busy = true;
     error = null;
+
+    // Redeem first, as its own POST. The checkout call is a GET and must stay read-only —
+    // `SameSite=Lax` sends the session cookie on a cross-site navigation, so a GET that
+    // spent a code would let any page burn a visitor's one redemption.
+    //
+    // A refusal here stops the purchase and SAYS so. Charging somebody full price after
+    // they entered an offer, without telling them, is the version of this they would
+    // rightly call a bug. Redemption is durable, so if the checkout below then fails, the
+    // discount still applies on their next attempt.
+    const entered = code.trim();
+    if (entered) {
+      try {
+        checked = (await api.promoRedeem(entered)).percent_off;
+        codeError = null;
+      } catch (e) {
+        codeError =
+          e instanceof Error && e.message.includes('already')
+            ? 'You have already used a promo code.'
+            : 'That code is not available. Clear it to continue at the usual price.';
+        busy = false;
+        return;
+      }
+    }
+
     try {
-      const { url } = await api.billingCheckout(chosen.id, code.trim() || undefined);
+      const { url } = await api.billingCheckout(chosen.id);
       window.location.href = url;
-    } catch (e) {
-      // A code the buyer typed and that was refused must be SAID, not swallowed: charging
-      // full price after somebody entered an offer, without telling them, is the version of
-      // this they would rightly call a bug.
-      error =
-        code.trim() && e instanceof Error && e.message
-          ? 'That code could not be applied. Clear it to continue at the usual price.'
-          : 'Checkout is not available right now. Please try again in a moment.';
+    } catch {
+      error = 'Checkout is not available right now. Please try again in a moment.';
       busy = false;
     }
   }

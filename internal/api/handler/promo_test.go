@@ -59,7 +59,9 @@ func (s *stubPromoRepo) PendingRewards(context.Context, int32) ([]promo.PendingR
 	return nil, nil
 }
 func (s *stubPromoRepo) CountGranted(context.Context, int64) (int64, error) { return 0, nil }
-func (s *stubPromoRepo) Grant(context.Context, int64, int64) (bool, error)  { return false, nil }
+func (s *stubPromoRepo) Grant(context.Context, int64, int64, int64) (bool, error) {
+	return false, nil
+}
 func (s *stubPromoRepo) MarkDelivered(context.Context, int64) (bool, error) { return false, nil }
 func (s *stubPromoRepo) UndeliveredRewards(context.Context, int32) ([]promo.EarnedReward, error) {
 	return nil, nil

@@ -66,15 +66,17 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 
 	amount := priceCents * int64(InvitePercent) / 100
 	granted := 0
+	ceiling := int64(s.ceiling())
 	for _, reward := range rewards {
-		// The ceiling is read per reward rather than once, because a referrer can cross it
-		// inside a single pass. Reading it before the provider call also means a referrer
-		// who is already at the ceiling costs no API call at all.
+		// Read first as a CHEAP SKIP, not as the bound. A referrer already at the ceiling
+		// costs no provider call this way, which is the whole reason it is here — the bound
+		// itself is inside the UPDATE, because two passes reading the same count would each
+		// grant one more than it allows.
 		count, err := s.repo.CountGranted(ctx, reward.ReferrerID)
 		if err != nil {
 			return granted, fmt.Errorf("promo: counting rewards of user %d: %w", reward.ReferrerID, err)
 		}
-		if count >= int64(s.ceiling()) {
+		if count >= ceiling {
 			continue
 		}
 
@@ -89,7 +91,7 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 			continue
 		}
 
-		moved, err := s.repo.Grant(ctx, reward.ID, amount)
+		moved, err := s.repo.Grant(ctx, reward.ID, amount, ceiling)
 		if err != nil {
 			return granted, fmt.Errorf("promo: granting reward %d: %w", reward.ID, err)
 		}

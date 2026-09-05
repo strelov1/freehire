@@ -128,15 +128,29 @@ SELECT count(*) FROM invite_rewards
 WHERE referrer_id = $1 AND status = 'granted';
 
 -- name: GrantInviteReward :execrows
--- Move one reward to granted at the amount it is worth today.
+-- Move one reward to granted at the amount it is worth today, if the referrer is below the
+-- ceiling.
 --
 -- Guarded on the current status, which is what makes the pass idempotent: a re-run over a
 -- row somebody else already granted affects no rows, and the caller reads that as "already
 -- done" rather than doing it twice. The amount is fixed here and never recomputed, so a
 -- later price change cannot revalue credit that has been earned.
+--
+-- The CEILING is counted inside this statement rather than read before it, and that is the
+-- difference between a bound and a suggestion. Two passes reading eleven granted rewards
+-- against a ceiling of twelve would each grant one more and produce thirteen. Nothing
+-- prevents two passes: systemd will not stack a Type=oneshot unit on itself, but that
+-- protects the TIMER path only and a run started by hand has no lock at all. The count is
+-- taken under this UPDATE's own lock on the row, so the second statement sees the first.
 UPDATE invite_rewards
 SET status = 'granted', granted_at = now(), amount_cents = sqlc.arg(amount_cents)
-WHERE id = sqlc.arg(id) AND status = 'pending';
+WHERE invite_rewards.id = sqlc.arg(id)
+  AND invite_rewards.status = 'pending'
+  AND (
+      SELECT count(*) FROM invite_rewards earned
+       WHERE earned.referrer_id = invite_rewards.referrer_id
+         AND earned.status = 'granted'
+  ) < sqlc.arg(ceiling);
 
 -- name: UndeliveredInviteRewards :many
 -- The worker's delivery pass: earned, but not yet placed on the referrer's balance.

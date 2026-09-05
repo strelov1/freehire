@@ -67,8 +67,14 @@ an extra parameter on `CheckoutURL`; it never learns why the discount exists.
 type Discount struct {
     PercentOff int32  // 1..100; zero means no discount
     Label      string // what the buyer sees on the coupon
+    Key        string // idempotency key for minting the coupon
 }
 ```
+
+`Key` is not decoration: a coupon is minted per checkout, so a retried or double-clicked
+purchase without one leaves a second coupon behind for a single sale. It is derived from the
+account, the source and the percentage — the same buyer asking for the same offer twice gets
+the same coupon back from the provider.
 
 A percentage and nothing else — see the delivery decision below for why a referral reward
 never arrives as a coupon. The HTTP handler asks `promo`, hands the answer to

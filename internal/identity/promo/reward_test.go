@@ -31,8 +31,14 @@ func (f *fakeLedger) CountGranted(_ context.Context, referrerID int64) (int64, e
 	return f.countByRef[referrerID], nil
 }
 
-func (f *fakeLedger) Grant(_ context.Context, id, amountCents int64) (bool, error) {
+// Grant enforces the ceiling itself, as the statement it stands in for does. A fake that
+// only checked the status would let the service's cheap pre-read look like the bound, which
+// is exactly the confusion the real query exists to remove.
+func (f *fakeLedger) Grant(_ context.Context, id, amountCents, ceiling int64) (bool, error) {
 	if _, done := f.granted[id]; done {
+		return false, nil
+	}
+	if int64(len(f.granted)) >= ceiling {
 		return false, nil
 	}
 	f.granted[id] = amountCents

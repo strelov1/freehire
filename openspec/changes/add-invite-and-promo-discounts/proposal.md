@@ -18,8 +18,10 @@ host environment, and the source carries only the rules for reading them.
   constant in the source.
 - **A personal invite link per account.** `/r/<code>` remembers the referrer for 30 days.
   Whoever signs up through it gets 50% off their first month.
-- **A reward for the referrer, paid on money, not on signups.** When the invitee's first
-  invoice actually collects (`amount_paid > 0`), the referrer earns 50% of the list price. A
+- **A reward for the referrer, paid on money, not on signups.** When ANY of the invitee's
+  invoices actually collects (`amount_paid > 0`), the referrer earns 50% of the list price.
+  Any, not the first: an invitee whose first month was free under a total discount and who
+  then paid for a second has still paid us. A
   referrer who already has a provider customer receives it as a customer balance credit the
   next invoice consumes; a referrer who has never bought carries it until their own first
   checkout, where it applies as an amount-off discount.

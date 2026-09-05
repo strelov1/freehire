@@ -47,6 +47,16 @@ func (h *promoHandlers) register(api fiber.Router, mw middleware, throttler rate
 	api.Post("/me/promo/preview", mw.cookie,
 		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute),
 		h.PreviewCode)
+
+	// POST, and that is a security property rather than a style choice. Redeeming spends
+	// the account's one lifetime redemption, and the first draft did it on the checkout
+	// GET — which `SameSite=Lax` sends the session cookie along with on a cross-site
+	// top-level navigation. Any page could then burn a visitor's redemption by linking to
+	// it. A GET here must stay read-only; a state change goes through a method the browser
+	// will not issue cross-site without a preflight this deployment does not answer.
+	api.Post("/me/promo/redeem", mw.cookie,
+		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute),
+		h.RedeemCode)
 }
 
 // Invite returns this account's invite link and what it has earned.
@@ -106,15 +116,55 @@ func (h *promoHandlers) PreviewCode(c *fiber.Ctx) error {
 	defer cancel()
 
 	percent, err := h.promo.Preview(ctx, userID, body.Code)
+	if err != nil {
+		return promoError(err, "could not check that code", userID)
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"percent_off": percent}})
+}
+
+// RedeemCode spends this account's one lifetime redemption on a code.
+//
+// Separate from checkout on purpose. The redemption is DURABLE: once recorded, every later
+// checkout reads the percentage back through `promo.Discount`, so a provider failure while
+// opening the payment page costs a retry rather than the offer. Making the checkout GET do
+// this instead — as the first draft did — was both a CSRF hole and a way to burn somebody's
+// one code on a call that then failed.
+func (h *promoHandlers) RedeemCode(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "expected a JSON body with a code")
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), promoReadTimeout)
+	defer cancel()
+
+	percent, err := h.promo.Redeem(ctx, userID, body.Code)
+	if err != nil {
+		return promoError(err, "could not apply that code", userID)
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"percent_off": percent}})
+}
+
+// promoError renders the two refusals this surface distinguishes, and nothing else.
+//
+// Every reason a CODE can be refused is one status, deliberately: these routes are
+// reachable by anyone who can create an account, and separating "no such code" from "out of
+// seats" would answer the question a guesser is actually asking.
+func promoError(err error, fallback string, userID int64) error {
 	switch {
-	case err == nil:
-		return c.JSON(fiber.Map{"data": fiber.Map{"percent_off": percent}})
 	case errors.Is(err, promo.ErrAlreadyRedeemed):
 		return fiber.NewError(fiber.StatusConflict, "you have already used a promo code")
 	case errors.Is(err, promo.ErrNotUsable):
 		return fiber.NewError(fiber.StatusNotFound, "that code is not available")
 	default:
-		log.Printf("promo: previewing a code for user %d: %v", userID, err)
-		return fiber.NewError(fiber.StatusInternalServerError, "could not check that code")
+		log.Printf("promo: %s for user %d: %v", fallback, userID, err)
+		return fiber.NewError(fiber.StatusInternalServerError, fallback)
 	}
 }

@@ -213,13 +213,13 @@ func TestGrantAndDeliverAreEachIdempotent(t *testing.T) {
 		t.Fatalf("reading the reward: %v", err)
 	}
 
-	moved, err := repo.Grant(ctx, rewardID, 250)
+	moved, err := repo.Grant(ctx, rewardID, 250, 12)
 	if err != nil || !moved {
 		t.Fatalf("first Grant: moved=%v err=%v", moved, err)
 	}
 	// A second grant at a DIFFERENT amount, so a guard that only checked the id would show
 	// up as a changed row rather than as a no-op.
-	if moved, err := repo.Grant(ctx, rewardID, 999); err != nil || moved {
+	if moved, err := repo.Grant(ctx, rewardID, 999, 12); err != nil || moved {
 		t.Fatalf("second Grant: moved=%v err=%v, want false", moved, err)
 	}
 
@@ -245,6 +245,74 @@ func TestGrantAndDeliverAreEachIdempotent(t *testing.T) {
 	}
 	if len(left) != 0 {
 		t.Fatalf("%d rewards still undelivered, want 0", len(left))
+	}
+}
+
+func TestTheCeilingIsEnforcedByTheStatement(t *testing.T) {
+	repo, pool := newRepo(t)
+	ctx := context.Background()
+
+	referrer := addUser(t, pool, "prolific@example.test")
+
+	// Two rewards, one seat left under a ceiling of two. Granted CONCURRENTLY, which is what
+	// a count read before the write cannot survive: both passes would read one and both
+	// would grant.
+	ids := make([]int64, 0, 2)
+	for _, name := range []string{"a@example.test", "b@example.test"} {
+		invitee := addUser(t, pool, name)
+		if _, err := repo.Attribute(ctx, referrer, invitee); err != nil {
+			t.Fatalf("Attribute: %v", err)
+		}
+		var id int64
+		if err := pool.QueryRow(ctx,
+			`SELECT id FROM invite_rewards WHERE referee_id = $1`, invitee).Scan(&id); err != nil {
+			t.Fatalf("reading the reward: %v", err)
+		}
+		ids = append(ids, id)
+	}
+
+	// One already earned, so the ceiling of two leaves exactly one seat.
+	seedInvitee := addUser(t, pool, "seed@example.test")
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO invite_rewards (referrer_id, referee_id, status, amount_cents, granted_at)
+		 VALUES ($1, $2, 'granted', 250, now())`, referrer, seedInvitee); err != nil {
+		t.Fatalf("seeding: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	moved := make([]bool, 2)
+	for i, id := range ids {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ok, err := repo.Grant(context.Background(), id, 250, 2)
+			if err != nil {
+				t.Errorf("Grant: %v", err)
+			}
+			moved[i] = ok
+		}()
+	}
+	wg.Wait()
+
+	granted := 0
+	for _, ok := range moved {
+		if ok {
+			granted++
+		}
+	}
+	if granted != 1 {
+		t.Fatalf("%d rewards granted, want 1 — the ceiling has to be counted inside the "+
+			"UPDATE, or two passes each grant one more than it allows", granted)
+	}
+
+	var total int64
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM invite_rewards WHERE referrer_id = $1 AND status = 'granted'`,
+		referrer).Scan(&total); err != nil {
+		t.Fatalf("counting: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("granted rewards = %d, want 2 — the ceiling", total)
 	}
 }
 

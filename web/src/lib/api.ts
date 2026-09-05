@@ -1067,15 +1067,13 @@ export function createApi(
    *  Throws when billing is not configured on this deployment, or when no paywall is set
    *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
    *  entry point, never as an error to show. */
-  async function billingCheckout(priceID?: string, code?: string): Promise<CheckoutSession> {
-    const q = new URLSearchParams();
-    if (priceID) q.set('price', priceID);
-    // Sending a code REDEEMS it, spending the account's one lifetime redemption. That is
-    // why it rides on the checkout call and not on a button of its own: a code must not be
-    // spent by somebody who only looked at the page.
-    if (code) q.set('code', code);
-    const suffix = q.size > 0 ? `?${q}` : '';
-    return requestData<CheckoutSession>(`/api/v1/billing/checkout${suffix}`);
+  async function billingCheckout(priceID?: string): Promise<CheckoutSession> {
+    const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
+    // No code here. This is a GET, and `SameSite=Lax` sends the session cookie on a
+    // cross-site top-level navigation — so a GET that redeemed a code would let any page
+    // burn a visitor's one lifetime redemption by linking to it. Redemption is its own
+    // POST; this call only reads back what the account already holds.
+    return requestData<CheckoutSession>(`/api/v1/billing/checkout${q}`);
   }
 
   /** Check what a promo code is worth without spending it. Rate limited server-side, and
@@ -1083,6 +1081,16 @@ export function createApi(
    *  from "out of seats" would make this an oracle for guessing them. */
   async function promoPreview(code: string): Promise<{ percent_off: number }> {
     return requestData<{ percent_off: number }>('/api/v1/me/promo/preview', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  /** Spend this account's one lifetime redemption on a code. Durable: once recorded, every
+   *  later checkout reads the percentage back, so a provider failure while opening the
+   *  payment page costs a retry rather than the offer. */
+  async function promoRedeem(code: string): Promise<{ percent_off: number }> {
+    return requestData<{ percent_off: number }>('/api/v1/me/promo/redeem', {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -2424,6 +2432,7 @@ export function createApi(
     plans,
     billingCheckout,
     promoPreview,
+    promoRedeem,
     myInvite,
     billingManageUrl,
     billingSubscription,

@@ -30,8 +30,9 @@ shares a word with this feature and nothing else, and the account section calls 
   `promo_codes` row with a seat limit. There is no second mechanism, no date constant, and
   nothing in the source that knows the offer exists.
 
-- **A reward is earned by money, never by a signup.** The condition is an invoice with
-  `amount_paid > 0`. A subscription can be active having collected nothing — a trial, a
+- **A reward is earned by money, never by a signup.** The condition is ANY invoice with
+  `amount_paid > 0` — any and not the first, so an invitee whose first month was free under
+  a total discount and who then paid for a second still earns it. They paid us. A subscription can be active having collected nothing — a trial, a
   total discount — and rewarding that turns a discount into a way to mint credit. This is
   also the whole anti-abuse design: attribution is a cookie the visitor controls and is
   therefore free to forge, while a payment is not.
