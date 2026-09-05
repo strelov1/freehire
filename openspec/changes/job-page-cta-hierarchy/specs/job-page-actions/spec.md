@@ -8,9 +8,9 @@ and right-aligned, and SHALL NOT render them on the row that carries the content
 per-posting actions — Discussion, Report, Save, Add-to-list — so that the content TabStrip
 keeps enough width to show its labels without scrolling on a desktop column.
 
-This applies from the `lg` breakpoint up. Below `lg` the page's existing arrangement is
-unchanged: the quiet strip rides under the title and the sticky bottom bar carries the
-apply CTA.
+This applies from the `lg` breakpoint up. Below `lg` the furniture differs but the rule does
+not: the sticky bottom bar carries whichever control the page made primary, and the quiet
+strip under the title carries the other one.
 
 #### Scenario: Desktop tab row is not starved by the actions
 
@@ -30,11 +30,17 @@ apply CTA.
 - **THEN** Discussion, Report, Save and Add-to-list render to the right of the content tabs
 - **AND** they share the single rule drawn under the tab row
 
-#### Scenario: Below lg the arrangement is unchanged
+#### Scenario: The phone's sticky bar carries the primary control
 
-- **WHEN** the job detail page renders narrower than `lg`
-- **THEN** the quiet action strip renders under the job title as before
-- **AND** the apply CTA renders only in the sticky bottom bar
+- **WHEN** the page renders narrower than `lg` on a posting whose auto-apply can be started
+- **THEN** the sticky bottom bar carries the auto-apply button, with its `Pro` marker
+- **AND** the apply link renders in the quiet strip under the title instead
+
+#### Scenario: The phone falls back to the apply link
+
+- **WHEN** the page renders narrower than `lg` and auto-apply is not the primary control
+- **THEN** the sticky bottom bar carries the apply link, at whatever rank the page gave it
+- **AND** the quiet strip does not repeat it
 
 ### Requirement: Auto-apply is the primary CTA when it can be started
 

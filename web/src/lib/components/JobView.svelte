@@ -8,6 +8,7 @@
     Check,
     CheckCircle2,
     Clock,
+    ExternalLink,
     Eye,
     Flag,
     MessageSquare,
@@ -15,7 +16,7 @@
   } from '@lucide/svelte';
   import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { autoApplyButtonState, jobCtaPlan, undemotedExternalCta } from '$lib/autoApplyButton';
+  import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, requirementGroups, summaryFacets } from '$lib/enrichment';
@@ -308,7 +309,6 @@
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
 
-
   async function onAutoApplyClick() {
     if (!isAuthenticated()) {
       promptSignIn();
@@ -340,11 +340,7 @@
      vetted — the same stance the description sanitizer takes on in-body links
      (internal/sources/sanitize.go). Without it a submitted vacancy buys a followed
      link from every job page, which is what the SEO submissions are actually after. -->
-{#snippet applyCta(
-  size: 'md' | 'lg',
-  className: string,
-  external: { label: string; primary: boolean },
-)}
+{#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   <Button
     variant={external.primary ? 'primary' : 'outline'}
     {size}
@@ -370,18 +366,18 @@
      white in the light theme, near-white on black in the dark one — so it stays the highest
      contrast thing on a brand-green button in either. A tint of the button's own foreground
      was the first try and it dissolved into the fill. -->
-{#snippet autoApplyCta(className: string)}
+{#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
   {#if cta.autoApply}
-    {@const button = cta.autoApply}
+    {@const autoApply = cta.autoApply}
     <Button
-      variant={button.primary ? 'primary' : 'secondary'}
-      size="md"
-      disabled={button.disabled || autoApplySubmitting}
+      variant={autoApply.primary ? 'primary' : 'secondary'}
+      {size}
+      disabled={autoApply.disabled || autoApplySubmitting}
       onclick={onAutoApplyClick}
       class={className}
     >
-      {button.label}
-      {#if button.pro}
+      {autoApply.label}
+      {#if autoApply.pro}
         <span
           class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
         >
@@ -454,24 +450,24 @@
   {#if posted || views > 0 || applies > 0}
     <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
       {#if posted}
-      <span
-        class="inline-flex items-center gap-1 whitespace-nowrap"
-        title={`Posted ${formatDateTime(job.posted_at)}`}
-      >
-        <Clock class="size-3.5 shrink-0" aria-hidden="true" />
-        <span class="sr-only">Posted</span>
-        <time datetime={job.posted_at}>{posted}</time>
-      </span>
-      {#if updated && updated !== posted}
         <span
           class="inline-flex items-center gap-1 whitespace-nowrap"
-          title={`Updated ${formatDateTime(job.updated_at)}`}
+          title={`Posted ${formatDateTime(job.posted_at)}`}
         >
-          <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
-          <span class="sr-only">Updated</span>
-          <time datetime={job.updated_at}>{updated}</time>
+          <Clock class="size-3.5 shrink-0" aria-hidden="true" />
+          <span class="sr-only">Posted</span>
+          <time datetime={job.posted_at}>{posted}</time>
         </span>
-      {/if}
+        {#if updated && updated !== posted}
+          <span
+            class="inline-flex items-center gap-1 whitespace-nowrap"
+            title={`Updated ${formatDateTime(job.updated_at)}`}
+          >
+            <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
+            <span class="sr-only">Updated</span>
+            <time datetime={job.updated_at}>{updated}</time>
+          </span>
+        {/if}
       {/if}
       <!-- A zero counter is omitted rather than drawn: "0 views" on a posting nobody has
            opened yet measures our own traffic, not the job. -->
@@ -517,6 +513,24 @@
     {@render reportButton()}
     {@render saveButton()}
     <AddToListButton jobSlug={job.public_slug} />
+    <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
+         whenever auto-apply can be started, so the posting's own page needs a door
+         somewhere else — and this strip is where the quiet things already are. On lg the
+         same link is a button up beside the title, so this copy stays hidden rather than
+         offering it twice. Same handler as that button: one click, one apply-intent event,
+         whichever copy the reader reached. -->
+    {#if cta.autoApply?.primary}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
+        href={job.url}
+        class="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground lg:hidden"
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        onclick={onApplyClick}
+      >
+        <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
+        {cta.external.label}
+      </a>
+    {/if}
   </div>
 {/snippet}
 
@@ -529,7 +543,7 @@
      auto-apply has no button there at all. -->
 {#snippet ctaGroup()}
   <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
-    {@render autoApplyCta('shrink-0')}
+    {@render autoApplyCta('md', 'shrink-0')}
     {@render applyCta('md', 'shrink-0', cta.external)}
   </div>
 {/snippet}
@@ -701,7 +715,13 @@
          between the employer and the role. Right-aligned like the lg copy beside the
          tabs, so the strip reads the same on both; `-mr-2` cancels the last button's
          own padding, lining its right edge up with the column's. -->
-    {@render actionStrip('-mr-2 flex w-full justify-end border-b border-border pb-2 lg:hidden')}
+    <!-- `flex-wrap` only on this copy: the phone's strip carries a fifth item the tab row's
+         does not (the link out), and five labels do not fit one phone-width line — without
+         it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
+         a line with the TabStrip and must not wrap. -->
+    {@render actionStrip(
+      '-mr-2 flex w-full flex-wrap justify-end border-b border-border pb-2 lg:hidden',
+    )}
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
          once for the whole page: a gauge and the hedged wording here, the criteria and
@@ -867,7 +887,7 @@
                row calls a quiet `Show origin` would be one link at two ranks on one page. -->
           <div class="hidden shrink-0 items-center gap-2 lg:flex">
             {@render saveButton('size-9 rounded-md px-0', true)}
-            {@render autoApplyCta('shrink-0')}
+            {@render autoApplyCta('md', 'shrink-0')}
             {@render applyCta('md', 'shrink-0', cta.external)}
           </div>
         </div>
@@ -1001,15 +1021,24 @@
        frosted-glass panel (semi-transparent bg + backdrop-blur), full-bleed via
        negative margins that cancel the page gutter. pointer-events-none lets the
        description scroll under the glass, with pointer-events-auto re-enabling the
-       button. Desktop uses the inline header button instead (hidden at lg). -->
+       button. Desktop uses the inline header button instead (hidden at lg).
+       It carries whichever of the two controls the plan made primary — auto-apply where
+       that can be started, the apply link everywhere else — because this bar IS the phone's
+       call to action, and naming exactly one is the plan's whole job. The other control
+       does not vanish: the quiet strip under the title picks the apply link up whenever
+       auto-apply has taken this bar. -->
   <div
     class="pointer-events-none sticky bottom-0 z-30 -mx-5 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
   >
-    {@render applyCta(
-      'lg',
-      'pointer-events-auto w-full rounded-xl font-semibold shadow-lg',
-      undemotedExternalCta,
-    )}
+    {#if cta.autoApply?.primary}
+      {@render autoApplyCta('lg', 'pointer-events-auto w-full rounded-xl font-semibold shadow-lg')}
+    {:else}
+      {@render applyCta(
+        'lg',
+        'pointer-events-auto w-full rounded-xl font-semibold shadow-lg',
+        cta.external,
+      )}
+    {/if}
   </div>
 </article>
 

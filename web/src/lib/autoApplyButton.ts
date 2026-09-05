@@ -62,14 +62,7 @@ const quiet = (label: string): NonNullable<JobCtaPlan['autoApply']> => ({
 });
 
 const showOrigin = { label: 'Show origin', primary: false } as const;
-
-/** The apply link at full rank. Exported for the one bar that renders it WITHOUT an
- *  auto-apply button beside it — the mobile sticky bar, where auto-apply has no button on
- *  any device — since a demoted label there would step aside for nothing the reader can
- *  reach, and writing the word out a second time would give these buttons a second place
- *  that decides what they say. */
-export const undemotedExternalCta = { label: 'Apply', primary: true } as const;
-const apply = undemotedExternalCta;
+const apply = { label: 'Apply', primary: true } as const;
 
 /** Ranks the two CTAs for a posting.
  *
