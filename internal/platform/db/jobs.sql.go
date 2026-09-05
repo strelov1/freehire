@@ -3247,28 +3247,6 @@ SET enrichment         =
                 'salary_period', NULLIF(salary_period_manual, '')
             ))
             ELSE '{}'::jsonb
-        END
-        -- Both sides are coerced to an array BEFORE their length is asked for, because
-        -- jsonb_array_length RAISES on anything else and COALESCE catches only SQL
-        -- NULL, not a JSON ` + "`" + `null` + "`" + `. A payload carrying ` + "`" + `"requirements": null` + "`" + `, or a
-        -- column holding jsonb ` + "`" + `null` + "`" + `, would otherwise turn every enrichment write for
-        -- that job into a permanent 22023 — retry, retry, dead-letter. The guard is on
-        -- the VALUE rather than in the WHEN because Postgres does not promise to
-        -- short-circuit an OR/AND, so a type test beside the length call is not a
-        -- guarantee that the length call is skipped.
-        || CASE
-            WHEN jsonb_array_length(CASE
-                     WHEN jsonb_typeof($1::jsonb -> 'requirements') = 'array'
-                     THEN $1::jsonb -> 'requirements'
-                     ELSE '[]'::jsonb
-                 END) = 0
-             AND jsonb_array_length(CASE
-                     WHEN jsonb_typeof(requirements_derived) = 'array'
-                     THEN requirements_derived
-                     ELSE '[]'::jsonb
-                 END) > 0
-            THEN jsonb_build_object('requirements', requirements_derived)
-            ELSE '{}'::jsonb
         END,
     enriched_at        = $2,
     enrichment_version = $3,
@@ -3298,12 +3276,14 @@ type SetJobEnrichmentParams struct {
 // min/max does not blank the other's payload value; each overlay only fires at all
 // when at least one of its own bounds is set (the presence signal).
 //
-// A third overlay follows them, with the opposite precedence: requirements_derived
-// FILLS `requirements` only when the payload states none of its own. The model reads
-// the postings whose requirements are prose with no list markup, which the derivation
-// cannot reach, so where the model has a reading it stands. The overlay is what makes
-// the derived list survive enrichment: this statement replaces the blob wholesale, so
-// without it every enrichment run would erase what ingest derived.
+// There is deliberately NO overlay for requirements_derived here, though one lived in
+// this statement briefly. It would MATERIALISE the derived list into the blob, and
+// nothing revises a blob: a later crawl rewrites the column and leaves the copy, so a
+// description edit that deleted the requirements section would leave the page quoting
+// a posting that no longer says it — and the backfill could not reach it either. The
+// fold belongs on the read path, where it re-reads the column every time
+// (jobview.FromDomain). The column stays the single source; the blob holds only what
+// the model itself said.
 func (q *Queries) SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error {
 	_, err := q.db.Exec(ctx, setJobEnrichment,
 		arg.Enrichment,

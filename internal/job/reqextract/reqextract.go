@@ -60,6 +60,41 @@ var preferredHeadings = []string{
 	"it would be great if you",
 }
 
+// closingHeadings are the section titles that END a requirements section without
+// starting one. They exist because structure alone cannot tell a heading from a
+// lead-in: a posting written in a rich-text editor heads its sections with a bolded
+// paragraph, which is the same shape `<p>You will need:</p>` takes. An h1–h6 outside
+// the vocabulary closes a section on its tag alone; an inline element needs to be
+// RECOGNIZED, or the spacers and lead-ins between a heading and its bullets would
+// close it too.
+//
+// Everything here names the section a posting most often puts right after its
+// requirements — which is the benefits list, the one thing that must never be read as
+// a requirement. An unrecognized inline line still leaves the section open: this is a
+// dictionary, so what it does not know, it does not act on.
+var closingHeadings = []string{
+	"about us",
+	"about the company",
+	"about the role",
+	"about the team",
+	"benefits",
+	"benefits and perks",
+	"compensation",
+	"compensation and benefits",
+	"how to apply",
+	"interview process",
+	"next steps",
+	"our offer",
+	"perks",
+	"perks and benefits",
+	"salary",
+	"the process",
+	"what we offer",
+	"what you get",
+	"what you will get",
+	"why join us",
+}
+
 var requiredHeadings = []string{
 	"requirements",
 	"requirement",
@@ -207,13 +242,17 @@ func isHeadingCandidate(n *xhtml.Node) bool {
 // in force before it. Three outcomes, and the difference between them is what decides
 // whether a list two elements down is read as requirements:
 //
-//   - The text is in the vocabulary: it OPENS a section at that priority.
-//   - A structural heading (h1–h6) outside the vocabulary CLOSES the open section —
-//     "Benefits" ends "Requirements".
-//   - An inline element outside the vocabulary LEAVES the section as it was. This is
-//     the spacer `<p></p>` and the lead-in `<p>You will need:</p>` that a rich-text
-//     editor puts between a heading and its bullets; closing on those cost real
-//     postings their lists.
+//   - The text is in the requirements vocabulary: it OPENS a section at that priority.
+//   - The text is in closingHeadings, or it is a structural heading (h1–h6) outside
+//     every vocabulary: it CLOSES the open section — "Benefits" ends "Requirements".
+//   - Anything else inline LEAVES the section as it was. This is the spacer `<p></p>`
+//     and the lead-in `<p>You will need:</p>` that a rich-text editor puts between a
+//     heading and its bullets; closing on those cost real postings their lists.
+//
+// The asymmetry between the last two is the whole reason closingHeadings exists. An
+// h1–h6 announces itself as a heading by its tag, so an unrecognized one can safely
+// close. An inline element does not: `<p>Benefits:</p>` and `<p>You will need:</p>`
+// are the same shape, and only a vocabulary tells them apart.
 //
 // Prose never reaches here: a text block longer than maxHeadingRunes is not a
 // candidate, and the walk closes the section on it in a later case instead.
@@ -224,6 +263,9 @@ func headingDecision(n *xhtml.Node, open string) string {
 	}
 	if matches(heading, requiredHeadings) {
 		return "required"
+	}
+	if matches(heading, closingHeadings) {
+		return ""
 	}
 	switch n.DataAtom {
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:

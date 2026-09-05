@@ -25,8 +25,9 @@ Measured on prod, 2026-09-04:
 
 The 86%-distinct figure is the load-bearing one: this is a long tail, not a
 vocabulary. It can never be a facet or a filter. It is display material, and
-material for the candidate-side stack (`matchanalysis`, `coverletter`) that already
-takes a requirement list as input.
+material. (An earlier draft added "and material for the candidate-side stack" —
+`matchanalysis` builds its own list from a first LLM stage and `coverletter` takes
+that one, so neither reads this field.)
 
 A bucket pass over 74,623 items from the 8,000 most recently enriched rows:
 
@@ -51,9 +52,9 @@ A bucket pass over 74,623 items from the 8,000 most recently enriched rows:
    a second normaliser living in `web/`, drifting from `internal/dict`. The list is a
    quotation from the posting and is only honest whole.
 3. **Store the deterministic derivation in a column,** filled by a dedicated one-off
-   backfill, rather than parsing on the request path. The stored list also reaches
-   `matchanalysis` and `coverletter`, which today have nothing to read on 97% of
-   postings.
+   backfill, rather than parsing on the request path: the backfill needs somewhere to
+   put its answer, and re-parsing every body on every read repeats work whose input
+   never changes.
 4. **One served field, one reader.** The derived list is merged into
    `enrichment.requirements` at write time, not served as a second field.
 5. **LLM wins; the derivation fills the gap.** The model reads the 77% of postings
@@ -201,6 +202,6 @@ that both groups render in order when present.
   clustering problem and this list is display-only.
 - Non-English heading vocabulary. The catalogue is majority English; adding more
   languages is a later, additive change to one vocabulary.
-- Feeding the derived list into `matchanalysis` / `coverletter`. They read
-  `enrichment.requirements` already, so they inherit the wider coverage for free —
-  no change needed, but worth measuring after the backfill.
+- Feeding the derived list into `matchanalysis` / `coverletter`. Neither reads
+  `enrichment.requirements`: the first builds its own list from an LLM stage and the
+  second takes that. Wiring them to this column is a separate change.

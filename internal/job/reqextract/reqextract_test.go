@@ -185,6 +185,34 @@ func TestDerive(t *testing.T) {
 			html: `<div>Requirements</div><div><ul><li>Go</li></ul></div>`,
 			want: []enrich.Requirement{req("Go")},
 		},
+		// A posting written in a rich-text editor heads its sections with a bolded
+		// paragraph, not an h2 — which is the same shape a lead-in takes. Structure
+		// alone cannot tell "Benefits:" from "You will need:", so the closing headings
+		// are their own vocabulary. Without it the benefits list two elements after
+		// "Requirements" was read as required.
+		{
+			name: "an inline benefits heading closes the section",
+			html: `<p>Requirements:</p><p>Benefits:</p><ul><li>Free lunch</li></ul>`,
+			want: nil,
+		},
+		{
+			name: "an inline benefits heading closes it across a lead-in too",
+			html: `<p>Requirements</p><p>We ask a lot.</p><p>Perks:</p>
+			       <ul><li>Free lunch</li><li>Gym</li></ul>`,
+			want: nil,
+		},
+		{
+			name: "a bolded what-we-offer heading closes the section",
+			html: `<h3>Requirements</h3><p><strong>What we offer</strong></p><ul><li>Free lunch</li></ul>`,
+			want: nil,
+		},
+		// The closing vocabulary must not swallow the section it is meant to end: a
+		// list that really does follow the requirements heading is still taken.
+		{
+			name: "an inline requirements heading still opens its own section",
+			html: `<p>About us</p><p>Requirements:</p><ul><li>Go</li></ul>`,
+			want: []enrich.Requirement{req("Go")},
+		},
 	}
 
 	for _, tt := range tests {

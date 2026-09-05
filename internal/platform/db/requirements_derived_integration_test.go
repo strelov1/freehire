@@ -77,7 +77,7 @@ func equalStrings(a, b []string) bool {
 
 const derivedGo = `[{"text":"5+ years of Go","priority":"required"},{"text":"Kubernetes","priority":"preferred"}]`
 
-func TestSetJobEnrichment_DerivedRequirementsOverlay(t *testing.T) {
+func TestSetJobEnrichment_LeavesTheDerivedRequirementsAlone(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -104,51 +104,45 @@ func TestSetJobEnrichment_DerivedRequirementsOverlay(t *testing.T) {
 			t.Errorf("requirements = %v, want the payload's %v", texts(got), want)
 		}
 		if got.Summary != "keep me" {
-			t.Errorf("summary = %q, want the payload's (the overlay must not disturb it)", got.Summary)
-		}
-	})
-
-	t.Run("a payload stating none picks up the derivation", func(t *testing.T) {
-		truncate(t, pool)
-		id := insertJobWithDerivedRequirements(t, pool, "derivefills", derivedGo)
-		set(t, id, `{"summary":"a synopsis"}`)
-
-		got := readRequirements(t, pool, id)
-		want := []string{"5+ years of Go/required", "Kubernetes/preferred"}
-		if !equalStrings(texts(got), want) {
-			t.Errorf("requirements = %v, want the derived %v", texts(got), want)
-		}
-		if got.Summary != "a synopsis" {
 			t.Errorf("summary = %q, want the payload's", got.Summary)
 		}
 	})
 
-	t.Run("an empty list in the payload counts as stating none", func(t *testing.T) {
+	// The load-bearing property, and the reason there is no overlay here. Copying the
+	// derived list into the blob would make it a SECOND stored value that nothing
+	// revises: a later crawl rewrites the column and leaves the copy, so a description
+	// edit deleting the requirements section would leave the page quoting a posting
+	// that no longer says it, and the backfill could not reach it. The fold lives on
+	// the read path instead (jobview.FromDomain), where it re-reads the column every
+	// time.
+	t.Run("a payload stating none does NOT materialise the derived list", func(t *testing.T) {
 		truncate(t, pool)
-		id := insertJobWithDerivedRequirements(t, pool, "emptylist", derivedGo)
-		set(t, id, `{"requirements":[]}`)
-
-		got := readRequirements(t, pool, id)
-		if len(got.Requirements) != 2 {
-			t.Errorf("requirements = %v, want the derived two — an empty array is not a reading", texts(got))
-		}
-	})
-
-	t.Run("neither source yields no requirements at all", func(t *testing.T) {
-		truncate(t, pool)
-		id := insertJobWithDerivedRequirements(t, pool, "neither", `[]`)
+		id := insertJobWithDerivedRequirements(t, pool, "nomaterialise", derivedGo)
 		set(t, id, `{"summary":"a synopsis"}`)
 
-		if got := readRequirements(t, pool, id); len(got.Requirements) != 0 {
-			t.Errorf("requirements = %v, want none", texts(got))
+		got := readRequirements(t, pool, id)
+		if len(got.Requirements) != 0 {
+			t.Errorf("enrichment.requirements = %v, want none stored — the column is the "+
+				"single source and the projection folds it in at read time", texts(got))
+		}
+		if got.Summary != "a synopsis" {
+			t.Errorf("summary = %q, want the payload's", got.Summary)
+		}
+
+		// …and the column itself is untouched, so the projection still has it to fold.
+		var stored []byte
+		if err := pool.QueryRow(ctx, "SELECT requirements_derived FROM jobs WHERE id = $1", id).Scan(&stored); err != nil {
+			t.Fatalf("read requirements_derived: %v", err)
+		}
+		if string(stored) == "[]" {
+			t.Error("requirements_derived was cleared by the enrichment write")
 		}
 	})
 
-	// jsonb_array_length RAISES on a non-array, and COALESCE catches only SQL NULL,
-	// not a JSON `null`. Unguarded, any of these turns every enrichment write for that
-	// job into a permanent 22023 — retry, retry, dead-letter. None can arrive today;
-	// that is why the guard is cheap and why this test is what keeps it.
-	t.Run("a non-array requirements value does not raise", func(t *testing.T) {
+	// The enrichment payload is untrusted JSON. None of these shapes can arrive
+	// through the typed contract today, but a write that raises would dead-letter the
+	// job permanently, so the statement must simply store what it was given.
+	t.Run("an odd requirements value in the payload does not raise", func(t *testing.T) {
 		for name, payload := range map[string]string{
 			"json null": `{"requirements":null}`,
 			"an object": `{"requirements":{"text":"Go"}}`,
@@ -157,38 +151,9 @@ func TestSetJobEnrichment_DerivedRequirementsOverlay(t *testing.T) {
 		} {
 			t.Run(name, func(t *testing.T) {
 				truncate(t, pool)
-				id := insertJobWithDerivedRequirements(t, pool, "nonarray", derivedGo)
-				set(t, id, payload)
-
-				// The payload states no usable list, so the derivation fills.
-				if got := readRequirements(t, pool, id); len(got.Requirements) != 2 {
-					t.Errorf("requirements = %v, want the derived two", texts(got))
-				}
+				id := insertJobWithDerivedRequirements(t, pool, "oddshape", derivedGo)
+				set(t, id, payload) // fails the test if it errors
 			})
-		}
-	})
-
-	t.Run("a derived column holding json null does not raise", func(t *testing.T) {
-		truncate(t, pool)
-		id := insertJobWithDerivedRequirements(t, pool, "nullcolumn", `null`)
-		set(t, id, `{"summary":"a synopsis"}`)
-
-		if got := readRequirements(t, pool, id); len(got.Requirements) != 0 {
-			t.Errorf("requirements = %v, want none", texts(got))
-		}
-	})
-
-	// The point of the overlay: the statement assigns the blob wholesale, so without
-	// it every enrichment run would silently erase what ingest derived.
-	t.Run("a second run cannot erase the derived list", func(t *testing.T) {
-		truncate(t, pool)
-		id := insertJobWithDerivedRequirements(t, pool, "survives", derivedGo)
-		set(t, id, `{"summary":"first"}`)
-		set(t, id, `{"summary":"second"}`)
-
-		got := readRequirements(t, pool, id)
-		if len(got.Requirements) != 2 {
-			t.Errorf("requirements = %v, want the derived two still present", texts(got))
 		}
 	})
 

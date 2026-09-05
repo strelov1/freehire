@@ -4232,12 +4232,14 @@ type Querier interface {
 	// min/max does not blank the other's payload value; each overlay only fires at all
 	// when at least one of its own bounds is set (the presence signal).
 	//
-	// A third overlay follows them, with the opposite precedence: requirements_derived
-	// FILLS `requirements` only when the payload states none of its own. The model reads
-	// the postings whose requirements are prose with no list markup, which the derivation
-	// cannot reach, so where the model has a reading it stands. The overlay is what makes
-	// the derived list survive enrichment: this statement replaces the blob wholesale, so
-	// without it every enrichment run would erase what ingest derived.
+	// There is deliberately NO overlay for requirements_derived here, though one lived in
+	// this statement briefly. It would MATERIALISE the derived list into the blob, and
+	// nothing revises a blob: a later crawl rewrites the column and leaves the copy, so a
+	// description edit that deleted the requirements section would leave the page quoting
+	// a posting that no longer says it — and the backfill could not reach it either. The
+	// fold belongs on the read path, where it re-reads the column every time
+	// (jobview.FromDomain). The column stays the single source; the blob holds only what
+	// the model itself said.
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
 	// Publish a list: set its public slug, owner-scoped, bumping updated_at. The service
 	// decides the slug (keeping an existing one on re-share, minting a fresh one

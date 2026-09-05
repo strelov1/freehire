@@ -142,10 +142,17 @@ func run() int {
 			break
 		}
 
+		// Narrow the last chunk to what is left of the budget, so the run stops AT the
+		// maximum rather than up to one chunk past it. Checking only between chunks
+		// would overshoot by rowsPerChunk, which makes the knob approximate.
+		limit := int32(rowsPerChunk)
+		if left := maxPerRun - examined; left < int64(limit) {
+			limit = int32(left)
+		}
 		rows, err := q.ListJobsForRequirementsBackfill(ctx, db.ListJobsForRequirementsBackfillParams{
 			FromID:   from,
 			ToID:     from + step,
-			RowLimit: rowsPerChunk,
+			RowLimit: limit,
 		})
 		if err != nil {
 			log.Printf("backfill-requirements: read chunk %d..%d after %d filled: %v", from, from+step, filled, err)
@@ -156,7 +163,7 @@ func run() int {
 		// more rows than one statement should materialise. Resume from the last id
 		// seen rather than stepping past the rest of the range, which would skip them.
 		next := from + step
-		if len(rows) == int(rowsPerChunk) {
+		if len(rows) == int(limit) && len(rows) > 0 {
 			next = rows[len(rows)-1].ID + 1
 		}
 

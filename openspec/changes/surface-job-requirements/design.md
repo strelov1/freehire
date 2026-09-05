@@ -42,8 +42,9 @@ yield of the code that ships.
   single additional model call.
 - Keep one served field with one reader, so nothing downstream learns a second
   code path.
-- Let `matchanalysis` and `coverletter` inherit the wider coverage with no change
-  of their own.
+- Nothing downstream inherits anything: `matchanalysis` builds its own requirement
+  list from a first LLM stage and `coverletter` takes that. An earlier draft claimed
+  otherwise and leaned on it; the claim was wrong and is not load-bearing here.
 
 **Non-Goals:**
 
@@ -88,10 +89,13 @@ repository's test architecture and belongs in its own change.
 path. Cheaper to ship — no migration, no backfill — and a parser fix would reach
 every row instantly.
 
-Rejected because the value is not only on the page. `matchanalysis` and
-`coverletter` take a requirement list as input and today have nothing to read on
-97% of postings; a request-path derivation would not reach them. Storing it once
-serves both.
+Rejected on smaller but real ground: the backfill needs somewhere to put its answer,
+and parsing every job body on every read repeats work whose input never changes.
+
+An earlier draft argued instead that `matchanalysis` and `coverletter` read this
+field and would inherit the coverage. They do not — `matchanalysis` builds its own
+list from a first LLM stage and `coverletter` takes that one. The decision survives
+losing that argument; the argument should not survive being wrong.
 
 ### The fold happens on the READ path, not only at write time
 
