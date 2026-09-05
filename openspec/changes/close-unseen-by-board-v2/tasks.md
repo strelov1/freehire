@@ -101,12 +101,12 @@ Unit-level, against the pipeline/sweep fakes.
 
 ## 7. Documentation
 
-- [ ] 7.1 `docs/agents/job-lifecycle.md`: mechanism (1) gains the board scope, gated on the
+- [x] 7.1 `docs/agents/job-lifecycle.md`: mechanism (1) gains the board scope, gated on the
       `fullBoardListing` marker. State plainly that the company-scope leak remains accepted for
       any provider without the marker.
-- [ ] 7.2 `internal/ingest/pipeline/AGENTS.md`: the board-qualification rule, the `Failed>0`
+- [x] 7.2 `internal/ingest/pipeline/AGENTS.md`: the board-qualification rule, the `Failed>0`
       refinement, and why zero-yield is refused.
-- [ ] 7.3 `internal/ingest/sources` package docs (or `source.go`'s own comments): the
+- [x] 7.3 `internal/ingest/sources` package docs (or `source.go`'s own comments): the
       `fullBoardListing` bar, referencing `habrcareer.go` as the model and `solidjobs.go` as the
       negative example that motivated it.
 
