@@ -5,10 +5,10 @@ import {
   PLACEHOLDER_ROLES,
   ROLE_PREFIX,
   TYPE_MS,
-  TYPEWRITER_START,
+  ROLE_PLACEHOLDER,
   type TypewriterState,
   completeWord,
-  rolePlaceholder,
+  typewriterStart,
   typedTail,
   typewriterStep,
 } from './placeholderRoles';
@@ -40,12 +40,12 @@ describe('PLACEHOLDER_ROLES', () => {
   });
 });
 
-describe('rolePlaceholder', () => {
+describe('ROLE_PLACEHOLDER', () => {
   // Pinned literally rather than re-derived through the same functions: mapping the same
   // inputs through the same code would restate the implementation and pass however the
   // wording changed. These are the words that ship.
   it('is a fixed prefix and the roles that follow it', () => {
-    expect(rolePlaceholder()).toEqual({
+    expect(ROLE_PLACEHOLDER).toEqual({
       prefix: 'Search jobs — e.g. ',
       roles: ['Backend', 'Frontend', 'DevOps', 'QA', 'Data Science', 'Product'],
     });
@@ -58,6 +58,7 @@ describe('rolePlaceholder', () => {
 
 describe('typewriterStep', () => {
   const roles = ['ab', 'c'];
+  const start = typewriterStart(roles);
   const run = (from: TypewriterState, times: number) => {
     const frames: { tail: string; delayMs: number }[] = [];
     let state = from;
@@ -69,28 +70,26 @@ describe('typewriterStep', () => {
     return frames;
   };
 
-  it('starts with nothing typed', () => {
-    expect(typedTail(TYPEWRITER_START, roles)).toBe('');
+  // The server renders this state, so it has to be a whole sentence: an empty tail would
+  // ship "Search jobs - e.g. " to anyone reading before hydration or with JS off.
+  it('starts with the first word already whole', () => {
+    expect(typedTail(start, roles)).toBe('ab');
   });
 
-  it('types the word one character at a time', () => {
-    const [first, second] = run(TYPEWRITER_START, 2);
-    expect(first).toEqual({ tail: 'a', delayMs: TYPE_MS });
-    expect(second).toEqual({ tail: 'ab', delayMs: TYPE_MS });
-  });
-
-  it('holds the finished word before it starts deleting', () => {
+  it('holds that finished word, then erases it a character at a time', () => {
     // The pause is the delay attached to the step that BEGINS the deletion, so the whole
     // word stays on screen for it.
-    const frames = run(TYPEWRITER_START, 3);
-    expect(frames[2]).toEqual({ tail: 'a', delayMs: HOLD_MS });
+    const frames = run(start, 3);
+    expect(frames.map((f) => f.tail)).toEqual(['a', '', 'c']);
+    expect(frames[0]?.delayMs).toBe(HOLD_MS);
+    expect(frames[1]?.delayMs).toBe(DELETE_MS);
+    expect(frames[2]?.delayMs).toBe(TYPE_MS);
   });
 
-  it('deletes back to nothing, then types the next role', () => {
-    const frames = run(TYPEWRITER_START, 5);
-    expect(frames.map((f) => f.tail)).toEqual(['a', 'ab', 'a', '', 'c']);
-    expect(frames[3]?.delayMs).toBe(DELETE_MS);
-    expect(frames[4]?.delayMs).toBe(TYPE_MS);
+  it('types the next word one character at a time', () => {
+    const frames = run({ role: 0, chars: 0, deleting: false }, 2);
+    expect(frames[0]).toEqual({ tail: 'a', delayMs: TYPE_MS });
+    expect(frames[1]).toEqual({ tail: 'ab', delayMs: TYPE_MS });
   });
 
   it('wraps from the last role back to the first', () => {

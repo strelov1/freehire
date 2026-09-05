@@ -14,8 +14,10 @@
       permanently on first focus or input: advance every 2.5s, stop
       permanently on first focus or input, hold at index 0 under `prefers-reduced-motion`,
       fade via a `::placeholder` colour transition.
-- [x] 1.5 Pass `rolePlaceholders()` from the jobs call sites only; `/companies` keeps its
-      static placeholder.
+- [x] 1.5 Pass the role placeholder from the jobs call sites only; `/companies` keeps its
+      static one. (Superseded: `rolePlaceholders()` named here was replaced by the
+      `ROLE_PLACEHOLDER` constant when the crossfade became a per-character typing
+      animation — see specs/search-role-placeholder.)
 - [x] 1.6 simplify → tests green → `requesting-code-review` + `/code-review` → fix
       Critical/Important.
 

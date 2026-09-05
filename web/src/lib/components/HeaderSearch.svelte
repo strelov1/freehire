@@ -20,9 +20,9 @@
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
   import { starterSuggestions, type Suggestion } from '$lib/suggestions';
   import {
-    TYPEWRITER_START,
     completeWord,
     typedTail,
+    typewriterStart,
     typewriterStep,
     type TypewriterState,
   } from '$lib/placeholderRoles';
@@ -103,7 +103,14 @@
   // lib/placeholderRoles.ts, which is where they can be tested without a browser.
   const typing = $derived(typeof placeholder === 'string' ? null : placeholder);
 
-  let typewriter = $state<TypewriterState>(TYPEWRITER_START);
+  // Capturing just the initial value is the intent: this is where the animation STARTS,
+  // and the server renders it. A caller that later swaps its word list is handled by the
+  // stepper instead — a role index the new list has no word for steps past on the next
+  // tick rather than needing this seed to be recomputed.
+  // svelte-ignore state_referenced_locally
+  let typewriter = $state<TypewriterState>(
+    typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles),
+  );
   let typingStopped = $state(false);
 
   function stopTyping() {
@@ -113,6 +120,17 @@
     // attention arrived on the field.
     typewriter = completeWord(typewriter, typing.roles);
     typingStopped = true;
+  }
+
+  /** Undo a stop that no visitor asked for — see the autofocus effect below. */
+  function resumeTyping() {
+    if (!typing) return;
+    // Both halves, not just the flag: stopTyping also FILLED IN the current word, so
+    // clearing the flag alone would leave the animation resuming from a finished word
+    // and skip typing the very first one — on the homepage hero, the one surface this
+    // exists for.
+    typewriter = typewriterStart(typing.roles);
+    typingStopped = false;
   }
 
   // Sampled AND subscribed: the OS-level setting can be turned on mid-visit, and reading
@@ -128,15 +146,19 @@
 
   $effect(() => {
     if (typingStopped || !typing) return;
-    // Under reduced motion the first role stands whole and nothing is scheduled. Reading
-    // `typing.roles` before the return keeps this effect subscribed to the prop, so a
-    // caller that swaps its word list still restarts the animation.
     const roles = typing.roles;
+    // Under reduced motion nothing is scheduled at all and the first role simply stands.
     if (reduceMotion || roles.length === 0) return;
 
     // One chained timeout rather than an interval: every step has its own delay (a typed
     // character, a faster deleted one, and the long hold on a finished word), so a fixed
     // tick would have to be the shortest of them and then count its way to the others.
+    //
+    // `untrack` is what makes that chain real. Read plainly, the seed below would
+    // subscribe this effect to the very state its own callback writes: each character
+    // would invalidate the effect, the cleanup would cancel the link already scheduled,
+    // and the animation would be driven by re-runs at the mercy of flush latency rather
+    // than by the delays computed here.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = (from: TypewriterState) => {
       const { next, delayMs } = typewriterStep(from, roles);
@@ -145,7 +167,7 @@
         schedule(next);
       }, delayMs);
     };
-    schedule(typewriter);
+    schedule(untrack(() => typewriter));
     return () => clearTimeout(timer);
   });
 
@@ -203,10 +225,10 @@
     // put here", so close it back: their first click or keystroke opens it as usual.
     dismissed = true;
     // Same reasoning, and the same undo: the focus above fires the field's own handler,
-    // which stops the placeholder rotation. On the homepage — where this box IS the
-    // page, and the one surface the rotation exists for — that killed it before the
-    // first tick. A caret nobody placed has not interrupted anything.
-    typingStopped = false;
+    // which stops the placeholder animation. On the homepage — where this box IS the
+    // page, and the one surface the animation exists for — that killed it before the
+    // first character. A caret nobody placed has not interrupted anything.
+    resumeTyping();
   });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.

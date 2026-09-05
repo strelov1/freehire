@@ -34,10 +34,16 @@ export const PLACEHOLDER_ROLES: Category[] = [
   'product',
 ];
 
-/** The fixed prefix and the words that follow it, for the jobs search box. */
-export function rolePlaceholder(): { prefix: string; roles: string[] } {
-  return { prefix: ROLE_PREFIX, roles: PLACEHOLDER_ROLES.map(categoryLabel) };
-}
+/** The fixed prefix and the words that follow it, for the jobs search box.
+ *
+ *  A constant, not a factory. The labels are a pure lookup over a frozen list, so every
+ *  call would return an equal object with a new identity — and a caller that recomputes
+ *  it (the header re-derives its wording on every navigation) would hand the box a
+ *  "changed" prop, restarting the animation's pending delay on each page change. */
+export const ROLE_PLACEHOLDER: { prefix: string; roles: string[] } = {
+  prefix: ROLE_PREFIX,
+  roles: PLACEHOLDER_ROLES.map(categoryLabel),
+};
 
 // ---- the typing animation ----------------------------------------------------------
 //
@@ -62,8 +68,16 @@ export interface TypewriterState {
   deleting: boolean;
 }
 
-/** Nothing typed yet, on the first role. */
-export const TYPEWRITER_START: TypewriterState = { role: 0, chars: 0, deleting: false };
+/** Where the animation begins: the FIRST role already whole.
+ *
+ *  Not an empty tail. The server renders this state, and an empty tail would ship
+ *  `"Search jobs — e.g. "` — a sentence that stops mid-air for anyone reading before
+ *  hydration or with JavaScript off. Starting complete also means the first thing anyone
+ *  reads is a whole example, and the animation's first act is to erase it rather than to
+ *  correct a dangling line. */
+export function typewriterStart(roles: string[]): TypewriterState {
+  return { role: 0, chars: (roles[0] ?? '').length, deleting: false };
+}
 
 /** The visible tail for a state: the current role, cut to the characters typed so far. */
 export function typedTail(state: TypewriterState, roles: string[]): string {
