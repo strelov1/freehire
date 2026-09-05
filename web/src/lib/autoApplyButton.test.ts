@@ -58,9 +58,15 @@ describe('jobCtaPlan', () => {
       autoApply: { label: 'Auto-apply queued', primary: false, pro: false, disabled: true },
       external: { label: 'Show origin', primary: false },
     });
+  });
+
+  // Not demoted: `applied` is true of a posting from any source, and demoting on it would
+  // make a Greenhouse posting read differently from an identical Lever one for a reader in
+  // the identical situation.
+  it('leaves the apply button alone for a reader who already applied by hand', () => {
     expect(plan('applied')).toEqual({
       autoApply: { label: 'Already applied', primary: false, pro: false, disabled: true },
-      external: { label: 'Show origin', primary: false },
+      external: { label: 'Apply', primary: true },
     });
   });
 
@@ -86,14 +92,13 @@ describe('jobCtaPlan', () => {
   });
 
   // And the other half of it: a state where the reader still HAS something to do gets a
-  // loud button for it. `queued` and `applied` are the two where they do not — the
-  // submission is in flight or already made, and a loud button there would only invite a
-  // second one.
+  // loud button for it. `queued` is the one state where they do not — a submission is in
+  // flight, and a loud button there would only invite a second one.
   it('offers a primary CTA in every state that still has an action left', () => {
     for (const kind of kinds) {
       const p = plan(kind);
       const hasPrimary = Boolean(p.autoApply?.primary) || p.external.primary;
-      expect(hasPrimary, `state ${kind}`).toBe(kind !== 'queued' && kind !== 'applied');
+      expect(hasPrimary, `state ${kind}`).toBe(kind !== 'queued');
     }
   });
 

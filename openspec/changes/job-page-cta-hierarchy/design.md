@@ -60,7 +60,7 @@ a label, a loudness and a disabled state for it would be four fields describing 
 | `hidden`   | not rendered                            | `Apply`, primary         |
 | `idle`     | `Auto-apply` + `Pro`, primary, enabled  | `Show origin`, outline   |
 | `queued`   | `Auto-apply queued`, quiet, disabled    | `Show origin`, outline   |
-| `applied`  | `Already applied`, quiet, disabled      | `Show origin`, outline   |
+| `applied`  | `Already applied`, quiet, disabled      | `Apply`, primary         |
 | `declined` | `Auto-apply declined`, quiet, disabled  | `Apply`, primary         |
 | `failed`   | `Auto-apply couldn't complete`, quiet, disabled | `Apply`, primary |
 
@@ -69,14 +69,23 @@ table, not the markup: six states, two buttons, and a rule about how loud they m
 is easy to break silently in a template. A pure function unit-tests the whole table without
 mounting Svelte, which is precisely the seam `autoApplyButtonState` was extracted for.
 Putting it in the same file keeps one place that knows what the auto-apply button is. The
-rule is worth writing down twice — the invariant tests are what caught that `queued` and
-`applied` fall out of it, below.
+rule is worth writing down twice — the invariant tests are what caught that `queued` falls
+out of it, below.
 
-**Why `queued` and `applied` have no primary CTA at all.** Both are states where the reader
-has nothing left to do: the submission is in flight or already made. The obvious invariant
-("exactly one primary, always") would force a loud `Show origin` there, which reads as an
-invitation to apply a second time. The rule is therefore two-sided — never two primaries,
-and one wherever an action remains — with those two states the only place it yields none.
+**Why `queued` has no primary CTA at all.** The submission is in flight and the reader has
+nothing to do but wait. The obvious invariant ("exactly one primary, always") would force a
+loud button there, which reads as an invitation to apply a second time. The rule is
+therefore two-sided — never two primaries, and one wherever an action remains — with
+`queued` the only place it yields none.
+
+**Why `applied` does NOT demote.** It looks like the same case, and it is not. `applied`
+comes from `alreadyApplied` — the "Did you apply?" prompt after a manual click-through —
+which is true of a posting from any source, while this table only runs on the ones
+auto-apply can drive. Demoting on it would make a Greenhouse posting read differently from
+an identical Lever one for a reader in the identical situation: an artefact of routing a
+source-independent question through the auto-apply state machine, not a decision anybody
+made. Whether a page should quiet down for a reader who already applied is a real question,
+and it belongs to every source at once — not to this change.
 
 **Why `declined`/`failed` re-promote the external button.** The naive reading of the ask —
 "Apply becomes Show origin whenever auto-apply is shown" — leaves a page with no primary
@@ -88,6 +97,22 @@ button exists".
 **Alternative considered:** keeping the mapping inline in `JobView.svelte`. Rejected — the
 component is already 800 lines, and the rule that matters would be untestable without a
 mount.
+
+### The pinned header carries the same pair, the mobile sticky bar does not
+
+Three bars render the external link: the title row, the pinned desktop header, and the
+mobile sticky bar. The first two take the plan; only the third overrides it.
+
+The pinned header IS the title row for most of a several-screen description, so a
+brand-filled `Apply` there for the link the title row calls a quiet `Show origin` would put
+one link at two ranks on one page — and the argument against a loud button beside a queued
+attempt applies with full force to the bar the reader actually has in front of them. It
+therefore gains an auto-apply button it did not have before.
+
+The mobile sticky bar keeps `undemotedExternalCta`: auto-apply has no button below `lg` on
+any device, so a demoted label there would step aside for nothing the reader can reach.
+That constant is exported from `autoApplyButton.ts` rather than written out again, so the
+words these buttons say still have exactly one home.
 
 ### CTAs move into the existing `<header>` block, right-aligned against the title
 
@@ -102,10 +127,12 @@ the thing it acts on.
 
 ### The `Pro` marker is a span inside the button, not the `Badge` primitive
 
-`Badge`'s variants carry their own background and foreground colours, none of which are
-legible on `bg-brand`. The marker is a small inline pill styled from the button's own
-foreground token (`bg-brand-foreground/15 text-brand-foreground`), so it inherits the
-button's colour scheme in both themes instead of fighting it.
+`Badge`'s variants carry their own background and foreground colours, none of which read as
+a plan marker on `bg-brand`. The marker is a small inline pill taking the PAGE's own
+`foreground` for its fill and `background` for its text — near-black on white in the light
+theme, near-white on black in the dark one — so it is the highest-contrast thing on a
+brand-green button in either. A tint of the button's own foreground
+(`bg-brand-foreground/15`) was the first attempt and dissolved into the fill.
 
 ### The demoted button uses `outline`, not `ghost`
 
@@ -118,6 +145,13 @@ where Save and Report live.
 - **A non-Pro reader now meets a loud green button that refuses them.** → Deliberate: the
   refusal is a 402 carrying the upgrade path, and this is the page where that offer belongs.
   The `Pro` marker in the button is what keeps it from being a surprise.
+- **A SIGNED-OUT reader meets the same loud green button, and it only opens the sign-in
+  prompt** — while the link that does what they came for reads `Show origin`, a phrase that
+  does not say "apply". Signed-out traffic is most of the job page's traffic, so this is the
+  common case rather than an edge one. → Kept, because the page is where the Pro feature is
+  advertised and a visitor who cannot see it will not sign up for it; but it is the change's
+  weakest point and the first thing to measure. Making the plan fall back to `hidden` while
+  `!isAuthenticated()` is a one-line change if the funnel says so.
 - **`Show origin` is a weaker word than `Apply` and may cost external-apply clicks on
   Greenhouse postings.** → Accepted, and bounded: Greenhouse is a small slice of the
   catalogue, and the tracking on that click is unchanged, so the effect is measurable after

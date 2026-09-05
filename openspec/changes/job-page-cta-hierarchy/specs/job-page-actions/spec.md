@@ -52,7 +52,7 @@ after clicking.
 - **AND** it carries a `Pro` marker
 - **AND** it is enabled
 
-#### Scenario: A queued attempt is not a primary CTA
+#### Scenario: A standing or spent attempt is not a primary CTA
 
 - **WHEN** the reader already has a live auto-apply attempt for the posting
 - **THEN** the auto-apply button renders quiet and disabled, reading `Auto-apply queued`
@@ -66,14 +66,22 @@ after clicking.
 ### Requirement: The external apply button yields its rank to auto-apply
 
 The external apply button SHALL be demoted to an outline treatment labelled `Show origin`
-whenever auto-apply is the posting's primary CTA or an auto-apply attempt is already
-standing (queued, or already submitted). In every other case it SHALL keep its primary
-(brand fill) treatment and its `Apply` label.
+whenever auto-apply is the posting's primary CTA or an auto-apply attempt is queued. In
+every other case it SHALL keep its primary (brand fill) treatment and its `Apply` label.
+
+Every bar on the page that renders the external button beside an auto-apply button SHALL
+give it the same treatment the title row does. One link SHALL NOT read at two ranks on one
+page.
 
 The page SHALL NOT render two primary CTAs at once, and SHALL render one in every state
-where the reader still has an action left to take. The two states where none is rendered
-are exactly those where they do not: a submission already in flight, and a submission
-already made. A loud button in either would only invite a duplicate application.
+where the reader still has an action left to take. A queued attempt is the one state where
+none is rendered: a submission is in flight, and a loud button would only invite a
+duplicate.
+
+A reader who already applied to the posting by hand SHALL NOT change the external button.
+That fact is true of a posting from any source, and demoting on it would make a posting
+auto-apply can drive read differently from an identical one it cannot, for a reader in the
+identical situation.
 
 Demotion changes only the button's label and treatment. Its destination, its
 `nofollow noopener noreferrer` rel, its new-tab target, and the apply-intent tracking and
@@ -86,8 +94,13 @@ Demotion changes only the button's label and treatment. Its destination, its
 
 #### Scenario: Demoted while an attempt stands
 
-- **WHEN** an auto-apply attempt for the posting is queued, or auto-apply already submitted it
+- **WHEN** an auto-apply attempt for the posting is queued
 - **THEN** the external button reads `Show origin` with an outline treatment
+
+#### Scenario: The pinned header agrees with the title row
+
+- **WHEN** the reader scrolls past the title on a posting auto-apply can drive
+- **THEN** the pinned header carries the same two buttons, with the same labels and treatments
 
 #### Scenario: Promoted when auto-apply will not act
 
@@ -95,10 +108,16 @@ Demotion changes only the button's label and treatment. Its destination, its
 - **THEN** the external button reads `Apply` with the primary (brand fill) treatment
 - **AND** it is the only primary CTA on the page
 
-#### Scenario: No primary CTA while a submission stands
+#### Scenario: No primary CTA while a submission is in flight
 
-- **WHEN** an auto-apply attempt for the posting is queued, or auto-apply already submitted it
+- **WHEN** an auto-apply attempt for the posting is queued
 - **THEN** no button on the page carries the primary (brand fill) treatment
+
+#### Scenario: Applying by hand does not demote anything
+
+- **WHEN** the reader has already applied to the posting themselves
+- **THEN** the external button reads `Apply` with the primary (brand fill) treatment
+- **AND** it reads the same way whether or not auto-apply can drive the posting
 
 #### Scenario: Unchanged where auto-apply is not offered
 

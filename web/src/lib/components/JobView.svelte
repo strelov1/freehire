@@ -5,7 +5,7 @@
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { autoApplyButtonState, jobCtaPlan } from '$lib/autoApplyButton';
+  import { autoApplyButtonState, jobCtaPlan, undemotedExternalCta } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, requirementGroups, summaryFacets } from '$lib/enrichment';
@@ -298,11 +298,6 @@
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
 
-  // The two bars that carry the apply link WITHOUT an auto-apply button beside it — the
-  // pinned desktop header and the mobile sticky bar — never demote it. "Show origin" steps
-  // aside for auto-apply, and in a bar that does not offer auto-apply it would step aside
-  // for nothing the reader can reach from there.
-  const undemotedExternalCta = { label: 'Apply', primary: true } as const;
 
   async function onAutoApplyClick() {
     if (!isAuthenticated()) {
@@ -323,9 +318,11 @@
   }
 </script>
 
-<!-- The link out to the posting's own site. Renders twice: beside the title on desktop,
-     and in the mobile sticky bar at the end of the article. Size, layout classes and the
-     `external` half of the CTA plan are what differ, so both share this snippet.
+<!-- The link out to the posting's own site. Renders three times: beside the title on
+     desktop, in the pinned header once that title scrolls away, and in the mobile sticky
+     bar at the end of the article. Size, layout classes and the `external` half of the CTA
+     plan are what differ, so all three share this snippet — and only the mobile bar passes
+     a plan of its own (`undemotedExternalCta`), since auto-apply has no button there.
      `external` decides only the word and the loudness — the destination, the target and
      the click handler are the same button either way, which is what keeps the apply-intent
      event comparable across postings whether or not auto-apply offered to do it instead.
@@ -358,8 +355,11 @@
      in flight also disables it, which is a fact about THIS component's request rather than
      about the posting.
      The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
-     background and foreground, none of which are legible on `bg-brand`. Styling it from the
-     button's own foreground token instead makes it follow the button into either theme. -->
+     background and foreground, none of which read as a plan marker on `bg-brand`. It takes
+     the PAGE's `foreground` for its fill and `background` for its text — near-black on
+     white in the light theme, near-white on black in the dark one — so it stays the highest
+     contrast thing on a brand-green button in either. A tint of the button's own foreground
+     was the first try and it dissolved into the fill. -->
 {#snippet autoApplyCta(className: string)}
   {#if cta.autoApply}
     {@const button = cta.autoApply}
@@ -373,7 +373,7 @@
       {button.label}
       {#if button.pro}
         <span
-          class="rounded-sm bg-brand-foreground/15 px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide"
+          class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
         >
           Pro
         </span>
@@ -382,9 +382,10 @@
   {/if}
 {/snippet}
 
-<!-- Save, a quiet peer of the apply CTA rather than the full-width button it was in the
-     sidebar: it belongs beside "Apply", because keeping a job and opening it are the two
-     things a reader does with one. The filled bookmark is the state.
+<!-- Save, a quiet action rather than the full-width button it was in the sidebar: keeping a
+     posting is something a reader does in passing, not the thing the page is for. It sits
+     with the other quiet ones on the tab row, and beside the apply CTA in the pinned header,
+     which has room for one bookmark and not for four. The filled bookmark is the state.
      `iconOnly` is for the pinned header, whose one line already holds the company, the
      title and the CTA; aria-label and the tooltip name the button either way. -->
 {#snippet saveButton(className = '', iconOnly = false)}
@@ -822,10 +823,14 @@
           <!-- Hidden below lg for the same reason as the action strip's own copy: on
                mobile the CTA is the sticky bottom bar, and two pinned buttons would
                fight. Save comes along, since this bar is what a reader has in front of
-               them for most of a description several screens long. -->
+               them for most of a description several screens long.
+               It carries the SAME pair as the header, plan and all — this bar is the header
+               for most of the read, and a brand-filled `Apply` here for the link the title
+               row calls a quiet `Show origin` would be one link at two ranks on one page. -->
           <div class="hidden shrink-0 items-center gap-2 lg:flex">
             {@render saveButton('size-9 rounded-md px-0', true)}
-            {@render applyCta('md', 'shrink-0', undemotedExternalCta)}
+            {@render autoApplyCta('shrink-0')}
+            {@render applyCta('md', 'shrink-0', cta.external)}
           </div>
         </div>
       </div>
@@ -860,12 +865,14 @@
       {@render actionStrip('hidden border-b border-border pb-2 lg:flex')}
     </div>
 
-    <!-- The three states of one exchange, below the action strip because that strip is
-         what raised the question: Apply was clicked there, so the answer belongs under
-         the hand that asked rather than back up beside the title. They share one slot so
-         that answering "Yes, save" replaces the question in place — split across the
-         page, the confirmation would read as a second, unrelated banner appearing
-         somewhere the reader was not looking. -->
+    <!-- The three states of one exchange. They sit at the top of the content column rather
+         than beside the CTA that raised them: the question follows a click that opened a
+         NEW TAB, so the reader meets it on returning to this one, and the first thing under
+         the tabs is what a returning eye lands on. It is also the widest slot on the page,
+         which a two-button question needs and the title row — already carrying the CTAs —
+         does not have. They share one slot so that answering "Yes, save" replaces the
+         question in place; split across the page, the confirmation would read as a second,
+         unrelated banner appearing somewhere the reader was not looking. -->
     {#if showApplyPrompt && !applied}
       <div
         class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"

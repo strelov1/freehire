@@ -62,7 +62,14 @@ const quiet = (label: string): NonNullable<JobCtaPlan['autoApply']> => ({
 });
 
 const showOrigin = { label: 'Show origin', primary: false } as const;
-const apply = { label: 'Apply', primary: true } as const;
+
+/** The apply link at full rank. Exported for the one bar that renders it WITHOUT an
+ *  auto-apply button beside it — the mobile sticky bar, where auto-apply has no button on
+ *  any device — since a demoted label there would step aside for nothing the reader can
+ *  reach, and writing the word out a second time would give these buttons a second place
+ *  that decides what they say. */
+export const undemotedExternalCta = { label: 'Apply', primary: true } as const;
+const apply = undemotedExternalCta;
 
 /** Ranks the two CTAs for a posting.
  *
@@ -73,7 +80,16 @@ const apply = { label: 'Apply', primary: true } as const;
  *  auto-apply button exists" — the two read the same until you reach those two states.
  *
  *  `pro` rides only the clickable state for the same reason the brand fill does: a marker
- *  naming what an action requires says nothing on a button nobody can press. */
+ *  naming what an action requires says nothing on a button nobody can press.
+ *
+ *  `applied` does NOT demote, even though the reader has nothing left to do here. That
+ *  state comes from `alreadyApplied` — the "Did you apply?" prompt after a manual
+ *  click-through — and is true of a posting from any source, while this table only runs on
+ *  the ones auto-apply can drive. Demoting on it would make a Greenhouse posting read
+ *  differently from an identical Lever one for a reader in the identical situation, which
+ *  is an artefact of routing the question through the auto-apply state machine rather than
+ *  a decision anybody made. `queued` is the one state that genuinely leaves no primary CTA,
+ *  and it is genuinely auto-apply's own. */
 export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
   switch (state.kind) {
     case 'hidden':
@@ -86,7 +102,7 @@ export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
     case 'queued':
       return { autoApply: quiet('Auto-apply queued'), external: showOrigin };
     case 'applied':
-      return { autoApply: quiet('Already applied'), external: showOrigin };
+      return { autoApply: quiet('Already applied'), external: apply };
     case 'declined':
       return { autoApply: quiet('Auto-apply declined'), external: apply };
     case 'failed':

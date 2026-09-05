@@ -47,6 +47,7 @@ strip already rides under the title.
 - `web/src/lib/components/JobView.svelte` — the `applyCta`, `autoApplyCta` and
   `actionStrip` snippets, and the two rows that render them (the `<header>` block and the
   tab row).
-- `web/src/lib/autoApplyButton.ts` — read-only; the
-  `kind` it already returns is what decides both the CTA rank and the `Show origin` label.
+- `web/src/lib/autoApplyButton.ts` — gains `JobCtaPlan` and `jobCtaPlan`, the six-state
+  table that maps the `kind` it already returns onto what each of the two buttons says and
+  how loud it is, plus the `undemotedExternalCta` constant the mobile sticky bar renders.
 - No backend, API, or schema change. No new dependency.
