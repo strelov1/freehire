@@ -1,5 +1,5 @@
 // Command backfill-requirements fills jobs.requirements_derived for the open postings
-// that predate the column (migration 0135), then exits.
+// that predate the column (migration 0138), then exits.
 //
 // Every write path fills the column going forward (internal/job/job's withDerived);
 // this is the one-off pass for the catalogue already in the table. Once a row carries a

@@ -16,7 +16,7 @@
 
 ## 3. Store the derivation
 
-- [x] 3.1 Add migration `0135_jobs_requirements_derived.sql`: `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`, `IF NOT EXISTS` per squawk's `prefer-robust-stmts`.
+- [x] 3.1 Add migration `0138_jobs_requirements_derived.sql`: `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`, `IF NOT EXISTS` per squawk's `prefer-robust-stmts`.
 - [x] 3.2 Thread the derived list through the write path — in `internal/job/job`'s `withDerived`, beside the two fingerprints, rather than in `internal/ingest/pipeline`: that is the one shared mapping every write path already goes through, so no path can omit it by forgetting a step.
 - [x] 3.3 Add the column to `UpsertJob`, `UpsertManualJob`, `UpdateManualJob` and `InsertPrivateJob` (insert and conflict branches) and run `make sqlc`. All four, not just the crawl: a moderator-authored posting or a pasted private JD that silently never showed requirements is the "backend can do it, the UI cannot reach it" trap. The crawl and moderator re-create paths keep the stored list when the incoming derivation is empty (a failed detail fetch must not wipe one); the moderator EDIT path writes unconditionally, because deleting a list from a posting means it no longer has one.
 - [x] 3.4 Tests: `internal/job/job` covers that the shared mapping derives a posting's list and stores `[]` (never null) when it yields none; `internal/platform/db` integration covers the column default and the keep-the-stored-value guard. Extended `mutateField` in `internal/job/jobhash`'s reflective coverage guard for the new `[]byte` field — the guard fails on a field it cannot mutate, so an unchecked column cannot read as checked.

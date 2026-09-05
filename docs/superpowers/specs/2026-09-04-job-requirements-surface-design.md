@@ -121,7 +121,7 @@ immediately, four-fold, and the two sources union.
 
 ### 3. Storage and the merge
 
-**Migration 0135** adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
+**Migration 0138** adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
 
 Writers:
 

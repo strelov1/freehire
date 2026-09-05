@@ -8,7 +8,7 @@ Surfacing them is nearly free. Widening them is the second half: 133k is 2.9% of
 
 - **Render the list on the job page.** A "What they ask for" section in the right column of `JobView.svelte`, between the description and Skills, grouped `Required` then `Preferred`, every item verbatim. Absent when the list is empty.
 - **Derive the same shape without an LLM.** A new deterministic extractor reads the posting's description HTML: it finds a heading in a controlled vocabulary (`Requirements`, `Qualifications`, `What you'll need`, `Nice to have`, …) and takes the `<li>` items of the list that follows it. Priority comes from the heading. No heading means no items — there is no fallback that guesses which list is the requirements list.
-- **Store the derivation** in a new `jobs.requirements_derived` column (migration 0135), written by `UpsertJob` at ingest.
+- **Store the derivation** in a new `jobs.requirements_derived` column (migration 0138), written by `UpsertJob` at ingest.
 - **Merge it into the served field.** `SetJobEnrichment` gains a third overlay, chained after the two salary overlays it already carries: when the LLM payload states no requirements, the derived list fills them. `enrichment.requirements` stays the single field every consumer reads, and a later enrichment run cannot erase the derived list.
 - **Backfill the existing catalogue** with a dedicated one-off `cmd/backfill-requirements` over open postings — keyset-paced, chunked, idempotent — following `cmd/backfill-clearance`'s shape rather than folding into the ~15h `cmd/backfill-derive` pass.
 
@@ -25,7 +25,7 @@ No breaking changes. The wire shape does not move; a field that was always prese
 
 ## Impact
 
-- **Schema:** migration 0135 adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
+- **Schema:** migration 0138 adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
 - **SQL:** `SetJobEnrichment` and `UpsertJob`'s conflict branch gain one overlay each; a new chunked update query for the backfill. `make sqlc` regeneration required.
 - **Go:** a new extractor package under `internal/job`; `internal/ingest/pipeline` passes the derived list through `UpsertJob`; new `cmd/backfill-requirements`.
 - **Web:** one new section in `web/src/lib/components/JobView.svelte`. The `Requirement[]` type is already generated in `web/src/lib/generated/contracts.ts`.
