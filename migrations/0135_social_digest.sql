@@ -61,8 +61,11 @@ CREATE TABLE public.social_digest_posts (
     -- The day the digest DESCRIBES, not the day it was sent. Those differ by at
     -- least one: the freshest day in job_daily_views is always a completed day.
     day          date        NOT NULL,
-    -- 'discord' | 'linkedin'. Text and not an enum: adding a channel should be a Go
-    -- change and a config line, not a migration.
+    -- 'discord' today. Text and not an enum: adding a channel should be a Go change
+    -- and a config line, not a migration — which is also why this column exists while
+    -- only one channel does. A ledger keyed on the day alone would make the second
+    -- destination a schema change, and the second destination is a matter of when.
+
     channel      text        NOT NULL,
     job_id       bigint      NOT NULL,
     -- Where the posting sat in the published list. Neither question above needs it;

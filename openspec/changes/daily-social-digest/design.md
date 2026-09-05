@@ -24,8 +24,9 @@ timer under `deploy/systemd/`.
 
 - Materialize the page-open signal separately, without moving the value that
   `GET /api/v1/stats/catalog` reads.
-- Publish one honest, readable daily post to Discord and to the LinkedIn company
-  page, on a schedule, unattended.
+- Publish one honest, readable daily post to a Discord channel, on a schedule,
+  unattended — behind a seam that takes a second destination without reshaping
+  anything.
 - Make the run safe to repeat: a second run for the same day publishes nothing.
 - Make the rendered post inspectable before it is ever sent.
 
@@ -34,8 +35,15 @@ timer under `deploy/systemd/`.
 - **Backfilling `page_uniques` over history.** The `.gz` log history exists and
   could be re-read, but the digest only reads the freshest day. Re-reading months
   of logs to fill a column nothing queries would be work for its own sake.
-- **LinkedIn token refresh.** The organization token expires every 60 days. A
-  refresh worker is its own change; here the token is an env var.
+- **A LinkedIn publisher.** The Community Management API access request is filed
+  and awaiting review, with no promised date. Until it clears there is no
+  organization URN and no token, so the publisher could be neither configured nor
+  pointed at anything real — it would be code that ships and never runs. The API
+  itself is free (Development Tier, no per-call fee), so none of this is about
+  cost. When the credentials exist the work is one `Publisher` plus a
+  token-refresh worker: the access token lasts 60 days, and a webhook needs no
+  such thing, which is why the refresh path belongs to that change rather than
+  being retrofitted onto this one.
 - **A web surface for the digest.** No page, no archive, no feed. If the archive
   turns out to be wanted, `social_digest_posts` already holds it.
 - **Per-audience variants.** One list, rendered per channel's format. Not one
@@ -103,12 +111,15 @@ type Publisher interface {
 ```
 
 The ledger key is `(day, channel)`, not `(day)`. A run that posts to Discord and
-then fails on LinkedIn must, on its next attempt, skip Discord and retry
-LinkedIn. Keying on the day alone would either re-post to Discord or abandon
-LinkedIn, and both are wrong.
+then fails on a second channel must, on its next attempt, skip Discord and retry
+the other. Keying on the day alone would either re-post to Discord or abandon the
+second channel, and both are wrong.
+
+That only one channel exists today does not make the key premature: a ledger keyed
+on the day is a schema change away from a second channel, and this one is not.
 
 The quarantine reads the same ledger across channels: a posting shown on Discord
-yesterday is quarantined for LinkedIn today too. The list is the editorial unit;
+yesterday is quarantined everywhere today. The list is the editorial unit;
 the channel is only how it is delivered.
 
 ### The floor and the quarantine are constants
@@ -134,15 +145,13 @@ worker is one query and two HTTP calls regardless.
   them. Anything later that wants historical page/API split must re-run
   `rollup-views --backfill` against a cleared cursor, which is possible but is
   not this change's problem.
-- **The LinkedIn publisher cannot be smoke-tested** until LinkedIn approves the
-  application → Its client is unit-tested against a fake HTTP server, and the
-  worker's `-dry-run` renders the exact payload. Discord is verified live first,
-  which proves the selection and rendering; only the LinkedIn transport stays
-  unproven, and it is the last task.
-- **The LinkedIn token expires every 60 days** and the first expiry will look
-  exactly like a broken worker → The publisher must report an authentication
-  failure distinctly enough to recognize, and the deployment notes must record
-  the expiry date. Automatic refresh is a follow-up change.
+- **A one-channel dispatcher is a dispatcher nobody has exercised.** The
+  multi-channel behaviour this design specifies — attempt every channel, let one
+  fail without skipping another — has no second channel to prove it in
+  production → It is covered by tests with two fake publishers, which is where
+  that behaviour is worth proving anyway. The alternative, hard-coding a single
+  publisher and generalizing later, would leave the ledger keyed on the day and
+  make the second channel a schema change.
 - **A publish that succeeds but whose ledger write fails** would re-post the next
   day → The ledger write and the publish cannot be one transaction across an
   HTTP boundary. The ledger is written immediately after a successful publish,
@@ -165,7 +174,8 @@ worker is one query and two HTTP calls regardless.
 3. Ship the selection package and the worker with **no timer installed**. Run
    `-dry-run` by hand for a week and read the lists.
 4. Configure the Discord webhook, install the unit and timer, enable Discord.
-5. Configure LinkedIn once its application clears review.
+5. Read the dry runs for a week and move the floor or the quarantine if they are
+   wrong. Only then is the change finished.
 
 **Rollback:** stop the timer. The column and the ledger are inert without the
 worker; nothing else reads them.

@@ -1,0 +1,18 @@
+[Unit]
+Description=freehire worker: daily most-viewed social digest
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+# One query and one HTTP POST per configured channel. It reads the day
+# cmd/rollup-views last produced, so it needs no coordination with that unit beyond
+# running after it — the day is discovered from the data, not assumed from the clock.
+#
+# Publishes nothing and exits 0 when no channel is configured
+# (DISCORD_DIGEST_WEBHOOK_URL unset), so installing this unit before the webhook
+# exists is harmless.
+ExecStart=/opt/freehire/src/hire-current/social-digest

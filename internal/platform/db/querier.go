@@ -1188,6 +1188,10 @@ type Querier interface {
 	// handler treats delete as idempotent (204 either way).
 	DeleteUserProfile(ctx context.Context, userID int64) (int64, error)
 	DeleteWebhookConfig(ctx context.Context, userID int64) (int64, error)
+	// The publish-once check. Keyed on the channel and not on the day alone: a run that
+	// posted to Discord and then failed on LinkedIn must, next time, skip Discord and
+	// retry LinkedIn.
+	DigestPublishedForChannel(ctx context.Context, arg DigestPublishedForChannelParams) (bool, error)
 	// Disables the destination, stamping disabled_at. Used both by the settings
 	// API (user-initiated) and by the notify delivery engine when a send gets a
 	// definitive 410 Gone from the destination (see internal/engage/webhooknotify).
@@ -2187,6 +2191,23 @@ type Querier interface {
 	// Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
 	// predicate.
 	LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error)
+	// Queries behind the daily social digest (internal/engage/socialdigest, cmd/social-digest).
+	//
+	// The division of labour here is deliberate: SQL answers what is CHEAP and
+	// unambiguous — which day has data, which postings are eligible at all, which
+	// postings went out recently — and the editorial shaping (the view floor, the cap on
+	// postings per company, the final ten) happens in Go, where it is a pure function
+	// over a slice and can be tested without a database. Those are the rules most likely
+	// to be argued about and changed; keeping them out of SQL keeps that argument cheap.
+	// The freshest day the view rollup has produced. The digest asks for this rather than
+	// computing "yesterday" from the clock: cmd/rollup-views fires at 02:30 UTC and reads
+	// the rotated access log, so whether the freshest complete day is yesterday or the day
+	// before depends on when logrotate runs on the host. A digest that assumed the answer
+	// would fail by publishing a stale list silently, which is the worst way to fail.
+	//
+	// Returns NULL when the table is empty; the caller treats that as a broken pipeline,
+	// not as an empty day.
+	LatestJobViewDay(ctx context.Context) (pgtype.Date, error)
 	// created_at of the most recently added open, public job — the "is the pipeline
 	// still writing rows" signal for the public /status endpoint. Same predicate and
 	// ordering as ListJobs above, so it is served by the same jobs_open_created_idx
@@ -3569,6 +3590,11 @@ type Querier interface {
 	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
 	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
 	RebuildJobDailyStats(ctx context.Context) (int64, error)
+	// The quarantine set: postings that appeared in a digest on or after `since`, in ANY
+	// channel. Across channels on purpose — the list is the editorial unit and the channel
+	// is only how it is delivered, so a posting shown on Discord yesterday should not lead
+	// the LinkedIn post today.
+	RecentlyDigestedJobIDs(ctx context.Context, since pgtype.Date) ([]int64, error)
 	// The batched slice of the role-duplicate recompute, driven over a CHUNK of companies
 	// (cmd/reindex's forCompanyBatches) rather than one call per company — see that
 	// function's doc comment for why: at catalogue scale (2026-08-06 prod measurement:
@@ -3623,6 +3649,11 @@ type Querier interface {
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
+	// Ledger write, one row per posting in the published list. Written only AFTER a
+	// channel has published; a dry run never reaches here. ON CONFLICT DO NOTHING so a
+	// retry that races itself cannot fail the run over a row that already says what we
+	// were about to say.
+	RecordDigestPost(ctx context.Context, arg []RecordDigestPostParams) *RecordDigestPostBatchResults
 	// Step 2: record the event when the message is LINKED and no live event exists for it.
 	// Run RetractSupersededEmailEvent first.
 	//
@@ -4461,6 +4492,21 @@ type Querier interface {
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
 	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
 	SyncCompaniesFromJobs(ctx context.Context) error
+	// The day's candidates, most-viewed first, ranked on page_uniques — NOT on uniques.
+	// uniques fuses page opens with API reads and API reads carry no bot filtering, so on
+	// a host whose traffic is mostly crawlers it answers "what did robots fetch". See
+	// migration 0135 and internal/application/viewlog.
+	//
+	// The predicates are the same open-posting shape every public listing uses
+	// (closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private), plus ats_absent_at:
+	// a posting the source's own ATS has stopped listing must never be promoted. The full
+	// ghost verdict (internal/job/ghost) is a hedged classification needing evidence this
+	// query has no reason to gather; ats_absent_at is the strongest single column of it.
+	//
+	// OVER-FETCHES on purpose. The caller drops rows for the company cap and the
+	// quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
+	// postings on any day where one company had a good morning.
+	TopPageViewedJobsForDay(ctx context.Context, arg TopPageViewedJobsForDayParams) ([]TopPageViewedJobsForDayRow, error)
 	// Mark a session as the most recently active, so the rail's order follows real use.
 	// Owner-scoped like every other write in this file (Get/Delete both require id AND
 	// user_id): a bare id would let any caller who learns another user's session id touch

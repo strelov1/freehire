@@ -1,0 +1,15 @@
+[Unit]
+Description=timer: freehire-social-digest
+[Timer]
+# 10:00 in Brazil, which is when the person who reads this feed is awake. The zone is
+# NAMED rather than written as the 13:00 UTC it currently equals: Brazil has had no
+# DST since 2019, so the two are the same instant today, and if that ever changes the
+# named zone follows while a hard-coded hour would drift silently.
+#
+# The slot is clear of this host's heavy cron block (03:00-10:00 UTC), and well after
+# freehire-rollup-views at 02:30 UTC, which produces the day this reads.
+OnCalendar=*-*-* 10:00:00 America/Sao_Paulo
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

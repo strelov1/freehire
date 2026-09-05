@@ -25,10 +25,19 @@ wrong in public, every day, on our own company page.
   views, at most two per company, a quarantine so a posting cannot reappear for
   seven days), records what it published, and hands the result to one or more
   publishers.
-- **Two publishers behind one interface.** A Discord incoming webhook and a
-  LinkedIn organization post. Each is disabled — silently, as the rest of this
-  worker fleet does — when its credentials are absent. One publisher failing
-  does not stop the other; the run still exits non-zero.
+- **Publishers behind one interface, and one implementation of it.** A Discord
+  incoming webhook. The channel is disabled — silently, as the rest of this
+  worker fleet does — when its credentials are absent, and the dispatcher is
+  written for several: one publisher failing does not stop another, and the run
+  still exits non-zero.
+
+  **LinkedIn is deliberately not in this change.** Posting to a company page
+  needs LinkedIn's Community Management API, whose access request is submitted
+  and awaiting LinkedIn's review — a wait measured in weeks, with no promised
+  date. Until it clears there is no organization URN and no token, so a
+  publisher could be neither configured nor verified against anything real. The
+  seam is what this change delivers instead; adding the channel once the
+  credentials exist is one file and a config branch.
 - **New worker `cmd/social-digest`**, with `-dry-run` (renders the post, sends
   nothing) and `-day` (replay a specific day), plus its systemd unit and timer.
 - **No historical backfill.** `page_uniques` starts at zero for every existing
@@ -68,13 +77,19 @@ fail. `engage` is layer 7 and may import `job` (5) and `application` (6).
 to the build list in `deploy/bin/release.sh`. That script lives on the host and
 is not deployed by anything; the repository edit is only half the work.
 
-**External** — a Discord incoming webhook URL, and a LinkedIn application with
-Community Management API access plus an organization access token. Both arrive
-through the two-file env split on the host.
+**External** — a Discord incoming webhook URL, arriving through the two-file env
+split on the host. Nothing else.
 
-**Known blocker, not resolved by this change:** the LinkedIn publisher cannot be
-verified against the live API until that application clears LinkedIn's review.
-Its client is written and unit-tested against a fake HTTP server like any other
-outbound client, and its live smoke test is deferred. Discord is verifiable
-immediately. The LinkedIn token expires every 60 days; automatic refresh is
-explicitly **out of scope** here and is its own change.
+**Deferred, with the reason recorded so it is not rediscovered:** a LinkedIn
+company-page publisher. The API exists (Posts API, under the Community
+Management product) and carries no per-call fee — the Development Tier is free
+and one post a day sits far inside its limits. Two things gate it, and neither
+is money:
+
+- **Review.** The access request is filed and pending. LinkedIn publishes no
+  turnaround, and the product must be the *only* one on its application, so it
+  lives in an app of its own.
+- **Token lifecycle.** The access token lasts 60 days and the refresh token a
+  year, so unattended posting needs a refresh worker that a Discord webhook does
+  not. That worker is part of the follow-up change, not an afterthought to it —
+  the first expiry would otherwise look exactly like a broken digest.

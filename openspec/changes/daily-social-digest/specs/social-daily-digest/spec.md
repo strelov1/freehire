@@ -118,14 +118,14 @@ The ledger is also what the quarantine rule reads.
 #### Scenario: Re-running the worker on the same day publishes nothing
 
 - **WHEN** the worker runs twice for the same day and the first run published to
-  Discord
-- **THEN** the second run does not publish to Discord again
+  a channel
+- **THEN** the second run does not publish to that channel again
 
 #### Scenario: A channel that has not yet published still publishes
 
-- **WHEN** a run published to Discord but failed before publishing to LinkedIn,
-  and the worker runs again for the same day
-- **THEN** Discord is skipped and LinkedIn is published
+- **WHEN** two channels are configured, a run published to the first but failed
+  before publishing to the second, and the worker runs again for the same day
+- **THEN** the first channel is skipped and the second is published
 
 ### Requirement: Channels are independent and optional
 
@@ -139,15 +139,16 @@ attempted.
 
 #### Scenario: An unconfigured channel is skipped silently
 
-- **WHEN** no Discord webhook URL is configured
-- **THEN** the digest is not published to Discord
+- **WHEN** a channel's credentials are absent from the configuration
+- **THEN** the digest is not published to that channel
 - **AND** the run does not fail for that reason
 
 #### Scenario: One channel failing does not block the other
 
-- **WHEN** LinkedIn returns an error and Discord succeeds
-- **THEN** the Discord post is published and recorded in the ledger
-- **AND** the LinkedIn failure is reported and the run fails
+- **WHEN** two channels are configured, the first returns an error and the second
+  succeeds
+- **THEN** the second channel's post is published and recorded in the ledger
+- **AND** the first channel's failure is reported and the run fails
 
 #### Scenario: No channel configured at all
 

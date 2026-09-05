@@ -233,6 +233,13 @@ type Settings struct {
 	AWSRegion       string
 	NotifyEmailFrom string
 
+	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the
+	// daily "most viewed" list to. Optional and silently disabling, like the rest of
+	// this worker fleet: an unset value means the channel is not configured, not that
+	// the run failed. A webhook URL is itself the credential and does not expire,
+	// which is why this channel needs nothing else here.
+	DiscordDigestWebhookURL string
+
 	// OnboardingReplyTo is the human inbox that answers the founder signup sequence
 	// (internal/engage/onboarding). Those mails ask a question, so an unset value disables
 	// the sequence rather than sending letters whose replies reach nobody — the send
@@ -418,6 +425,8 @@ func Load() Settings {
 
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
+
+		DiscordDigestWebhookURL: os.Getenv("DISCORD_DIGEST_WEBHOOK_URL"),
 
 		OnboardingReplyTo: os.Getenv("ONBOARDING_REPLY_TO"),
 

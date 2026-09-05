@@ -89,3 +89,62 @@ func (b *ApplyDailyViewBatchResults) Close() error {
 	b.closed = true
 	return b.br.Close()
 }
+
+const recordDigestPost = `-- name: RecordDigestPost :batchexec
+INSERT INTO social_digest_posts (day, channel, job_id, slot)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (day, channel, job_id) DO NOTHING
+`
+
+type RecordDigestPostBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type RecordDigestPostParams struct {
+	Day     pgtype.Date `json:"day"`
+	Channel string      `json:"channel"`
+	JobID   int64       `json:"job_id"`
+	Slot    int32       `json:"slot"`
+}
+
+// Ledger write, one row per posting in the published list. Written only AFTER a
+// channel has published; a dry run never reaches here. ON CONFLICT DO NOTHING so a
+// retry that races itself cannot fail the run over a row that already says what we
+// were about to say.
+func (q *Queries) RecordDigestPost(ctx context.Context, arg []RecordDigestPostParams) *RecordDigestPostBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.Day,
+			a.Channel,
+			a.JobID,
+			a.Slot,
+		}
+		batch.Queue(recordDigestPost, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &RecordDigestPostBatchResults{br, len(arg), false}
+}
+
+func (b *RecordDigestPostBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *RecordDigestPostBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
