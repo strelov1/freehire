@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -467,4 +468,169 @@ func TestSetAutoApplyResolvedPreview(t *testing.T) {
 			t.Errorf("resolved_preview = %v, want nil — the guard must leave it untouched", *stored)
 		}
 	})
+}
+
+// TestRecordAutoApplyPreviewFailure_IndependentFromSubmitFailureBudget guards a bug a code
+// review found: the preview pass and the real submission pass used to share
+// attempts/failed_at, so a transient preview-resolution error could spend down the same
+// retry budget the real ATS submission depends on, and could dead-letter a row before a
+// submission was ever attempted (openspec/changes/auto-apply-review-tracking).
+func TestRecordAutoApplyPreviewFailure_IndependentFromSubmitFailureBudget(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	t.Run("preview failures dead-letter preview_failed_at without ever touching failed_at", func(t *testing.T) {
+		truncateAutoApplyQueue(t, pool)
+		user := insertUser(t, pool, "preview-fail@example.test")
+		job := insertJob(t, pool, "preview-fail")
+		id := insertTailoredAutoApplyQueueEntry(t, pool, user, job)
+
+		first, err := q.RecordAutoApplyPreviewFailure(ctx, RecordAutoApplyPreviewFailureParams{ID: id, LastError: "boom", MaxAttempts: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if first.PreviewFailedAt.Valid {
+			t.Fatal("first preview failure dead-lettered, want it retried")
+		}
+
+		second, err := q.RecordAutoApplyPreviewFailure(ctx, RecordAutoApplyPreviewFailureParams{ID: id, LastError: "boom again", MaxAttempts: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !second.PreviewFailedAt.Valid {
+			t.Error("second preview failure not dead-lettered, want it marked failed at max attempts")
+		}
+
+		var attempts int
+		var failedAt *time.Time
+		if err := pool.QueryRow(ctx, "SELECT attempts, failed_at FROM auto_apply_queue WHERE id = $1", id).Scan(&attempts, &failedAt); err != nil {
+			t.Fatal(err)
+		}
+		if attempts != 0 || failedAt != nil {
+			t.Errorf("attempts=%d failed_at=%v, want both untouched by preview failures", attempts, failedAt)
+		}
+	})
+
+	t.Run("the submit pass gets a fresh attempts budget regardless of prior preview failures", func(t *testing.T) {
+		truncateAutoApplyQueue(t, pool)
+		user := insertUser(t, pool, "preview-then-submit@example.test")
+		job := insertJob(t, pool, "preview-then-submit")
+		id := insertTailoredAutoApplyQueueEntry(t, pool, user, job)
+
+		// Exhaust the preview pass's own budget first.
+		if _, err := q.RecordAutoApplyPreviewFailure(ctx, RecordAutoApplyPreviewFailureParams{ID: id, LastError: "flaky schema fetch", MaxAttempts: 1}); err != nil {
+			t.Fatal(err)
+		}
+
+		// A resolved preview lands anyway (e.g. a later, out-of-band pass, or this test
+		// simulating one) and the candidate approves.
+		if _, err := q.SetAutoApplyResolvedPreview(ctx, SetAutoApplyResolvedPreviewParams{ID: id, ResolvedPreview: []byte(`{"fields":[]}`)}); err != nil {
+			t.Fatal(err)
+		}
+		if affected, err := q.ApproveAutoApplyReview(ctx, id); err != nil || affected != 1 {
+			t.Fatalf("approve: affected=%d err=%v, want 1", affected, err)
+		}
+
+		claimed, err := q.ClaimAutoApplyBatch(ctx, ClaimAutoApplyBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claim: rows=%d err=%v, want 1 — a prior preview failure must not block the real claim", len(claimed), err)
+		}
+
+		// A full max_attempts=3 budget for the SUBMIT pass, unaffected by the preview
+		// pass having already exhausted its own budget of 1 above.
+		for i := 0; i < 2; i++ {
+			row, err := q.RecordAutoApplyFailure(ctx, RecordAutoApplyFailureParams{ID: id, LastError: "transient", MaxAttempts: 3})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if row.FailedAt.Valid {
+				t.Fatalf("dead-lettered after %d submit failures, want 3 full attempts available", i+1)
+			}
+		}
+	})
+}
+
+// TestSetAutoApplyTailoredCV_ClearsAStalePreviewOnRetailor guards the other half of the
+// same review finding: a deliberate re-tailor must invalidate the preview computed against
+// the PREVIOUS CV, and must not leave the entry permanently unclaimable by the preview pass
+// if it had already exhausted its own attempts budget once.
+func TestSetAutoApplyTailoredCV_ClearsAStalePreviewOnRetailor(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateAutoApplyQueue(t, pool)
+
+	user := insertUser(t, pool, "retailor@example.test")
+	job := insertJob(t, pool, "retailor")
+	id := insertTailoredAutoApplyQueueEntry(t, pool, user, job)
+	if _, err := q.SetAutoApplyResolvedPreview(ctx, SetAutoApplyResolvedPreviewParams{ID: id, ResolvedPreview: []byte(`{"fields":[{"label":"Old","value":"stale"}]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.RecordAutoApplyPreviewFailure(ctx, RecordAutoApplyPreviewFailureParams{ID: id, LastError: "boom", MaxAttempts: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	freshCV := insertCV(t, pool, user)
+	if affected, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{ID: id, TailoredCvID: &freshCV}); err != nil || affected != 1 {
+		t.Fatalf("re-tailor: affected=%d err=%v, want 1", affected, err)
+	}
+
+	var resolvedPreview *string
+	var previewAttempts int
+	var previewFailedAt *time.Time
+	if err := pool.QueryRow(ctx, "SELECT resolved_preview, preview_attempts, preview_failed_at FROM auto_apply_queue WHERE id = $1", id).
+		Scan(&resolvedPreview, &previewAttempts, &previewFailedAt); err != nil {
+		t.Fatal(err)
+	}
+	if resolvedPreview != nil {
+		t.Errorf("resolved_preview = %v, want cleared by the re-tailor", *resolvedPreview)
+	}
+	if previewAttempts != 0 || previewFailedAt != nil {
+		t.Errorf("preview_attempts=%d preview_failed_at=%v, want both reset so the fresh CV gets its own attempt budget",
+			previewAttempts, previewFailedAt)
+	}
+
+	rows, err := q.ClaimAutoApplyPreviewBatch(ctx, ClaimAutoApplyPreviewBatchParams{LeaseSeconds: 300, BatchSize: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].ID != id {
+		t.Fatalf("claimed = %+v, want the re-tailored entry claimable again", rows)
+	}
+}
+
+// TestSetAutoApplyResolvedPreview_ReleasesTheLease guards a second review finding: without
+// releasing claimed_at on success, an approval landing before the preview claim's own lease
+// expires would sit unclaimed by the submit pass for up to the full lease window even
+// though nothing is still working the row.
+func TestSetAutoApplyResolvedPreview_ReleasesTheLease(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateAutoApplyQueue(t, pool)
+
+	user := insertUser(t, pool, "lease-release@example.test")
+	job := insertJob(t, pool, "lease-release")
+	id := insertTailoredAutoApplyQueueEntry(t, pool, user, job)
+
+	if _, err := pool.Exec(ctx, "UPDATE auto_apply_queue SET claimed_at = now() WHERE id = $1", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.SetAutoApplyResolvedPreview(ctx, SetAutoApplyResolvedPreviewParams{ID: id, ResolvedPreview: []byte(`{"fields":[]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if affected, err := q.ApproveAutoApplyReview(ctx, id); err != nil || affected != 1 {
+		t.Fatalf("approve: affected=%d err=%v, want 1", affected, err)
+	}
+
+	// A long lease: if claimed_at were still the stale preview-claim timestamp from just
+	// now, this claim would find nothing.
+	rows, err := q.ClaimAutoApplyBatch(ctx, ClaimAutoApplyBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].ID != id {
+		t.Fatalf("claimed = %+v, want the just-approved entry immediately claimable, not blocked by a stale lease", rows)
+	}
 }

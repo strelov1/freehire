@@ -355,7 +355,8 @@ func (r *QueriesRepository) ListInteractions(
 			FollowedUpAt:         pgconv.TimePtr(row.FollowedUpAt),
 			CVOpenedAt:           pgconv.TimePtr(row.CvOpenedAt),
 			AutoApplyStatus: autoApplyStatusFor(row.AutoApplyID.Valid, row.AutoApplyTailoredCvID,
-				row.AutoApplyHasPreview, row.AutoApplyReviewDecision, row.AutoApplyBlockedAt, row.AutoApplyFailedAt),
+				row.AutoApplyHasPreview, row.AutoApplyReviewDecision, row.AutoApplyBlockedAt,
+				row.AutoApplyFailedAt, row.AutoApplyPreviewFailedAt),
 		})
 	}
 
@@ -498,11 +499,14 @@ func textPtr(t pgtype.Text) *string {
 // pair). Mirrors autoApplyReviewInfoForJob's own derivation (internal/api/handler), scoped
 // to just the status this list needs for its badge — the full preview/unmapped detail is
 // the drawer's own, richer read.
-func autoApplyStatusFor(hasAttempt bool, tailoredCVID *uuid.UUID, hasPreview bool, reviewDecision pgtype.Text, blockedAt, failedAt pgtype.Timestamptz) *autoapply.Status {
+func autoApplyStatusFor(hasAttempt bool, tailoredCVID *uuid.UUID, hasPreview bool, reviewDecision pgtype.Text, blockedAt, failedAt, previewFailedAt pgtype.Timestamptz) *autoapply.Status {
 	if !hasAttempt {
 		return nil
 	}
-	status := autoapply.DeriveStatus(tailoredCVID != nil, hasPreview, reviewDecision.String, blockedAt.Valid, failedAt.Valid)
+	// Either budget exhausting counts as failed — see autoApplyReviewInfoForJob's own
+	// identical reasoning (internal/api/handler/auto_apply_review_info.go).
+	failed := failedAt.Valid || previewFailedAt.Valid
+	status := autoapply.DeriveStatus(tailoredCVID != nil, hasPreview, reviewDecision.String, blockedAt.Valid, failed)
 	return &status
 }
 

@@ -169,6 +169,41 @@ return struct has no field for it.
   **Mitigation**: none needed structurally now; worth a comment at the banner site
   cross-referencing this design.
 
+## Post-implementation review fixes
+
+A full-diff code review (before archiving this change) caught two real bugs and two
+lower-severity gaps in the implementation above, all fixed in the same branch:
+
+- **The preview pass and the submit pass originally shared `attempts`/`failed_at`
+  (`RecordAutoApplyFailure`).** A transient preview-resolution error (a flaky schema fetch, a
+  chromedp launch failure) spent down the SAME retry budget the real ATS submission depends
+  on, and could dead-letter a row (`failed_at` set, reported to the candidate as "could not
+  submit after retrying") before a submission was ever attempted. Fixed with migration
+  0140: `preview_attempts`/`preview_failed_at`, a new `RecordAutoApplyPreviewFailure` query,
+  and `PreviewStore.FailPreview` (distinct from `Store.Fail` — the two interfaces can no
+  longer collapse onto one shared implementation by accident). `ClaimAutoApplyPreviewBatch`
+  now excludes on `preview_failed_at`, not the submit pass's own `failed_at`. `DeriveStatus`'s
+  `failed` input is now `failed_at.Valid || preview_failed_at.Valid` at both read paths, so a
+  permanently-stuck preview still surfaces as `failed` to the candidate instead of reading as
+  `tailoring` forever.
+- **`SetAutoApplyResolvedPreview` never released the `claimed_at` lease it took as a preview
+  claim.** An approval landing before that lease's own `AUTO_APPLY_LEASE_SECONDS` window
+  expired would sit unclaimed by `ClaimAutoApplyBatch` for up to that long, for no reason —
+  nothing was still working the row. Fixed: the same statement that persists the preview now
+  also sets `claimed_at = NULL`.
+- **A deliberate re-tailor didn't invalidate a stale preview.** `SetAutoApplyTailoredCV` only
+  wrote `tailored_cv_id`; an entry already at `pending_review` whose CV got re-tailored kept
+  showing the candidate an answer preview computed against the PREVIOUS CV. Fixed: the same
+  statement now also clears `resolved_preview` and resets `preview_attempts`/
+  `preview_failed_at` — a fresh CV gets a fresh preview attempt budget, not a permanently
+  exhausted one.
+- **`JobDrawer.svelte`'s optimistic update mutated the `item` prop directly**, working only by
+  relying on `JobBoard.svelte` passing a live `$state`-proxied object reference — an
+  implementation detail two components away that every other mutation in the same file
+  respects via a callback prop instead. Fixed: `onautoapplyreview` mirrors `onsetstage`'s own
+  division of labor (the drawer makes the API call, since it alone holds the queue id; the
+  parent owns the mutation, since it alone owns `item`'s reactivity).
+
 ## Migration Plan
 
 One migration: `auto_apply_queue.resolved_preview jsonb` (nullable). Additive-only otherwise: a

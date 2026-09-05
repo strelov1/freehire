@@ -413,6 +413,7 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        aaq.id AS auto_apply_id, aaq.tailored_cv_id AS auto_apply_tailored_cv_id,
        aaq.review_decision AS auto_apply_review_decision,
        aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at,
+       aaq.preview_failed_at AS auto_apply_preview_failed_at,
        (aaq.resolved_preview IS NOT NULL)::boolean AS auto_apply_has_preview
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
@@ -455,40 +456,41 @@ type ListUserJobsParams struct {
 }
 
 type ListUserJobsRow struct {
-	ID                      int64              `json:"id"`
-	PublicSlug              string             `json:"public_slug"`
-	Title                   string             `json:"title"`
-	Company                 string             `json:"company"`
-	CompanySlug             string             `json:"company_slug"`
-	ClosedAt                pgtype.Timestamptz `json:"closed_at"`
-	WorkMode                string             `json:"work_mode"`
-	Seniority               string             `json:"seniority"`
-	EmploymentType          string             `json:"employment_type"`
-	Countries               []string           `json:"countries"`
-	Regions                 []string           `json:"regions"`
-	Skills                  []string           `json:"skills"`
-	Collections             []string           `json:"collections"`
-	PostedAt                pgtype.Timestamptz `json:"posted_at"`
-	CreatedAt               pgtype.Timestamptz `json:"created_at"`
-	Blurb                   string             `json:"blurb"`
-	LlmCountries            []string           `json:"llm_countries"`
-	LlmRegions              []string           `json:"llm_regions"`
-	ViewedAt                pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt                 pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt               pgtype.Timestamptz `json:"applied_at"`
-	Stage                   pgtype.Text        `json:"stage"`
-	Notes                   pgtype.Text        `json:"notes"`
-	EmailCount              int64              `json:"email_count"`
-	HasPendingSuggestion    bool               `json:"has_pending_suggestion"`
-	FollowedUpAt            pgtype.Timestamptz `json:"followed_up_at"`
-	CvOpenedAt              pgtype.Timestamptz `json:"cv_opened_at"`
-	LastActivityAt          pgtype.Timestamptz `json:"last_activity_at"`
-	AutoApplyID             pgtype.Int8        `json:"auto_apply_id"`
-	AutoApplyTailoredCvID   *uuid.UUID         `json:"auto_apply_tailored_cv_id"`
-	AutoApplyReviewDecision pgtype.Text        `json:"auto_apply_review_decision"`
-	AutoApplyBlockedAt      pgtype.Timestamptz `json:"auto_apply_blocked_at"`
-	AutoApplyFailedAt       pgtype.Timestamptz `json:"auto_apply_failed_at"`
-	AutoApplyHasPreview     bool               `json:"auto_apply_has_preview"`
+	ID                       int64              `json:"id"`
+	PublicSlug               string             `json:"public_slug"`
+	Title                    string             `json:"title"`
+	Company                  string             `json:"company"`
+	CompanySlug              string             `json:"company_slug"`
+	ClosedAt                 pgtype.Timestamptz `json:"closed_at"`
+	WorkMode                 string             `json:"work_mode"`
+	Seniority                string             `json:"seniority"`
+	EmploymentType           string             `json:"employment_type"`
+	Countries                []string           `json:"countries"`
+	Regions                  []string           `json:"regions"`
+	Skills                   []string           `json:"skills"`
+	Collections              []string           `json:"collections"`
+	PostedAt                 pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	Blurb                    string             `json:"blurb"`
+	LlmCountries             []string           `json:"llm_countries"`
+	LlmRegions               []string           `json:"llm_regions"`
+	ViewedAt                 pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt                  pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt                pgtype.Timestamptz `json:"applied_at"`
+	Stage                    pgtype.Text        `json:"stage"`
+	Notes                    pgtype.Text        `json:"notes"`
+	EmailCount               int64              `json:"email_count"`
+	HasPendingSuggestion     bool               `json:"has_pending_suggestion"`
+	FollowedUpAt             pgtype.Timestamptz `json:"followed_up_at"`
+	CvOpenedAt               pgtype.Timestamptz `json:"cv_opened_at"`
+	LastActivityAt           pgtype.Timestamptz `json:"last_activity_at"`
+	AutoApplyID              pgtype.Int8        `json:"auto_apply_id"`
+	AutoApplyTailoredCvID    *uuid.UUID         `json:"auto_apply_tailored_cv_id"`
+	AutoApplyReviewDecision  pgtype.Text        `json:"auto_apply_review_decision"`
+	AutoApplyBlockedAt       pgtype.Timestamptz `json:"auto_apply_blocked_at"`
+	AutoApplyFailedAt        pgtype.Timestamptz `json:"auto_apply_failed_at"`
+	AutoApplyPreviewFailedAt pgtype.Timestamptz `json:"auto_apply_preview_failed_at"`
+	AutoApplyHasPreview      bool               `json:"auto_apply_has_preview"`
 }
 
 // A user's job interactions joined with a CARD of the job — what a list row draws, and no
@@ -569,6 +571,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.AutoApplyReviewDecision,
 			&i.AutoApplyBlockedAt,
 			&i.AutoApplyFailedAt,
+			&i.AutoApplyPreviewFailedAt,
 			&i.AutoApplyHasPreview,
 		); err != nil {
 			return nil, err

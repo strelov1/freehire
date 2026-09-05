@@ -123,7 +123,7 @@ WITH claimable AS (
     WHERE q.tailored_cv_id IS NOT NULL
       AND q.resolved_preview IS NULL
       AND q.review_decision IS NULL
-      AND q.failed_at IS NULL
+      AND q.preview_failed_at IS NULL
       AND q.blocked_at IS NULL
       AND (q.claimed_at IS NULL
            OR q.claimed_at < now() - make_interval(secs => $1::int))
@@ -161,8 +161,11 @@ type ClaimAutoApplyPreviewBatchRow struct {
 // (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
 // two passes can safely share the one claimed_at lease column rather than needing a second.
 //
-// blocked_at/failed_at excluded for the same reason ClaimAutoApplyBatch excludes them: a
-// parked or dead-lettered entry needs new data or a human, not another resolve attempt.
+// Excludes on preview_failed_at, its OWN dead-letter marker (migration 0140) — not the
+// submit pass's failed_at, which a still-unreviewed row can never have set anyway
+// (ClaimAutoApplyBatch only ever claims an approved entry). blocked_at is still shared: a
+// park during preview resolution (a captcha, an unscannable page) predicts the identical
+// outcome the real submission would hit, so there is nothing a retry here would fix either.
 func (q *Queries) ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error) {
 	rows, err := q.db.Query(ctx, claimAutoApplyPreviewBatch, arg.LeaseSeconds, arg.BatchSize)
 	if err != nil {
@@ -316,7 +319,8 @@ func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (Get
 }
 
 const getAutoApplyQueueEntryForJob = `-- name: GetAutoApplyQueueEntryForJob :one
-SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview
+SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview,
+       preview_failed_at
 FROM auto_apply_queue
 WHERE user_id = $1 AND job_id = $2
 `
@@ -334,6 +338,7 @@ type GetAutoApplyQueueEntryForJobRow struct {
 	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
 	Unmapped        []byte             `json:"unmapped"`
 	ResolvedPreview []byte             `json:"resolved_preview"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
 }
 
 // The caller's own existing auto-apply entry for one job, if any — the conflict-read path
@@ -352,7 +357,9 @@ type GetAutoApplyQueueEntryForJobRow struct {
 // ride along on the same row read rather than a second query: they are exactly what the
 // tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
 // unmapped question list), and this is already "the caller's own existing auto-apply entry
-// for one job."
+// for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
+// is: without it, an entry whose preview pass permanently gave up would read forever as
+// "tailoring" — no preview, no failure, nothing to tell the candidate anything went wrong.
 func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error) {
 	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryForJob, arg.UserID, arg.JobID)
 	var i GetAutoApplyQueueEntryForJobRow
@@ -364,6 +371,7 @@ func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoA
 		&i.TailoredCvID,
 		&i.Unmapped,
 		&i.ResolvedPreview,
+		&i.PreviewFailedAt,
 	)
 	return i, err
 }
@@ -464,10 +472,49 @@ func (q *Queries) RecordAutoApplyFailure(ctx context.Context, arg RecordAutoAppl
 	return i, err
 }
 
+const recordAutoApplyPreviewFailure = `-- name: RecordAutoApplyPreviewFailure :one
+UPDATE auto_apply_queue
+SET preview_attempts = preview_attempts + 1,
+    last_error        = $1,
+    preview_failed_at = CASE
+                            WHEN preview_attempts + 1 >= $2::int THEN now()
+                            ELSE NULL
+                        END
+WHERE id = $3
+RETURNING preview_attempts, preview_failed_at
+`
+
+type RecordAutoApplyPreviewFailureParams struct {
+	LastError   string `json:"last_error"`
+	MaxAttempts int32  `json:"max_attempts"`
+	ID          int64  `json:"id"`
+}
+
+type RecordAutoApplyPreviewFailureRow struct {
+	PreviewAttempts int32              `json:"preview_attempts"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+}
+
+// RecordAutoApplyFailure's own counterpart for the preview pass, on its own columns
+// (migration 0140). Before this query existed, a transient preview-resolution error (a
+// flaky schema fetch, a browser launch hiccup) called RecordAutoApplyFailure and spent
+// down the SAME attempts/failed_at budget the real ATS submission depends on — a run of
+// bad luck during preview resolution could dead-letter a row that never even reached
+// submission, reported to the candidate as "could not submit after retrying," which never
+// happened. Same shape otherwise: bump attempts, record the error, dead-letter once
+// attempts reach the max, leave the lease in place.
+func (q *Queries) RecordAutoApplyPreviewFailure(ctx context.Context, arg RecordAutoApplyPreviewFailureParams) (RecordAutoApplyPreviewFailureRow, error) {
+	row := q.db.QueryRow(ctx, recordAutoApplyPreviewFailure, arg.LastError, arg.MaxAttempts, arg.ID)
+	var i RecordAutoApplyPreviewFailureRow
+	err := row.Scan(&i.PreviewAttempts, &i.PreviewFailedAt)
+	return i, err
+}
+
 const setAutoApplyResolvedPreview = `-- name: SetAutoApplyResolvedPreview :one
 WITH updated AS (
     UPDATE auto_apply_queue q
-    SET resolved_preview = $1
+    SET resolved_preview = $1,
+        claimed_at       = NULL
     WHERE q.id = $2 AND q.review_decision IS NULL
     RETURNING q.job_id, q.user_id
 )
@@ -500,6 +547,11 @@ type SetAutoApplyResolvedPreviewRow struct {
 // caller's "ready for review" notification needs those three columns, and this statement
 // already has the job_id at hand from its own WHERE — a second round trip for exactly what
 // this write already touched would be a query with no reason to exist.
+//
+// Also releases the lease (claimed_at = NULL): without this, an approval that lands before
+// the preview claim's own lease expires would sit unclaimed by ClaimAutoApplyBatch for up
+// to AUTO_APPLY_LEASE_SECONDS after nothing is actually still working the row — a stale
+// lease from a claim that already finished successfully, not a live one.
 func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error) {
 	row := q.db.QueryRow(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.ID)
 	var i SetAutoApplyResolvedPreviewRow
@@ -514,7 +566,10 @@ func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoAp
 
 const setAutoApplyTailoredCV = `-- name: SetAutoApplyTailoredCV :execrows
 UPDATE auto_apply_queue
-SET tailored_cv_id = $1
+SET tailored_cv_id    = $1,
+    resolved_preview  = NULL,
+    preview_attempts  = 0,
+    preview_failed_at = NULL
 WHERE id = $2 AND review_decision IS NULL
 `
 
@@ -532,6 +587,14 @@ type SetAutoApplyTailoredCVParams struct {
 // CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
 // (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
 // real. Zero rows here means exactly that race happened; the handler checks it.
+//
+// Also clears resolved_preview and resets the preview pass's own attempts/failed_at
+// (migration 0140): a deliberate re-tailor (this entry already had a tailored_cv_id) means
+// the candidate's profile or the tailoring evidence changed, so a preview computed against
+// the PREVIOUS CV is stale and must be recomputed — leaving it would let the candidate
+// review an answer preview that no longer matches what would actually be submitted. Reset,
+// not left exhausted: an entry whose preview pass had already dead-lettered deserves a
+// fresh attempt budget against the fresh CV, not a permanent unclaimable state.
 func (q *Queries) SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setAutoApplyTailoredCV, arg.TailoredCvID, arg.ID)
 	if err != nil {

@@ -226,6 +226,13 @@
     if (openItem) await applyStage(openItem, stage);
   }
 
+  // The drawer makes the actual review call itself (it alone holds the queue id, loaded
+  // via getTrackedApplication) and calls this only to report the outcome — the mutation on
+  // openItem belongs here, the same division applyStage/setStage already draw for stage.
+  function applyAutoApplyReview(decision: 'approved' | 'declined') {
+    if (openItem) openItem.auto_apply_status = decision;
+  }
+
   async function applyStage(item: BoardItem, stage: string) {
     const prevCol = cardCol[item.id];
     item.stage = stage || null;
@@ -411,6 +418,7 @@
       onsetstage={setStage}
       onsavenotes={saveNotes}
       onchooseoutcome={chooseOutcome}
+      onautoapplyreview={applyAutoApplyReview}
       onremove={remove}
       onclose={closeDrawer}
       onrehearse={startRehearsal}

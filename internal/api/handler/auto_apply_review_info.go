@@ -30,7 +30,12 @@ func autoApplyReviewInfoForJob(ctx context.Context, queries *db.Queries, userID,
 		HasTailoredCV:  row.TailoredCvID != nil,
 		ReviewDecision: pgStr(row.ReviewDecision),
 		Blocked:        row.BlockedAt.Valid,
-		Failed:         row.FailedAt.Valid,
+		// Either budget exhausting counts as failed: a dead-lettered submission
+		// (failed_at) or a preview pass that never managed to resolve one
+		// (preview_failed_at, migration 0140) — without the latter, an entry stuck
+		// there would read as "tailoring" forever, with nothing telling the candidate
+		// anything went wrong.
+		Failed: row.FailedAt.Valid || row.PreviewFailedAt.Valid,
 	}
 	if len(row.Unmapped) > 0 {
 		if err := json.Unmarshal(row.Unmapped, &attempt.Unmapped); err != nil {

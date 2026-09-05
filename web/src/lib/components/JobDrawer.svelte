@@ -43,6 +43,7 @@
     onsetstage,
     onsavenotes,
     onchooseoutcome,
+    onautoapplyreview,
     onremove,
     onclose,
     onrehearse,
@@ -57,6 +58,13 @@
     onsetstage: (stage: string) => void;
     onsavenotes: (notes: string) => void;
     onchooseoutcome: (o: ClosedOutcome) => void;
+    // Called after a successful approve/decline so the board's own item (which this
+    // component only ever borrows through the `item` prop) gets its badge updated —
+    // mirroring onsetstage/onsavenotes: the panel makes the call because it alone holds
+    // the queue id (loaded via getTrackedApplication), but the mutation itself belongs to
+    // whichever component owns `item`'s reactivity, the same division of labor every other
+    // mutation here already follows.
+    onautoapplyreview: (status: 'approved' | 'declined') => void;
     onremove: () => void;
     onclose: () => void;
     // The actions the card used to carry. They live here because a card carries no
@@ -133,10 +141,10 @@
     autoApplyError = null;
     try {
       await api.reviewAutoApply(String(autoApply.queue_id), decision);
-      // Optimistic: the same object the board's card reads (item is the board's own
-      // state, not a copy), so its badge updates without a separate reload.
       autoApply = { ...autoApply, status: decision };
-      item.auto_apply_status = decision;
+      // The board's own item is the parent's to mutate — see onautoapplyreview's own
+      // doc comment for why this isn't done directly here.
+      onautoapplyreview(decision);
     } catch (e) {
       autoApplyError = errorMessage(e, 'Could not record your decision.');
     } finally {

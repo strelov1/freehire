@@ -21,10 +21,18 @@ type PreviewStore interface {
 	SetPreview(ctx context.Context, queueID int64, preview ResolvedPreview) error
 	// Park records an attempt whose form could not be previewed at all (a captcha-gated
 	// provider, an unscannable page) — the same write Store.Park already makes for the
-	// structurally identical outcome during a real submission.
+	// structurally identical outcome during a real submission: a park predicts the
+	// identical outcome the real submission would hit either way, so sharing blocked_at is
+	// correct, not merely convenient.
 	Park(ctx context.Context, queueID int64, unmapped []UnmappedField, reason string) error
-	// Fail records a transient failure for one entry; it reports whether it dead-lettered.
-	Fail(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// FailPreview records a transient failure for one entry's preview resolution, on its
+	// own attempts/failed_at budget — deliberately NOT named Fail and deliberately not
+	// Store.Fail: the two passes used to share Store.Fail's own attempts/failed_at columns,
+	// which let a transient preview-resolution error (a flaky schema fetch, a browser
+	// launch hiccup) spend down the SAME retry budget the real ATS submission depends on,
+	// and could dead-letter a row before a submission was ever attempted. See migration
+	// 0140 and RecordAutoApplyPreviewFailure.
+	FailPreview(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
 }
 
 // PreviewStats is what a preview run did.
@@ -122,7 +130,7 @@ func (rn *previewRun) process(ctx context.Context, c Claimed) outbox.Outcome {
 }
 
 func (rn *previewRun) fail(ctx context.Context, c Claimed, err error) outbox.Outcome {
-	dead, failErr := rn.store.Fail(ctx, c.QueueID, err.Error(), rn.opts.MaxAttempts)
+	dead, failErr := rn.store.FailPreview(ctx, c.QueueID, err.Error(), rn.opts.MaxAttempts)
 	if failErr != nil {
 		log.Printf("auto-apply: record preview failure for queue entry %d: %v", c.QueueID, failErr)
 	} else if dead {

@@ -124,6 +124,22 @@ func (s *dbStore) Fail(ctx context.Context, queueID int64, errMsg string, maxAtt
 	return row.FailedAt.Valid, nil
 }
 
+// FailPreview is Fail's own counterpart for the preview pass, on preview_attempts/
+// preview_failed_at rather than Fail's attempts/failed_at (migration 0140) — a code review
+// caught the two passes sharing one budget, which let a transient preview error dead-letter
+// a row before a submission was ever attempted.
+func (s *dbStore) FailPreview(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
+	row, err := s.q.RecordAutoApplyPreviewFailure(ctx, db.RecordAutoApplyPreviewFailureParams{
+		ID:          queueID,
+		LastError:   errMsg,
+		MaxAttempts: int32(maxAttempts),
+	})
+	if err != nil {
+		return false, err
+	}
+	return row.PreviewFailedAt.Valid, nil
+}
+
 func (s *dbStore) ClaimForPreview(ctx context.Context, batch, leaseSeconds int) ([]autoapply.Claimed, error) {
 	rows, err := s.q.ClaimAutoApplyPreviewBatch(ctx, db.ClaimAutoApplyPreviewBatchParams{
 		LeaseSeconds: int32(leaseSeconds),

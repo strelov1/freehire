@@ -53,7 +53,7 @@ func (f *fakePreviewStore) Park(ctx context.Context, queueID int64, unmapped []U
 	return nil
 }
 
-func (f *fakePreviewStore) Fail(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
+func (f *fakePreviewStore) FailPreview(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
 	if f.failErr != nil {
 		return false, f.failErr
 	}

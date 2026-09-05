@@ -146,3 +146,16 @@ no browser, by its own existing design) is the wrong place for this.
       email/notification-delivery fixture in this environment) and the real Greenhouse
       DOM-scan path in `cmd/auto-apply`'s preview pass (covered instead by
       `PreviewClient`'s own unit tests against fakes).
+- [x] 9.7 Post-implementation code review (full diff, all commits) found and fixed two real
+      bugs and two lower-severity gaps — see design.md's "Post-implementation review fixes":
+      the preview pass and the submit pass sharing one failure budget (migration 0140,
+      `preview_attempts`/`preview_failed_at`, `RecordAutoApplyPreviewFailure`,
+      `PreviewStore.FailPreview`); `SetAutoApplyResolvedPreview` never releasing its lease;
+      `SetAutoApplyTailoredCV` never invalidating a stale preview on re-tailor; and
+      `JobDrawer.svelte`'s optimistic update mutating a prop directly instead of through a
+      callback (`onautoapplyreview`, mirroring `onsetstage`). New integration tests cover all
+      four. Re-ran the full verification after: `go build`/`vet`/`test` clean, `go vet
+      -tags=integration` clean, `go test -tags=integration ./...` 206/206 packages ok, `pnpm
+      check`/`lint` clean (0 errors), `vitest run` 1539/1539, and re-verified the approve flow
+      live in a browser against a fresh `make up` volume (the new migration only takes effect
+      on a fresh Postgres volume — an existing one needs `cmd/migrate` run against it first).
