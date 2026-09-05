@@ -188,11 +188,19 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "the tailoring run failed")
 	}
 
-	if err := h.queries.SetAutoApplyTailoredCV(c.Context(), db.SetAutoApplyTailoredCVParams{
+	affected, err := h.queries.SetAutoApplyTailoredCV(c.Context(), db.SetAutoApplyTailoredCVParams{
 		ID: queueID, TailoredCvID: &tailored.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		log.Printf("auto-apply: recording tailored cv for queue entry %d: %v", queueID, err)
 		return fiber.NewError(fiber.StatusInternalServerError, "could not record the tailored cv")
+	}
+	if affected == 0 {
+		// The candidate reviewed an earlier tailored CV for this same entry while this
+		// (stale or retried) run was still in flight — the guard on the statement itself
+		// refused to attach this fresh, never-seen CV to an already-decided entry. No
+		// notification, no success response: this run's own output is simply discarded.
+		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
 
 	rec, err := h.cv.cvStore.Get(c.Context(), tailored.ID, userID)

@@ -341,10 +341,10 @@ func (q *Queries) RecordAutoApplyFailure(ctx context.Context, arg RecordAutoAppl
 	return i, err
 }
 
-const setAutoApplyTailoredCV = `-- name: SetAutoApplyTailoredCV :exec
+const setAutoApplyTailoredCV = `-- name: SetAutoApplyTailoredCV :execrows
 UPDATE auto_apply_queue
 SET tailored_cv_id = $1
-WHERE id = $2
+WHERE id = $2 AND review_decision IS NULL
 `
 
 type SetAutoApplyTailoredCVParams struct {
@@ -352,10 +352,19 @@ type SetAutoApplyTailoredCVParams struct {
 	ID           int64      `json:"id"`
 }
 
-// Records which tailored CV a queue entry's tailoring run produced. Set once, by the
-// tailoring endpoint, before the candidate has had a chance to review it — review_decision
-// stays NULL until the review endpoint records one.
-func (q *Queries) SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) error {
-	_, err := q.db.Exec(ctx, setAutoApplyTailoredCV, arg.TailoredCvID, arg.ID)
-	return err
+// Records which tailored CV a queue entry's tailoring run produced. Guarded by
+// review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
+// guard: PostAutoApplyTailor's own review_decision check happens before its (potentially
+// minutes-long) LLM run, not after, so a candidate can approve or decline an EARLIER
+// tailored CV while a stale or retried tailor call for the same entry is still in flight.
+// Without this guard that call's own write here would silently attach a fresh, never-seen
+// CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
+// (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
+// real. Zero rows here means exactly that race happened; the handler checks it.
+func (q *Queries) SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAutoApplyTailoredCV, arg.TailoredCvID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

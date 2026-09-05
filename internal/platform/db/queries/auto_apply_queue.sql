@@ -95,13 +95,19 @@ SELECT id, user_id, job_id, tailored_cv_id, review_decision
 FROM auto_apply_queue
 WHERE id = sqlc.arg(id);
 
--- name: SetAutoApplyTailoredCV :exec
--- Records which tailored CV a queue entry's tailoring run produced. Set once, by the
--- tailoring endpoint, before the candidate has had a chance to review it — review_decision
--- stays NULL until the review endpoint records one.
+-- name: SetAutoApplyTailoredCV :execrows
+-- Records which tailored CV a queue entry's tailoring run produced. Guarded by
+-- review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
+-- guard: PostAutoApplyTailor's own review_decision check happens before its (potentially
+-- minutes-long) LLM run, not after, so a candidate can approve or decline an EARLIER
+-- tailored CV while a stale or retried tailor call for the same entry is still in flight.
+-- Without this guard that call's own write here would silently attach a fresh, never-seen
+-- CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
+-- (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
+-- real. Zero rows here means exactly that race happened; the handler checks it.
 UPDATE auto_apply_queue
 SET tailored_cv_id = sqlc.arg(tailored_cv_id)
-WHERE id = sqlc.arg(id);
+WHERE id = sqlc.arg(id) AND review_decision IS NULL;
 
 -- name: ApproveAutoApplyReview :execrows
 -- Records an approval. Guarded by review_decision IS NULL so a second attempt at an

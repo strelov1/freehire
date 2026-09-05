@@ -112,7 +112,7 @@ func TestAutoApplyQueueClaim(t *testing.T) {
 		job := insertJob(t, pool, "unreviewed")
 		cvID := insertCV(t, pool, user)
 		id := insertBareAutoApplyQueueEntry(t, pool, user, job)
-		if err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{
+		if _, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{
 			ID: id, TailoredCvID: &cvID,
 		}); err != nil {
 			t.Fatal(err)
@@ -162,6 +162,50 @@ func TestAutoApplyQueueClaim(t *testing.T) {
 			t.Errorf("reclaim = %d rows, want 1 once its lease expired", len(again))
 		}
 	})
+}
+
+// TestSetAutoApplyTailoredCVGuardsAnAlreadyReviewedEntry guards the race a code review
+// found: PostAutoApplyTailor's own review_decision check runs before its (potentially
+// minutes-long) LLM tailoring pass, not after, so a candidate can record a decision on an
+// EARLIER tailored CV while a stale or retried tailor call for the same entry is still in
+// flight. Without this guard, that call's own write would silently attach a fresh,
+// never-reviewed CV to an already-decided entry, which ClaimAutoApplyBatch's own predicate
+// would then submit as if approved.
+func TestSetAutoApplyTailoredCVGuardsAnAlreadyReviewedEntry(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateAutoApplyQueue(t, pool)
+
+	user := insertUser(t, pool, "raced@example.test")
+	job := insertJob(t, pool, "raced")
+	id := insertBareAutoApplyQueueEntry(t, pool, user, job)
+	firstCV := insertCV(t, pool, user)
+	if _, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{ID: id, TailoredCvID: &firstCV}); err != nil {
+		t.Fatal(err)
+	}
+	if affected, err := q.ApproveAutoApplyReview(ctx, id); err != nil || affected != 1 {
+		t.Fatalf("approve: affected=%d err=%v, want 1", affected, err)
+	}
+
+	// A stale second tailor pass for the same entry finishes after the approval above and
+	// tries to attach a DIFFERENT, never-reviewed CV.
+	secondCV := insertCV(t, pool, user)
+	affected, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{ID: id, TailoredCvID: &secondCV})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected != 0 {
+		t.Fatalf("affected = %d, want 0 — an already-reviewed entry must refuse a new tailored cv", affected)
+	}
+
+	var stored uuid.UUID
+	if err := pool.QueryRow(ctx, "SELECT tailored_cv_id FROM auto_apply_queue WHERE id = $1", id).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != firstCV {
+		t.Errorf("tailored_cv_id = %s, want the approved cv %s to survive unchanged", stored, firstCV)
+	}
 }
 
 func TestAutoApplyQueueCompletion(t *testing.T) {
