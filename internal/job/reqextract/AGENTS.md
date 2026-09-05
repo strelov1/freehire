@@ -65,11 +65,29 @@ list under `MUST HAVE…`, a scheduling note under `Preferred Hours:`, and a per
 under an inline `Benefits:`. A unit test written from imagination reproduces none of
 them.
 
-Coverage after the last such run: **14.0%** of 164 live open postings yield a list.
-The regex estimate that motivated the work said 23%; the difference is precision the
-vocabulary buys, and it is the right trade — a missed section is a blank space, while
-a benefits list under a "Requirements" heading is a false claim the reader cannot
-detect.
+## Measuring coverage
+
+**Sample with `TABLESAMPLE`, never with `ORDER BY id LIMIT` or the API's default order.**
+This number was estimated three times before the backfill finished and was wrong twice,
+both times for the same reason: id order and recency both correlate with the SOURCE, and
+the source is exactly what decides whether a posting states its requirements as a list.
+
+| Method | Answer | Why it lied |
+| --- | --- | --- |
+| 164 postings from the API's default order | 12.8% | newest first, which skews to flat-text aggregators |
+| 300k rows by `ORDER BY id` | 43.5% | oldest first, which skews to ATS boards |
+| `TABLESAMPLE SYSTEM (5)` over 350k open rows | **28.0%** | — |
+
+Measured after the full backfill, 2026-09-05: **28.0%** of open postings carry a
+derived list. Together with the model's own 1.9%, **29.3%** of open postings show a
+reader something — and the two barely overlap (6,806 + 98,410 entries in the sample
+union to 102,707), which is the whole bet of this package holding: the model reads the
+prose postings, the parser reads the marked-up ones.
+
+A regex sweep for a requirements-shaped heading said 23% before any of this was built.
+The shipped extractor is stricter than a regex on purpose: a missed section is a blank
+space, while a benefits list under a "Requirements" heading is a false claim the reader
+cannot detect.
 
 ## Limitations
 

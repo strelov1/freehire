@@ -2,7 +2,9 @@
 
 The enrichment LLM has extracted each posting's own stated requirements since 2026-08-18 — `{text, priority}` pairs, sanitised, served over the API, and shipped into every job page's hydration payload. **Nothing renders them.** Measured on prod 2026-09-04: 133,404 open postings carry a non-empty list, averaging 9.3 items, and the bytes reach the browser only to be discarded.
 
-Surfacing them is nearly free. Widening them is the second half: 133k is 2.9% of the 4.6M open catalogue, because LLM enrichment is expensive and slow. A deterministic parse of the description's own "Requirements" list reaches 12.8% of open postings (measured over 164 live postings) at zero model cost, and the two sources union rather than compete.
+Surfacing them is nearly free. Widening them is the second half: 133k is 2.9% of the 4.6M open catalogue, because LLM enrichment is expensive and slow. A deterministic parse of the description's own "Requirements" list reaches a further **28.0%** of open postings at zero model cost, and the two sources union rather than compete.
+
+*(Planning estimated 12.8% from 164 postings in the API's default order. That was a biased sample — newest first skews to flat-text aggregators — and the shipped result is measured with `TABLESAMPLE` over 350k open rows after the backfill. See design.md for why id order and recency both proxy for the source.)*
 
 ## What Changes
 

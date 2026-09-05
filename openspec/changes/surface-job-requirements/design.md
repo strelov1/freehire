@@ -21,17 +21,25 @@ Measured on prod 2026-09-04:
 | Entry length | ~70 chars mean, 200 ceiling |
 | Distinct entry texts | 86% of entries |
 | Open postings with a requirements-shaped heading + list (regex estimate) | 23% |
-| Open postings the shipped extractor actually yields on (164 live postings) | 12.8% |
+| Open postings the shipped extractor yields on (planning estimate) | 12.8% |
+| **Same, measured after the backfill (`TABLESAMPLE`, 350k open rows)** | **28.0%** |
 
 Two of these decide the shape of the work. **86% distinct** means the list can never
-be a facet, a filter, or a search field — it is display material and input to the
-candidate-side stack, nothing else. **2.9% versus 12.8%** means the deterministic
-parse is, today, the wider source by a factor of four.
+be a facet, a filter, or a search field — it is display material, nothing else.
+**2.9% versus 28.0%** means the deterministic parse is the wider source by a factor
+of ten.
 
-The two coverage figures differ because the 23% was a regex sweep for a
-requirements-shaped heading near a list, and the shipped extractor is stricter than
-that on purpose (see "Dictionary-gated extraction" below). 12.8% is the measured
-yield of the code that ships.
+**The 12.8% was a bad measurement, and the mistake is worth recording** because it was
+made twice. It sampled 164 postings in the API's default order — newest first — and
+the newest postings skew to flat-text aggregators. Re-measuring later with
+`ORDER BY id LIMIT 300000` gave 43.5%, wrong in the opposite direction for the same
+reason: the oldest open postings skew to ATS boards. Id order and recency both proxy
+for the SOURCE, and the source is precisely what decides whether a posting states its
+requirements as a list. Only `TABLESAMPLE` answers the question asked.
+
+Final, post-backfill (2026-09-05): **28.0%** carry a derived list, **1.9%** carry the
+model's own, and **29.3%** carry one or the other — the two barely overlap, which is
+the bet of this change holding.
 
 ## Goals / Non-Goals
 
