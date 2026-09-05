@@ -27,35 +27,49 @@ pattern already established by `/my/tracking` and `/my/activity`.
 
 ```
 web/src/routes/my/profile/
-  +layout.svelte        # NEW — shared data, setup gate, tab strip, context
+  +layout.svelte        # NEW — status load gate, setup branch, tab strip
   +page.ts              # NEW — ?tab= compat redirect (see below)
+  actions.ts             # NEW — handleSaved/handleCvUploaded/handleCvDeleted
   +page.svelte           # Profile view only (was: profile===null setup ∪ all 8 views)
   contacts/+page.svelte  # NEW (replaces contacts/+page.ts redirect)
   location/+page.svelte  # NEW
   skills/+page.svelte    # NEW (replaces skills/+page.ts redirect)
-  experience/+page.svelte # NEW (replaces experience/+page.ts redirect)
+  experience/+page.svelte # NEW (replaces experience/+page.ts redirect); owns its
+                          # own local actionError/offerRefreshAfterBankEdit
   education/+page.svelte # NEW
-  screening/+page.svelte # NEW (replaces screening/+page.ts redirect)
+  screening/+page.svelte # NEW (replaces screening/+page.ts redirect); owns its
+                          # own local screeningAnswers state
   settings/+page.svelte  # NEW
-  cv-readiness/          # unchanged — already its own route, not one of the 8 tabs
+  cv-readiness/+page@my.svelte  # renamed from +page.svelte — see below
 ```
 
 `contacts/+page.ts`, `experience/+page.ts`, `screening/+page.ts`, `skills/+page.ts`
 (the four redirect stubs) are deleted.
+
+**`cv-readiness/+page@my.svelte`**: this pre-existing, deliberately-unlisted route
+(reachable by URL only, not one of the 8 tabs) is NOT skipped by adding
+`my/profile/+layout.svelte` — SvelteKit nests every page inside every ancestor
+layout by default. Without the `@my` reset it would silently inherit the new
+layout's tab strip and its "no profile yet" setup gate, both wrong there. `@my`
+resets it past `my/profile/+layout.svelte` straight to `my/+layout.svelte`, the
+same mechanism `my/assistant/+layout@.svelte` already uses (found in code review,
+not by `svelte-check` or the manual QA pass — neither exercises SvelteKit's
+layout-inheritance rules).
 
 ### `+layout.svelte`
 
 Owns everything that today lives at module scope in `+page.svelte` except the
 per-view markup:
 
-- `profileStore.ensureLoaded()` / `resumeStore.ensureLoaded()` / screening-answers
-  fetch, and the `status` (`loading`/`error`/`ready`) they drive.
+- `profileStore.ensureLoaded()` / `resumeStore.ensureLoaded()`, and the `status`
+  (`loading`/`error`/`ready`) they drive. `profileStore`/`resumeStore` are the
+  existing app-wide `.svelte.ts` singletons (`$lib/profile.svelte`,
+  `$lib/resume.svelte`) — leaf pages import them directly, no plumbing through
+  the layout needed for those two at all.
 - The profile-not-set-up branch: when `profileStore.profile === null`, render only
   `ProfileForm` (profile=null) + `AccountPreferences`, **regardless of which child
   route was requested** — matches today's behavior where the tab strip itself
   doesn't exist until a profile is created.
-- `actionError`, `handleSaved`, `syncProfileAlert`, `handleCvUploaded`,
-  `handleCvDeleted`, `offerRefreshAfterBankEdit` — unchanged logic, relocated.
 - The tab strip: 8 `<a href>` elements (was `<button onclick>`), `aria-selected`
   from `page.url.pathname === href` (index route) or `.startsWith(href + '/')` is
   not needed since these are leaf routes — exact match only, mirroring
@@ -64,30 +78,25 @@ per-view markup:
   hand-rolled `handleTabKeydown`. Visual classes unchanged (same underline/icon
   treatment, not `routeTabClass` — that's Tracking/Activity's pill style, a
   deliberately different existing convention noted in the current code comment).
-- Exposes shared data to child pages via `setContext` (see below), and renders
-  `{@render children()}` inside the existing `role="tabpanel"` wrapper.
+- Renders `{@render children()}` inside the existing `role="tabpanel"` wrapper.
 
-### Context contract
+### Shared state: singleton stores, not Context
 
-A single context key (`profile-section` or similar) carrying a reactive object:
+This codebase has no existing use of Svelte's Context API anywhere. `handleSaved`
+(and its private helper `syncProfileAlert`), `handleCvUploaded`, `handleCvDeleted`
+touch only the `profileStore`/`resumeStore`/`savedSearches` singletons — never
+local component state — so they became plain functions in `actions.ts`, imported
+directly by whichever leaf page needs them (Profile, Location), the same
+"import a shared module" shape as the stores themselves. No context, no props
+drilling.
 
-```ts
-{
-  get profile(): Profile | null;
-  get resumeMeta(): ResumeMeta | null;
-  get screeningAnswers(): Answers | null;
-  get actionError(): string | null;
-  handleSaved(): void;
-  handleCvUploaded(): void;
-  handleCvDeleted(): void;
-  offerRefreshAfterBankEdit(): void;
-  reloadScreeningAnswers(): Promise<void>;
-}
-```
-
-Each leaf page reads only the pieces it needs (e.g. `contacts/+page.svelte` reads
-`resumeMeta` and `handleSaved`; `experience/+page.svelte` reads only
-`offerRefreshAfterBankEdit`).
+Two pieces of state that used to be page-wide lose that scope entirely now that
+each section is its own component instance: `screeningAnswers` (read/refreshed
+only by Screening) moves into `screening/+page.svelte`; the bank-edit
+`actionError` banner (only ever shown for Experience, per the original code's own
+comment that it "must not keep showing" once the visitor leaves) moves into
+`experience/+page.svelte` — leaving that page naturally clears it, no manual
+`$effect` reset required.
 
 ### `?tab=` compatibility
 

@@ -42,17 +42,16 @@ describe('accountSteps', () => {
     }
   });
 
-  // The three steps that land on /my/profile must open their own tab there, or
-  // completing them means hunting through the page first. cv and alerts point at
-  // other pages entirely, so they name no tab.
-  it('names the profile tab each profile-bound step opens', () => {
-    const tabById = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.tab]));
-    expect(tabById).toEqual({
-      cv: undefined,
-      role: 'profile',
-      skills: 'skills',
-      location: 'location',
-      alerts: undefined,
+  // skills and location are their own routes under /my/profile; role is the default
+  // section there, and cv/alerts point at other pages entirely.
+  it('links each step straight to the route it is done on', () => {
+    const hrefById = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.href]));
+    expect(hrefById).toEqual({
+      cv: '/my/cvs',
+      role: '/my/profile',
+      skills: '/my/profile/skills',
+      location: '/my/profile/location',
+      alerts: '/my/searches',
     });
   });
 

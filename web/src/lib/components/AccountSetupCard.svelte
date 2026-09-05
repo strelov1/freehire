@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check, ArrowRight } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { outstandingOf, type CompletenessStep } from '$lib/accountCompleteness';
+  import { outstandingOf } from '$lib/accountCompleteness';
   import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
   // "How complete is my account", above the profile page's section tabs — the page
@@ -20,12 +20,6 @@
   $effect(() => {
     ensureAccountSetupLoaded();
   });
-
-  // resolve()'s own base plus a query string when the step names a tab — there is no
-  // dynamic route segment to resolve, same shape as TrackingCalendar's message link.
-  function stepHref(step: CompletenessStep): string {
-    return `${resolve(step.href)}${step.tab ? `?tab=${step.tab}` : ''}`;
-  }
 </script>
 
 {#if outstanding.length > 0}
@@ -55,8 +49,7 @@
               <span class="line-through decoration-border">{step.label}</span>
             </p>
           {:else}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended ?tab= query -->
-            <a href={stepHref(step)} class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent">
+            <a href={resolve(step.href)} class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent">
               <span
                 class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground"
                 aria-hidden="true"

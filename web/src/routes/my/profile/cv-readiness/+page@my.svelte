@@ -18,6 +18,10 @@
   // role the reader picks. Reachable by URL only — not one of the profile's views (see
   // /my/profile's toolbar), and not linked from anywhere in the product yet. Kept because
   // the report is still worth having, not because anything points to it.
+  //
+  // `@my` in the filename resets past `my/profile/+layout.svelte` (the section tab strip
+  // and its "no profile yet" gate — both wrong here) straight to `my/+layout.svelte`,
+  // same mechanism `my/assistant/+layout@.svelte` uses to reset further, past that too.
   const profile = $derived(profileStore.profile);
 
   // Skills are the measured set (from the profile), never a market filter — hide the

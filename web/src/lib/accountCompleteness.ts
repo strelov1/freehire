@@ -16,7 +16,7 @@ import type { UserProfile } from './types';
  *  does not exist fails the build here, instead of rendering a link to a 404. Spelling
  *  the routes out keeps this module free of any SvelteKit import, which is what lets it
  *  be unit-tested in plain Node. */
-type SetupHref = '/my/cvs' | '/my/profile' | '/my/searches';
+type SetupHref = '/my/cvs' | '/my/profile' | '/my/profile/skills' | '/my/profile/location' | '/my/searches';
 
 export interface CompletenessStep {
   /** Stable key. Used by tests and as the list key — never shown. */
@@ -24,11 +24,6 @@ export interface CompletenessStep {
   label: string;
   href: SetupHref;
   done: boolean;
-  /** The profile page's own tab id to open this step on, when `href` is `/my/profile`.
-   *  An opaque string rather than a type shared with the profile page — this module
-   *  stays free of any SvelteKit import (see the header comment) — so it must be kept
-   *  in sync by hand with that page's tab ids. Absent for steps on any other page. */
-  tab?: string;
 }
 
 export interface CompletenessInput {
@@ -76,21 +71,18 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       id: 'role',
       label: 'Say what you do, and at what level',
       href: '/my/profile',
-      tab: 'profile',
       done: Boolean(profile?.specializations.length && profile?.seniorities.length),
     },
     {
       id: 'skills',
       label: 'List your skills',
-      href: '/my/profile',
-      tab: 'skills',
+      href: '/my/profile/skills',
       done: Boolean(profile?.skills.length),
     },
     {
       id: 'location',
       label: 'Set where and how you want to work',
-      href: '/my/profile',
-      tab: 'location',
+      href: '/my/profile/location',
       done: statesLocation(profile),
     },
     {
