@@ -469,9 +469,9 @@ WITH updated AS (
     UPDATE auto_apply_queue q
     SET resolved_preview = $1
     WHERE q.id = $2 AND q.review_decision IS NULL
-    RETURNING q.job_id
+    RETURNING q.job_id, q.user_id
 )
-SELECT j.public_slug, j.title, j.company
+SELECT j.public_slug, j.title, j.company, u.user_id
 FROM jobs j
 JOIN updated u ON u.job_id = j.id
 `
@@ -485,6 +485,7 @@ type SetAutoApplyResolvedPreviewRow struct {
 	PublicSlug string `json:"public_slug"`
 	Title      string `json:"title"`
 	Company    string `json:"company"`
+	UserID     int64  `json:"user_id"`
 }
 
 // Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
@@ -502,7 +503,12 @@ type SetAutoApplyResolvedPreviewRow struct {
 func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error) {
 	row := q.db.QueryRow(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.ID)
 	var i SetAutoApplyResolvedPreviewRow
-	err := row.Scan(&i.PublicSlug, &i.Title, &i.Company)
+	err := row.Scan(
+		&i.PublicSlug,
+		&i.Title,
+		&i.Company,
+		&i.UserID,
+	)
 	return i, err
 }
 

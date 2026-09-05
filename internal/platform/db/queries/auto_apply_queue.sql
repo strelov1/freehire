@@ -157,9 +157,9 @@ WITH updated AS (
     UPDATE auto_apply_queue q
     SET resolved_preview = sqlc.arg(resolved_preview)
     WHERE q.id = sqlc.arg(id) AND q.review_decision IS NULL
-    RETURNING q.job_id
+    RETURNING q.job_id, q.user_id
 )
-SELECT j.public_slug, j.title, j.company
+SELECT j.public_slug, j.title, j.company, u.user_id
 FROM jobs j
 JOIN updated u ON u.job_id = j.id;
 
