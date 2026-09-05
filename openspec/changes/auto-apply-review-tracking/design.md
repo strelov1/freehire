@@ -135,7 +135,7 @@ built to match that visual language rather than a prop-driven variant of the sam
 non-actionable states (`blocked`/`declined`/`failed`) render a third, read-only variant of that
 same banner family.
 
-**Notification target changes from `/tailor/[slug]` to `/my/tracking?job=<id>`.**
+**Notification target changes from `/tailor/[slug]` to `/my/tracking/[id]`.**
 The tailoring-complete notification (`auto-apply-tailored-resume` task 3.5) currently links to the
 tailoring workspace, which has no approve/decline affordance and was never meant to be one — it
 is where a CV gets *edited*, not where an auto-apply decision gets made. Once the resolve-preview

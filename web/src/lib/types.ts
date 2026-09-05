@@ -652,6 +652,60 @@ export interface MyJob {
   /** When somebody last opened a CV sent for this application. Outside the silence derivation:
    *  a recruiter reading a CV is not a reply. */
   cv_opened_at: string | null;
+  /** The six-value status of this job's live auto-apply attempt — the board card's own
+   *  "needs your review" badge (openspec/changes/auto-apply-review-tracking). Absent when
+   *  there is no live attempt. The full answer preview lives on `TrackedApplication.auto_apply`
+   *  instead, which the drawer fetches separately. */
+  auto_apply_status?: AutoApplyStatus;
+}
+
+/** The six-value candidate-facing status for a live auto-apply attempt. */
+export type AutoApplyStatus =
+  | 'tailoring'
+  | 'pending_review'
+  | 'approved'
+  | 'blocked'
+  | 'declined'
+  | 'failed';
+
+/** One resolved question/answer pair in an auto-apply answer preview. */
+export interface AutoApplyPreviewField {
+  label: string;
+  value: string;
+}
+
+/** One required question an auto-apply answer preview has no answer for yet.
+ *  `will_draft_at_submission` distinguishes "the real submission will fill this in
+ *  automatically" from "nothing can answer this". */
+export interface AutoApplyPreviewPending {
+  label: string;
+  will_draft_at_submission: boolean;
+}
+
+/** The candidate-facing snapshot of what an unattended auto-apply submission would send —
+ *  computed once, before review, never a live guess made when the drawer opens. */
+export interface AutoApplyResolvedPreview {
+  fields: AutoApplyPreviewField[];
+  pending?: AutoApplyPreviewPending[];
+}
+
+/** One application question an auto-apply attempt could not answer — candidate-facing
+ *  detail only; the attempt's internal error text is never part of this shape. */
+export interface AutoApplyUnmappedField {
+  id: string;
+  label: string;
+  required: boolean;
+  reason: string;
+}
+
+/** What a tracked job's own drawer read (`TrackedApplication.auto_apply`) surfaces about
+ *  its live auto-apply attempt (openspec/changes/auto-apply-review-tracking).
+ *  `resolved_preview` is present only when `status` is `pending_review`; `unmapped` only
+ *  when `status` is `blocked`. */
+export interface AutoApplyReviewInfo {
+  status: AutoApplyStatus;
+  resolved_preview?: AutoApplyResolvedPreview;
+  unmapped?: AutoApplyUnmappedField[];
 }
 
 /** The account-level notification rule: whether notifications are on, and the
@@ -672,17 +726,20 @@ export interface NotificationSettings {
 
 /** The notification-center event kinds a `user_notifications` row can carry — matches
  *  internal/notify/reminder/nudge's kind strings exactly (see
- *  openspec/changes/add-notification-center/design.md decision 1), plus
- *  `auto_apply_tailor_ready` (openspec/changes/auto-apply-tailored-resume), recorded
- *  directly by internal/api/handler's auto-apply tailoring endpoint rather than by one of
- *  those background engines. */
+ *  openspec/changes/add-notification-center/design.md decision 1), plus two recorded
+ *  directly by auto-apply's own write paths rather than by one of those background
+ *  engines: `auto_apply_tailor_ready` (auto-apply-tailored-resume; historical rows only —
+ *  auto-apply-review-tracking moved this notification to fire later, as
+ *  `auto_apply_ready_for_review`, once there is an answer preview to review, not merely a
+ *  tailored CV) and `auto_apply_ready_for_review` itself. */
 export type NotificationKind =
   | 'subscription_digest'
   | 'reminder'
   | 'nudge_follow_up'
   | 'nudge_interview_prep'
   | 'nudge_job_closed'
-  | 'auto_apply_tailor_ready';
+  | 'auto_apply_tailor_ready'
+  | 'auto_apply_ready_for_review';
 
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this
@@ -792,6 +849,10 @@ export interface TrackedApplication {
   /** The application's history from the ledger, newest first — what happened to it, as
    *  against the marks on the posting the listing row carries. Empty when nothing has. */
   events: TimelineEvent[];
+  /** The caller's live auto-apply attempt for this job, absent when none exists
+   *  (openspec/changes/auto-apply-review-tracking). The drawer's own approve/decline
+   *  banner reads this. */
+  auto_apply?: AutoApplyReviewInfo;
 }
 
 /** The assembled follow-up message for a silent application. Deterministic and

@@ -67,4 +67,11 @@ describe('notificationTarget', () => {
       slug: 'acme-go-engineer',
     });
   });
+
+  it('sends an auto-apply ready-for-review notification to the tracking board, deep-linked to the job', () => {
+    expect(notificationTarget({ kind: 'auto_apply_ready_for_review', public_slug: 'acme-go-engineer' })).toEqual({
+      kind: 'tracking',
+      slug: 'acme-go-engineer',
+    });
+  });
 });

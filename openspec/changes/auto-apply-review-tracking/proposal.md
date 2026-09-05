@@ -52,8 +52,9 @@ run this session got stuck at the review step with nowhere in the product to res
   link + Approve/Decline (calling the existing, unchanged `POST /me/auto-apply/:queueId/review`);
   for `blocked`/`declined`/`failed`, a read-only variant naming why, explicit that the attempt is
   final for this job (no retry path exists anywhere in the backend today).
-- The existing tailoring-complete notification now links into `/my/tracking?job=<id>`, which
-  opens that job's drawer on load, instead of `/tailor/[slug]`.
+- The existing tailoring-complete notification now links into `/my/tracking/[id]` (an
+  existing deep-link route, built for the inbox's mail-linking feature, that already opens
+  the given application's drawer on load), instead of `/tailor/[slug]`.
 - No new database columns for status derivation (unchanged from the queue's existing
   `tailored_cv_id`/`review_decision`/`blocked_at`/`failed_at`); one new column,
   `auto_apply_queue.resolved_preview jsonb`, holds the persisted answer-preview snapshot.
@@ -95,7 +96,6 @@ endpoints' own contracts are untouched.)
   gains `auto_apply`; `auto-apply-submit-trigger`'s enqueue handler gains one `jobtracking.Track`
   call; `PostAutoApplyTailor` loses its notification call, moved to the new preview pass.
 - **Frontend**: `BoardCard.svelte` gains a badge; `JobDrawer.svelte` gains a banner section;
-  the tracking route supports opening a drawer via `?job=<id>`; the tailoring-complete
-  notification's target changes.
+  the notification's target moves to the existing `/my/tracking/[id]` deep link.
 - **No impact** to `cmd/auto-apply`'s real submission path, `internal/api/atsapply`'s resolve
   logic (reused, not changed), or the job-detail auto-apply button's own 4-state contract.

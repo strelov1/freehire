@@ -959,6 +959,18 @@ export function createApi(
     });
   }
 
+  /** Record the candidate's approve/decline decision on a tailored-but-not-yet-reviewed
+   *  auto-apply queue entry (openspec/changes/auto-apply-review-tracking, calling the
+   *  endpoint auto-apply-tailored-resume already built). Rejects with an ApiError (404
+   *  foreign/missing entry, 409 no tailored CV yet or already reviewed) whose `message` is
+   *  the caller-facing reason. */
+  function reviewAutoApply(queueId: string, decision: 'approved' | 'declined'): Promise<{ decision: string }> {
+    return requestData<{ decision: string }>(
+      `/api/v1/me/auto-apply/${encodeURIComponent(queueId)}/review`,
+      jsonBody('POST', { decision }),
+    );
+  }
+
   /** Dismiss (swipe away) a job in the swipe deck. Keeps it out of the deck only;
    *  the job stays visible in the normal list and search. */
   function dismissJob(slug: string): Promise<UserJob> {
@@ -2380,6 +2392,7 @@ export function createApi(
     saveJob,
     unsaveJob,
     autoApplyJob,
+    reviewAutoApply,
     dismissJob,
     undismissJob,
     voteJob,

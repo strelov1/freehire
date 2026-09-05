@@ -113,11 +113,14 @@ no browser, by its own existing design) is the wrong place for this.
       the wrong target (`/tailor/[slug]`, which has no approve/decline affordance).
 - [x] 8.2 Add the notification call to `SetPreview`'s implementation (§3.4) instead, targeting
       `auto_apply_ready_for_review` with the job's tracker slug.
-- [ ] 8.3 `notificationTarget.ts`: map the new notification type to `{kind: 'tracking', job:
-      <id>}` → `/my/tracking?job=<id>` (dropping the old `auto_apply_tailor_ready` → `tailor`
-      mapping this replaces).
-- [ ] 8.4 `web/src/routes/my/tracking/+page.svelte` (or `JobBoard.svelte`): on load, if `?job=`
-      is present, open that job's drawer.
+- [x] 8.3 `notificationTarget.ts`: map `auto_apply_ready_for_review` to `{kind: 'tracking',
+      slug}` (widening the existing `tracking` variant, which `nudge_follow_up`/
+      `nudge_interview_prep` already use with no slug).
+- [x] 8.4 **No new deep-link mechanism needed** — `/my/tracking/[id]` already exists and
+      already does exactly this (`JobBoard.svelte`'s own `initialId` prop, built for the
+      inbox's mail-linking feature): it server-fetches the board and opens the given
+      application's drawer once loaded. `NotificationCard.svelte`'s href derivation routes a
+      `tracking` target WITH a slug there instead of inventing a `?job=` query param.
 
 ## 9. Verification
 
