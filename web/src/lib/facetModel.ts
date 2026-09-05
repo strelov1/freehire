@@ -65,8 +65,9 @@ export interface JobFilters {
    *  `relevance` is the engine's own ranking, `newest` is freshest first, `views` is
    *  most-opened first, and `match` ranks by how well a vacancy's skills overlap the
    *  signed-in caller's profile. The server degrades `match` to its default for anyone
-   *  it cannot serve it to — anonymous, no profile, no skills — so this is never gated
-   *  client-side beyond hiding the option.
+   *  it cannot serve it to — anonymous, no profile, no skills — so this is not gated
+   *  client-side at all: every ordering is offered, and the feed explains the degraded
+   *  one rather than withholding it.
    *
    *  The `null` matters because the DEFAULT depends on `q` (see defaultSortFor) while
    *  `q` changes under the ordering's feet. Storing the resolved default instead would
@@ -136,15 +137,14 @@ export interface SortOption {
 
 /** The orderings a caller can actually choose between, in display order.
  *
- *  `relevance` needs query text to rank against and `match` needs a profile the caller
- *  has (plus the runtime flag the view resolves); `newest` and `views` always apply —
- *  the latter ranks by a stored figure, so gating it on anything would be inventing a
- *  precondition. The rule is per OPTION rather than per control — gating the whole
- *  select on the match precondition, as it was, took `newest` down with it, so a
- *  signed-out visitor searching by text had no way to reach the freshest-first ordering.
+ *  `relevance` is the only conditional one: it ranks against query text, so without any
+ *  there is nothing for it to rank. `newest`, `views` and `match` always apply.
  *
- *  With two unconditional options the control now holds a choice for every caller, so
- *  it renders on every listing — including the signed-out browse that used to show none.
+ *  `match` was conditional too — it needed a profile with skills. That hid the one
+ *  ordering that answers "which of these suit me" from precisely the people who had not
+ *  filled a profile in, and told them nothing. It is offered to everyone now, and the
+ *  view explains what it needs when there is nothing to rank against (see
+ *  matchSortNeedsSkills below).
  *
  *  It lives here, not in the view, for the reason effectiveSort does: it is pure, it
  *  decides what the user sees, and in the component nothing could test it. */

@@ -208,7 +208,17 @@
 
   // Whether that notice is showing: match is the ordering in force and there are no
   // skills to rank against, so the server has quietly served newest instead.
-  const matchNeedsSkills = $derived(matchSortNeedsSkills(filters.value, matchFilterAvailable));
+  //
+  // Three states, not two — "has skills", "has none", and "we do not know yet".
+  // `matchFilterAvailable` folds the third into the second, and the profile arrives one
+  // round trip after the page does, so asking it alone would put this notice in the
+  // server-rendered HTML for a signed-in user WITH skills and take it away a moment
+  // later. `loaded` exists for exactly this (see userResource.svelte.ts). Signed out
+  // there is nothing to wait for: no account means no profile, and that is known at once.
+  const skillsSettled = $derived(!isAuthenticated() || profileStore.loaded);
+  const matchNeedsSkills = $derived(
+    skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
+  );
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
   // value read once at module load, and it cannot change while the page is mounted.
@@ -778,7 +788,13 @@
          would punish someone for pressing a button we offered them. What was missing
          was only the explanation. -->
     {#if matchNeedsSkills}
-      <div class="mt-3 rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm sm:p-4">
+      <!-- `role="status"` because this appears in response to changing the Sort control,
+           and a screen-reader user who just did that gets no other signal that the
+           ordering they picked was not the one served. -->
+      <div
+        role="status"
+        class="mt-3 rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm sm:p-4"
+      >
         <p class="font-medium text-foreground">Sorted by match needs to know about you</p>
         <p class="mt-1 text-muted-foreground">
           We rank these against your own skills, and we don't have them yet. Showing the

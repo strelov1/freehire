@@ -112,6 +112,8 @@ browser rather than with tests that would only restate the implementation.
 ## Out of scope
 
 - `PUBLIC_MATCH_SORT` on production — an ops check, recorded so it is not lost.
+  (Answered since: the flag was set, and a later change retired it altogether — the match
+  sort is now offered to everyone and the feed explains what it needs.)
 - Any change to what `save` means on the server. Saving still writes `saved_at` and
   nothing else.
 - The companies search placeholder. It is not a role box.
