@@ -1704,9 +1704,7 @@ curl "https://freehire.me/api/v1/me/tracking/analyses" -H "Authorization: Bearer
 
 Your plan and what it allows today.
 
-Which plan you are on and, for every metered AI feature, how much of today you have used against what the day allows. Every plan offers every feature; what differs is the daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM.
-
-A pro caller also carries `pro_until` and `pro_source`; both are absent on the free plan and on a plan that has ended. `pro_source` is where the subscription was bought — `stripe` for the web, `revenuecat` for the App Store or Google Play, `granted` for one given by hand — and it is behavioural rather than informational. **A client offering an in-app purchase must not offer one to a `stripe` subscriber**, who would then be charged twice for one plan; and a `revenuecat` subscriber must be sent to their store to cancel rather than to a web page, which Apple's rules require. Where two origins reach the same instant the answer is the first of `stripe`, `revenuecat`, `granted`.
+Which plan you are on and, for every metered AI feature, how much of today you have used against what the day allows. Every plan offers every feature; what differs is the daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and on a plan that has ended. `pro_source` is behavioural: a client offering an in-app purchase must not offer one to a `stripe` subscriber, who would be charged twice for one plan, and a `revenuecat` subscriber must be sent to their store to cancel rather than to a web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.
 
 ```bash
 curl "https://freehire.me/api/v1/me/plan" -H "Authorization: Bearer $FREEHIRE_API_KEY"
@@ -1725,31 +1723,13 @@ curl "https://freehire.me/api/v1/me/plan" -H "Authorization: Bearer $FREEHIRE_AP
 }
 ```
 
-A pro caller who bought in an app:
-
-```json
-{
-  "data": {
-    "plan": "pro",
-    "resets_at": "2026-09-01T00:00:00Z",
-    "pro_until": "2026-10-04T12:00:00Z",
-    "pro_source": "revenuecat",
-    "allowances": [
-      { "feature": "match", "used": 4, "limit": 0, "unlimited": true, "enforced": false, "resets_at": "2026-09-01T00:00:00Z" }
-    ]
-  }
-}
-```
-
 ### `POST /billing/revenuecat/sync`
 
-**Auth:** Session (cookie only)
+**Auth:** Session only
 
 Re-read your own store subscription now.
 
-For a mobile client that has just completed an App Store or Google Play purchase. The purchase finishes on the device before the provider's webhook reaches us, and if that delivery is lost the provider stops retrying after 80 minutes — so without this route a paid subscriber can be left looking at a paywall. It re-reads the caller's subscription from RevenueCat and updates their plan.
-
-**It names nobody.** The account is the session's, and a user id in the body or the query is ignored. Rate-limited per caller; the route does not exist at all where the store provider is unconfigured.
+For a mobile client that has just completed an App Store or Google Play purchase. The purchase finishes on the device before the provider’s webhook reaches us, and if that delivery is lost the provider stops retrying after 80 minutes — so without this route a paid subscriber can be left looking at a paywall. It names nobody: the account is the session’s, and a user id in the request is ignored. Rate-limited per caller, and absent entirely where the store provider is unconfigured. `status` is `synced` when the plan was written, or `no_subscription` when RevenueCat holds nothing for this account; a 503 means the provider could not be reached and the hourly reconciler will finish the job.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/billing/revenuecat/sync" -b cookies.txt
@@ -1758,8 +1738,6 @@ curl -X POST "https://freehire.me/api/v1/billing/revenuecat/sync" -b cookies.txt
 ```json
 { "data": { "status": "synced" } }
 ```
-
-`status` is `synced` when the plan was written from what RevenueCat holds, and `no_subscription` when they hold nothing for this account. A `503` means the provider could not be reached — the purchase is not lost, and the hourly reconciler will finish the job.
 
 ### `GET /me/tracking/saved`
 
