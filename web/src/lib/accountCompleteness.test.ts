@@ -55,6 +55,17 @@ describe('accountSteps', () => {
     });
   });
 
+  // The card itself is rendered on /my/profile, so the role step's link would otherwise
+  // point at the page the reader is already looking at — the anchor is what makes it move.
+  it('anchors the role step, since its own card shares that page', () => {
+    const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.hash]));
+    expect(byId.role).toBe('account-role');
+    expect(byId.cv).toBeUndefined();
+    expect(byId.skills).toBeUndefined();
+    expect(byId.location).toBeUndefined();
+    expect(byId.alerts).toBeUndefined();
+  });
+
   it('counts a CV once one is stored', () => {
     expect(doneIds({ ...empty, hasCv: true })).toEqual(['cv']);
   });
