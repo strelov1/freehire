@@ -63,7 +63,9 @@ var discountSources = []string{
 	"web/src/lib/referral.ts",
 	"web/src/lib/referral.test.ts",
 	"migrations/0140_promo_and_invites.sql",
-	"openspec/changes/add-invite-and-promo-discounts",
+	"openspec/specs/promo-codes",
+	"openspec/specs/invite-referrals",
+	"openspec/changes/archive/2026-09-05-add-invite-and-promo-discounts",
 }
 
 func TestNoRedeemableCodeShipsInTheRepository(t *testing.T) {
