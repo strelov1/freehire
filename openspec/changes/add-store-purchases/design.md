@@ -283,12 +283,18 @@ rather than puzzle.
 1. Add the migration. Verify on a fresh initdb volume that a clean install produces the
    generated column, and separately against a copy of prod that the split by
    `stripe_customer_id` lands every existing non-NULL value in exactly one source column.
-2. Run it manually on prod, before deploying code that reads or writes the new columns. The
-   generated column keeps `pro_until` answering correctly throughout, so the running
-   deployment is unaffected while the code is still the old one — the only writer it has,
-   `SetProUntil`, is what fails, and it fails closed by erroring rather than by writing a
-   wrong value.
-3. Deploy the code. Stripe now writes `pro_until_stripe`; behaviour is unchanged.
+2. Merge. **The release runs it** — `deploy/bin/release.sh` builds `cmd/migrate` and runs it
+   before the new colour starts, so that colour never serves against an older schema, and a
+   migration failure aborts the release with the live colour untouched. An earlier draft of
+   this plan called for a manual run first; that was written from a wrong model of the fleet,
+   and following it would have meant doing by hand what the pipeline already does under a
+   lock.
+
+   The one gap it leaves is between the migration and the flip, where the OLD binary briefly
+   serves against the NEW schema. Its only write to this column, `SetProUntil`, fails with
+   428C9 — closed, not wrong: a Stripe delivery in that window goes unacknowledged and is
+   retried, and the reconciler repeats a sync that changes nothing.
+3. Stripe now writes `pro_until_stripe`; behaviour is unchanged.
 4. Configure RevenueCat in the environment and register the webhook. Until that moment the
    RevenueCat routes 404 and nothing else differs.
 5. Verify with a sandbox purchase end to end, including a cancellation and a refund.

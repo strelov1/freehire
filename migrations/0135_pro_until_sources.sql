@@ -37,28 +37,26 @@
 -- is affordable here and a trigger, which would hide the rule from anyone reading \d users,
 -- is not worth what it saves.
 --
--- Applied to a fresh volume by initdb in name order, after 0134; on an existing prod volume this file must
--- be run manually BEFORE deploying code that reads or writes the new columns. The deployed
--- old code keeps working across the gap in the one direction that matters: it can still READ
--- pro_until, which does not go away — it becomes unassignable — and its only write,
--- SetProUntil, now errors instead of writing a wrong value.
+-- Applied to a fresh volume by initdb in name order, after 0134. On the fleet it is applied by
+-- the RELEASE, not by hand: deploy/bin/release.sh builds cmd/migrate and runs it before the
+-- new colour starts, so that colour never serves a request against an older schema, and a
+-- migration failure aborts the release with the live colour untouched.
 --
--- Run it through the migration runner, which wraps a file in a transaction — the same
--- binary deploy/bin/release.sh runs, with DATABASE_URL in the environment:
---   ./migrate
--- `make migrate` and initdb both feed these files to plain `psql -f`, which does NOT, and
--- this file must not half-apply — between the DROP and the ADD there is no pro_until at all.
--- If psql is the only tool to hand, it needs --single-transaction.
+-- That leaves one gap worth naming, because it is this file's own doing. Between the migration
+-- and the flip, the OLD binary is briefly serving against the NEW schema, and its only write to
+-- this column — SetProUntil — now fails with 428C9. It fails CLOSED: a Stripe delivery in that
+-- window goes unacknowledged and is retried, and cmd/billing-sync repeats a sync that changes
+-- nothing. Nothing is written wrongly, which is the whole reason the column refuses assignment
+-- rather than accepting a value nobody meant.
 --
--- BEFORE RUNNING IT, look at the accounts the split cannot decide from evidence alone:
+-- BEFORE the release, look at the accounts the split cannot decide from evidence alone:
 --
 --   SELECT id, pro_until FROM users WHERE pro_until IS NOT NULL AND stripe_customer_id IS NOT NULL;
 --
--- Those are Stripe customers, so their value goes to pro_until_stripe — correct unless
--- support hand-set a longer expiry on top of a real subscription, in which case the next
--- sync shortens it back. Nothing in the data distinguishes the two cases. At the measured
--- 1397 accounts this is a handful of rows a person can read; move any of them to
--- pro_until_granted by hand afterwards.
+-- Those are Stripe customers, so their value goes to pro_until_stripe — correct unless support
+-- hand-set a longer expiry on top of a real subscription, in which case the next sync shortens
+-- it back. Nothing in the data distinguishes the two cases. At the measured 1397 accounts this
+-- is a handful of rows a person can read; move any of them to pro_until_granted afterwards.
 ALTER TABLE users
     ADD COLUMN pro_until_stripe timestamp with time zone,
     ADD COLUMN pro_until_revenuecat timestamp with time zone,
