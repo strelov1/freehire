@@ -704,6 +704,8 @@ export interface AutoApplyUnmappedField {
  *  when `status` is `blocked`. */
 export interface AutoApplyReviewInfo {
   status: AutoApplyStatus;
+  /** Addresses the attempt for `api.reviewAutoApply(queue_id, decision)`. */
+  queue_id: number;
   resolved_preview?: AutoApplyResolvedPreview;
   unmapped?: AutoApplyUnmappedField[];
 }

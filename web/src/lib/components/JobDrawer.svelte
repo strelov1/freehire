@@ -27,6 +27,7 @@
     Job,
     MyJob,
     ApplicationEmail,
+    AutoApplyReviewInfo,
     MailRecallResult,
     RecalledEmail,
     StageSuggestion,
@@ -34,6 +35,7 @@
   } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
+  import { autoApplyReviewBanner } from '$lib/autoApplyReview';
 
   let {
     item,
@@ -117,6 +119,30 @@
   // stage is set from here, so the offer disappears on the press rather than on the next
   // load — the server would stop sending it, but not until something asks it again.
   let stageSuggestion = $state.raw<StageSuggestion | null>(null);
+  // The caller's own live auto-apply attempt for this job, loaded alongside everything
+  // else loadEmails() fetches (openspec/changes/auto-apply-review-tracking) — null for a
+  // job with none.
+  let autoApply = $state.raw<AutoApplyReviewInfo | null>(null);
+  let autoApplyDeciding = $state(false);
+  let autoApplyError = $state<string | null>(null);
+  const autoApplyBanner = $derived(autoApplyReviewBanner(autoApply?.status));
+
+  async function decideAutoApply(decision: 'approved' | 'declined') {
+    if (!autoApply || autoApplyDeciding) return;
+    autoApplyDeciding = true;
+    autoApplyError = null;
+    try {
+      await api.reviewAutoApply(String(autoApply.queue_id), decision);
+      // Optimistic: the same object the board's card reads (item is the board's own
+      // state, not a copy), so its badge updates without a separate reload.
+      autoApply = { ...autoApply, status: decision };
+      item.auto_apply_status = decision;
+    } catch (e) {
+      autoApplyError = errorMessage(e, 'Could not record your decision.');
+    } finally {
+      autoApplyDeciding = false;
+    }
+  }
   // The full posting. The listing serves a card — employer, role, and the facets a row draws —
   // because carrying every description was 84% of its payload for text no row renders. The
   // panel is the one place that wants the posting, and it already makes this request for the
@@ -161,6 +187,7 @@
       const app = await api.getTrackedApplication(item.job.public_slug);
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
+      autoApply = app.auto_apply ?? null;
       posting = app.job;
       events = app.events ?? [];
     } catch (e) {
@@ -425,6 +452,77 @@
     >
       {#if tab === 'application'}
         <div class="flex flex-col gap-4">
+          <!-- Auto-apply's own "action needed"/status banner (openspec/changes/
+               auto-apply-review-tracking) — same shape the stage-suggestion banner uses
+               (below, on the Emails tab), placed here instead because this is the tab a
+               fresh mount always opens on and a pending decision is the primary reason to
+               open this drawer at all. -->
+          {#if autoApplyBanner?.kind === 'pending_review'}
+            <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
+              <p class="text-sm font-medium">Auto-apply tailored a CV for this job and is ready to send it.</p>
+              {#if autoApply?.resolved_preview?.fields.length}
+                <dl class="flex flex-col gap-1 text-sm">
+                  {#each autoApply.resolved_preview.fields as f (f.label)}
+                    <div class="flex gap-2">
+                      <dt class="shrink-0 text-muted-foreground">{f.label}:</dt>
+                      <dd class="min-w-0 truncate">{f.value}</dd>
+                    </div>
+                  {/each}
+                </dl>
+              {/if}
+              {#if autoApply?.resolved_preview?.pending?.length}
+                <ul class="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                  {#each autoApply.resolved_preview.pending as p (p.label)}
+                    <li>{p.label} — {p.will_draft_at_submission ? 'will be filled in automatically' : 'no known answer yet'}</li>
+                  {/each}
+                </ul>
+              {/if}
+              {#if hasPosting && item.job}
+                <a
+                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
+                  class="w-fit text-xs underline-offset-2 hover:underline"
+                >
+                  View tailored CV
+                </a>
+              {/if}
+              <div class="flex items-center gap-2">
+                <Button size="sm" disabled={autoApplyDeciding} onclick={() => decideAutoApply('approved')}>
+                  Approve & send
+                </Button>
+                <Button size="sm" variant="outline" disabled={autoApplyDeciding} onclick={() => decideAutoApply('declined')}>
+                  Decline
+                </Button>
+              </div>
+              {#if autoApplyError}
+                <p class="text-xs text-destructive">{autoApplyError}</p>
+              {/if}
+            </div>
+          {:else if autoApplyBanner?.kind === 'blocked'}
+            <div class="flex flex-col gap-1 rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm font-medium">Auto-apply couldn't finish this application.</p>
+              {#if autoApply?.unmapped?.length}
+                <ul class="flex list-inside list-disc flex-col gap-0.5 text-xs text-muted-foreground">
+                  {#each autoApply.unmapped as u (u.id)}
+                    <li>{u.label}</li>
+                  {/each}
+                </ul>
+              {/if}
+              <p class="text-xs text-muted-foreground">This attempt is final for this job — it will not be retried.</p>
+            </div>
+          {:else if autoApplyBanner?.kind === 'declined'}
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm text-muted-foreground">
+                You declined the tailored CV auto-apply prepared for this job. This attempt is final.
+              </p>
+            </div>
+          {:else if autoApplyBanner?.kind === 'failed'}
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm text-muted-foreground">
+                Auto-apply could not submit this application after retrying. This attempt is final.
+              </p>
+            </div>
+          {/if}
+
           {#if pendingOutcome}
             <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
               <p class="text-sm font-medium">How did it close?</p>

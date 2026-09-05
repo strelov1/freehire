@@ -88,22 +88,22 @@ no browser, by its own existing design) is the wrong place for this.
 
 ## 6. Review action (reused endpoint, new caller)
 
-- [ ] 6.1 Confirm `web/src/lib/api.ts` has (or add) a wrapper for the existing
+- [x] 6.1 Confirm `web/src/lib/api.ts` has (or add) a wrapper for the existing
       `POST /me/auto-apply/:queueId/review`.
 
 ## 7. Frontend: tracker UI
 
-- [ ] 7.1 Add the `auto_apply` field to the tracked-job type in `web/src/lib/types.ts` (or
+- [x] 7.1 Add the `auto_apply` field to the tracked-job type in `web/src/lib/types.ts` (or
       generated contracts, per this repo's existing convention).
-- [ ] 7.2 `BoardCard.svelte`: a small "needs your review" badge, same visual family as the
+- [x] 7.2 `BoardCard.svelte`: a small "needs your review" badge, same visual family as the
       existing silence badge, shown when `auto_apply.status` is `pending_review` or `blocked`.
-- [ ] 7.3 `JobDrawer.svelte`: new banner section for `pending_review` — answer preview (label/
+- [x] 7.3 `JobDrawer.svelte`: new banner section for `pending_review` — answer preview (label/
       value list), tailored CV link, Approve/Decline buttons calling the endpoint from §6, with
       optimistic status update on success.
-- [ ] 7.4 `JobDrawer.svelte`: read-only banner variant for `blocked` (renders the `unmapped`
+- [x] 7.4 `JobDrawer.svelte`: read-only banner variant for `blocked` (renders the `unmapped`
       question list), `declined`, and `failed` — copy makes clear the attempt is final for this
       job, no retry implied.
-- [ ] 7.5 Unit-test the status-to-badge/banner-variant mapping, following
+- [x] 7.5 Unit-test the status-to-badge/banner-variant mapping, following
       `autoApplyButton.test.ts`'s pattern.
 
 ## 8. Notification: relocate from tailor-completion to preview-ready
