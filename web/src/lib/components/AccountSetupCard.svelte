@@ -4,8 +4,9 @@
   import { outstandingOf, type CompletenessStep } from '$lib/accountCompleteness';
   import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
-  // "How complete is my account", above the profile page's section tabs — the page
-  // where every one of these fields is actually edited.
+  // "How complete is my account", above the profile page's section tabs. Two of its steps
+  // are done on that very page, which is why a step may carry an anchor (see stepHref);
+  // the rest point at other routes.
   //
   // A funnel beats a choose-your-own-adventure: the onboarding wizard asks these same
   // questions once, and this is what remains of them afterwards for anyone who skipped a
