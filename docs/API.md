@@ -29,8 +29,9 @@ Base URL: `https://freehire.me/api/v1`
 - [Profile & résumé](#profile--rsum)
 - [Screening answers](#screening-answers)
 - [Onboarding survey](#onboarding-survey)
-- [Activity & shared boards](#activity--shared-boards)
+- [Activity & shared job lists](#activity--shared-job-lists)
 - [Saved searches & subscriptions](#saved-searches--subscriptions)
+- [Job lists](#job-lists)
 - [Push notifications & alerts](#push-notifications--alerts)
 - [Account, plan & extension](#account-plan--extension)
 - [Link intake & discovery](#link-intake--discovery)
@@ -2965,9 +2966,9 @@ curl -X POST "https://freehire.me/api/v1/me/onboarding/complete" -b cookies.txt
 { "data": { "onboarding_complete": true } }
 ```
 
-## Activity & shared boards
+## Activity & shared job lists
 
-Two public reads — the catalogue-activity time series and a shared saved-search “board” by slug — plus the session-only publish/unpublish actions that turn one of your saved searches into such a board. A published board exposes no owner identity.
+Two public reads — the catalogue-activity time series and a shared job list by slug. A published list exposes no owner identity.
 
 ### `GET /stats/jobs-activity`
 
@@ -2999,74 +3000,26 @@ curl "https://freehire.me/api/v1/stats/jobs-activity?granularity=week"
 }
 ```
 
-### `GET /boards/{slug}`
+### `GET /lists/{slug}`
 
 **Auth:** Public
 
-A shared saved-search board by its public slug.
+A shared job list by its public slug.
 
-Public, no owner-scoping — returns only display fields (`name`, the canonical filter `query`, and an optional `author_label`). An unknown or unshared slug is a `404`.
+Public, no owner-scoping — returns display fields (`name`, `description`) plus the jobs it contains (a closed/expired job stays listed, marked as such). An unknown or unshared slug is a `404`.
 
 **Path parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `slug` | string | yes | The board public slug. (e.g. `senior-go-remote-3f9a`) |
+| `slug` | string | yes | The job-list public slug. (e.g. `backend-jobs-a3f1`) |
 
 ```bash
-curl "https://freehire.me/api/v1/boards/senior-go-remote-3f9a"
+curl "https://freehire.me/api/v1/lists/backend-jobs-a3f1"
 ```
 
 ```json
-{ "data": { "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "author_label": "Jane D." } }
-```
-
-### `POST /me/searches/{id}/share`
-
-**Auth:** Session only
-
-Publish one of your saved searches as a public board.
-
-Mints (or keeps) the board slug and sets the optional author label. Owner-scoped; a missing/non-owned id is a `404`. Returns the saved search, now carrying `public_slug`.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | integer | yes | The saved-search id. (e.g. `2`) |
-
-**Body**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `author_label` | string | no | Label shown on the board; blank/omitted renders it anonymously. (e.g. `Jane D.`) |
-
-```bash
-curl -X POST "https://freehire.me/api/v1/me/searches/2/share" \
-  -H 'Content-Type: application/json' -b cookies.txt \
-  -d '{"author_label":"Jane D."}'
-```
-
-```json
-{ "data": { "id": 2, "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "public_slug": "senior-go-remote-3f9a", "author_label": "Jane D." } }
-```
-
-### `DELETE /me/searches/{id}/share`
-
-**Auth:** Session only
-
-Make a shared board private again.
-
-Owner-scoped and idempotent (already-private is a no-op). Returns `204 No Content`.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | integer | yes | The saved-search id. (e.g. `2`) |
-
-```bash
-curl -X DELETE "https://freehire.me/api/v1/me/searches/2/share" -b cookies.txt
+{ "data": { "name": "Backend jobs", "description": "Shortlist for this round", "jobs": [ { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." } ] } }
 ```
 
 ## Saved searches & subscriptions
@@ -3354,6 +3307,195 @@ Delete your webhook destination.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/webhook" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+## Job lists
+
+Named lists of specific jobs — independent of the single-flag "save" — that you can optionally publish read-only by slug (see the public read under "Activity & shared job lists"). Browser conveniences, session-only. Each operation is owner-scoped — a non-owned id is a 404.
+
+### `GET /me/lists`
+
+**Auth:** Session only
+
+List your job lists.
+
+```bash
+curl "https://freehire.me/api/v1/me/lists" -b cookies.txt
+```
+
+```json
+{ "data": [ { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 4 } ] }
+```
+
+### `POST /me/lists`
+
+**Auth:** Session only
+
+Create a job list.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | yes | Display name. (e.g. `Backend jobs`) |
+| `description` | string | no | Optional free-text description. (e.g. `Shortlist for this round`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/lists" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"name":"Backend jobs","description":"Shortlist for this round"}'
+```
+
+```json
+{ "data": { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 0 } }
+```
+
+### `PATCH /me/lists/{id}`
+
+**Auth:** Session only
+
+Rename or re-describe a job list.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | no | New name (optional). |
+| `description` | string | no | New description (optional). |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/me/lists/3" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"name":"Backend jobs — Q3"}'
+```
+
+```json
+{ "data": { "id": 3, "name": "Backend jobs — Q3", "description": "...", "public_slug": "", "job_count": 4 } }
+```
+
+### `DELETE /me/lists/{id}`
+
+**Auth:** Session only
+
+Delete a job list.
+
+The referenced jobs and your separate "save" flags are untouched.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/lists/3" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+### `POST /me/lists/{id}/jobs`
+
+**Auth:** Session only
+
+Add a job to a list.
+
+Jobs are addressed by `job_slug` (the public slug), the same identifier every job carries elsewhere. Idempotent: adding an already-present job changes nothing. An unknown slug is a `404`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job_slug` | string | yes | The job to add. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/lists/3/jobs" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"job_slug":"senior-go-engineer-acme-1a2b"}'
+```
+
+```json
+(204 No Content)
+```
+
+### `DELETE /me/lists/{id}/jobs/{job_slug}`
+
+**Auth:** Session only
+
+Remove a job from a list.
+
+Idempotent: a job not in the list, or a slug that resolves to no job at all, is a no-op.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+| `job_slug` | string | yes | The job to remove. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/lists/3/jobs/senior-go-engineer-acme-1a2b" -b cookies.txt
+```
+
+```json
+(204 No Content)
+```
+
+### `POST /me/lists/{id}/share`
+
+**Auth:** Session only
+
+Publish a job list as a public, read-only page.
+
+Mints (or keeps) the public slug. Returns the list, now carrying `public_slug`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/lists/3/share" -b cookies.txt
+```
+
+```json
+{ "data": { "id": 3, "name": "Backend jobs", "description": "...", "public_slug": "backend-jobs-a3f1", "job_count": 4 } }
+```
+
+### `DELETE /me/lists/{id}/share`
+
+**Auth:** Session only
+
+Make a shared job list private again.
+
+Idempotent (already-private is a no-op).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The job-list id. (e.g. `3`) |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/lists/3/share" -b cookies.txt
 ```
 
 ```json

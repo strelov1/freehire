@@ -65,10 +65,10 @@ func TestJobListsEndToEnd(t *testing.T) {
 	cookieReq := func(method, path, cookie string, body []byte) *http.Request {
 		var r *http.Request
 		if body != nil {
-			r = httptest.NewRequest(method, path, bytes.NewReader(body))
+			r = httptest.NewRequestWithContext(ctx, method, path, bytes.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
 		} else {
-			r = httptest.NewRequest(method, path, nil)
+			r = httptest.NewRequestWithContext(ctx, method, path, nil)
 		}
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
