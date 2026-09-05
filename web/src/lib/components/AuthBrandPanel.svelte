@@ -162,9 +162,12 @@
        contrast headroom left to dim. -->
   <div class="flex items-center gap-3 text-xs text-brand-foreground">
     <span>Open source —</span>
+    <!-- The repeated `hover:text-brand-foreground` below is load-bearing, not a typo:
+         GithubStars' own base class has `hover:text-accent-foreground`, and cn()'s
+         twMerge only drops that when this className supplies a same-group replacement. -->
     <GithubStars
       variant="inline"
-      class="min-h-0 gap-1 px-0 text-xs text-brand-foreground hover:bg-transparent hover:underline"
+      class="min-h-0 gap-1 px-0 text-xs text-brand-foreground hover:bg-transparent hover:text-brand-foreground hover:underline"
     />
     {#each otherSocials as social (social.provider)}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
