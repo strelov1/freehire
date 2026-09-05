@@ -97,7 +97,11 @@
     <p class="text-2xl font-semibold leading-snug tracking-tight">
       {slide.headline}
     </p>
-    <ul class="mt-6 flex flex-col gap-2 text-sm text-brand-foreground/70">
+    <!-- Full-opacity brand-foreground, not a dimmed fraction of it: brand/brand-foreground
+         is a much lower-contrast pair (~5.1:1) than the near-black/near-white one this
+         panel used before, so there is no headroom left to fade text and still clear
+         WCAG AA (4.5:1) for normal-size text. -->
+    <ul class="mt-6 flex flex-col gap-2 text-sm text-brand-foreground">
       {#each slide.bullets as bullet (bullet)}
         <li>{bullet}</li>
       {/each}
@@ -143,7 +147,9 @@
             onclick={() => select(i)}
             class={[
               'h-1.5 rounded-full transition-all',
-              active === i ? 'w-6 bg-brand' : 'w-1.5 bg-brand/30 hover:bg-brand/50',
+              // /30 and /50 (this card's earlier near-transparent backdrop) blend to
+              // under 3:1 against the now-opaque brand-foreground card — /80 clears it.
+              active === i ? 'w-6 bg-brand' : 'w-1.5 bg-brand/80 hover:bg-brand',
             ]}
           ></button>
         {/each}
@@ -151,11 +157,14 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-3 text-xs text-brand-foreground/50">
+  <!-- Full-opacity brand-foreground (see the bullet list's comment above) with an
+       underline for hover affordance instead of a color fade — this pair has no
+       contrast headroom left to dim. -->
+  <div class="flex items-center gap-3 text-xs text-brand-foreground">
     <span>Open source —</span>
     <GithubStars
       variant="inline"
-      class="min-h-0 gap-1 px-0 text-xs text-brand-foreground/50 hover:bg-transparent hover:text-brand-foreground/80"
+      class="min-h-0 gap-1 px-0 text-xs text-brand-foreground hover:bg-transparent hover:underline"
     />
     {#each otherSocials as social (social.provider)}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
@@ -163,7 +172,7 @@
         target="_blank"
         rel="noopener noreferrer"
         aria-label={social.label}
-        class="text-brand-foreground/50 transition-colors hover:text-brand-foreground/80"
+        class="text-brand-foreground underline-offset-4 hover:underline"
       >
         <ProviderIcon provider={social.provider} />
       </a>
