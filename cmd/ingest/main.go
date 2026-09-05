@@ -226,6 +226,7 @@ func run() int {
 		if selfClosing[provider] {
 			continue
 		}
+		_, hasGrace := grace[provider]
 		window := sweepWindowFor(grace, provider)
 		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
 		bySource := sweepBySource(runStats[provider], fullCatalog[provider])
@@ -254,7 +255,7 @@ func run() int {
 		// Reuses this provider's own cutoff: a board-scope candidate is by construction never
 		// a sweepGrace provider, so the window is always the default here.
 		var boardFailed int
-		for _, boardID := range sweepableBoards(provider, runStats[provider], grace, fullCatalog, fullBoardListing) {
+		for _, boardID := range sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider]) {
 			boardClosed, err := queries.CloseUnseenJobsForBoard(ctx, db.CloseUnseenJobsForBoardParams{
 				Source:       provider,
 				Cutoff:       cutoff,
@@ -278,32 +279,28 @@ func run() int {
 	return worker.ExitCode(failed, 0)
 }
 
-// sweepableBoards returns, sorted and de-duplicated, the boards of provider the board-scoped
-// close may retire this run: those the run structurally proved it covered
-// (stats.QualifyingBoards, see pipeline.boardQualifies) on a provider whose adapter is
-// registered as listing a board to completion (fullBoardListing). A provider absent from that
-// registration never contributes to the board scope, however its crawl went — see
-// sources.fullBoardListing for the bar an adapter must clear to earn it.
+// sweepableBoards returns, sorted and de-duplicated, the boards of one provider the
+// board-scoped close may retire this run: those the run structurally proved it covered
+// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on three pre-resolved,
+// per-provider facts the caller has already looked up — the same convention sweepBySource
+// uses, rather than this function re-deriving them from the raw registry maps itself.
 //
-// Excluded even when registered, for the same reasons sweepBySource excludes them from the
-// source-scoped close: a sweepGrace provider (its crawl deliberately reaches only a slice of
-// the catalogue, so a board-scoped close on the default window would close postings that
-// merely drifted past the crawl's depth) and a fullCatalog provider (already closes by source
-// alone on a clean run, strictly broader than board scope — and today's fullCatalog adapters
-// are boardless besides, so this exclusion is belt-and-braces). Callers gate on shouldSweep
-// first, same as sweepBySource.
+// fullBoardListing must be true: a provider whose adapter is not registered as listing a
+// board to completion never contributes to the board scope, however its crawl went — see
+// sources.fullBoardListing for the bar an adapter must clear to earn it. hasGrace and
+// fullCatalog exclude a provider even when registered, for the same reasons sweepBySource
+// excludes them from the source-scoped close: a sweepGrace provider's crawl deliberately
+// reaches only a slice of the catalogue, so a board-scoped close on the default window would
+// close postings that merely drifted past the crawl's depth; a fullCatalog provider already
+// closes by source alone on a clean run, strictly broader than board scope (and today's
+// fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). Callers
+// gate on shouldSweep first, same as sweepBySource.
 //
 // De-duplication guards against a board legitimately appearing twice in one run (a repeated
 // board-file entry, or one board id recurring across independent regional slices) double-
 // counting the close and its log line.
-func sweepableBoards(provider string, stats pipeline.Stats, grace map[string]time.Duration, fullCatalog, fullBoardListing map[string]bool) []string {
-	if !fullBoardListing[provider] {
-		return nil
-	}
-	if _, hasGrace := grace[provider]; hasGrace {
-		return nil
-	}
-	if fullCatalog[provider] {
+func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListing bool) []string {
+	if !fullBoardListing || hasGrace || fullCatalog {
 		return nil
 	}
 	boards := slices.Clone(stats.QualifyingBoards)

@@ -175,7 +175,10 @@ func (s taleo) listRequisitions(ctx context.Context, b taleoBoard, portal string
 			break
 		}
 		reqs = append(reqs, resp.RequisitionList...)
-		if len(reqs) >= resp.PagingData.TotalCount {
+		// A non-positive totalCount is not authoritative — a tenant that omits or zeroes it
+		// on an otherwise real page must not have that read as "the whole board fits here";
+		// only an actual empty page (or the cap above) may end the walk in that case.
+		if resp.PagingData.TotalCount > 0 && len(reqs) >= resp.PagingData.TotalCount {
 			reachedNaturalEnd = true
 			break
 		}

@@ -33,3 +33,37 @@ func boardReachedPostings(st Stats) bool {
 func boardQualifies(e sources.CompanyEntry, st Stats) bool {
 	return e.Board != "" && st.Failed == 0 && boardReachedPostings(st)
 }
+
+// providerBoard identifies a board by name alone, ignoring region — the key the board-scoped
+// close's SQL predicate is forced to use, since externalid.Namespace does not encode region.
+type providerBoard struct{ provider, board string }
+
+// ambiguousRegionBoards returns the (provider, board) pairs that appear under more than one
+// distinct region across entries. The `boards` catalog allows one board name to exist twice
+// under a provider, distinguished only by region
+// (`UNIQUE(provider, lower(board), region)` — see internal/ingest/boardcatalog), but
+// CloseUnseenJobsForBoard's `external_id LIKE '<board>:%'` predicate has no region dimension
+// at all, so it cannot tell which region's crawl proved coverage. Qualifying such a board from
+// one region's outcome alone risks closing postings only a DIFFERENT region's crawl keeps
+// alive, so an ambiguous board name never qualifies through this scope, regardless of how any
+// single region's crawl went — it falls back to the company scope instead.
+func ambiguousRegionBoards(entries []sources.CompanyEntry) map[providerBoard]bool {
+	regions := make(map[providerBoard]map[string]bool)
+	for _, e := range entries {
+		if e.Board == "" {
+			continue
+		}
+		pb := providerBoard{e.Provider, e.Board}
+		if regions[pb] == nil {
+			regions[pb] = make(map[string]bool)
+		}
+		regions[pb][e.Region] = true
+	}
+	ambiguous := make(map[providerBoard]bool)
+	for pb, rs := range regions {
+		if len(rs) > 1 {
+			ambiguous[pb] = true
+		}
+	}
+	return ambiguous
+}

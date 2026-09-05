@@ -25,6 +25,31 @@ func TestRunReportsQualifyingBoardOnASuccessfulCrawl(t *testing.T) {
 	}
 }
 
+// TestRunExcludesABoardNameSharedAcrossRegions: the boards catalog allows one board name to
+// exist twice under one provider, distinguished only by region
+// (UNIQUE(provider, lower(board), region) — see internal/ingest/boardcatalog). The
+// board-scoped close's SQL predicate has no region dimension at all (externalid.Namespace
+// does not encode it), so it cannot tell which region's crawl proved coverage. Both regions'
+// crawls succeed and yield here — the failure case (one region's crawl not qualifying) would
+// be even less safe to allow through — so this pins the conservative behavior: a board name
+// spanning more than one region in this run must never enter QualifyingBoards, regardless of
+// how any single region's crawl went.
+func TestRunExcludesABoardNameSharedAcrossRegions(t *testing.T) {
+	src := fakeSource{provider: "lever", jobs: []sources.Job{{ExternalID: "1", Title: "Backend Engineer"}}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme US", Provider: "lever", Board: "acme", Region: "us"},
+		{Company: "Acme EU", Provider: "lever", Board: "acme", Region: "eu"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := stats["lever"].QualifyingBoards; slices.Contains(got, "acme") {
+		t.Errorf("QualifyingBoards = %v, must not contain %q — its region is ambiguous this run", got, "acme")
+	}
+}
+
 // TestRunReportsNoBoardForAZeroYieldCrawl: a board that fetched successfully but returned
 // nothing is indistinguishable from a board whose crawl silently broke, so it must not
 // qualify even though it did not fail.

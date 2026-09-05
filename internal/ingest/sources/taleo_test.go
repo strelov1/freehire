@@ -383,3 +383,25 @@ func TestTaleoListRequisitionsFailsWhenListingExceedsThePageCap(t *testing.T) {
 		t.Fatal("listRequisitions succeeded despite the listing still yielding new requisitions past the page cap — a truncated walk must not be returned as a partial success")
 	}
 }
+
+// A tenant whose API omits or zeroes pagingData.totalCount despite returning real
+// requisitions must not have that zero read as "the whole board fits on this page" — the
+// original code's `len(reqs) >= resp.PagingData.TotalCount` is trivially true against a zero
+// total after page 1, which would silently truncate the board while still reporting success.
+// Only an actual empty page (or the page cap, which now fails loudly) may end the walk.
+func TestTaleoIgnoresABogusZeroTotalCount(t *testing.T) {
+	page := func(contest string) string {
+		return fmt.Sprintf(`{"requisitionList":[{"jobId":"%s","contestNo":"%s","column":["Role %s"]}],"pagingData":{"totalCount":0}}`, contest, contest, contest)
+	}
+	fake := &taleoPagingFake{
+		pages: []string{page("1"), page("2"), `{"requisitionList":[],"pagingData":{"totalCount":0}}`},
+	}
+
+	reqs, err := taleo{http: fake}.listRequisitions(context.Background(), taleoBoard{host: "acme.taleo.net", section: "2"}, "12345")
+	if err != nil {
+		t.Fatalf("listRequisitions: %v", err)
+	}
+	if len(reqs) != 2 {
+		t.Fatalf("got %d requisitions, want 2 — a bogus totalCount:0 must not stop the walk after page 1", len(reqs))
+	}
+}

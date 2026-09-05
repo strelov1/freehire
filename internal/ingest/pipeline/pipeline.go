@@ -294,6 +294,11 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 	// below does not crawl it a second time.
 	handled := r.recoverProviders(ctx, entries)
 
+	// Computed once up front: a board name this run's entries share across more than one
+	// region never qualifies for the board scope (see ambiguousRegionBoards) — the close
+	// query's pattern cannot distinguish which region proved coverage.
+	ambiguous := ambiguousRegionBoards(entries)
+
 	var (
 		mu     sync.Mutex
 		byProv = RunStats{}
@@ -331,7 +336,7 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 			if !already {
 				boardStats = r.ingestBoard(ctx, e)
 			}
-			if boardQualifies(e, boardStats) {
+			if boardQualifies(e, boardStats) && !ambiguous[providerBoard{e.Provider, e.Board}] {
 				boardStats.QualifyingBoards = append(boardStats.QualifyingBoards, e.Board)
 			}
 			crawled.Add(1)

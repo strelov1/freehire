@@ -93,52 +93,49 @@ func TestSweepBySource(t *testing.T) {
 // Duplicate board entries (a repeated board-file row, or one board id recurring across regional
 // slices) are de-duplicated so neither the close nor its log line double-counts.
 func TestSweepableBoards(t *testing.T) {
-	grace := map[string]time.Duration{"whatjobs": 14 * 24 * time.Hour}
-	fullCatalog := map[string]bool{"habr_career": true}
-	fullBoardListing := map[string]bool{"workday": true, "whatjobs": true, "habr_career": true}
-
 	cases := []struct {
-		name     string
-		provider string
-		stats    pipeline.Stats
-		want     []string
+		name                                    string
+		stats                                   pipeline.Stats
+		hasGrace, fullCatalog, fullBoardListing bool
+		want                                    []string
 	}{
 		{
-			name:     "registered provider's qualifying boards are returned sorted",
-			provider: "workday",
-			stats:    pipeline.Stats{QualifyingBoards: []string{"zeta-inc", "acme-corp"}},
-			want:     []string{"acme-corp", "zeta-inc"},
+			name:             "registered provider's qualifying boards are returned sorted",
+			stats:            pipeline.Stats{QualifyingBoards: []string{"zeta-inc", "acme-corp"}},
+			fullBoardListing: true,
+			want:             []string{"acme-corp", "zeta-inc"},
 		},
 		{
-			name:     "duplicate boards are de-duplicated",
-			provider: "workday",
-			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp", "acme-corp"}},
-			want:     []string{"acme-corp"},
+			name:             "duplicate boards are de-duplicated",
+			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp", "acme-corp"}},
+			fullBoardListing: true,
+			want:             []string{"acme-corp"},
 		},
 		{
-			name:     "a provider not registered as fullBoardListing gets none",
-			provider: "greenhouse",
-			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
-			want:     nil,
+			name:  "a provider not registered as fullBoardListing gets none",
+			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			want:  nil,
 		},
 		{
-			name:     "a sweepGrace provider is excluded even if registered",
-			provider: "whatjobs",
-			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
-			want:     nil,
+			name:             "a sweepGrace provider is excluded even if registered",
+			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			hasGrace:         true,
+			fullBoardListing: true,
+			want:             nil,
 		},
 		{
-			name:     "a fullCatalog provider is excluded even if registered",
-			provider: "habr_career",
-			stats:    pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
-			want:     nil,
+			name:             "a fullCatalog provider is excluded even if registered",
+			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			fullCatalog:      true,
+			fullBoardListing: true,
+			want:             nil,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sweepableBoards(tc.provider, tc.stats, grace, fullCatalog, fullBoardListing)
+			got := sweepableBoards(tc.stats, tc.hasGrace, tc.fullCatalog, tc.fullBoardListing)
 			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("sweepableBoards(%q) = %v, want %v", tc.provider, got, tc.want)
+				t.Errorf("sweepableBoards() = %v, want %v", got, tc.want)
 			}
 		})
 	}
