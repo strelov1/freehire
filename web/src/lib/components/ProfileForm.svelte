@@ -249,8 +249,8 @@
        then). -->
   <!-- `account-cv` is the anchor the account-setup checklist's CV step links to (see
        accountCompleteness.ts) — this box is the only place under /my/ that takes a base
-       résumé, /my/cvs being the per-vacancy builder. `scroll-mt-20` is the repo's
-       anchored-section offset. -->
+       résumé, /my/cvs being the per-vacancy builder. `scroll-mt-20` clears the sticky
+       header (`h-14`), same as the other anchored sections. -->
   <div id="account-cv" class="flex scroll-mt-20 flex-col gap-1.5">
     <span class="text-sm font-medium">Your CV</span>
     <input

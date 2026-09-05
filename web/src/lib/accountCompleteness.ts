@@ -23,12 +23,13 @@ export interface CompletenessStep {
   id: string;
   label: string;
   href: SetupHref;
-  /** Where on `href`'s page to land. Required for `/my/profile`, which is the page this
-   *  card is itself rendered on: without an anchor the link goes to where the reader
-   *  already stands and nothing appears to happen. An opaque string rather than a type
-   *  shared with the page — this module stays free of any SvelteKit import (see
-   *  `SetupHref`) — so it is kept in sync by hand with that element's `id`. */
-  hash?: string;
+  /** The `id` of the element on `href`'s page to land on. Required for `/my/profile`,
+   *  whose default section holds three things and only one of them is the step. An opaque
+   *  string rather than a type shared with the page — this module stays free of any
+   *  SvelteKit import (see `SetupHref`) — so it is kept in sync by hand with that
+   *  element's `id`. Absent means "the page itself is the answer", which the card reads
+   *  as "this step cannot move you off the page you are on" (see AccountSetupCard). */
+  anchorId?: string;
   done: boolean;
 }
 
@@ -71,7 +72,7 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       // has no upload of its own. What this step measures is the stored base résumé, and
       // the only surface under /my/ that takes one is ProfileForm's "Your CV" box.
       href: '/my/profile',
-      hash: 'account-cv',
+      anchorId: 'account-cv',
       done: hasCv,
     },
     {
@@ -84,7 +85,7 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       // The card that carries this step is rendered on /my/profile itself, above two other
       // blocks — so the link has to name the Role card or it is a link to where you already
       // stand.
-      hash: 'account-role',
+      anchorId: 'account-role',
       done: Boolean(profile?.specializations.length && profile?.seniorities.length),
     },
     {

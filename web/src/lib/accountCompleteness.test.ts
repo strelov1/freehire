@@ -56,10 +56,11 @@ describe('accountSteps', () => {
     });
   });
 
-  // The card itself is rendered on /my/profile, so a step landing there would otherwise
-  // point at the page the reader is already looking at — the anchor is what makes it move.
-  it('anchors every step that lands on the page the card itself is on', () => {
-    const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.hash]));
+  // /my/profile's default section holds three blocks and only one is the step, so both
+  // steps landing there name which. The other three routes ARE their step, so an anchor
+  // would only point at the top of what is already the whole page.
+  it('anchors the two steps that share the crowded default section', () => {
+    const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.anchorId]));
     expect(byId.cv).toBe('account-cv');
     expect(byId.role).toBe('account-role');
     expect(byId.skills).toBeUndefined();
@@ -67,11 +68,14 @@ describe('accountSteps', () => {
     expect(byId.alerts).toBeUndefined();
   });
 
-  // The guard for the whole class of bug this fixes: a step whose href is the page the
-  // card is rendered on has to name where on it to go, or following it changes nothing.
+  // The guard for the whole class of bug this fixes. The card is mounted in /my/profile's
+  // LAYOUT, so it is on screen for every profile section — a step landing on one of them
+  // either names a block further down, or AccountSetupCard must refuse to render it as a
+  // link (leadsSomewhere). What must never happen is a step on /my/profile itself with
+  // neither: that one has no page of its own to be "already on".
   it('leaves no step pointing at /my/profile without an anchor', () => {
     for (const step of accountSteps(empty)) {
-      if (step.href === '/my/profile') expect(step.hash).toBeTruthy();
+      if (step.href === '/my/profile') expect(step.anchorId).toBeTruthy();
     }
   });
 

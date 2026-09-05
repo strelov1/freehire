@@ -3,11 +3,12 @@
   // into (it's the one piece of the old identity header that doesn't carry enough content
   // to earn its own view, unlike Contacts/Location which do). Autosaves straight to
   // profileStore on every change, the same way the Skills view does.
-  import { CATEGORY_OPTIONS, SENIORITY_OPTIONS } from '$lib/facets';
+  import { CATEGORY_OPTIONS } from '$lib/facets';
   import { profileStore } from '$lib/profile.svelte';
   import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import type { UserProfile } from '$lib/types';
   import SearchSelect from '../facets/SearchSelect.svelte';
+  import SeniorityPills from './SeniorityPills.svelte';
 
   let {
     profile,
@@ -76,8 +77,8 @@
 
 <!-- `account-role` is the anchor the account-setup checklist's role step links to (see
      accountCompleteness.ts). It sits on the whole card, not on either half, because that
-     step asks for both together — "what you do, and at what level". `scroll-mt-20` is the
-     repo's anchored-section offset. -->
+     step asks for both together — "what you do, and at what level". `scroll-mt-20` clears
+     the sticky header (`h-14`), same as the other anchored sections. -->
 <div id="account-role" class="flex scroll-mt-20 flex-col gap-6">
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
@@ -102,29 +103,13 @@
 
   <!-- Level lives beside Roles rather than in its own card: it was previously askable only
        inside the onboarding wizard, so a profile whose level needed changing had no surface
-       at all. Pills rather than a SearchSelect — the vocabulary is five values, and the
-       wizard's own Level step (ConfirmStep) already reads this way. -->
+       at all. The control itself is the wizard's own, shared (SeniorityPills). -->
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">Level</span>
       <span class="text-xs text-muted-foreground">Pick every level you'd take</span>
     </div>
-    <div class={['flex flex-wrap gap-2', levelBusy && 'pointer-events-none opacity-60']}>
-      {#each SENIORITY_OPTIONS as o (o.value)}
-        {@const selected = profile.seniorities.includes(o.value)}
-        <button
-          type="button"
-          onclick={() => toggleSeniority(o.value)}
-          aria-pressed={selected}
-          class={[
-            'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-            selected ? 'border-brand bg-brand text-brand-foreground' : 'border-border bg-card hover:bg-accent',
-          ]}
-        >
-          {o.label}
-        </button>
-      {/each}
-    </div>
+    <SeniorityPills selected={profile.seniorities} onToggle={toggleSeniority} busy={levelBusy} />
     {#if levelError}
       <p class="text-xs text-destructive">{levelError}</p>
     {/if}
