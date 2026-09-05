@@ -16,7 +16,7 @@ import type { UserProfile } from './types';
  *  does not exist fails the build here, instead of rendering a link to a 404. Spelling
  *  the routes out keeps this module free of any SvelteKit import, which is what lets it
  *  be unit-tested in plain Node. */
-type SetupHref = '/my/cvs' | '/my/profile' | '/my/profile/skills' | '/my/profile/location' | '/my/searches';
+type SetupHref = '/my/profile' | '/my/profile/skills' | '/my/profile/location' | '/my/searches';
 
 export interface CompletenessStep {
   /** Stable key. Used by tests and as the list key — never shown. */
@@ -24,8 +24,9 @@ export interface CompletenessStep {
   label: string;
   href: SetupHref;
   /** The id of the element on `href`'s page to land on, for a step whose page holds more
-   *  than the step asks for. Without it, the role step links to the page it is already
-   *  rendered on and nothing appears to happen. An opaque string rather than a type shared
+   *  than the step asks for. Both steps that land on /my/profile need one: that page is
+   *  where this card is itself rendered, so without an anchor the link goes to where the
+   *  reader already stands and nothing appears to happen. An opaque string rather than a type shared
    *  with the page — this module stays free of any SvelteKit import (see `SetupHref`) — so
    *  it must be kept in sync by hand with that element's `id`. */
   hash?: string;
@@ -67,7 +68,11 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
     {
       id: 'cv',
       label: 'Add your CV',
-      href: '/my/cvs',
+      // Not /my/cvs: that is the CV BUILDER, a list of the CVs tailored per vacancy, and it
+      // has no upload of its own. What this step measures is the stored base résumé, and
+      // the only surface under /my/ that takes one is ProfileForm's "Your CV" box.
+      href: '/my/profile',
+      hash: 'account-cv',
       done: hasCv,
     },
     {
