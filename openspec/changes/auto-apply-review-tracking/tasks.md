@@ -124,14 +124,25 @@ no browser, by its own existing design) is the wrong place for this.
 
 ## 9. Verification
 
-- [ ] 9.1 `gofmt -l .` clean on every touched file.
-- [ ] 9.2 `go vet ./...` and `go test ./...` green.
-- [ ] 9.3 `go vet -tags=integration ./...` green.
-- [ ] 9.4 `go test -tags=integration ./...` green (this change alters behavior — a new claim
-      pass in `cmd/auto-apply`, a new tracked-job field, a new enqueue side effect, a relocated
-      notification — not just a signature).
-- [ ] 9.5 Frontend: `pnpm check` green.
-- [ ] 9.6 Manual: drive the golden path in the browser — trigger auto-apply, see the job appear
-      on the board at `preparing`, see the badge once `pending_review`, open the drawer, review
-      the answer preview, approve, confirm the notification links correctly, confirm a `blocked`
-      entry renders its unmapped questions with no retry affordance.
+- [x] 9.1 `gofmt -l .` clean on every touched file.
+- [x] 9.2 `go vet ./...` and `go test ./...` green.
+- [x] 9.3 `go vet -tags=integration ./...` green.
+- [x] 9.4 `go test -tags=integration ./...` green — 206/206 packages ok, 0 failures.
+- [x] 9.5 Frontend: `pnpm check` (0 errors, 35 pre-existing warnings, none new) and `pnpm lint`
+      (0 errors; every warning pre-existing, none in a file this change touches) both green.
+      `pnpm vitest run`: 1539/1539 tests passing.
+- [x] 9.6 Manual: `make up`, registered a real account, seeded an `auto_apply_queue` row
+      directly (no Chrome/Greenhouse fixture in this environment to drive the real preview
+      pass end-to-end) at `pending_review` with a resolved preview, and drove the app in a real
+      Chromium via Playwright: the board shows the job at `preparing` with the "Review" badge;
+      the drawer's default Application tab shows the banner with the resolved fields, the
+      pending "will be filled in automatically" field, the tailored-CV link, and Approve/Decline;
+      clicking Approve called the real `POST /me/auto-apply/:queueId/review`, persisted
+      `review_decision='approved'` in Postgres, and cleared both the banner and the board badge
+      with no reload. Separately seeded a `blocked` entry: the drawer shows the unmapped
+      question and "final, will not be retried" copy, the board shows the same badge, and the
+      raw DOM was checked byte-for-byte to confirm `last_error` never reaches it. Zero browser
+      console errors across all of it. Not exercised: the actual notification click-through (no
+      email/notification-delivery fixture in this environment) and the real Greenhouse
+      DOM-scan path in `cmd/auto-apply`'s preview pass (covered instead by
+      `PreviewClient`'s own unit tests against fakes).
