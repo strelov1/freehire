@@ -19,7 +19,7 @@
       with no label falls back to its id, the résumé field is omitted rather than shown blank, a
       draftable unmapped field is marked `will_draft_at_submission`, a non-draftable (sensitive)
       one is not, an optional unanswered field is not reported at all.
-- [ ] 2.3 Add `PreviewClient` (`preview_client.go`) and `StoredFormReader` interface: for
+- [x] 2.3 Add `PreviewClient` (`preview_client.go`) and `StoredFormReader` interface: for
       Greenhouse, launches a browser and scans the live form exactly like `Client.Submit` does
       (`newBrowserSession`, `renderedHTML`, `hasRecaptchaMarker`, `ScanGreenhouseForm`,
       `Reconcile`), returning a parked result (no error) for a captcha/unscannable page — the
@@ -27,7 +27,7 @@
       schema from `StoredFormReader` when configured (the `apply_forms` row `cmd/capture-
       apply-form` already persists) rather than a live refetch, falling back to a live
       `fetchSchema`-equivalent fetch only when no reader is configured or no row exists yet.
-- [ ] 2.4 RED+GREEN: `PreviewClient.Preview` unit tests — a captcha-listed provider
+- [x] 2.4 RED+GREEN: `PreviewClient.Preview` unit tests — a captcha-listed provider
       (`requiresCaptcha`) parks without touching a browser or the form reader; a configured
       `StoredFormReader` is preferred over a fetch for a non-Greenhouse provider (fake fetcher
       asserts it is never called when the reader has a row).

@@ -1,6 +1,12 @@
 package atsapply
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/ingest/applyform"
+)
 
 func TestPreviewAnswers_ResolvedFieldsAreLabelledForTheCandidate(t *testing.T) {
 	fields := []MergedField{{ID: "first_name", Label: "First name", Kind: "text", Required: true}}
@@ -71,5 +77,86 @@ func TestPreviewAnswers_AnOptionalUnansweredFieldIsNotPending(t *testing.T) {
 
 	if len(preview.Fields) != 0 || len(preview.Pending) != 0 {
 		t.Fatalf("preview = %+v, want an unanswered optional field left out entirely", preview)
+	}
+}
+
+// fakeFetcher records whether it was called and returns a canned form — used to prove
+// PreviewClient prefers a StoredFormReader over a live fetch.
+type fakeFetcher struct {
+	called bool
+	form   applyform.Form
+	err    error
+}
+
+func (f *fakeFetcher) Fetch(context.Context, applyform.Claimed) (applyform.Form, error) {
+	f.called = true
+	return f.form, f.err
+}
+
+// fakeFormReader is a StoredFormReader test double.
+type fakeFormReader struct {
+	form  applyform.Form
+	found bool
+	err   error
+}
+
+func (r *fakeFormReader) GetStoredForm(context.Context, int64) (applyform.Form, bool, error) {
+	return r.form, r.found, r.err
+}
+
+func TestPreviewClient_ALeverAttemptParksWithoutTouchingAFetcherOrFormReader(t *testing.T) {
+	fetcher := &fakeFetcher{}
+	reader := &fakeFormReader{}
+	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"lever": fetcher}, forms: reader}
+
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "lever"}, nil, false)
+	if err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	if !result.Parked || result.Reason != "requires_captcha" {
+		t.Errorf("result = %+v, want parked/requires_captcha", result)
+	}
+	if fetcher.called {
+		t.Errorf("fetcher was called, want no schema fetch for a provider that always parks")
+	}
+}
+
+func TestPreviewClient_PrefersAStoredFormOverALiveFetchForANonGreenhouseProvider(t *testing.T) {
+	fetcher := &fakeFetcher{form: applyform.Form{Fields: []applyform.Field{
+		{ID: "should_not_be_used", Type: applyform.TypeText, Required: true},
+	}}}
+	reader := &fakeFormReader{found: true, form: applyform.Form{Fields: []applyform.Field{
+		{ID: "first_name", Label: "First name", Type: applyform.TypeText, Required: true},
+	}}}
+	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"ashby": fetcher}, forms: reader}
+
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"first_name": "Ada"}, false)
+	if err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	if fetcher.called {
+		t.Errorf("fetcher was called, want the stored form preferred over a live fetch")
+	}
+	if len(result.Preview.Fields) != 1 || result.Preview.Fields[0].Value != "Ada" {
+		t.Fatalf("preview = %+v, want the stored form's field resolved", result.Preview)
+	}
+}
+
+func TestPreviewClient_FallsBackToALiveFetchWhenNoFormIsStored(t *testing.T) {
+	fetcher := &fakeFetcher{form: applyform.Form{Fields: []applyform.Field{
+		{ID: "first_name", Label: "First name", Type: applyform.TypeText, Required: true},
+	}}}
+	reader := &fakeFormReader{found: false}
+	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"ashby": fetcher}, forms: reader}
+
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"first_name": "Ada"}, false)
+	if err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	if !fetcher.called {
+		t.Errorf("fetcher was not called, want a live fetch when no form is stored")
+	}
+	if len(result.Preview.Fields) != 1 || result.Preview.Fields[0].Value != "Ada" {
+		t.Fatalf("preview = %+v, want the fetched form's field resolved", result.Preview)
 	}
 }
