@@ -208,7 +208,13 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		log.Printf("auto-apply: re-reading tailored cv %s after run: %v", tailored.ID, err)
 	}
 
-	h.notifyTailoredCVReady(c.Context(), userID, job)
+	// Only the run that first attaches a tailored CV to this entry notifies — a retried or
+	// resumed call against an entry that already had one (a stale Inngest retry after a
+	// timeout, or a deliberate re-tailor once more evidence is added) must not re-send a
+	// notification the candidate already got for the same review.
+	if entry.TailoredCvID == nil {
+		h.notifyTailoredCVReady(c.Context(), userID, job)
+	}
 
 	return c.JSON(fiber.Map{"data": autoApplyTailorResponse{
 		TailoredCVID: tailored.ID.String(), AutopilotReport: rec.AutopilotReport,

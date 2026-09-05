@@ -311,6 +311,49 @@ func TestPostAutoApplyTailor_RunsAndRecordsTheTailoredCV(t *testing.T) {
 	}
 }
 
+// TestPostAutoApplyTailor_RetryAgainstAnAlreadyTailoredEntryDoesNotRenotify guards a
+// wasteful re-run a code review found: nothing stopped a retried or resumed call (an
+// Inngest retry after a client-side timeout, say) against an entry that already has a
+// tailored CV from re-sending the "ready to review" notification the candidate already
+// got. cv.Store.Tailor's own "one tailored copy per vacancy" idempotency means the CV
+// itself, and the plan charge, are already safe — only the notification needed a guard.
+func TestPostAutoApplyTailor_RetryAgainstAnAlreadyTailoredEntryDoesNotRenotify(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyTailorTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	model := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
+	app, _ := newAutoApplyTailorApp(pool, iss, model)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "retry@example.test")
+	insertBaseCV(t, pool, userID)
+	job := insertAutoApplyJob(t, pool, "tailor-retry")
+	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
+
+	first := autoApplyRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer first.Body.Close()
+	if first.StatusCode != fiber.StatusOK {
+		t.Fatalf("first status = %d, want 200", first.StatusCode)
+	}
+
+	second := autoApplyRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer second.Body.Close()
+	if second.StatusCode != fiber.StatusOK {
+		t.Fatalf("second (retried) status = %d, want 200 — a retry against an unreviewed entry is not itself an error", second.StatusCode)
+	}
+
+	var notifCount int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM user_notifications WHERE user_id = $1 AND kind = 'auto_apply_tailor_ready'", userID).
+		Scan(&notifCount); err != nil {
+		t.Fatalf("count notifications: %v", err)
+	}
+	if notifCount != 1 {
+		t.Errorf("notifications = %d, want 1 — the retry must not re-notify", notifCount)
+	}
+}
+
 func TestPostAutoApplyReview_ForeignEntryIsNotFound(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
