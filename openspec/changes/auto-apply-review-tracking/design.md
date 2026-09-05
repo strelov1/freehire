@@ -1,104 +1,133 @@
 ## Context
 
-`auto_apply_queue` (migrations/0116, /0128) already carries everything needed to derive a
-richer status than the job-detail overlay does: `tailored_cv_id`, `review_decision`
-(`approved`/`declined`/NULL), `blocked_at` (+ `unmapped` jsonb), `failed_at`, `last_error`. On
-a successful submission the row is deleted in the same transaction that calls
-`jobtracking.MarkJobApplied` (`cmd/auto-apply/store.go`), so a completed attempt leaves no
-trace in `auto_apply_queue` — the only durable record is `application_events`. That call
-stamps `EventSource: appevent.SourceSystem` (`"system"`), and grepping the module shows this
-is, today, the *only* caller that writes an `applied` event with that source — every other
-`applied` event comes from `SourceUser`, `SourceAssistant`, or a mail source. That makes
-`event_type = 'applied' AND source = 'system'` a reliable, already-existing marker for "an
-auto-apply attempt actually submitted this," with no schema change.
+`auto_apply_queue` (migrations/0116, /0128) already carries `tailored_cv_id`, `review_decision`
+(`approved`/`declined`/NULL), `blocked_at` (+ `unmapped` jsonb), `failed_at`, `last_error`. On a
+successful submission the row is deleted in the same transaction that calls
+`jobtracking.MarkJobApplied` (`cmd/auto-apply/store.go`) — a completed attempt already reaches
+`applied` on the tracker with no change needed here.
+
+The candidate-facing gap is entirely on the *pending* side: nothing surfaces a `pending_review`
+entry anywhere, nothing shows what a `blocked` entry is missing, and triggering auto-apply
+(`auto-apply-submit-trigger`) does not put the job on the board at all — the tracker has no idea
+an attempt exists until it silently succeeds or fails.
 
 The existing review write path (`internal/api/handler/auto_apply_tailor.go`,
 `POST /me/auto-apply/:queueId/review`) and its Inngest resume plumbing
 (`auto_apply_review_publish.go`) are unchanged by this design — they already implement
-approve/decline and resuming the orchestrator. This change only adds a way to read the
-candidate's own attempts as a list and call that existing endpoint from a real page.
-
-See proposal.md for motivation; see `specs/auto-apply-status-list/spec.md` for the behavior
-contract this design implements.
+approve/decline and resuming the orchestrator (`auto-apply-inngest-orchestration`). This design
+only adds: (1) a way for the tracker to see a `pending_review`/`blocked` entry and call that
+existing endpoint, and (2) the one missing piece neither of those changes built — an exact
+preview of what the unattended submission would send.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- One list endpoint that answers "what does my auto-apply queue look like right now, and
-  what has it recently done" scoped to the caller.
-- Reuse the existing review endpoint unchanged; this change only adds a reader and a page.
-- No new database columns or migrations.
+- Surface auto-apply's live status inside the tracker the candidate already uses, via the same
+  "action needed" interaction shape the tracker already has (mail-derived stage suggestions).
+- Give the candidate an exact preview — not a guess — of the application-form answers before they
+  approve, computed once and persisted, not on the read path.
+- Make triggering auto-apply immediately visible on the board.
 
 **Non-Goals:**
-- No retry/unpark mechanism for a `blocked` or `failed` entry — none exists in the backend
-  today (confirmed: no `Unpark`/requeue query or handler), and `auto_apply_queue`'s own
-  `UNIQUE (user_id, job_id)` plus `PostJobAutoApply`'s permanent-decline check mean a
-  blocked/failed/declined entry has no recovery path today regardless of what this page
-  shows. Adding one is a separate, larger change (would need to relax the uniqueness
-  constraint or add an explicit re-enqueue path) and is out of scope here.
-- No pagination for either list in this iteration (bounded LIMIT is enough at current
-  volume — a candidate's own queue is small); add it if usage shows otherwise.
+- No retry/unpark mechanism for a `blocked` or `failed` entry — none exists in the backend today
+  (no `Unpark`/requeue query or handler), and `auto_apply_queue`'s own `UNIQUE (user_id, job_id)`
+  plus `PostJobAutoApply`'s permanent-decline check mean there is no recovery path regardless of
+  what the UI shows. A separate, larger change.
+- No cover-letter generation — the preview reflects whatever the form's `resolve.go` already
+  produces today, which never includes one.
+- No dedicated auto-apply page, no separate "recently completed" list — both already exist as the
+  tracker's own `applied` stage.
+- No pagination anywhere in this change (a candidate's own live queue is small).
 - No change to the job-detail button's existing 4-state contract (`autoApplyButtonState`,
-  `autoApplyEntryStatus`) — it keeps its own, coarser status derivation.
+  `autoApplyEntryStatus`) — it keeps its own, coarser status derivation; it is not wired to the
+  tracker and stays that way.
 
 ## Decisions
 
-**One new handler, one new use case package function, two new sqlc queries.**
-`internal/api/handler/auto_apply_list.go` mounts `GET /me/auto-apply` behind `mw.cookie`
-(same auth posture as the enqueue/review endpoints — the browser is the only place a
-candidate can watch and undo this). It calls a new function in
-`internal/application/autoapply` (Fiber/pgx-free, per that package's existing convention)
-that takes the two query results and derives the six-value status. Alternative considered:
-compute the status entirely in SQL (a `CASE` expression per row) — rejected because the
-status rules (e.g. "declined beats blocked even though decline also sets `blocked_at`") are
-exactly the kind of business rule this package's Go layer already owns
-(`autoApplyEntryStatus` in `auto_apply_enqueue.go` does the analogous 3-way derivation in Go,
-not SQL), and keeping it in Go keeps one place testable without a live database.
+**The preview is computed once, server-side, inside the existing orchestrator run — not lazily
+on read.** `internal/api/atsapply`'s resolve pipeline is already a pure function over
+`[]MergedField` once a schema is in hand (`resolve.go`, `draft.go`, no chromedp import anywhere in
+either file); the browser is only needed to produce the DOM-scanned field list for Greenhouse
+(`client.go`'s `renderedHTML` → `ScanGreenhouseForm`, itself "a pure function over an HTML
+string" per its own doc comment). For the other three providers, `mergedFromAPIOnly` already
+builds the schema without a browser, and can read the schema `cmd/capture-apply-form` already
+persisted in `apply_forms` instead of re-fetching it. A new orchestrator step (`step.Run`, after
+the existing tailor step, before the entry moves to `pending_review`) calls this same pipeline —
+including, for Greenhouse, one headless render, exactly like the real submission eventually does
+— and persists the result to `auto_apply_queue.resolved_preview jsonb`.
+Alternative considered: resolve lazily when the candidate opens the drawer — rejected because it
+would put a Chrome dependency on the interactive API request path for Greenhouse specifically
+(today only workers own a browser lifecycle), adding request latency and a new failure mode to a
+read.
+Alternative considered: always approximate from the cached/API-only schema, skipping the
+Greenhouse DOM render — rejected because a spike measured 36 DOM-scanned fields against 17
+API-declared ones for the same form; an approximation could omit a field the real submission
+requires, which defeats the point of showing the candidate what will actually be sent.
 
-**Two separate arrays in the response, not one merged/sorted timeline.**
-`{"data": {"pending": [...], "recently_applied": [...]}}`. Alternative considered: merge both
-into one chronological feed — rejected because the two sources answer different questions
-("what needs me" vs "what already happened") and forcing one sort order across a queue table
-and an event ledger adds a merge step for no reader benefit; the page renders them as two
-sections either way (per the agreed frontend design).
+**Auto-apply gets its own `Track` source, called from the enqueue handler.**
+`jobtracking.Service.Track(ctx, userID, slug, stage, notes, source)` already accepts a `source`
+string (the same vocabulary `application_events.source` uses elsewhere in this codebase). The
+existing `auto-apply-submit-trigger` enqueue handler calls it with `stage: "preparing"`,
+`source: "auto_apply"`, idempotently (an already-tracked job is left alone — `Track`'s own
+existing semantics, unchanged here) — so the job appears on the board the moment auto-apply
+starts, not once it happens to finish.
 
-**Recently-completed list reads `application_events`, not `user_jobs`.**
-`user_jobs`/`applications` carries no per-row marker of *how* the candidate came to be marked
-applied - only `application_events.source` does. Querying the ledger for
-`event_type = 'applied' AND source = 'system'` (scoped to the caller, `ORDER BY occurred_at
-DESC LIMIT 20`) is therefore the only correct way to isolate auto-apply's own submissions.
-20 is a fixed cap for this iteration (see Non-Goals on pagination).
+**Status and preview ride on the tracked-job read path as one optional field, not a separate
+endpoint.** The tracker's existing wire shape already carries an analogous optional field,
+`stage_suggestion` (from `jobtracking/suggestion.go`'s `StageSuggestion`), assembled alongside the
+rest of a `TrackedJob` when one exists. `auto_apply` is added the same way: a new
+`internal/application/autoapply` function derives the six-value status
+(`tailoring`/`pending_review`/`approved`/`blocked`/`declined`/`failed`) from
+`(tailoredCVID, reviewDecision, blockedAt, failedAt)` — mirroring `autoAppyEntryStatus`'s existing
+precedence (declined checked before blocked/failed) — and assembles
+`{status, resolved_preview, tailored_cv_id, unmapped}` (never `last_error`) for whatever entry
+matches the job. Alternative considered: a separate `GET /me/auto-apply` list endpoint (the
+original draft of this change) — rejected once the surface moved into the tracker: the tracker
+already has to fetch the board to render at all, and a second round trip the frontend would need
+to cross-reference by job id adds a request for no reader benefit the embedded field doesn't
+already give for free.
 
-**`unmapped` is returned verbatim; `last_error` is never serialized onto any attempt.**
-`unmapped` ([{id, label, required, reason}], migrations/0116) was designed to be legible
-without replaying the attempt - it is exactly the "what got blocked" detail the candidate
-asked for. `last_error` is an internal diagnostic string (e.g., a driver/HTTP error) never
-intended for a candidate to read; the new use case's return struct simply has no field for it,
-so there is no serialization path that could leak it by omission-of-a-filter.
+**The tracker UI reuses the stage-suggestion banner's shape, not its component.**
+`JobDrawer.svelte`'s existing suggestion banner (warning-tinted, one action button, one dismiss
+link) is the right *shape* — action needed, one clear next step, dismissible — but auto-apply's
+banner needs richer content (the answer preview, a CV link, two buttons instead of one) and two
+outcomes (approve/decline) instead of one (move-stage/dismiss), so it is a new banner section
+built to match that visual language rather than a prop-driven variant of the same component. The
+non-actionable states (`blocked`/`declined`/`failed`) render a third, read-only variant of that
+same banner family.
 
-**The job-detail button's own status function is left untouched.**
-`autoApplyEntryStatus` (3 values: `queued`/`failed`/`declined`) has its own existing
-consumers (`GetJob`'s overlay, `autoApplyButtonState` in the SPA) and its own doc comment
-explaining why declined is checked before failed/blocked. The new 6-value derivation is a
-separate function for a separate, richer surface - collapsing them into one shared function
-now would force the button's simpler contract to either grow unused values or the list page
-to lose the distinctions it needs.
+**Notification target changes from `/tailor/[slug]` to `/my/tracking?job=<id>`.**
+The tailoring-complete notification (`auto-apply-tailored-resume` task 3.5) currently links to the
+tailoring workspace, which has no approve/decline affordance and was never meant to be one — it
+is where a CV gets *edited*, not where an auto-apply decision gets made. Once the resolve-preview
+step lands (this change), the notification is meaningful only once approve/decline is possible,
+so its target moves to the tracker, deep-linked to open the relevant job's drawer directly.
+
+**`unmapped` is returned verbatim on a `blocked` entry; `last_error` is never serialized.**
+`unmapped` ([{id, label, required, reason}], migrations/0116) was designed to be legible without
+replaying the attempt — exactly the "what got blocked" detail the candidate needs. `last_error` is
+an internal diagnostic string never intended for a candidate to read; the new assembly function's
+return struct has no field for it.
 
 ## Risks / Trade-offs
 
-- **[Risk]** A candidate reads "blocked" and expects a way to fix it, but there is no retry
-  path → **Mitigation**: the page copy for `blocked`/`failed` should be explicit that the
-  attempt is final for this job (matches `PostJobAutoApply`'s own existing "permanently
-  stuck"/"already declined" wording), not implying a retry is possible.
-- **[Risk]** `EventSource: appevent.SourceSystem` being auto-apply-exclusive is a convention,
-  not an enforced invariant - a future system-initiated `applied` event from an unrelated
-  feature would silently leak into "recently completed by auto-apply" → **Mitigation**: none
-  needed structurally now (it is the only such caller today, and `appevent`'s own layering
-  keeps the vocabulary in one file); worth a comment at the new query site cross-referencing
-  this design so a future second `SourceSystem`-tagged `applied` event is a deliberate choice,
-  not an accident.
+- **[Risk]** A candidate reads `blocked`/`failed`/`declined` and expects a way to fix it, but no
+  retry path exists → **Mitigation**: the banner copy for these states is explicit that the
+  attempt is final for this job (matches `PostJobAutoApply`'s own existing
+  "permanently stuck"/"already declined" wording).
+- **[Risk]** The Greenhouse resolve-preview step adds one more headless-browser render to the
+  orchestrator run, between the tailor step and the review wait → **Mitigation**: this reuses the
+  exact render `cmd/auto-apply`'s real submission already performs (same cost, same failure mode,
+  already handled there); a render failure here should park the entry the same way a resolve
+  failure during the real submission already does, rather than leaving it silently stuck.
+- **[Risk]** `EventSource`/status vocabulary drift: if a future change adds a way to un-park an
+  entry, the "final, no retry" banner copy this design writes becomes stale →
+  **Mitigation**: none needed structurally now; worth a comment at the banner site
+  cross-referencing this design.
 
 ## Migration Plan
 
-No database migration. Additive-only: new queries, new handler, new route, new SPA page and
-nav entry. Rollback is a plain revert - nothing else depends on the new endpoint or route.
+One migration: `auto_apply_queue.resolved_preview jsonb` (nullable). Additive-only otherwise: new
+orchestrator step, new use-case function, one new field on an existing read path, new frontend
+banner/badge, notification target change. Rollback is a plain revert — nothing else depends on
+`resolved_preview` or the new field.
