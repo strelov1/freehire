@@ -53,6 +53,7 @@ func DeriveStatus(hasTailoredCV, hasResolvedPreview bool, reviewDecision string,
 // string never intended for a candidate to read, so the type that carries what a tracked
 // job reports has no place to put it.
 type ResolvedAttempt struct {
+	QueueID         int64
 	HasTailoredCV   bool
 	ResolvedPreview *ResolvedPreview
 	ReviewDecision  string
@@ -66,6 +67,10 @@ type ResolvedAttempt struct {
 // jobtracking.StageSuggestion already follows for its own optional field.
 type AutoApplyReviewInfo struct {
 	Status Status `json:"status"`
+	// QueueID addresses the attempt for the existing POST /me/auto-apply/:queueId/review
+	// call the drawer's approve/decline banner makes — carried on every status, not just
+	// pending_review, so it costs nothing to include and never needs a second read later.
+	QueueID int64 `json:"queue_id"`
 	// ResolvedPreview is set only when Status is StatusPendingReview — the one state
 	// where the candidate has a decision to make and needs to see what it covers.
 	ResolvedPreview *ResolvedPreview `json:"resolved_preview,omitempty"`
@@ -81,7 +86,7 @@ func AssembleReviewInfo(hasAttempt bool, a ResolvedAttempt) *AutoApplyReviewInfo
 		return nil
 	}
 	status := DeriveStatus(a.HasTailoredCV, a.ResolvedPreview != nil, a.ReviewDecision, a.Blocked, a.Failed)
-	info := &AutoApplyReviewInfo{Status: status}
+	info := &AutoApplyReviewInfo{Status: status, QueueID: a.QueueID}
 	if status == StatusPendingReview {
 		info.ResolvedPreview = a.ResolvedPreview
 	}

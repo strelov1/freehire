@@ -41,10 +41,13 @@ func TestAssembleReviewInfo_NoAttemptIsNil(t *testing.T) {
 func TestAssembleReviewInfo_PendingReviewCarriesThePreview(t *testing.T) {
 	preview := &ResolvedPreview{Fields: []PreviewField{{Label: "First name", Value: "Ada"}}}
 	got := AssembleReviewInfo(true, ResolvedAttempt{
-		HasTailoredCV: true, ResolvedPreview: preview,
+		QueueID: 42, HasTailoredCV: true, ResolvedPreview: preview,
 	})
 	if got == nil || got.Status != StatusPendingReview {
 		t.Fatalf("got = %+v, want pending_review", got)
+	}
+	if got.QueueID != 42 {
+		t.Errorf("QueueID = %d, want 42", got.QueueID)
 	}
 	if got.ResolvedPreview != preview {
 		t.Errorf("ResolvedPreview = %v, want the same preview carried through", got.ResolvedPreview)

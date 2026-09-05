@@ -26,6 +26,7 @@ func autoApplyReviewInfoForJob(ctx context.Context, queries *db.Queries, userID,
 	}
 
 	attempt := autoapply.ResolvedAttempt{
+		QueueID:        row.ID,
 		HasTailoredCV:  row.TailoredCvID != nil,
 		ReviewDecision: pgStr(row.ReviewDecision),
 		Blocked:        row.BlockedAt.Valid,
