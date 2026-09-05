@@ -78,6 +78,6 @@
 - [x] 7.2 `go test -tags=integration ./internal/ai/plan/ ./internal/identity/billing/
   ./internal/api/handler/`.
 - [x] 7.3 `pnpm check:sql`, `pnpm check:links`, `golangci-lint run --new-from-rev=origin/main`.
-- [ ] 7.4 Walk it against a Stripe stub: an Ultra price resolves to ultra, auto-apply is
+- [x] 7.4 Walk it against a Stripe stub: an Ultra price resolves to ultra, auto-apply is
   unbounded there and refuses on pro at the fourth attempt in a day, and a store sync leaves
   the web entitlement alone.
