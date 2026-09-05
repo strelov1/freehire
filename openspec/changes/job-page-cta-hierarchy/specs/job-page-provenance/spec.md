@@ -32,6 +32,27 @@ else.
 - **WHEN** a posting's update time renders to the same label as its posting time
 - **THEN** only the posting date renders, as it does today
 
+### Requirement: The engagement counters ride the provenance line
+
+The job detail page SHALL render the posting's view and applied counts on the same line as
+its dates, and SHALL NOT render them in the sidebar. They are facts about how the posting is
+doing, like the dates, and each is one icon and one number; a reader weighing "posted 20
+minutes ago" against "3 views" should not have to hold that thought across two places.
+
+A count of zero SHALL NOT render. On a posting nobody has opened yet, "0 views" measures
+this site's own traffic rather than the job.
+
+#### Scenario: The counters sit with the dates
+
+- **WHEN** a posting has been viewed and someone has told us they applied
+- **THEN** both counts render on the dates line, each as an icon and a number
+- **AND** neither renders in the sidebar
+
+#### Scenario: A count of zero says nothing
+
+- **WHEN** a posting has no views and no recorded applications
+- **THEN** neither counter renders, and the dates line carries only the dates
+
 ### Requirement: The posting date is stated once per page
 
 The job detail page SHALL NOT restate the posting's date beside the reality badge. The

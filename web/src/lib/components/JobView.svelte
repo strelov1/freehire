@@ -430,23 +430,30 @@
   </Button>
 {/snippet}
 
-<!-- When the posting went up and when its words last moved. Two facts ABOUT the posting,
-     so they ride the provenance line with the company and the badges rather than the
-     sidebar's source row, where a reader comparing freshness had to look past the match
-     score and the salary to find them.
+<!-- How this posting is doing: when it went up, when its words last moved, and how many
+     people have opened it or told us they applied. Facts ABOUT the posting rather than
+     about the role, so they ride the provenance line with the company and the badges,
+     rather than the sidebar, where a reader comparing "posted 20 minutes ago" against "3
+     views" had to hold one thought across two places — past the match score and the salary
+     to reach either.
+     Every one of them is an icon and a number, which is what lets four of them share a line
+     the words would have filled on their own. The icons carry the word they replaced in an
+     `sr-only` span, so the line reads the same to a screen reader as it did when it was
+     spelled out.
      "Updated" is dropped when it renders to the same label as the posting date: a job
      written once and never touched would otherwise say the same thing twice. Comparing
      the LABELS rather than the timestamps is the point — two edits an hour apart on one
      day are a real difference while both read as ages, and stop being one the day they
      both collapse into that date.
-     The exact clock time rides the `title` either way, since a reader who has read "2
+     The exact clock time rides the `title` on both dates, since a reader who has read "2
      hours ago" off a server-rendered page may want to know how old the page is.
      Rendered twice, one visible at a time (the caller passes the display class): to the
      right of the provenance line from lg, and under the title below it, where that line is
      a single non-wrapping row whose company name is already truncating to fit. -->
-{#snippet postingDates(className: string)}
-  {#if posted}
+{#snippet postingMeta(className: string)}
+  {#if posted || views > 0 || applies > 0}
     <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
+      {#if posted}
       <span
         class="inline-flex items-center gap-1 whitespace-nowrap"
         title={`Posted ${formatDateTime(job.posted_at)}`}
@@ -463,6 +470,22 @@
           <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
           <span class="sr-only">Updated</span>
           <time datetime={job.updated_at}>{updated}</time>
+        </span>
+      {/if}
+      {/if}
+      <!-- A zero counter is omitted rather than drawn: "0 views" on a posting nobody has
+           opened yet measures our own traffic, not the job. -->
+      {#if views > 0}
+        <span class="inline-flex items-center gap-1 whitespace-nowrap">
+          <Eye class="size-3.5 shrink-0" aria-hidden="true" />
+          {views}
+          {views === 1 ? 'view' : 'views'}
+        </span>
+      {/if}
+      {#if applies > 0}
+        <span class="inline-flex items-center gap-1 whitespace-nowrap">
+          <Check class="size-3.5 shrink-0" aria-hidden="true" />
+          {applies} applied
         </span>
       {/if}
     </div>
@@ -505,7 +528,7 @@
      `hidden lg:flex`: below lg the sticky bottom bar carries the apply CTA instead, and
      auto-apply has no button there at all. -->
 {#snippet ctaGroup()}
-  <div class="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
+  <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
     {@render autoApplyCta('shrink-0')}
     {@render applyCta('md', 'shrink-0', cta.external)}
   </div>
@@ -643,7 +666,7 @@
 
     <!-- `ml-auto` rather than a grid column: the badges above are a variable-width group,
          so the dates take whatever is left of the line and sit against its right edge. -->
-    {@render postingDates('ml-auto hidden shrink-0 lg:flex')}
+    {@render postingMeta('ml-auto hidden shrink-0 lg:flex')}
   </div>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
@@ -656,16 +679,19 @@
           <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
         </Chip>
       {/if}
-      <!-- `ml-auto` inside the snippet, so the buttons take the right edge of the title's
-           own row. The row wraps, so a long title pushes them onto a line of their own
-           rather than truncating either. -->
-      {@render ctaGroup()}
     </div>
+
+    <!-- The CTAs take a row of their own under the title rather than riding its right
+         edge: the title is the longest string on the page and the buttons are the widest
+         fixed thing beside it, so sharing a line meant a two-word title left them adrift in
+         the middle of the page and a long one pushed them down anyway. Right-aligned, so
+         they land above the quiet strip's own right edge on the tab row below. -->
+    {@render ctaGroup()}
 
     <!-- Below lg the provenance line is a single non-wrapping row already truncating the
          company name, so the dates read here instead — a caption under the title rather
          than right-aligned, which on one phone-width column would only look adrift. -->
-    {@render postingDates('flex lg:hidden')}
+    {@render postingMeta('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
@@ -743,33 +769,26 @@
         </dl>
       {/if}
 
-      <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+      <!-- Where the posting came from. One row since the engagement counters left it for
+           the provenance line up beside the title; the `flex-col` wrapper that held the two
+           apart went with them. -->
+      <div
+        class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-border pt-4 text-xs text-muted-foreground first:border-t-0 first:pt-0"
+      >
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-          <a href={filterHref('source', job.source)} class="inline-flex">
-            <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
-              {job.source}
-            </Badge>
-          </a>
-          {#if job.source === 'adzuna'}
-            <!-- Required by Adzuna's API terms, not a courtesy credit — see the component. It
-                 sits in the provenance row beside the source chip, which is where a reader
-                 already looks to find out where a posting came from. -->
-            <AdzunaAttribution jobUrl={job.url} />
-          {/if}
-          {#if job.manually_added}
-            <Badge variant="secondary">Manually added</Badge>
-          {/if}
-        </div>
-        {#if views > 0 || applies > 0}
-          <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">
-            {#if views > 0}
-              <span class="inline-flex items-center gap-1"><Eye class="size-3.5 shrink-0" />{views} {views === 1 ? 'view' : 'views'}</span>
-            {/if}
-            {#if applies > 0}
-              <span class="inline-flex items-center gap-1"><Check class="size-3.5 shrink-0" />{applies} applied</span>
-            {/if}
-          </div>
+        <a href={filterHref('source', job.source)} class="inline-flex">
+          <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
+            {job.source}
+          </Badge>
+        </a>
+        {#if job.source === 'adzuna'}
+          <!-- Required by Adzuna's API terms, not a courtesy credit — see the component. It
+               sits in the provenance row beside the source chip, which is where a reader
+               already looks to find out where a posting came from. -->
+          <AdzunaAttribution jobUrl={job.url} />
+        {/if}
+        {#if job.manually_added}
+          <Badge variant="secondary">Manually added</Badge>
         {/if}
       </div>
 

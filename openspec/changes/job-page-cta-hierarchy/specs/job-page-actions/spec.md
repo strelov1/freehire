@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
-### Requirement: Primary CTAs sit beside the title, not on the tab row
+### Requirement: Primary CTAs sit under the title, not on the tab row
 
 The job detail page SHALL render its call-to-action buttons (the external apply link and,
-where offered, auto-apply) in the header block beside the job title, and SHALL NOT render
-them on the row that carries the content tabs. The tab row SHALL carry only the quiet
+where offered, auto-apply) in the header block, on a row of their own under the job title
+and right-aligned, and SHALL NOT render them on the row that carries the content tabs. The tab row SHALL carry only the quiet
 per-posting actions — Discussion, Report, Save, Add-to-list — so that the content TabStrip
 keeps enough width to show its labels without scrolling on a desktop column.
 
@@ -17,6 +17,12 @@ apply CTA.
 - **WHEN** a signed-in reader opens a Greenhouse posting on a desktop-width viewport
 - **THEN** the tab row shows every content tab label in full
 - **AND** neither the auto-apply button nor the external apply button appears on that row
+
+#### Scenario: The CTAs keep their own row
+
+- **WHEN** the job detail page renders at `lg` or wider
+- **THEN** the CTA buttons sit on a row between the title and the content tabs
+- **AND** they are right-aligned, whatever the length of the title above them
 
 #### Scenario: Quiet actions stay on the tab row
 
