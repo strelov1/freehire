@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { accountSteps, stepsOutstanding, type CompletenessInput } from './accountCompleteness';
+import { accountSteps, outstandingOf, type CompletenessInput } from './accountCompleteness';
 import type { UserProfile } from './types';
 
 // What the account card measures. The predicates are the whole point of the module, so
@@ -32,7 +32,7 @@ describe('accountSteps', () => {
     const steps = accountSteps(empty);
     expect(steps.length).toBeGreaterThan(0);
     expect(steps.every((s) => !s.done)).toBe(true);
-    expect(stepsOutstanding(empty)).toBe(steps.length);
+    expect(outstandingOf(steps)).toHaveLength(steps.length);
   });
 
   it('gives every step a label and a link to where it is done', () => {
@@ -99,7 +99,7 @@ describe('accountSteps', () => {
       }),
       alertCount: 2,
     };
-    expect(stepsOutstanding(full)).toBe(0);
+    expect(outstandingOf(accountSteps(full))).toEqual([]);
     expect(accountSteps(full).every((s) => s.done)).toBe(true);
   });
 });

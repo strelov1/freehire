@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check, ArrowRight } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { outstandingOf } from '$lib/accountCompleteness';
   import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
   // "How complete is my account", at the top of the tracking page — the page a bare /my
@@ -14,11 +14,12 @@
   // outstanding — a card that congratulates you forever is a permanent tax on the page.
 
   const steps = $derived(setupSteps());
-  const outstanding = $derived(steps.filter((s) => !s.done));
+  const outstanding = $derived(outstandingOf(steps));
   const done = $derived(steps.length - outstanding.length);
 
+  // The signed-in check lives inside ensureAccountSetupLoaded, so both callers share it.
   $effect(() => {
-    if (isAuthenticated()) ensureAccountSetupLoaded();
+    ensureAccountSetupLoaded();
   });
 </script>
 

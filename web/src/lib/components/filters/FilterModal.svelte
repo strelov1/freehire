@@ -221,6 +221,11 @@
 
   const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
 
+  // Whether this modal offers the "describe your filters in words" entry point. It needs
+  // a live store to write into, and it makes no sense in `plain` reuse (the profile
+  // editor), where a facet value is a plain choice rather than a search.
+  const showAiEntry = $derived(Boolean(store) && !plain);
+
   // A non-preset value (hand-edited URL) has no exact stop, so it reads as "Any"
   // (the rightmost stop) rather than snapping to "Today".
   const freshnessIndex = $derived.by(() => {
@@ -266,7 +271,7 @@
   {pane}
   headerAction={showProfileAction ? profileAction : undefined}
   {titleHint}
-  extra={extra || (store && !plain) ? aboveThePane : undefined}
+  extra={extra || showAiEntry ? aboveThePane : undefined}
   {footerNote}
 />
 
@@ -328,7 +333,7 @@
        `onApplied={onClose}` is not decoration: the dialog writes straight to the live
        store, while this modal defers its own edits until Apply. Left open, it would
        later apply what it had staged before the dialog ran and silently undo it. -->
-  {#if store && !plain}
+  {#if showAiEntry && store}
     <div class="mb-4">
       <AiFilterButton {store} onApplied={onClose} />
     </div>

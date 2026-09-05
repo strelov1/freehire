@@ -94,7 +94,11 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
   ];
 }
 
-/** How many steps are still open. Zero means the card and its dot are done showing. */
-export function stepsOutstanding(input: CompletenessInput): number {
-  return accountSteps(input).filter((step) => !step.done).length;
+/** The steps still open. Zero of them means the card and its dot are done showing.
+ *
+ *  Takes the steps rather than the input so "what counts as outstanding" is written once
+ *  and every caller shares it — the card needs both the full list and this subset, and
+ *  would otherwise re-filter on `!done` itself. */
+export function outstandingOf(steps: CompletenessStep[]): CompletenessStep[] {
+  return steps.filter((step) => !step.done);
 }

@@ -1,7 +1,7 @@
 // Derives which Kanban column a tracked job belongs to. The column is NOT stored
-// — it is a view over the application's applied_at / stage. The board shows only
-// jobs in an active application state; a saved-only row (saved but never applied,
-// no stage) has no column and lives in the Activity → Saved list instead.
+// — it is a view over the application's saved_at / applied_at / stage. A row the board
+// cannot place is one the user has neither saved nor tracked; a saved job is a card in
+// the first column, because saving one is taking it on.
 //
 // The columns and their membership are the generated ones (internal/userjob →
 // cmd/gen-contracts). This file used to restate both, which is how the board and the
@@ -21,9 +21,9 @@ const STAGE_COLUMN: Record<string, BoardColumnId> = Object.fromEntries(
   STAGE_GROUPS.flatMap((g) => g.stages.map((stage) => [stage, g.id])),
 );
 
-/** The column a tracked job currently sits in, or `null` when it is saved-only and
- *  therefore not on the board. Priority: precise stage, then a legacy
- *  applied-without-stage row, else off-board. */
+/** The column a tracked job currently sits in, or `null` when it is neither saved nor
+ *  tracked and so has nothing to sit in. Priority: precise stage, then a legacy
+ *  applied-without-stage row, then the saved mark, else off-board. */
 export function columnOf(item: MyJob): BoardColumnId | null {
   const col = item.stage ? STAGE_COLUMN[item.stage] : undefined;
   if (col) return col;

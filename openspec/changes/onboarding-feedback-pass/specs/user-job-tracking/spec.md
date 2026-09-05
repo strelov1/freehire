@@ -33,7 +33,14 @@ An explicit stage SHALL continue to decide the column — a saved row that has b
 ### Requirement: Saving is a primary, labelled action on a job card
 
 The save control on a job card SHALL be a labelled button rather than an icon-only overlay,
-and SHALL read as the card's primary action.
+and SHALL read as the card's primary action. The label SHALL name the state the job is in
+rather than the action performed, since a long feed has to answer "is this one already
+mine" at a glance.
+
+The narrow-column card — the one the assistant chat renders, at roughly 360px — is
+exempt and keeps the icon-only overlay. That card drops the blurb and shortens the title
+for the same reason; a control that earns a word on a full card has to give it back
+there. The exemption is by card width, not by surface, so no caller opts into it.
 
 The control SHALL remain outside the card's link element so that activating it never
 navigates to the posting.

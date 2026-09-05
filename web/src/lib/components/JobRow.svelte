@@ -36,19 +36,28 @@
   // job, so the browse list shows what's been seen. The My Jobs surfaces (where
   // every card is viewed by definition) pass `dimViewed={false}` to opt out.
   // `newTab` opens the job in a new browser tab (used when the card is rendered
-  // inside the assistant chat, so the conversation stays open). `compact` tightens
-  // the card for the narrow chat column (smaller padding + title, one-line title,
-  // no blurb). Both default off so the jobs list / company pages are unchanged.
+  // inside the assistant chat, so the conversation stays open). Both default off so the
+  // jobs list / company pages are unchanged.
+  //
+  // `compact` is the narrow-chat-column card, and it decides more than density. As well
+  // as the smaller padding and title, the one-line title and the dropped blurb, it
+  // selects the card's whole control inventory: there is no action row, so Save stays
+  // the corner glyph it always was and `onHide` has nowhere to render. The two concerns
+  // are fused on purpose — the column is ~360px wide, and every control that earns a
+  // word on a full card has to give it back here. Splitting them would be a second flag
+  // whose only honest value is the same as this one's.
+  //
   // `footer` is an optional actions row rendered inside the card, below the link
   // content (a sibling of the <a>, never nested in it — so its interactive controls
-  // don't fight the card's navigation). The hidden list passes an un-hide control here.
+  // don't fight the card's navigation). The hidden list passes an un-hide control here,
+  // and gets it as a second row under the card's own Save row.
   //
-  // `onHide` is the feed's hook for the "hide this job" gesture: when set (only the
-  // browse feed passes it), the card shows a hover-revealed hide control, and after
-  // a successful dismiss it calls back with the slug so the feed can surface an undo
-  // affordance. Surfaces that reuse JobRow without it (saved/hidden lists, tracking
-  // board, assistant chat) get no hide control — leaving it out scopes the gesture
-  // to the feed.
+  // `onHide` is the feed's hook for the "hide this job" gesture: when set on a NON-compact
+  // card (only the browse feed passes it), the action row gains a hover-revealed hide
+  // control, and after a successful dismiss it calls back with the slug so the feed can
+  // surface an undo affordance. Surfaces that reuse JobRow without it (saved/hidden
+  // lists, tracking board, assistant chat) get no hide control — leaving it out scopes
+  // the gesture to the feed.
   let {
     job,
     dimViewed = true,
@@ -441,12 +450,13 @@
   <span class="sr-only">{matchInvite}</span>
 {/if}
 
-{#if footer}
-  <!-- Optional in-card actions row (e.g. the hidden list's un-hide control, the
-       assistant deck's rationale), divided from the content and rendered outside
-       the <a> so its controls stay clickable. Its inline padding tracks the card's
-       own, or the row would sit 4px out of line in a compact card. -->
-  <div class={['border-t border-border py-2.5', compact ? 'px-3' : 'px-4']}>
+{#if footer && compact}
+  <!-- Optional in-card actions row (e.g. the assistant deck's rationale), divided from
+       the content and rendered outside the <a> so its controls stay clickable. Its
+       inline padding tracks the card's own, or the row would sit 4px out of line.
+       A normal card has an action row of its own, and the caller's controls join it
+       rather than stacking a second bordered row under the first. -->
+  <div class="border-t border-border px-3 py-2.5">
     {@render footer()}
   </div>
 {/if}
@@ -483,11 +493,14 @@
        should not compete with Save for attention). `pointer-coarse` keeps it visible on
        touch, which has no hover to reveal anything. -->
   <div class="flex items-center gap-2 border-t border-border px-4 py-2.5">
+    <!-- No `aria-pressed` here, unlike the compact glyph: this button's NAME already
+         changes with the state, so the toggle role would have a screen reader announce
+         "On your board, pressed" — the same fact twice, in two vocabularies. The glyph
+         needs it precisely because its name cannot say which state it is in. -->
     <button
       type="button"
       onclick={toggleSave}
       disabled={saving}
-      aria-pressed={saved}
       class={[
         'flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
         saved
@@ -498,6 +511,10 @@
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
       {saved ? 'On your board' : 'Save to board'}
     </button>
+
+    <!-- The caller's own controls share this row rather than getting a second bordered
+         one under it — two stacked rules under one card read as a layout mistake. -->
+    {@render footer?.()}
 
     {#if onHide}
       <button

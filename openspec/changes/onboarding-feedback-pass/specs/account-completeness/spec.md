@@ -36,10 +36,18 @@ endpoint.
 
 ### Requirement: A quiet dot marks incomplete setup from anywhere
 
-While any setup step is outstanding, the header account control SHALL carry a dot.
+While any setup step is outstanding, the header menu button SHALL carry a dot.
+
+The menu button, not the profile icon beside it: that icon is hidden below the `sm`
+breakpoint, so on a phone it is not there to carry anything, and the menu button is the
+one account control present at every width.
 
 The dot SHALL NOT carry a count. The notification bell sits in the same corner and wins on
 urgency; a second counted badge beside it would make two signals compete for one glance.
+
+Its screen-reader equivalent SHALL be part of the button's own accessible name. An
+aria-label replaces an element's contents as its name, so a visually-hidden span inside
+the button would never be read.
 
 #### Scenario: The dot marks an incomplete account
 

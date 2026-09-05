@@ -121,10 +121,10 @@
     { href: '/my/submissions', label: 'My submissions', icon: FileText },
   ] as const;
 
-  // What the setup dot reads. The three stores behind it load once per session and are
-  // shared, so asking here costs nothing that the account pages were not going to pay.
+  // What the setup dot reads. The signed-in check is inside the call, shared with the
+  // card on the tracking page.
   $effect(() => {
-    if (isAuthenticated()) ensureAccountSetupLoaded();
+    ensureAccountSetupLoaded();
   });
 
   // Mobile only: the open panel is a full-screen overlay, so lock the page behind
@@ -259,7 +259,7 @@
 
   <button
     type="button"
-    aria-label="Menu"
+    aria-label={setupOutstanding() > 0 ? 'Menu — account setup unfinished' : 'Menu'}
     aria-haspopup="menu"
     aria-expanded={open}
     onclick={(e) => {
@@ -285,13 +285,16 @@
          No count, deliberately: the notification bell is two controls away and does carry
          one, and a second numbered badge beside it would make two signals compete for one
          glance. The bell wins on urgency; this is a nudge, and a nudge only has to be
-         noticeable. Hidden while the menu is open — by then it has been acted on. -->
+         noticeable. Hidden while the menu is open — by then it has been acted on.
+
+         The screen-reader equivalent is in this button's aria-label, not an sr-only span
+         in here: an aria-label REPLACES an element's contents as its accessible name, so
+         a span would have been silently unreadable. -->
     {#if isAuthenticated() && !open && setupOutstanding() > 0}
       <span
         class="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-background"
         aria-hidden="true"
       ></span>
-      <span class="sr-only">Your account setup is unfinished</span>
     {/if}
   </button>
 

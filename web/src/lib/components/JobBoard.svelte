@@ -88,8 +88,8 @@
     cardCol = cols;
     status = 'ready';
     // Deep link: open the requested application's drawer once, after the board is
-    // built. A slug that isn't on the board (untracked / saved-only) just leaves
-    // the board showing.
+    // built. A slug that isn't on the board — one the user has neither saved nor
+    // tracked — just leaves the board showing.
     if (initialId && !openedInitial) {
       openedInitial = true;
       const found = Object.values(next)
