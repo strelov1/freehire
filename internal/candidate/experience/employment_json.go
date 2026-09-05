@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // employmentWire is the kind-aware JSON shape for an Employment. Jobs keep `company`;
@@ -13,18 +14,18 @@ import (
 // (and any other embedder) can compose the same shape without losing sibling fields —
 // an embedded type that implements MarshalJSON would otherwise replace the outer object.
 type employmentWire struct {
-	ID       uuid.UUID `json:"id"`
-	Kind     string    `json:"kind"`
-	Company  string    `json:"company,omitempty"`
-	Name     string    `json:"name,omitempty"`
-	Role     string    `json:"role,omitempty"`
-	Location string    `json:"location,omitempty"`
-	Start    string    `json:"start,omitempty"`
-	End      string    `json:"end,omitempty"`
-	Current  bool      `json:"current,omitempty"`
-	Summary  string    `json:"summary,omitempty"`
-	Link     string    `json:"link,omitempty"`
-	Stack    []string  `json:"stack,omitempty"`
+	ID       uuid.UUID              `json:"id"`
+	Kind     string                 `json:"kind"`
+	Company  string                 `json:"company,omitempty"`
+	Name     string                 `json:"name,omitempty"`
+	Role     string                 `json:"role,omitempty"`
+	Location string                 `json:"location,omitempty"`
+	Start    *perioddate.PeriodDate `json:"start,omitempty"`
+	End      *perioddate.PeriodDate `json:"end,omitempty"`
+	Current  bool                   `json:"current,omitempty"`
+	Summary  string                 `json:"summary,omitempty"`
+	Link     string                 `json:"link,omitempty"`
+	Stack    []string               `json:"stack,omitempty"`
 }
 
 // toWire returns the kind-aware JSON projection of e.

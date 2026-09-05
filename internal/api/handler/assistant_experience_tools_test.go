@@ -13,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // experienceToolsFor builds the bank tools over a stub, and returns the registry so tool
@@ -145,7 +146,7 @@ func TestExperienceAddReportsAnAlreadyBankedClaim(t *testing.T) {
 // The search result has to carry what the agent needs to ACT: the id to cite in cv_edit,
 // and whether the evidence may be written at all.
 func TestExperienceSearchResultCarriesWhatTheAgentMustCite(t *testing.T) {
-	role := experience.Employment{ID: uuid.New(), Kind: experience.KindJob, Company: "RingCentral", Role: "SWE", Start: "2023-09", End: "Present"}
+	role := experience.Employment{ID: uuid.New(), Kind: experience.KindJob, Company: "RingCentral", Role: "SWE", Start: &perioddate.PeriodDate{Year: 2023, Month: 9}, Current: true}
 	bank := newStubBank()
 	bank.matches = []experience.Match{
 		{
@@ -284,7 +285,7 @@ func readAtoms(t *testing.T, reg *assistant.Registry, ids ...string) (getResult,
 // nothing — so it answered about achievements the candidate had not selected.
 func TestExperienceGetReadsTheAchievementsItIsNamed(t *testing.T) {
 	bank := newStubBank()
-	role := experience.Employment{ID: uuid.New(), Kind: experience.KindJob, Company: "RingCentral", Role: "Tech Lead", Start: "2023-09", End: "Present"}
+	role := experience.Employment{ID: uuid.New(), Kind: experience.KindJob, Company: "RingCentral", Role: "Tech Lead", Start: &perioddate.PeriodDate{Year: 2023, Month: 9}, Current: true}
 	bank.employments = []experience.Employment{role}
 	first := bank.add(1, experience.Atom{
 		EmploymentID: &role.ID,
@@ -409,7 +410,7 @@ func TestExperienceGetCapsOneReadAndNamesTheRemainder(t *testing.T) {
 // read achievement are different kinds of thing. They share a builder; this is the guard
 // that keeps them sharing it.
 func TestAReadAchievementLooksLikeASearchedOne(t *testing.T) {
-	role := experience.Employment{ID: uuid.New(), Company: "Acme", Role: "Engineer", Start: "2021-01", End: "2024-06"}
+	role := experience.Employment{ID: uuid.New(), Company: "Acme", Role: "Engineer", Start: &perioddate.PeriodDate{Year: 2021, Month: 1}, End: &perioddate.PeriodDate{Year: 2024, Month: 6}}
 	atom := experience.Atom{
 		ID: uuid.New(), EmploymentID: &role.ID,
 		Claim: "Halved the build", Context: "CI ran every suite on every push.",

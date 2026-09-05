@@ -495,20 +495,24 @@ type ExperienceAtom struct {
 }
 
 type ExperienceEmployment struct {
-	ID          uuid.UUID          `json:"id"`
-	UserID      int64              `json:"user_id"`
-	Kind        string             `json:"kind"`
-	Company     string             `json:"company"`
-	Role        string             `json:"role"`
-	Location    string             `json:"location"`
-	PeriodStart string             `json:"period_start"`
-	PeriodEnd   string             `json:"period_end"`
-	IsCurrent   bool               `json:"is_current"`
-	Summary     string             `json:"summary"`
-	Stack       []string           `json:"stack"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Link        string             `json:"link"`
+	ID               uuid.UUID          `json:"id"`
+	UserID           int64              `json:"user_id"`
+	Kind             string             `json:"kind"`
+	Company          string             `json:"company"`
+	Role             string             `json:"role"`
+	Location         string             `json:"location"`
+	PeriodStart      string             `json:"period_start"`
+	PeriodEnd        string             `json:"period_end"`
+	IsCurrent        bool               `json:"is_current"`
+	Summary          string             `json:"summary"`
+	Stack            []string           `json:"stack"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	Link             string             `json:"link"`
+	PeriodStartYear  pgtype.Int4        `json:"period_start_year"`
+	PeriodStartMonth pgtype.Int2        `json:"period_start_month"`
+	PeriodEndYear    pgtype.Int4        `json:"period_end_year"`
+	PeriodEndMonth   pgtype.Int2        `json:"period_end_month"`
 }
 
 type GhostReport struct {

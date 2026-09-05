@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest solidjobs
 [Timer]
-OnCalendar=*:35:00
+OnCalendar=*:41:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

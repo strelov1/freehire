@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/stringset"
 )
@@ -21,7 +22,7 @@ import (
 // InsertAtomIfNew and the coalesce/nullif blanks fill) are covered by an integration
 // test against a real Postgres instead.
 type fakeRepo struct {
-	employments map[uuid.UUID]db.ExperienceEmployment
+	employments map[uuid.UUID]employmentRow
 	atoms       map[uuid.UUID]db.ExperienceAtom
 	order       []uuid.UUID // insertion order, so listing is deterministic
 
@@ -31,7 +32,7 @@ type fakeRepo struct {
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		employments: map[uuid.UUID]db.ExperienceEmployment{},
+		employments: map[uuid.UUID]employmentRow{},
 		atoms:       map[uuid.UUID]db.ExperienceAtom{},
 	}
 }
@@ -44,8 +45,8 @@ func (f *fakeRepo) stamp() pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: time.Unix(f.clock, 0), Valid: true}
 }
 
-func (f *fakeRepo) ListEmployments(_ context.Context, userID int64) ([]db.ExperienceEmployment, error) {
-	var out []db.ExperienceEmployment
+func (f *fakeRepo) ListEmployments(_ context.Context, userID int64) ([]employmentRow, error) {
+	var out []employmentRow
 	for _, id := range f.order {
 		if e, ok := f.employments[id]; ok && e.UserID == userID {
 			out = append(out, e)
@@ -54,15 +55,15 @@ func (f *fakeRepo) ListEmployments(_ context.Context, userID int64) ([]db.Experi
 	return out, nil
 }
 
-func (f *fakeRepo) GetEmployment(_ context.Context, id uuid.UUID, userID int64) (db.ExperienceEmployment, error) {
+func (f *fakeRepo) GetEmployment(_ context.Context, id uuid.UUID, userID int64) (employmentRow, error) {
 	f.getEmploymentCalls++
 	if e, ok := f.employments[id]; ok && e.UserID == userID {
 		return e, nil
 	}
-	return db.ExperienceEmployment{}, pgx.ErrNoRows
+	return employmentRow{}, pgx.ErrNoRows
 }
 
-func (f *fakeRepo) FindEmployment(_ context.Context, userID int64, company, role string) (db.ExperienceEmployment, error) {
+func (f *fakeRepo) FindEmployment(_ context.Context, userID int64, company, role string) (employmentRow, error) {
 	for _, id := range f.order {
 		e, ok := f.employments[id]
 		if ok && e.UserID == userID &&
@@ -70,15 +71,21 @@ func (f *fakeRepo) FindEmployment(_ context.Context, userID int64, company, role
 			return e, nil
 		}
 	}
-	return db.ExperienceEmployment{}, pgx.ErrNoRows
+	return employmentRow{}, pgx.ErrNoRows
 }
 
-func (f *fakeRepo) CreateEmployment(_ context.Context, userID int64, e Employment) (db.ExperienceEmployment, error) {
+func (f *fakeRepo) CreateEmployment(_ context.Context, userID int64, e Employment) (employmentRow, error) {
 	id := uuid.New()
-	row := db.ExperienceEmployment{
+	startYear, startMonth := PeriodToColumns(e.Start)
+	endYear, endMonth := PeriodToColumns(e.End)
+	row := employmentRow{
 		ID: id, UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role,
-		Location: e.Location, PeriodStart: e.Start, PeriodEnd: e.End,
-		IsCurrent: e.Current, Summary: e.Summary, Link: e.Link, Stack: e.Stack,
+		Location:         e.Location,
+		PeriodStartYear:  startYear,
+		PeriodStartMonth: startMonth,
+		PeriodEndYear:    endYear,
+		PeriodEndMonth:   endMonth,
+		IsCurrent:        e.Current, Summary: e.Summary, Link: e.Link, Stack: e.Stack,
 		CreatedAt: f.stamp(), UpdatedAt: f.stamp(),
 	}
 	f.employments[id] = row
@@ -86,28 +93,38 @@ func (f *fakeRepo) CreateEmployment(_ context.Context, userID int64, e Employmen
 	return row, nil
 }
 
-func (f *fakeRepo) UpdateEmployment(_ context.Context, id uuid.UUID, userID int64, e Employment) (db.ExperienceEmployment, error) {
+func (f *fakeRepo) UpdateEmployment(_ context.Context, id uuid.UUID, userID int64, e Employment) (employmentRow, error) {
 	row, ok := f.employments[id]
 	if !ok || row.UserID != userID {
-		return db.ExperienceEmployment{}, pgx.ErrNoRows
+		return employmentRow{}, pgx.ErrNoRows
 	}
 	row.Kind, row.Company, row.Role = e.Kind, e.Company, e.Role
-	row.Location, row.PeriodStart, row.PeriodEnd = e.Location, e.Start, e.End
+	row.Location = e.Location
+	row.PeriodStartYear, row.PeriodStartMonth = PeriodToColumns(e.Start)
+	row.PeriodEndYear, row.PeriodEndMonth = PeriodToColumns(e.End)
 	row.IsCurrent, row.Summary, row.Link, row.Stack = e.Current, e.Summary, e.Link, e.Stack
 	f.employments[id] = row
 	return row, nil
 }
 
-func (f *fakeRepo) FillEmploymentBlanks(_ context.Context, id uuid.UUID, userID int64, e Employment) (db.ExperienceEmployment, error) {
+func (f *fakeRepo) FillEmploymentBlanks(_ context.Context, id uuid.UUID, userID int64, e Employment) (employmentRow, error) {
 	row, ok := f.employments[id]
 	if !ok || row.UserID != userID {
-		return db.ExperienceEmployment{}, pgx.ErrNoRows
+		return employmentRow{}, pgx.ErrNoRows
 	}
 	row.Company = orExisting(row.Company, e.Company)
 	row.Role = orExisting(row.Role, e.Role)
 	row.Location = orExisting(row.Location, e.Location)
-	row.PeriodStart = orExisting(row.PeriodStart, e.Start)
-	row.PeriodEnd = orExisting(row.PeriodEnd, e.End)
+	// A period fills as a whole pair exactly when its year is currently unset — mirrors
+	// the real query's CASE WHEN (see queries/experience.sql's own comment).
+	startYear, startMonth := PeriodToColumns(e.Start)
+	if !row.PeriodStartYear.Valid {
+		row.PeriodStartYear, row.PeriodStartMonth = startYear, startMonth
+	}
+	endYear, endMonth := PeriodToColumns(e.End)
+	if !row.PeriodEndYear.Valid {
+		row.PeriodEndYear, row.PeriodEndMonth = endYear, endMonth
+	}
 	row.Summary = orExisting(row.Summary, e.Summary)
 	row.Link = orExisting(row.Link, e.Link)
 	row.Stack = unionSorted(row.Stack, e.Stack)
@@ -474,7 +491,7 @@ func TestStoreCreateEmployment(t *testing.T) {
 
 	got, err := s.CreateEmployment(ctx, owner, Employment{
 		Kind: KindJob, Company: "  RingCentral  ", Role: "Senior Software Engineer",
-		Start: "2023-09", End: "Present", Current: true,
+		Start: &perioddate.PeriodDate{Year: 2023, Month: 9}, Current: true,
 	})
 	if err != nil {
 		t.Fatalf("CreateEmployment: %v", err)

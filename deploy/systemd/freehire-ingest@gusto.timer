@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest gusto
 [Timer]
-OnCalendar=*:03:00
+OnCalendar=*:51:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest justjoin
 [Timer]
-OnCalendar=*:15:00
+OnCalendar=*:18:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

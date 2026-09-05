@@ -16,14 +16,17 @@
   import { profileKickoff } from '$lib/assistant/presets';
   import { companyLogoUrl } from '$lib/logo';
   import SkillIcon from '$lib/components/SkillIcon.svelte';
+  import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
   import type {
     ExperienceAtom,
     ExperienceBank,
     ExperienceEmployment,
     ExperienceEmploymentWithAtoms,
     ExperienceProvenance,
+    PeriodDate,
   } from '$lib/types';
   import { must } from '$lib/utils';
+  import { formatPeriodRange } from '$lib/periodDate';
 
   /** Host-supplied: profile reseeds the base CV, tailor resets the open tailored copy.
    *  The bank itself never talks to the CV store. */
@@ -46,24 +49,24 @@
   let empSummary = $state('');
   let empStack = $state('');
   let empLink = $state('');
-  let empStart = $state('');
-  let empEnd = $state('');
+  let empStart = $state<PeriodDate | undefined>(undefined);
+  let empEnd = $state<PeriodDate | undefined>(undefined);
   // Deliberately separate from empName/empLink/empStart/empEnd above: "Add project" and
   // "Edit employment" are independently toggleable, and sharing state between them let
   // opening one silently blank or overwrite the other's still-open, unsaved form.
   let addingProject = $state(false);
   let projName = $state('');
   let projLink = $state('');
-  let projStart = $state('');
-  let projEnd = $state('');
+  let projStart = $state<PeriodDate | undefined>(undefined);
+  let projEnd = $state<PeriodDate | undefined>(undefined);
   // Same reasoning as addingProject above, kept separate from it: the two forms open
   // independently (one per section) and must not blank each other.
   let addingJob = $state(false);
   let jobCompany = $state('');
   let jobRole = $state('');
   let jobLocation = $state('');
-  let jobStart = $state('');
-  let jobEnd = $state('');
+  let jobStart = $state<PeriodDate | undefined>(undefined);
+  let jobEnd = $state<PeriodDate | undefined>(undefined);
   /** Unplaced achievement being promoted into a new project employment. */
   let promotingAtomId = $state<string | null>(null);
   let promoteName = $state('');
@@ -188,8 +191,8 @@
     empSummary = employment.summary || '';
     empStack = (employment.stack ?? []).join(', ');
     empLink = employment.link || '';
-    empStart = employment.start || '';
-    empEnd = employment.end || '';
+    empStart = employment.start;
+    empEnd = employment.end;
   }
 
   function parseStack(raw: string): string[] | undefined {
@@ -206,8 +209,8 @@
     try {
       const body: Partial<ExperienceEmployment> = {
         kind: employment.kind,
-        start: empStart.trim() || undefined,
-        end: empEnd.trim() || undefined,
+        start: empStart,
+        end: empEnd,
         link: empLink.trim() || undefined,
         summary: empSummary.trim() || undefined,
         stack: parseStack(empStack),
@@ -262,14 +265,14 @@
         kind: 'project',
         name: projName.trim(),
         link: projLink.trim() || undefined,
-        start: projStart.trim() || undefined,
-        end: projEnd.trim() || undefined,
+        start: projStart,
+        end: projEnd,
       });
       addingProject = false;
       projName = '';
       projLink = '';
-      projStart = '';
-      projEnd = '';
+      projStart = undefined;
+      projEnd = undefined;
       await load();
       onBankMutated?.();
     } catch (e) {
@@ -288,15 +291,15 @@
         company: jobCompany.trim(),
         role: jobRole.trim() || undefined,
         location: jobLocation.trim() || undefined,
-        start: jobStart.trim() || undefined,
-        end: jobEnd.trim() || undefined,
+        start: jobStart,
+        end: jobEnd,
       });
       addingJob = false;
       jobCompany = '';
       jobRole = '';
       jobLocation = '';
-      jobStart = '';
-      jobEnd = '';
+      jobStart = undefined;
+      jobEnd = undefined;
       await load();
       onBankMutated?.();
     } catch (e) {
@@ -571,8 +574,8 @@
             jobCompany = '';
             jobRole = '';
             jobLocation = '';
-            jobStart = '';
-            jobEnd = '';
+            jobStart = undefined;
+            jobEnd = undefined;
           })}
 
           {#if addingJob}
@@ -584,8 +587,8 @@
                 <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobLocation} placeholder="Location" />
               </div>
               <div class="flex gap-2">
-                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobStart} placeholder="Start" />
-                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobEnd} placeholder="End" />
+                <PeriodDateInput bind:value={jobStart} placeholder="Start" />
+                <PeriodDateInput bind:value={jobEnd} placeholder="End" />
               </div>
               <div class="flex gap-2">
                 <Button size="sm" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button>
@@ -607,8 +610,8 @@
             addingProject = true;
             projName = '';
             projLink = '';
-            projStart = '';
-            projEnd = '';
+            projStart = undefined;
+            projEnd = undefined;
           })}
 
           {#if addingProject}
@@ -617,8 +620,8 @@
               <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projName} placeholder="Name" />
               <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projLink} placeholder="https://…" />
               <div class="flex gap-2">
-                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projStart} placeholder="Start" />
-                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projEnd} placeholder="End" />
+                <PeriodDateInput bind:value={projStart} placeholder="Start" />
+                <PeriodDateInput bind:value={projEnd} placeholder="End" />
               </div>
               <div class="flex gap-2">
                 <Button size="sm" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>
@@ -710,8 +713,8 @@
             <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empLink} placeholder="https://…" />
           {/if}
           <div class="flex gap-2">
-            <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empStart} placeholder="Start" />
-            <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empEnd} placeholder="End" />
+            <PeriodDateInput bind:value={empStart} placeholder="Start" />
+            <PeriodDateInput bind:value={empEnd} placeholder="End" />
           </div>
           <textarea
             class="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -735,9 +738,9 @@
         {#if employment.location}
           <span class="text-sm text-muted-foreground">· {employment.location}</span>
         {/if}
-        {#if employment.start || employment.end}
+        {#if employment.start || employment.end || employment.current}
           <span class="text-xs text-muted-foreground">
-            {employment.start}{employment.end ? ` – ${employment.end}` : ''}
+            {formatPeriodRange(employment.start, employment.end, employment.current)}
           </span>
         {/if}
         <div class="ml-auto flex gap-1">

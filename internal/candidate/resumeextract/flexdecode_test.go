@@ -3,14 +3,16 @@ package resumeextract
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
-// The model is asked to keep years/dates as written, but it frequently emits a bare
-// number (e.g. "year": 2019) instead of a string. encoding/json aborts the WHOLE
-// unmarshal on the first type mismatch, so one numeric year silently kills the entire
-// structured résumé (prod: user 291 — resume_structured never persisted). Number-or-string
-// free-form fields must decode either way.
-func TestUnmarshal_NumericDateFieldsDecodeAsStrings(t *testing.T) {
+// The model is asked for structured {"year":N,"month":N} dates, but it frequently emits
+// a bare number instead (prod: user 291 — resume_structured never persisted because
+// encoding/json aborts the WHOLE unmarshal on the first type mismatch, and one numeric
+// year silently killed the entire structured résumé). perioddate.PeriodDate.UnmarshalJSON's
+// defensive bare-number tolerance must still catch this with the new schema shape.
+func TestUnmarshal_NumericDateFieldsDecodeAsYears(t *testing.T) {
 	raw := `{
 		"full_name": "Ada Lovelace",
 		"experience": [{"title": "Engineer", "company": "Acme", "start": 2019, "end": 2021}],
@@ -22,12 +24,14 @@ func TestUnmarshal_NumericDateFieldsDecodeAsStrings(t *testing.T) {
 		t.Fatalf("unmarshal with numeric year/dates failed: %v", err)
 	}
 
-	if len(s.Education) != 1 || s.Education[0].Year != "2015" {
-		t.Errorf("Education[0].Year = %q, want %q", educationYear(s), "2015")
+	if len(s.Education) != 1 || *s.Education[0].Year != (perioddate.PeriodDate{Year: 2015}) {
+		t.Errorf("Education[0].Year = %+v, want {2015 0}", educationYear(s))
 	}
-	if len(s.Experience) != 1 || s.Experience[0].Start != "2019" || s.Experience[0].End != "2021" {
-		t.Errorf("Experience start/end = %q/%q, want %q/%q",
-			experienceStart(s), experienceEnd(s), "2019", "2021")
+	if len(s.Experience) != 1 ||
+		*s.Experience[0].Start != (perioddate.PeriodDate{Year: 2019}) ||
+		*s.Experience[0].End != (perioddate.PeriodDate{Year: 2021}) {
+		t.Errorf("Experience start/end = %+v/%+v, want {2019 0}/{2021 0}",
+			experienceStart(s), experienceEnd(s))
 	}
 }
 
@@ -52,23 +56,23 @@ func TestUnmarshal_TotalYearsFromString(t *testing.T) {
 	}
 }
 
-func educationYear(s Structured) string {
+func educationYear(s Structured) *perioddate.PeriodDate {
 	if len(s.Education) == 0 {
-		return ""
+		return nil
 	}
 	return s.Education[0].Year
 }
 
-func experienceStart(s Structured) string {
+func experienceStart(s Structured) *perioddate.PeriodDate {
 	if len(s.Experience) == 0 {
-		return ""
+		return nil
 	}
 	return s.Experience[0].Start
 }
 
-func experienceEnd(s Structured) string {
+func experienceEnd(s Structured) *perioddate.PeriodDate {
 	if len(s.Experience) == 0 {
-		return ""
+		return nil
 	}
 	return s.Experience[0].End
 }

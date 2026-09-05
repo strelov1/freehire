@@ -33,6 +33,7 @@ func Seed(s resumeextract.Structured) Document {
 			Location: e.Location,
 			Start:    e.Start,
 			End:      e.End,
+			Current:  e.Current,
 			Summary:  e.Summary,
 			Bullets:  e.Highlights,
 			Stack:    e.Stack,

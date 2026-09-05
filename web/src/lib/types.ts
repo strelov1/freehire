@@ -1292,8 +1292,14 @@ export interface CommunityReply {
   created_at: string;
 }
 
-/** One place where evidence was produced: a job or a project. Dates are free-form labels
- *  exactly as printed on a CV ("2021-03", "Mar 2021", "Present").
+/** A work-history/CV period boundary: a year, and optionally a month (1-12; absent means
+ *  the CV gave no month). Named PeriodDate, not Date, so it never shadows the language's
+ *  own global `Date` wherever this file's types are imported — mirrors the Go type
+ *  (internal/candidate/perioddate.PeriodDate) this is the wire shape of. */
+export type PeriodDate = { year: number; month?: number };
+
+/** One place where evidence was produced: a job or a project. Start/end are a structured
+ *  PeriodDate, matching the Go domain type — no parsing needed on this side either.
  *  Jobs expose `company`; projects expose the place label as `name` (same storage column). */
 export type ExperienceEmployment = {
   id: string;
@@ -1304,8 +1310,8 @@ export type ExperienceEmployment = {
   name?: string;
   role?: string;
   location?: string;
-  start?: string;
-  end?: string;
+  start?: PeriodDate;
+  end?: PeriodDate;
   current?: boolean;
   summary?: string;
   /** Portfolio URL — typically set on projects. */

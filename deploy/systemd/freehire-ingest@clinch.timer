@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest clinch
 [Timer]
-OnCalendar=*:02:00
+OnCalendar=*:43:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

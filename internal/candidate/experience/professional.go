@@ -150,6 +150,7 @@ func experienceRow(e Employment, highlights []string) resumeextract.Experience {
 		Location:   e.Location,
 		Start:      e.Start,
 		End:        e.End,
+		Current:    e.Current,
 		Summary:    e.Summary,
 		Highlights: highlights,
 		Stack:      e.Stack,

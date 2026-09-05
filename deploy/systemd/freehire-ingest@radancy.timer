@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest radancy
 [Timer]
-OnCalendar=*:20:00
+OnCalendar=*:45:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

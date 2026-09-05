@@ -88,21 +88,27 @@ describe('blankExperience', () => {
 
 describe('dateRange', () => {
   it('joins both ends with an en dash', () => {
-    expect(dateRange('2021', '2024')).toBe('2021 – 2024');
+    expect(dateRange({ year: 2021 }, { year: 2024 })).toBe('2021 – 2024');
   });
-  it('shows a single end when the other is blank', () => {
-    expect(dateRange('2021', '')).toBe('2021');
-    expect(dateRange('', 'Present')).toBe('Present');
+  it('shows a single end when the other is unset', () => {
+    expect(dateRange({ year: 2021 }, undefined)).toBe('2021');
+    expect(dateRange(undefined, undefined, true)).toBe('Present');
   });
-  it('is empty when both are blank', () => {
-    expect(dateRange('', '')).toBe('');
+  it('is empty when both are unset', () => {
+    expect(dateRange(undefined, undefined)).toBe('');
   });
 });
 
 describe('experienceHeader', () => {
   it('joins company | location | role with a trailing date range', () => {
     expect(
-      experienceHeader({ company: 'Acme', location: 'Remote', role: 'Eng', start: '2021', end: '2024' }),
+      experienceHeader({
+        company: 'Acme',
+        location: 'Remote',
+        role: 'Eng',
+        start: { year: 2021 },
+        end: { year: 2024 },
+      }),
     ).toBe('Acme | Remote | Eng (2021 – 2024)');
   });
   it('drops blank parts and omits the parens when there are no dates', () => {
@@ -113,7 +119,13 @@ describe('experienceHeader', () => {
 describe('educationLine', () => {
   it('combines degree, field, institution and dates', () => {
     expect(
-      educationLine({ degree: 'BSc', field: 'CS', institution: 'MIT', start: '2016', end: '2020' }),
+      educationLine({
+        degree: 'BSc',
+        field: 'CS',
+        institution: 'MIT',
+        start: { year: 2016 },
+        end: { year: 2020 },
+      }),
     ).toBe('BSc, CS | MIT (2016 – 2020)');
   });
   it('keeps only the present parts', () => {
@@ -132,7 +144,7 @@ describe('languageLabel', () => {
 
 describe('certificationLine', () => {
   it('joins name — issuer (year)', () => {
-    expect(certificationLine({ name: 'CKA', issuer: 'CNCF', year: '2023' })).toBe('CKA — CNCF (2023)');
+    expect(certificationLine({ name: 'CKA', issuer: 'CNCF', year: { year: 2023 } })).toBe('CKA — CNCF (2023)');
   });
   it('drops the missing pieces', () => {
     expect(certificationLine({ name: 'CKA' })).toBe('CKA');

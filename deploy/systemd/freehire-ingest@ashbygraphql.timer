@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest ashbygraphql
+[Timer]
+OnCalendar=*:46:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

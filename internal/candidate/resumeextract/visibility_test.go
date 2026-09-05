@@ -5,15 +5,17 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
-// noEndedExperience is a work history where no entry reads as current — every End is a
-// concrete date. Deliberately NOT ordered by recency; the masking rule is content-based
-// (the End label), so position must not matter to it.
+// noEndedExperience is a work history where no entry reads as current — every entry has
+// a concrete End and Current: false. Deliberately NOT ordered by recency; the masking
+// rule is content-based (Current), so position must not matter to it.
 func noEndedExperience() []Experience {
 	return []Experience{
-		{Title: "Engineer", Company: "Difference Co", Start: "2015-06", End: "2017-12"},
-		{Title: "Senior Engineer", Company: "Babbage Systems", Start: "2018-01", End: "2021-02"},
+		{Title: "Engineer", Company: "Difference Co", Start: &perioddate.PeriodDate{Year: 2015, Month: 6}, End: &perioddate.PeriodDate{Year: 2017, Month: 12}},
+		{Title: "Senior Engineer", Company: "Babbage Systems", Start: &perioddate.PeriodDate{Year: 2018, Month: 1}, End: &perioddate.PeriodDate{Year: 2021, Month: 2}},
 	}
 }
 
@@ -22,19 +24,18 @@ func noEndedExperience() []Experience {
 // wrong entry here.
 func oneCurrentExperience() []Experience {
 	return []Experience{
-		{Title: "Engineer", Company: "Difference Co", Start: "2015-06", End: "2017-12"},
-		{Title: "Staff Engineer", Company: "Analytical Engines", Start: "2021-03", End: "Present"},
+		{Title: "Engineer", Company: "Difference Co", Start: &perioddate.PeriodDate{Year: 2015, Month: 6}, End: &perioddate.PeriodDate{Year: 2017, Month: 12}},
+		{Title: "Staff Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2021, Month: 3}, Current: true},
 	}
 }
 
-// multipleCurrentExperience models two concurrent roles (End: "" and End: "CURRENT",
-// case-varied and whitespace-padded to exercise the trim+lowercase normalization) plus
-// one genuinely-ended role that must stay unmasked.
+// multipleCurrentExperience models two concurrent roles plus one genuinely-ended role
+// that must stay unmasked.
 func multipleCurrentExperience() []Experience {
 	return []Experience{
-		{Title: "Freelance Consultant", Company: "Self-employed", Start: "2022-01", End: ""},
-		{Title: "Engineer", Company: "Difference Co", Start: "2015-06", End: "2017-12"},
-		{Title: "Advisor", Company: "Babbage Systems", Start: "2023-05", End: "  CURRENT  "},
+		{Title: "Freelance Consultant", Company: "Self-employed", Start: &perioddate.PeriodDate{Year: 2022, Month: 1}, Current: true},
+		{Title: "Engineer", Company: "Difference Co", Start: &perioddate.PeriodDate{Year: 2015, Month: 6}, End: &perioddate.PeriodDate{Year: 2017, Month: 12}},
+		{Title: "Advisor", Company: "Babbage Systems", Start: &perioddate.PeriodDate{Year: 2023, Month: 5}, Current: true},
 	}
 }
 
@@ -97,34 +98,13 @@ func TestAnonymous_MultipleCurrentEntries_AllMasked(t *testing.T) {
 		t.Fatalf("Experience len = %d, want 3", len(got.Experience))
 	}
 	if got.Experience[0].Company != currentEmployerLabel {
-		t.Errorf("End=\"\" Experience[0].Company = %q, want masked as %q", got.Experience[0].Company, currentEmployerLabel)
+		t.Errorf("Current=true Experience[0].Company = %q, want masked as %q", got.Experience[0].Company, currentEmployerLabel)
 	}
 	if got.Experience[1].Company != "Difference Co" {
 		t.Errorf("ended Experience[1].Company = %q, want unchanged (\"Difference Co\")", got.Experience[1].Company)
 	}
 	if got.Experience[2].Company != currentEmployerLabel {
-		t.Errorf("End=\"  CURRENT  \" Experience[2].Company = %q, want masked as %q", got.Experience[2].Company, currentEmployerLabel)
-	}
-}
-
-// TestAnonymous_TodayLabelMasked pins notEndedLabels against internal/candidate/experience's
-// canonical "not ended" vocabulary (period_sort.go's isPresentLabel): "today" is one of
-// its recognized present labels and must mask here too, or the two would silently
-// disagree on which roles read as ongoing.
-func TestAnonymous_TodayLabelMasked(t *testing.T) {
-	s := fullStructured()
-	s.Experience = []Experience{
-		{Title: "Staff Engineer", Company: "Analytical Engines", Start: "2021-03", End: "Today"},
-	}
-
-	got := s.Anonymous()
-
-	if len(got.Experience) != 1 {
-		t.Fatalf("Experience len = %d, want 1", len(got.Experience))
-	}
-	if got.Experience[0].Company != currentEmployerLabel {
-		t.Errorf("End=%q Experience[0].Company = %q, want masked as %q",
-			"Today", got.Experience[0].Company, currentEmployerLabel)
+		t.Errorf("Current=true Experience[2].Company = %q, want masked as %q", got.Experience[2].Company, currentEmployerLabel)
 	}
 }
 

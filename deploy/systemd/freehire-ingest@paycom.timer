@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest paycom
 [Timer]
-OnCalendar=*-*-* 00/3:33:00
+OnCalendar=*-*-* 02/3:16:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

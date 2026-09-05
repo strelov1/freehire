@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
@@ -180,7 +180,7 @@ func (h *assistantHandlers) experienceSummary(ctx context.Context, userID int64,
 	for _, e := range employments {
 		out.Employments = append(out.Employments, employmentSummary{
 			ID: e.ID, Company: e.Company, Role: e.Role, Current: e.Current,
-			Period:       strings.TrimSpace(e.Start + " – " + e.End),
+			Period:       perioddate.FormatRange(e.Start, e.End, e.Current),
 			Achievements: counts[e.ID],
 		})
 		for _, skill := range e.Stack {

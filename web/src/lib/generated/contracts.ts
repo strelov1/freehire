@@ -1002,16 +1002,18 @@ export interface Professional {
   projects?: Project[];
 }
 /**
- * Experience is one work-history entry. Dates are kept as free-form strings as printed
- * on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
- * Summary is the role/company one-line context; Highlights are the achievement bullets.
+ * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
+ * (year, optional month) that the model interprets from however the CV prints the
+ * range; Current marks an ongoing role instead of a fabricated End. Summary is the
+ * role/company one-line context; Highlights are the achievement bullets.
  */
 export interface Experience {
   title?: string;
   company?: string;
   location?: string;
-  start?: string;
-  end?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
+  current?: boolean;
   summary?: string;
   highlights?: string[];
   stack?: string[];
@@ -1025,12 +1027,14 @@ export interface Project {
   highlights?: string[];
 }
 /**
- * Education is one education entry.
+ * Education is one education entry. Year is the same structured perioddate.PeriodDate as
+ * Experience's Start/End (month is rarely stated for a degree, so it is usually
+ * year-only, but the type stays the one shared shape rather than a bare int).
  */
 export interface Education {
   degree?: string;
   institution?: string;
-  year?: string;
+  year?: { year: number; month?: number };
 }
 
 /**
@@ -1145,15 +1149,17 @@ export interface Header {
   links?: string[];
 }
 /**
- * Experience is one work-history entry. Dates are free-form strings as printed on the
- * CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
+ * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
+ * (year, optional month) — the same shared type experience.Employment and
+ * resumeextract.Experience use. Rendering to PDF formats this back to display text
+ * (see renderer.go); no template deals with the structured value directly.
  */
 export interface ExperienceItem {
   role?: string;
   company?: string;
   location?: string;
-  start?: string;
-  end?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
   current?: boolean;
   /**
    * Summary is the one-line company/role context printed under the role header, before
@@ -1164,14 +1170,14 @@ export interface ExperienceItem {
   stack?: string[];
 }
 /**
- * Education is one education entry.
+ * Education is one education entry. Start/End are the same structured perioddate.PeriodDate.
  */
 export interface EducationItem {
   institution?: string;
   degree?: string;
   field?: string;
-  start?: string;
-  end?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
 }
 /**
  * SkillGroup is a named cluster of skills (e.g. "Languages" → Go, Python). A group with
@@ -1197,12 +1203,13 @@ export interface Project {
   bullets?: string[];
 }
 /**
- * Certification is one certification/credential.
+ * Certification is one certification/credential. Year is the same structured
+ * perioddate.PeriodDate.
  */
 export interface Certification {
   name?: string;
   issuer?: string;
-  year?: string;
+  year?: { year: number; month?: number };
 }
 
 /**

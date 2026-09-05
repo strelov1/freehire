@@ -19,6 +19,13 @@
   import { runLinkIntake, type LinkIntakeStep } from '$lib/linkIntake';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
   import { starterSuggestions, type Suggestion } from '$lib/suggestions';
+  import {
+    completeWord,
+    typedTail,
+    typewriterStart,
+    typewriterStep,
+    type TypewriterState,
+  } from '$lib/placeholderRoles';
   import { cn } from '$lib/ui';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
   import IntakeOutcome from './IntakeOutcome.svelte';
@@ -49,15 +56,17 @@
     counts = null,
     onOpenFilters,
   }: {
-    /** What an empty box shows. A single string is static; an array cycles through its
-     *  entries while the box is empty and untouched, fully composed by the caller (see
-     *  lib/placeholderRoles.ts).
+    /** What an empty box shows.
      *
-     *  One prop rather than a static one plus an override, because an override would
-     *  always win and leave the static string dead at every rotating call site — the
-     *  reader would have two candidates and no way to tell which one ships. Either way
-     *  this is never the field's accessible name; that is `label`. */
-    placeholder: string | string[];
+     *  A plain string is static. `{ prefix, roles }` types the roles one after another
+     *  into the tail of a sentence whose `prefix` never moves — see lib/placeholderRoles.ts,
+     *  which owns both the words and the stepping.
+     *
+     *  One prop rather than a static one plus an animated override, because an override
+     *  would always win and leave the static string dead at every animating call site —
+     *  the reader would have two candidates and no way to tell which one ships. Either
+     *  way this is never the field's accessible name; that is `label`. */
+    placeholder: string | { prefix: string; roles: string[] };
     /** The field's accessible name. Static, and required of every caller rather than
      *  defaulting to `placeholder`: the two were one prop until the placeholder learned
      *  to rotate, at which point a screen reader announced the input as whatever example
@@ -83,30 +92,45 @@
 
   const hero = $derived(size === 'hero');
 
-  // ---- the rotating placeholder ----
+  // ---- the typed placeholder ----
   //
   // Runs only while the box is empty and has never been touched. The first focus or
-  // keystroke stops it for the rest of the visit and freezes it on the entry then
-  // showing: text moving under the cursor while a query is being composed is the failure
-  // an animated placeholder invites, and reverting to a static string on stop would be a
-  // visible jump at the moment the visitor's attention is on the field.
+  // keystroke stops it for the rest of the visit — text moving under the cursor while a
+  // query is being composed is the failure an animated placeholder invites.
   //
-  // The list itself is composed in lib/placeholderRoles.ts, from the generated category
-  // vocabulary rather than from hand-written strings.
-  // Long enough to read the word and notice it is an example, short enough that a
-  // visitor who pauses sees it is a list rather than a typo. The fade is a fifth of it,
-  // so the box is legible for the great majority of each step.
-  const ROTATE_MS = 2500;
-  const FADE_MS = 200;
+  // Only the tail moves; `prefix` is never rewritten, so the sentence stays readable and
+  // the eye has one place to look. The words and the stepping both live in
+  // lib/placeholderRoles.ts, which is where they can be tested without a browser.
+  const typing = $derived(typeof placeholder === 'string' ? null : placeholder);
 
-  const rotation = $derived(Array.isArray(placeholder) ? placeholder : []);
+  // Capturing just the initial value is the intent: this is where the animation STARTS,
+  // and the server renders it. A caller that later swaps its word list is handled by the
+  // stepper instead — a role index the new list has no word for steps past on the next
+  // tick rather than needing this seed to be recomputed.
+  // svelte-ignore state_referenced_locally
+  let typewriter = $state<TypewriterState>(
+    typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles),
+  );
+  let typingStopped = $state(false);
 
-  let rotationIndex = $state(0);
-  let rotationStopped = $state(false);
-  let placeholderFading = $state(false);
+  function stopTyping() {
+    if (typingStopped || !typing) return;
+    // Finish the word on the way out. Freezing on "Devo" reads as a typo rather than as
+    // an animation that stopped, and it would do so at the exact moment the visitor's
+    // attention arrived on the field.
+    typewriter = completeWord(typewriter, typing.roles);
+    typingStopped = true;
+  }
 
-  function stopRotation() {
-    rotationStopped = true;
+  /** Undo a stop that no visitor asked for — see the autofocus effect below. */
+  function resumeTyping() {
+    if (!typing) return;
+    // Both halves, not just the flag: stopTyping also FILLED IN the current word, so
+    // clearing the flag alone would leave the animation resuming from a finished word
+    // and skip typing the very first one — on the homepage hero, the one surface this
+    // exists for.
+    typewriter = typewriterStart(typing.roles);
+    typingStopped = false;
   }
 
   // Sampled AND subscribed: the OS-level setting can be turned on mid-visit, and reading
@@ -121,33 +145,40 @@
   });
 
   $effect(() => {
-    // Under reduced motion the first entry stands alone, so no timer is started at all.
-    if (rotationStopped || reduceMotion || rotation.length < 2) return;
+    if (typingStopped || !typing) return;
+    const roles = typing.roles;
+    // Under reduced motion nothing is scheduled at all and the first role simply stands.
+    if (reduceMotion || roles.length === 0) return;
 
-    let swap: ReturnType<typeof setTimeout> | undefined;
-    const tick = setInterval(() => {
-      placeholderFading = true;
-      swap = setTimeout(() => {
-        rotationIndex = (rotationIndex + 1) % rotation.length;
-        placeholderFading = false;
-      }, FADE_MS);
-    }, ROTATE_MS);
-    return () => {
-      clearInterval(tick);
-      clearTimeout(swap);
-      // Every teardown path — a stop, an unmount, reduced motion switched on — can land
-      // inside the fade window, where the text is transparent and the swap that would
-      // restore it has just been cancelled. Without this the field keeps a placeholder
-      // nobody can see, which is worse than the one it was rotating away from.
-      placeholderFading = false;
+    // One chained timeout rather than an interval: every step has its own delay (a typed
+    // character, a faster deleted one, and the long hold on a finished word), so a fixed
+    // tick would have to be the shortest of them and then count its way to the others.
+    //
+    // `untrack` is what makes that chain real. Read plainly, the seed below would
+    // subscribe this effect to the very state its own callback writes: each character
+    // would invalidate the effect, the cleanup would cancel the link already scheduled,
+    // and the animation would be driven by re-runs at the mercy of flush latency rather
+    // than by the delays computed here.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = (from: TypewriterState) => {
+      const { next, delayMs } = typewriterStep(from, roles);
+      timer = setTimeout(() => {
+        typewriter = next;
+        schedule(next);
+      }, delayMs);
     };
+    schedule(untrack(() => typewriter));
+    return () => clearTimeout(timer);
   });
 
-  // `rotation[0]` is what server-rendered markup carries, since the effects above are
-  // client-only — so the box never paints empty and then fills in.
-  const shownPlaceholder = $derived(
-    Array.isArray(placeholder) ? (placeholder[rotationIndex] ?? placeholder[0] ?? '') : placeholder,
-  );
+  // Server-rendered markup carries the prefix with an empty tail, since the effect above
+  // is client-only — so the sentence is already there and only its last word arrives.
+  // Under reduced motion the first role is shown whole instead.
+  const shownPlaceholder = $derived.by(() => {
+    if (!typing) return placeholder as string;
+    if (reduceMotion && !typingStopped) return typing.prefix + (typing.roles[0] ?? '');
+    return typing.prefix + typedTail(typewriter, typing.roles);
+  });
 
   // How long the draft must sit still before the suggestions are refetched.
   //
@@ -194,10 +225,10 @@
     // put here", so close it back: their first click or keystroke opens it as usual.
     dismissed = true;
     // Same reasoning, and the same undo: the focus above fires the field's own handler,
-    // which stops the placeholder rotation. On the homepage — where this box IS the
-    // page, and the one surface the rotation exists for — that killed it before the
-    // first tick. A caret nobody placed has not interrupted anything.
-    rotationStopped = false;
+    // which stops the placeholder animation. On the homepage — where this box IS the
+    // page, and the one surface the animation exists for — that killed it before the
+    // first character. A caret nobody placed has not interrupted anything.
+    resumeTyping();
   });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
@@ -723,12 +754,12 @@
         // autofocused hero would stay silent when its own field is clicked.
         dismissed = false;
         activeIndex = -1;
-        stopRotation();
+        stopTyping();
       }}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
-        stopRotation();
+        stopTyping();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         linkStep = null;
@@ -746,7 +777,7 @@
         // box permanently silent for the rest of the visit.
         dismissed = false;
         activeIndex = -1;
-        stopRotation();
+        stopTyping();
       }}
       onkeydown={onKeydown}
       type="text"
@@ -758,11 +789,7 @@
       aria-expanded={suggestOpen}
       aria-controls="role-suggestions"
       aria-activedescendant={activeIndex >= 0 ? `role-suggestion-${activeIndex}` : undefined}
-      style="--placeholder-fade: {FADE_MS}ms"
-      class={cn(
-        'placeholder-rotates min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground',
-        placeholderFading && 'placeholder-faded',
-      )}
+      class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
     />
     {#if draft.text}
       <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor
@@ -970,25 +997,3 @@
     </ul>
   {/if}
 </div>
-
-<style>
-  /* The rotating placeholder's crossfade.
-     Transitioning ::placeholder colour rather than overlaying a positioned span keeps
-     the box's flex row untouched — the field, the location prefix, the clear button and
-     the filters trigger already negotiate width in there, and a second element is a
-     layout risk taken for a cosmetic gain.
-
-     The duration comes from the script's FADE_MS rather than being written twice: it is
-     the same measurement — how long the text is held invisible before it is swapped —
-     and two copies would drift into swapping the word while it was still legible.
-
-     No reduced-motion rule here: under that setting no timer is ever started, so nothing
-     ever adds the faded class and a transition that can't run needs no switching off. */
-  .placeholder-rotates::placeholder {
-    transition: color var(--placeholder-fade) ease;
-  }
-
-  .placeholder-faded::placeholder {
-    color: transparent;
-  }
-</style>

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -207,15 +208,17 @@ func (d Document) withoutContacts() Document {
 	return d
 }
 
-// Experience is one work-history entry. Dates are free-form strings as printed on the
-// CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
+// Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
+// (year, optional month) — the same shared type experience.Employment and
+// resumeextract.Experience use. Rendering to PDF formats this back to display text
+// (see renderer.go); no template deals with the structured value directly.
 type ExperienceItem struct {
-	Role     string `json:"role,omitempty"`
-	Company  string `json:"company,omitempty"`
-	Location string `json:"location,omitempty"`
-	Start    string `json:"start,omitempty"`
-	End      string `json:"end,omitempty"`
-	Current  bool   `json:"current,omitempty"`
+	Role     string                 `json:"role,omitempty"`
+	Company  string                 `json:"company,omitempty"`
+	Location string                 `json:"location,omitempty"`
+	Start    *perioddate.PeriodDate `json:"start,omitempty"`
+	End      *perioddate.PeriodDate `json:"end,omitempty"`
+	Current  bool                   `json:"current,omitempty"`
 	// Summary is the one-line company/role context printed under the role header, before
 	// the bullets. Stack is the per-role technology line printed after the bullets.
 	Summary string   `json:"summary,omitempty"`
@@ -223,13 +226,13 @@ type ExperienceItem struct {
 	Stack   []string `json:"stack,omitempty"`
 }
 
-// Education is one education entry.
+// Education is one education entry. Start/End are the same structured perioddate.PeriodDate.
 type EducationItem struct {
-	Institution string `json:"institution,omitempty"`
-	Degree      string `json:"degree,omitempty"`
-	Field       string `json:"field,omitempty"`
-	Start       string `json:"start,omitempty"`
-	End         string `json:"end,omitempty"`
+	Institution string                 `json:"institution,omitempty"`
+	Degree      string                 `json:"degree,omitempty"`
+	Field       string                 `json:"field,omitempty"`
+	Start       *perioddate.PeriodDate `json:"start,omitempty"`
+	End         *perioddate.PeriodDate `json:"end,omitempty"`
 }
 
 // SkillGroup is a named cluster of skills (e.g. "Languages" → Go, Python). A group with
@@ -252,11 +255,12 @@ type Project struct {
 	Bullets []string `json:"bullets,omitempty"`
 }
 
-// Certification is one certification/credential.
+// Certification is one certification/credential. Year is the same structured
+// perioddate.PeriodDate.
 type Certification struct {
-	Name   string `json:"name,omitempty"`
-	Issuer string `json:"issuer,omitempty"`
-	Year   string `json:"year,omitempty"`
+	Name   string                 `json:"name,omitempty"`
+	Issuer string                 `json:"issuer,omitempty"`
+	Year   *perioddate.PeriodDate `json:"year,omitempty"`
 }
 
 // EmptyDocument returns an empty skeleton (default margins, no content) that is already
@@ -292,13 +296,13 @@ func sanitizeExperience(e ExperienceItem) (ExperienceItem, bool) {
 	e.Role = clip(e.Role, maxShortRunes)
 	e.Company = clip(e.Company, maxShortRunes)
 	e.Location = clip(e.Location, maxShortRunes)
-	e.Start = clip(e.Start, maxShortRunes)
-	e.End = clip(e.End, maxShortRunes)
+	e.Start = perioddate.Sanitize(e.Start)
+	e.End = perioddate.Sanitize(e.End)
 	e.Summary = clip(e.Summary, maxBulletRunes)
 	e.Bullets = limit(nonEmpty(mapStrings(e.Bullets, maxBulletRunes)), MaxBullets)
 	e.Stack = limit(nonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkillItems)
 	keep := e.Role != "" || e.Company != "" || e.Location != "" ||
-		e.Start != "" || e.End != "" || e.Summary != "" || len(e.Bullets) > 0
+		e.Start != nil || e.End != nil || e.Summary != "" || len(e.Bullets) > 0
 	return e, keep
 }
 
@@ -306,9 +310,9 @@ func sanitizeEducation(e EducationItem) (EducationItem, bool) {
 	e.Institution = clip(e.Institution, maxShortRunes)
 	e.Degree = clip(e.Degree, maxShortRunes)
 	e.Field = clip(e.Field, maxShortRunes)
-	e.Start = clip(e.Start, maxShortRunes)
-	e.End = clip(e.End, maxShortRunes)
-	keep := e.Institution != "" || e.Degree != "" || e.Field != "" || e.Start != "" || e.End != ""
+	e.Start = perioddate.Sanitize(e.Start)
+	e.End = perioddate.Sanitize(e.End)
+	keep := e.Institution != "" || e.Degree != "" || e.Field != "" || e.Start != nil || e.End != nil
 	return e, keep
 }
 
@@ -335,8 +339,8 @@ func sanitizeProject(p Project) (Project, bool) {
 func sanitizeCertification(c Certification) (Certification, bool) {
 	c.Name = clip(c.Name, maxShortRunes)
 	c.Issuer = clip(c.Issuer, maxShortRunes)
-	c.Year = clip(c.Year, maxShortRunes)
-	return c, c.Name != "" || c.Issuer != "" || c.Year != ""
+	c.Year = perioddate.Sanitize(c.Year)
+	return c, c.Name != "" || c.Issuer != "" || c.Year != nil
 }
 
 // --- small helpers (mirror internal/candidate/resumeextract) ---

@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // ringCentral is one role as a CV states it, used across the import tests.
@@ -11,7 +13,7 @@ func ringCentral() ImportEntry {
 	return ImportEntry{
 		Employment: Employment{
 			Kind: KindJob, Company: "RingCentral", Role: "Senior Software Engineer",
-			Location: "USA, Remote", Start: "2023-09", End: "Present", Current: true,
+			Location: "USA, Remote", Start: &perioddate.PeriodDate{Year: 2023, Month: 9}, Current: true,
 			Summary: "Global SaaS leader in business communications",
 			Stack:   []string{"typescript", "golang", "mongodb"},
 		},

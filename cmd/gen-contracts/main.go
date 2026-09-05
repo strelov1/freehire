@@ -183,6 +183,12 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/candidate/resumeextract",
 				OutputPath:   resumeextractTS,
 				IncludeFiles: []string{"structured.go"},
+				// perioddate.PeriodDate is inlined rather than generated as its own type: it
+				// is two fields, shared by this package and cv below, and — unlike every
+				// other TypeMappings entry here — must NOT be named PeriodDate's Go name
+				// (Date) in TypeScript, since that collides with the language's own global
+				// Date.
+				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
 			},
 			{
 				// The editable CV-builder document wire shape (Document + Header +
@@ -194,6 +200,8 @@ func genStructs() (string, error) {
 				// autopilot.go carries the run report's wire shape; its server-side rules
 				// (sanitizing, the owner-scoped writes) live in autopilot_store.go and stay here.
 				IncludeFiles: []string{"cv.go", "autopilot.go"},
+				// See the resumeextract entry above — same type, same reason to inline it.
+				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
 			},
 			{
 				// One entry in a CV's history feed. Only the wire file: the operations, the

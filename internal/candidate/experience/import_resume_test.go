@@ -3,6 +3,7 @@ package experience
 import (
 	"testing"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 )
 
@@ -13,12 +14,13 @@ func structuredFixture() resumeextract.Structured {
 		Experience: []resumeextract.Experience{
 			{
 				Title: "Senior Software Engineer", Company: "RingCentral", Location: "USA, Remote",
-				Start: "2023-09", End: "Present", Summary: "Global SaaS leader",
+				Start: &perioddate.PeriodDate{Year: 2023, Month: 9}, Current: true, Summary: "Global SaaS leader",
 				Highlights: []string{"Cut latency 20s to 1s", "Sustained a 99.999% SLA"},
 				Stack:      []string{"golang", "mongodb"},
 			},
 			{
-				Title: "Team Lead", Company: "Sber", Start: "2020-04", End: "2022-04",
+				Title: "Team Lead", Company: "Sber",
+				Start: &perioddate.PeriodDate{Year: 2020, Month: 4}, End: &perioddate.PeriodDate{Year: 2022, Month: 4},
 				Highlights: []string{"Cut report load by 95%"},
 			},
 		},
@@ -61,26 +63,19 @@ func TestImportEntriesFromStructured(t *testing.T) {
 	}
 }
 
-// A CV states "Present" rather than a flag, so the current role is derived from the end
-// label. Getting this wrong would mark every past job as current on the seeded CV.
-func TestImportEntriesDeriveTheCurrentRole(t *testing.T) {
+// Current is copied straight from what resumeextract decided (the model reads "Present"
+// or an absent end date and sets Current itself, per its own schema) — EntriesFromResume
+// no longer derives it from an End label.
+func TestImportEntriesCarryCurrentThrough(t *testing.T) {
 	tests := []struct {
-		end  string
-		want bool
-	}{
-		{"Present", true},
-		{"present", true},
-		{"Current", true},
-		{"", true}, // an open-ended role
-		{"2022-04", false},
-		{"Apr 2022", false},
-	}
+		current bool
+	}{{true}, {false}}
 	for _, tt := range tests {
 		entries := EntriesFromResume(resumeextract.Structured{
-			Experience: []resumeextract.Experience{{Company: "X", Title: "Y", End: tt.end}},
+			Experience: []resumeextract.Experience{{Company: "X", Title: "Y", Current: tt.current}},
 		})
-		if got := entries[0].Employment.Current; got != tt.want {
-			t.Errorf("end %q -> current = %v, want %v", tt.end, got, tt.want)
+		if got := entries[0].Employment.Current; got != tt.current {
+			t.Errorf("current %v -> got %v", tt.current, got)
 		}
 	}
 }

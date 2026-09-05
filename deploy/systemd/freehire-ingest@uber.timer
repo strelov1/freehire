@@ -1,0 +1,8 @@
+[Unit]
+Description=timer ingest uber
+[Timer]
+OnCalendar=*:08:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target

@@ -93,7 +93,7 @@ var blocks = map[string][]string{
 		// platform and derives nothing itself — the caller runs the same dictionaries
 		// the CV path runs, which is what keeps one text from resolving two ways.
 		"linkedinprofile",
-		"matchanalysis", "pii", "resume", "resumeextract",
+		"matchanalysis", "pii", "perioddate", "resume", "resumeextract",
 		// survey holds the candidate's self-reported segmentation answers (job-search
 		// stage, biggest challenge, current income). It sits here rather than in engage,
 		// whose digests are its most likely future reader, because it states what a

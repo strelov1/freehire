@@ -30,12 +30,12 @@ var (
 // unit test. Every method takes the owner's id, so there is no path that reads or writes
 // a row without one.
 type Repository interface {
-	ListEmployments(ctx context.Context, userID int64) ([]db.ExperienceEmployment, error)
-	GetEmployment(ctx context.Context, id uuid.UUID, userID int64) (db.ExperienceEmployment, error)
-	FindEmployment(ctx context.Context, userID int64, company, role string) (db.ExperienceEmployment, error)
-	CreateEmployment(ctx context.Context, userID int64, e Employment) (db.ExperienceEmployment, error)
-	UpdateEmployment(ctx context.Context, id uuid.UUID, userID int64, e Employment) (db.ExperienceEmployment, error)
-	FillEmploymentBlanks(ctx context.Context, id uuid.UUID, userID int64, e Employment) (db.ExperienceEmployment, error)
+	ListEmployments(ctx context.Context, userID int64) ([]employmentRow, error)
+	GetEmployment(ctx context.Context, id uuid.UUID, userID int64) (employmentRow, error)
+	FindEmployment(ctx context.Context, userID int64, company, role string) (employmentRow, error)
+	CreateEmployment(ctx context.Context, userID int64, e Employment) (employmentRow, error)
+	UpdateEmployment(ctx context.Context, id uuid.UUID, userID int64, e Employment) (employmentRow, error)
+	FillEmploymentBlanks(ctx context.Context, id uuid.UUID, userID int64, e Employment) (employmentRow, error)
 	DeleteEmployment(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
 
 	ListAtoms(ctx context.Context, userID int64) ([]db.ExperienceAtom, error)
@@ -93,8 +93,10 @@ func (s *Store) syncProfileSkills(ctx context.Context, userID int64, skills []st
 }
 
 // ListEmployments returns the owner's places of work in reverse chronological order
-// (current roles first). Free-form period labels are sorted via a parsed key — not raw
-// `ORDER BY period_start` text order.
+// (current roles first). The SQL query already orders on the structured period columns
+// (migration 0135), but Store re-sorts in Go too so a fake Repository (see fakeRepo,
+// which returns rows in plain insertion order) and the real one agree on ordering, and
+// so a tie beyond the date itself resolves deterministically.
 func (s *Store) ListEmployments(ctx context.Context, userID int64) ([]Employment, error) {
 	rows, err := s.repo.ListEmployments(ctx, userID)
 	if err != nil {
@@ -104,9 +106,6 @@ func (s *Store) ListEmployments(ctx context.Context, userID int64) ([]Employment
 	for _, row := range rows {
 		out = append(out, employmentFromRow(row))
 	}
-	// SQL ORDER BY period_start is lexicographic on free-form labels ("October 2018"
-	// ranks above "2024"). Re-sort here so every bank reader (WorkHistory, seed,
-	// Professional) sees reverse-chronological roles.
 	sortEmploymentsChronological(out)
 	return out, nil
 }
@@ -389,11 +388,13 @@ func (s *Store) ownsEmployment(ctx context.Context, userID int64, employmentID *
 	return nil
 }
 
-func employmentFromRow(row db.ExperienceEmployment) Employment {
+func employmentFromRow(row employmentRow) Employment {
 	return Employment{
 		ID: row.ID, Kind: row.Kind, Company: row.Company, Role: row.Role,
-		Location: row.Location, Start: row.PeriodStart, End: row.PeriodEnd,
-		Current: row.IsCurrent, Summary: row.Summary, Link: row.Link, Stack: row.Stack,
+		Location: row.Location,
+		Start:    PeriodFromColumns(row.PeriodStartYear, row.PeriodStartMonth),
+		End:      PeriodFromColumns(row.PeriodEndYear, row.PeriodEndMonth),
+		Current:  row.IsCurrent, Summary: row.Summary, Link: row.Link, Stack: row.Stack,
 	}
 }
 

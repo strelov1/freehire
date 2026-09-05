@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest taleo
 [Timer]
-OnCalendar=*-*-* 01/3:50:00
+OnCalendar=*-*-* 00/3:33:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

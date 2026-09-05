@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest enlizt
 [Timer]
-OnCalendar=*:55:00
+OnCalendar=*:36:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

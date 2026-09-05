@@ -19,6 +19,8 @@ import type {
   Analysis,
   AutopilotEntry,
 } from './generated/contracts';
+import type { PeriodDate } from './types';
+import { formatPeriodDate, formatPeriodRange } from './periodDate';
 
 /** CV metadata (list rows and mutation responses). */
 export interface CvMeta {
@@ -237,8 +239,8 @@ export const blankExperience = (): ExperienceItem => ({
   role: '',
   company: '',
   location: '',
-  start: '',
-  end: '',
+  start: undefined,
+  end: undefined,
   current: false,
   summary: '',
   bullets: [''],
@@ -249,8 +251,8 @@ export const blankEducation = (): EducationItem => ({
   institution: '',
   degree: '',
   field: '',
-  start: '',
-  end: '',
+  start: undefined,
+  end: undefined,
 });
 
 export const blankSkillGroup = (): SkillGroup => ({ group: '', items: [] });
@@ -259,7 +261,7 @@ export const blankLanguage = (): Language => ({ name: '', level: '' });
 
 export const blankProject = (): Project => ({ name: '', link: '', bullets: [''] });
 
-export const blankCertification = (): Certification => ({ name: '', issuer: '', year: '' });
+export const blankCertification = (): Certification => ({ name: '', issuer: '', year: undefined });
 
 /** The title to show for a CV whose title is blank. */
 export function cvTitle(title: string): string {
@@ -268,24 +270,24 @@ export function cvTitle(title: string): string {
 
 // ---- Preview projections ----
 // Pure string composers that mirror the classic-ats Typst template's layout rules, so the live
-// HTML preview reads the same as the rendered PDF. Free-form dates are shown as written (no
-// parsing), and blank parts are dropped rather than leaving stray separators.
+// HTML preview reads the same as the rendered PDF. Dates are PeriodDate (see periodDate.ts,
+// the frontend counterpart of the renderer's own format-before-render step), and blank parts
+// are dropped rather than leaving stray separators.
 
-/** A free-form date range: "start – end", or whichever end is present, or ''. */
-export function dateRange(start?: string, end?: string): string {
-  const a = (start ?? '').trim();
-  const b = (end ?? '').trim();
-  if (a && b) return `${a} – ${b}`;
-  return a || b;
+/** A period range: "start – end" (formatPeriodRange), or '' if neither side (nor current) is set. */
+export function dateRange(start?: PeriodDate, end?: PeriodDate, current?: boolean): string {
+  return formatPeriodRange(start, end, current);
 }
 
 const joinNonEmpty = (parts: (string | undefined)[], sep: string): string =>
   parts.map((p) => (p ?? '').trim()).filter((p) => p !== '').join(sep);
 
 /** An experience role header: "Company | Location | Role (start – end)", blanks dropped. */
-export function experienceHeader(e: Pick<ExperienceItem, 'company' | 'location' | 'role' | 'start' | 'end'>): string {
+export function experienceHeader(
+  e: Pick<ExperienceItem, 'company' | 'location' | 'role' | 'start' | 'end' | 'current'>,
+): string {
   const head = joinNonEmpty([e.company, e.location, e.role], ' | ');
-  const dr = dateRange(e.start, e.end);
+  const dr = dateRange(e.start, e.end, e.current);
   if (!dr) return head;
   return head ? `${head} (${dr})` : `(${dr})`;
 }
@@ -310,6 +312,7 @@ export function languageLabel(l: Pick<Language, 'name' | 'level'>): string {
 export function certificationLine(c: Pick<Certification, 'name' | 'issuer' | 'year'>): string {
   let line = (c.name ?? '').trim();
   if ((c.issuer ?? '').trim()) line = `${line} — ${(c.issuer ?? '').trim()}`;
-  if ((c.year ?? '').trim()) line = `${line} (${(c.year ?? '').trim()})`;
+  const year = formatPeriodDate(c.year);
+  if (year) line = `${line} (${year})`;
   return line;
 }

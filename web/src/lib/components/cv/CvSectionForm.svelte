@@ -11,6 +11,7 @@
     blankCertification,
   } from '$lib/cv';
   import StringListEditor from './StringListEditor.svelte';
+  import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
 
   // The controlled section form for one CV: binds directly to a caller-owned Document (and CV
   // title) and adds/removes rows per section. It does no data-fetching and no saving — the host
@@ -85,8 +86,8 @@
             <Input bind:value={entry.company} placeholder="Company" />
             <Input bind:value={entry.location} placeholder="Location" />
             <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
-              <Input bind:value={entry.start} placeholder="Start (e.g. 2021)" />
-              <Input bind:value={entry.end} placeholder="End / Present" />
+              <PeriodDateInput bind:value={entry.start} placeholder="Start" />
+              <PeriodDateInput bind:value={entry.end} placeholder="End" />
             </div>
           </div>
           <Button variant="ghost" size="icon" aria-label="Remove role" onclick={() => removeAt('experience', i)}>
@@ -121,8 +122,8 @@
           <Input bind:value={entry.degree} placeholder="Degree" />
           <Input bind:value={entry.field} placeholder="Field" />
           <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
-            <Input bind:value={entry.start} placeholder="Start" />
-            <Input bind:value={entry.end} placeholder="End" />
+            <PeriodDateInput bind:value={entry.start} placeholder="Start" />
+            <PeriodDateInput bind:value={entry.end} placeholder="End" />
           </div>
         </div>
         <Button variant="ghost" size="icon" aria-label="Remove education" onclick={() => removeAt('education', i)}>
@@ -206,7 +207,7 @@
       <div class="flex items-center gap-2">
         <Input bind:value={entry.name} placeholder="Name" class="flex-1" />
         <Input bind:value={entry.issuer} placeholder="Issuer" class="flex-1" />
-        <Input bind:value={entry.year} placeholder="Year" class="w-24" />
+        <PeriodDateInput bind:value={entry.year} placeholder="Year" />
         <Button variant="ghost" size="icon" aria-label="Remove certification" onclick={() => removeAt('certifications', i)}>
           <Trash2 class="h-4 w-4" />
         </Button>

@@ -16,6 +16,8 @@ import (
 	"testing"
 
 	"github.com/ledongthuc/pdf"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 func TestResolveTemplateDefaultsAndRejectsUnknown(t *testing.T) {
@@ -55,7 +57,7 @@ func TestTypstRendererProducesExtractableATSText(t *testing.T) {
 		Header:  Header{FullName: "Ada Lovelace", Email: "ada@example.com"},
 		Summary: "Backend engineer with a decade of systems work.",
 		Experience: []ExperienceItem{
-			{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+			{Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 				Bullets: []string{"Cut latency by 40%."}},
 		},
 		Skills: []SkillGroup{{Group: "Languages", Items: []string{"Go", "Python", "SQL"}}},
@@ -114,10 +116,10 @@ func TestAllTemplatesProduceExtractableText(t *testing.T) {
 		Header:  Header{FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+1 555", Location: "London", Links: []string{"github.com/ada"}},
 		Summary: "Backend engineer with a decade of systems work.",
 		Experience: []ExperienceItem{
-			{Role: "Senior Engineer", Company: "Analytical Engines", Location: "London", Start: "2018", End: "Present",
+			{Role: "Senior Engineer", Company: "Analytical Engines", Location: "London", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 				Summary: "Led core systems.", Bullets: []string{"Cut latency by 40%."}, Stack: []string{"Go", "Python"}},
 		},
-		Education: []EducationItem{{Degree: "BSc", Field: "CS", Institution: "Cambridge", Start: "2010", End: "2014"}},
+		Education: []EducationItem{{Degree: "BSc", Field: "CS", Institution: "Cambridge", Start: &perioddate.PeriodDate{Year: 2010}, End: &perioddate.PeriodDate{Year: 2014}}},
 		Skills:    []SkillGroup{{Group: "Languages", Items: []string{"Go", "Python", "SQL"}}},
 		Languages: []Language{{Name: "English", Level: "Native"}},
 	}
@@ -209,6 +211,63 @@ func TestRenderPayloadCarriesHasPhoto(t *testing.T) {
 		if _, ok := decoded["header"]; !ok {
 			t.Errorf("payload lost the document's fields: %s", data)
 		}
+	}
+}
+
+// TestRenderPayloadFormatsStructuredDatesToStrings is task 4.4/4.5's non-typst-dependent
+// half: the templates' daterange-style helpers expect start/end/year as plain strings,
+// exactly as they did before Start/End/Year became perioddate.PeriodDate — this proves that
+// contract at the JSON boundary the templates actually read, without needing the typst
+// binary installed.
+func TestRenderPayloadFormatsStructuredDatesToStrings(t *testing.T) {
+	doc := Document{
+		Header: Header{FullName: "Ada Lovelace"},
+		Experience: []ExperienceItem{
+			{Role: "Senior Engineer", Company: "Analytical Engines",
+				Start: &perioddate.PeriodDate{Year: 2018, Month: 3}, Current: true},
+		},
+		Education: []EducationItem{
+			{Degree: "BSc", Institution: "Cambridge",
+				Start: &perioddate.PeriodDate{Year: 2010}, End: &perioddate.PeriodDate{Year: 2014}},
+		},
+		Certifications: []Certification{
+			{Name: "CKA", Issuer: "CNCF", Year: &perioddate.PeriodDate{Year: 2021}},
+		},
+	}
+	data, err := renderPayload(doc, false, LinkHrefs{})
+	if err != nil {
+		t.Fatalf("renderPayload: %v", err)
+	}
+	var decoded struct {
+		Experience []struct {
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"experience"`
+		Education []struct {
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"education"`
+		Certifications []struct {
+			Year string `json:"year"`
+		} `json:"certifications"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if got := decoded.Experience[0].Start; got != "Mar 2018" {
+		t.Errorf("experience start = %q, want %q", got, "Mar 2018")
+	}
+	if got := decoded.Experience[0].End; got != "Present" {
+		t.Errorf("experience end = %q, want %q (Current: true)", got, "Present")
+	}
+	if got := decoded.Education[0].Start; got != "2010" {
+		t.Errorf("education start = %q, want %q", got, "2010")
+	}
+	if got := decoded.Education[0].End; got != "2014" {
+		t.Errorf("education end = %q, want %q", got, "2014")
+	}
+	if got := decoded.Certifications[0].Year; got != "2021" {
+		t.Errorf("certification year = %q, want %q", got, "2021")
 	}
 }
 
@@ -344,7 +403,7 @@ func styledDoc(s Style) Document {
 		Header:  Header{FullName: "Ada Lovelace", Email: "ada@example.com", Location: "London"},
 		Summary: "Backend engineer with a decade of systems work.",
 		Experience: []ExperienceItem{
-			{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+			{Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2018}, Current: true,
 				Bullets: []string{"Cut latency by 40%."}, Stack: []string{"Go"}},
 		},
 		Skills: []SkillGroup{{Group: "Languages", Items: []string{"Go", "Python", "SQL"}}},
@@ -559,7 +618,7 @@ func TestEveryTemplateRendersLinksAsClickableLinks(t *testing.T) {
 		// pass, and this test exists to hold templates that do not exist yet.
 		Header:     Header{FullName: "Ada Lovelace", Email: "ada@example.com", Links: []string{"github.com/ada", "linkedin.com/in/ada"}},
 		Summary:    "Backend engineer with a decade of systems work.",
-		Experience: []ExperienceItem{{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present", Bullets: []string{"Cut latency by 40%."}}},
+		Experience: []ExperienceItem{{Role: "Senior Engineer", Company: "Analytical Engines", Start: &perioddate.PeriodDate{Year: 2018}, Current: true, Bullets: []string{"Cut latency by 40%."}}},
 		Projects:   []Project{{Name: "opensched", Link: "opensched.dev", Bullets: []string{"A tiny cron scheduler."}}},
 		Skills:     []SkillGroup{{Group: "Languages", Items: []string{"Go"}}},
 	}
@@ -704,7 +763,7 @@ func TestATracedRenderSubstitutesTheTargetAndNotTheText(t *testing.T) {
 	doc := Document{
 		Header:     Header{FullName: "Ada Lovelace", Links: []string{"github.com/ada"}},
 		Summary:    "Backend engineer.",
-		Experience: []ExperienceItem{{Role: "Engineer", Company: "Acme", Start: "2018", End: "Present"}},
+		Experience: []ExperienceItem{{Role: "Engineer", Company: "Acme", Start: &perioddate.PeriodDate{Year: 2018}, Current: true}},
 	}
 	const traced = "https://freehire.me/cv/acme-x7abc"
 	tmpl, err := ResolveTemplate(DefaultTemplateID)

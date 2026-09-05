@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest bairesdev
 [Timer]
-OnCalendar=*:12:00
+OnCalendar=*:53:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

@@ -4,7 +4,7 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { signinUrl } from '$lib/signin';
   import HeaderSearch from './HeaderSearch.svelte';
-  import { rolePlaceholders } from '$lib/placeholderRoles';
+  import { ROLE_PLACEHOLDER } from '$lib/placeholderRoles';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
   import { isFullBleedRoute } from '$lib/shellLayout';
@@ -29,7 +29,7 @@
   const searchWording = $derived(
     page.url.pathname === '/companies'
       ? { placeholder: 'Search companies…', label: 'Search companies' }
-      : { placeholder: rolePlaceholders(), label: 'Search jobs' },
+      : { placeholder: ROLE_PLACEHOLDER, label: 'Search jobs' },
   );
 
   // The homepage is the one exception: its whole content is a large centred copy of

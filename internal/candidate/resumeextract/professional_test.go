@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
 // fullStructured is a Structured with every field populated, so a projection test can
@@ -23,13 +25,13 @@ func fullStructured() Structured {
 			Title:      "Staff Engineer",
 			Company:    "Analytical Engines",
 			Location:   "Remote",
-			Start:      "2021-03",
-			End:        "Present",
+			Start:      &perioddate.PeriodDate{Year: 2021, Month: 3},
+			Current:    true,
 			Summary:    "Payments platform.",
 			Highlights: []string{"Cut p99 latency by half."},
 			Stack:      []string{"Go", "PostgreSQL"},
 		}},
-		Education:      []Education{{Degree: "BSc Mathematics", Institution: "UCL", Year: "2012"}},
+		Education:      []Education{{Degree: "BSc Mathematics", Institution: "UCL", Year: &perioddate.PeriodDate{Year: 2012}}},
 		Languages:      []string{"English", "Portuguese"},
 		Links:          []string{"https://github.com/ada"},
 		Skills:         []string{"Go", "Kafka"},

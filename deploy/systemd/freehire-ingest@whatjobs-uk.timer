@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest whatjobs-uk
 [Timer]
-OnCalendar=*:28:00
+OnCalendar=*:15:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

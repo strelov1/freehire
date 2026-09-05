@@ -1,6 +1,7 @@
 package resumeextract
 
 import (
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -92,18 +93,20 @@ func (s Structured) Professional() Professional {
 	}
 }
 
-// Experience is one work-history entry. Dates are kept as free-form strings as printed
-// on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
-// Summary is the role/company one-line context; Highlights are the achievement bullets.
+// Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
+// (year, optional month) that the model interprets from however the CV prints the
+// range; Current marks an ongoing role instead of a fabricated End. Summary is the
+// role/company one-line context; Highlights are the achievement bullets.
 type Experience struct {
-	Title      string   `json:"title,omitempty"`
-	Company    string   `json:"company,omitempty"`
-	Location   string   `json:"location,omitempty"`
-	Start      string   `json:"start,omitempty"`
-	End        string   `json:"end,omitempty"`
-	Summary    string   `json:"summary,omitempty"`
-	Highlights []string `json:"highlights,omitempty"`
-	Stack      []string `json:"stack,omitempty"`
+	Title      string                 `json:"title,omitempty"`
+	Company    string                 `json:"company,omitempty"`
+	Location   string                 `json:"location,omitempty"`
+	Start      *perioddate.PeriodDate `json:"start,omitempty"`
+	End        *perioddate.PeriodDate `json:"end,omitempty"`
+	Current    bool                   `json:"current,omitempty"`
+	Summary    string                 `json:"summary,omitempty"`
+	Highlights []string               `json:"highlights,omitempty"`
+	Stack      []string               `json:"stack,omitempty"`
 }
 
 // Project is one portfolio/side-project entry.
@@ -113,11 +116,13 @@ type Project struct {
 	Highlights []string `json:"highlights,omitempty"`
 }
 
-// Education is one education entry.
+// Education is one education entry. Year is the same structured perioddate.PeriodDate as
+// Experience's Start/End (month is rarely stated for a degree, so it is usually
+// year-only, but the type stays the one shared shape rather than a bare int).
 type Education struct {
-	Degree      string `json:"degree,omitempty"`
-	Institution string `json:"institution,omitempty"`
-	Year        string `json:"year,omitempty"`
+	Degree      string                 `json:"degree,omitempty"`
+	Institution string                 `json:"institution,omitempty"`
+	Year        *perioddate.PeriodDate `json:"year,omitempty"`
 }
 
 // Sanitize bounds every string, coerces total-years into [0, maxYears], caps each
@@ -152,13 +157,13 @@ func sanitizeExperience(e Experience) (Experience, bool) {
 	e.Title = clip(e.Title, maxShortRunes)
 	e.Company = clip(e.Company, maxShortRunes)
 	e.Location = clip(e.Location, maxShortRunes)
-	e.Start = clip(e.Start, maxShortRunes)
-	e.End = clip(e.End, maxShortRunes)
+	e.Start = perioddate.Sanitize(e.Start)
+	e.End = perioddate.Sanitize(e.End)
 	e.Summary = clip(e.Summary, maxEntrySummaryRunes)
 	e.Highlights = limit(nonEmpty(mapStrings(e.Highlights, maxEntrySummaryRunes)), maxHighlights)
 	e.Stack = limit(nonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkills)
 	keep := e.Title != "" || e.Company != "" || e.Location != "" ||
-		e.Start != "" || e.End != "" || e.Summary != "" || len(e.Highlights) > 0
+		e.Start != nil || e.End != nil || e.Summary != "" || len(e.Highlights) > 0
 	return e, keep
 }
 
@@ -172,8 +177,8 @@ func sanitizeProject(p Project) (Project, bool) {
 func sanitizeEducation(e Education) (Education, bool) {
 	e.Degree = clip(e.Degree, maxShortRunes)
 	e.Institution = clip(e.Institution, maxShortRunes)
-	e.Year = clip(e.Year, maxShortRunes)
-	keep := e.Degree != "" || e.Institution != "" || e.Year != ""
+	e.Year = perioddate.Sanitize(e.Year)
+	keep := e.Degree != "" || e.Institution != "" || e.Year != nil
 	return e, keep
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -146,8 +147,8 @@ func clipEducation(items []resumeextract.Education, maxCount int) []resumeextrac
 	for _, e := range items {
 		e.Degree = clipRunes(strings.TrimSpace(e.Degree), maxOwnedShort)
 		e.Institution = clipRunes(strings.TrimSpace(e.Institution), maxOwnedShort)
-		e.Year = clipRunes(strings.TrimSpace(e.Year), maxOwnedShort)
-		if e.Degree == "" && e.Institution == "" && e.Year == "" {
+		e.Year = perioddate.Sanitize(e.Year)
+		if e.Degree == "" && e.Institution == "" && e.Year == nil {
 			continue
 		}
 		out = append(out, e)
@@ -442,11 +443,21 @@ func educationEqual(a, b []resumeextract.Education) bool {
 		return false
 	}
 	for i := range a {
-		if a[i] != b[i] {
+		if a[i].Degree != b[i].Degree || a[i].Institution != b[i].Institution || !periodDateEqual(a[i].Year, b[i].Year) {
 			return false
 		}
 	}
 	return true
+}
+
+// periodDateEqual compares by value: Sanitize (see clipEducation) always allocates a
+// fresh *PeriodDate, even for an unchanged date, so a plain != on Education structs
+// would compare that pointer's address instead of what it points to.
+func periodDateEqual(a, b *perioddate.PeriodDate) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func stringsEqual(a, b []string) bool {

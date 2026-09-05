@@ -8,8 +8,37 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 )
+
+// clipEducation (via Owned.Sanitize) always reallocates a fresh *PeriodDate, even for an
+// unchanged year, so educationEqual must compare Year by value rather than by the struct's
+// own != (which would compare the pointer's address) — otherwise FillEmptyOwnedFromStructured's
+// "skip an unnecessary write" check never sees two calls as equal.
+func TestEducationEqual_SameValueDifferentPointerIsEqual(t *testing.T) {
+	a := []resumeextract.Education{{Degree: "BSc", Institution: "MIT", Year: &perioddate.PeriodDate{Year: 2020}}}
+	b := []resumeextract.Education{{Degree: "BSc", Institution: "MIT", Year: &perioddate.PeriodDate{Year: 2020}}}
+	if !educationEqual(a, b) {
+		t.Fatalf("educationEqual(%+v, %+v) = false, want true (same value, different pointer)", a, b)
+	}
+}
+
+func TestEducationEqual_DifferentYearIsNotEqual(t *testing.T) {
+	a := []resumeextract.Education{{Degree: "BSc", Year: &perioddate.PeriodDate{Year: 2020}}}
+	b := []resumeextract.Education{{Degree: "BSc", Year: &perioddate.PeriodDate{Year: 2021}}}
+	if educationEqual(a, b) {
+		t.Fatalf("educationEqual(%+v, %+v) = true, want false", a, b)
+	}
+}
+
+func TestEducationEqual_NilVsSetYearIsNotEqual(t *testing.T) {
+	a := []resumeextract.Education{{Degree: "BSc"}}
+	b := []resumeextract.Education{{Degree: "BSc", Year: &perioddate.PeriodDate{Year: 2020}}}
+	if educationEqual(a, b) {
+		t.Fatalf("educationEqual(%+v, %+v) = true, want false", a, b)
+	}
+}
 
 func TestFillEmptyDoesNotOverwriteOwned(t *testing.T) {
 	dst := Owned{Email: "mine@example.com", Links: []string{"https://mine.example"}}

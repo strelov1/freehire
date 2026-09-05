@@ -27,7 +27,7 @@ Best-effort, read-only LLM parse of the stored user CV into a typed `Structured`
 
 ## How it works
 
-`internal/candidate/resumeextract` is a self-contained prompt unit like `internal/candidate/matchanalysis`/`internal/ai/enrich`, NOT an agent. It turns the uploaded CV into a typed `Structured` (contacts, summary, work experience with free-form dates, education, languages, links, total years) via the shared `internal/platform/llm` client.
+`internal/candidate/resumeextract` is a self-contained prompt unit like `internal/candidate/matchanalysis`/`internal/ai/enrich`, NOT an agent. It turns the uploaded CV into a typed `Structured` (contacts, summary, work experience with structured `internal/candidate/perioddate.PeriodDate` dates, education, languages, links, total years) via the shared `internal/platform/llm` client.
 
 **File split:** `structured.go` holds the wire shape + `Sanitize` + the `Professional` projection. `resumeextract.go` holds the server-only `Extractor` — split so `cmd/gen-contracts` emits only `structured.go`, mirroring `matchanalysis.go` vs `analyzer.go`.
 

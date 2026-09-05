@@ -4,7 +4,7 @@
   import { ArrowRight } from '@lucide/svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
-  import { rolePlaceholders } from '$lib/placeholderRoles';
+  import { ROLE_PLACEHOLDER } from '$lib/placeholderRoles';
   import { api } from '$lib/api';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
   import type { ApplyPlan } from '$lib/apiSuggestions';
@@ -241,7 +241,7 @@
            this box does search companies and skills too. An example is a starting point
            rather than a boundary, and a role is what people actually type first. -->
       <HeaderSearch
-        placeholder={rolePlaceholders()}
+        placeholder={ROLE_PLACEHOLDER}
         label="Search jobs, companies and skills"
         size="hero"
         autofocus

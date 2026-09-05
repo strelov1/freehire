@@ -1,7 +1,7 @@
 [Unit]
-Description=timer ingest careerspage
+Description=timer ingest rwb
 [Timer]
-OnCalendar=*:59:00
+OnCalendar=*:07:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

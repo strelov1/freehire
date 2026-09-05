@@ -1,7 +1,7 @@
 [Unit]
 Description=timer ingest arbeitsagentur
 [Timer]
-OnCalendar=*:09:00
+OnCalendar=*:50:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]

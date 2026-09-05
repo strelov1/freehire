@@ -825,7 +825,7 @@ type Querier interface {
 	// be inferred from a NULL job_id — an absence cmd/prune also produces. Users may own several of
 	// these. Returns the metadata the list and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
-	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error)
+	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (CreateExperienceEmploymentRow, error)
 	// File one person's claim that they applied to a posting and were never answered.
 	//
 	// Two of the three refusals are STRUCTURAL rather than checks the service performs:
@@ -1490,13 +1490,15 @@ type Querier interface {
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
-	// "Present" for a role the user has left would otherwise resurrect it.
-	FillExperienceEmploymentBlanks(ctx context.Context, arg FillExperienceEmploymentBlanksParams) (ExperienceEmployment, error)
+	// "Present" for a role the user has left would otherwise resurrect it. A period fills as a
+	// whole pair (year and month together) exactly when its year is currently NULL — filling just
+	// a month onto a year the user already entered would silently change a date they set.
+	FillExperienceEmploymentBlanks(ctx context.Context, arg FillExperienceEmploymentBlanksParams) (FillExperienceEmploymentBlanksRow, error)
 	// Import's match: the caller's employment with this company and role, compared case-
 	// insensitively because a CV, a chat and a form will each capitalise them differently.
 	// There is no unique constraint behind this on purpose (a second stint at the same employer
 	// in the same role is a real career shape), so the oldest match wins and stays stable.
-	FindExperienceEmployment(ctx context.Context, arg FindExperienceEmploymentParams) (ExperienceEmployment, error)
+	FindExperienceEmployment(ctx context.Context, arg FindExperienceEmploymentParams) (FindExperienceEmploymentRow, error)
 	// Resolve a job page URL to the posting stored under it — the second tier of
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
 	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
@@ -1693,7 +1695,7 @@ type Querier interface {
 	GetExperienceAtom(ctx context.Context, arg GetExperienceAtomParams) (ExperienceAtom, error)
 	// One employment owned by the caller. A foreign or missing id returns no row, which the
 	// handler maps to 404 — so a probe cannot tell the two apart.
-	GetExperienceEmployment(ctx context.Context, arg GetExperienceEmploymentParams) (ExperienceEmployment, error)
+	GetExperienceEmployment(ctx context.Context, arg GetExperienceEmploymentParams) (GetExperienceEmploymentRow, error)
 	// The grant row as the status endpoint reads it. `scopes` is included because the two
 	// consents are separate: a connected mailbox says nothing about the calendar, and a
 	// calendar grant may have no mailbox behind it, so the row's existence cannot answer
@@ -2607,9 +2609,23 @@ type Querier interface {
 	// falls through to extraction. The freshness test is the same one resume.Store.Structured
 	// applies, so the worker never reuses a structure the app itself treats as absent.
 	ListExperienceBackfillTargets(ctx context.Context, userID int64) ([]ListExperienceBackfillTargetsRow, error)
+	// cmd/backfill-experience-dates' input: every employment still missing at least one of the
+	// structured boundaries migration 0135 added, alongside the legacy free-text labels to
+	// parse, the row's own created_at (the approved fallback for a label that fails to
+	// parse), and is_current — the pre-migration sort key (period_sort.go, since deleted)
+	// read a present-reading period_end as "ongoing" independently of is_current, so a row
+	// where the two disagree needs is_current corrected in the same pass (see
+	// SetExperienceEmploymentBackfilledDates), or that row silently loses its "ongoing" sort
+	// position once the free-text column backing the old check is gone. OR, not AND: a row
+	// where an ordinary write path (deployed ahead of this pass) already filled one boundary
+	// but not the other must still be visited, or the other boundary's only surviving copy —
+	// the free-text column — is never migrated.
+	ListExperienceEmploymentDatesForBackfill(ctx context.Context) ([]ListExperienceEmploymentDatesForBackfillRow, error)
 	// The caller's places of work, current roles first and most recent within that. Owner-scoped
-	// by construction — another user's employments can never appear.
-	ListExperienceEmployments(ctx context.Context, userID int64) ([]ExperienceEmployment, error)
+	// by construction — another user's employments can never appear. Ordered natively on the
+	// structured columns (see migration 0135) rather than the lexicographic free-text column
+	// 0047 originally indexed — period_sort.go's Go-side re-sort no longer exists.
+	ListExperienceEmployments(ctx context.Context, userID int64) ([]ListExperienceEmploymentsRow, error)
 	// The whole snapshot, ordered by facet then count DESC so the reader can take the
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
@@ -4301,6 +4317,12 @@ type Querier interface {
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 	// unlinked or suggestion-only email leaves job_id NULL.
 	SetEmailClassification(ctx context.Context, arg SetEmailClassificationParams) error
+	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
+	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
+	// uses, so a boundary an ordinary write path already populated is never clobbered by a
+	// backfill pass racing behind it — plus is_current, which this only ever turns TRUE, never
+	// back to false, when the caller found a present-reading label is_current disagreed with.
+	SetExperienceEmploymentBackfilledDates(ctx context.Context, arg SetExperienceEmploymentBackfilledDatesParams) (int64, error)
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
 	// Targeted enrichment write used by the enrichment command: set only the payload
@@ -4726,7 +4748,7 @@ type Querier interface {
 	UpdateExperienceAtomKeepingProvenance(ctx context.Context, arg UpdateExperienceAtomKeepingProvenanceParams) (ExperienceAtom, error)
 	// A full owner-scoped replacement, used by the profile UI where the user is editing the
 	// fields directly and means what they typed — including blanking one.
-	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (ExperienceEmployment, error)
+	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (UpdateExperienceEmploymentRow, error)
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
