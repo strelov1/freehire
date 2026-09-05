@@ -60,3 +60,26 @@ func (c Config) Shard(i, n int) Config {
 	}
 	return Config{Provider: c.Provider, Sources: picked}
 }
+
+// FilterBoard returns a copy of the config holding only the entries matching board (skipped
+// when board == "") and region (skipped when region == "") — an operator-driven narrow for
+// resyncing one company/keyword (or one region's boards) by hand, without waiting for or
+// disturbing the rest of the provider's crawl. Board matching is exact: a board id is an
+// opaque platform identifier (or, for a keyword-as-board provider, the literal keyword), not
+// display text to fuzz-match. Both empty returns c unchanged.
+func (c Config) FilterBoard(board, region string) Config {
+	if board == "" && region == "" {
+		return c
+	}
+	var picked []CompanyEntry
+	for _, e := range c.Sources {
+		if board != "" && e.Board != board {
+			continue
+		}
+		if region != "" && e.Region != region {
+			continue
+		}
+		picked = append(picked, e)
+	}
+	return Config{Provider: c.Provider, Sources: picked}
+}
