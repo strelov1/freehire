@@ -16,14 +16,21 @@
   // settings may list as a preferred channel without the user ever having connected
   // them — see ReminderSettings.svelte/CompanyFollowButton.svelte's `linked` gate).
   // The user can add another channel from the Search alerts tab afterward. Flipping
-  // the toggle off deletes the saved search — the ON DELETE CASCADE on
-  // subscriptions.saved_search_id takes the subscription with it, so there is nothing
-  // else to clean up here. On/off is derived from whether such a row exists, not a
-  // separate flag, so this component never drifts from the server.
+  // the toggle off deletes the saved search, and its subscriptions go with it.
+  //
+  // On/off is read from the server's rows rather than a separate flag, and it reads
+  // BOTH of them — the search and its email subscription. The Search alerts tab renders
+  // this same search's per-channel chips right below this toggle, so turning the Email
+  // chip off there must not leave this one still claiming the alert is on.
   let { profile }: { profile: UserProfile } = $props();
 
   const profileSearch = $derived(savedSearches.items.find((s) => s.derived_from_profile) ?? null);
-  const enabled = $derived(profileSearch !== null);
+  const enabled = $derived(
+    profileSearch !== null && notifications.forSavedSearch(profileSearch.id, 'email') !== undefined,
+  );
+  // Until both stores have answered, "off" would be a guess rather than a reading, and
+  // acting on a guess is how the toggle wrote past a subscription that already existed.
+  const ready = $derived(savedSearches.loaded && notifications.loaded);
 
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let saveError = $state<string | null>(null);
@@ -31,6 +38,7 @@
 
   $effect(() => {
     void savedSearches.ensureLoaded();
+    void notifications.ensureLoaded();
   });
 
   function flash() {
@@ -44,21 +52,28 @@
   async function enable() {
     saveState = 'saving';
     saveError = null;
-    let search: SavedSearch | undefined;
+    // Only a search THIS call created may be rolled back below; an existing one is the
+    // user's, and re-enabling after they turned the Email chip off must not delete it.
+    let created: SavedSearch | undefined;
     try {
-      const query = filtersToParams(filtersFromProfile(profile)).toString();
-      search = await savedSearches.create('My profile', query, true);
+      // Reuse the profile search when there is one — the server's partial unique index
+      // permits exactly one, so re-creating it would conflict rather than re-subscribe.
+      let search = profileSearch;
+      if (!search) {
+        const query = filtersToParams(filtersFromProfile(profile)).toString();
+        search = created = await savedSearches.create('My profile', query, true);
+      }
       // Through the store, not api.createSubscription: this page also renders this
       // search's per-channel chips (AlertChannels), which read the store. Writing past
       // it drew the Email chip "off" over a live subscription — tapping it 409'd.
       await notifications.subscribe(search.id, 'email');
       flash();
     } catch (e) {
-      // The search may have been created before the subscribe call failed — clean it
-      // up so the toggle doesn't end up "on" (search exists) while showing an error.
-      if (search) {
+      // The search may have been created before the subscribe call failed — clean it up
+      // so a half-done enable leaves no saved search the user never asked for.
+      if (created) {
         try {
-          await savedSearches.remove(search.id);
+          await savedSearches.remove(created.id);
         } catch {
           // best-effort; the toggle's error state still surfaces the original failure.
         }
@@ -106,7 +121,7 @@
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving')}
+    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving' || !ready)}
   </div>
 </section>
 

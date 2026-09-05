@@ -1,14 +1,16 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { ApiError } from './api';
-import type { SavedSearch } from './types';
+import type { SavedSearch, Subscription } from './types';
 import {
   alertName,
   matchedSavedSearch,
   ensureSaved,
+  ensureSubscribed,
   setPendingAlert,
   consumePendingAlert,
   PENDING_ALERT_KEY,
   type SavedSearchesPort,
+  type SubscriptionsPort,
 } from './saveSearchAlert';
 import { must } from './utils';
 
@@ -135,6 +137,103 @@ describe('ensureSaved', () => {
     expect(set.id).toBe(9);
     expect(createCalls).toHaveLength(2);
     expect(must(createCalls[1]).name).not.toBe(must(createCalls[0]).name);
+  });
+});
+
+const sub = (id: number, savedSearchId: number, channel: string): Subscription =>
+  ({ id, saved_search_id: savedSearchId, channel, active: true }) as Subscription;
+
+// A SubscriptionsPort double. `held` is what the caller currently has; `server` is what
+// a refresh() would read back. Seeding them differently is how a stale list is staged.
+function makeSubs(opts: {
+  held?: Subscription[];
+  server?: Subscription[];
+  addImpl?: () => Promise<void>;
+}): {
+  port: SubscriptionsPort;
+  held: Subscription[];
+  calls: { ensureLoaded: number; add: number; refresh: number };
+} {
+  let held = [...(opts.held ?? [])];
+  const calls = { ensureLoaded: 0, add: 0, refresh: 0 };
+  return {
+    calls,
+    get held() {
+      return held;
+    },
+    port: {
+      ensureLoaded: async () => {
+        calls.ensureLoaded++;
+      },
+      find: (id, ch) => held.find((s) => s.saved_search_id === id && s.channel === ch),
+      add: async (id, ch) => {
+        calls.add++;
+        if (opts.addImpl) return opts.addImpl();
+        held = [sub(held.length + 100, id, ch), ...held];
+      },
+      refresh: async () => {
+        calls.refresh++;
+        held = [...(opts.server ?? [])];
+      },
+    },
+  };
+}
+
+describe('ensureSubscribed', () => {
+  it('creates the subscription when the channel is not yet subscribed', async () => {
+    const s = makeSubs({ held: [] });
+    await ensureSubscribed(5, 'email', s.port);
+    expect(s.calls.add).toBe(1);
+    expect(s.calls.refresh).toBe(0);
+    expect(s.held).toHaveLength(1);
+  });
+
+  it('does not re-POST a channel it already holds', async () => {
+    const s = makeSubs({ held: [sub(1, 5, 'email')] });
+    await ensureSubscribed(5, 'email', s.port);
+    expect(s.calls.add).toBe(0);
+  });
+
+  it('subscribes per channel, not per saved search', async () => {
+    const s = makeSubs({ held: [sub(1, 5, 'email')] });
+    await ensureSubscribed(5, 'telegram', s.port);
+    expect(s.calls.add).toBe(1);
+  });
+
+  // The reported bug: the list was stale, so the pre-check found nothing, the POST
+  // conflicted, and the caller was left still not holding the row — drawing the channel
+  // "off" over a live subscription, so the next tap conflicted again. Treating the
+  // conflict as success means ending up holding it, not merely not throwing.
+  it('adopts the server row on a 409 rather than surfacing it', async () => {
+    const s = makeSubs({
+      held: [],
+      server: [sub(42, 5, 'email')],
+      addImpl: async () => {
+        throw new ApiError(409, 'already subscribed to this saved search on this channel');
+      },
+    });
+    await ensureSubscribed(5, 'email', s.port);
+    expect(s.calls.refresh).toBe(1);
+    expect(s.port.find(5, 'email')?.id).toBe(42);
+  });
+
+  it('rethrows anything that is not a 409', async () => {
+    const s = makeSubs({
+      held: [],
+      addImpl: async () => {
+        throw new ApiError(500, 'boom');
+      },
+    });
+    await expect(ensureSubscribed(5, 'email', s.port)).rejects.toThrow('boom');
+    expect(s.calls.refresh).toBe(0);
+  });
+
+  // A write racing an in-flight load is discarded by the snapshot that lands after it,
+  // so the load has to settle before the pre-check reads the list.
+  it('waits for the load before deciding whether to POST', async () => {
+    const s = makeSubs({ held: [sub(1, 5, 'email')] });
+    await ensureSubscribed(5, 'email', s.port);
+    expect(s.calls.ensureLoaded).toBe(1);
   });
 });
 
