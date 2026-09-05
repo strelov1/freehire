@@ -106,9 +106,33 @@ night is normal operational noise.
 ```go
 type Publisher interface {
     Name() string
+    Render(d Digest) (string, error)
     Publish(ctx context.Context, d Digest) error
 }
 ```
+
+`Render` was not in the first sketch of this seam and the dry-run requirement put
+it there. A dry run exists to catch a list that **reads** badly, and a summary of
+a post cannot read badly — so the thing a dry run prints has to be the payload
+itself, which only the publisher can build. `Publish` calls it too, so the two
+cannot drift.
+
+Three more things the implementation added that this design did not ask for, each
+because publishing under our own name has a lower tolerance than the sketch
+assumed:
+
+- **`?utm_source=<channel>` on every link.** The digest is a marketing channel; if
+  its traffic is not separable from every other inbound path, nobody can say
+  whether it worked.
+- **The worker refuses to publish when `FRONTEND_ORIGIN` is not `https://`.** That
+  variable defaults to `localhost:5173` so a developer's checkout runs, and every
+  link in the post is rooted at it. This is the only worker in the fleet whose
+  output strangers read, so the default costs ten dead public links rather than a
+  quiet local oddity. A dry run is exempt.
+- **HTML-entity unescaping, Discord markdown escaping, and truncation at
+  Discord's own description limit.** All three were found by rendering real
+  production rows: `Learning Design &amp; Capacity` is a real title, and this
+  catalogue's titles are unbounded.
 
 The ledger key is `(day, channel)`, not `(day)`. A run that posts to Discord and
 then fails on a second channel must, on its next attempt, skip Discord and retry

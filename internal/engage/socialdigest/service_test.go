@@ -33,7 +33,7 @@ func newFakeRepo(candidates ...Posting) *fakeRepo {
 	}
 }
 
-func key(d time.Time, channel string) string { return d.Format(dayLayout) + "|" + channel }
+func key(d time.Time, channel string) string { return d.Format(DayLayout) + "|" + channel }
 
 func (f *fakeRepo) LatestViewDay(context.Context) (time.Time, bool, error) {
 	return f.latest, f.hasLatest, f.latestErr
@@ -60,7 +60,7 @@ func (f *fakeRepo) RecentlyDigested(_ context.Context, since, before time.Time) 
 		out[id] = true
 	}
 	for k, items := range f.recorded {
-		d, err := time.Parse(dayLayout, strings.SplitN(k, "|", 2)[0])
+		d, err := time.Parse(DayLayout, strings.SplitN(k, "|", 2)[0])
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +97,7 @@ type fakePublisher struct {
 func (p *fakePublisher) Name() string { return p.name }
 
 func (p *fakePublisher) Render(d Digest) (string, error) {
-	return p.name + ":" + d.Day.Format(dayLayout), nil
+	return p.name + ":" + d.Day.Format(DayLayout), nil
 }
 
 func (p *fakePublisher) Publish(context.Context, Digest) error {
@@ -119,7 +119,7 @@ func TestServiceBuild(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !got.Day.Equal(day("2026-09-03")) {
-			t.Errorf("day = %s, want 2026-09-03", got.Day.Format(dayLayout))
+			t.Errorf("day = %s, want 2026-09-03", got.Day.Format(DayLayout))
 		}
 		assertIDs(t, got.Items, []int64{1, 2})
 	})
@@ -132,7 +132,7 @@ func TestServiceBuild(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !got.Day.Equal(day("2025-01-01")) {
-			t.Errorf("day = %s, want 2025-01-01", got.Day.Format(dayLayout))
+			t.Errorf("day = %s, want 2025-01-01", got.Day.Format(DayLayout))
 		}
 	})
 
@@ -343,7 +343,7 @@ func TestServiceDispatch(t *testing.T) {
 }
 
 func TestJobURL(t *testing.T) {
-	got := JobURL("https://freehire.me/", "acme-engineer-123", "discord")
+	got := jobURL("https://freehire.me/", "acme-engineer-123", "discord")
 	want := "https://freehire.me/jobs/acme-engineer-123?utm_source=discord"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)

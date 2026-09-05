@@ -48,6 +48,11 @@ const (
 	CandidateLimit = 200
 )
 
+// DayLayout is how a digest day is written wherever it is shown to a person — in a
+// log line, in an error, and as the -day flag's argument. Exported so cmd/social-digest
+// spells it the same way this package does rather than repeating the literal.
+const DayLayout = "2006-01-02"
+
 // Posting is one job in the digest — a candidate before the editorial rules run, an
 // item of the published list after. One type rather than two: the rules select from
 // the set, they do not transform its members.

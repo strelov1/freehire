@@ -45,12 +45,6 @@ func NewDiscordPublisher(webhookURL, origin string) *DiscordPublisher {
 	}
 }
 
-// WithHTTPClient swaps the HTTP client. For tests against httptest.
-func (p *DiscordPublisher) WithHTTPClient(c *http.Client) *DiscordPublisher {
-	p.http = c
-	return p
-}
-
 func (p *DiscordPublisher) Name() string { return ChannelDiscord }
 
 // discordPayload is the webhook body. Only the fields this feature sets — Discord
@@ -83,7 +77,7 @@ func (p *DiscordPublisher) payload(d Digest) discordPayload {
 		fmt.Fprintf(&b, "**%d.** [%s](%s)\n%s",
 			i+1,
 			escapeDiscordMarkdown(item.Title),
-			JobURL(p.origin, item.Slug, ChannelDiscord),
+			jobURL(p.origin, item.Slug, ChannelDiscord),
 			escapeDiscordMarkdown(item.Company),
 		)
 		if where := placeOf(item); where != "" {

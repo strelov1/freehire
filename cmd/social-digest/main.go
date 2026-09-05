@@ -95,7 +95,7 @@ func run() int {
 		log.Printf("social-digest: nothing to publish for %s. Either no posting cleared the floor of %d page views, "+
 			"or every candidate was published within the last %d days, or cmd/rollup-views has not yet run with the "+
 			"page/API split and page_uniques is still zero for that day",
-			digest.Day.Format("2006-01-02"), socialdigest.MinPageUniques, socialdigest.QuarantineDays)
+			digest.Day.Format(socialdigest.DayLayout), socialdigest.MinPageUniques, socialdigest.QuarantineDays)
 		return 0
 	}
 
@@ -104,7 +104,7 @@ func run() int {
 	}
 
 	log.Printf("social-digest: publishing %d postings for %s to %d channel(s)",
-		len(digest.Items), digest.Day.Format("2006-01-02"), len(publishers))
+		len(digest.Items), digest.Day.Format(socialdigest.DayLayout), len(publishers))
 	if err := svc.Dispatch(ctx, digest, publishers); err != nil {
 		log.Printf("social-digest: %v", err)
 		return 1
@@ -122,9 +122,9 @@ func parseDay(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
 	}
-	d, err := time.Parse("2006-01-02", s)
+	d, err := time.Parse(socialdigest.DayLayout, s)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("-day must be YYYY-MM-DD: %w", err)
+		return time.Time{}, fmt.Errorf("-day must be "+socialdigest.DayLayout+": %w", err)
 	}
 	return d, nil
 }

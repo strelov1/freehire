@@ -56,7 +56,11 @@ signal with API reads that carry no bot filtering.
 The digest SHALL select at most ten postings for the day, applying these rules:
 
 - **Open only.** A posting that is closed, marked as a duplicate by any of the
-  duplicate-marker columns, or carrying a ghost signal SHALL NOT be selected.
+  duplicate-marker columns, or whose source ATS has stopped listing it SHALL NOT
+  be selected. The last of those is the evidence, not the full ghost verdict:
+  that verdict is a hedged classification needing evidence this selection has no
+  reason to gather, and "the employer's own board no longer shows it" is the
+  strongest single piece of it.
 - **Tech only.** A posting SHALL be selected only if it is positively classified
   as a tech job. A posting the classifier could not decide about SHALL NOT be
   selected: this catalogue carries non-tech postings, the most-viewed of them are

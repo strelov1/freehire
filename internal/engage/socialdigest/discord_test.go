@@ -21,6 +21,15 @@ func sampleDigest() Digest {
 	}
 }
 
+// discordFor builds a publisher pointed at a test server. The http.Client is set
+// directly rather than through a setter: the test is in this package, and an exported
+// swapper would be production surface nothing in production calls.
+func discordFor(url string, client *http.Client) *DiscordPublisher {
+	p := NewDiscordPublisher(url, "https://freehire.me")
+	p.http = client
+	return p
+}
+
 func TestDiscordRender(t *testing.T) {
 	out, err := NewDiscordPublisher("https://example.invalid/hook", "https://freehire.me").Render(sampleDigest())
 	if err != nil {
@@ -164,7 +173,7 @@ func TestDiscordPublish(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		p := NewDiscordPublisher(srv.URL, "https://freehire.me").WithHTTPClient(srv.Client())
+		p := discordFor(srv.URL, srv.Client())
 		if err := p.Publish(context.Background(), sampleDigest()); err != nil {
 			t.Fatal(err)
 		}
@@ -187,7 +196,7 @@ func TestDiscordPublish(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		p := NewDiscordPublisher(srv.URL, "https://freehire.me").WithHTTPClient(srv.Client())
+		p := discordFor(srv.URL, srv.Client())
 		err := p.Publish(context.Background(), sampleDigest())
 		if err == nil {
 			t.Fatal("want an error")
@@ -204,7 +213,7 @@ func TestDiscordPublish(t *testing.T) {
 		client := srv.Client()
 		srv.Close()
 
-		p := NewDiscordPublisher(srv.URL, "https://freehire.me").WithHTTPClient(client)
+		p := discordFor(srv.URL, client)
 		if err := p.Publish(context.Background(), sampleDigest()); err == nil {
 			t.Error("want an error")
 		}

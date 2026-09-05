@@ -127,7 +127,7 @@ func TestLatestViewDayPicksTheNewest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !ok || !got.Equal(day("2026-09-03")) {
-		t.Errorf("got (%s, %v), want 2026-09-03", got.Format(dayLayout), ok)
+		t.Errorf("got (%s, %v), want 2026-09-03", got.Format(DayLayout), ok)
 	}
 }
 

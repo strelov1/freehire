@@ -48,7 +48,7 @@ func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, er
 
 	candidates, err := s.repo.TopPageViewed(ctx, day, CandidateLimit)
 	if err != nil {
-		return Digest{}, fmt.Errorf("candidates for %s: %w", day.Format(dayLayout), err)
+		return Digest{}, fmt.Errorf("candidates for %s: %w", day.Format(DayLayout), err)
 	}
 	quarantined, err := s.repo.RecentlyDigested(ctx, QuarantineSince(day), day)
 	if err != nil {
@@ -98,11 +98,8 @@ func (s *Service) Dispatch(ctx context.Context, d Digest, publishers []Publisher
 	return errors.Join(failures...)
 }
 
-// JobURL is the public link for a posting, tagged with the channel that carried it so
+// jobURL is the public link for a posting, tagged with the channel that carried it so
 // the digest's traffic is separable from every other inbound path in analytics.
-func JobURL(origin, slug, utmSource string) string {
+func jobURL(origin, slug, utmSource string) string {
 	return strings.TrimRight(origin, "/") + "/jobs/" + slug + "?utm_source=" + utmSource
 }
-
-// dayLayout is how a digest day is written wherever it is shown to a person.
-const dayLayout = "2006-01-02"

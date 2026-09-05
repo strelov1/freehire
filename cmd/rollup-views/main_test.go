@@ -197,3 +197,52 @@ func TestProcessSkipsGzippedCopyOfProcessedFile(t *testing.T) {
 		t.Errorf("view_count after gzip re-run = %d, want 2 (no double-count across compression)", v)
 	}
 }
+
+// A day whose lines span two rotated files must sum across both, in BOTH counters.
+// This is what the additive ON CONFLICT buys, and page_uniques is a separate term in
+// that statement — a version that carried only `uniques` would pass every other test
+// here and then quietly report half a day's page views to the digest.
+func TestProcessSumsBothCountersAcrossTwoFiles(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	job := seedJob(t, pool, "acme")
+	const day = "21/Jul/2026:12:00:00 +0000"
+
+	// First file: one page visitor and one API visitor.
+	dir1 := writeLog(t, "access.log.1",
+		logLine("1.1.1.1", "/jobs/acme", "human1", day),
+		logLine("2.2.2.2", "/api/v1/jobs/acme", "curl", day),
+	)
+	// Second file, same calendar day: two more page visitors.
+	dir2 := writeLog(t, "access.log.1",
+		logLine("3.3.3.3", "/jobs/acme", "human3", day),
+		logLine("4.4.4.4", "/jobs/acme", "human4", day),
+	)
+
+	for _, dir := range []string{dir1, dir2} {
+		files, err := viewlog.RotatedFiles(dir, "access.log")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := process(ctx, pool, files); err != nil {
+			t.Fatalf("process %s: %v", dir, err)
+		}
+	}
+
+	var uniques, pageUniques int32
+	if err := pool.QueryRow(ctx,
+		"SELECT uniques, page_uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'",
+		job).Scan(&uniques, &pageUniques); err != nil {
+		t.Fatalf("read job_daily_views: %v", err)
+	}
+	if uniques != 4 {
+		t.Errorf("uniques = %d, want 4 (2 + 2 across both files)", uniques)
+	}
+	if pageUniques != 3 {
+		t.Errorf("page_uniques = %d, want 3 (1 + 2; the API visitor is not a page open)", pageUniques)
+	}
+	if v := viewCount(t, pool, job); v != 4 {
+		t.Errorf("view_count = %d, want 4", v)
+	}
+}
