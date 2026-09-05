@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/sveltekit';
 import { hasSessionCookie } from '$lib/authCookie';
 import { cachePolicy } from '$lib/httpCache';
 import { isTranslatedLocale, LOCALE_COOKIE } from '$lib/locale';
+import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '$lib/referral';
 
 // Resolves the account-section locale for `<html lang>` before the response
 // streams. Path-gated: only `/my/**` may render non-English — every other route
@@ -111,8 +112,62 @@ const preloadPolicy: Handle = async ({ event, resolve }) =>
     preload: ({ type, path }) => type === 'css' || path.includes('immutable/entry/'),
   });
 
+// Capture a referral or promo code arriving in ANY link, not only on a dedicated route.
+//
+// One hook rather than a page-level check, because the link is pasted into chats and lands
+// wherever the sharer happened to be: `/?ref=x`, `/jobs/some-posting?ref=x`, or the short
+// `/r/x`. A capture that only worked on the landing page would silently attribute nothing
+// for most of the links people actually send.
+//
+// Set-Cookie from the SERVER and never from script: Safari's tracking prevention caps
+// script-written cookies at seven days, and this window is thirty. httpOnly follows for
+// free on the invite cookie — nothing in the browser needs to read it, and the OAuth
+// callback that does is on the server.
+//
+// LAST in the sequence, and that position is the whole reason this is safe. `cacheControl`
+// above labels anonymous public pages as storable by a shared cache. A response carrying
+// Set-Cookie under such a label can be held by a CDN and replayed — handing one visitor's
+// referral cookie to everybody who asks for that page. Running after it means the
+// `no-store` below overwrites the label on exactly the responses that set a cookie, and
+// nothing else changes.
+const attribution: Handle = async ({ event, resolve }) => {
+  const captures = [
+    captureRef(event.url.searchParams.get('ref'), event.cookies.get(REF_COOKIE)),
+    capturePromo(event.url.searchParams.get('promo')),
+  ].filter((capture) => capture !== null);
+
+  const response = await resolve(event);
+  if (captures.length === 0) return response;
+
+  for (const capture of captures) {
+    response.headers.append(
+      'set-cookie',
+      event.cookies.serialize(capture.name, capture.value, {
+        path: '/',
+        maxAge: CAPTURE_MAX_AGE_SECONDS,
+        // Lax, not Strict: the cookie has to survive the top-level GET redirect back from
+        // an OAuth provider, which is the majority sign-up path and the one place a value
+        // kept anywhere else could not travel.
+        sameSite: 'lax',
+        // The promo cookie is read by the pricing page to prefill its field, so it is not
+        // httpOnly. The invite cookie is read only by the server.
+        httpOnly: capture.name === REF_COOKIE,
+        secure: event.url.protocol === 'https:',
+      }),
+    );
+  }
+  response.headers.set('cache-control', 'no-store');
+  return response;
+};
+
 // sentryHandle scopes each SSR request; it is a passthrough when init was skipped.
-export const handle = sequence(Sentry.sentryHandle(), preloadPolicy, locale, cacheControl);
+export const handle = sequence(
+  Sentry.sentryHandle(),
+  preloadPolicy,
+  locale,
+  cacheControl,
+  attribution,
+);
 
 // Reports uncaught SSR errors to Sentry; inert when init was skipped above.
 export const handleError = Sentry.handleErrorWithSentry();

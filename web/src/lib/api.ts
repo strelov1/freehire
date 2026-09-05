@@ -79,6 +79,8 @@ import type {
   Allowance,
   AiUsage,
   BillingOverview,
+  CheckoutSession,
+  InviteSummary,
   PlansMatrix,
   PlanState,
   UsageHistoryEntry,
@@ -1065,9 +1067,30 @@ export function createApi(
    *  Throws when billing is not configured on this deployment, or when no paywall is set
    *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
    *  entry point, never as an error to show. */
-  async function billingCheckout(priceID?: string): Promise<{ url: string }> {
-    const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
-    return requestData<{ url: string }>(`/api/v1/billing/checkout${q}`);
+  async function billingCheckout(priceID?: string, code?: string): Promise<CheckoutSession> {
+    const q = new URLSearchParams();
+    if (priceID) q.set('price', priceID);
+    // Sending a code REDEEMS it, spending the account's one lifetime redemption. That is
+    // why it rides on the checkout call and not on a button of its own: a code must not be
+    // spent by somebody who only looked at the page.
+    if (code) q.set('code', code);
+    const suffix = q.size > 0 ? `?${q}` : '';
+    return requestData<CheckoutSession>(`/api/v1/billing/checkout${suffix}`);
+  }
+
+  /** Check what a promo code is worth without spending it. Rate limited server-side, and
+   *  every refusal about the code itself is the same 404 — telling "no such code" apart
+   *  from "out of seats" would make this an oracle for guessing them. */
+  async function promoPreview(code: string): Promise<{ percent_off: number }> {
+    return requestData<{ percent_off: number }>('/api/v1/me/promo/preview', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  /** This account's invite link and what it has earned. */
+  async function myInvite(): Promise<InviteSummary> {
+    return requestData<InviteSummary>('/api/v1/me/invite');
   }
 
   /** What the caller is paying and what has been charged. 404 when there is no
@@ -2400,6 +2423,8 @@ export function createApi(
     myPlan,
     plans,
     billingCheckout,
+    promoPreview,
+    myInvite,
     billingManageUrl,
     billingSubscription,
     myPlanHistory,

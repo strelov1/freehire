@@ -93,6 +93,33 @@ export interface PublicPrice {
   default: boolean;
 }
 
+/** Where a buyer goes to pay, and which offer was applied on the way
+ *  (`GET /api/v1/billing/checkout`).
+ *
+ *  A session carries at most one discount, so this is a single percentage rather than a
+ *  list: the provider admits one coupon, and stacking two offers is how a subscription
+ *  becomes free by accident. `discount_percent` is 0 when there was none. */
+export interface CheckoutSession {
+  url: string;
+  discount_percent: number;
+  /** `'promo'` or `'invite'`, or empty when nothing was applied. */
+  discount_source: string;
+}
+
+/** This account's invite link and what it has earned (`GET /api/v1/me/invite`).
+ *
+ *  Counts and a total, naming nobody. Telling a referrer which of their contacts signed up
+ *  would disclose that a particular person is looking for work, which is not theirs to
+ *  know — so there is no field here that could carry it. */
+export interface InviteSummary {
+  link: string;
+  invitees: number;
+  rewarded: number;
+  credit_cents: number;
+  /** What both sides of an invite are worth, so the page states one number from one place. */
+  percent_off: number;
+}
+
 /** What each plan allows and what Pro costs (`GET /api/v1/plans`). Public and
  *  unauthenticated — a pricing page that needs an account cannot do a pricing page's job.
  *

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the seventeen account sections', () => {
-    expect(accountNav).toHaveLength(17);
+  it('lists the eighteen account sections', () => {
+    expect(accountNav).toHaveLength(18);
   });
 
   it('offers a section for job lists', () => {

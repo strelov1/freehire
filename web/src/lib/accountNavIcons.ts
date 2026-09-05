@@ -19,6 +19,7 @@ import {
   Link2,
   Handshake,
   Coins,
+  Gift,
   ShieldCheck,
   TrendingUp,
   Plug,
@@ -44,5 +45,6 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/submissions': FileText,
   '/my/contributions': Link2,
   '/my/plan': Coins,
+  '/my/invite': Gift,
   '/my/security': ShieldCheck,
 };

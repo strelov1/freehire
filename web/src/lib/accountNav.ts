@@ -52,6 +52,11 @@ export const accountNav = [
   // The plan's daily allowances and what they were spent on (analyses, CV editing,
   // contribution rewards).
   { href: '/my/plan', label: 'Plan' },
+  // The account's own invite link and what it has earned. Named "Invite" and not
+  // "Referrals" because that word is taken above by the employee-referral marketplace,
+  // which is an unrelated feature — two sections sharing a name would be a menu nobody
+  // can navigate.
+  { href: '/my/invite', label: 'Invite a friend' },
   // Password and sessions: change the password, and sign out everywhere when a
   // device is lost or a session is suspect.
   { href: '/my/security', label: 'Security' },

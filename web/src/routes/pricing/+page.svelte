@@ -52,15 +52,54 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
 
+  // Prefilled from a code that arrived in a link. Nothing is spent by filling the field —
+  // the code is only redeemed when the buy button is pressed, because a redemption spends
+  // the account's one lifetime code and must not happen to somebody who merely looked.
+  let code = $state(data.promo ?? '');
+  let checking = $state(false);
+  let checked = $state<number | null>(null);
+  let codeError = $state<string | null>(null);
+
+  // What the code is worth, checked without spending it. Deliberately a button rather than
+  // something that fires as you type: the route is rate limited server-side, and firing on
+  // every keystroke would spend a real caller's budget rendering "not available" over and
+  // over while they are still typing.
+  async function checkCode() {
+    const entered = code.trim();
+    if (!entered || checking) return;
+    checking = true;
+    checked = null;
+    codeError = null;
+    try {
+      const { percent_off } = await api.promoPreview(entered);
+      checked = percent_off;
+    } catch (e) {
+      // Every refusal about the code itself reads the same on the server, so there is one
+      // message here too. 409 is the one exception: it is about this account, not the code.
+      codeError =
+        e instanceof Error && e.message.includes('already')
+          ? 'You have already used a promo code.'
+          : 'That code is not available.';
+    } finally {
+      checking = false;
+    }
+  }
+
   async function buy() {
     if (!chosen || busy) return;
     busy = true;
     error = null;
     try {
-      const { url } = await api.billingCheckout(chosen.id);
+      const { url } = await api.billingCheckout(chosen.id, code.trim() || undefined);
       window.location.href = url;
-    } catch {
-      error = 'Checkout is not available right now. Please try again in a moment.';
+    } catch (e) {
+      // A code the buyer typed and that was refused must be SAID, not swallowed: charging
+      // full price after somebody entered an offer, without telling them, is the version of
+      // this they would rightly call a bug.
+      error =
+        code.trim() && e instanceof Error && e.message
+          ? 'That code could not be applied. Clear it to continue at the usual price.'
+          : 'Checkout is not available right now. Please try again in a moment.';
       busy = false;
     }
   }
@@ -160,9 +199,41 @@
 
       {#if chosen}
         {#if isAuthenticated()}
+          <div class="mt-auto flex flex-col gap-2">
+            <label class="text-sm text-muted-foreground" for="promo-code">
+              Have a promo code?
+            </label>
+            <div class="flex gap-2">
+              <input
+                id="promo-code"
+                type="text"
+                bind:value={code}
+                placeholder="EARLY90"
+                autocomplete="off"
+                spellcheck="false"
+                class="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase"
+              />
+              <button
+                type="button"
+                class="shrink-0 rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
+                disabled={checking || !code.trim()}
+                onclick={checkCode}
+              >
+                {checking ? 'Checking…' : 'Check'}
+              </button>
+            </div>
+            {#if checked !== null}
+              <p class="text-sm text-muted-foreground">
+                {checked}% off your first month. It is applied when you continue.
+              </p>
+            {/if}
+            {#if codeError}
+              <p class="text-sm text-destructive">{codeError}</p>
+            {/if}
+          </div>
           <button
             type="button"
-            class="mt-auto rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            class="rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
             disabled={busy}
             onclick={buy}
           >

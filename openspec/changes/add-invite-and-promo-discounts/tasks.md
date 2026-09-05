@@ -81,18 +81,18 @@
 
 ## 6. Web
 
-- [ ] 6.1 Capture `?ref=` in `web/src/hooks.server.ts` on any request: set an httpOnly,
+- [x] 6.1 Capture `?ref=` in `web/src/hooks.server.ts` on any request: set an httpOnly,
   `SameSite=Lax`, `Secure`, 30-day cookie, and only when one is not already present (first
   toucher wins). Unit-test the capture rule, including that a second code does not overwrite.
-- [ ] 6.2 `web/src/routes/r/[code]/+server.ts`: the short form of the same link — set the
+- [x] 6.2 `web/src/routes/r/[code]/+server.ts`: the short form of the same link — set the
   cookie and redirect to `/`.
-- [ ] 6.3 Capture `?promo=` the same way into its own, non-httpOnly cookie, and read it in the
+- [x] 6.3 Capture `?promo=` the same way into its own, non-httpOnly cookie, and read it in the
   pricing page's server `load` to prefill the field.
-- [ ] 6.4 Promo-code field on `web/src/routes/pricing/+page.svelte`, wired to preview then
+- [x] 6.4 Promo-code field on `web/src/routes/pricing/+page.svelte`, wired to preview then
   checkout, showing the refusal text the API returns.
-- [ ] 6.5 Invite page: the account's link with copy-to-clipboard, invitee and paid counts, and
+- [x] 6.5 Invite page: the account's link with copy-to-clipboard, invitee and paid counts, and
   accrued credit. Follow the existing account-section routing and its auth redirect gate.
-- [ ] 6.6 `pnpm --dir web lint` and `pnpm --dir web test` green (a fresh worktree needs
+- [x] 6.6 `pnpm --dir web lint` and `pnpm --dir web test` green (a fresh worktree needs
   `svelte-kit sync` first).
 
 ## 7. Guards and docs
