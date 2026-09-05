@@ -19,6 +19,12 @@
   // balance said "you own 12 of something", this says "1 of today's 3 analyses". Nothing
   // here accumulates and nothing is a currency.
   let plan = $state<PlanState | null>(null);
+
+  // The plan's own name, from the strings rather than from a ternary that can only know two
+  // of them. A tier the strings have no label for falls back to what the API called it,
+  // which is wrong-looking rather than silently reading as "Free".
+  const planLabel = (tier: PlanState['plan']) =>
+    tier === 'ultra' ? s.planStrip.ultra : tier === 'pro' ? s.planStrip.pro : s.planStrip.free;
   let history = $state<UsageHistoryEntry[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
 
@@ -57,11 +63,14 @@
   // a reload — leaving it there shows one person's invoices and receipt links to the next.
   // `live` drops a slow response from a plan we have since moved off, which is the same
   // leak arriving late.
+  // Any PAID plan, not pro specifically. Asking `=== 'pro'` left an Ultra subscriber with no
+  // receipts and no link to the provider's portal — and that portal is the only place a
+  // subscription can be changed or cancelled, which is why we write no flow of our own.
   $effect(() => {
-    const pro = plan?.plan === 'pro';
+    const paid = plan?.plan === 'pro' || plan?.plan === 'ultra';
     billing = null;
     manageUrl = null;
-    if (!pro) return;
+    if (!paid) return;
 
     let live = true;
     api
@@ -118,9 +127,9 @@
       >
         <div class="flex flex-col gap-0.5">
           <span class="text-sm font-semibold">
-            {plan.plan === 'pro' ? s.planStrip.pro : s.planStrip.free}
+            {planLabel(plan.plan)}
           </span>
-          {#if plan.plan === 'pro' && plan.pro_until}
+          {#if plan.plan !== 'free' && plan.pro_until}
             <span class="text-xs text-muted-foreground">
               {s.planStrip.runsUntilPrefix}
               {fmtDate(plan.pro_until)}

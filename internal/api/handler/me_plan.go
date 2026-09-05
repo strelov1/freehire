@@ -36,9 +36,14 @@ func (h *planHandlers) register(api fiber.Router, mw middleware) {
 type planResponse struct {
 	Plan     string    `json:"plan"`
 	ResetsAt time.Time `json:"resets_at"`
-	// ProUntil is when the Pro plan lapses, absent on the free plan. It is read from the
-	// stored column, never from the billing provider — this endpoint must keep answering
-	// when the provider does not.
+	// ProUntil is when the caller's PAID plan lapses, absent on the free plan. It is read
+	// from the stored column, never from the billing provider — this endpoint must keep
+	// answering when the provider does not.
+	//
+	// It carries whichever tier the caller is actually on: an ultra subscriber gets their
+	// ultra entitlement here, not a NULL taken from the pro columns they do not hold. The
+	// field keeps its `pro_` spelling because clients read it and a rename buys nothing —
+	// what it has always meant is "when does the plan you are paying for run out".
 	ProUntil *time.Time `json:"pro_until,omitempty"`
 	// ProSource is where the plan was bought: "stripe", "revenuecat" or "granted". Absent on
 	// the free plan, alongside ProUntil.
@@ -59,19 +64,21 @@ type planResponse struct {
 // first, so the answer is stable across deployments. A tie means two origins reach the same
 // instant, which is rare and harmless; naming Stripe first points a client's cancellation
 // advice at the surface the subscriber most likely bought through.
-func proSourceOf(row db.GetProUntilSourcesRow) string {
-	if !row.ProUntil.Valid {
+// It takes the derived instant and this tier's three sources rather than the whole row, so
+// that adding a tier cannot leave it silently answering about the wrong one.
+func planSourceOf(derived, stripe, revenuecat, granted pgtype.Timestamptz) string {
+	if !derived.Valid {
 		return ""
 	}
 	for _, c := range []struct {
 		name  string
 		value pgtype.Timestamptz
 	}{
-		{"stripe", row.ProUntilStripe},
-		{"revenuecat", row.ProUntilRevenuecat},
-		{"granted", row.ProUntilGranted},
+		{"stripe", stripe},
+		{"revenuecat", revenuecat},
+		{"granted", granted},
 	} {
-		if c.value.Valid && c.value.Time.Equal(row.ProUntil.Time) {
+		if c.value.Valid && c.value.Time.Equal(derived.Time) {
 			return c.name
 		}
 	}
@@ -112,10 +119,21 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if sources.ProUntil.Valid && sources.ProUntil.Time.After(time.Now()) {
-		when := sources.ProUntil.Time
+	// The columns of the tier the caller is ACTUALLY on. Reading the pro ones unconditionally
+	// answered "ultra" with no until and no source — and pro_source is behavioural, so a
+	// client deciding whether to offer an in-app purchase from an empty one would sell Ultra
+	// to somebody already paying for it. That is the exact double-charge this field exists to
+	// prevent, produced by the endpoint meant to prevent it.
+	derived, stripe, revenuecat, granted := sources.ProUntil, sources.ProUntilStripe,
+		sources.ProUntilRevenuecat, sources.ProUntilGranted
+	if tier == plan.TierUltra {
+		derived, stripe, revenuecat, granted = sources.UltraUntil, sources.UltraUntilStripe,
+			sources.UltraUntilRevenuecat, sources.UltraUntilGranted
+	}
+	if derived.Valid && derived.Time.After(time.Now()) {
+		when := derived.Time
 		out.ProUntil = &when
-		out.ProSource = proSourceOf(sources)
+		out.ProSource = planSourceOf(derived, stripe, revenuecat, granted)
 	}
 	for _, u := range usage {
 		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, u.Enforced, resets))

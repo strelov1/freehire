@@ -27,7 +27,15 @@
   // One toggle drives both plans, so the two columns can never show different intervals.
   let interval = $state<'month' | 'year'>('month');
   const chosen = $derived(interval === 'year' ? annual : monthly);
-  const ultraChosen = $derived(interval === 'year' ? ultraAnnual : ultraMonthly);
+  // Falls back to whichever Ultra price exists, because the column's presence must depend on
+  // whether Ultra is SOLD and not on which toggle is showing. Without it, a deployment
+  // offering only a monthly Ultra loses the whole column the moment a reader flips to
+  // Yearly — the plan vanishing as a side effect of looking at the other one. The interval
+  // shown is read off the price itself, so a fallback says "$19 / month" rather than
+  // implying an annual price that does not exist.
+  const ultraChosen = $derived(
+    (interval === 'year' ? ultraAnnual : ultraMonthly) ?? ultraMonthly ?? ultraAnnual,
+  );
 
   const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
 
@@ -35,7 +43,7 @@
   // than a ceiling, so it is not shown — quoting a guard as a limit would promise less than
   // the plan gives. Zero is "not on this plan" rather than "nothing today".
   const allowanceText = (a: PlanTierAllowance) =>
-    a.unlimited ? 'Unlimited' : a.daily > 0 ? `${a.daily} / day` : '—';
+    a.unlimited ? 'Unlimited' : a.limit > 0 ? `${a.limit} / day` : '—';
 
   // What the annual price saves against twelve monthly ones, as a whole percentage. Shown
   // only when both prices exist and the saving is real — a "save 0%" badge is worse than
