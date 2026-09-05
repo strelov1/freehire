@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
@@ -88,6 +89,11 @@ func newAutoApplyTailorAppFull(pool *pgxpool.Pool, iss *auth.Issuer, model assis
 		jobs:       queries,
 		cv:         cvH,
 		plans:      plans,
+		// PostJobAutoApply tracks the job on enqueue (openspec/changes/
+		// auto-apply-review-tracking) — a real service, not nil, since production always
+		// wires one (newAssistantHandlers) and PostJobAutoApply trusts that rather than
+		// nil-checking a dependency that is never actually absent.
+		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})

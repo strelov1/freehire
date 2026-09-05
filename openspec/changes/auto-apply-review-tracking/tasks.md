@@ -63,12 +63,14 @@ no browser, by its own existing design) is the wrong place for this.
 
 ## 4. Enqueue: put the job on the tracker board
 
-- [ ] 4.1 RED: `auto-apply-submit-trigger`'s enqueue handler, given a job not yet tracked by the
+- [x] 4.1 RED: `auto-apply-submit-trigger`'s enqueue handler, given a job not yet tracked by the
       caller, results in a tracked entry at stage `preparing` after enqueue.
-- [ ] 4.2 RED: given a job already tracked at some other stage, enqueue leaves that stage
+- [x] 4.2 RED: given a job already tracked at some other stage, enqueue leaves that stage
       unchanged.
-- [ ] 4.3 GREEN: call `jobtracking.Service.Track(ctx, userID, slug, ptr("preparing"), nil,
-      "auto_apply")` from the enqueue handler, after the existing queue insert.
+- [x] 4.3 GREEN: call `jobtracking.Service.Track` from the enqueue handler
+      (`ensureTrackedForAutoApply`), gated by a new `GetApplicationStage` read so an already-set
+      stage is never overwritten (`TrackJob`'s own `COALESCE(EXCLUDED.stage, applications.stage)`
+      would otherwise reset an in-progress application back to `preparing`).
 
 ## 5. Status derivation + tracked-job read path
 

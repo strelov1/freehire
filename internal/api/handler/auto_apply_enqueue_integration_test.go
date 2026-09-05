@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -197,6 +198,73 @@ func TestPostJobAutoApply_FreshRequestCreatesOneEntryAndPublishes(t *testing.T) 
 		t.Fatalf("auto_apply_queue rows = %d, want 1", count)
 	}
 	waitForPublishCalls(t, events, 1)
+}
+
+// TestPostJobAutoApply_PutsTheJobOnTheTrackerBoard covers openspec/changes/
+// auto-apply-review-tracking: triggering auto-apply for a job the candidate has never
+// tracked must make it appear on the board (stage `preparing`) immediately, not only once
+// an attempt happens to succeed — today the queue is otherwise entirely invisible there.
+func TestPostJobAutoApply_PutsTheJobOnTheTrackerBoard(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "board@example.test")
+	makePro(t, pool, userID)
+	insertBaseCV(t, pool, userID)
+	job := seedEnqueueJob(t, pool, "greenhouse", "board-job")
+
+	resp := enqueueRequest(t, app, "board-job", cookie)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var stage pgtype.Text
+	if err := pool.QueryRow(context.Background(),
+		"SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2", userID, job).Scan(&stage); err != nil {
+		t.Fatalf("read application stage: %v", err)
+	}
+	if !stage.Valid || stage.String != "preparing" {
+		t.Errorf("stage = %+v, want preparing", stage)
+	}
+}
+
+// TestPostJobAutoApply_DoesNotMoveAJobAlreadyOnTheBoard covers the other half of the same
+// requirement: a job the candidate already progressed (say, to `interview`) must not be
+// silently reset to `preparing` just because they also started an auto-apply attempt for it.
+func TestPostJobAutoApply_DoesNotMoveAJobAlreadyOnTheBoard(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "already-board@example.test")
+	makePro(t, pool, userID)
+	insertBaseCV(t, pool, userID)
+	job := seedEnqueueJob(t, pool, "greenhouse", "already-board-job")
+
+	tracking := jobtracking.New(jobtracking.NewQueriesRepository(db.New(pool), pool))
+	stage := "interview"
+	if _, err := tracking.Track(context.Background(), userID, "already-board-job", &stage, nil, "user"); err != nil {
+		t.Fatalf("pre-track: %v", err)
+	}
+
+	resp := enqueueRequest(t, app, "already-board-job", cookie)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var got pgtype.Text
+	if err := pool.QueryRow(context.Background(),
+		"SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2", userID, job).Scan(&got); err != nil {
+		t.Fatalf("read application stage: %v", err)
+	}
+	if !got.Valid || got.String != "interview" {
+		t.Errorf("stage = %+v, want interview to survive unchanged", got)
+	}
 }
 
 func TestPostJobAutoApply_RepeatRequestIsIdempotentAndDoesNotRepublish(t *testing.T) {
