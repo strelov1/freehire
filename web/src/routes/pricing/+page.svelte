@@ -204,11 +204,14 @@
               Have a promo code?
             </label>
             <div class="flex gap-2">
+              <!-- The placeholder is deliberately not shaped like a code. A public
+                   repository showing an example that looks redeemable is showing a code,
+                   as far as anyone reading it is concerned. -->
               <input
                 id="promo-code"
                 type="text"
                 bind:value={code}
-                placeholder="EARLY90"
+                placeholder="Enter your code"
                 autocomplete="off"
                 spellcheck="false"
                 class="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase"

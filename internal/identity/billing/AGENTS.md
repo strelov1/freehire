@@ -45,6 +45,22 @@ answer 404, and its worker exits without opening a connection.
 - **A cancelled subscription still entitles until its period ends.** Cancelling says "do not
   renew", not "refund me". They bought that time.
 
+- **A `Discount` is executed, never interpreted.** `CheckoutURL` takes a percentage and a
+  label and mints a `duration=once` coupon from it; `CreditAccount` places a positive amount
+  of credit on the account's customer, creating one if it has never bought. What decides that
+  an account is owed either lives in `internal/identity/promo`, which this package does not
+  import — a discount is a reason to buy, and the scope above is the subscription itself. The
+  sign convention is applied in exactly one place (`creditCustomerBalance`): the provider's
+  positive balance is a DEBT, so a caller passing a signed amount would eventually bill
+  somebody for a reward.
+
+- **`hasCollectedPayment` is not `invoices`, and must not become it.** The receipt list
+  returns an empty slice when the provider fails and falls back to `amount_due` when
+  `amount_paid` is zero, so a declined charge does not render as a free month. Both are right
+  for a receipt list and both are wrong for deciding whether money moved: the first reads a
+  network blip as "collected nothing" and silently denies a reward somebody earned, the
+  second reads an unpaid invoice as a payment.
+
 - **`current_period_end` lives on the subscription ITEM, not on the subscription**, and
   reading the wrong one is not a cosmetic miss. The provider moved it — a subscription can
   hold items on different cycles, so the field stopped having one answer at the top — and a

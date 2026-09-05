@@ -60,7 +60,7 @@
   customer created for them rather than being skipped.
 - [x] 4.3 Enforce the per-referrer ceiling: over it, the row stays `pending`, nothing is
   credited, and the invitee's own discount is untouched.
-- [ ] 4.4 Assert a store-only invitee (RevenueCat, no Stripe customer) never grants. This is
+- [x] 4.4 Assert a store-only invitee (RevenueCat, no Stripe customer) never grants. This is
   a property of the query's `stripe_customer_id IS NOT NULL` filter, so the assertion needs a
   real database and lands with the integration tests in 8.2.
 
@@ -97,23 +97,23 @@
 
 ## 7. Guards and docs
 
-- [ ] 7.1 A test that walks the module for a string literal shaped like a live promo code and
+- [x] 7.1 A test that walks the module for a string literal shaped like a live promo code and
   fails naming the file. Fixtures use an allowlisted prefix so the guard cannot be satisfied
   by weakening it.
-- [ ] 7.2 `internal/identity/promo/AGENTS.md`: the scope, why it is not `engage/referral`, why
+- [x] 7.2 `internal/identity/promo/AGENTS.md`: the scope, why it is not `engage/referral`, why
   granting is worker-side, and the one-discount-per-session rule.
-- [ ] 7.3 Note the new capability in `internal/identity/billing/AGENTS.md` — a `Discount`
+- [x] 7.3 Note the new capability in `internal/identity/billing/AGENTS.md` — a `Discount`
   parameter it executes and never interprets — without widening the stated scope.
-- [ ] 7.4 Record `INVITE_REWARD_MAX_PER_USER` and `INVITE_REWARD_MAX_PER_RUN` where the other
+- [x] 7.4 Record `INVITE_REWARD_MAX_PER_USER` and `INVITE_REWARD_MAX_PER_RUN` where the other
   worker variables are documented in `CLAUDE.md`.
 
 ## 8. Verification
 
-- [ ] 8.1 `gofmt -l .` silent, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`.
-- [ ] 8.2 `go test -tags=integration ./internal/identity/promo/ ./internal/identity/billing/`,
+- [x] 8.1 `gofmt -l .` silent, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`.
+- [x] 8.2 `go test -tags=integration ./internal/identity/promo/ ./internal/identity/billing/`,
   including the two assertions that need a real database: `CreditAccount` creates no second
   customer for an already-bound account, and the seat claim cannot be won twice.
-- [ ] 8.3 `pnpm check:sql`, `pnpm check:links`, `golangci-lint run`.
-- [ ] 8.4 Walk the whole flow against a Stripe stub: invited signup → discounted checkout →
+- [x] 8.3 `pnpm check:sql`, `pnpm check:links`, `golangci-lint run`.
+- [x] 8.4 Walk the whole flow against a Stripe stub: invited signup → discounted checkout →
   paid invoice → worker grants → referrer credited; then re-run the worker and assert nothing
   moves.
