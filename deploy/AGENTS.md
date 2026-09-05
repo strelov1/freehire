@@ -65,12 +65,17 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   one to verify the other fails every delivery, and the failure looks exactly like a wrong
   key rather than a wrong environment.
 
-- **The stores are a SECOND provider, configured separately and inert without its own three
-  variables.** `REVENUECAT_API_KEY` (a `sk_` SECRET key, server-side only),
-  `REVENUECAT_WEBHOOK_SECRET`, and `REVENUECAT_ENTITLEMENT` (defaults to `pro`). Missing any
-  of them mounts no store route and skips that reconciler pass, and **leaves Stripe working**
-  — the two are independent, so a deployment may sell on the web, in the apps, in both, or in
-  neither.
+- **The stores are a SECOND provider, configured separately and inert without its two
+  credentials.** `REVENUECAT_API_KEY` (a `sk_` SECRET key, server-side only) and
+  `REVENUECAT_WEBHOOK_SECRET` are what a deployment must set. Missing either mounts no store
+  route and skips that reconciler pass, and **leaves Stripe working** — the two providers are
+  independent, so a deployment may sell on the web, in the apps, in both, or in neither.
+
+  `REVENUECAT_ENTITLEMENT` is OPTIONAL and defaults to `pro`; set it only if the dashboard's
+  entitlement is called something else. `Enabled()` does require it to be non-empty, but the
+  default fills it, so leaving it unset switches nothing off — an earlier draft of this note
+  said all three were required, which would have had an operator hunting a variable that was
+  never missing.
 
   This exists because Apple's guideline 3.1.1 and Google Play's Payments policy require
   digital content consumed in an app to be sold through in-app purchase. The mobile client

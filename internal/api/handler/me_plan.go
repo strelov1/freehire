@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -100,15 +99,20 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	// One extra row read, not a call to the provider. A lapsed or absent value simply leaves
 	// both fields out, which is what a free-plan caller should see.
 	//
-	// A FAILED read is logged rather than swallowed, and the reason is not tidiness. The tier
-	// above came from the same column through plans.Usage, so the response would say "pro"
-	// while carrying no pro_source — and a client that decides whether to show a paywall from
-	// pro_source would then offer an in-app purchase to somebody already paying, which is the
-	// exact double-sell that field exists to prevent.
+	// A FAILED read FAILS THE RESPONSE. Logging it and answering 200 anyway was the first
+	// draft, and it is the wrong direction: the tier above came from the same column through
+	// plans.Usage, so the answer would say "pro" while carrying no pro_source — and a client
+	// that decides whether to offer an in-app purchase from pro_source would then sell Pro to
+	// somebody already paying for it. That is the exact double-charge the field exists to
+	// prevent, produced by the endpoint meant to prevent it.
+	//
+	// A partial answer nobody can tell is partial is worse than no answer: a 500 is retried,
+	// a wrong 200 is believed.
 	sources, err := h.queries.GetProUntilSources(c.Context(), userID)
 	if err != nil {
-		log.Printf("plan: reading the plan sources for user %d: %v", userID, err)
-	} else if sources.ProUntil.Valid && sources.ProUntil.Time.After(time.Now()) {
+		return err
+	}
+	if sources.ProUntil.Valid && sources.ProUntil.Time.After(time.Now()) {
 		when := sources.ProUntil.Time
 		out.ProUntil = &when
 		out.ProSource = proSourceOf(sources)

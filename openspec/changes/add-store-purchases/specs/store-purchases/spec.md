@@ -313,13 +313,31 @@ subscriptions near their expiry, treating each provider independently and writin
 provider's column.
 
 Delivery stops for good after five retries, roughly two and a half hours after the event.
-Past that point the reconciler is the only path by which a paid subscription becomes Pro.
 
-#### Scenario: A lost delivery is recovered
+**The reconciler cannot recover a FIRST purchase, and saying otherwise would be a lie about
+the one case that matters most.** It has two candidate sources and a first purchase is in
+neither: the pending-events pass sees only recorded deliveries, and there is none; the
+near-expiry pass selects on a non-NULL `pro_until_revenuecat`, and it is NULL until something
+writes it. Both are bounded that way on purpose — an unbounded pass over `users` would enrol
+every account with the provider.
 
-- **GIVEN** a purchase whose webhook was never delivered successfully
+So for a first purchase whose delivery is lost, the self-service sync route is the ONLY
+recovery path, and the client is expected to call it. Every LATER lost delivery — a renewal, a
+cancellation, a refund — is recoverable by the reconciler, because by then a footprint exists.
+
+#### Scenario: A lost renewal is recovered
+
+- **GIVEN** an account with a store entitlement whose renewal webhook was never delivered
 - **WHEN** the reconciler runs
 - **THEN** the account's RevenueCat state is re-read and `pro_until_revenuecat` is corrected
+
+#### Scenario: A first purchase is not the reconciler's to recover
+
+- **GIVEN** a first purchase whose delivery never arrived, so the account has no recorded event
+  and a NULL `pro_until_revenuecat`
+- **WHEN** the reconciler runs
+- **THEN** it does not reach the provider for that account, and the account is recovered by the
+  caller's own sync instead
 
 #### Scenario: One provider's outage does not stall the other
 

@@ -181,8 +181,20 @@ func (p *revenuecatProvider) accept(raw []byte, signature string, now time.Time)
 // endpoint, taking every other subscriber's deliveries with it. Returning false instead
 // records the event with a NULL user, which is what "an event we could not attribute" already
 // means here.
+// It reads CustomerID when UserRef is empty, and that fallback is what makes the replay work.
+// `applyPending` rebuilds an event from the stored row and can only fill UserRef from a
+// non-NULL user_id — but a NULL user_id is precisely the row that still needs attributing.
+// Without the fallback the replay resolved nobody, the worker read that as "nothing to apply"
+// and STAMPED the row processed: a purchase marked done having conferred nothing, and never
+// retried. For this provider both fields carry the same string, so reading either is reading
+// `app_user_id`.
 func (p *revenuecatProvider) account(ctx context.Context, ev Event) (int64, bool) {
-	id, ok := userIDFromRef(ev.UserRef)
+	ref := ev.UserRef
+	if ref == "" {
+		ref = ev.CustomerID
+	}
+
+	id, ok := userIDFromRef(ref)
 	if !ok {
 		return 0, false
 	}

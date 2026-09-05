@@ -320,3 +320,43 @@ func TestADeliveryNamingAVanishedAccountIsRecordedNotRejected(t *testing.T) {
 		t.Fatalf("record: recorded=%v err=%v — an unattributable delivery must still be stored", recorded, err)
 	}
 }
+
+// TestAReplayWithNoStoredUserStillResolves is the path cmd/billing-sync takes when it retries
+// an event the webhook recorded but could not apply.
+//
+// applyPending rebuilds the event from the stored row, and it can only fill UserRef from a
+// non-NULL user_id — but a NULL user_id is exactly the row that still needs attributing. With
+// account() reading UserRef alone, the replay resolved nobody, the worker read that as
+// "nothing to apply" and STAMPED the row processed: a purchase marked done having conferred
+// nothing, and never retried.
+func TestAReplayWithNoStoredUserStillResolves(t *testing.T) {
+	until := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	s, pool, _ := newRevenueCat(t, entitledUntil(`"`+until.Format(time.RFC3339)+`"`))
+	ctx := context.Background()
+
+	userID := insertUser(t, pool, "replay-no-stored-user@example.com")
+
+	body := rcDelivery("evt_replay", userID)
+	ev, err := s.Accept(body, signRevenueCat(t, body, time.Now()), time.Now())
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	rowID, recorded, err := s.Record(ctx, ev)
+	if err != nil || !recorded {
+		t.Fatalf("record: recorded=%v err=%v", recorded, err)
+	}
+
+	// The row the reconciler finds when recording could not attribute it — the subject survives
+	// in app_user_id and nothing else does.
+	if _, err := pool.Exec(ctx, `UPDATE billing_events SET user_id = NULL WHERE id = $1`, rowID); err != nil {
+		t.Fatalf("orphan the row: %v", err)
+	}
+
+	replay := Event{ID: ev.ID, CustomerID: ev.CustomerID, Type: ev.Type}
+	if err := s.Apply(ctx, rowID, replay); err != nil {
+		t.Fatalf("apply: %v — a replay carrying only app_user_id must still find the account", err)
+	}
+	if got := readSource(t, pool, userID, "pro_until_revenuecat"); got == nil || !got.Equal(until) {
+		t.Fatalf("pro_until_revenuecat = %v, want %v", got, until)
+	}
+}

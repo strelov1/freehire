@@ -134,7 +134,13 @@ func (e *engine) Apply(ctx context.Context, rowID int64, ev Event) error {
 		return fmt.Errorf("billing: binding user %d for %s event %s: %w", userID, e.p.name(), ev.ID, err)
 	}
 
-	if err := e.SyncUser(ctx, userID); err != nil {
+	// e.sync, not SyncUser: the stranger check does not bind this path, and binding it would
+	// be the same mistake it made once already. The guard exists to stop a pass that reaches
+	// accounts WITHOUT evidence — a walk over users — from enrolling every one of them with the
+	// provider. Applying holds evidence: a signed delivery naming this account. That delivery
+	// IS the footprint, and refusing to act on it because the footprint has not been written
+	// yet would stamp a paid purchase processed having conferred nothing.
+	if err := e.sync(ctx, userID); err != nil {
 		return err
 	}
 	return e.q.MarkBillingEventProcessed(ctx, rowID)
