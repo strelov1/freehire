@@ -123,6 +123,15 @@ export interface InviteSummary {
   percent_off: number;
 }
 
+/** What one tier allows for one feature in a day. `unlimited` makes `limit` the fair-use
+ *  guard behind it rather than a ceiling — the same two field names, in the same meaning,
+ *  that every allowance response uses, so a page never has to learn a second vocabulary for
+ *  one idea. */
+export interface PlanTierAllowance {
+  limit: number;
+  unlimited: boolean;
+}
+
 /** What each plan allows and what Pro costs (`GET /api/v1/plans`). Public and
  *  unauthenticated — a pricing page that needs an account cannot do a pricing page's job.
  *
@@ -130,13 +139,6 @@ export interface InviteSummary {
  *  cannot drift from the limits actually enforced. `enforced` names the features whose
  *  ceiling really refuses today; while the shadow run is on it is empty, and a page claiming
  *  otherwise would be selling a limit nobody meets. */
-/** What one tier allows for one feature in a day. `unlimited` makes `daily` the fair-use
- *  guard behind it rather than a ceiling — the same convention the allowance itself uses,
- *  so a page never has to decide which of the two a number is. */
-export interface PlanTierAllowance {
-  daily: number;
-  unlimited: boolean;
-}
 
 export interface PlansMatrix {
   features: { feature: string; free: PlanTierAllowance; pro: PlanTierAllowance; ultra: PlanTierAllowance }[];
@@ -178,7 +180,7 @@ export interface BillingOverview {
 }
 
 export interface PlanState {
-  plan: 'free' | 'pro';
+  plan: 'free' | 'pro' | 'ultra';
   resets_at: string;
   /** When the Pro plan lapses. Absent on the free plan, and absent once it has lapsed —
    *  the server omits a past value, so a date here is always still in force. Read from the

@@ -103,10 +103,40 @@ This is the reshape `AGENTS.md` asks for over an awkward special case: the curre
 is not load-bearing legacy, and a third tier is exactly the new feature that does not fit
 cleanly into it.
 
-Environment knobs follow the existing naming: `PLAN_FREE_DAILY_<F>` and `PLAN_FAIR_USE_<F>`
-keep their meanings, and `PLAN_PRO_DAILY_<F>` and `PLAN_ULTRA_DAILY_<F>` join them. The pro
-auto-apply number in particular must move without a deploy, because it is a ceiling under a
-plan people already bought.
+Environment knobs follow the existing naming: `PLAN_FREE_DAILY_<F>`, `PLAN_PRO_DAILY_<F>` and
+`PLAN_ULTRA_DAILY_<F>`, one per tier. The pro auto-apply number in particular must move
+without a deploy, because it is a ceiling under a plan people already bought.
+
+**Amended during implementation.** This section originally kept `PLAN_FAIR_USE_<F>` alongside
+`PLAN_PRO_DAILY_<F>`. Both wrote the same field — a tier's figure is its ceiling where it has
+one and its fair-use guard where it does not — so keeping both meant two names for one thing,
+which the same paragraph argues against elsewhere. Nothing had ever set the older name (no
+`PLAN_*` variable is set on the production host at all), so it was removed rather than
+carried. Recorded here rather than left as a silent deviation from the spec.
+
+### A refusal offers an upgrade to anybody who is not on the top tier
+
+Added during implementation, and it reaches all six features rather than auto-apply alone.
+
+The 402 offered its upgrade link to the free tier only, which was correct while pro was the
+top of the range: there was nothing to sell a subscriber. With Ultra above it that rule
+withholds the link from exactly the person it is worth something to — a pro subscriber
+refused for auto-apply — and the refusal is the moment it is worth it. Written as "not the
+top tier" so that adding a fourth does not silently stop offering it to the one it displaced.
+
+Wider than the spec asked for, and deliberately: leaving the other five features on the old
+rule would mean two upgrade rules differing by feature, which is a thing to discover rather
+than a thing to read.
+
+### The account plan surface reads the tier the caller is on
+
+`GET /me/plan` filled `pro_until` and `pro_source` from the pro columns unconditionally, so
+an ultra subscriber was answered `plan: "ultra"` with neither. `pro_source` is behavioural —
+it exists so a client does not offer an in-app purchase to somebody already paying through
+Stripe — so an empty one on a paying account is the exact double-charge the field prevents,
+produced by the endpoint meant to prevent it. The fields keep their `pro_` spelling, which
+clients read; what they have always meant is "when does the plan you are paying for run out,
+and where did you buy it".
 
 ### Tier resolution is Ultra > Pro > Free
 

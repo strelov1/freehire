@@ -1,7 +1,10 @@
 # Plan and allowance conventions
 
 ## Scope
-The plan a user is on and the per-day allowance each metered AI feature draws from. One
+The plan a user is on and the per-day allowance each metered feature draws from. Five of the
+six are AI features whose cost is a model call; the sixth, auto-apply, is a headless browser
+submitting an application, and it is shaped differently for that reason wherever it differs.
+One
 question in, yes or no out: `Consume(user, feature, ref)`. Which plan, what it allows, how
 much is left and whether a refusal is switched on are all this package's business.
 
@@ -124,10 +127,18 @@ transaction. `store.go` is the transaction around it and nothing else.
   reconnect are work already paid for; refusing one charges the candidate for looking at
   their own result twice.
 
-- **Every meter fails open.** A counter that cannot be read logs and lets the action
-  through uncharged. Bookkeeping must never refuse a legitimate request, and an uncharged
-  turn is a smaller wrong than a candidate stopped by our accounting. The atomic
+- **Every meter fails open — EXCEPT auto-apply.** A counter that cannot be read logs and
+  lets the action through uncharged. Bookkeeping must never refuse a legitimate request, and
+  an uncharged turn is a smaller wrong than a candidate stopped by our accounting. The atomic
   consumption is the real ceiling, not the pre-checks in front of it.
+
+  The exception is auto-apply, and the rule above is why it is one. Everywhere else the
+  action is a model call whose cost we absorb, so an unmeasured one is a rounding error.
+  auto-apply drives a browser and submits a REAL application to a REAL employer under
+  somebody's name — an unmeasured one is not ours to absorb, and it is not undoable. The
+  honest answer to "we could not tell whether you may" is to say so, so `chargeAutoApply`
+  answers 503 both when the charge errors and when the meter is absent. Nothing else in this
+  package may copy that without an argument of the same shape.
 
 - **A refusal is 402 and must precede the stream.** Writing it after the headers are out
   makes it an event inside a 200 — invisible to anything checking status codes. Note that

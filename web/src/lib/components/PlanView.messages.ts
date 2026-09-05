@@ -13,6 +13,7 @@ export const messages = defineMessages(
       'Every AI feature is available on every plan. What changes is how much of each you can do in a day — and it starts over every night.',
     planStrip: {
       pro: 'Pro',
+      ultra: 'Ultra',
       free: 'Free',
       runsUntilPrefix: 'Runs until',
       freeSubtitle: 'Same features, daily limits',
@@ -75,6 +76,7 @@ export const messages = defineMessages(
         'Все AI-функции доступны на любом тарифе. Отличается только то, сколько каждой можно сделать за день — и каждую ночь счётчик обнуляется.',
       planStrip: {
         pro: 'Pro',
+        ultra: 'Ultra',
         free: 'Free',
         runsUntilPrefix: 'Действует до',
         freeSubtitle: 'Те же функции, дневные лимиты',

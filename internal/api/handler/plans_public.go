@@ -27,10 +27,15 @@ func (h *plansHandlers) register(api fiber.Router) {
 	api.Get("/plans", h.GetPlans)
 }
 
-// planTierView is what one tier allows for one feature in a day. Unlimited makes Daily the
+// planTierView is what one tier allows for one feature in a day. Unlimited makes Limit the
 // fair-use guard behind it rather than a ceiling, exactly as the allowance itself does.
+//
+// The field names are allowanceView's, deliberately. This endpoint and every allowance
+// response describe the same idea, and shipping it as `daily` here and `limit` there would
+// make a page learn a second vocabulary for one thing — the objection env.go raises about
+// two names for one field, in the place a customer reads.
 type planTierView struct {
-	Daily     int  `json:"daily"`
+	Limit     int  `json:"limit"`
 	Unlimited bool `json:"unlimited"`
 }
 
@@ -95,5 +100,5 @@ func (h *plansHandlers) GetPlans(c *fiber.Ctx) error {
 // most expensive place, since a promise on a pricing page is one a customer can hold us to.
 func tierView(cfg plan.Config, tier plan.Tier, f plan.Feature) planTierView {
 	a := cfg.Allowance(tier, f)
-	return planTierView{Daily: a.Limit, Unlimited: a.Unlimited}
+	return planTierView{Limit: a.Limit, Unlimited: a.Unlimited}
 }

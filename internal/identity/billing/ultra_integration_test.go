@@ -10,15 +10,18 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
 const ultraPrice = "price_ultra_monthly"
@@ -163,5 +166,33 @@ func TestWithNoUltraPricesNobodyIsEverUltra(t *testing.T) {
 	}
 	if ultra.Valid {
 		t.Fatalf("ultra_until = %v with no Ultra price configured, want NULL", ultra.Time)
+	}
+}
+
+// TestUltraUntilRefusesAssignment is the Pro column's twin, and it exists for the same
+// reason: the guarantee lives in the schema rather than in a convention, so it is worth one
+// test that a hand-written UPDATE cannot quietly grant somebody a plan.
+func TestUltraUntilRefusesAssignment(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+
+	var id int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('ultra-generated@example.test') RETURNING id`).Scan(&id); err != nil {
+		t.Fatalf("seeding: %v", err)
+	}
+
+	at := time.Now().UTC().Add(24 * time.Hour)
+	_, err := pool.Exec(ctx, `UPDATE users SET ultra_until = $1 WHERE id = $2`, at, id)
+	if err == nil {
+		t.Fatal("assigning ultra_until succeeded; the column must be generated, not writable")
+	}
+
+	// 428C9 is ERRCODE_GENERATED_ALWAYS. Asserting the code rather than the message keeps the
+	// test from breaking on a Postgres release that rewords the sentence, and from passing on
+	// an unrelated error that merely happens to be an error.
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "428C9" {
+		t.Fatalf("assigning ultra_until failed with %v, want SQLSTATE 428C9 (generated column)", err)
 	}
 }

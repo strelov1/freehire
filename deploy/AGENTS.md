@@ -64,7 +64,8 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   half is copying it to the host and running `systemctl daemon-reload`. Treat git as the
   truth and the host as the copy, not the other way round, or this snapshot rots into
   fiction within a month.
-- **Billing reads four variables from `/opt/freehire/.env`, and is inert without them.**
+- **Billing reads four required variables from `/opt/freehire/.env`, and is inert without
+  them.**
   `STRIPE_SECRET_KEY` (`sk_…`), `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_PRICE_IDS`, and
   `FRONTEND_ORIGIN` — which the fleet already sets, and which is reused rather than given a
   billing-specific twin that would disagree with it the first time one was changed. With any missing, every billing route is simply not mounted and the timer is a
@@ -76,6 +77,15 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   plan. An empty list is not a default that sells the obvious thing — it confers Pro on
   nobody, deliberately, because the alternative to refusing a misconfiguration is granting
   one.
+
+  **`STRIPE_ULTRA_PRICE_IDS` is the fifth, and it is OPTIONAL** — the same list shape, for
+  the prices that confer the Ultra tier rather than Pro. Unset, nobody is ever resolved to
+  ultra, the pricing page shows two plans instead of three, and Pro and Free behave exactly
+  as they did before it existed; that is what makes it safe to deploy the code before the
+  price is created. Which tier a subscription confers is decided by which of these two lists
+  its price appears in, so a price named in neither confers nothing, and a price named in
+  both confers Ultra — a misconfiguration, but one that fails toward the plan the customer
+  paid more for.
 
   Two steps happen in the provider's dashboard and nowhere else: registering the webhook at
   `https://freehire.me/api/v1/billing/stripe/webhook` (its `whsec_` secret is shown once,
