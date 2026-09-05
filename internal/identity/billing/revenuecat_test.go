@@ -1,6 +1,8 @@
 package billing
 
 import (
+	"context"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -243,5 +245,27 @@ func TestTheLifetimeHorizonOutlivesTheSyncWindow(t *testing.T) {
 	chances := int((2 * reconcilerWindow) / reconcilerInterval)
 	if chances < 24 {
 		t.Fatalf("a lifetime grant gets only %d scheduled passes inside the band; one bad day would drop it", chances)
+	}
+}
+
+// TestRefuseRedirect pins that the secret key travels to one host and no other.
+//
+// Go's default policy follows up to ten hops, carries Authorization to the original host and
+// its subdomains, and permits HTTPS to be redirected to plain HTTP. safehttp re-dials each hop
+// through the SSRF guard, which stops an internal address — and says nothing about a public
+// host receiving a `Bearer sk_…` meant for api.revenuecat.com.
+func TestRefuseRedirect(t *testing.T) {
+	for _, target := range []string{
+		"https://api.revenuecat.com.evil.test/v1/subscribers/1",
+		"http://api.revenuecat.com/v1/subscribers/1",
+		"https://api.revenuecat.com/v2/elsewhere",
+	} {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		if err := refuseRedirect(req, nil); err == nil {
+			t.Fatalf("a redirect to %s was allowed; the key must not follow one anywhere", target)
+		}
 	}
 }
