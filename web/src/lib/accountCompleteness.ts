@@ -23,12 +23,11 @@ export interface CompletenessStep {
   id: string;
   label: string;
   href: SetupHref;
-  /** The id of the element on `href`'s page to land on, for a step whose page holds more
-   *  than the step asks for. Both steps that land on /my/profile need one: that page is
-   *  where this card is itself rendered, so without an anchor the link goes to where the
-   *  reader already stands and nothing appears to happen. An opaque string rather than a type shared
-   *  with the page — this module stays free of any SvelteKit import (see `SetupHref`) — so
-   *  it must be kept in sync by hand with that element's `id`. */
+  /** Where on `href`'s page to land. Required for `/my/profile`, which is the page this
+   *  card is itself rendered on: without an anchor the link goes to where the reader
+   *  already stands and nothing appears to happen. An opaque string rather than a type
+   *  shared with the page — this module stays free of any SvelteKit import (see
+   *  `SetupHref`) — so it is kept in sync by hand with that element's `id`. */
   hash?: string;
   done: boolean;
 }
