@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Check, User } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
+  import { ApiError } from '$lib/api';
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
+  import { notifications } from '$lib/notifications.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { cn } from '$lib/ui';
   import type { SavedSearch, UserProfile } from '$lib/types';
@@ -47,7 +48,11 @@
     try {
       const query = filtersToParams(filtersFromProfile(profile)).toString();
       search = await savedSearches.create('My profile', query, true);
-      await api.createSubscription(search.id, 'email');
+      // Through the store, not api.createSubscription: this page also renders the
+      // per-channel chips (AlertChannels) for this very saved search, and they read
+      // the store. Writing past it left the Email chip drawing "off" over a
+      // subscription that existed, so tapping it POSTed a duplicate and 409'd.
+      await notifications.subscribe(search.id, 'email');
       flash();
     } catch (e) {
       // The search may have been created before the subscribe call failed — clean it

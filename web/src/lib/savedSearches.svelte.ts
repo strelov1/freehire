@@ -9,6 +9,7 @@
 // caller (a duplicate name or the per-user cap is a 409) so the UI can show them.
 
 import { api } from '$lib/api';
+import { notifications } from '$lib/notifications.svelte';
 import { UserResource } from '$lib/userResource.svelte';
 import type { SavedSearch } from '$lib/types';
 
@@ -50,10 +51,14 @@ class SavedSearches extends UserResource<SavedSearch[]> {
     return row;
   }
 
-  /** Delete a set and drop it from the list. */
+  /** Delete a set and drop it from the list, along with the subscriptions the server
+   *  cascades away with it (subscriptions.saved_search_id ON DELETE CASCADE) — the
+   *  cascade is a property of this DELETE, so it is reflected here rather than at each
+   *  of the five call sites. */
   async remove(id: number): Promise<void> {
     await api.deleteSavedSearch(id);
     this.#items = this.#items.filter((s) => s.id !== id);
+    notifications.forgetSavedSearch(id);
   }
 }
 
