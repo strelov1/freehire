@@ -59,6 +59,7 @@
         { label: 'For companies', href: resolve('/for-companies') },
         { label: 'Contribute', href: resolve('/contribute') },
         { label: 'Submit a job', href: resolve('/submit') },
+        { label: 'Status', href: resolve('/status') },
         { label: 'Privacy', href: resolve('/privacy') },
         { label: 'Terms', href: resolve('/terms') },
       ],
