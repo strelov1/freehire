@@ -18,7 +18,7 @@ import type { Category } from './generated/contracts';
 import { categoryLabel } from './labels';
 
 /** The half of the placeholder that never changes. */
-export const ROLE_PREFIX = 'Search jobs — e.g. ';
+export const ROLE_PREFIX = 'Search jobs: ';
 
 /** The roles the box types, in order.
  *
@@ -71,7 +71,7 @@ export interface TypewriterState {
 /** Where the animation begins: the FIRST role already whole.
  *
  *  Not an empty tail. The server renders this state, and an empty tail would ship
- *  `"Search jobs — e.g. "` — a sentence that stops mid-air for anyone reading before
+ *  `"Search jobs: "` — a label that stops mid-air for anyone reading before
  *  hydration or with JavaScript off. Starting complete also means the first thing anyone
  *  reads is a whole example, and the animation's first act is to erase it rather than to
  *  correct a dangling line. */
