@@ -34,3 +34,62 @@ export function autoApplyButtonState(
   if (status === 'failed') return { kind: 'failed' };
   return { kind: 'idle' };
 }
+
+/** What the job page's two call-to-action buttons look like, given the auto-apply state.
+ *  Never two loud buttons at once, and one wherever the reader still has something to do. */
+export type JobCtaPlan = {
+  /** `null` where auto-apply cannot drive the posting's ATS: no button is rendered. */
+  autoApply: {
+    label: string;
+    /** Carries the brand fill — the page's primary call to action. */
+    primary: boolean;
+    /** Renders the `Pro` marker naming the plan the action requires. */
+    pro: boolean;
+    disabled: boolean;
+  } | null;
+  /** The link out to the posting's own site. Demoted to an outline `Show origin` while
+   *  auto-apply owns the primary slot. */
+  external: { label: 'Apply' | 'Show origin'; primary: boolean };
+};
+
+/** A rendered-but-unpressable auto-apply button: it reports where the attempt stands and
+ *  takes neither the brand fill nor the `Pro` marker. */
+const quiet = (label: string): NonNullable<JobCtaPlan['autoApply']> => ({
+  label,
+  primary: false,
+  pro: false,
+  disabled: true,
+});
+
+const showOrigin = { label: 'Show origin', primary: false } as const;
+const apply = { label: 'Apply', primary: true } as const;
+
+/** Ranks the two CTAs for a posting.
+ *
+ *  `declined` and `failed` hand the primary slot BACK to the external button: auto-apply
+ *  is not going to act in either state, so applying by hand is the reader's only way
+ *  forward and demoting it there would leave the page with nothing loud to press. The rule
+ *  is "demote while an attempt stands or can be started", not "demote whenever the
+ *  auto-apply button exists" — the two read the same until you reach those two states.
+ *
+ *  `pro` rides only the clickable state for the same reason the brand fill does: a marker
+ *  naming what an action requires says nothing on a button nobody can press. */
+export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
+  switch (state.kind) {
+    case 'hidden':
+      return { autoApply: null, external: apply };
+    case 'idle':
+      return {
+        autoApply: { label: 'Auto-apply', primary: true, pro: true, disabled: false },
+        external: showOrigin,
+      };
+    case 'queued':
+      return { autoApply: quiet('Auto-apply queued'), external: showOrigin };
+    case 'applied':
+      return { autoApply: quiet('Already applied'), external: showOrigin };
+    case 'declined':
+      return { autoApply: quiet('Auto-apply declined'), external: apply };
+    case 'failed':
+      return { autoApply: quiet("Auto-apply couldn't complete"), external: apply };
+  }
+}

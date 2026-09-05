@@ -5,7 +5,7 @@
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { autoApplyButtonState } from '$lib/autoApplyButton';
+  import { autoApplyButtonState, jobCtaPlan } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, requirementGroups, summaryFacets } from '$lib/enrichment';
@@ -293,6 +293,16 @@
   const autoApplyState = $derived(
     autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied),
   );
+  // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
+  // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
+  // where they unit-test without mounting this component.
+  const cta = $derived(jobCtaPlan(autoApplyState));
+
+  // The two bars that carry the apply link WITHOUT an auto-apply button beside it — the
+  // pinned desktop header and the mobile sticky bar — never demote it. "Show origin" steps
+  // aside for auto-apply, and in a bar that does not offer auto-apply it would step aside
+  // for nothing the reader can reach from there.
+  const undemotedExternalCta = { label: 'Apply', primary: true } as const;
 
   async function onAutoApplyClick() {
     if (!isAuthenticated()) {
@@ -313,16 +323,23 @@
   }
 </script>
 
-<!-- The apply CTA renders twice: inline in the header on desktop, and in the
-     mobile sticky bar at the end of the article. Sole difference is size + layout
-     classes, so both share this snippet.
+<!-- The link out to the posting's own site. Renders twice: beside the title on desktop,
+     and in the mobile sticky bar at the end of the article. Size, layout classes and the
+     `external` half of the CTA plan are what differ, so both share this snippet.
+     `external` decides only the word and the loudness — the destination, the target and
+     the click handler are the same button either way, which is what keeps the apply-intent
+     event comparable across postings whether or not auto-apply offered to do it instead.
      nofollow: the destination is the posting's own site, which the catalogue never
      vetted — the same stance the description sanitizer takes on in-body links
      (internal/sources/sanitize.go). Without it a submitted vacancy buys a followed
      link from every job page, which is what the SEO submissions are actually after. -->
-{#snippet applyCta(size: 'md' | 'lg', className: string)}
+{#snippet applyCta(
+  size: 'md' | 'lg',
+  className: string,
+  external: { label: string; primary: boolean },
+)}
   <Button
-    variant="primary"
+    variant={external.primary ? 'primary' : 'outline'}
     {size}
     href={job.url}
     target="_blank"
@@ -330,37 +347,36 @@
     onclick={onApplyClick}
     class={className}
   >
-    Apply <ArrowRight class="size-4" />
+    {external.label} <ArrowRight class="size-4" />
   </Button>
 {/snippet}
 
-<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside Apply, not a
+<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside the apply link, not a
      replacement for it — auto-apply still goes through the same ATS in the end, this
-     button only starts the tailor-then-review sequence. Absent entirely off
-     autoApplyButtonState's `hidden` (any source but Greenhouse today). `idle` is the only
-     clickable state; `queued`/`declined`/`applied`/`failed` render disabled (the
-     `disabled:opacity-50` the button variant already carries) so a caller who already has
-     an attempt, already applied for real, or whose attempt cmd/auto-apply gave up on, sees
-     that at a glance rather than clicking into a 200 or a 409 that changes nothing. -->
+     button only starts the tailor-then-review sequence. What it says and how loud it is
+     both come from the CTA plan; the only thing decided here is that a submission already
+     in flight also disables it, which is a fact about THIS component's request rather than
+     about the posting.
+     The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
+     background and foreground, none of which are legible on `bg-brand`. Styling it from the
+     button's own foreground token instead makes it follow the button into either theme. -->
 {#snippet autoApplyCta(className: string)}
-  {#if autoApplyState.kind !== 'hidden'}
+  {#if cta.autoApply}
+    {@const button = cta.autoApply}
     <Button
-      variant="secondary"
+      variant={button.primary ? 'primary' : 'secondary'}
       size="md"
-      disabled={autoApplyState.kind !== 'idle' || autoApplySubmitting}
+      disabled={button.disabled || autoApplySubmitting}
       onclick={onAutoApplyClick}
       class={className}
     >
-      {#if autoApplyState.kind === 'queued'}
-        Auto-apply queued
-      {:else if autoApplyState.kind === 'declined'}
-        Auto-apply declined
-      {:else if autoApplyState.kind === 'applied'}
-        Already applied
-      {:else if autoApplyState.kind === 'failed'}
-        Auto-apply couldn't complete
-      {:else}
-        Auto-apply
+      {button.label}
+      {#if button.pro}
+        <span
+          class="rounded-sm bg-brand-foreground/15 px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide"
+        >
+          Pro
+        </span>
       {/if}
     </Button>
   {/if}
@@ -433,16 +449,18 @@
   {/if}
 {/snippet}
 
-<!-- The action strip: everything a reader does WITH the posting — talk about it, flag
-     it, keep it, open it — on one line, sharing the tab row's rule. It carries the
+<!-- The action strip: the QUIET things a reader does with a posting — talk about it, flag
+     it, keep it, file it — on one line, sharing the tab row's rule. It carries the
      rule itself (`border-b`) rather than sitting above one, so the line reads as a
      single edge across the column: the strip and the TabStrip beside it are aligned on
      their bottoms, and each draws its own half of it.
+     The two loud things — auto-apply and the apply link — are NOT here; they are ctaGroup,
+     up beside the title. They shared this row until there were six controls on it, at which
+     point the TabStrip, the only half that yields, had been squeezed to a scrolling sliver.
      Rendered in two places, one visible at a time (the caller passes the display class):
      the tab row on lg, and directly under the title below it, where the sidebar stacks
      between the title and the description and a strip left on the tab row would put Save
-     a whole screen away from the job it saves. Only the apply CTA drops out below lg — the sticky
-     bottom bar carries it there, which is also what leaves the phone room for the labels. -->
+     a whole screen away from the job it saves. -->
 {#snippet actionStrip(className: string)}
   <div class={`shrink-0 items-center gap-1.5 ${className}`}>
     <a
@@ -456,8 +474,20 @@
     {@render reportButton()}
     {@render saveButton()}
     <AddToListButton jobSlug={job.public_slug} />
-    {@render autoApplyCta('ml-1 hidden shrink-0 lg:inline-flex')}
-    {@render applyCta('md', 'ml-1 hidden shrink-0 lg:inline-flex')}
+  </div>
+{/snippet}
+
+<!-- The two call-to-action buttons, auto-apply first: the page's answer to "what do I do
+     with this posting". They ride the title's own row rather than the tab row below it,
+     because the tab row's other half is the content TabStrip and the strip is the half
+     that cannot shrink — every control added here used to come straight out of the tab
+     labels, which had been squeezed to a scrolling sliver by the time there were six.
+     `hidden lg:flex`: below lg the sticky bottom bar carries the apply CTA instead, and
+     auto-apply has no button there at all. -->
+{#snippet ctaGroup()}
+  <div class="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
+    {@render autoApplyCta('shrink-0')}
+    {@render applyCta('md', 'shrink-0', cta.external)}
   </div>
 {/snippet}
 
@@ -606,6 +636,10 @@
           <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
         </Chip>
       {/if}
+      <!-- `ml-auto` inside the snippet, so the buttons take the right edge of the title's
+           own row. The row wraps, so a long title pushes them onto a line of their own
+           rather than truncating either. -->
+      {@render ctaGroup()}
     </div>
 
     <!-- Below lg the provenance line is a single non-wrapping row already truncating the
@@ -791,7 +825,7 @@
                them for most of a description several screens long. -->
           <div class="hidden shrink-0 items-center gap-2 lg:flex">
             {@render saveButton('size-9 rounded-md px-0', true)}
-            {@render applyCta('md', 'shrink-0')}
+            {@render applyCta('md', 'shrink-0', undemotedExternalCta)}
           </div>
         </div>
       </div>
@@ -926,7 +960,11 @@
   <div
     class="pointer-events-none sticky bottom-0 z-30 -mx-5 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
   >
-    {@render applyCta('lg', 'pointer-events-auto w-full rounded-xl font-semibold shadow-lg')}
+    {@render applyCta(
+      'lg',
+      'pointer-events-auto w-full rounded-xl font-semibold shadow-lg',
+      undemotedExternalCta,
+    )}
   </div>
 </article>
 

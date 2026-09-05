@@ -1,0 +1,52 @@
+## Why
+
+The job page's action strip has grown from three controls to six — Discussion, Report,
+Save, Add-to-list, Auto-apply, Apply — and it shares one row with the content TabStrip.
+The strip does not shrink, so every pixel it gained came out of the tabs: on a standard
+desktop column the tab row is squeezed to a scrolling sliver, and "Applications" reads as
+"Applicat…" with the Discussion link fading over it. The row cannot hold both halves any
+more.
+
+The same row also states the wrong priority. Auto-apply is the feature this page is meant
+to sell — it is Pro-only and it does the work for the reader — yet it renders as a quiet
+grey `secondary` button beside a loud green `Apply` that only opens someone else's site.
+
+## What Changes
+
+- Move the two call-to-action buttons (Auto-apply, Apply) off the tab row and up beside
+  the job title, where the page's primary actions belong. The tab row keeps only the quiet
+  actions — Discussion, Report, Save, Add-to-list — and the tabs get their width back.
+- Promote Auto-apply to the page's primary CTA when it is offered and clickable: the brand
+  green fill, plus a small `Pro` marker inside the button naming the plan it needs.
+  Non-clickable states (queued, declined, failed, already applied) stay quiet and disabled
+  — a green button nobody can press is a lie.
+- Demote the external-apply button to `Show origin` with an outline treatment whenever
+  Auto-apply is offered for the posting. It keeps its destination, its `nofollow` rel, its
+  new-tab target, and its apply-intent tracking — only its rank on the page changes.
+- Where Auto-apply is not offered (every non-Greenhouse posting, which is most of the
+  catalogue), the title row carries the unchanged green `Apply` alone.
+
+Below `lg` nothing moves: the sticky bottom bar already carries Apply there, and the quiet
+strip already rides under the title.
+
+## Capabilities
+
+### New Capabilities
+
+- `job-page-actions`: how the job detail page ranks and places what a reader can do with a
+  posting — which control is the primary CTA, where the CTAs sit relative to the title and
+  the content tabs, and how the CTA pair changes when auto-apply is available.
+
+### Modified Capabilities
+
+<!-- None. The auto-apply submit trigger's own behaviour (eligibility, statuses, the POST)
+     is unchanged; this change only re-ranks and re-places its button. -->
+
+## Impact
+
+- `web/src/lib/components/JobView.svelte` — the `applyCta`, `autoApplyCta` and
+  `actionStrip` snippets, and the two rows that render them (the `<header>` block and the
+  tab row).
+- `web/src/lib/autoApplyButton.ts` — read-only; the
+  `kind` it already returns is what decides both the CTA rank and the `Show origin` label.
+- No backend, API, or schema change. No new dependency.
