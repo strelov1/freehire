@@ -4,17 +4,20 @@ import type { Handle } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { hasSessionCookie } from '$lib/authCookie';
 import { cachePolicy } from '$lib/httpCache';
-import { LOCALE_COOKIE } from '$lib/locale';
+import { isTranslatedLocale, LOCALE_COOKIE } from '$lib/locale';
 
 // Resolves the account-section locale for `<html lang>` before the response
 // streams. Path-gated: only `/my/**` may render non-English — every other route
 // is forced to `en` here, so "public pages are never translated" is a structural
 // property of this one hook rather than a convention each page has to remember.
 //
-// `'ru'` is the only value that renders as anything but English — matches
-// `t()`'s own fallback rule exactly (any account preference that isn't `ru`,
-// including a valid-but-untranslated one like `es`, renders English content),
-// so the attribute never disagrees with what's actually on the page.
+// What may render as anything but English is `TRANSLATED_LOCALES`, not one
+// hard-coded literal. The distinction matters in both directions: testing for
+// `'ru'` alone would make a Spanish catalog unreachable however complete it was
+// (the resolver, not the catalog, decides what a reader sees), while admitting
+// every SUPPORTED locale would put `lang="es"` on a page still rendering English
+// through `t()`'s fallback. Reading the list keeps `<html lang>` honest about
+// what the page is actually written in, which is what this attribute is for.
 //
 // Seeds `event.locals.locale` from the cookie synchronously (no DB/network) as
 // a best-effort guess, but `transformPageChunk` reads it lazily rather than
@@ -26,7 +29,9 @@ import { LOCALE_COOKIE } from '$lib/locale';
 // cookie exists.
 const locale: Handle = async ({ event, resolve }) => {
   const onAccountSection = event.url.pathname === '/my' || event.url.pathname.startsWith('/my/');
-  event.locals.locale = onAccountSection && event.cookies.get(LOCALE_COOKIE) === 'ru' ? 'ru' : 'en';
+  const cookieLocale = event.cookies.get(LOCALE_COOKIE);
+  event.locals.locale =
+    onAccountSection && isTranslatedLocale(cookieLocale) ? cookieLocale : 'en';
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', event.locals.locale),
   });

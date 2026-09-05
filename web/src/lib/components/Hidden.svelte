@@ -1,14 +1,18 @@
 <script lang="ts">
   import { Eye } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { markUndismissed } from '$lib/dismissedJobs.svelte';
   import { Paginator } from '$lib/paginated.svelte';
   import JobRow from './JobRow.svelte';
   import { LoadMore } from '$lib/ui';
+  import { messages } from './activity.messages';
   import States from './States.svelte';
   import { must } from '$lib/utils';
 
+  const s = $derived(t(messages, locale()).hidden);
   // The jobs the signed-in user has hidden from the feed, newest-hidden first.
   // Mirrors SavedJobs, with a per-row un-hide action: this is the durable way to
   // reverse a hide once the feed's undo toast is gone.
@@ -40,9 +44,9 @@
 {#if page.status === 'loading'}
   <States state="loading" />
 {:else if page.status === 'error'}
-  <States state="error" message="Couldn't load your hidden jobs." />
+  <States state="error" message={s.loadError} />
 {:else if page.items.length === 0}
-  <States state="empty" message="Nothing hidden. Jobs you hide from the feed show up here." />
+  <States state="empty" message={s.empty} />
 {:else}
   <ul class="flex flex-col gap-3">
     <!-- Hidden jobs are always posting-backed: hiding is a mark on a posting. -->
@@ -59,11 +63,11 @@
                 type="button"
                 onclick={() => unhide(job.public_slug)}
                 disabled={unhiding === job.public_slug}
-                title="Un-hide — show this job in the feed again"
+                title={s.unhideTitle}
                 class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground transition hover:text-brand disabled:pointer-events-none disabled:opacity-50"
               >
                 <Eye class="size-4" aria-hidden="true" />
-                Un-hide
+                {s.unhide}
               </button>
             </div>
           {/snippet}

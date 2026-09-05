@@ -1,10 +1,15 @@
 <script lang="ts">
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
+  import { messages } from '$lib/components/MySubmissionsView.messages';
   import MySubmissionsView from '$lib/components/MySubmissionsView.svelte';
+
+  // The title shares the view's catalog rather than getting a second one — every
+  // other string on this page is the view's.
+  const s = $derived(t(messages, locale()));
 </script>
 
-<svelte:head>
-  <title>My submissions — freehire</title>
-</svelte:head>
+<svelte:head><title>{s.headTitle}</title></svelte:head>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex;
      an inner max-width keeps the list readable within the content column. -->

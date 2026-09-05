@@ -2,12 +2,17 @@
   import { resolve } from '$app/paths';
   import { ArrowRight } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MyAnalysisItem } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { EntityLogo } from '$lib/ui';
+  import { messages } from './activity.messages';
   import States from './States.svelte';
+
+  const s = $derived(t(messages, locale()).matches);
 
   // The Activity → Matches tab: the jobs the caller has run the AI match analysis on. Read-only —
   // never triggers the LLM (each row links to the Tailor workspace, which owns compute/recompute).
@@ -44,9 +49,9 @@
 {#if status === 'loading'}
   <States state="loading" />
 {:else if status === 'error'}
-  <States state="error" message="Couldn't load your analyses." />
+  <States state="error" message={s.loadError} />
 {:else if items.length === 0}
-  <States state="empty" message="No AI match analyses yet. Open a job and run “Analyse match with AI”." />
+  <States state="empty" message={s.empty} />
 {:else}
   <ul class="flex flex-col gap-3">
     {#each items as it (it.slug)}
@@ -63,15 +68,15 @@
             <span class="flex items-center gap-2">
               <span class="truncate font-medium">{it.title}</span>
               {#if it.closed}
-                <span class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-muted-foreground">Closed</span>
+                <span class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-muted-foreground">{s.closed}</span>
               {/if}
               {#if it.stale}
-                <span class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-warning-strong">Stale</span>
+                <span class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-warning-strong">{s.stale}</span>
               {/if}
             </span>
             <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
               <EntityLogo
-                name={it.company || 'Unknown company'}
+                name={it.company || s.unknownCompany}
                 src={companyLogoUrl(it.company) ?? undefined}
                 shape="square"
                 size="xs"

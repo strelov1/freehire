@@ -3,11 +3,16 @@
   import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
   import type { Contribution, ResolvedLink } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
+  import { messages } from './ContributeView.messages';
   import IntakeOutcome from './IntakeOutcome.svelte';
   import States from './States.svelte';
+
+  const s = $derived(t(messages, locale()));
 
   // Prefilled, not auto-submitted, when a link arrives in `?url=`. That is how the search
   // box hands a signed-out visitor's paste across the sign-in it needed — the link would
@@ -34,7 +39,9 @@
   // Where a row came from, appended to its line. Rows recorded before surfaces were tracked
   // (or by a client that sends no tag) read "unknown" and are better left unlabelled.
   function surfaceLabel(surface: string): string {
-    return !surface || surface === 'unknown' || surface === 'web' ? '' : ` · via ${surface}`;
+    return !surface || surface === 'unknown' || surface === 'web'
+      ? ''
+      : ` · ${s.viaPrefix} ${surface}`;
   }
 
   // A review row carries no board — show the link's host as its label instead.
@@ -60,8 +67,9 @@
     } catch (err) {
       // Only a malformed link is an error now: a board we already crawl, or one someone already
       // contributed, comes back as an ordinary outcome rather than a 409.
-      formError =
-        err instanceof ApiError ? err.message : 'Could not submit the link. Please try again.';
+      // An ApiError carries the server's own sentence, which is English — see the
+      // known gap in this change's design.md.
+      formError = err instanceof ApiError ? err.message : s.submitFailed;
     } finally {
       submitting = false;
     }
@@ -69,16 +77,12 @@
 </script>
 
 {#if !isAuthenticated()}
-  <p class="py-12 text-center text-sm text-muted-foreground">Sign in to contribute a board.</p>
+  <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
   <div class="flex flex-col gap-6">
     <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Contribute a board</h1>
-      <p class="text-sm text-muted-foreground">
-        Found a company we don't cover yet? Paste any link from its ATS careers page — a vacancy
-        or the board itself. If it's a board we don't crawl, we add it and pull in all of its
-        jobs.
-      </p>
+      <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
+      <p class="text-sm text-muted-foreground">{s.description}</p>
     </div>
 
     {#if resolved}
@@ -89,7 +93,7 @@
 
     <form onsubmit={submit} class="flex flex-col gap-3 rounded-lg border border-border p-4">
       <label class="flex flex-col gap-1">
-        <span class="text-sm font-medium">Job URL</span>
+        <span class="text-sm font-medium">{s.urlLabel}</span>
         <Input bind:value={url} type="url" placeholder="https://job-boards.greenhouse.io/…" class="w-full" />
       </label>
       {#if formError}
@@ -97,19 +101,19 @@
       {/if}
       <div>
         <Button variant="primary" type="submit" disabled={!canSubmit}>
-          {submitting ? 'Checking…' : 'Contribute'}
+          {submitting ? s.submitting : s.submit}
         </Button>
       </div>
     </form>
 
     <div class="flex flex-col gap-3">
-      <h2 class="text-sm font-medium text-muted-foreground">My contributions</h2>
+      <h2 class="text-sm font-medium text-muted-foreground">{s.listHeading}</h2>
       {#if status === 'loading'}
         <States state="loading" />
       {:else if status === 'error'}
-        <States state="error" message="Couldn't load your contributions." />
+        <States state="error" message={s.loadError} />
       {:else if contributions.length === 0}
-        <States state="empty" message="No boards yet. Paste an ATS link to get started." />
+        <States state="empty" message={s.empty} />
       {:else}
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
           {#each contributions as c (c.id)}
@@ -125,10 +129,11 @@
                 </a>
                 <span class="truncate text-xs text-muted-foreground">
                   {#if c.status === 'review'}
-                    <span class="font-medium text-foreground">Under review</span> · not credited yet
-                    · {timeAgo(c.created_at)}{surfaceLabel(c.surface)}
+                    <span class="font-medium text-foreground">{s.underReview}</span>
+                    · {s.notCreditedYet} · {timeAgo(c.created_at)}{surfaceLabel(c.surface)}
                   {:else}
-                    {c.source} · contributed {timeAgo(c.created_at)}{surfaceLabel(c.surface)}
+                    {c.source} · {s.contributedPrefix}
+                    {timeAgo(c.created_at)}{surfaceLabel(c.surface)}
                   {/if}
                 </span>
               </div>
