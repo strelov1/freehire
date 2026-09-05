@@ -4,6 +4,7 @@
   import { cvUploadReason, track } from '$lib/analytics';
   import { CATEGORY_OPTIONS } from '$lib/facets';
   import { profileStore } from '$lib/profile.svelte';
+  import { MAX_SPECIALIZATIONS, capSpecializations } from '$lib/profileLimits';
   import { withSkills } from '$lib/profileSkills';
   import type { LocationPreferences, UserProfile } from '$lib/types';
   import { Button, ConfirmDialog } from '$lib/ui';
@@ -11,9 +12,6 @@
   import SearchSelect from './facets/SearchSelect.svelte';
   import LocationPreferencesFields from './profile/LocationPreferencesFields.svelte';
   import SkillsPicker from './profile/SkillsPicker.svelte';
-
-  // Mirror of the server's specialization cap (searchprofile.maxSpecializations).
-  const MAX_SPECIALIZATIONS = 5;
 
   // Inline editor for the single profile. `profile` seeds the fields (null = first-time
   // set-up); `hasCv` drives the CV block's uploaded/empty state. `onSaved` fires after a
@@ -106,18 +104,8 @@
       // Merge every specialization the CV resolved, respecting the cap; track how many
       // were added vs. left out by the cap so the note is accurate. Always local first —
       // `nextSpecializations` is what an editing-mode write below persists alongside skills.
-      let addedSpecs = 0;
-      let cappedSpecs = 0; // resolved but the cap left no room
-      const nextSpecializations = [...specializations];
-      for (const cat of cv.categories) {
-        if (nextSpecializations.includes(cat)) continue;
-        if (nextSpecializations.length < MAX_SPECIALIZATIONS) {
-          nextSpecializations.push(cat);
-          addedSpecs++;
-        } else {
-          cappedSpecs++;
-        }
-      }
+      const { kept: nextSpecializations, dropped: cappedSpecs } = capSpecializations(specializations, cv.categories);
+      const addedSpecs = nextSpecializations.length - specializations.length;
       specializations = nextSpecializations;
 
       let addedSkills: number;

@@ -107,7 +107,10 @@ func TestPutProfile_ValidationErrors(t *testing.T) {
 	}{
 		{"empty specializations", `{"specializations":[],"skills":["go"]}`, fiber.StatusBadRequest},
 		{"unknown specialization", `{"specializations":["wizardry"],"skills":["go"]}`, fiber.StatusBadRequest},
-		{"too many specializations", `{"specializations":["backend","frontend","fullstack","mobile","devops","sre"],"skills":["go"]}`, fiber.StatusBadRequest},
+		// One past userprofile.MaxSpecializations. The set below the cap is exercised by
+		// TestPutProfile_AcceptsSpecializationsUpToTheCap — a cap only holds if both sides
+		// of it are checked.
+		{"too many specializations", `{"specializations":["backend","frontend","fullstack","mobile","devops","sre","qa","security","hardware","embedded","blockchain"],"skills":["go"]}`, fiber.StatusBadRequest},
 		{"empty skills", `{"specializations":["backend"],"skills":[]}`, fiber.StatusBadRequest},
 	}
 	for _, tc := range cases {
@@ -142,6 +145,30 @@ func TestPutProfile_ReturnsSpecializationsArray(t *testing.T) {
 	}
 	if strings.Join(got.Data.Specializations, ",") != "backend,devops" {
 		t.Errorf("specializations = %v, want [backend devops]", got.Data.Specializations)
+	}
+}
+
+// A profile filled from a CV routinely resolves more than a handful of categories, and the
+// cap that used to sit at 5 rejected the whole save when it did. Exactly MaxSpecializations
+// must be accepted, or the bound is really one lower than it says.
+func TestPutProfile_AcceptsSpecializationsUpToTheCap(t *testing.T) {
+	specs := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre", "qa", "security", "hardware", "embedded"}
+	if len(specs) != userprofile.MaxSpecializations {
+		t.Fatalf("test fixture holds %d specializations, want MaxSpecializations = %d", len(specs), userprofile.MaxSpecializations)
+	}
+	repo := &fakeProfileRepo{}
+	app, token := profileApp(t, repo)
+	body, err := json.Marshal(map[string]any{"specializations": specs, "skills": []string{"go"}})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp := doProfile(t, app, fiber.MethodPut, string(body), token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(repo.upserted.Specializations) != len(specs) {
+		t.Errorf("specializations upserted = %v, want all %d", repo.upserted.Specializations, len(specs))
 	}
 }
 

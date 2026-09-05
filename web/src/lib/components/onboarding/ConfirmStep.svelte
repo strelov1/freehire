@@ -13,6 +13,7 @@
   import { FACETS } from '$lib/facets';
   import { CATEGORY_GROUPS } from '$lib/filterSections';
   import { pillClass, pillTitle } from '$lib/components/facets/pill';
+  import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import ProfileLinksFields from './ProfileLinksFields.svelte';
   import type { ProfileLinks } from '$lib/profileLinks';
 
@@ -64,12 +65,24 @@
     })).filter((g) => g.options.length > 0);
   });
 
+  // The same cap the profile form and the profile's Roles editor enforce, and for the same
+  // reason: the profile save rejects the whole set past it. This step went without one, so
+  // the wizard let an 11th role be picked, sent all 11, and turned a rejection the user
+  // could have avoided into "couldn't save that just now".
+  let specError = $state<string | null>(null);
+
   function toggleSpecialization(value: string) {
-    onSpecializationsChange(
-      specializations.includes(value)
-        ? specializations.filter((v) => v !== value)
-        : [...specializations, value],
-    );
+    if (specializations.includes(value)) {
+      specError = null;
+      onSpecializationsChange(specializations.filter((v) => v !== value));
+      return;
+    }
+    if (specializations.length >= MAX_SPECIALIZATIONS) {
+      specError = `You can pick at most ${MAX_SPECIALIZATIONS} specializations. Remove one to add another.`;
+      return;
+    }
+    specError = null;
+    onSpecializationsChange([...specializations, value]);
   }
 
   function toggleSeniority(value: string) {
@@ -82,9 +95,14 @@
 <!-- A field label with a "Clear" X — same pattern as FacetSection's section header: shown
      only once something is selected, and clearing that field's whole selection at once
      (separate from removing one pill at a time). -->
-{#snippet fieldLabel(text: string, count: number, onClear: () => void)}
+{#snippet fieldLabel(text: string, count: number, onClear: () => void, hint?: string)}
   <div class="mb-2 flex min-h-6 items-center justify-between gap-2">
-    <span class="text-sm font-medium">{text}</span>
+    <span class="text-sm font-medium">
+      {text}
+      <!-- The count sits beside the label rather than inside it, so the Clear button's
+           accessible name stays "Clear Specialization" and not "Clear Specialization 3/10". -->
+      {#if hint}<span class="ml-1 text-xs font-normal tabular-nums text-muted-foreground">{hint}</span>{/if}
+    </span>
     {#if count > 0}
       <button
         type="button"
@@ -103,8 +121,19 @@
 <p class="mt-1 text-sm text-muted-foreground">Everything's optional — pick as many as apply.</p>
 
 <div class="mt-5">
-  {@render fieldLabel('Specialization', specializations.length, () => onSpecializationsChange([]))}
+  {@render fieldLabel(
+    'Specialization',
+    specializations.length,
+    () => {
+      specError = null;
+      onSpecializationsChange([]);
+    },
+    `${specializations.length}/${MAX_SPECIALIZATIONS}`,
+  )}
 </div>
+{#if specError}
+  <p class="mb-2 text-xs text-destructive">{specError}</p>
+{/if}
 <div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring">
   <Search class="size-4 shrink-0 text-muted-foreground" />
   <input

@@ -19,7 +19,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { ArrowLeft, ArrowRight, LoaderCircle, X } from '@lucide/svelte';
-  import { api } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { completeOnboarding, isAuthenticated } from '$lib/auth.svelte';
   import { onboardingGate } from '$lib/onboardingGate.svelte';
   import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered, type StepKind } from '$lib/onboardingSteps';
@@ -218,8 +218,15 @@
       // The response IS the new stored overlay, so keeping it is what stops a later contacts
       // write spreading something three screens stale — see onboardingSave.ts's header.
       contacts = await persistStep(kind, wizardAnswers, saveDeps);
-    } catch {
-      saveError = "Couldn't save that just now. Try again, or skip this step.";
+    } catch (err) {
+      // The server's own message when there is one: a rejection names the field it refused
+      // ("too many specializations (max 10)"), and that is something the candidate can act
+      // on, unlike "couldn't save that just now" — which is all a candidate on prod ever
+      // saw while the 400 went to their browser console.
+      saveError =
+        err instanceof ApiError
+          ? `${err.message}. Fix it above, or skip this step.`
+          : "Couldn't save that just now. Try again, or skip this step.";
       saving = false;
       return;
     }

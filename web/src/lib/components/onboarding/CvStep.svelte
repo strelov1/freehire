@@ -12,6 +12,7 @@
   import { cvUploadReason, track } from '$lib/analytics';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { resumeStore } from '$lib/resume.svelte';
+  import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import type { DerivedLocation } from '$lib/types';
   import { mergeFacets, type MergedFacets, type StagedFacets } from '$lib/onboardingImport';
 
@@ -48,6 +49,19 @@
     cvInput?.click();
   }
 
+  // What an import says afterwards. Both entry points share it because they share the fold
+  // (mergeFacets) — including the specialization cap, which is the one part of the result
+  // the candidate cannot see for themselves: a role the cap left out simply is not on the
+  // next step, and an import that quietly kept 10 of 13 reads as one that misread the CV.
+  function importNote(merged: MergedFacets, source: string): string {
+    if (!merged.resolved) return `Couldn’t read details from ${source} — pick below.`;
+    if (merged.specializationsDropped > 0) {
+      const n = merged.specializationsDropped;
+      return `Filled in what we found — review on the next step. A profile holds ${MAX_SPECIALIZATIONS} specializations, so ${n} more we found ${n === 1 ? 'was' : 'were'} left out.`;
+    }
+    return 'Filled in what we found — review on the next step.';
+  }
+
   async function onCvFile(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -68,9 +82,7 @@
       const merged = mergeFacets(staged, cv);
       onExtracted(merged);
       cvState = 'idle';
-      cvNote = merged.resolved
-        ? 'Filled in what we found — review on the next step.'
-        : 'Couldn’t read details from that CV — pick below.';
+      cvNote = importNote(merged, 'that CV');
     } catch (err) {
       track('cv_upload', {
         ok: false,
@@ -109,9 +121,7 @@
       // they already gave us one step later reads as not having listened.
       onLinkedInUrl(url);
       liState = 'idle';
-      liNote = merged.resolved
-        ? 'Filled in what we found — review on the next step.'
-        : 'Couldn’t read details from that profile — pick below.';
+      liNote = importNote(merged, 'that profile');
     } catch (err) {
       track('linkedin_import', { ok: false, origin: 'onboarding_gate' });
       if (gen !== liGen) return;

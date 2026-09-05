@@ -299,13 +299,32 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 
 func TestSave_RejectsTooManySpecializations(t *testing.T) {
 	repo := &fakeRepo{}
-	six := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre"}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"}, nil, nil, nil)
+	tooMany := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre", "qa", "security", "hardware", "embedded", "blockchain"}
+	if len(tooMany) != userprofile.MaxSpecializations+1 {
+		t.Fatalf("test fixture holds %d specializations, want MaxSpecializations + 1 = %d", len(tooMany), userprofile.MaxSpecializations+1)
+	}
+	_, err := userprofile.New(repo).Save(context.Background(), 7, tooMany, []string{"go"}, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySpecializations) {
 		t.Errorf("err = %v, want ErrTooManySpecializations", err)
 	}
 	if repo.upsertCalled {
 		t.Error("repo.Upsert should not be called past the specialization cap")
+	}
+}
+
+// The other side of the same bound: exactly MaxSpecializations saves. A cap checked only
+// from above is really a cap one lower than it says.
+func TestSave_AcceptsSpecializationsUpToTheCap(t *testing.T) {
+	repo := &fakeRepo{}
+	specs := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre", "qa", "security", "hardware", "embedded"}
+	if len(specs) != userprofile.MaxSpecializations {
+		t.Fatalf("test fixture holds %d specializations, want MaxSpecializations = %d", len(specs), userprofile.MaxSpecializations)
+	}
+	if _, err := userprofile.New(repo).Save(context.Background(), 7, specs, []string{"go"}, nil, nil, nil); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !repo.upsertCalled {
+		t.Error("repo.Upsert should be called at exactly the specialization cap")
 	}
 }
 

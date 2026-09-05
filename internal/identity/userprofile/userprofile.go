@@ -27,7 +27,7 @@ var (
 	// ErrEmptySpecializations is a profile whose specializations are empty after
 	// normalization (mapped to 400).
 	ErrEmptySpecializations = errors.New("userprofile: at least one specialization is required")
-	// ErrTooManySpecializations is a specialization set past maxSpecializations (mapped to 400).
+	// ErrTooManySpecializations is a specialization set past MaxSpecializations (mapped to 400).
 	ErrTooManySpecializations = errors.New("userprofile: too many specializations")
 	// ErrEmptySkills is a profile whose skills are empty after normalization (mapped to 400).
 	ErrEmptySkills = errors.New("userprofile: at least one skill is required")
@@ -50,9 +50,15 @@ var (
 // the right failure mode, not an unbounded retry loop.
 const mergeSkillsMaxAttempts = 3
 
-// maxSpecializations caps how many specializations one profile may combine; the
-// migration's cardinality CHECK is the backstop.
-const maxSpecializations = 5
+// MaxSpecializations caps how many specializations one profile may combine; the
+// migration's cardinality CHECK is the backstop. Exported so the HTTP layer names the
+// bound in its 400 rather than repeating the number, and so the two cannot drift.
+//
+// Raised from 5 to 10 (migration 0135): a CV resolves several categories on its own and
+// the profile form unions them into whatever is already picked, so a candidate whose work
+// genuinely spans backend, data, cloud and a few more hit the bound without ever choosing
+// to. 10 still bounds the set — it is a profile's role list, not a catalogue.
+const MaxSpecializations = 10
 
 // maxSkills caps how many skills one profile may list, wanted or avoided. The wanted set is
 // not just stored: the coverage verdict turns it into one `skills != "<skill>"` AND group per
@@ -253,7 +259,7 @@ func mergeSkills(held, additions, excluded []string) ([]string, bool) {
 // first-seen order), and checks membership in the controlled category vocabulary (the same
 // enum the rest of the app validates against). It returns ErrEmptySpecializations if nothing
 // remains, ErrInvalidSpecialization for an unknown category, and ErrTooManySpecializations
-// past maxSpecializations — mirroring normalizeSkills.
+// past MaxSpecializations — mirroring normalizeSkills.
 func normalizeSpecializations(specializations []string) ([]string, error) {
 	out := make([]string, 0, len(specializations))
 	seen := make(map[string]struct{}, len(specializations))
@@ -274,7 +280,7 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 	if len(out) == 0 {
 		return nil, ErrEmptySpecializations
 	}
-	if len(out) > maxSpecializations {
+	if len(out) > MaxSpecializations {
 		return nil, ErrTooManySpecializations
 	}
 	return out, nil

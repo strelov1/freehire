@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -171,7 +172,7 @@ func profileError(err error) error {
 	case errors.Is(err, userprofile.ErrEmptySpecializations):
 		return fiber.NewError(fiber.StatusBadRequest, "at least one specialization is required")
 	case errors.Is(err, userprofile.ErrTooManySpecializations):
-		return fiber.NewError(fiber.StatusBadRequest, "too many specializations (max 5)")
+		return fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("too many specializations (max %d)", userprofile.MaxSpecializations))
 	case errors.Is(err, userprofile.ErrEmptySkills):
 		return fiber.NewError(fiber.StatusBadRequest, "at least one skill is required")
 	case errors.Is(err, userprofile.ErrTooManySkills):
