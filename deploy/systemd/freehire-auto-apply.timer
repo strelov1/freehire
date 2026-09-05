@@ -1,0 +1,8 @@
+[Unit]
+Description=timer: freehire-auto-apply
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+RandomizedDelaySec=60
+[Install]
+WantedBy=timers.target
