@@ -41,7 +41,7 @@ func insertUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 }
 
 // makePro puts an account on the pro plan. It writes pro_until_granted, not pro_until: since
-// migration 0132 the plan column is derived from three sources and assigning it fails.
+// migration 0135 the plan column is derived from three sources and assigning it fails.
 //
 // The granted source is the right one here rather than a convenient one. These tests are
 // about what a plan ALLOWS, and no payment provider is involved in any of them — granted is

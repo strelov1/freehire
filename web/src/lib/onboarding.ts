@@ -9,6 +9,14 @@
 // Svelte here (mirrors facetModel.ts / filterStorage.ts), so it's unit-testable in
 // plain Node and every storage access is best-effort — private mode / SSR must never
 // break the feed.
+//
+// WHAT IS NOT HERE, deliberately: whether the account completed onboarding. That is an
+// explicit server-side fact (`users.onboarding_completed_at`, read off the user in the
+// root layout), because it has to follow the person rather than the browser — a candidate
+// who finished the wizard on their laptop must not be walked through it again on their
+// phone, and clearing site data must not re-ask a completed account. What lives here is
+// only the feed BANNER's dismissed/not-dismissed nudge, which is a per-browser
+// presentation concern and correctly forgotten with the storage.
 
 import type { JobFilters } from './facetModel';
 

@@ -1,0 +1,23 @@
+---
+title: Push saved-search matches to your own webhook
+date: 2026-09-04
+summary: Saved searches can now alert your own script or automation with an HTTP POST, alongside or instead of email and Telegram.
+type: changelog
+tags:
+  - notifications
+  - api
+draft: false
+---
+
+Saved searches already alert you by email or Telegram when a new job matches.
+Now there is a third option: a webhook.
+
+Open **Webhook** in your account settings and give it a URL. Turn the webhook
+on for any saved search from its alert settings, and every new match arrives
+as a plain HTTP POST — wire it straight into your own script, a Zapier/Make
+flow, or anything else you run yourself.
+
+It rides the same delivery pipeline as email and Telegram — the same
+dedup, the same retries. If your endpoint ever answers with `410 Gone`, we
+take that as "stop sending" and turn the webhook off; flip it back on
+whenever you're ready.

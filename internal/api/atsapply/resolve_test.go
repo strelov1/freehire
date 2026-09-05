@@ -10,7 +10,7 @@ func TestResolve_FillsATextFieldFromAKnownAnswer(t *testing.T) {
 	fields := []MergedField{{ID: "first_name", Kind: "text", Required: true}}
 	answers := map[string]string{"first_name": "Ada"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "Ada" {
 		t.Fatalf("plan.Fields = %+v, want first_name=Ada", plan.Fields)
@@ -24,7 +24,7 @@ func TestResolve_ARequiredFieldWithNoKnownAnswerIsUnmapped(t *testing.T) {
 	fields := []MergedField{{ID: "country", Label: "Country", Kind: "text", Required: true}}
 	answers := map[string]string{}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 0 {
 		t.Errorf("plan.Fields = %+v, want none filled", plan.Fields)
@@ -38,7 +38,7 @@ func TestResolve_AnOptionalFieldWithNoKnownAnswerIsSkippedNotUnmapped(t *testing
 	fields := []MergedField{{ID: "portfolio_url", Kind: "text", Required: false}}
 	answers := map[string]string{}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 0 || len(plan.Unmapped) != 0 {
 		t.Fatalf("plan = %+v, want an unanswered optional field left alone entirely", plan)
@@ -51,7 +51,7 @@ func TestResolve_AppliesTheDOMToAnswerKeyAlias(t *testing.T) {
 	fields := []MergedField{{ID: "candidate-location", Kind: "text", Required: true}}
 	answers := map[string]string{"location": "Lisbon, Portugal"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "Lisbon, Portugal" {
 		t.Fatalf("plan.Fields = %+v, want candidate-location filled from the location answer", plan.Fields)
@@ -68,7 +68,7 @@ func TestResolve_MatchesAnAnswerToTheClosestOfferedOptionValue(t *testing.T) {
 	}}
 	answers := map[string]string{"authorized_countries": "Yes"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "1" {
 		t.Fatalf("plan.Fields = %+v, want the option's platform VALUE (1), not the label", plan.Fields)
@@ -82,7 +82,7 @@ func TestResolve_AnAnswerMatchingNoOfferedOptionParksRatherThanGuessing(t *testi
 	}}
 	answers := map[string]string{"authorized_countries": "Sponsorship required"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 0 {
 		t.Errorf("plan.Fields = %+v, want nothing filled — the answer matches no offered option", plan.Fields)
@@ -92,21 +92,50 @@ func TestResolve_AnAnswerMatchingNoOfferedOptionParksRatherThanGuessing(t *testi
 	}
 }
 
-// File uploads (resume, cover letter) are not resolved from the answers map at all in this
-// package yet — attaching the right stored artifact is separate plumbing this change does
-// not build. A required file field always parks, explicitly, rather than silently failing at
-// submit time.
-func TestResolve_ARequiredFileFieldIsAlwaysUnmapped(t *testing.T) {
+// A required résumé field parks when the entry carries no approved tailored CV — the only
+// artifact this package can attach. answers is irrelevant: a file field is never resolved
+// from the answers map, only from hasApprovedCV.
+func TestResolve_ARequiredResumeFieldParksWithNoApprovedCV(t *testing.T) {
 	fields := []MergedField{{ID: "resume", Label: "Resume/CV", Kind: "file", Required: true}}
 	answers := map[string]string{"resume": "https://example.test/resume.pdf"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 0 {
-		t.Errorf("plan.Fields = %+v, want file fields never auto-filled by this package", plan.Fields)
+		t.Errorf("plan.Fields = %+v, want the résumé field left unfilled with no approved CV", plan.Fields)
 	}
 	if len(plan.Unmapped) != 1 || plan.Unmapped[0].ID != "resume" {
 		t.Fatalf("unmapped = %+v, want the resume field named", plan.Unmapped)
+	}
+}
+
+// The résumé field resolves (Kind stays "file"; Value is set later, by Client.Submit, once
+// the CV is actually rendered) once the entry carries an approved tailored CV.
+func TestResolve_ARequiredResumeFieldResolvesWithAnApprovedCV(t *testing.T) {
+	fields := []MergedField{{ID: "resume", Label: "Resume/CV", Kind: "file", Required: true}}
+
+	plan := Resolve(fields, map[string]string{}, true)
+
+	if len(plan.Unmapped) != 0 {
+		t.Fatalf("unmapped = %+v, want the résumé field resolved with an approved CV", plan.Unmapped)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].ID != "resume" || plan.Fields[0].Kind != "file" {
+		t.Fatalf("plan.Fields = %+v, want the resume field resolved, Kind unchanged", plan.Fields)
+	}
+}
+
+// A cover-letter (or any other non-résumé) file field stays unmapped even with an approved
+// CV — this path only ever closes the résumé gap, per design.md's Non-Goals.
+func TestResolve_ACoverLetterFieldStaysUnmappedEvenWithAnApprovedCV(t *testing.T) {
+	fields := []MergedField{{ID: "cover_letter", Label: "Cover Letter", Kind: "file", Required: true}}
+
+	plan := Resolve(fields, map[string]string{}, true)
+
+	if len(plan.Fields) != 0 {
+		t.Errorf("plan.Fields = %+v, want the cover letter field left unfilled", plan.Fields)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0].ID != "cover_letter" {
+		t.Fatalf("unmapped = %+v, want the cover_letter field named", plan.Unmapped)
 	}
 }
 
@@ -117,7 +146,7 @@ func TestResolve_FullyResolvedReportsNoUnmapped(t *testing.T) {
 	}
 	answers := map[string]string{"first_name": "Ada"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if !plan.FullyResolved() {
 		t.Errorf("FullyResolved() = false, want true — the only required field is answered")
@@ -126,7 +155,7 @@ func TestResolve_FullyResolvedReportsNoUnmapped(t *testing.T) {
 
 func TestResolve_NotFullyResolvedWhenAnyUnmappedExists(t *testing.T) {
 	fields := []MergedField{{ID: "country", Kind: "text", Required: true}}
-	plan := Resolve(fields, map[string]string{})
+	plan := Resolve(fields, map[string]string{}, false)
 
 	if plan.FullyResolved() {
 		t.Error("FullyResolved() = true, want false — a required field has no answer")

@@ -18,7 +18,7 @@ func TestResolve_MatchesAVisaSponsorshipQuestionByLabelWhenIDIsUnknown(t *testin
 	}}
 	answers := map[string]string{"visa_sponsorship_needed": "No"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "No" {
 		t.Fatalf("plan.Fields = %+v, want the custom question filled from visa_sponsorship_needed", plan.Fields)
@@ -44,7 +44,7 @@ func TestResolve_LabelMatchedVisaQuestionStillMatchesAgainstOfferedOptions(t *te
 	}}
 	answers := map[string]string{"visa_sponsorship_needed": "No"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "0" {
 		t.Fatalf("plan.Fields = %+v, want the option's platform value (0), not the raw answer text", plan.Fields)
@@ -60,7 +60,7 @@ func TestResolve_LabelMatchDoesNotFireOnUnrelatedCustomQuestions(t *testing.T) {
 	}}
 	answers := map[string]string{"visa_sponsorship_needed": "No"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 0 {
 		t.Errorf("plan.Fields = %+v, want nothing filled — this question is unrelated to visa sponsorship", plan.Fields)
@@ -79,7 +79,7 @@ func TestResolve_IDMatchTakesPriorityOverLabelKeywordMatch(t *testing.T) {
 	}}
 	answers := map[string]string{"visa_sponsorship_needed": "No"}
 
-	plan := Resolve(fields, answers)
+	plan := Resolve(fields, answers, false)
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "No" {
 		t.Fatalf("plan.Fields = %+v, want the direct id match", plan.Fields)

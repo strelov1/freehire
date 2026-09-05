@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Plug,
+  Webhook,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -37,6 +38,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/notifications': BellRing,
   '/my/integrations': Plug,
   '/my/api-keys': Key,
+  '/my/webhook': Webhook,
   '/my/submissions': FileText,
   '/my/contributions': Link2,
   '/my/plan': Coins,

@@ -20,9 +20,9 @@ import (
 // roles (business/real-estate developer). So every term here is ANCHORED to the
 // discipline — no bare "engineer"/"developer"/"analyst"/"architect"/"administrator"
 // — and a non-software "…Engineer" stays `unknown` rather than being mislabelled
-// tech. The anchor is usually the word "software" or a language name; the IT
-// service desk below is the one family anchored on its own noun instead, and it
-// carries the argument for that beside the terms.
+// tech. The anchor is usually the word "software" or a language name; IT support
+// below is the one family anchored on its own noun instead, and it carries the
+// argument for that beside the terms.
 var techTitleTerms = []string{
 	// Software engineer forms (never bare "engineer")
 	"software engineer", "software development engineer", "devops engineer",
@@ -62,15 +62,30 @@ var techTitleTerms = []string{
 	"system administrator", "systems administrator", "sysadmin", "network administrator",
 	"database administrator", "linux administrator", "windows administrator",
 	"it administrator", "devsecops",
-	// The IT service desk. These are the one family here whose CATEGORY cannot say
-	// what they are: they resolve to `support`, a vocab.NonTechCategories member, so
-	// without an entry here the derivation reads them as confidently non-technical
-	// and the enrichment gate skips them. That category is right about the function
-	// — reactive, ticket-driven — and wrong about the craft: a help desk runs an IT
-	// estate. The bare nouns stay out. "support" alone is the whole customer-service
-	// population (226k open postings), and only "desk" and the IT-anchored analyst
-	// form are specific enough to carry the claim.
+	// IT support. These are the one family here whose CATEGORY cannot say what they
+	// are: they resolve to `support`, a vocab.NonTechCategories member, so without an
+	// entry here the derivation reads them as confidently non-technical and the
+	// enrichment gate skips them. That category is right about the function —
+	// reactive, ticket-driven — and wrong about the craft: a help desk runs an IT
+	// estate.
+	//
+	// What makes a term safe here is an anchor that names the estate, not the mood of
+	// the work. "it support", "desktop support" and "deskside support" are IT by
+	// definition; sampled against live titles they are unanimous. Bare "technical
+	// support" is NOT and gets no entry: the same sample gives AGV, automotive,
+	// controls, logistics and instructional support, so only the analyst form —
+	// already the office-IT title in practice — carries the claim. Bare "support" is
+	// the whole customer-service population (226k open postings) and stays out too.
+	//
+	// "it supporter" is the German/Nordic surface form ("1st Level IT Supporter") and
+	// needs its own term: the trailing "er" breaks the word boundary, the same trap
+	// the "system administrator"/"systems administrator" pair above guards against.
+	// "end user" is an IT/product term of art and its titles read the same way
+	// ("Analyst, End User Support", "Desktop / End User Support Technician"); spaced
+	// and hyphenated are separate terms because a hyphen is a word boundary.
 	"service desk", "help desk", "helpdesk", "technical support analyst",
+	"it support", "it supporter", "desktop support", "deskside support",
+	"end user support", "end-user support",
 	// Architects (never bare "architect")
 	"software architect", "solutions architect", "cloud architect", "data architect",
 	"security architect", "enterprise architect", "technical architect",

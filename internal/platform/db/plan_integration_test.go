@@ -34,7 +34,7 @@ func planDay(t time.Time) pgtype.Date {
 // TestProUntilIsTheWholePlan covers the one column the metered path reads: absent by
 // default, movable, and clearable.
 //
-// It moves it through a SOURCE writer, because since migration 0132 pro_until is derived and
+// It moves it through a SOURCE writer, because since migration 0135 pro_until is derived and
 // cannot be assigned. What the metered path reads is unchanged, which is the property worth
 // pinning here — the plan surface must not notice that the column gained three sources.
 func TestProUntilIsTheWholePlan(t *testing.T) {

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/chromedp/chromedp"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
@@ -56,6 +59,20 @@ type Client struct {
 	// means "no grounding source configured", and drafting is skipped entirely rather
 	// than run against an always-empty GroundingContext.
 	atoms AtomReader
+	// cvs and renderer resolve and render a claim's approved tailored CV to a résumé PDF,
+	// on demand, at submit time — no object storage involved (openspec/changes/
+	// auto-apply-tailored-resume's design.md: "File rendering is on-demand"). Both nil is
+	// an ordinary, supported state exactly like atoms/llmClient: a résumé field then simply
+	// cannot be filled even when Resolve marked it resolvable, and attachApprovedResume
+	// treats that as a render-failure park rather than a panic.
+	cvs      CVReader
+	renderer cv.Renderer
+}
+
+// CVReader resolves one owned CV record for rendering. *cv.Store satisfies it directly;
+// tests use a fake.
+type CVReader interface {
+	Get(ctx context.Context, id uuid.UUID, userID int64) (cv.Record, error)
 }
 
 // NewClient builds a Client. transport is the same one internal/applyform's own capture
@@ -63,14 +80,17 @@ type Client struct {
 // reuses needs nothing different from it. llmClient/llmKeys/atoms may all be nil, which
 // disables question drafting entirely and leaves every other behavior unchanged (a form
 // drafting could have completed instead parks, exactly as it did before this capability
-// existed).
-func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader) *Client {
+// existed). cvs/renderer may also be nil, with the same degrade: a résumé field parks
+// instead of being filled.
+func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader, cvs CVReader, renderer cv.Renderer) *Client {
 	return &Client{
 		fetchers:      applyform.Fetchers(transport),
 		allocatorOpts: stealthAllocatorOptions(),
 		llmClient:     llmClient,
 		llmKeys:       llmKeys,
 		atoms:         atoms,
+		cvs:           cvs,
+		renderer:      renderer,
 	}
 }
 
@@ -146,6 +166,14 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		return autoapply.SidecarResult{}, fmt.Errorf("internal error: no browser session for a Greenhouse submission")
 	}
 
+	if cleanup, parked, err := c.attachApprovedResume(ctx, claimed, &plan); err != nil {
+		return autoapply.SidecarResult{}, err
+	} else if parked != nil {
+		return *parked, nil
+	} else if cleanup != nil {
+		defer cleanup()
+	}
+
 	confirmed, err := fillAndSubmit(browserCtx, claimed.JobURL, plan)
 	if err != nil {
 		// A fill action failing, or the board EXPLICITLY refusing the submit click
@@ -181,18 +209,93 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 // budget-attributed LLM call whose answer Submit then discarded two lines later ("submission
 // not yet implemented for this provider") — spend with no possible use.
 func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged []MergedField, answers map[string]string) (Plan, error) {
+	hasApprovedCV := claimed.TailoredCVID != uuid.Nil
 	if c.atoms == nil || !fillProviders[claimed.Provider] {
-		return Resolve(merged, answers), nil
+		return Resolve(merged, answers, hasApprovedCV), nil
 	}
 
 	grounding, err := buildGroundingContext(ctx, c.atoms, claimed.UserID)
 	if err != nil {
 		log.Printf("atsapply: read grounding context for user %d: %v — drafting nothing for this attempt", claimed.UserID, err)
-		return Resolve(merged, answers), nil
+		return Resolve(merged, answers, hasApprovedCV), nil
 	}
 
 	bound := llmkey.Bind(ctx, c.llmKeys, c.llmClient, claimed.UserID, llm.Feature(tagAutoApplyDrafting))
-	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding)
+	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding, hasApprovedCV)
+}
+
+// attachApprovedResume renders the claim's approved tailored CV to a temp PDF and sets it
+// as the résumé field's Value in plan — the file fillOne (fill.go) actually uploads.
+// Cleanup removes the temp file; the caller defers it so the file outlives the fill/submit
+// that reads it and is gone once Submit returns.
+//
+// A plan with no résumé field (nothing this attempt needs to attach) returns three nils —
+// nothing to render, nothing to park, nothing to clean up.
+//
+// A render failure parks the attempt naming the résumé field, rather than being retried as
+// a transient failure (design.md: "never guess, park instead" — the same rule an unresolved
+// form field already follows). c.cvs/c.renderer being unconfigured is treated identically:
+// it means this deployment cannot fill a résumé field at all yet, which is exactly the state
+// a required résumé field with no known answer parks for.
+func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Claimed, plan *Plan) (cleanup func(), parked *autoapply.SidecarResult, err error) {
+	idx := -1
+	for i, f := range plan.Fields {
+		if f.Kind == "file" {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return nil, nil, nil
+	}
+
+	path, err := c.renderResumeToTempFile(ctx, claimed)
+	if err != nil {
+		log.Printf("atsapply: render approved CV %s for user %d job %d: %v", claimed.TailoredCVID, claimed.UserID, claimed.JobID, err)
+		return nil, &autoapply.SidecarResult{
+			Status: autoapply.StatusParked,
+			Unmapped: []autoapply.UnmappedField{{
+				ID: plan.Fields[idx].ID, Label: "Resume/CV", Required: true,
+				Reason: "the approved tailored CV could not be rendered",
+			}},
+		}, nil
+	}
+	plan.Fields[idx].Value = path
+	return func() { _ = os.Remove(path) }, nil, nil
+}
+
+// renderResumeToTempFile renders claimed's approved tailored CV through the same Typst
+// renderer the interactive CV workspace's PDF download uses (GetCVPDF, internal/api/
+// handler/cv.go), to a temp file chromedp can point a file input at — no object storage, no
+// persistence beyond this one attempt. No photo, no traced hrefs: a machine-submitted
+// résumé attachment is not the interactive preview those exist for.
+func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.Claimed) (string, error) {
+	if c.cvs == nil || c.renderer == nil {
+		return "", fmt.Errorf("no CV renderer configured")
+	}
+	rec, err := c.cvs.Get(ctx, claimed.TailoredCVID, claimed.UserID)
+	if err != nil {
+		return "", fmt.Errorf("load tailored cv %s: %w", claimed.TailoredCVID, err)
+	}
+	tmpl, err := cv.ResolveTemplate(rec.TemplateID)
+	if err != nil {
+		return "", fmt.Errorf("resolve template %q: %w", rec.TemplateID, err)
+	}
+	pdf, err := c.renderer.Render(ctx, rec.Document, tmpl, nil, cv.LinkHrefs{})
+	if err != nil {
+		return "", fmt.Errorf("render pdf: %w", err)
+	}
+
+	f, err := os.CreateTemp("", "auto-apply-resume-*.pdf")
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.Write(pdf); err != nil {
+		_ = os.Remove(f.Name())
+		return "", fmt.Errorf("write temp file: %w", err)
+	}
+	return f.Name(), nil
 }
 
 // fetchSchema reuses internal/applyform's own per-provider fetcher rather than

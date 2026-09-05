@@ -15,8 +15,6 @@
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '$lib/cvRefreshOffer';
-  import { askCvRefresh } from '$lib/cvRefreshDialog.svelte';
   import { track } from '$lib/analytics';
   import { must } from '$lib/utils';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
@@ -24,7 +22,6 @@
   import CliEditDialog from '$lib/components/cv/CliEditDialog.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
-  import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
   import TracerLinksSettings from '$lib/components/cv/TracerLinksSettings.svelte';
   import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
@@ -102,12 +99,11 @@
   // switches (hidden, not unmounted) so its live session is never dropped.
   // The left panel holds what CHANGES the document — its text, its template, its typography —
   // and the chat that does all three by asking. Measuring the document is the right panel's job.
-  type LeftTab = 'chat' | 'editor' | 'experience' | 'templates' | 'settings';
+  type LeftTab = 'chat' | 'editor' | 'templates' | 'settings';
   let leftTab = $state<LeftTab>('chat');
   const leftTabs: [LeftTab, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
-    ['experience', 'Experience'],
     ['templates', 'Templates'],
     ['settings', 'Settings'],
   ];
@@ -129,11 +125,10 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'experience' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
+  type MobileView = 'chat' | 'editor' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
   const mobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
-    ['experience', 'Experience'],
     ['templates', 'Templates'],
     ['settings', 'Settings'],
     ['preview', 'Preview'],
@@ -153,7 +148,7 @@
   let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
-    if (v === 'chat' || v === 'editor' || v === 'experience' || v === 'templates' || v === 'settings') leftTab = v;
+    if (v === 'chat' || v === 'editor' || v === 'templates' || v === 'settings') leftTab = v;
     else if (v !== 'preview') artifactTab = v;
   }
 
@@ -409,18 +404,6 @@
     confirmResetOpen = true;
   }
 
-  // A bank edit offers the same whole-document reset the History tab's control offers, so it
-  // answers to the same guard. While that guard is up the offer is skipped rather than shown:
-  // asking and then doing nothing reads as a broken control, and the next bank edit asks again.
-  function offerRefreshAfterBankEdit() {
-    if (resetLocked) return;
-    void offerCvRefresh({
-      message: TAILOR_REFRESH_MESSAGE,
-      apply: applyResetFromResume,
-      confirm: askCvRefresh,
-    });
-  }
-
   // ---- Autosave (folded in from the old standalone CvEditor) ----
   // A JSON snapshot of the last-persisted state; the effect compares against it to detect real
   // edits (and skip the initial load), and persist() advances it on success.
@@ -599,7 +582,7 @@
         bind:this={leftPanelEl}
         class={[
           'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none',
-          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'experience' || mobileView === 'templates' || mobileView === 'settings'
+          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'templates' || mobileView === 'settings'
             ? 'flex'
             : 'hidden',
           leftCollapsed ? 'lg:hidden' : 'lg:flex',
@@ -659,23 +642,6 @@
             <fieldset disabled={runActive} class="contents">
               <CvSectionForm bind:doc bind:title />
             </fieldset>
-          </div>
-          <!-- The experience bank as its owner sees it on /my/profile — same component, so
-               checking, confirming, or editing what the assistant knows never means leaving the
-               workspace. -->
-          <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'experience'}>
-            <!-- The refresh a bank edit offers is the same reset the History tab's control runs,
-                 and it fails into the same `resetError` — but someone who triggered it from here
-                 is not looking at that tab, so the failure is said here too. -->
-            {#if resetError}
-              <p
-                class="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                role="alert"
-              >
-                {resetError}
-              </p>
-            {/if}
-            <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
           </div>
           <!-- Presentation, in two blocks of label→control rows. Both write straight into the
                shared document, so the centre preview re-renders live and autosave persists them

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,12 +22,42 @@ func truncateAutoApplyQueue(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
+// insertAutoApplyQueueEntry inserts a claimable entry: reviewed and approved, carrying a
+// tailored CV, exactly what ClaimAutoApplyBatch's WHERE now requires (openspec/changes/
+// auto-apply-tailored-resume). Every existing caller here is testing lease/park/failure
+// semantics, not the review gate, so making "claimable" the default keeps their behavior
+// unchanged; TestAutoApplyQueueClaim's own "no approved tailored CV" subtest below exercises
+// the gate itself with a bare insert.
 func insertAutoApplyQueueEntry(t *testing.T, pool *pgxpool.Pool, userID, jobID int64) int64 {
+	t.Helper()
+	cvID := insertCV(t, pool, userID)
+	var id int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO auto_apply_queue (user_id, job_id, tailored_cv_id, review_decision)
+		 VALUES ($1, $2, $3, 'approved') RETURNING id`, userID, jobID, cvID).Scan(&id); err != nil {
+		t.Fatalf("insert auto_apply_queue entry: %v", err)
+	}
+	return id
+}
+
+// insertBareAutoApplyQueueEntry inserts an entry with no tailored CV and no review decision
+// — the shape a would-be enqueue trigger writes before tailoring has run at all.
+func insertBareAutoApplyQueueEntry(t *testing.T, pool *pgxpool.Pool, userID, jobID int64) int64 {
 	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
 		"INSERT INTO auto_apply_queue (user_id, job_id) VALUES ($1, $2) RETURNING id", userID, jobID).Scan(&id); err != nil {
 		t.Fatalf("insert auto_apply_queue entry: %v", err)
+	}
+	return id
+}
+
+func insertCV(t *testing.T, pool *pgxpool.Pool, userID int64) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`, userID).Scan(&id); err != nil {
+		t.Fatalf("insert cv: %v", err)
 	}
 	return id
 }
@@ -54,6 +85,45 @@ func TestAutoApplyQueueClaim(t *testing.T) {
 		}
 		if claimed[0].ExternalID != "gh-claim" {
 			t.Errorf("claimed external_id = %q, want the job's own (internal/atsapply needs it to reuse internal/applyform's schema fetchers)", claimed[0].ExternalID)
+		}
+		if claimed[0].TailoredCvID == nil {
+			t.Error("claimed tailored_cv_id not set, want the approved tailored CV's id")
+		}
+	})
+
+	t.Run("an entry with no approved tailored CV is never claimed", func(t *testing.T) {
+		truncateAutoApplyQueue(t, pool)
+		user := insertUser(t, pool, "untailored@example.test")
+		job := insertJob(t, pool, "untailored")
+		insertBareAutoApplyQueueEntry(t, pool, user, job)
+
+		claimed, err := q.ClaimAutoApplyBatch(ctx, ClaimAutoApplyBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(claimed) != 0 {
+			t.Errorf("claim = %d rows, want 0 for an entry with no tailored_cv_id/review_decision", len(claimed))
+		}
+	})
+
+	t.Run("a tailored but not-yet-reviewed entry is never claimed", func(t *testing.T) {
+		truncateAutoApplyQueue(t, pool)
+		user := insertUser(t, pool, "unreviewed@example.test")
+		job := insertJob(t, pool, "unreviewed")
+		cvID := insertCV(t, pool, user)
+		id := insertBareAutoApplyQueueEntry(t, pool, user, job)
+		if _, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{
+			ID: id, TailoredCvID: &cvID,
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		claimed, err := q.ClaimAutoApplyBatch(ctx, ClaimAutoApplyBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(claimed) != 0 {
+			t.Errorf("claim = %d rows, want 0 for a tailored entry with no recorded review decision", len(claimed))
 		}
 	})
 
@@ -92,6 +162,50 @@ func TestAutoApplyQueueClaim(t *testing.T) {
 			t.Errorf("reclaim = %d rows, want 1 once its lease expired", len(again))
 		}
 	})
+}
+
+// TestSetAutoApplyTailoredCVGuardsAnAlreadyReviewedEntry guards the race a code review
+// found: PostAutoApplyTailor's own review_decision check runs before its (potentially
+// minutes-long) LLM tailoring pass, not after, so a candidate can record a decision on an
+// EARLIER tailored CV while a stale or retried tailor call for the same entry is still in
+// flight. Without this guard, that call's own write would silently attach a fresh,
+// never-reviewed CV to an already-decided entry, which ClaimAutoApplyBatch's own predicate
+// would then submit as if approved.
+func TestSetAutoApplyTailoredCVGuardsAnAlreadyReviewedEntry(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateAutoApplyQueue(t, pool)
+
+	user := insertUser(t, pool, "raced@example.test")
+	job := insertJob(t, pool, "raced")
+	id := insertBareAutoApplyQueueEntry(t, pool, user, job)
+	firstCV := insertCV(t, pool, user)
+	if _, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{ID: id, TailoredCvID: &firstCV}); err != nil {
+		t.Fatal(err)
+	}
+	if affected, err := q.ApproveAutoApplyReview(ctx, id); err != nil || affected != 1 {
+		t.Fatalf("approve: affected=%d err=%v, want 1", affected, err)
+	}
+
+	// A stale second tailor pass for the same entry finishes after the approval above and
+	// tries to attach a DIFFERENT, never-reviewed CV.
+	secondCV := insertCV(t, pool, user)
+	affected, err := q.SetAutoApplyTailoredCV(ctx, SetAutoApplyTailoredCVParams{ID: id, TailoredCvID: &secondCV})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected != 0 {
+		t.Fatalf("affected = %d, want 0 — an already-reviewed entry must refuse a new tailored cv", affected)
+	}
+
+	var stored uuid.UUID
+	if err := pool.QueryRow(ctx, "SELECT tailored_cv_id FROM auto_apply_queue WHERE id = $1", id).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != firstCV {
+		t.Errorf("tailored_cv_id = %s, want the approved cv %s to survive unchanged", stored, firstCV)
+	}
 }
 
 func TestAutoApplyQueueCompletion(t *testing.T) {

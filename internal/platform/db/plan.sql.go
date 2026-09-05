@@ -493,7 +493,7 @@ type SetProUntilGrantedParams struct {
 
 // Pro GIVEN rather than sold: support's manual grant today, awarded days once add-invites
 // lands. No provider sync touches it, which is the whole reason it is separate — before
-// migration 0132 a hand-set value lived in the column the Stripe sync overwrites, and the
+// migration 0135 a hand-set value lived in the column the Stripe sync overwrites, and the
 // next webhook silently undid it.
 func (q *Queries) SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error {
 	_, err := q.db.Exec(ctx, setProUntilGranted, arg.Until, arg.ID)
@@ -534,9 +534,9 @@ type SetProUntilStripeParams struct {
 // current view of the customer.
 //
 // It writes a source, not the plan. users.pro_until is derived by the schema as the furthest
-// of three sources and refuses assignment outright (428C9) — see migration 0132 — so
+// of three sources and refuses assignment outright (428C9) — see migration 0135 — so
 // clearing this column says "Stripe confers nothing", never "this account is not Pro". The
-// account may hold a store subscription or a manual grant, and before 0132 this write would
+// account may hold a store subscription or a manual grant, and before 0135 this write would
 // have revoked either without a trace.
 func (q *Queries) SetProUntilStripe(ctx context.Context, arg SetProUntilStripeParams) error {
 	_, err := q.db.Exec(ctx, setProUntilStripe, arg.Until, arg.ID)

@@ -3,8 +3,9 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { LayoutGrid, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
+  import { LayoutGrid, Link2, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { isAuthenticated } from '$lib/auth.svelte';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
   import { dropdownRows, namedCompanies, type DropdownRow } from '$lib/dropdownRows';
   import { companyLogoUrl } from '$lib/logo';
@@ -12,11 +13,15 @@
   import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '$lib/types';
   import { listSearchTarget, type ListSearchTarget } from '$lib/listSearch.svelte';
   import { headerFilterTrigger } from '$lib/headerFilterTrigger';
+  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
   import { fromApi, applyParams, type ApplyPlan } from '$lib/apiSuggestions';
+  import { pastedJobLink, type PastedJobLink } from '$lib/jobLink';
+  import { runLinkIntake, type LinkIntakeStep } from '$lib/linkIntake';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
   import { starterSuggestions, type Suggestion } from '$lib/suggestions';
   import { cn } from '$lib/ui';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
+  import IntakeOutcome from './IntakeOutcome.svelte';
 
   // The header's search box — the ONE of them, on every page.
   //
@@ -265,16 +270,134 @@
     })();
   });
 
+  // ── A pasted link ─────────────────────────────────────────────────────────
+  //
+  // The box is one input serving two intents: almost everything typed into it is a
+  // query, and occasionally somebody drops in the URL of a vacancy they found elsewhere.
+  // Searching that URL as text finds nothing every time, so the box recognises it and
+  // offers the other thing instead — look it up, and hand it in if we don't have it.
+  //
+  // Recognition follows the DRAFT rather than the settled query: a paste is a complete
+  // thought the moment it lands, and making it wait out the suggestion debounce would
+  // show a panel of nothing first.
+  const link = $derived(pastedJobLink(draft.text, page.url.origin));
+
+  let linkBusy = $state(false);
+  // Where the last run stopped, when it stopped anywhere worth showing. Null while
+  // nothing has been asked yet — the row then offers to ask.
+  let linkStep = $state.raw<LinkIntakeStep | null>(null);
+
+  /** Where a signed-out visitor goes to hand this link in. The link rides along in the
+   *  return path so it survives the round trip — otherwise signing in costs them the
+   *  paste, and the whole point was that they had it in hand. */
+  const signinHref = $derived.by(() => {
+    const back = `/my/contributions?url=${encodeURIComponent(link?.url ?? '')}`;
+    return `${resolve('/signin')}?returnTo=${encodeURIComponent(back)}`;
+  });
+
+  /** Look this link up, and hand it in if we don't have it. See $lib/linkIntake for the
+   *  order and why it is that way round. */
+  async function activateLink(pasted: PastedJobLink) {
+    // One of our own posting pages: the slug is in the path, so asking the API whether
+    // we carry a posting we are serving right now would be asking ourselves.
+    if (pasted.ownSlug) {
+      openPosting(pasted.ownSlug);
+      return;
+    }
+    if (linkBusy) return;
+    linkBusy = true;
+    linkStep = null;
+    const step = await runLinkIntake(pasted.url, {
+      find: (u) => api.findJobByUrl(u),
+      submit: (u) => api.resolveJobLink(u),
+      signedIn: isAuthenticated,
+    });
+    linkBusy = false;
+    // The box may have moved on while the intake was out: a paste over the old text, or
+    // the text cleared entirely. The answer is about the URL we asked with, so applying
+    // it now would navigate to a posting nobody is asking about any more — the same
+    // stale-response hazard the suggestion fetches guard with `previewToken`, answered
+    // here by the question itself rather than by a counter.
+    if (link?.url !== pasted.url) return;
+    if (step.kind === 'open') {
+      openPosting(step.slug);
+      return;
+    }
+    linkStep = step;
+  }
+
+  /** Go to a posting and leave the box empty behind us: the URL that got us there is
+   *  not a query, and leaving it sitting in the header over the vacancy it opened reads
+   *  as a search that is still running. */
+  function openPosting(slug: string) {
+    draft = commit(edit(draft, ''));
+    close();
+    void goto(resolve('/jobs/[slug]', { slug }));
+  }
+
   const rows = $derived(
-    dropdownRows({ suggestions, jobs, companies, text: draft.text }),
+    dropdownRows({ suggestions, jobs, companies, text: draft.text, link }),
   );
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
   const rowCount = $derived(suggestOpen ? rows.length : 0);
+
+  /** How much of the screen's bottom the on-screen keyboard is covering, in pixels.
+   *
+   *  Neither mobile browser shrinks the PAGE for the keyboard on its own — it is drawn
+   *  over the bottom of a viewport that stays full height — so the panel below, pinned
+   *  from the header to `bottom: 0`, ran under the keys with its last rows unreachable.
+   *  Which is the worst place to lose: the visitor has just typed, and the rows they are
+   *  reading are the ones the typing produced.
+   *
+   *  `visualViewport` is the part of the page actually left visible, so the difference
+   *  between it and the window is the keyboard. `app.html` also asks Chrome to shrink the
+   *  page itself (`interactive-widget=resizes-content`), and the two do not double up:
+   *  where the browser honours that, the window shrinks with it and this measures 0.
+   *
+   *  Held here rather than in a shared store because this panel is the only thing that
+   *  reaches the bottom edge today; a second one (a composer, a sheet) is when it earns
+   *  a module of its own. */
+  let keyboardInset = $state(0);
+
+  $effect(() => {
+    // Nothing to lift while the panel is shut, and no listener to keep either.
+    if (!suggestOpen) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const measure = () => {
+      // Only the phone-width panel has a bottom edge to lift: at `sm` and up it hangs off
+      // the box and is sized by `max-height`. Read the breakpoint the same way the
+      // autofocus check above reads it, so there is one answer to "is this a phone".
+      const wide = window.matchMedia('(min-width: 640px)').matches;
+      keyboardInset = wide
+        ? 0
+        : Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    };
+    measure();
+    // `scroll` as well as `resize`: iOS scrolls the visual viewport inside the layout one
+    // to keep the focused field visible, which moves the keyboard's top edge without
+    // changing its height.
+    viewport.addEventListener('resize', measure);
+    viewport.addEventListener('scroll', measure);
+    return () => {
+      viewport.removeEventListener('resize', measure);
+      viewport.removeEventListener('scroll', measure);
+      keyboardInset = 0;
+    };
+  });
 
   function close() {
     dismissed = true;
     activeIndex = -1;
   }
+
+  // Close whatever other header overlay (the bell dropdown, the hamburger menu)
+  // was open, and let them close this one back — see headerOverlay.ts.
+  $effect(() => {
+    if (!suggestOpen) return;
+    openedOverlay(close);
+    return () => closedOverlay(close);
+  });
 
   /** Run what is in the box, and close over it. The store owns the URL write and the
    *  reload from here. Every path that searches free text goes through this — Enter,
@@ -284,6 +407,15 @@
    *  navigates to the feed carrying the query. The target is never null — off a list
    *  page it is the navigating one — so this path has no "nobody received it" case. */
   function runSearch() {
+    // Enter on a pasted link runs the link, not a text search for it. This sits here
+    // rather than in the keyboard handler because every path that searches free text
+    // comes through this function, and a URL is never the text somebody meant to search
+    // for — including from the dropdown's own last row, which is why that row is not
+    // offered at all while a link is recognised.
+    if (link) {
+      void activateLink(link);
+      return;
+    }
     draft = commit(draft);
     target.commitQuery(draft.committed);
     close();
@@ -296,6 +428,10 @@
     if (!row) return;
     if (row.kind === 'text') {
       runSearch();
+      return;
+    }
+    if (row.kind === 'link') {
+      void activateLink(row.link);
       return;
     }
     if (row.kind === 'job') {
@@ -369,11 +505,24 @@
    *  neighbours (postings, companies), and there "Filter by" says what picking one of
    *  these rows does rather than what it is. */
   function sectionHeading(kind: DropdownRow['kind']): string | null {
-    if (kind === 'text') return null;
+    if (kind === 'text' || kind === 'link') return null;
     if (kind === 'job') return 'Jobs';
     if (kind === 'company') return 'Companies';
     return draft.text.trim() === '' ? null : 'Filter by';
   }
+
+  /** The panel a recognised link drops.
+   *
+   *  It does NOT take the phone's screen the way the suggestions list does. That panel
+   *  goes full-bleed because it is a dozen rows that truncate at the box's width; this
+   *  one is a sentence, and a sentence stretched from the header to the bottom of the
+   *  screen reads as a page that has gone wrong. */
+  const linkPanelClass = $derived(
+    cn(
+      'absolute inset-x-0 top-full z-50 mt-2 border border-border bg-background px-3 py-2.5 text-sm shadow-lg',
+      hero ? 'rounded-2xl' : 'rounded-md',
+    ),
+  );
 
   const rowClass = (active: boolean) =>
     cn(
@@ -422,6 +571,19 @@
           // than the bar that grows.
           'h-12 gap-2 rounded-md px-3 text-sm',
     )}
+    onpointerdown={(e) => {
+      // The whole box takes the caret, not just the field inside it. Probed at 390px: the
+      // field is 175px of a 278px box, and the other 103 — the rule, the magnifier, the
+      // `/` hint, the padding — landed on nothing at all. That reads as a search box that
+      // ignored the first tap and answered the second, better-aimed one.
+      //
+      // Only what is NOT itself a control: the scope prefix, the clear button and the
+      // All-filters trigger keep their own taps. `preventDefault` because the default for
+      // a press on a non-focusable box is to take focus AWAY from the field.
+      if ((e.target as HTMLElement | null)?.closest('button, input, a')) return;
+      e.preventDefault();
+      inputEl?.focus();
+    }}
   >
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
          scope-prefix, divided from the search icon. `variant` picks the popover body
@@ -455,6 +617,9 @@
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
+        // Editing the text asks a different question, so the last link's answer goes
+        // with it — otherwise a half-corrected URL sits under a verdict on the old one.
+        linkStep = null;
         draft = edit(draft, e.currentTarget.value);
       }}
       onfocus={() => {
@@ -538,10 +703,56 @@
        Section headings ride on the row (`first`) rather than living in a second
        structure: one list means one set of indices, and the arrow keys cross a section
        boundary without knowing there was one. -->
-  {#if suggestOpen}
+  <!-- A recognised link takes the panel over. It is not a listbox: there is one thing to
+       do and no list to walk, and the states it passes through carry a link of their own
+       (sign in, view the company), which cannot live inside an option's button. -->
+  {#if link && !dismissed}
+    <div class={linkPanelClass} role="status" aria-live="polite">
+      {#if linkBusy}
+        <span class="flex items-center gap-2 text-muted-foreground">
+          <Link2 class="size-4 shrink-0" />
+          Checking whether we have this one…
+        </span>
+      {:else if linkStep?.kind === 'signin'}
+        <span class="flex flex-col gap-1">
+          <span>We don't have this one yet.</span>
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path -->
+          <a href={signinHref} class="font-medium underline underline-offset-4">
+            Sign in to send it to us →
+          </a>
+        </span>
+      {:else if linkStep?.kind === 'outcome'}
+        <IntakeOutcome resolved={linkStep.resolved} />
+      {:else if linkStep?.kind === 'error'}
+        <span class="flex flex-col gap-1">
+          <span>That didn't go through.</span>
+          <button
+            type="button"
+            onclick={() => link && activateLink(link)}
+            class="self-start font-medium underline underline-offset-4"
+          >
+            Try again
+          </button>
+        </span>
+      {:else}
+        <button
+          type="button"
+          onclick={() => link && activateLink(link)}
+          class="flex w-full items-center gap-2 text-left"
+        >
+          <Link2 class="size-4 shrink-0 text-muted-foreground" />
+          <span class="min-w-0 flex-1 truncate">Open this job link</span>
+          <kbd class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline">
+            ↵
+          </kbd>
+        </button>
+      {/if}
+    </div>
+  {:else if suggestOpen}
     <ul
       id="role-suggestions"
       role="listbox"
+      style:bottom={keyboardInset > 0 ? `${keyboardInset}px` : null}
       aria-label="Search suggestions"
       class={cn(
         'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
@@ -630,7 +841,7 @@
                 {row.company.job_count}
                 {row.company.job_count === 1 ? 'job' : 'jobs'}
               </span>
-            {:else}
+            {:else if row.kind === 'text'}
               <Search class="size-4 shrink-0 text-muted-foreground" />
               <span class="min-w-0 flex-1 truncate text-muted-foreground"
                 >Search “{row.text}” as text</span

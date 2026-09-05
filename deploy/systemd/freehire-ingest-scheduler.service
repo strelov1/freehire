@@ -1,0 +1,22 @@
+[Unit]
+Description=freehire ingest scheduler (one tick)
+# meilisearch is here for parity with the per-provider units this replaces: a crawl
+# enqueues into search_outbox rather than talking to Meili, so this is ordering hygiene
+# rather than a dependency — but a difference from the units being replaced is worth not
+# introducing silently.
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+# Root, and this is the ONLY privileged piece of the ingest fleet. It needs to create
+# transient units via systemd-run; each unit it creates carries --uid=freehire, so the
+# crawl itself runs exactly as unprivileged as it did under the per-provider units.
+User=root
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# A tick reads a few hundred rows and forks; it must never be the thing that is slow.
+CPUWeight=100
+# Generous against a stalled database connection, tight enough that a wedged tick cannot
+# overlap the next minute's timer. Type=oneshot already refuses a second instance while
+# the first is active, so an overrun defers rather than stacks.
+TimeoutStartSec=45
+ExecStart=/opt/freehire/src/hire-current/ingest-scheduler

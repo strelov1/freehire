@@ -2,103 +2,125 @@ package mailbox
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
-// fakeStore is an in-memory mailbox.Store for the allocator tests.
+// fakeStore is an in-memory mailbox.Store for the allocator tests. trace, when
+// non-nil, records call order across both fakeStore and fakeEnsurer.
 type fakeStore struct {
-	byUser map[int64]string
-	taken  map[string]int64 // address -> owner
+	enrolled map[int64]bool
+	trace    *[]string
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{byUser: map[int64]string{}, taken: map[string]int64{}}
+	return &fakeStore{enrolled: map[int64]bool{}}
 }
 
-func (f *fakeStore) AddressByUser(_ context.Context, userID int64) (string, bool, error) {
-	a, ok := f.byUser[userID]
-	return a, ok, nil
-}
-
-func (f *fakeStore) Insert(_ context.Context, userID int64, address string) error {
-	if _, ok := f.taken[address]; ok {
-		return ErrTaken
+func (f *fakeStore) EnsureRow(_ context.Context, userID int64) error {
+	if f.trace != nil {
+		*f.trace = append(*f.trace, "EnsureRow")
 	}
-	if _, ok := f.byUser[userID]; ok {
-		return ErrTaken // user already has a mailbox (user_id unique)
-	}
-	f.taken[address] = userID
-	f.byUser[userID] = address
+	f.enrolled[userID] = true
 	return nil
 }
 
-func TestGetOrCreate_FreshUser(t *testing.T) {
+// fakeEnsurer is an in-memory UsernameEnsurer: each userID gets a canned
+// username or error, set up per test.
+type fakeEnsurer struct {
+	usernames map[int64]string
+	errs      map[int64]error
+	calls     []int64
+	trace     *[]string
+}
+
+func (f *fakeEnsurer) EnsureUsername(_ context.Context, userID int64, _ string) (string, error) {
+	if f.trace != nil {
+		*f.trace = append(*f.trace, "EnsureUsername")
+	}
+	f.calls = append(f.calls, userID)
+	if err, ok := f.errs[userID]; ok {
+		return "", err
+	}
+	return f.usernames[userID], nil
+}
+
+func TestGetOrCreate_ComposesAddressFromUsername(t *testing.T) {
 	s := newFakeStore()
-	addr, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
+	e := &fakeEnsurer{usernames: map[int64]string{1: "ivan"}}
+
+	addr, err := GetOrCreate(context.Background(), s, e, 1, "ivan@gmail.com", "inbox.freehire.me")
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
 	if addr != "ivan@inbox.freehire.me" {
-		t.Errorf("addr = %q", addr)
+		t.Errorf("addr = %q, want %q", addr, "ivan@inbox.freehire.me")
 	}
 }
 
-func TestGetOrCreate_Collision(t *testing.T) {
+func TestGetOrCreate_EnrollsTheUser(t *testing.T) {
 	s := newFakeStore()
-	s.taken["ivan@inbox.freehire.me"] = 999 // someone else already holds the bare handle
-	addr, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
-	if err != nil {
+	e := &fakeEnsurer{usernames: map[int64]string{1: "ivan"}}
+
+	if _, err := GetOrCreate(context.Background(), s, e, 1, "ivan@gmail.com", "inbox.freehire.me"); err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
-	if addr != "ivan-2@inbox.freehire.me" {
-		t.Errorf("addr = %q, want suffixed", addr)
+	if !s.enrolled[1] {
+		t.Error("GetOrCreate did not enroll the user in the Store")
 	}
 }
 
-// A user whose own local-part happens to be an operational name must not be handed the
-// bare form of it on the receiving domain: those addresses are where abuse reports land and
-// what a CA will mail to prove control of the domain.
-func TestGetOrCreate_SkipsReservedHandles(t *testing.T) {
-	for _, email := range []string{"postmaster@somewhere.io", "abuse@somewhere.io", "admin@somewhere.io"} {
-		s := newFakeStore()
-		addr, err := GetOrCreate(context.Background(), s, 1, email, "inbox.freehire.me")
-		if err != nil {
-			t.Fatalf("GetOrCreate(%q): %v", email, err)
-		}
-		base := Handle(email)
-		if addr == base+"@inbox.freehire.me" {
-			t.Errorf("GetOrCreate(%q) allocated the reserved address %q", email, addr)
-		}
-		if want := base + "-2@inbox.freehire.me"; addr != want {
-			t.Errorf("GetOrCreate(%q) = %q, want the first non-reserved candidate %q", email, addr, want)
-		}
-	}
-}
-
-// A suffixed form of a reserved name is not itself an operational address, so nothing
-// stops a user from holding it.
-func TestGetOrCreate_ReservationIsExactLocalPartOnly(t *testing.T) {
+func TestGetOrCreate_IsIdempotent(t *testing.T) {
 	s := newFakeStore()
-	addr, err := GetOrCreate(context.Background(), s, 1, "administrator.uk@somewhere.io", "inbox.freehire.me")
-	if err != nil {
-		t.Fatalf("GetOrCreate: %v", err)
-	}
-	if addr != "administrator.uk@inbox.freehire.me" {
-		t.Errorf("addr = %q, want the bare handle (not a reserved name)", addr)
-	}
-}
+	e := &fakeEnsurer{usernames: map[int64]string{1: "ivan"}}
+	ctx := context.Background()
 
-func TestGetOrCreate_Idempotent(t *testing.T) {
-	s := newFakeStore()
-	first, _ := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
-	second, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
+	first, err := GetOrCreate(ctx, s, e, 1, "ivan@gmail.com", "inbox.freehire.me")
 	if err != nil {
-		t.Fatalf("GetOrCreate second: %v", err)
+		t.Fatalf("GetOrCreate (first): %v", err)
+	}
+	second, err := GetOrCreate(ctx, s, e, 1, "ivan@gmail.com", "inbox.freehire.me")
+	if err != nil {
+		t.Fatalf("GetOrCreate (second): %v", err)
 	}
 	if first != second {
 		t.Errorf("not idempotent: %q != %q", first, second)
 	}
-	if len(s.taken) != 1 {
-		t.Errorf("allocated %d addresses, want 1", len(s.taken))
+}
+
+func TestGetOrCreate_ResolvesUsernameBeforeEnrolling(t *testing.T) {
+	var trace []string
+	s := newFakeStore()
+	s.trace = &trace
+	e := &fakeEnsurer{usernames: map[int64]string{1: "ivan"}, trace: &trace}
+
+	if _, err := GetOrCreate(context.Background(), s, e, 1, "ivan@gmail.com", "inbox.freehire.me"); err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	want := []string{"EnsureUsername", "EnsureRow"}
+	if len(trace) != len(want) || trace[0] != want[0] || trace[1] != want[1] {
+		t.Errorf("call order = %v, want %v (username first — enrolling first would leave a mailbox row with no username on a partial failure)", trace, want)
+	}
+}
+
+func TestGetOrCreate_DoesNotEnrollWhenEnsureUsernameFails(t *testing.T) {
+	s := newFakeStore()
+	e := &fakeEnsurer{errs: map[int64]error{1: errors.New("boom")}}
+
+	if _, err := GetOrCreate(context.Background(), s, e, 1, "ivan@gmail.com", "inbox.freehire.me"); err == nil {
+		t.Fatal("GetOrCreate: want an error")
+	}
+	if s.enrolled[1] {
+		t.Error("GetOrCreate enrolled the user despite EnsureUsername failing")
+	}
+}
+
+func TestGetOrCreate_PropagatesEnsureUsernameError(t *testing.T) {
+	s := newFakeStore()
+	wantErr := errors.New("boom")
+	e := &fakeEnsurer{errs: map[int64]error{1: wantErr}}
+
+	if _, err := GetOrCreate(context.Background(), s, e, 1, "ivan@gmail.com", "inbox.freehire.me"); !errors.Is(err, wantErr) {
+		t.Errorf("GetOrCreate error = %v, want %v", err, wantErr)
 	}
 }

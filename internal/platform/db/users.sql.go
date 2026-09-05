@@ -255,21 +255,22 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, email, role, beta_tester, email_verified,
        (password_hash IS NOT NULL)::boolean AS has_password,
-       created_at, timezone, language
+       created_at, timezone, language, onboarding_completed_at
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID            int64              `json:"id"`
-	Email         string             `json:"email"`
-	Role          string             `json:"role"`
-	BetaTester    bool               `json:"beta_tester"`
-	EmailVerified bool               `json:"email_verified"`
-	HasPassword   bool               `json:"has_password"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	Timezone      pgtype.Text        `json:"timezone"`
-	Language      string             `json:"language"`
+	ID                    int64              `json:"id"`
+	Email                 string             `json:"email"`
+	Role                  string             `json:"role"`
+	BetaTester            bool               `json:"beta_tester"`
+	EmailVerified         bool               `json:"email_verified"`
+	HasPassword           bool               `json:"has_password"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	Timezone              pgtype.Text        `json:"timezone"`
+	Language              string             `json:"language"`
+	OnboardingCompletedAt pgtype.Timestamptz `json:"onboarding_completed_at"`
 }
 
 // Profile lookup for the authenticated user. role is included so /auth/me can tell a
@@ -278,7 +279,9 @@ type GetUserByIDRow struct {
 // change to password accounts and explain itself to OAuth-only ones. timezone is NULL
 // until the user sets one on their profile (internal/application/deliverywindow reads NULL as UTC).
 // language is never NULL — it has a NOT NULL DEFAULT, so every account has one from
-// creation.
+// creation. onboarding_completed_at is NULL until the account has been through the
+// wizard, and it rides along here rather than on its own endpoint because the root
+// layout's gate needs it on the same read it already makes to decide anything at all.
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
@@ -292,6 +295,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.CreatedAt,
 		&i.Timezone,
 		&i.Language,
+		&i.OnboardingCompletedAt,
 	)
 	return i, err
 }
@@ -322,6 +326,22 @@ func (q *Queries) GetUserExperienceRequireContext(ctx context.Context, id int64)
 	var experience_require_context bool
 	err := row.Scan(&experience_require_context)
 	return experience_require_context, err
+}
+
+const getUserIDByUsername = `-- name: GetUserIDByUsername :one
+SELECT id
+FROM users
+WHERE username = $1
+`
+
+// Uniqueness/availability lookup: which account (if any) already holds
+// username. Used by the username-check endpoint and by the hosted-mailbox
+// inbound resolver to map a recipient's local-part back to its owning user.
+func (q *Queries) GetUserIDByUsername(ctx context.Context, username pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserIDByUsername, username)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getUserLanguage = `-- name: GetUserLanguage :one
@@ -502,6 +522,28 @@ func (q *Queries) GetUserTokenVersion(ctx context.Context, id int64) (int32, err
 	return token_version, err
 }
 
+const getUsernameByUser = `-- name: GetUsernameByUser :one
+SELECT username, username_updated_at
+FROM users
+WHERE id = $1
+`
+
+type GetUsernameByUserRow struct {
+	Username          pgtype.Text        `json:"username"`
+	UsernameUpdatedAt pgtype.Timestamptz `json:"username_updated_at"`
+}
+
+// The account's own username (NULL until claimed/allocated) and, when set, the
+// time of its last EXPLICIT change via SetUsername — NULL for a lazily
+// allocated default written by SetUsernameIfAbsent, which never touches this
+// column (see the add-username-claim change's design.md, Decision 2).
+func (q *Queries) GetUsernameByUser(ctx context.Context, id int64) (GetUsernameByUserRow, error) {
+	row := q.db.QueryRow(ctx, getUsernameByUser, id)
+	var i GetUsernameByUserRow
+	err := row.Scan(&i.Username, &i.UsernameUpdatedAt)
+	return i, err
+}
+
 const listUserBlobKeys = `-- name: ListUserBlobKeys :many
 SELECT u.resume_object_key AS key FROM users u
 WHERE u.id = $1 AND u.resume_object_key IS NOT NULL AND u.resume_object_key <> ''
@@ -584,6 +626,22 @@ func (q *Queries) ListUsersForResumeGeoBackfill(ctx context.Context, userID int6
 		return nil, err
 	}
 	return items, nil
+}
+
+const markOnboardingComplete = `-- name: MarkOnboardingComplete :exec
+UPDATE users
+SET onboarding_completed_at = now()
+WHERE id = $1 AND onboarding_completed_at IS NULL
+`
+
+// Record that this account has been through the onboarding wizard, so it is never routed
+// there again. Guarded on IS NULL rather than written unconditionally: the useful fact is
+// WHEN the account first finished, and a second call (a re-submit, a double click, a
+// decline after a finish) must not overwrite it. That guard is also what makes the
+// endpoint idempotent — a repeat call affects no rows and is still a success.
+func (q *Queries) MarkOnboardingComplete(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markOnboardingComplete, id)
+	return err
 }
 
 const resetUserPassword = `-- name: ResetUserPassword :one
@@ -905,6 +963,53 @@ func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResume
 		arg.ResumeRegions,
 		arg.ResumeCities,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUsername = `-- name: SetUsername :exec
+UPDATE users
+SET username = $2, username_updated_at = now()
+WHERE id = $1
+`
+
+type SetUsernameParams struct {
+	ID       int64       `json:"id"`
+	Username pgtype.Text `json:"username"`
+}
+
+// Replace the account's username unconditionally and record the change time.
+// The caller (accounts.ClaimUsername) has already validated the format, the
+// reserved list, and the 30-day cooldown against the account's own prior
+// change — this query trusts its input, same as every other single-column
+// update in this file. A unique violation means another account already holds
+// username.
+func (q *Queries) SetUsername(ctx context.Context, arg SetUsernameParams) error {
+	_, err := q.db.Exec(ctx, setUsername, arg.ID, arg.Username)
+	return err
+}
+
+const setUsernameIfAbsent = `-- name: SetUsernameIfAbsent :execrows
+UPDATE users
+SET username = $2
+WHERE id = $1
+  AND username IS NULL
+`
+
+type SetUsernameIfAbsentParams struct {
+	ID       int64       `json:"id"`
+	Username pgtype.Text `json:"username"`
+}
+
+// Claim username for id only if the account has none yet, leaving
+// username_updated_at untouched. Zero affected rows means the account already
+// has a username (a concurrent caller won the race); a unique violation on
+// username means another account already holds it. The caller resolves either
+// case by re-reading GetUsernameByUser.
+func (q *Queries) SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUsernameIfAbsent, arg.ID, arg.Username)
 	if err != nil {
 		return 0, err
 	}

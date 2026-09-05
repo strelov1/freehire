@@ -29,9 +29,9 @@ import (
 // `go test` runs. The tests below execute the operator's own files rather than a copy of
 // their statements, so a change that breaks either one fails here rather than on prod.
 var (
-	forwardMigration = filepath.Join("..", "..", "..", "migrations", "0132_pro_until_sources.sql")
-	rollbackScript   = filepath.Join("..", "..", "..", "deploy", "rollback", "0132_pro_until_sources.down.sql")
-	reapplyScript    = filepath.Join("..", "..", "..", "deploy", "rollback", "0132_pro_until_sources.reapply.sql")
+	forwardMigration = filepath.Join("..", "..", "..", "migrations", "0135_pro_until_sources.sql")
+	rollbackScript   = filepath.Join("..", "..", "..", "deploy", "rollback", "0135_pro_until_sources.down.sql")
+	reapplyScript    = filepath.Join("..", "..", "..", "deploy", "rollback", "0135_pro_until_sources.reapply.sql")
 )
 
 // setSource writes one source column. It interpolates the column NAME, which is safe here
@@ -181,8 +181,8 @@ func TestTheRollbackRestoresAWritableColumnWithoutMovingAnybodysPlan(t *testing.
 }
 
 // The backfill is the half of the migration that a fresh install never exercises: initdb
-// runs 0132 against an empty users table, so the two UPDATEs touch nothing and a mistake in
-// them would ship unnoticed. The rollback restores exactly the pre-0132 shape, which is what
+// runs 0135 against an empty users table, so the two UPDATEs touch nothing and a mistake in
+// them would ship unnoticed. The rollback restores exactly the pre-0135 shape, which is what
 // makes it possible to seed that shape here and run the real forward file over it.
 //
 // Getting this wrong is silent in both directions: everything into _stripe lets the next
@@ -194,16 +194,16 @@ func TestTheMigrationSeparatesExistingPlansByTheirOrigin(t *testing.T) {
 	until := time.Now().Add(30 * 24 * time.Hour).UTC().Truncate(time.Microsecond)
 
 	// The rollback restores a writable pro_until but deliberately KEEPS the source columns,
-	// so it lands one step short of the shape 0132 was written against. Dropping them here
+	// so it lands one step short of the shape 0135 was written against. Dropping them here
 	// completes the reconstruction; doing it in the test rather than in the rollback file is
 	// the point of issue: an operator must never lose those columns.
 	runSQLFile(t, pool, rollbackScript)
 	if _, err := pool.Exec(ctx, `ALTER TABLE users
 		DROP COLUMN pro_until_stripe, DROP COLUMN pro_until_revenuecat, DROP COLUMN pro_until_granted`); err != nil {
-		t.Fatalf("reconstruct the pre-0132 shape: %v", err)
+		t.Fatalf("reconstruct the pre-0135 shape: %v", err)
 	}
 
-	// The three shapes an account can be in before 0132.
+	// The three shapes an account can be in before 0135.
 	bought := insertUser(t, pool, "split-stripe@example.com")
 	granted := insertUser(t, pool, "split-granted@example.com")
 	free := insertUser(t, pool, "split-free@example.com")

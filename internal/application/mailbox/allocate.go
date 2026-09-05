@@ -1,61 +1,43 @@
+// Package mailbox composes a per-user hosted-mailbox address on the freehire
+// receiving domain (<username>@<domain>). It no longer allocates or suffixes
+// its own handle — the address is always the account's own username (see the
+// add-username-claim change's design.md), lazily allocated on first use via
+// UsernameEnsurer. Enrollment (the mailboxes row) is separate from the
+// username itself: releasing a mailbox stops mail delivery without touching
+// the account's username.
 package mailbox
 
-import (
-	"context"
-	"errors"
-	"fmt"
-)
+import "context"
 
-// maxAllocAttempts bounds the collision-suffix search so a pathological run of
-// taken handles fails loudly instead of looping forever.
-const maxAllocAttempts = 100
-
-// ErrTaken is returned by Store.Insert when the address (or the user's mailbox)
-// already exists — the allocator resolves it by re-reading and, if needed,
-// trying the next suffix.
-var ErrTaken = errors.New("mailbox: taken")
-
-// Store is the persistence the allocator needs, kept db-free so it is faked in
-// tests. A db-backed adapter maps a Postgres unique violation (23505) to ErrTaken.
-type Store interface {
-	// AddressByUser returns the user's mailbox address, ok=false if none.
-	AddressByUser(ctx context.Context, userID int64) (string, bool, error)
-	// Insert claims address for userID, or ErrTaken on any unique collision.
-	Insert(ctx context.Context, userID int64, address string) error
+// UsernameEnsurer resolves (lazily allocating a default if the caller does
+// not already have one) an account's username. Satisfied by
+// *accounts.Service.
+type UsernameEnsurer interface {
+	EnsureUsername(ctx context.Context, userID int64, email string) (string, error)
 }
 
-// GetOrCreate returns the user's mailbox address, allocating one on first use.
-// The handle derives from the user's email; an address collision tries the next
-// numeric suffix. It is safe under a race: a concurrent create that wins the
-// unique user_id is resolved by re-reading the user's mailbox.
-func GetOrCreate(ctx context.Context, s Store, userID int64, email, domain string) (string, error) {
-	if addr, ok, err := s.AddressByUser(ctx, userID); err != nil {
-		return "", err
-	} else if ok {
-		return addr, nil
-	}
+// Store is the persistence GetOrCreate needs beyond the account's username,
+// kept db-free so it is faked in tests.
+type Store interface {
+	// EnsureRow marks userID as enrolled in the hosted mailbox. Idempotent — a
+	// second call for the same user is a no-op.
+	EnsureRow(ctx context.Context, userID int64) error
+}
 
-	base := Handle(email)
-	for n := 1; n <= maxAllocAttempts; n++ {
-		// A reserved handle is skipped rather than claimed, so a user whose own local-part
-		// is an operational name gets the next suffix instead. Only the bare form is ever
-		// reserved, so this costs at most one attempt.
-		if isReserved(Candidate(base, n)) {
-			continue
-		}
-		addr := Address(base, n, domain)
-		err := s.Insert(ctx, userID, addr)
-		if err == nil {
-			return addr, nil
-		}
-		if !errors.Is(err, ErrTaken) {
-			return "", err
-		}
-		// A collision is either the address (try the next suffix) or the user_id
-		// — a concurrent allocation for this same user, whose row we then return.
-		if existing, ok, gerr := s.AddressByUser(ctx, userID); gerr == nil && ok {
-			return existing, nil
-		}
+// GetOrCreate returns the user's hosted-mailbox address, enrolling them in the
+// feature on first use. Resolves the username BEFORE enrolling: the two are
+// separate, non-transactional writes, and this order means a failure between
+// them leaves an account with a username but no mailbox row — the ordinary
+// state of every non-mailbox user — rather than a mailbox row with no
+// username, which would be an anomaly every reader of that row has to
+// specifically account for.
+func GetOrCreate(ctx context.Context, s Store, ensurer UsernameEnsurer, userID int64, email, domain string) (string, error) {
+	name, err := ensurer.EnsureUsername(ctx, userID, email)
+	if err != nil {
+		return "", err
 	}
-	return "", fmt.Errorf("mailbox: no free address for %q after %d attempts", base, maxAllocAttempts)
+	if err := s.EnsureRow(ctx, userID); err != nil {
+		return "", err
+	}
+	return name + "@" + domain, nil
 }

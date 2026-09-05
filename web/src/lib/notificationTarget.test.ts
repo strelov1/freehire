@@ -60,4 +60,11 @@ describe('notificationTarget', () => {
   it('sends nowhere when a nudge kind somehow has no slug', () => {
     expect(notificationTarget({ kind: 'nudge_follow_up', public_slug: null })).toEqual({ kind: 'none' });
   });
+
+  it('sends a tailored-CV-ready notification to the tailoring workspace, not the job page', () => {
+    expect(notificationTarget({ kind: 'auto_apply_tailor_ready', public_slug: 'acme-go-engineer' })).toEqual({
+      kind: 'tailor',
+      slug: 'acme-go-engineer',
+    });
+  });
 });

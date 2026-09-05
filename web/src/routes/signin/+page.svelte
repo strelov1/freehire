@@ -193,6 +193,11 @@
 
   const inputClass =
     'rounded-md border border-border bg-background px-4 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  // The size every full-width button in this column shares — the provider buttons
+  // and the submit button — so the choices read as equally weighted. Named once so
+  // the two cannot drift apart; only their fill and weight differ.
+  const buttonSizeClass = 'h-12 rounded-lg px-5 text-base';
 </script>
 
 <svelte:head>
@@ -234,13 +239,14 @@
       </div>
 
       {#if providers.length > 0 && !isRecovery}
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-3">
           {#each providers as provider (provider)}
             <Button
               variant="outline"
+              class={buttonSizeClass}
               href={`/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`}
             >
-              <ProviderIcon {provider} />
+              <ProviderIcon {provider} class="size-5" />
               Continue with {providerLabels[provider]}
             </Button>
           {/each}
@@ -299,7 +305,10 @@
         <button
           type="submit"
           disabled={submitting}
-          class="mt-1 inline-flex h-12 items-center justify-center rounded-lg bg-brand px-5 text-base font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+          class={[
+            buttonSizeClass,
+            'mt-1 inline-flex items-center justify-center bg-brand font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-60',
+          ]}
         >
           {submitting ? 'Please wait…' : titles[mode]}
         </button>

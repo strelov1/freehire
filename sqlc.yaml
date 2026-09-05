@@ -75,6 +75,13 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
               pointer: true
+          # The tailored CV an auto-apply queue entry's tailoring run produced (openspec/
+          # changes/auto-apply-tailored-resume) — nullable until tailoring finishes.
+          - column: "auto_apply_queue.tailored_cv_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
           # A session id is a random UUID the client treats as an opaque string.
           # google/uuid gives it a real type (parse errors surface at the edge)
           # rather than pgtype.UUID's byte array, which every caller would have to

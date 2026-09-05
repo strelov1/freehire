@@ -46,6 +46,15 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   layer, or reworking `SidecarClient.Submit` to pull answers lazily — both costlier than the
   handful of avoidable DB reads per already-doomed-to-park row that this saves.
 
+- **`Store.Claim` only ever returns a reviewed-and-approved entry.** `Claimed.TailoredCVID`
+  is the candidate's approved tailored CV for the vacancy — never the zero value for a row
+  this package sees, because the real `Claim` (`ClaimAutoApplyBatch`) requires
+  `tailored_cv_id IS NOT NULL AND review_decision = 'approved'` (openspec/changes/
+  auto-apply-tailored-resume). An entry with no tailored CV yet, or one the candidate has
+  not reviewed, simply sits in the queue unclaimed; a decline parks it the same way an
+  unresolved form field does, through its own review endpoint (`internal/api/handler`), not
+  through anything in this package.
+
 ## How it works
 `Run` wires `outbox.RunPool` over `Store.Claim`, mirroring `internal/applyform`'s own
 `cmd/capture-apply-form` runner shape. `process` per claimed item: assemble answers → call

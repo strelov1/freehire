@@ -128,7 +128,7 @@ export const OVERVIEW: Overview[] = [
         'deliberately left out because calling them directly is meaningless: the ' +
         'Gmail and calendar consent redirects (`/me/gmail/connect`, ' +
         '`/me/calendar/connect`, and their callbacks), which only a browser can ' +
-        'complete; the Telegram bot webhook and the Discord interaction webhook; the ' +
+        'complete; the Telegram bot webhook; the ' +
         'browser-tool websocket relay; the sitemap-cursor helpers behind ' +
         '`/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an ' +
         'image rather than answer with JSON.',
@@ -2179,6 +2179,74 @@ data: {"type":"result","stop_reason":"completed"}
     ],
   },
   {
+    title: 'Onboarding survey',
+    intro:
+      'What you told us about your search when you signed up: how far along it is, ' +
+      'the single biggest thing in its way, and what you earn today. A singleton per ' +
+      'user — no id in the path. These answers describe you to us and reach no ' +
+      'employer and no job search; what you WANT to be paid is a screening answer ' +
+      '(`desired_salary_*`), not one of these. `PUT` is a partial update: a field the ' +
+      'body omits keeps its stored value, and there is no way to clear one back to ' +
+      'unstated.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/survey',
+        auth: 'cookie-or-key',
+        summary: 'Your stored survey answers. Every field is absent until you answer it.',
+        curl: `curl "${BASE_URL}/me/survey" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "job_search_stage": "searching",
+    "biggest_challenge": "technical_interviews",
+    "current_income_amount": 5000,
+    "current_income_currency": "USD",
+    "current_income_period": "month"
+  }
+}`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/survey',
+        auth: 'cookie',
+        summary: 'Update one or more survey answers.',
+        description:
+          'A field the body omits is left unchanged. A stage or challenge outside its ' +
+          'vocabulary, a note alongside any challenge other than `other`, a currency ' +
+          'that is not a three-letter ISO 4217 code, a period outside the vocabulary, ' +
+          'or a non-positive income is a `400` naming the offending field.',
+        body: [
+          { name: 'job_search_stage', type: 'string', description: 'One of `not_started`, `searching`, `employed_looking`, `exploring`.', example: 'searching' },
+          { name: 'biggest_challenge', type: 'string', description: 'One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`.', example: 'technical_interviews' },
+          { name: 'biggest_challenge_note', type: 'string', description: 'Free text. Accepted only alongside `biggest_challenge: "other"`.' },
+          { name: 'current_income_amount', type: 'integer', description: 'What you earn today, in the currency and period below.', example: '5000' },
+          { name: 'current_income_currency', type: 'string', description: 'Three-letter ISO 4217 currency code.', example: 'USD' },
+          { name: 'current_income_period', type: 'string', description: 'Income period, e.g. `year`, `month`.', example: 'month' },
+        ],
+        curl: `curl -X PUT "${BASE_URL}/me/survey" \\
+  -b cookies.txt -H 'Content-Type: application/json' \\
+  -d '{"job_search_stage":"searching"}'`,
+        responseExample: `{
+  "data": {
+    "job_search_stage": "searching"
+  }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/me/onboarding/complete',
+        auth: 'cookie',
+        summary: 'Record that you have been through the onboarding wizard.',
+        description:
+          'Sets `onboarding_completed_at` on your account, which is what stops the app ' +
+          'routing you into the wizard again. Idempotent: calling it a second time ' +
+          'keeps the original timestamp and still answers `200`.',
+        curl: `curl -X POST "${BASE_URL}/me/onboarding/complete" -b cookies.txt`,
+        responseExample: `{ "data": { "onboarding_complete": true } }`,
+      },
+    ],
+  },
+  {
     title: 'Activity & shared boards',
     intro:
       'Two public reads — the catalogue-activity time series and a shared saved-' +
@@ -2257,7 +2325,8 @@ data: {"type":"result","stop_reason":"completed"}
     intro:
       'Browser conveniences, session-only. A saved search stores a canonical ' +
       'filter query string; a subscription turns one into a recurring digest ' +
-      '(e.g. Telegram). Each operation is owner-scoped — a non-owned id is a 404.',
+      '(Telegram, email, or your own webhook). Each operation is owner-scoped — ' +
+      'a non-owned id is a 404.',
     endpoints: [
       {
         method: 'GET',
@@ -2374,29 +2443,45 @@ data: {"type":"result","stop_reason":"completed"}
       },
       {
         method: 'GET',
-        path: '/me/discord',
+        path: '/me/webhook',
         auth: 'cookie',
-        summary: 'Your Discord link status (for the `/contribute` bot command).',
-        curl: `curl "${BASE_URL}/me/discord" -b cookies.txt`,
-        responseExample: `{ "data": { "enabled": true, "linked": true, "discord_id": 123456789 } }`,
+        summary: 'Your webhook destination for saved-search matches, or null if none is configured.',
+        curl: `curl "${BASE_URL}/me/webhook" -b cookies.txt`,
+        responseExample: `{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }`,
       },
       {
         method: 'POST',
-        path: '/me/discord/link',
+        path: '/me/webhook',
         auth: 'cookie',
-        summary: 'Mint a one-time token to link your Discord account.',
+        summary: 'Create your webhook destination, or update its URL if one already exists.',
         description:
-          'Discord has no deep-link URL equivalent to Telegram’s — paste the ' +
-          'returned token into the bot’s `/link` slash command.',
-        curl: `curl -X POST "${BASE_URL}/me/discord/link" -b cookies.txt`,
-        responseExample: `{ "data": { "token": "abc123...", "instructions": "In the freehire Discord server, run /link token:abc123..." } }`,
+          'There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a ' +
+          'saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here.',
+        body: [
+          { name: 'url', type: 'string', required: true, description: 'Destination URL — must be http or https.', example: 'https://example.com/hook' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/webhook" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"url":"https://example.com/hook"}'`,
+        responseExample: `{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }`,
+      },
+      {
+        method: 'PATCH',
+        path: '/me/webhook',
+        auth: 'cookie',
+        summary: 'Enable or disable your webhook destination without changing its URL.',
+        body: [{ name: 'enabled', type: 'boolean', required: true, description: 'Whether the destination is enabled.', example: 'false' }],
+        curl: `curl -X PATCH "${BASE_URL}/me/webhook" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"enabled":false}'`,
+        responseExample: `{ "data": { "url": "https://example.com/hook", "enabled": false, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": "2026-09-04T13:00:00Z" } }`,
       },
       {
         method: 'DELETE',
-        path: '/me/discord',
+        path: '/me/webhook',
         auth: 'cookie',
-        summary: 'Unlink your Discord account. Idempotent.',
-        curl: `curl -X DELETE "${BASE_URL}/me/discord" -b cookies.txt`,
+        summary: 'Delete your webhook destination.',
+        curl: `curl -X DELETE "${BASE_URL}/me/webhook" -b cookies.txt`,
         responseExample: `(204 No Content)`,
       },
     ],

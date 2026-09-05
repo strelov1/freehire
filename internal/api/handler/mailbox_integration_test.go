@@ -113,3 +113,47 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 		t.Error("mailbox still present after release")
 	}
 }
+
+// TestGetMailbox_LegacyRowWithNoUsernameYet covers the one real (non-fresh-claim)
+// way a mailboxes row can exist with no username set: a pre-existing row from
+// before this change, in the deploy window before
+// cmd/backfill-username-from-mailbox has visited it. GetMailbox must report no
+// address rather than allocate one on a read.
+func TestGetMailbox_LegacyRowWithNoUsernameYet(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var uid int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('legacy-status@example.test') RETURNING id`).Scan(&uid); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	// A mailboxes row with no corresponding users.username — the pre-backfill state.
+	if _, err := pool.Exec(ctx, `INSERT INTO mailboxes (user_id, address) VALUES ($1, 'legacy@inbox.freehire.test')`, uid); err != nil {
+		t.Fatalf("seed legacy mailbox: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret-that-is-long-enough-0003", time.Hour)
+	cookie, _ := iss.Issue(uid, testTokenVersion)
+	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "inbox.freehire.test")
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/mailbox", auth.RequireAuth(iss, testVersions), h.GetMailbox)
+
+	r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/me/mailbox", nil)
+	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	resp, err := app.Test(r, -1)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	var body map[string]any
+	if code := decodeJSON(t, resp, &body); code != 200 {
+		t.Fatalf("status: %d", code)
+	}
+	d, _ := body["data"].(map[string]any)
+	if d["address"] != nil {
+		t.Errorf("GetMailbox reported address %v for a not-yet-backfilled account, want null", d["address"])
+	}
+	if d["available"] != true {
+		t.Errorf("GetMailbox available = %v, want true (feature is configured)", d["available"])
+	}
+}

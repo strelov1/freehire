@@ -11,6 +11,7 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 | `internal/engage/emailnotify` | Email channel (SES) — implements `notify.Notifier` (the `reminder`/`nudge`-side email transports live in their own `transports.go`) | — |
 | `internal/engage/telegramnotify` | Telegram channel (Bot API, deep-link token) | — |
 | `internal/engage/pushnotify` | Mobile push channel (Expo relay) — the bare Expo transport; each of `notify`/`reminder`/`nudge` has its own thin `PushNotifier` on top, same as Telegram/email | — |
+| `internal/engage/webhooknotify` | Webhook channel (plain, unsigned HTTP POST to an account's own URL) — implements `notify.Notifier` for `notify` ONLY, see the bullet below | — |
 
 ## Always true
 
@@ -60,6 +61,19 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   three small, near-identical `PushNotifier`s (a few lines of message-rendering each) rather than
   three copies of anything structurally significant. Revisit if a fourth channel makes the
   per-engine cost look different.
+  **The fourth channel (webhook, `add-saved-search-webhooks`) answers that by landing in
+  only ONE of the three engines** — a saved search's "matched a job" alert is what a
+  candidate's own tooling wants pushed to it; a saved-job reminder or a lifecycle nudge is
+  not. So there is no `webhooknotify` transport for `reminder`/`nudge`, and neither one's
+  `cmd` main ever registers `notify.ChannelWebhook` in its `Router`. But `notify.Channels`
+  is shared vocabulary (see the bullet below), and `reminder.go`'s create-time gate reads
+  it too — so an account's `notification_settings.channels` will validate `"webhook"` as an
+  accepted value even though nothing ever delivers over it there. This is not a new failure
+  mode: it is the same "valid channel, no registered `Notifier`" soft-skip described below,
+  just permanent rather than until a credential is configured. The product UI never offers
+  `webhook` as a `notification_settings` choice (only the saved-search subscription control
+  does), so this is reachable only by a direct API call — accepted as the cost of one shared
+  vocabulary constant rather than a per-engine one.
   **Grouping made the duplication bigger, and that is the seam to watch.** `reminder` and
   `nudge` now each carry a near-identical `collect` + `deliverBatch` pair — claim, validate
   per item, group, send once, finalize every member — differing only in their ledger's

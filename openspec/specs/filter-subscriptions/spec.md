@@ -8,10 +8,10 @@ TBD - created by syncing change filter-subscriptions. Update Purpose after archi
 The system SHALL let an authenticated user subscribe one of their saved searches
 to a delivery channel, so that matching jobs are pushed to them. A subscription
 references a saved search (the filter of record) and a channel; the channel SHALL
-be one of the supported channels (`telegram` or `email`); at most one
+be one of the supported channels (`telegram`, `email`, or `webhook`); at most one
 subscription MAY exist per (saved search, channel), so a user MAY subscribe the
-same saved search on both Telegram and email. Subscription management SHALL
-require the session cookie (`RequireAuth`), never an API key.
+same saved search on Telegram, email, and their webhook at once. Subscription
+management SHALL require the session cookie (`RequireAuth`), never an API key.
 
 #### Scenario: Create a subscription
 
@@ -23,9 +23,14 @@ require the session cookie (`RequireAuth`), never an API key.
 - **WHEN** an authenticated user POSTs `{saved_search_id, channel:"email"}` for a saved search they own
 - **THEN** the system creates an email subscription with `active=true`, no per-subscription destination stored, and returns it as `{"data": subscription}`
 
+#### Scenario: Create a webhook subscription
+
+- **WHEN** an authenticated user POSTs `{saved_search_id, channel:"webhook"}` for a saved search they own
+- **THEN** the system creates a webhook subscription with `active=true`, no per-subscription destination stored, and returns it as `{"data": subscription}` — regardless of whether the account has configured a webhook destination yet
+
 #### Scenario: Unsupported channel is rejected
 
-- **WHEN** a user POSTs a subscription with a channel that is not `telegram` or `email`
+- **WHEN** a user POSTs a subscription with a channel that is not `telegram`, `email`, or `webhook`
 - **THEN** the system returns a 400 and creates no subscription
 
 #### Scenario: Duplicate subscription is rejected
@@ -162,8 +167,13 @@ be added without changing the matching engine. The `telegram` channel SHALL
 resolve the recipient from the user's linked Telegram chat. The `email` channel
 SHALL resolve the recipient from the user's account email, read live at delivery
 time, so that no per-subscription address is stored and a changed account email
-takes effect on the next delivery. A subscription whose channel has no configured
-notifier SHALL be softly skipped (its matches stay pending, no attempt counted).
+takes effect on the next delivery. The `webhook` channel SHALL resolve the
+recipient from the account's configured webhook destination, read live at
+delivery time, so that a changed URL or a disabled destination takes effect on the next
+delivery without editing the subscription.
+A subscription whose channel has no configured notifier, or whose account has no
+enabled destination for that channel, SHALL be softly skipped (its matches stay
+pending, no attempt counted).
 
 #### Scenario: Telegram delivery without a stored destination
 
@@ -179,6 +189,16 @@ notifier SHALL be softly skipped (its matches stay pending, no attempt counted).
 
 - **WHEN** an `email` subscription is delivered
 - **THEN** the worker resolves the recipient from the user's current account email and routes the digest to the email notifier
+
+#### Scenario: Webhook delivery resolves the account's destination
+
+- **WHEN** a `webhook` subscription is delivered
+- **THEN** the worker resolves the URL from the account's webhook destination rather than from a per-subscription value
+
+#### Scenario: No configured or disabled webhook destination is skipped, not failed
+
+- **WHEN** a `webhook` subscription's account has never configured a webhook destination, or has disabled it
+- **THEN** the delivery is softly skipped (matches stay pending, no attempt is counted) rather than dead-lettered
 
 #### Scenario: Router dispatches by channel
 

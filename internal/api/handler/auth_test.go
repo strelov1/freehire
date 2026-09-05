@@ -55,6 +55,12 @@ func (fakeRepo) UserByEmail(context.Context, string) (accounts.User, string, boo
 func (fakeRepo) UserByID(context.Context, int64) (accounts.User, error) {
 	return accounts.User{}, accounts.ErrUserNotFound
 }
+func (fakeRepo) UsernameByUser(context.Context, int64) (string, *time.Time, bool, error) {
+	return "", nil, false, nil
+}
+func (fakeRepo) SetUsernameIfAbsent(context.Context, int64, string) error { return nil }
+func (fakeRepo) SetUsername(context.Context, int64, string) error         { return nil }
+func (fakeRepo) UsernameTaken(context.Context, string) (bool, error)      { return false, nil }
 
 // registerApp mounts only the register route on a handler whose accounts service
 // is backed by an in-memory repo. The validation cases below all reject inside

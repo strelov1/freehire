@@ -28,6 +28,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Moderator jobs](#moderator-jobs)
 - [Profile & résumé](#profile--rsum)
 - [Screening answers](#screening-answers)
+- [Onboarding survey](#onboarding-survey)
 - [Activity & shared boards](#activity--shared-boards)
 - [Saved searches & subscriptions](#saved-searches--subscriptions)
 - [Push notifications & alerts](#push-notifications--alerts)
@@ -80,7 +81,7 @@ Endpoints marked “Session or API key” accept either; endpoints marked “Ses
 
 ## What is not here
 
-This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook and the Discord interaction webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
+This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
 
 The `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.
 
@@ -2927,6 +2928,81 @@ curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \
 }
 ```
 
+## Onboarding survey
+
+What you told us about your search when you signed up: how far along it is, the single biggest thing in its way, and what you earn today. A singleton per user — no id in the path. These answers describe you to us and reach no employer and no job search; what you WANT to be paid is a screening answer (`desired_salary_*`), not one of these. `PUT` is a partial update: a field the body omits keeps its stored value, and there is no way to clear one back to unstated.
+
+### `GET /me/survey`
+
+**Auth:** Session or API key
+
+Your stored survey answers. Every field is absent until you answer it.
+
+```bash
+curl "https://freehire.me/api/v1/me/survey" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_search_stage": "searching",
+    "biggest_challenge": "technical_interviews",
+    "current_income_amount": 5000,
+    "current_income_currency": "USD",
+    "current_income_period": "month"
+  }
+}
+```
+
+### `PUT /me/survey`
+
+**Auth:** Session only
+
+Update one or more survey answers.
+
+A field the body omits is left unchanged. A stage or challenge outside its vocabulary, a note alongside any challenge other than `other`, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a non-positive income is a `400` naming the offending field.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job_search_stage` | string | no | One of `not_started`, `searching`, `employed_looking`, `exploring`. (e.g. `searching`) |
+| `biggest_challenge` | string | no | One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`. (e.g. `technical_interviews`) |
+| `biggest_challenge_note` | string | no | Free text. Accepted only alongside `biggest_challenge: "other"`. |
+| `current_income_amount` | integer | no | What you earn today, in the currency and period below. (e.g. `5000`) |
+| `current_income_currency` | string | no | Three-letter ISO 4217 currency code. (e.g. `USD`) |
+| `current_income_period` | string | no | Income period, e.g. `year`, `month`. (e.g. `month`) |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/survey" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"job_search_stage":"searching"}'
+```
+
+```json
+{
+  "data": {
+    "job_search_stage": "searching"
+  }
+}
+```
+
+### `POST /me/onboarding/complete`
+
+**Auth:** Session only
+
+Record that you have been through the onboarding wizard.
+
+Sets `onboarding_completed_at` on your account, which is what stops the app routing you into the wizard again. Idempotent: calling it a second time keeps the original timestamp and still answers `200`.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/onboarding/complete" -b cookies.txt
+```
+
+```json
+{ "data": { "onboarding_complete": true } }
+```
+
 ## Activity & shared boards
 
 Two public reads — the catalogue-activity time series and a shared saved-search “board” by slug — plus the session-only publish/unpublish actions that turn one of your saved searches into such a board. A published board exposes no owner identity.
@@ -3033,7 +3109,7 @@ curl -X DELETE "https://freehire.me/api/v1/me/searches/2/share" -b cookies.txt
 
 ## Saved searches & subscriptions
 
-Browser conveniences, session-only. A saved search stores a canonical filter query string; a subscription turns one into a recurring digest (e.g. Telegram). Each operation is owner-scoped — a non-owned id is a 404.
+Browser conveniences, session-only. A saved search stores a canonical filter query string; a subscription turns one into a recurring digest (Telegram, email, or your own webhook). Each operation is owner-scoped — a non-owned id is a 404.
 
 ### `GET /me/searches`
 
@@ -3248,44 +3324,74 @@ curl -X DELETE "https://freehire.me/api/v1/me/telegram" -b cookies.txt
 (204 No Content)
 ```
 
-### `GET /me/discord`
+### `GET /me/webhook`
 
 **Auth:** Session only
 
-Your Discord link status (for the `/contribute` bot command).
+Your webhook destination for saved-search matches, or null if none is configured.
 
 ```bash
-curl "https://freehire.me/api/v1/me/discord" -b cookies.txt
+curl "https://freehire.me/api/v1/me/webhook" -b cookies.txt
 ```
 
 ```json
-{ "data": { "enabled": true, "linked": true, "discord_id": 123456789 } }
+{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }
 ```
 
-### `POST /me/discord/link`
+### `POST /me/webhook`
 
 **Auth:** Session only
 
-Mint a one-time token to link your Discord account.
+Create your webhook destination, or update its URL if one already exists.
 
-Discord has no deep-link URL equivalent to Telegram’s — paste the returned token into the bot’s `/link` slash command.
+There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | yes | Destination URL — must be http or https. (e.g. `https://example.com/hook`) |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/discord/link" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/webhook" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"url":"https://example.com/hook"}'
 ```
 
 ```json
-{ "data": { "token": "abc123...", "instructions": "In the freehire Discord server, run /link token:abc123..." } }
+{ "data": { "url": "https://example.com/hook", "enabled": true, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": null } }
 ```
 
-### `DELETE /me/discord`
+### `PATCH /me/webhook`
 
 **Auth:** Session only
 
-Unlink your Discord account. Idempotent.
+Enable or disable your webhook destination without changing its URL.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | yes | Whether the destination is enabled. (e.g. `false`) |
 
 ```bash
-curl -X DELETE "https://freehire.me/api/v1/me/discord" -b cookies.txt
+curl -X PATCH "https://freehire.me/api/v1/me/webhook" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"enabled":false}'
+```
+
+```json
+{ "data": { "url": "https://example.com/hook", "enabled": false, "created_at": "2026-09-04T12:00:00Z", "last_success_at": null, "disabled_at": "2026-09-04T13:00:00Z" } }
+```
+
+### `DELETE /me/webhook`
+
+**Auth:** Session only
+
+Delete your webhook destination.
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/webhook" -b cookies.txt
 ```
 
 ```json

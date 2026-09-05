@@ -296,7 +296,7 @@ func TestSyncClearsALapsedSubscription(t *testing.T) {
 //
 // A Stripe sync that finds no subscription must say "Stripe confers nothing", not "this
 // account is not Pro". The account here holds a store subscription and a manual grant, and
-// before migration 0132 this exact sync — one UPDATE of one column — would have revoked both
+// before migration 0135 this exact sync — one UPDATE of one column — would have revoked both
 // without leaving a trace. Note what it does NOT assert: nothing about GREATEST, which the
 // schema tests already pin. What it pins is that the SERVICE writes one column and no other.
 func TestSyncLeavesEveryOtherSourceStanding(t *testing.T) {

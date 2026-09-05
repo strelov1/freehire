@@ -8,6 +8,7 @@
 //
 // Pure by design: no Svelte, no DOM, no network.
 
+import type { PastedJobLink } from './jobLink';
 import type { Suggestion } from './suggestions';
 import type { Job, CompanyListItem } from './types';
 
@@ -19,6 +20,7 @@ export type DropdownRow = { key: string; first: boolean } & (
   | { kind: 'job'; job: Job }
   | { kind: 'company'; company: CompanyListItem }
   | { kind: 'text'; text: string }
+  | { kind: 'link'; link: PastedJobLink }
 );
 
 /** Keep only the companies the typed text actually NAMES.
@@ -65,6 +67,9 @@ export interface DropdownContent {
   /** What is typed in the box. Empty means no free-text row: there is nothing to
    *  offer searching for. */
   text: string;
+  /** The link recognised in `text`, when it is one. Set means the panel offers exactly
+   *  one thing — see below. */
+  link?: PastedJobLink | null;
 }
 
 /** Flatten the sections into the single list the keyboard walks.
@@ -72,6 +77,15 @@ export interface DropdownContent {
  *  A section with nothing in it contributes no rows at all, so an empty postings
  *  section leaves no gap in the numbering and no orphan heading. */
 export function dropdownRows(content: DropdownContent): DropdownRow[] {
+  // A pasted link REPLACES the panel rather than joining it. The other sections are
+  // answers to a full-text search, and a URL is not text anybody wrote to be searched
+  // for: the completions come back empty, the postings section matches on stray path
+  // fragments, and the free-text row offers to run a search that finds nothing. One row
+  // that does the one useful thing is the whole panel here.
+  if (content.link) {
+    return [{ kind: 'link', link: content.link, key: 'l', first: true }];
+  }
+
   const rows: DropdownRow[] = [];
 
   content.suggestions.forEach((suggestion, i) => {

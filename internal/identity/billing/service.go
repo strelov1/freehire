@@ -181,7 +181,7 @@ func (e *engine) SubscribersNearExpiry(ctx context.Context, window time.Duration
 //
 // The column written is the provider's own and never the derived one. A provider reporting no
 // subscription is saying "I confer nothing", not "this account is not Pro" — the account may
-// hold a store subscription or a manual grant, and before migration 0132 this write would
+// hold a store subscription or a manual grant, and before migration 0135 this write would
 // have revoked either of them without a trace.
 //
 // This is the only place the source is derived, and it is derived WHOLE every time rather

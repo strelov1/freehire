@@ -1,6 +1,6 @@
 ## 1. Schema
 
-- [x] 1.1 Add `migrations/0132_pro_until_sources.sql`: three nullable `timestamptz` columns
+- [x] 1.1 Add `migrations/0135_pro_until_sources.sql`: three nullable `timestamptz` columns
       on `users` (`pro_until_stripe`, `pro_until_revenuecat`, `pro_until_granted`), the
       split of existing values by `stripe_customer_id`, then `DROP COLUMN pro_until` and its
       re-addition as `GENERATED ALWAYS AS (GREATEST(...)) STORED`. Comment the file the way
@@ -24,7 +24,7 @@
       `pro_until`. (The RevenueCat near-expiry read moved to 5.1, where it gains a caller.)
 - [x] 1.5 Verify on a fresh initdb volume that a clean install produces the generated column
       — testcontainers replays every migration, so the integration tests are that check —
-      and that each pre-0132 shape lands in exactly one source column with `pro_until`
+      and that each pre-0135 shape lands in exactly one source column with `pro_until`
       unchanged, by rolling back to that shape and running the real forward file over it.
       Still to do against a copy of prod, with the candidate list from the migration header
       (`pro_until IS NOT NULL AND stripe_customer_id IS NOT NULL`) in hand: those are the
@@ -48,7 +48,7 @@
       the client at construction and the old aliasing left the stub uncalled.
 - [x] 2.3 Point the Stripe path at `pro_until_stripe`. Assert in a test that a Stripe sync
       reporting no subscription leaves `pro_until_revenuecat` and `pro_until_granted`
-      untouched. Done ahead of 2.1/2.2 because 0132 makes the old write fail, so the suite
+      untouched. Done ahead of 2.1/2.2 because 0135 makes the old write fail, so the suite
       cannot be green without it; the seam then generalises what is already correct.
 
 ## 3. The RevenueCat provider

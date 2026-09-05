@@ -75,7 +75,7 @@ var blocks = map[string][]string{
 		// this package, and billing's only callers are the webhook handler in api and a
 		// binary in cmd.
 		"billing",
-		"userprofile",
+		"userprofile", "username",
 	},
 	"candidate": {
 		"atscheck",
@@ -94,6 +94,11 @@ var blocks = map[string][]string{
 		// the CV path runs, which is what keeps one text from resolving two ways.
 		"linkedinprofile",
 		"matchanalysis", "pii", "resume", "resumeextract",
+		// survey holds the candidate's self-reported segmentation answers (job-search
+		// stage, biggest challenge, current income). It sits here rather than in engage,
+		// whose digests are its most likely future reader, because it states what a
+		// candidate IS — engage is layer 7 and may import this, but not the reverse.
+		"survey",
 	},
 	"job": {
 		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",
@@ -101,9 +106,9 @@ var blocks = map[string][]string{
 		"outboundurl", "privatejob", "silence", "verdict", "ycdir",
 	},
 	"application": {
-		"appevent", "apptimeline", "autoapply", "calmatch", "calsync", "deliverywindow",
-		"followup", "gmailsync", "ical", "inbox", "jobtracking", "mailbox", "mailclassify",
-		"mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl", "userjob",
+		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
+		"deliverywindow", "followup", "gmailsync", "ical", "inbox", "jobtracking", "mailbox",
+		"mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl", "userjob",
 		"viewlog",
 	},
 	"search": {
@@ -118,13 +123,13 @@ var blocks = map[string][]string{
 	// (load.go), so they cannot be handed over in the snapshot.
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
-		"catalogstats", "contribution", "jdresolve", "linkimport", "linksource", "moderation",
-		"pipeline", "screeninganswers", "sources", "submission", "telegram",
+		"catalogstats", "contribution", "ingestsched", "jdresolve", "linkimport", "linksource",
+		"moderation", "pipeline", "screeninganswers", "sources", "submission", "telegram",
 	},
 	"engage": {
-		"broadcast", "community", "companyfeedback", "discordbot", "emailnotify",
+		"broadcast", "community", "companyfeedback", "emailnotify",
 		"mailpreview", "notify", "nudge", "onboarding", "pushnotify", "referral",
-		"reminder", "report", "subscription", "telegramnotify", "vote",
+		"reminder", "report", "subscription", "telegramnotify", "vote", "webhooknotify",
 	},
 	// atsapply and candidateprofile sit here, not lower, because both need to reach
 	// ingest (applyform, screeninganswers) as well as candidate (experience, cv,

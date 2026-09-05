@@ -1,0 +1,36 @@
+-- migrate: no-transaction
+--
+-- Enforces uniqueness on users.username (added by 0128_add_username.sql), mirroring
+-- 0086 (talent_network_public_id) for the identical reason: users is under continuous
+-- write traffic on nearly every authenticated request, and a plain `ADD CONSTRAINT
+-- ... UNIQUE` (or plain CREATE UNIQUE INDEX) holds a SHARE lock blocking writes to
+-- users for the whole index build. CONCURRENTLY takes SHARE UPDATE EXCLUSIVE instead,
+-- blocking neither readers nor writers, at the cost of two table passes — but Postgres
+-- forbids CONCURRENTLY inside a transaction block, and a migration file's statements
+-- sent as one multi-statement query run in an implicit transaction regardless of the
+-- no-transaction marker, so this stays its own file (see 0086 for the full argument).
+--
+-- Partial (WHERE username IS NOT NULL): most accounts have not claimed one yet, and a
+-- partial index over only the claimed rows is both smaller and lets NULL coexist freely
+-- (Postgres' own UNIQUE would already permit that, but the WHERE clause keeps the
+-- index itself from ever indexing the unclaimed majority).
+--
+-- Run this BEFORE cmd/backfill-username-from-mailbox (see design.md's Migration Plan)
+-- — the other order was tried first and is wrong: cmd/backfill-username-from-mailbox's
+-- collision resolution (accounts.EnsureUsernameFromBase's Candidate retry loop) works
+-- by reacting to a real Postgres unique violation on an attempted write. Without this
+-- index already in place, nothing stops two different legacy mailbox handles that
+-- collide after sanitization (e.g. "ivan.doe" and "ivan-doe" both sanitizing to
+-- "ivan-doe") from both succeeding with the identical username — silently, since
+-- SetUsernameIfAbsent's `WHERE username IS NULL` has no cross-row uniqueness check of
+-- its own. Building the index first also costs nothing extra here: every username is
+-- still NULL at this point (the backfill hasn't run yet), so this partial index starts
+-- and stays empty until the backfill begins writing — there's no existing-row scan for
+-- CONCURRENTLY to do.
+--
+-- Applied to a fresh volume by initdb after 0128; on an existing prod volume build it
+-- by hand, detached from the SSH session (systemd-run or nohup) — a CONCURRENTLY build
+-- dies with its ssh session and leaves an INVALID index behind.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS users_username_key
+    ON public.users (username)
+    WHERE username IS NOT NULL;

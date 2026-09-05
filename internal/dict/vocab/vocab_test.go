@@ -178,3 +178,55 @@ func TestCompanyTypeGlossCoversVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// TestIsCurrencyCode covers the one guarantee this check gives. There is no closed
+// currency dictionary in this repository — vocab documents salary_currency as a
+// deliberately open ISO-standard field — so shape is all it can assert, and asserting it
+// in one place is what keeps a second caller from inventing a laxer copy.
+func TestIsCurrencyCode(t *testing.T) {
+	for _, ok := range []string{"USD", "EUR", "GBP", "RUB", "XYZ"} {
+		if !IsCurrencyCode(ok) {
+			t.Errorf("IsCurrencyCode(%q) = false, want true", ok)
+		}
+	}
+	for _, bad := range []string{"", "usd", "US", "USDT", "US$", "U SD", " USD"} {
+		if IsCurrencyCode(bad) {
+			t.Errorf("IsCurrencyCode(%q) = true, want false", bad)
+		}
+	}
+}
+
+// TestJobChallengeHasOther locks the member the free-text note hangs off. The survey
+// accepts a written note ONLY alongside this value (internal/candidate/survey), so
+// renaming or dropping it would leave the note unreachable — a question the wizard still
+// asks and no answer can ever reach. Not a general "every vocabulary has an escape
+// hatch" rule: it is specific to this one, because this one is load-bearing in code.
+func TestJobChallengeHasOther(t *testing.T) {
+	if !slices.Contains(JobChallengeValues, JobChallengeOther) {
+		t.Fatalf("JobChallengeValues %v is missing %q, which gates the free-text note", JobChallengeValues, JobChallengeOther)
+	}
+}
+
+// TestSurveyVocabulariesAreCanonical guards the two candidate-survey vocabularies the
+// same way the job facets are guarded: values are stored as-is after a membership check,
+// so a stray capital or space would be a value no submission could ever match.
+func TestSurveyVocabulariesAreCanonical(t *testing.T) {
+	for name, values := range map[string][]string{
+		"JobSearchStageValues": JobSearchStageValues,
+		"JobChallengeValues":   JobChallengeValues,
+	} {
+		seen := map[string]bool{}
+		for _, v := range values {
+			if v != strings.ToLower(v) || strings.TrimSpace(v) != v || strings.Contains(v, " ") {
+				t.Errorf("%s: %q is not canonical (lowercase, trimmed, no spaces)", name, v)
+			}
+			if seen[v] {
+				t.Errorf("%s: %q appears twice", name, v)
+			}
+			seen[v] = true
+		}
+		if len(values) == 0 {
+			t.Errorf("%s is empty", name)
+		}
+	}
+}

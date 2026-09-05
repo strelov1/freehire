@@ -299,7 +299,7 @@ generated. The write fails closed with `428C9` rather than storing something wro
 why the ordering is migrate-then-deploy and not the reverse.
 
 After step 3, rollback means redeploying the previous binary, which needs `pro_until`
-writable — so `deploy/rollback/0132_pro_until_sources.down.sql` restores it as a plain column
+writable — so `deploy/rollback/0135_pro_until_sources.down.sql` restores it as a plain column
 seeded from `GREATEST` of the three. **It keeps the three source columns rather than dropping
 them**, and that is the load-bearing part: the old binary neither reads nor writes them, so
 they cost it nothing, while dropping them would destroy the only record of which origin
@@ -308,7 +308,7 @@ every account by `stripe_customer_id` and move money in both directions — a st
 with no Stripe customer becomes an unrevocable grant that no refund can take back, and a
 Stripe customer's longer manual grant becomes revocable and is shortened by the next sync.
 
-Rolling forward again is therefore `0132_pro_until_sources.reapply.sql`, which only restores
+Rolling forward again is therefore `0135_pro_until_sources.reapply.sql`, which only restores
 the generated column, and explicitly not the migration a second time. Both files are executed
 from disk by the integration tests, including the full round trip, so the pair is verified
 rather than asserted.

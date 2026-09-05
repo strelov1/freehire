@@ -47,6 +47,12 @@ type Owned struct {
 	Languages      []string                  `json:"languages,omitempty"`
 	Certifications []string                  `json:"certifications,omitempty"`
 	Education      []resumeextract.Education `json:"education,omitempty"`
+	// TotalYears is the candidate's own years of experience. It belongs here for exactly
+	// the reason the rest of this struct does: the CV extract computes a figure, a
+	// re-upload recomputes it wholesale, and a candidate who corrected it needs that
+	// correction to survive. The onboarding wizard offers the extracted figure and saves
+	// whatever the candidate leaves in the field.
+	TotalYears int `json:"total_years,omitempty"`
 
 	// The five body fields above are owned per field (see ApplyBody), and a non-empty
 	// value has always implied ownership — Sanitize keeps deriving that. But a candidate
@@ -62,6 +68,11 @@ type Owned struct {
 	LanguagesSet      bool `json:"languages_set,omitempty"`
 	CertificationsSet bool `json:"certifications_set,omitempty"`
 	EducationSet      bool `json:"education_set,omitempty"`
+	// TotalYearsSet carries the same explicit-clear signal for a numeric field, where the
+	// stakes are higher than for the strings above: zero is a legitimate answer ("less
+	// than a year"), not an absence, and without this flag a junior who deliberately said
+	// zero would silently get the CV's own figure handed back to them.
+	TotalYearsSet bool `json:"total_years_set,omitempty"`
 }
 
 const (
@@ -77,6 +88,11 @@ const (
 	maxOwnedLanguages   = 20
 	maxOwnedCertifCount = 40
 	maxOwnedEducation   = 20
+	// maxOwnedTotalYears is longer than any career and shorter than any typo. A figure
+	// past it is clamped rather than rejected: this field rides the contacts endpoint
+	// alongside four others, and failing the whole write over a stray digit would lose
+	// the rest of what the candidate just typed.
+	maxOwnedTotalYears = 70
 )
 
 // Sanitize bounds every field the same way CV headers and the structured extract are
@@ -95,6 +111,7 @@ func (o *Owned) Sanitize() {
 	o.Languages = clipList(o.Languages, maxOwnedShort, maxOwnedLanguages, true)
 	o.Certifications = clipList(o.Certifications, maxOwnedShort, maxOwnedCertifCount, true)
 	o.Education = clipEducation(o.Education, maxOwnedEducation)
+	o.TotalYears = min(max(o.TotalYears, 0), maxOwnedTotalYears)
 
 	// Additive only: a non-empty value has always meant "owned" (every caller before the
 	// *Set fields existed relied on exactly that), so a value surviving Sanitize
@@ -115,6 +132,9 @@ func (o *Owned) Sanitize() {
 	}
 	if len(o.Education) > 0 {
 		o.EducationSet = true
+	}
+	if o.TotalYears > 0 {
+		o.TotalYearsSet = true
 	}
 }
 
@@ -173,7 +193,8 @@ func clipList(items []string, maxRunes, maxCount int, dedupe bool) []string {
 // is an override to nothing.
 func (o Owned) Empty() bool {
 	return o.IdentityEmpty() && !o.headlineOwned() && !o.summaryOwned() &&
-		!o.languagesOwned() && !o.certificationsOwned() && !o.educationOwned()
+		!o.languagesOwned() && !o.certificationsOwned() && !o.educationOwned() &&
+		!o.totalYearsOwned()
 }
 
 // headlineOwned and its four siblings report whether a body field is this candidate's own
@@ -186,6 +207,7 @@ func (o Owned) summaryOwned() bool        { return o.SummarySet || o.Summary != 
 func (o Owned) languagesOwned() bool      { return o.LanguagesSet || len(o.Languages) > 0 }
 func (o Owned) certificationsOwned() bool { return o.CertificationsSet || len(o.Certifications) > 0 }
 func (o Owned) educationOwned() bool      { return o.EducationSet || len(o.Education) > 0 }
+func (o Owned) totalYearsOwned() bool     { return o.TotalYearsSet || o.TotalYears > 0 }
 
 // IdentityEmpty reports whether every identity field (name/email/phone/location/links)
 // is blank — distinct from Empty(), which also considers the body fields. A caller that
@@ -219,6 +241,9 @@ func (o Owned) ApplyBody(st *resumeextract.Structured) {
 	}
 	if o.educationOwned() {
 		st.Education = append([]resumeextract.Education(nil), o.Education...)
+	}
+	if o.totalYearsOwned() {
+		st.TotalYears = o.TotalYears
 	}
 }
 
@@ -293,6 +318,9 @@ func FillEmpty(dst *Owned, src Owned) {
 	}
 	if !dst.educationOwned() && len(src.Education) > 0 {
 		dst.Education = append([]resumeextract.Education(nil), src.Education...)
+	}
+	if !dst.totalYearsOwned() {
+		dst.TotalYears = src.TotalYears
 	}
 	dst.Sanitize()
 }
@@ -400,6 +428,9 @@ func ownedEqual(a, b Owned) bool {
 	}
 	if a.HeadlineSet != b.HeadlineSet || a.SummarySet != b.SummarySet || a.LanguagesSet != b.LanguagesSet ||
 		a.CertificationsSet != b.CertificationsSet || a.EducationSet != b.EducationSet {
+		return false
+	}
+	if a.TotalYears != b.TotalYears || a.TotalYearsSet != b.TotalYearsSet {
 		return false
 	}
 	return stringsEqual(a.Links, b.Links) && stringsEqual(a.Languages, b.Languages) &&

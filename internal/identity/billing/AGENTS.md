@@ -7,7 +7,7 @@ the SOURCE COLUMN that provider owns. Nothing else. What the plan then ALLOWS is
 `internal/ai/plan`'s business, and the two packages never meet: `plan` reads the column
 through `platform/db` and does not import this package.
 
-`users.pro_until` still decides a plan, but since migration 0132 it is derived by the schema
+`users.pro_until` still decides a plan, but since migration 0135 it is derived by the schema
 and refuses assignment (428C9). It is the furthest of three sources — `pro_until_stripe`,
 `pro_until_revenuecat`, `pro_until_granted` — one per origin, each with exactly one writer.
 This package writes a provider's source and never the plan, which is what stops a provider

@@ -12,6 +12,8 @@
 // no bundled closed vocabulary here.
 package vocab
 
+import "regexp"
+
 // Controlled vocabularies. Each is the ordered, canonical list of allowed
 // values for one enum field. They are exported so the enrichment prompt, the
 // deterministic dictionaries, and the facet config reference the same lists.
@@ -226,4 +228,46 @@ var (
 		"rag_app_builder", "agent_builder", "cloud_ml_platform_engineer",
 		"ml_trainer_researcher", "fullstack_ai_engineer", "devops_infra_engineer",
 	}
+	// JobSearchStageValues is how far along the candidate says they are, asked once in
+	// onboarding (internal/candidate/survey). Ordered by commitment rather than by
+	// urgency: `exploring` sits last because someone who says the search is not a
+	// priority is the least engaged, not the earliest — the earliest is `not_started`,
+	// who has decided to start and has not yet.
+	//
+	// This is about the candidate, not about a posting, so unlike every vocabulary above
+	// it reaches no facet, no filter and no enrichment prompt. It lives here anyway for
+	// the reason the package exists: one definition, so the Go validator and the wizard's
+	// option list cannot drift into two spellings of the same answer.
+	JobSearchStageValues = []string{"not_started", "searching", "employed_looking", "exploring"}
+	// JobChallengeValues is the single biggest thing the candidate says is in their way.
+	// Single-valued by design — see the column comment in migration 0134.
+	//
+	// `other` is load-bearing, not filler: it is the ONLY value a free-text note may
+	// accompany, so the survey can collect an unanticipated answer without letting a note
+	// contradict a coded one. TestJobChallengeHasOther locks it.
+	JobChallengeValues = []string{
+		"english", "recruiter_contact", "working_abroad", "technical_interviews",
+		JobChallengeOther,
+	}
 )
+
+// JobChallengeOther is the JobChallengeValues member that admits a written note. Named
+// rather than spelled inline because two places depend on the exact string — the survey's
+// note gate and the vocabulary itself — and a literal in both is a silent drift waiting
+// to happen.
+const JobChallengeOther = "other"
+
+// currencyRE matches a well-formed ISO 4217 currency code.
+var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// IsCurrencyCode reports whether s is a well-formed ISO 4217 code. Shape only: this
+// package documents salary_currency as a deliberately open ISO-standard field, with no
+// closed dictionary to check membership against, so format is the only guarantee
+// available — and callers must not read a true here as "this currency exists".
+//
+// It lives here rather than beside its first caller because it now has two, in blocks
+// that cannot import each other (internal/ingest/screeninganswers holds the desired
+// salary, internal/candidate/survey the current income). The alternative was a second
+// regexp literal, which is how this repository ended up with four disagreeing copies of
+// the legal-form vocabulary.
+func IsCurrencyCode(s string) bool { return currencyRE.MatchString(s) }

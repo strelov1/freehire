@@ -121,6 +121,8 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	}
 	meGroup.Patch("/timezone", mw.cookie, h.UpdateTimezone)
 	meGroup.Patch("/language", mw.cookie, h.UpdateLanguage)
+	meGroup.Get("/username", mw.cookie, h.GetUsername)
+	meGroup.Put("/username", mw.cookie, h.ClaimUsername)
 	meGroup.Post("/password", mw.cookie, recent, h.ChangePassword)
 	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
@@ -150,6 +152,10 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// recent auth for the same reason password change does: a hijacked session
 	// must not be able to take the one action that can't be undone.
 	meGroup.Delete("", mw.cookie, recent, h.DeleteAccount)
+
+	// Availability check for a candidate username: public, so a name picker can
+	// probe before the caller is even signed in.
+	api.Get("/username/check", h.CheckUsername)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser
@@ -254,6 +260,12 @@ type userResponse struct {
 	// supportedLanguages, "en" until changed). No UI translation exists yet —
 	// this only records the preference for later (freehire#1836).
 	Language string `json:"language"`
+	// OnboardingCompletedAt is when this account finished (or declined) the onboarding
+	// wizard, null for one that never has. The root layout reads it as the whole gate:
+	// null routes the user to /onboarding, a timestamp never does. It rides along here
+	// rather than on its own endpoint because the layout already makes this read before
+	// it can decide anything at all.
+	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at"`
 }
 
 type credentials struct {
@@ -269,7 +281,7 @@ type credentials struct {
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
 		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt,
-		Timezone: u.Timezone, Language: u.Language}
+		Timezone: u.Timezone, Language: u.Language, OnboardingCompletedAt: u.OnboardingCompletedAt}
 }
 
 // timezoneRequest is the PATCH /me/timezone body.
@@ -336,6 +348,14 @@ func accountsError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid timezone")
 	case errors.Is(err, accounts.ErrInvalidLanguage):
 		return fiber.NewError(fiber.StatusBadRequest, "invalid language")
+	case errors.Is(err, accounts.ErrUsernameInvalid):
+		return fiber.NewError(fiber.StatusBadRequest, "invalid username")
+	case errors.Is(err, accounts.ErrUsernameTaken):
+		return fiber.NewError(fiber.StatusConflict, "username already taken")
+	case errors.Is(err, accounts.ErrUsernameReserved):
+		return fiber.NewError(fiber.StatusConflict, "username is reserved")
+	case errors.Is(err, accounts.ErrUsernameCooldown):
+		return fiber.NewError(fiber.StatusTooManyRequests, "username changed too recently")
 	default:
 		if isInfraError(err) {
 			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")

@@ -50,19 +50,21 @@ so a match between them is not the accidental kind the veto was built for.
 
 ## The one place category and `is_tech` disagree on purpose
 
-The IT service desk (`service desk`, `help desk`, `helpdesk`, `technical support
-analyst`) resolves the `support` category — a `vocab.NonTechCategories` member — and is
-*also* a `techTitleTerms` entry, so `jobderive.deriveIsTech` reads it as `is_tech = true`.
+IT support (`service desk`, `help desk`, `helpdesk`, `it support`, `it supporter`,
+`desktop support`, `deskside support`, `end user support`, `technical support
+analyst`) resolves the `support` category — a `vocab.NonTechCategories` member — and is *also* a
+`techTitleTerms` entry, so `jobderive.deriveIsTech` reads it as `is_tech = true`.
 That is deliberate, not drift: the category is right about the FUNCTION (reactive,
 ticket-driven, alongside customer service) and wrong about the CRAFT, and only the title
 list can say the second thing. `tech.go` carries the argument and the measurements
 beside the terms; do not restate them here, or the two copies will drift.
 
-**The exception is the DESK, not IT support at large.** `IT Support Specialist` and
-`Desktop Support Technician` are equally IT and stay `is_tech = false`, because
-extending the claim to them is a separate, larger decision (~5.5k more open postings
-into the enrichment gate) that has not been taken. Read the boundary as "not yet",
-not as a ruling that those roles are non-technical.
+**A term earns its place by naming the ESTATE, not the mood of the work.** That is why
+bare `technical support` has no entry — live titles give AGV, automotive, controls,
+logistics and instructional support under that phrase — while `desktop support` does.
+If you are tempted to widen this family, sample the phrase against live titles first;
+every term here was admitted that way, and the whole exception depends on none of them
+being loose.
 
 ## Serving: dict-only
 

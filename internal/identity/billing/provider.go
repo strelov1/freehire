@@ -89,7 +89,7 @@ type provider interface {
 	reach(ctx context.Context, userID int64) (time.Time, error)
 
 	// store writes this provider's own source column of users, and no other. The derived
-	// users.pro_until follows by way of the schema (migration 0132); assigning it directly
+	// users.pro_until follows by way of the schema (migration 0135); assigning it directly
 	// is refused by Postgres, which is what makes revoking another origin's grant
 	// unwritable rather than merely discouraged.
 	store(ctx context.Context, userID int64, until pgtype.Timestamptz) error

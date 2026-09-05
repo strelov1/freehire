@@ -3,8 +3,9 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
-  import { api } from '$lib/api';
+  import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { autoApplyButtonState } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
@@ -17,7 +18,7 @@
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
-  import { formatDate } from '$lib/utils';
+  import { formatDate, formatDateOrAgo, formatDateTime } from '$lib/utils';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
@@ -73,7 +74,15 @@
   const saved = $derived(interaction?.saved_at != null);
 
   // Presentational values derived from the (server-rendered) job.
-  const posted = $derived(formatDate(job.posted_at));
+  // Both read as an age for their first day ("20 minutes ago") and as a date after it —
+  // the same label the feed's card already gives a posting, so a reader arriving from
+  // the list meets the answer in the form they just left.
+  const posted = $derived(formatDateOrAgo(job.posted_at));
+  // When the posting's own content last changed. `jobs.updated_at` is deliberately left
+  // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
+  // means "the words moved", not "the crawler came back" — which is the only reading that
+  // earns a line beside the posting date.
+  const updated = $derived(formatDateOrAgo(job.updated_at));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
@@ -268,6 +277,35 @@
       // Leave the current state; the user can retry.
     }
   }
+
+  // Auto-apply (openspec/changes/auto-apply-submit-trigger): PRO-only, Greenhouse-only.
+  // Eligibility (plan tier, base CV) is not known client-side — the button stays
+  // clickable and the backend's own 402/409 message is what tells an ineligible
+  // caller why, surfaced below rather than pre-empted here.
+  let autoApplyOverrideStatus = $state<string | null>(null);
+  let autoApplySubmitting = $state(false);
+  let autoApplyError = $state<string | null>(null);
+  const autoApplyState = $derived(
+    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied),
+  );
+
+  async function onAutoApplyClick() {
+    if (!isAuthenticated()) {
+      promptSignIn();
+      return;
+    }
+    autoApplyError = null;
+    autoApplySubmitting = true;
+    try {
+      await api.autoApplyJob(job.public_slug);
+      autoApplyOverrideStatus = 'queued';
+      track('job_auto_apply', { slug: job.public_slug });
+    } catch (err) {
+      autoApplyError = err instanceof ApiError ? err.message : 'Something went wrong — please try again.';
+    } finally {
+      autoApplySubmitting = false;
+    }
+  }
 </script>
 
 <!-- The apply CTA renders twice: inline in the header on desktop, and in the
@@ -289,6 +327,38 @@
   >
     Apply <ArrowRight class="size-4" />
   </Button>
+{/snippet}
+
+<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside Apply, not a
+     replacement for it — auto-apply still goes through the same ATS in the end, this
+     button only starts the tailor-then-review sequence. Absent entirely off
+     autoApplyButtonState's `hidden` (any source but Greenhouse today). `idle` is the only
+     clickable state; `queued`/`declined`/`applied`/`failed` render disabled (the
+     `disabled:opacity-50` the button variant already carries) so a caller who already has
+     an attempt, already applied for real, or whose attempt cmd/auto-apply gave up on, sees
+     that at a glance rather than clicking into a 200 or a 409 that changes nothing. -->
+{#snippet autoApplyCta(className: string)}
+  {#if autoApplyState.kind !== 'hidden'}
+    <Button
+      variant="secondary"
+      size="md"
+      disabled={autoApplyState.kind !== 'idle' || autoApplySubmitting}
+      onclick={onAutoApplyClick}
+      class={className}
+    >
+      {#if autoApplyState.kind === 'queued'}
+        Auto-apply queued
+      {:else if autoApplyState.kind === 'declined'}
+        Auto-apply declined
+      {:else if autoApplyState.kind === 'applied'}
+        Already applied
+      {:else if autoApplyState.kind === 'failed'}
+        Auto-apply couldn't complete
+      {:else}
+        Auto-apply
+      {/if}
+    </Button>
+  {/if}
 {/snippet}
 
 <!-- Save, a quiet peer of the apply CTA rather than the full-width button it was in the
@@ -328,6 +398,36 @@
   </Button>
 {/snippet}
 
+<!-- When the posting went up and when its words last moved. Two facts ABOUT the posting,
+     so they ride the provenance line with the company and the badges rather than the
+     sidebar's source row, where a reader comparing freshness had to look past the match
+     score and the salary to find them.
+     "Updated" is dropped when it renders to the same label as the posting date: a job
+     written once and never touched would otherwise say the same thing twice. Comparing
+     the LABELS rather than the timestamps is the point — two edits an hour apart on one
+     day are a real difference while both read as ages, and stop being one the day they
+     both collapse into that date.
+     The exact clock time rides the `title` either way, since a reader who has read "2
+     hours ago" off a server-rendered page may want to know how old the page is.
+     Rendered twice, one visible at a time (the caller passes the display class): to the
+     right of the provenance line from lg, and under the title below it, where that line is
+     a single non-wrapping row whose company name is already truncating to fit. -->
+{#snippet postingDates(className: string)}
+  {#if posted}
+    <div class={`items-center gap-x-2 text-xs text-muted-foreground ${className}`}>
+      <span class="whitespace-nowrap">
+        Posted <time datetime={job.posted_at} title={formatDateTime(job.posted_at)}>{posted}</time>
+      </span>
+      {#if updated && updated !== posted}
+        <span aria-hidden="true">·</span>
+        <span class="whitespace-nowrap">
+          Updated <time datetime={job.updated_at} title={formatDateTime(job.updated_at)}>{updated}</time>
+        </span>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
 <!-- The action strip: everything a reader does WITH the posting — talk about it, flag
      it, keep it, open it — on one line, sharing the tab row's rule. It carries the
      rule itself (`border-b`) rather than sitting above one, so the line reads as a
@@ -350,6 +450,7 @@
     </a>
     {@render reportButton()}
     {@render saveButton()}
+    {@render autoApplyCta('ml-1 hidden shrink-0 lg:inline-flex')}
     {@render applyCta('md', 'ml-1 hidden shrink-0 lg:inline-flex')}
   </div>
 {/snippet}
@@ -459,6 +560,10 @@
         </span>
       {/each}
     </div>
+
+    <!-- `ml-auto` rather than a grid column: the badges above are a variable-width group,
+         so the dates take whatever is left of the line and sit against its right edge. -->
+    {@render postingDates('ml-auto hidden shrink-0 lg:flex')}
   </div>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
@@ -472,6 +577,11 @@
         </Chip>
       {/if}
     </div>
+
+    <!-- Below lg the provenance line is a single non-wrapping row already truncating the
+         company name, so the dates read here instead — a caption under the title rather
+         than right-aligned, which on one phone-width column would only look adrift. -->
+    {@render postingDates('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
@@ -566,7 +676,6 @@
           {#if job.manually_added}
             <Badge variant="secondary">Manually added</Badge>
           {/if}
-          {#if posted}<span>Posted {posted}</span>{/if}
         </div>
         {#if views > 0 || applies > 0}
           <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">
@@ -719,6 +828,20 @@
           View on your board →
         </a>
       </div>
+    {/if}
+
+    {#if autoApplyState.kind === 'queued'}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
+      >
+        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
+          a notification to review it.
+        </span>
+      </div>
+    {/if}
+    {#if autoApplyError}
+      <p class="text-sm text-destructive">{autoApplyError}</p>
     {/if}
 
     {#if showSignInPrompt}

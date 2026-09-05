@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, Check, Mail, Smartphone } from '@lucide/svelte';
+  import { Bell, Check, Mail, Smartphone, Webhook } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api';
   import { notifications } from '$lib/notifications.svelte';
@@ -19,13 +19,15 @@
   // it off. Telegram hides itself when the feature isn't configured server-side.
   let { savedSearchId, showLabel = true }: { savedSearchId: number; showLabel?: boolean } = $props();
 
-  let busy = $state<'telegram' | 'email' | 'push' | null>(null);
+  let busy = $state<'telegram' | 'email' | 'push' | 'webhook' | null>(null);
   let error = $state<string | null>(null);
 
   const tg = $derived(notifications.telegram);
   const tgSub = $derived(notifications.forSavedSearch(savedSearchId, 'telegram'));
   const emailSub = $derived(notifications.forSavedSearch(savedSearchId, 'email'));
   const pushSub = $derived(notifications.forSavedSearch(savedSearchId, 'push'));
+  const webhook = $derived(notifications.webhook);
+  const webhookSub = $derived(notifications.forSavedSearch(savedSearchId, 'webhook'));
 
   // Telegram: unsubscribe if on; else subscribe. Only ever called while linked — the
   // chip renders as a link to Integrations instead of this button while it isn't.
@@ -71,6 +73,25 @@
       else await notifications.subscribe(savedSearchId, 'push');
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not update the push alert. Please try again.';
+    } finally {
+      busy = null;
+    }
+  }
+
+  // Webhook: like email/push, plain subscribe/unsubscribe — but only once a
+  // destination is configured; otherwise the chip is a link to /my/webhook (the
+  // same "not linked yet" treatment Telegram gets for Integrations).
+  async function toggleWebhook() {
+    if (busy || !webhook?.enabled) return;
+    busy = 'webhook';
+    error = null;
+    try {
+      if (webhookSub) await notifications.unsubscribe(webhookSub.id);
+      else await notifications.subscribe(savedSearchId, 'webhook');
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 409) {
+        error = e instanceof ApiError ? e.message : 'Could not update the webhook alert. Please try again.';
+      }
     } finally {
       busy = null;
     }
@@ -130,6 +151,26 @@
       {/if}
       Push
     </button>
+
+    {#if webhook?.enabled}
+      <button type="button" onclick={toggleWebhook} disabled={busy !== null} aria-pressed={webhookSub != null} class={chipClass(webhookSub != null)}>
+        {#if webhookSub}
+          <Check class="size-3.5" aria-hidden="true" />
+        {:else}
+          <Webhook class="size-3.5" aria-hidden="true" />
+        {/if}
+        Webhook
+      </button>
+    {:else}
+      <a
+        href={resolve('/my/webhook')}
+        class={chipClass(false)}
+        title={webhook ? 'Re-enable your webhook in settings first' : 'Set up a webhook destination first'}
+      >
+        <Webhook class="size-3.5" aria-hidden="true" />
+        Webhook
+      </a>
+    {/if}
   </div>
 
   {#if error}

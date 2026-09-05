@@ -15,6 +15,12 @@ import type {
 /** @public — the app's vocabulary for the generated contract; a name is carried here
  *  whether or not a screen reads it yet. */
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
+/** @public — the app's name for the onboarding survey record, carried here whether or not
+ *  a screen reads it yet, like the contract re-exports above. It is `Responses` in the
+ *  generated file only because that file is one flat namespace and `Answers` is already the
+ *  screening answers' — see cmd/gen-contracts — so the useful name has to be given
+ *  somewhere, and this facade is where the app gives it. */
+export type { Responses as SurveyAnswers } from './generated/contracts';
 // The list-row projection of a job: the same names and derivations as Job, minus the posting
 // text and everything else a row does not draw.
 export type { Card as JobCard } from './generated/contracts';
@@ -370,6 +376,12 @@ export interface User {
   // Never empty ('en' until changed). No UI translation ships yet — this only
   // records the preference for the profile page's language field.
   language: string;
+  // When this account was walked through the onboarding wizard, null if it never has been.
+  // The root layout's gate reads exactly this: null routes the account to /onboarding, a
+  // timestamp never does. It replaced "does this account have a CV", which was a fair
+  // stand-in while the wizard was about the CV and stopped being one the moment it grew
+  // questions a CV cannot answer.
+  onboarding_completed_at: string | null;
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
@@ -400,6 +412,13 @@ export interface Contribution {
  *  - `review`   imported, but its careers site names no board we can crawl, so it went to triage
  *  - `queued`   nothing could read the page, so the link went to manual triage */
 type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
+
+/** A job page in the wild recognised as one the catalog already carries. The lookup that
+ *  produces it is public and read-only, so this is deliberately narrower than ResolvedLink:
+ *  nothing was imported and no board was recorded, so there is no status to report. */
+export interface FoundJob {
+  public_slug: string;
+}
 
 export interface ResolvedLink {
   public_slug: string | null;
@@ -651,15 +670,19 @@ export interface NotificationSettings {
   quiet_hours_end: string | null;
 }
 
-/** The five notification-center event kinds a `user_notifications` row can carry —
- *  matches internal/notify/reminder/nudge's kind strings exactly (see
- *  openspec/changes/add-notification-center/design.md decision 1). */
+/** The notification-center event kinds a `user_notifications` row can carry — matches
+ *  internal/notify/reminder/nudge's kind strings exactly (see
+ *  openspec/changes/add-notification-center/design.md decision 1), plus
+ *  `auto_apply_tailor_ready` (openspec/changes/auto-apply-tailored-resume), recorded
+ *  directly by internal/api/handler's auto-apply tailoring endpoint rather than by one of
+ *  those background engines. */
 export type NotificationKind =
   | 'subscription_digest'
   | 'reminder'
   | 'nudge_follow_up'
   | 'nudge_interview_prep'
-  | 'nudge_job_closed';
+  | 'nudge_job_closed'
+  | 'auto_apply_tailor_ready';
 
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this
@@ -939,6 +962,18 @@ export interface CreatedApiKey extends ApiKey {
   token: string;
 }
 
+/** The account's single saved-search webhook destination. Deliveries are
+ *  plain, unsigned POSTs. Timestamps are RFC3339 strings or null;
+ *  `disabled_at` is set once a delivery got a definitive 410 from the
+ *  destination or the user turned it off. */
+export interface WebhookConfig {
+  url: string;
+  enabled: boolean;
+  created_at: string | null;
+  last_success_at: string | null;
+  disabled_at: string | null;
+}
+
 interface ConnectedIdentity {
   provider: string;
   linked_at: string;
@@ -1094,22 +1129,6 @@ export interface TelegramStatus {
   chat_id?: number;
 }
 
-/** Discord link status for the current user (the `/contribute` bot, not a
- *  notification channel). `enabled` is whether the feature is configured
- *  server-side at all; `linked` is whether this user has connected their account. */
-export interface DiscordStatus {
-  enabled: boolean;
-  linked: boolean;
-  discord_id?: number;
-}
-
-/** A one-time token to run `/link token:<token>` in the freehire Discord server,
- *  plus the exact instruction text to show the user. */
-export interface DiscordLinkResult {
-  token: string;
-  instructions: string;
-}
-
 /** What a résumé yields through the deterministic dictionaries: canonical skills and
  *  every specialization the résumé spans, plus the seniority grade. `skills` and
  *  `categories` are always arrays (empty when nothing resolved); `seniority` is omitted
@@ -1168,6 +1187,10 @@ export interface CandidateContacts {
   languages?: string[];
   certifications?: string[];
   education?: ResumeEducation[];
+  /** Years of experience as the CANDIDATE states them, overlaying whatever the CV extract
+   *  computed. Captured on the onboarding wizard's experience step, pre-filled from the
+   *  extract's own figure. */
+  total_years?: number;
   // The five body fields above are owned per field, and a non-empty value has always
   // implied that. But clearing one to "" leaves no non-empty value to signal it, so the
   // editor that owns that field sends its *_set flag alongside a save that empties it —
@@ -1177,6 +1200,10 @@ export interface CandidateContacts {
   languages_set?: boolean;
   certifications_set?: boolean;
   education_set?: boolean;
+  /** The same explicit-clear signal for the numeric field, where it matters more: 0 is a
+   *  real answer ("less than a year"), so without this flag a deliberate zero would be
+   *  indistinguishable from never having answered and the CV's figure would come back. */
+  total_years_set?: boolean;
 }
 
 /** The résumé status (`GET /me/resume`): storage flags, owned contacts, parse status,

@@ -278,3 +278,98 @@ func TestStructureForSeedPendingBlobIsContactsOnly(t *testing.T) {
 		t.Fatalf("pending seed leaked superseded semantics: %+v", st)
 	}
 }
+
+// Years of experience follows the same owned-overlay rule as the other body fields: the CV
+// derives a figure, the candidate corrects it, and a re-upload must not undo the
+// correction.
+func TestApplyBody_OwnedTotalYearsOverridesExtract(t *testing.T) {
+	st := resumeextract.Structured{TotalYears: 3}
+	Owned{TotalYears: 11}.ApplyBody(&st)
+
+	if st.TotalYears != 11 {
+		t.Fatalf("TotalYears = %d, want the candidate's own 11", st.TotalYears)
+	}
+}
+
+// Zero is the case the *Set flag exists for. "Less than a year" is a real answer, and
+// without the flag it is indistinguishable from "never answered" — which would silently
+// hand the CV's own figure back to a junior who deliberately said zero.
+func TestApplyBody_OwnedZeroTotalYearsIsNotUnstated(t *testing.T) {
+	st := resumeextract.Structured{TotalYears: 7}
+	Owned{TotalYearsSet: true}.ApplyBody(&st)
+
+	if st.TotalYears != 0 {
+		t.Fatalf("TotalYears = %d, want 0 — an explicit zero fell back to the extract", st.TotalYears)
+	}
+}
+
+func TestApplyBody_UntouchedTotalYearsPassesExtractThrough(t *testing.T) {
+	st := resumeextract.Structured{TotalYears: 7}
+	Owned{}.ApplyBody(&st)
+
+	if st.TotalYears != 7 {
+		t.Fatalf("TotalYears = %d, want the extract's 7 passed through", st.TotalYears)
+	}
+}
+
+// Sanitize turns the flag on for a stated non-zero figure (the "a non-empty value has
+// always implied ownership" rule the other fields follow) and never turns one off.
+func TestSanitize_TotalYearsFlagIsAdditiveOnly(t *testing.T) {
+	o := Owned{TotalYears: 4}
+	o.Sanitize()
+	if !o.TotalYearsSet {
+		t.Error("a stated figure did not imply ownership")
+	}
+
+	cleared := Owned{TotalYearsSet: true} // explicitly zero
+	cleared.Sanitize()
+	if !cleared.TotalYearsSet {
+		t.Error("Sanitize turned an explicit zero back into unstated")
+	}
+}
+
+// An out-of-range figure is a typo, not a career. Clamped rather than rejected: this rides
+// the contacts endpoint alongside four other fields, and failing the whole write over a
+// stray digit would lose the rest.
+func TestSanitize_TotalYearsIsBounded(t *testing.T) {
+	o := Owned{TotalYears: 900}
+	o.Sanitize()
+	if o.TotalYears != maxOwnedTotalYears {
+		t.Errorf("TotalYears = %d, want it clamped to %d", o.TotalYears, maxOwnedTotalYears)
+	}
+
+	negative := Owned{TotalYears: -3}
+	negative.Sanitize()
+	if negative.TotalYears != 0 {
+		t.Errorf("TotalYears = %d, want a negative figure floored at 0", negative.TotalYears)
+	}
+}
+
+func TestFillEmptyDoesNotRefillAnExplicitZeroTotalYears(t *testing.T) {
+	dst := Owned{TotalYearsSet: true} // deliberately zero
+	FillEmpty(&dst, Owned{TotalYears: 12})
+
+	if dst.TotalYears != 0 {
+		t.Fatalf("TotalYears = %d, want the explicit zero preserved", dst.TotalYears)
+	}
+}
+
+func TestFillEmptyTakesTotalYearsWhenUnstated(t *testing.T) {
+	var dst Owned
+	FillEmpty(&dst, Owned{TotalYears: 12})
+
+	if dst.TotalYears != 12 {
+		t.Fatalf("TotalYears = %d, want the extract's 12", dst.TotalYears)
+	}
+}
+
+// Empty() decides whether there is anything to overlay at all. A candidate whose only edit
+// was their years of experience must not read as "nothing owned".
+func TestEmpty_TotalYearsCounts(t *testing.T) {
+	if (Owned{TotalYears: 5}).Empty() {
+		t.Error("an owned years figure read as Empty")
+	}
+	if !(Owned{}).Empty() {
+		t.Error("a blank Owned did not read as Empty")
+	}
+}

@@ -75,7 +75,7 @@ type ListSubscribersNearProExpiryStripeRow struct {
 // have transacted rather than over all of them.
 //
 // The window is a predicate on pro_until_stripe, NEVER on the derived pro_until. Since
-// migration 0132 the derived column is the FURTHEST reach of three sources, so a Stripe
+// migration 0135 the derived column is the FURTHEST reach of three sources, so a Stripe
 // customer who also holds a store subscription or a manual grant that reaches beyond their
 // renewal would sit outside the window and never be re-checked — and the renewal whose
 // webhook was lost, which is the only reason this query exists, would stay lost. Each
