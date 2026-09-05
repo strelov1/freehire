@@ -23,6 +23,12 @@ export interface CompletenessStep {
   id: string;
   label: string;
   href: SetupHref;
+  /** The id of the element on `href`'s page to land on, for a step whose page holds more
+   *  than the step asks for. Without it, the role step links to the page it is already
+   *  rendered on and nothing appears to happen. An opaque string rather than a type shared
+   *  with the page — this module stays free of any SvelteKit import (see `SetupHref`) — so
+   *  it must be kept in sync by hand with that element's `id`. */
+  hash?: string;
   done: boolean;
 }
 
@@ -71,6 +77,10 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       id: 'role',
       label: 'Say what you do, and at what level',
       href: '/my/profile',
+      // The card that carries this step is rendered on /my/profile itself, above two other
+      // blocks — so the link has to name the Role card or it is a link to where you already
+      // stand.
+      hash: 'account-role',
       done: Boolean(profile?.specializations.length && profile?.seniorities.length),
     },
     {

@@ -1,9 +1,9 @@
 <script lang="ts">
-  // Role: specializations, editable inline — no separate "Role" tab to click into (it's
-  // the one piece of the old identity header that doesn't carry enough content to earn
-  // its own view, unlike Contacts/Location which do). Autosaves straight to profileStore
-  // on every change, the same way the Skills view does.
-  import { CATEGORY_OPTIONS } from '$lib/facets';
+  // Role: specializations and level, editable inline — no separate "Role" tab to click
+  // into (it's the one piece of the old identity header that doesn't carry enough content
+  // to earn its own view, unlike Contacts/Location which do). Autosaves straight to
+  // profileStore on every change, the same way the Skills view does.
+  import { CATEGORY_OPTIONS, SENIORITY_OPTIONS } from '$lib/facets';
   import { profileStore } from '$lib/profile.svelte';
   import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import type { UserProfile } from '$lib/types';
@@ -22,6 +22,8 @@
 
   let specError = $state<string | null>(null);
   let specBusy = $state(false);
+  let levelError = $state<string | null>(null);
+  let levelBusy = $state(false);
 
   async function toggleSpecialization(value: string) {
     if (specBusy) return;
@@ -48,25 +50,83 @@
       specBusy = false;
     }
   }
+
+  // Level is a free multi-select with no floor, unlike the specializations above: someone
+  // who is between levels ("senior or lead") is stating both, and someone who wants to stop
+  // stating one at all must be able to — a profile that cannot go back to silent would make
+  // the wizard's answer permanent. The account-setup card simply re-opens its step when the
+  // list empties, which is the honest reading of "no level stated".
+  async function toggleSeniority(value: string) {
+    if (levelBusy) return;
+    levelError = null;
+    levelBusy = true;
+    const next = profile.seniorities.includes(value)
+      ? profile.seniorities.filter((s) => s !== value)
+      : [...profile.seniorities, value];
+    try {
+      await profileStore.updateSeniorities(next);
+      onProfileChanged?.();
+    } catch {
+      levelError = 'Could not update your level. Try again.';
+    } finally {
+      levelBusy = false;
+    }
+  }
 </script>
 
-<div class="flex flex-col gap-2">
-  <div class="flex items-baseline justify-between">
-    <span class="text-sm font-medium">Roles</span>
-    <span class="text-xs tabular-nums text-muted-foreground">
-      {profile.specializations.length}/{MAX_SPECIALIZATIONS}
-    </span>
+<!-- `account-role` is the anchor the account-setup checklist's role step links to (see
+     accountCompleteness.ts). It sits on the whole card, not on either half, because that
+     step asks for both together — "what you do, and at what level". `scroll-mt-20` is the
+     repo's anchored-section offset. -->
+<div id="account-role" class="flex scroll-mt-20 flex-col gap-6">
+  <div class="flex flex-col gap-2">
+    <div class="flex items-baseline justify-between">
+      <span class="text-sm font-medium">Roles</span>
+      <span class="text-xs tabular-nums text-muted-foreground">
+        {profile.specializations.length}/{MAX_SPECIALIZATIONS}
+      </span>
+    </div>
+    <div class={specBusy ? 'pointer-events-none opacity-60' : ''}>
+      <SearchSelect
+        options={CATEGORY_OPTIONS}
+        include={profile.specializations}
+        placeholder="Search specializations"
+        onToggle={toggleSpecialization}
+        clearOnSelect
+      />
+    </div>
+    {#if specError}
+      <p class="text-xs text-destructive">{specError}</p>
+    {/if}
   </div>
-  <div class={specBusy ? 'pointer-events-none opacity-60' : ''}>
-    <SearchSelect
-      options={CATEGORY_OPTIONS}
-      include={profile.specializations}
-      placeholder="Search specializations"
-      onToggle={toggleSpecialization}
-      clearOnSelect
-    />
+
+  <!-- Level lives beside Roles rather than in its own card: it was previously askable only
+       inside the onboarding wizard, so a profile whose level needed changing had no surface
+       at all. Pills rather than a SearchSelect — the vocabulary is five values, and the
+       wizard's own Level step (ConfirmStep) already reads this way. -->
+  <div class="flex flex-col gap-2">
+    <div class="flex items-baseline justify-between">
+      <span class="text-sm font-medium">Level</span>
+      <span class="text-xs text-muted-foreground">Pick every level you'd take</span>
+    </div>
+    <div class={['flex flex-wrap gap-2', levelBusy && 'pointer-events-none opacity-60']}>
+      {#each SENIORITY_OPTIONS as o (o.value)}
+        {@const selected = profile.seniorities.includes(o.value)}
+        <button
+          type="button"
+          onclick={() => toggleSeniority(o.value)}
+          aria-pressed={selected}
+          class={[
+            'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+            selected ? 'border-brand bg-brand text-brand-foreground' : 'border-border bg-card hover:bg-accent',
+          ]}
+        >
+          {o.label}
+        </button>
+      {/each}
+    </div>
+    {#if levelError}
+      <p class="text-xs text-destructive">{levelError}</p>
+    {/if}
   </div>
-  {#if specError}
-    <p class="text-xs text-destructive">{specError}</p>
-  {/if}
 </div>

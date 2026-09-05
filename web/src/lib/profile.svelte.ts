@@ -132,6 +132,16 @@ class ProfileStore extends UserResource<UserProfile | null> {
     });
   }
 
+  /** Re-save the profile with an edited seniority list — what the Roles card's Level row
+   *  writes when you add or remove one. Rejects when there is no profile. */
+  updateSeniorities(seniorities: string[]): Promise<UserProfile> {
+    return this.#queue(() => {
+      const current = this.#profile;
+      if (!current) return Promise.reject(new Error('No profile to edit.'));
+      return this.save(current.specializations, current.skills, seniorities, current.excluded_skills, current.location_preferences);
+    });
+  }
+
   /** Re-save the profile with an edited location-preferences block — what the Location
    *  view writes on every change. Rejects when there is no profile. */
   updateLocation(location: LocationPreferences | null): Promise<UserProfile> {

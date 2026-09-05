@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check, ArrowRight } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { outstandingOf } from '$lib/accountCompleteness';
+  import { outstandingOf, type CompletenessStep } from '$lib/accountCompleteness';
   import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
   // "How complete is my account", above the profile page's section tabs — the page
@@ -20,6 +20,12 @@
   $effect(() => {
     ensureAccountSetupLoaded();
   });
+
+  // resolve()'s own base plus the step's anchor, when it names one — there is no dynamic
+  // route segment to resolve, so this is a plain suffix rather than a second resolve().
+  function stepHref(step: CompletenessStep): string {
+    return `${resolve(step.href)}${step.hash ? `#${step.hash}` : ''}`;
+  }
 </script>
 
 {#if outstanding.length > 0}
@@ -49,7 +55,8 @@
               <span class="line-through decoration-border">{step.label}</span>
             </p>
           {:else}
-            <a href={resolve(step.href)} class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent">
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #hash -->
+            <a href={stepHref(step)} class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent">
               <span
                 class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground"
                 aria-hidden="true"
