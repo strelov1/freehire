@@ -1,12 +1,11 @@
 <script lang="ts">
   import { Check, ArrowRight } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { outstandingOf } from '$lib/accountCompleteness';
+  import { outstandingOf, type CompletenessStep } from '$lib/accountCompleteness';
   import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
-  // "How complete is my account", at the top of the tracking page — the page a bare /my
-  // already redirects to, so the card sits where people land rather than on an account
-  // home invented to host it.
+  // "How complete is my account", above the profile page's section tabs — the page
+  // where every one of these fields is actually edited.
   //
   // A funnel beats a choose-your-own-adventure: the onboarding wizard asks these same
   // questions once, and this is what remains of them afterwards for anyone who skipped a
@@ -21,6 +20,12 @@
   $effect(() => {
     ensureAccountSetupLoaded();
   });
+
+  // resolve()'s own base plus a query string when the step names a tab — there is no
+  // dynamic route segment to resolve, same shape as TrackingCalendar's message link.
+  function stepHref(step: CompletenessStep): string {
+    return `${resolve(step.href)}${step.tab ? `?tab=${step.tab}` : ''}`;
+  }
 </script>
 
 {#if outstanding.length > 0}
@@ -50,10 +55,8 @@
               <span class="line-through decoration-border">{step.label}</span>
             </p>
           {:else}
-            <a
-              href={resolve(step.href)}
-              class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent"
-            >
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended ?tab= query -->
+            <a href={stepHref(step)} class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent">
               <span
                 class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground"
                 aria-hidden="true"

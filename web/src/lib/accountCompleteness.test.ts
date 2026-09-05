@@ -42,6 +42,20 @@ describe('accountSteps', () => {
     }
   });
 
+  // The three steps that land on /my/profile must open their own tab there, or
+  // completing them means hunting through the page first. cv and alerts point at
+  // other pages entirely, so they name no tab.
+  it('names the profile tab each profile-bound step opens', () => {
+    const tabById = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.tab]));
+    expect(tabById).toEqual({
+      cv: undefined,
+      role: 'profile',
+      skills: 'skills',
+      location: 'location',
+      alerts: undefined,
+    });
+  });
+
   it('counts a CV once one is stored', () => {
     expect(doneIds({ ...empty, hasCv: true })).toEqual(['cv']);
   });

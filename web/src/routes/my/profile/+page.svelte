@@ -9,6 +9,7 @@
     Tags,
     User,
   } from '@lucide/svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -17,6 +18,7 @@
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { resumeStore } from '$lib/resume.svelte';
   import AccountPreferences from '$lib/components/AccountPreferences.svelte';
+  import AccountSetupCard from '$lib/components/AccountSetupCard.svelte';
   import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
@@ -71,6 +73,22 @@
   const initialTab = page.url.searchParams.get('tab');
   let view = $state<ViewId>(isViewId(initialTab) ? initialTab : 'profile');
   let actionError = $state<string | null>(null);
+
+  // The account-setup checklist now lives on this same page, so following one of its
+  // links only changes `?tab=` on the route we're already mounted on — SvelteKit does
+  // not remount `+page.svelte` for that, so the one-time read above never re-runs.
+  // Re-sync whenever the URL's tab actually changes (also covers browser back/forward).
+  // `view` is read only inside `untrack` — reading it as a tracked dependency would
+  // make this effect re-fire on every ordinary tab click too (Svelte 5 effects track
+  // every reactive read, not just the ones meant as triggers), reverting the click
+  // back to whatever tab the URL still names. See urlSynced.svelte.ts's syncOnNavigation
+  // for the same shape of fix.
+  $effect(() => {
+    const requested = page.url.searchParams.get('tab');
+    if (isViewId(requested) && requested !== untrack(() => view)) {
+      view = requested;
+    }
+  });
 
   // A stale error from one view (currently only Experience's bank-edit refresh offer)
   // must not keep showing once the visitor has moved to an unrelated tab.
@@ -213,6 +231,13 @@
     <AccountPreferences class="mt-6" />
   </div>
 {:else}
+  <!-- Above the tab strip: what is left to set up belongs to the account, not to
+       whichever tab happens to be open, and a card inside a tab panel would be
+       re-announced on every tab switch. -->
+  <div class="mb-6">
+    <AccountSetupCard />
+  </div>
+
   <!-- Underline tabs, same style as the Inbox page's Inbox/Settings switch. Icons match
        the account sidebar's convention (see accountNavIcons.ts) so the row scans the same
        way collapsed; the row scrolls horizontally on narrow viewports rather than wrapping,
