@@ -42,12 +42,13 @@ describe('accountSteps', () => {
     }
   });
 
-  // skills and location are their own routes under /my/profile; role is the default
-  // section there, and cv/alerts point at other pages entirely.
+  // skills and location are their own routes under /my/profile; cv and role are both on
+  // its default section, and alerts points at another page entirely. Notably NOT /my/cvs
+  // for the CV step — that route is the per-vacancy builder and takes no upload.
   it('links each step straight to the route it is done on', () => {
     const hrefById = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.href]));
     expect(hrefById).toEqual({
-      cv: '/my/cvs',
+      cv: '/my/profile',
       role: '/my/profile',
       skills: '/my/profile/skills',
       location: '/my/profile/location',
@@ -55,15 +56,23 @@ describe('accountSteps', () => {
     });
   });
 
-  // The card itself is rendered on /my/profile, so the role step's link would otherwise
+  // The card itself is rendered on /my/profile, so a step landing there would otherwise
   // point at the page the reader is already looking at — the anchor is what makes it move.
-  it('anchors the role step, since its own card shares that page', () => {
+  it('anchors every step that lands on the page the card itself is on', () => {
     const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.hash]));
+    expect(byId.cv).toBe('account-cv');
     expect(byId.role).toBe('account-role');
-    expect(byId.cv).toBeUndefined();
     expect(byId.skills).toBeUndefined();
     expect(byId.location).toBeUndefined();
     expect(byId.alerts).toBeUndefined();
+  });
+
+  // The guard for the whole class of bug this fixes: a step whose href is the page the
+  // card is rendered on has to name where on it to go, or following it changes nothing.
+  it('leaves no step pointing at /my/profile without an anchor', () => {
+    for (const step of accountSteps(empty)) {
+      if (step.href === '/my/profile') expect(step.hash).toBeTruthy();
+    }
   });
 
   it('counts a CV once one is stored', () => {
