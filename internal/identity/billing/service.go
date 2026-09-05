@@ -423,18 +423,46 @@ func (s *Service) newCustomerFor(ctx context.Context, userID int64, idempotencyK
 	return s.stripe().customerOf(ctx, userID)
 }
 
+// CheckoutPriceCents is what a new subscriber is sold, in the smallest currency unit.
+//
+// Read from the provider through the same cache the public price list uses, rather than
+// stored: a price is the provider's fact, and a copy here could only disagree. Its one
+// caller fixes a referral reward at a fraction of it, so a wrong answer would misprice
+// credit that can never be recomputed.
+func (s *Service) CheckoutPriceCents(ctx context.Context) (int64, error) {
+	price, err := s.checkoutPrice(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return price.AmountCents, nil
+}
+
 // checkoutCurrency is the currency the sold price is denominated in.
 //
 // A credit must be in the same currency as the invoices it is meant to reduce; a mismatch
 // is refused by the provider, which is the right failure but a late one.
 func (s *Service) checkoutCurrency(ctx context.Context) (string, error) {
+	price, err := s.checkoutPrice(ctx)
+	if err != nil {
+		return "", err
+	}
+	return price.Currency, nil
+}
+
+// checkoutPrice is the configured sale price as the provider reports it.
+//
+// An unreadable price is an error rather than a default. PublicPrices returns an empty list
+// when the provider cannot be reached, and treating that as a zero would misprice a reward
+// at nothing — silently, and in the direction of paying somebody nothing for a referral
+// they earned.
+func (s *Service) checkoutPrice(ctx context.Context) (PublicPrice, error) {
 	wanted := s.cfg.CheckoutPrice()
 	for _, price := range s.PublicPrices(ctx) {
 		if price.ID == wanted {
-			return price.Currency, nil
+			return price, nil
 		}
 	}
-	return "", fmt.Errorf("billing: cannot read the currency of price %q", wanted)
+	return PublicPrice{}, fmt.Errorf("billing: cannot read price %q from the provider", wanted)
 }
 
 // ManagementURL is the provider's own page where this subscriber changes their card or

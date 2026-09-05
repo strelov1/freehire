@@ -52,15 +52,17 @@
 
 ## 4. Granting the reward
 
-- [ ] 4.1 Add the third pass to `cmd/billing-sync`: pending rewards whose invitee holds a
+- [x] 4.1 Add the third pass to `cmd/billing-sync`: pending rewards whose invitee holds a
   `stripe_customer_id` → ask the provider → grant at 50% of list price, resolved at grant time
   and stored. Bounded by `INVITE_REWARD_MAX_PER_RUN`.
-- [ ] 4.2 Deliver every granted, undelivered reward through `Service.CreditAccount`. Assert
+- [x] 4.2 Deliver every granted, undelivered reward through `Service.CreditAccount`. Assert
   the pass is a no-op on a second run, and that a referrer who has never bought gets a
   customer created for them rather than being skipped.
-- [ ] 4.3 Enforce the per-referrer ceiling: over it, the row stays `pending`, nothing is
+- [x] 4.3 Enforce the per-referrer ceiling: over it, the row stays `pending`, nothing is
   credited, and the invitee's own discount is untouched.
-- [ ] 4.4 Assert a store-only invitee (RevenueCat, no Stripe customer) never grants.
+- [ ] 4.4 Assert a store-only invitee (RevenueCat, no Stripe customer) never grants. This is
+  a property of the query's `stripe_customer_id IS NOT NULL` filter, so the assertion needs a
+  real database and lands with the integration tests in 8.2.
 
 ## 5. HTTP
 
