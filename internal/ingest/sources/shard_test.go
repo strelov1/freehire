@@ -120,3 +120,56 @@ func TestConfigShard_SingleShardIsFullConfig(t *testing.T) {
 		t.Error("Shard must preserve the file's default provider")
 	}
 }
+
+func TestConfigFilterBoard_MatchesOneBoardExactly(t *testing.T) {
+	cfg := Config{Provider: "jobleads", Sources: []CompanyEntry{
+		{Company: "JobLeads — Frontend Developer", Provider: "jobleads", Board: "Frontend Developer", Region: "IT"},
+		{Company: "JobLeads — Backend Developer", Provider: "jobleads", Board: "Backend Developer", Region: "IT"},
+	}}
+	got := cfg.FilterBoard("Frontend Developer", "")
+	if len(got.Sources) != 1 || got.Sources[0].Board != "Frontend Developer" {
+		t.Errorf("FilterBoard(%q, \"\") = %+v, want exactly the Frontend Developer entry", "Frontend Developer", got.Sources)
+	}
+	if got.Provider != "jobleads" {
+		t.Error("FilterBoard must preserve the config's default provider")
+	}
+}
+
+func TestConfigFilterBoard_RegionDisambiguatesARepeatedBoardID(t *testing.T) {
+	// A board id can repeat across independent regional slices (e.g. Adzuna's it-jobs).
+	cfg := Config{Provider: "adzuna", Sources: []CompanyEntry{
+		{Company: "Adzuna UK", Provider: "adzuna", Board: "it-jobs", Region: "GB"},
+		{Company: "Adzuna DE", Provider: "adzuna", Board: "it-jobs", Region: "DE"},
+	}}
+	got := cfg.FilterBoard("it-jobs", "DE")
+	if len(got.Sources) != 1 || got.Sources[0].Region != "DE" {
+		t.Errorf("FilterBoard(%q, %q) = %+v, want only the DE entry", "it-jobs", "DE", got.Sources)
+	}
+}
+
+func TestConfigFilterBoard_RegionAloneNarrowsWithoutABoard(t *testing.T) {
+	cfg := Config{Provider: "adzuna", Sources: []CompanyEntry{
+		{Company: "Adzuna UK", Provider: "adzuna", Board: "it-jobs", Region: "GB"},
+		{Company: "Adzuna DE", Provider: "adzuna", Board: "it-jobs", Region: "DE"},
+		{Company: "Adzuna DE eng", Provider: "adzuna", Board: "engineering-jobs", Region: "DE"},
+	}}
+	got := cfg.FilterBoard("", "DE")
+	if len(got.Sources) != 2 {
+		t.Errorf("FilterBoard(\"\", %q) matched %d entries, want 2", "DE", len(got.Sources))
+	}
+}
+
+func TestConfigFilterBoard_NoMatchReturnsEmptyNotFullConfig(t *testing.T) {
+	cfg := mkConfig("a", "b", "c")
+	got := cfg.FilterBoard("nonexistent", "")
+	if len(got.Sources) != 0 {
+		t.Errorf("FilterBoard on an unknown board = %d entries, want 0 — a typo must not silently crawl everything", len(got.Sources))
+	}
+}
+
+func TestConfigFilterBoard_BothEmptyReturnsConfigUnchanged(t *testing.T) {
+	cfg := mkConfig("a", "b", "c")
+	if got := companiesOf(cfg.FilterBoard("", "")); !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
+		t.Errorf("FilterBoard(\"\", \"\") = %v, want the full config", got)
+	}
+}

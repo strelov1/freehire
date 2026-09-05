@@ -56,8 +56,10 @@ func run() int {
 	// provider name) or via INGEST_PROVIDER. An optional --shard=i/n (or the SHARD env)
 	// crawls only a round-robin slice of that provider's boards, so a provider with too
 	// many boards to finish in one timeout (workday) is spread across several staggered
-	// runs.
-	var provider, shardSpec string
+	// runs. --board=<id> (optionally narrowed further by --region=<code>) is the operator's
+	// hand-run equivalent: resync one company/keyword — e.g. one jobleads keyword, one
+	// workday tenant — without waiting for or disturbing the rest of the provider's crawl.
+	var provider, shardSpec, boardFilter, regionFilter string
 	for _, a := range os.Args[1:] {
 		switch {
 		case strings.HasPrefix(a, "--shard="):
@@ -66,6 +68,16 @@ func run() int {
 			// The value must be attached (--shard=i/n); a space-separated form would
 			// otherwise swallow the next arg (the provider name) as the selector's value.
 			log.Print("config: --shard needs an attached value, e.g. --shard=2/6")
+			return 1
+		case strings.HasPrefix(a, "--board="):
+			boardFilter = strings.TrimPrefix(a, "--board=")
+		case a == "--board":
+			log.Print(`config: --board needs an attached value, e.g. --board="Frontend Developer"`)
+			return 1
+		case strings.HasPrefix(a, "--region="):
+			regionFilter = strings.TrimPrefix(a, "--region=")
+		case a == "--region":
+			log.Print("config: --region needs an attached value, e.g. --region=IT")
 			return 1
 		case a != "" && !strings.HasPrefix(a, "-") && provider == "":
 			provider = a
@@ -129,6 +141,21 @@ func run() int {
 	// why sharding (below) can otherwise hide a region-ambiguous board from the board-scoped
 	// close's per-run safety check.
 	crossShardAmbiguousBoards := pipeline.AmbiguousBoardNames(boards)
+
+	// Narrow to one board (optionally one region), if requested. A typo here must not look
+	// like a legitimate empty targeted run (see the sweep's own note on those below) — an
+	// operator who asked for a specific board and got zero boards back needs to see why.
+	if boardFilter != "" || regionFilter != "" {
+		full := len(sourceCfg.Sources)
+		sourceCfg = sourceCfg.FilterBoard(boardFilter, regionFilter)
+		if len(sourceCfg.Sources) == 0 {
+			log.Printf("config: --board=%q --region=%q matched none of %s's %d board(s)",
+				boardFilter, regionFilter, provider, full)
+			return 1
+		}
+		log.Printf("ingest: board filter — crawling %d of %d boards for %s (board=%q region=%q)",
+			len(sourceCfg.Sources), full, provider, boardFilter, regionFilter)
+	}
 
 	// Narrow to this shard's slice, if requested.
 	if shardSpec != "" {
