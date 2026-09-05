@@ -312,7 +312,8 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        -- badge and the banner can never disagree about what an entry's state means.
        aaq.id AS auto_apply_id, aaq.tailored_cv_id AS auto_apply_tailored_cv_id,
        aaq.review_decision AS auto_apply_review_decision,
-       aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at
+       aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at,
+       (aaq.resolved_preview IS NOT NULL)::boolean AS auto_apply_has_preview
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
