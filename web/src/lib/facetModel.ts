@@ -148,28 +148,36 @@ export interface SortOption {
  *
  *  It lives here, not in the view, for the reason effectiveSort does: it is pure, it
  *  decides what the user sees, and in the component nothing could test it. */
-export function sortOptionsFor(q: string, matchAvailable: boolean): SortOption[] {
-  const values: JobSort[] = [
-    ...(q ? (['relevance'] as const) : []),
-    'newest',
-    'views',
-    ...(matchAvailable ? (['match'] as const) : []),
-  ];
+export function sortOptionsFor(q: string): SortOption[] {
+  // Match is offered to everyone, including a viewer with no skills on file. Hiding it
+  // from them answered "why can I not sort by fit here?" with nothing at all — and it
+  // hid the reason to fill in a profile from exactly the people who have not. What they
+  // get instead is an explanation of what the ordering needs; see matchSortNeedsSkills.
+  const values: JobSort[] = [...(q ? (['relevance'] as const) : []), 'newest', 'views', 'match'];
   return values.map((value) => ({ value, label: SORT_LABEL[value] }));
 }
 
 /** The option the control shows as selected.
  *
- *  Normally the effective ordering — but a shared `?sort=match` link opened by someone
- *  it cannot be served to resolves to an ordering that is not on offer. The param stays
- *  (the server degrades it rather than refusing, and signing in should just work), so
- *  the control instead names what the server will ACTUALLY serve that caller. A select
- *  whose value matches no option renders blank, which would put an empty control over a
- *  live ordering. */
-export function selectedSortFor(f: JobFilters, matchAvailable: boolean): JobSort {
+ *  Normally the effective ordering. `relevance` is the one that can be asked for and not
+ *  offered — it ranks against query text, and a shared link can arrive without any — so
+ *  the control then names what the server will ACTUALLY serve. A select whose value
+ *  matches no option renders blank, which would put an empty control over a live
+ *  ordering. */
+export function selectedSortFor(f: JobFilters): JobSort {
   const sort = effectiveSort(f);
-  const offered = sortOptionsFor(f.q, matchAvailable);
+  const offered = sortOptionsFor(f.q);
   return offered.some((o) => o.value === sort) ? sort : defaultSortFor(f.q);
+}
+
+/** Whether the feed should explain that the match ordering has nothing to rank against.
+ *
+ *  Only when match is the ordering actually in force AND the viewer has no skills on
+ *  file. The server degrades such a request to newest rather than refusing it, so the
+ *  list still fills — and a visitor told nothing reads that as the sort being broken
+ *  rather than as a profile they have not filled in yet. */
+export function matchSortNeedsSkills(f: JobFilters, hasSkills: boolean): boolean {
+  return effectiveSort(f) === 'match' && !hasSkills;
 }
 
 /** Splits every raw query value on comma and flattens the result, dropping

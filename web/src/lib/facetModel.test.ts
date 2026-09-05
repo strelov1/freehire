@@ -16,6 +16,7 @@ import {
   facetRemove,
   defaultSortFor,
   effectiveSort,
+  matchSortNeedsSkills,
   sortOptionsFor,
   selectedSortFor,
   type FacetState,
@@ -397,11 +398,13 @@ describe('sort', () => {
 // The option list is the sort control's visibility rule, kept pure and out of the
 // component so it can be tested at all — the same argument that put effectiveSort here.
 describe('sort options', () => {
-  it('offers relevance only under a query, and match only when it can be served', () => {
-    expect(sortOptionsFor('', false).map((o) => o.value)).toEqual(['newest', 'views']);
-    expect(sortOptionsFor('go', false).map((o) => o.value)).toEqual(['relevance', 'newest', 'views']);
-    expect(sortOptionsFor('', true).map((o) => o.value)).toEqual(['newest', 'views', 'match']);
-    expect(sortOptionsFor('go', true).map((o) => o.value)).toEqual([
+  // Match is offered to everyone now, including a visitor with no skills on file. It
+  // used to be hidden from them, which answered "why can I not sort by fit?" with
+  // nothing at all; the feed explains what the ordering needs instead (see
+  // matchSortNeedsSkills).
+  it('offers relevance only under a query, and match always', () => {
+    expect(sortOptionsFor('').map((o) => o.value)).toEqual(['newest', 'views', 'match']);
+    expect(sortOptionsFor('go').map((o) => o.value)).toEqual([
       'relevance',
       'newest',
       'views',
@@ -409,35 +412,28 @@ describe('sort options', () => {
     ]);
   });
 
-  // `views` ranks by a stored figure, so unlike `relevance` it needs no query text and
-  // unlike `match` it needs no profile. Being unconditional it joins `newest`, which
-  // means the control now holds two options for every caller and is therefore rendered
-  // on every listing — including the signed-out browse that previously showed none.
+  // `views` ranks by a stored figure, so unlike `relevance` it needs no query text.
   it('offers most-viewed unconditionally', () => {
     for (const q of ['', 'go']) {
-      for (const matchAvailable of [false, true]) {
-        expect(sortOptionsFor(q, matchAvailable).map((o) => o.value)).toContain('views');
-      }
+      expect(sortOptionsFor(q).map((o) => o.value)).toContain('views');
     }
-    expect(sortOptionsFor('', false).length).toBeGreaterThan(1);
   });
 
-  // A shared ?sort=match link opened signed out: the param survives (the server degrades
-  // the ordering rather than refusing it), but the control cannot show an option it does
-  // not offer. It shows what the server will actually serve — a select with nothing
-  // selected would be a blank control over a real ordering.
+  // `relevance` is the one ordering that can still be asked for and not offered: it
+  // ranks against query text, and a shared link can arrive without any. The control must
+  // name what the server will actually serve — a select with nothing selected would be a
+  // blank control over a real ordering.
   it('shows what the server will serve when the chosen ordering cannot be offered', () => {
-    expect(selectedSortFor(withQuery('go', 'match'), false)).toBe('relevance');
-    expect(selectedSortFor(withQuery('', 'match'), false)).toBe('newest');
-    expect(selectedSortFor(withQuery('go', 'match'), true)).toBe('match');
+    expect(selectedSortFor(withQuery('', 'relevance'))).toBe('newest');
+    expect(selectedSortFor(withQuery('go', 'relevance'))).toBe('relevance');
+    expect(selectedSortFor(withQuery('', 'match'))).toBe('match');
   });
 
   it('always names an option that exists', () => {
     for (const q of ['', 'go']) {
-      for (const matchAvailable of [false, true]) {
-        const f = withQuery(q, 'match');
-        const values = sortOptionsFor(q, matchAvailable).map((o) => o.value);
-        expect(values).toContain(selectedSortFor(f, matchAvailable));
+      for (const sort of ['match', 'relevance', 'views', 'newest'] as const) {
+        const f = withQuery(q, sort);
+        expect(sortOptionsFor(q).map((o) => o.value)).toContain(selectedSortFor(f));
       }
     }
   });
@@ -535,5 +531,31 @@ describe('the two date bounds', () => {
     expect(activeFilterCount(f)).toBe(none + 1);
     f.postedWithinDays = 3;
     expect(activeFilterCount(f)).toBe(none + 2);
+  });
+});
+
+// The feed's answer to "I picked Match and it did not rank anything". The ordering needs
+// the viewer's own skills; without them the server degrades to newest and, told nothing,
+// the visitor reads that as the sort being broken.
+describe('matchSortNeedsSkills', () => {
+  it('asks for skills only when match is the ordering in force', () => {
+    expect(matchSortNeedsSkills(withQuery('', 'match'), false)).toBe(true);
+    expect(matchSortNeedsSkills(withQuery('', 'newest'), false)).toBe(false);
+    expect(matchSortNeedsSkills(withQuery('', 'views'), false)).toBe(false);
+  });
+
+  it('stays quiet once the viewer has skills to rank against', () => {
+    expect(matchSortNeedsSkills(withQuery('', 'match'), true)).toBe(false);
+  });
+
+  // A query plus ?sort=match still means match: `relevance` is only the DEFAULT under a
+  // query, not an override of a stated one.
+  it('asks under a query too', () => {
+    expect(matchSortNeedsSkills(withQuery('go', 'match'), false)).toBe(true);
+  });
+
+  // Nobody asked for match here, so there is nothing to explain.
+  it('says nothing when no ordering was stated', () => {
+    expect(matchSortNeedsSkills(emptyFilters(), false)).toBe(false);
   });
 });

@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { Layers } from '@lucide/svelte';
+  import { ArrowRight, Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { promptSignIn } from '$lib/signin';
   import { profileStore } from '$lib/profile.svelte';
   import { env } from '$env/dynamic/public';
-  import { matchSortEnabled, openWithinEnabled } from '$lib/features';
+  import { openWithinEnabled } from '$lib/features';
   import { computeClientMatch } from '$lib/jobMatch';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
@@ -21,6 +22,7 @@
   import {
     FilterStore,
     filtersToParams,
+    matchSortNeedsSkills,
     selectedSortFor,
     sortOptionsFor,
     type JobSort,
@@ -193,24 +195,20 @@
     if (!matchFilterAvailable) minMatch = null;
   });
 
-  // The match SORT rides the same profile precondition as the match slider, plus a
-  // runtime flag. It ships dark: the API accepts ?sort=match as soon as the binary is
-  // out, but it ranks against skill vectors that only exist once a full index rebuild
-  // has written them — before that the sort returns a near-empty feed, which reads as
-  // broken rather than new. The flag is what reveals the option once the rebuild has
-  // landed, and flipping it is an env change plus a restart, not a redeploy.
-  //
-  // The URL param stays honoured either way, which is deliberate: it is how the sort
-  // gets verified on production before anyone can click it.
-  const matchSortAvailable = $derived(matchFilterAvailable && matchSortEnabled(env));
-
   // The orderings this caller can choose between, and which one the control shows —
   // both pure, both in facetModel so they can be tested (see sortOptionsFor).
-  const sortOptions = $derived(sortOptionsFor(filters.value.q, matchSortAvailable));
-  const selectedSort = $derived(selectedSortFor(filters.value, matchSortAvailable));
-  // A one-option select is a label wearing a control's clothes: there is nothing to
-  // choose, and the feed already IS that ordering.
-  const sortSelectVisible = $derived(sortOptions.length > 1);
+  //
+  // Match is offered to everyone. It used to need the same profile the match SLIDER
+  // does, which meant the one ordering that answers "which of these actually suit me"
+  // was invisible to every visitor who had not filled a profile in — and nothing told
+  // them it existed. Choosing it without skills on file is now answered out loud
+  // instead, by the notice below the toolbar.
+  const sortOptions = $derived(sortOptionsFor(filters.value.q));
+  const selectedSort = $derived(selectedSortFor(filters.value));
+
+  // Whether that notice is showing: match is the ordering in force and there are no
+  // skills to rank against, so the server has quietly served newest instead.
+  const matchNeedsSkills = $derived(matchSortNeedsSkills(filters.value, matchFilterAvailable));
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
   // value read once at module load, and it cannot change while the page is mounted.
@@ -727,7 +725,11 @@
      bound it belongs with. -->
 {#snippet listControls()}
   {@render postedSelect()}
-  {#if sortSelectVisible}{@render sortSelect()}{/if}
+  <!-- Unconditional. This used to be guarded against a one-option select - a label
+       wearing a control's clothes - which could happen when match was hidden from a
+       viewer with no profile. Every caller is now offered newest, most-viewed and match,
+       so the guard could never be false. -->
+  {@render sortSelect()}
 {/snippet}
 
 <div class="flex gap-6">
@@ -766,6 +768,41 @@
             autostart={alertBanner.autostart}
             onDismiss={() => (alertBanner = null)}
           />
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Match was chosen and there is nothing to rank against. Sits with the nudges
+         above and, like them, never replaces the feed: the server degrades this request
+         to newest rather than refusing it, so there ARE jobs below — taking them away
+         would punish someone for pressing a button we offered them. What was missing
+         was only the explanation. -->
+    {#if matchNeedsSkills}
+      <div class="mt-3 rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm sm:p-4">
+        <p class="font-medium text-foreground">Sorted by match needs to know about you</p>
+        <p class="mt-1 text-muted-foreground">
+          We rank these against your own skills, and we don't have them yet. Showing the
+          newest first for now.
+        </p>
+        {#if isAuthenticated()}
+          <a
+            href={resolve('/my/profile')}
+            class="mt-2.5 inline-flex items-center gap-1.5 font-medium text-brand hover:underline"
+          >
+            Add your CV or skills
+            <ArrowRight class="size-4" aria-hidden="true" />
+          </a>
+        {:else}
+          <!-- Signed out there is no profile to fill in yet, so the first step is the
+               account that would hold one. -->
+          <button
+            type="button"
+            onclick={() => promptSignIn()}
+            class="mt-2.5 inline-flex items-center gap-1.5 font-medium text-brand hover:underline"
+          >
+            Sign in to add your CV
+            <ArrowRight class="size-4" aria-hidden="true" />
+          </button>
         {/if}
       </div>
     {/if}

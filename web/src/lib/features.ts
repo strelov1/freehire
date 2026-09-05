@@ -8,20 +8,13 @@
 // unparseable value to reveal a feature.
 const TRUTHY = new Set(['1', 'true', 'on', 'yes']);
 
-/** Whether the profile-match sort control is revealed in the jobs feed.
- *
- *  This ships DARK on purpose. The backend accepts `?sort=match` from the moment the
- *  binary rolls out, but it ranks against skill vectors that only exist once a full
- *  index rebuild has written them — before that the sort returns the handful of
- *  postings re-indexed since, which reads as a broken feed rather than a new feature.
- *  So the control stays hidden until someone confirms the rebuild landed, and the URL
- *  param stays usable throughout for exactly that check.
- *
- *  Default OFF: an unset or unrecognized value hides the control. A flag that reveals
- *  a feature when it cannot parse its own value is how one ships by accident. */
-export function matchSortEnabled(env: Record<string, string | undefined>): boolean {
-  return TRUTHY.has((env.PUBLIC_MATCH_SORT ?? '').trim().toLowerCase());
-}
+// The match sort had a flag here (PUBLIC_MATCH_SORT). It existed to hide the control
+// until a full index rebuild had written the skill vectors it ranks against — before
+// that the ordering returned almost nothing and read as broken. That rebuild has long
+// since landed, so the flag was answering a question nobody asks any more, and it was
+// also hiding the control from every visitor without a profile — the people who most
+// need to be told the ordering exists. The feed explains what it needs instead; see
+// facetModel's matchSortNeedsSkills.
 
 /** Whether the "open within N days" bound is revealed — the filter over how long a
  *  posting has been in the catalogue, as distinct from the date its source states.
