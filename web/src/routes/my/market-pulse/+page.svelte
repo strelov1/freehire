@@ -10,6 +10,7 @@
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import MarketPulseView from '$lib/components/MarketPulseView.svelte';
   import States from '$lib/components/States.svelte';
+  import { Gauge, TrendingUp } from '@lucide/svelte';
   import { TabStrip, tabStripId } from '$lib/ui';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
@@ -23,8 +24,8 @@
   const excludeFacets = ['skills'];
 
   const TABS = [
-    { id: 'coverage', label: 'Coverage' },
-    { id: 'trend', label: 'Skill trend' },
+    { id: 'coverage', label: 'Coverage', icon: Gauge },
+    { id: 'trend', label: 'Skill trend', icon: TrendingUp },
   ] as const;
   const PANEL_ID = 'market-pulse-panel';
   let tab = $state<'coverage' | 'trend'>('coverage');

@@ -3,7 +3,9 @@
   // selection, scroll-into-view and the fade mask actually move.
   import TabStrip from '../../src/tab-strip.svelte';
 
-  let { tabs }: { tabs: readonly { id: string; label: string }[] } = $props();
+  import type { LucideIcon } from '@lucide/svelte';
+
+  let { tabs }: { tabs: readonly { id: string; label: string; icon?: LucideIcon }[] } = $props();
   let active = $state(tabs[0]?.id ?? '');
 </script>
 

@@ -849,14 +849,14 @@
       "id": "component.tab-strip",
       "type": "component",
       "name": "TabStrip",
-      "description": "Horizontally-scrolling, fade-masked underline tab strip with roving-tabindex arrow-key navigation. Distinct from Tabs (a pill/segmented control with no overflow handling) — for a row that can outgrow its container. Also exports the tabStripId(panelId, tab) helper.",
+      "description": "Horizontally-scrolling, fade-masked underline tab strip with roving-tabindex arrow-key navigation. A tab carrying an href renders as an anchor (so a strip of routes stays middle-clickable and openable in a new tab) and then the arrows move focus only, since activating a link navigates. Distinct from Tabs (a pill/segmented control with no overflow handling) — for a row that can outgrow its container. Also exports the tabStripId(panelId, tab) helper.",
       "source": {
         "file": "../../src/tab-strip.svelte"
       },
       "props": [
         {
           "name": "tabs",
-          "type": "readonly { id: T; label: string }[]",
+          "type": "readonly { id: T; label: string; icon?: LucideIcon; href?: string }[]",
           "required": true
         },
         {
@@ -867,7 +867,7 @@
         {
           "name": "onSelect",
           "type": "(id: T) => void",
-          "required": true
+          "description": "Commits a selection. Unused by a strip of href tabs — there the navigation is the selection."
         },
         {
           "name": "label",

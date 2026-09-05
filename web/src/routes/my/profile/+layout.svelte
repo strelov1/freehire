@@ -12,7 +12,7 @@
   } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { tablist } from '$lib/actions/tablist';
+  import { TabStrip, tabStripId } from '$lib/ui';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
@@ -36,9 +36,8 @@
   let { children }: { children: Snippet } = $props();
 
   // Icons match the account sidebar's convention (see accountNavIcons.ts) so the row
-  // scans the same way collapsed; the row scrolls horizontally on narrow viewports
-  // rather than wrapping, same as the account nav's own mobile strip in
-  // my/+layout.svelte. CV readiness is deliberately not one of these — it's not
+  // scans the same way collapsed; `TabStrip` owns the overflow behaviour on a narrow
+  // viewport. CV readiness is deliberately not one of these — it's not
   // published yet; it still works at /my/profile/cv-readiness for anyone who holds
   // the link, nothing here links to it.
   const SECTIONS = [
@@ -52,11 +51,21 @@
     { id: 'settings', href: '/my/profile/settings', icon: SettingsIcon },
   ] as const;
 
+  const PANEL_ID = 'profile-panel';
+
   const s = $derived(t(messages, locale()));
   const profile = $derived(profileStore.profile);
   const resumeMeta = $derived(resumeStore.meta);
   const path = $derived(page.url.pathname);
   const activeSectionId = $derived(SECTIONS.find((sec) => sec.href === path)?.id ?? 'profile');
+  const tabs = $derived(
+    SECTIONS.map((sec) => ({
+      id: sec.id,
+      label: s.tabs[sec.id],
+      icon: sec.icon,
+      href: resolve(sec.href),
+    })),
+  );
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
 
@@ -139,38 +148,28 @@
     <AccountSetupCard />
   </div>
 
-  <!-- Underline tabs, same style as the Inbox page's Inbox/Settings switch. -->
-  <div class="mb-6 flex items-end justify-between gap-4 border-b border-border text-sm">
-    <div
-      class="no-scrollbar flex min-w-0 gap-4 overflow-x-auto"
-      role="tablist"
-      aria-label="Profile sections"
-      use:tablist={path}
-    >
-      {#each SECTIONS as sec (sec.id)}
-        {@const Icon = sec.icon}
-        {@const active = path === sec.href}
-        <a
-          role="tab"
-          id="profile-tab-{sec.id}"
-          aria-selected={active}
-          aria-controls="profile-panel"
-          href={resolve(sec.href)}
-          class="-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 py-2 transition-colors {active
-            ? 'border-brand font-medium text-foreground'
-            : 'border-transparent text-muted-foreground hover:text-foreground'}"
-        >
-          <Icon class="size-4" aria-hidden="true" />
-          {s.tabs[sec.id]}
-        </a>
-      {/each}
-    </div>
+  <!-- Same heading the set-up branch above renders, so the page does not lose its title
+       the moment a profile exists — and so this section is titled like every other
+       /my/* one. -->
+  <div class="mb-6 flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
+    <p class="text-sm text-muted-foreground">
+      Your CV, skills and role — measured against live market demand.
+    </p>
   </div>
 
+  <TabStrip
+    {tabs}
+    active={activeSectionId}
+    label="Profile sections"
+    panelId={PANEL_ID}
+    class="mb-6"
+  />
+
   <div
-    id="profile-panel"
+    id={PANEL_ID}
     role="tabpanel"
-    aria-labelledby="profile-tab-{activeSectionId}"
+    aria-labelledby={tabStripId(PANEL_ID, activeSectionId)}
     tabindex="0"
   >
     {@render children()}
