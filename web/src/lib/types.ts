@@ -660,7 +660,7 @@ export interface MyJob {
 }
 
 /** The six-value candidate-facing status for a live auto-apply attempt. */
-export type AutoApplyStatus =
+type AutoApplyStatus =
   | 'tailoring'
   | 'pending_review'
   | 'approved'
@@ -669,7 +669,7 @@ export type AutoApplyStatus =
   | 'failed';
 
 /** One resolved question/answer pair in an auto-apply answer preview. */
-export interface AutoApplyPreviewField {
+interface AutoApplyPreviewField {
   label: string;
   value: string;
 }
@@ -677,21 +677,21 @@ export interface AutoApplyPreviewField {
 /** One required question an auto-apply answer preview has no answer for yet.
  *  `will_draft_at_submission` distinguishes "the real submission will fill this in
  *  automatically" from "nothing can answer this". */
-export interface AutoApplyPreviewPending {
+interface AutoApplyPreviewPending {
   label: string;
   will_draft_at_submission: boolean;
 }
 
 /** The candidate-facing snapshot of what an unattended auto-apply submission would send —
  *  computed once, before review, never a live guess made when the drawer opens. */
-export interface AutoApplyResolvedPreview {
+interface AutoApplyResolvedPreview {
   fields: AutoApplyPreviewField[];
   pending?: AutoApplyPreviewPending[];
 }
 
 /** One application question an auto-apply attempt could not answer — candidate-facing
  *  detail only; the attempt's internal error text is never part of this shape. */
-export interface AutoApplyUnmappedField {
+interface AutoApplyUnmappedField {
   id: string;
   label: string;
   required: boolean;
