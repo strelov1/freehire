@@ -46,7 +46,7 @@ describe('ROLE_PLACEHOLDER', () => {
   // wording changed. These are the words that ship.
   it('is a fixed prefix and the roles that follow it', () => {
     expect(ROLE_PLACEHOLDER).toEqual({
-      prefix: 'Search jobs — e.g. ',
+      prefix: 'Search jobs: ',
       roles: ['Backend', 'Frontend', 'DevOps', 'QA', 'Data Science', 'Product'],
     });
   });
@@ -70,8 +70,8 @@ describe('typewriterStep', () => {
     return frames;
   };
 
-  // The server renders this state, so it has to be a whole sentence: an empty tail would
-  // ship "Search jobs - e.g. " to anyone reading before hydration or with JS off.
+  // The server renders this state, so it has to read whole: an empty tail would ship
+  // "Search jobs: " to anyone reading before hydration or with JS off.
   it('starts with the first word already whole', () => {
     expect(typedTail(start, roles)).toBe('ab');
   });
