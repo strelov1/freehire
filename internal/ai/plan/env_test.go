@@ -9,9 +9,18 @@ func TestConfigFromEnvDefaultsToTheShippedConfig(t *testing.T) {
 		t.Errorf("an unset environment changed the free allowance")
 	}
 	for _, f := range AllFeatures() {
+		// auto-apply ships enforcing and is asserted so in tier_test.go — the one feature
+		// whose ceiling is what a tier is sold on, so counting-only would sell nothing.
+		if f == FeatureAutoApply {
+			continue
+		}
 		if cfg.Enforced(f) {
 			t.Errorf("%q enforces with nothing set; enforcement is opt-in per feature", f)
 		}
+	}
+	if !cfg.Enforced(FeatureAutoApply) {
+		t.Error("auto-apply stopped enforcing with nothing set; PLAN_ENFORCE turns features " +
+			"ON and must never be the thing that keeps this one on")
 	}
 }
 

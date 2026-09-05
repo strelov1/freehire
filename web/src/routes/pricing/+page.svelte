@@ -5,7 +5,7 @@
   import { formatMinorUnits } from '$lib/money';
   import { isAuthenticated } from '$lib/auth.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import type { PublicPrice } from '$lib/types';
+  import type { PlanTierAllowance, PublicPrice } from '$lib/types';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();
@@ -15,13 +15,27 @@
 
   // Monthly and annual, whichever the backend actually offers. Nothing here assumes both
   // exist: a deployment selling only one shows no toggle rather than a dead tab.
-  const monthly = $derived(plans?.prices.find((p) => p.interval === 'month') ?? null);
-  const annual = $derived(plans?.prices.find((p) => p.interval === 'year') ?? null);
+  // Prices carry the tier they buy, so a plan's own column can never offer another's price.
+  const proPrices = $derived(plans?.prices.filter((p) => p.tier === 'pro') ?? []);
+  const ultraPrices = $derived(plans?.prices.filter((p) => p.tier === 'ultra') ?? []);
 
+  const monthly = $derived(proPrices.find((p) => p.interval === 'month') ?? null);
+  const annual = $derived(proPrices.find((p) => p.interval === 'year') ?? null);
+  const ultraMonthly = $derived(ultraPrices.find((p) => p.interval === 'month') ?? null);
+  const ultraAnnual = $derived(ultraPrices.find((p) => p.interval === 'year') ?? null);
+
+  // One toggle drives both plans, so the two columns can never show different intervals.
   let interval = $state<'month' | 'year'>('month');
   const chosen = $derived(interval === 'year' ? annual : monthly);
+  const ultraChosen = $derived(interval === 'year' ? ultraAnnual : ultraMonthly);
 
   const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
+
+  // What one tier's allowance reads as. `unlimited` makes the number a fair-use guard rather
+  // than a ceiling, so it is not shown — quoting a guard as a limit would promise less than
+  // the plan gives. Zero is "not on this plan" rather than "nothing today".
+  const allowanceText = (a: PlanTierAllowance) =>
+    a.unlimited ? 'Unlimited' : a.daily > 0 ? `${a.daily} / day` : '—';
 
   // What the annual price saves against twelve monthly ones, as a whole percentage. Shown
   // only when both prices exist and the saving is real — a "save 0%" badge is worse than
@@ -41,6 +55,7 @@
     assistant: 'Assistant messages',
     dictation: 'Voice dictation',
     'cover-letter': 'Cover letters',
+    'auto-apply': 'Unattended applications',
   };
   const label = (id: string) => FEATURE_LABELS[id] ?? id;
 
@@ -82,6 +97,21 @@
           : 'That code is not available.';
     } finally {
       checking = false;
+    }
+  }
+
+  // Ultra carries no promo field of its own. A code is redeemed once for the account, not
+  // per plan, so offering the box twice would suggest two separate offers.
+  async function buyUltra() {
+    if (!ultraChosen || busy) return;
+    busy = true;
+    error = null;
+    try {
+      const { url } = await api.billingCheckout(ultraChosen.id);
+      window.location.href = url;
+    } catch {
+      error = 'Checkout is not available right now. Please try again in a moment.';
+      busy = false;
     }
   }
 
@@ -176,7 +206,7 @@
     </div>
   {/if}
 
-  <div class="grid gap-4 sm:grid-cols-2">
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     <!-- Free -->
     <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">
@@ -188,7 +218,7 @@
         {#each rows as f (f.feature)}
           <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
             <span class="text-muted-foreground">{label(f.feature)}</span>
-            <span class="shrink-0 font-medium tabular-nums">{f.free_daily} / day</span>
+            <span class="shrink-0 font-medium tabular-nums">{allowanceText(f.free)}</span>
           </li>
         {/each}
       </ul>
@@ -214,9 +244,7 @@
         {#each rows as f (f.feature)}
           <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
             <span class="text-muted-foreground">{label(f.feature)}</span>
-            <span class="shrink-0 font-medium">
-              {f.pro_unlimited ? 'Unlimited' : `${f.free_daily} / day`}
-            </span>
+            <span class="shrink-0 font-medium tabular-nums">{allowanceText(f.pro)}</span>
           </li>
         {/each}
       </ul>
@@ -281,6 +309,50 @@
         {/if}
       {/if}
     </section>
+
+    <!-- Ultra. Rendered only when the deployment actually sells it: a column with no price
+         behind it is a plan nobody can buy, which is worse than two plans. -->
+    {#if ultraChosen}
+      <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
+        <div class="flex flex-col gap-1">
+          <h2 class="text-lg font-semibold">Ultra</h2>
+          <p class="text-3xl font-semibold tracking-tight">
+            {money(ultraChosen)}
+            <span class="text-base font-normal text-muted-foreground"
+              >/ {ultraChosen.interval === 'year' ? 'year' : 'month'}</span
+            >
+          </p>
+          <p class="text-sm text-muted-foreground">
+            Apply to as many jobs as you like, unattended.
+          </p>
+        </div>
+        <ul class="flex flex-col gap-2 text-sm">
+          {#each rows as f (f.feature)}
+            <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+              <span class="text-muted-foreground">{label(f.feature)}</span>
+              <span class="shrink-0 font-medium tabular-nums">{allowanceText(f.ultra)}</span>
+            </li>
+          {/each}
+        </ul>
+
+        {#if isAuthenticated()}
+          <button
+            type="button"
+            class="mt-auto rounded-md border border-primary px-4 py-2.5 text-sm font-medium disabled:opacity-60"
+            disabled={busy}
+            onclick={buyUltra}
+          >
+            {busy ? 'Opening checkout…' : 'Upgrade to Ultra'}
+          </button>
+        {:else}
+          <button
+            type="button"
+            class="mt-auto rounded-md border border-primary px-4 py-2.5 text-sm font-medium"
+            onclick={promptSignIn}>Sign in to upgrade</button
+          >
+        {/if}
+      </section>
+    {/if}
   </div>
 
   <!-- Said plainly rather than buried: what a subscription does and does not commit anyone

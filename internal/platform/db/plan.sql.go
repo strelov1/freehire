@@ -131,34 +131,47 @@ func (q *Queries) GetConsumptionDay(ctx context.Context, arg GetConsumptionDayPa
 	return day, err
 }
 
-const getProUntil = `-- name: GetProUntil :one
-SELECT pro_until
+const getPlanUntils = `-- name: GetPlanUntils :one
+SELECT pro_until, ultra_until
 FROM users
 WHERE id = $1
 `
 
-// The whole of a user's plan. A timestamp in the future means pro; NULL or a past one
-// means free. Read on the request path of every metered action, which is why it is a
-// column read and never a call to a billing provider: a provider that is slow must not
-// be able to slow down a user's next question.
-func (q *Queries) GetProUntil(ctx context.Context, id int64) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, getProUntil, id)
-	var pro_until pgtype.Timestamptz
-	err := row.Scan(&pro_until)
-	return pro_until, err
+type GetPlanUntilsRow struct {
+	ProUntil   pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
+}
+
+// The whole of a user's plan: how far each tier reaches. A future ultra_until means ultra,
+// otherwise a future pro_until means pro, otherwise free.
+//
+// ONE row, not one query per tier. Read on the request path of every metered action, and
+// two reads could land either side of a sync — resolving a tier from two different instants
+// is how somebody momentarily becomes neither. It is a column read and never a call to a
+// billing provider, so a provider that is slow cannot slow down a user's next question.
+func (q *Queries) GetPlanUntils(ctx context.Context, id int64) (GetPlanUntilsRow, error) {
+	row := q.db.QueryRow(ctx, getPlanUntils, id)
+	var i GetPlanUntilsRow
+	err := row.Scan(&i.ProUntil, &i.UltraUntil)
+	return i, err
 }
 
 const getProUntilSources = `-- name: GetProUntilSources :one
-SELECT pro_until, pro_until_stripe, pro_until_revenuecat, pro_until_granted
+SELECT pro_until, pro_until_stripe, pro_until_revenuecat, pro_until_granted,
+       ultra_until, ultra_until_stripe, ultra_until_revenuecat, ultra_until_granted
 FROM users
 WHERE id = $1
 `
 
 type GetProUntilSourcesRow struct {
-	ProUntil           pgtype.Timestamptz `json:"pro_until"`
-	ProUntilStripe     pgtype.Timestamptz `json:"pro_until_stripe"`
-	ProUntilRevenuecat pgtype.Timestamptz `json:"pro_until_revenuecat"`
-	ProUntilGranted    pgtype.Timestamptz `json:"pro_until_granted"`
+	ProUntil             pgtype.Timestamptz `json:"pro_until"`
+	ProUntilStripe       pgtype.Timestamptz `json:"pro_until_stripe"`
+	ProUntilRevenuecat   pgtype.Timestamptz `json:"pro_until_revenuecat"`
+	ProUntilGranted      pgtype.Timestamptz `json:"pro_until_granted"`
+	UltraUntil           pgtype.Timestamptz `json:"ultra_until"`
+	UltraUntilStripe     pgtype.Timestamptz `json:"ultra_until_stripe"`
+	UltraUntilRevenuecat pgtype.Timestamptz `json:"ultra_until_revenuecat"`
+	UltraUntilGranted    pgtype.Timestamptz `json:"ultra_until_granted"`
 }
 
 // The plan and where it came from, in one read.
@@ -174,6 +187,10 @@ func (q *Queries) GetProUntilSources(ctx context.Context, id int64) (GetProUntil
 		&i.ProUntilStripe,
 		&i.ProUntilRevenuecat,
 		&i.ProUntilGranted,
+		&i.UltraUntil,
+		&i.UltraUntilStripe,
+		&i.UltraUntilRevenuecat,
+		&i.UltraUntilGranted,
 	)
 	return i, err
 }
@@ -491,55 +508,87 @@ type SetProUntilGrantedParams struct {
 	ID    int64              `json:"id"`
 }
 
-// Pro GIVEN rather than sold: support's manual grant today, awarded days once add-invites
-// lands. No provider sync touches it, which is the whole reason it is separate — before
-// migration 0135 a hand-set value lived in the column the Stripe sync overwrites, and the
-// next webhook silently undid it.
+// Pro GIVEN rather than sold: support's manual grant. No provider sync touches it, which is
+// the whole reason it is separate — before migration 0135 a hand-set value lived in the
+// column the Stripe sync overwrites, and the next webhook silently undid it.
 func (q *Queries) SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error {
 	_, err := q.db.Exec(ctx, setProUntilGranted, arg.Until, arg.ID)
 	return err
 }
 
-const setProUntilRevenueCat = `-- name: SetProUntilRevenueCat :exec
+const setRevenueCatEntitlement = `-- name: SetRevenueCatEntitlement :exec
 UPDATE users
-SET pro_until_revenuecat = $1
-WHERE id = $2
+SET pro_until_revenuecat = $1,
+    ultra_until_revenuecat = $2
+WHERE id = $3
 `
 
-type SetProUntilRevenueCatParams struct {
-	Until pgtype.Timestamptz `json:"until"`
-	ID    int64              `json:"id"`
+type SetRevenueCatEntitlementParams struct {
+	ProUntil   pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
+	ID         int64              `json:"id"`
 }
 
-// How far the APP STORE or GOOGLE PLAY subscription reaches. Written only by the RevenueCat
-// sync, and only over its own source column, for the same reason the Stripe setter is
-// confined to its own: neither provider may answer for a plan it did not sell.
-func (q *Queries) SetProUntilRevenueCat(ctx context.Context, arg SetProUntilRevenueCatParams) error {
-	_, err := q.db.Exec(ctx, setProUntilRevenueCat, arg.Until, arg.ID)
+// How far the APP STORE or GOOGLE PLAY subscription reaches, for every tier. Written only by
+// the RevenueCat sync, and only over its own source columns, for the same reason the Stripe
+// setter is confined to its own: neither provider may answer for a plan it did not sell.
+//
+// There is no Ultra product in either store today, so this writes NULL to that column on
+// every pass. Deliberately: a provider that only wrote the columns it had something to say
+// about could never take back what it once said, which is the cancellation path.
+func (q *Queries) SetRevenueCatEntitlement(ctx context.Context, arg SetRevenueCatEntitlementParams) error {
+	_, err := q.db.Exec(ctx, setRevenueCatEntitlement, arg.ProUntil, arg.UltraUntil, arg.ID)
 	return err
 }
 
-const setProUntilStripe = `-- name: SetProUntilStripe :exec
+const setStripeEntitlement = `-- name: SetStripeEntitlement :exec
 UPDATE users
-SET pro_until_stripe = $1
+SET pro_until_stripe = $1,
+    ultra_until_stripe = $2
+WHERE id = $3
+`
+
+type SetStripeEntitlementParams struct {
+	ProUntil   pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
+	ID         int64              `json:"id"`
+}
+
+// How far the WEB subscription reaches, FOR EVERY TIER, from Stripe's current view of the
+// customer.
+//
+// Both columns in one statement, and that is a correctness property rather than tidiness.
+// A provider is re-read whole and its answer applied whole; written as two statements there
+// is an instant between them where an upgrading subscriber has had Pro cleared and has not
+// yet been given Ultra — visible to any request that lands in it, on every sync of every
+// Ultra account.
+//
+// It writes SOURCES, not the plan. users.pro_until and users.ultra_until are derived by the
+// schema as the furthest of their three sources and refuse assignment outright (428C9) — see
+// migrations 0135 and 0141 — so clearing a column here says "Stripe confers nothing", never
+// "this account is not Pro". The account may hold a store subscription or a manual grant,
+// and before 0135 this write would have revoked either without a trace.
+func (q *Queries) SetStripeEntitlement(ctx context.Context, arg SetStripeEntitlementParams) error {
+	_, err := q.db.Exec(ctx, setStripeEntitlement, arg.ProUntil, arg.UltraUntil, arg.ID)
+	return err
+}
+
+const setUltraUntilGranted = `-- name: SetUltraUntilGranted :exec
+UPDATE users
+SET ultra_until_granted = $1
 WHERE id = $2
 `
 
-type SetProUntilStripeParams struct {
+type SetUltraUntilGrantedParams struct {
 	Until pgtype.Timestamptz `json:"until"`
 	ID    int64              `json:"id"`
 }
 
-// How far the WEB subscription reaches. Written only by the Stripe sync, from Stripe's
-// current view of the customer.
-//
-// It writes a source, not the plan. users.pro_until is derived by the schema as the furthest
-// of three sources and refuses assignment outright (428C9) — see migration 0135 — so
-// clearing this column says "Stripe confers nothing", never "this account is not Pro". The
-// account may hold a store subscription or a manual grant, and before 0135 this write would
-// have revoked either without a trace.
-func (q *Queries) SetProUntilStripe(ctx context.Context, arg SetProUntilStripeParams) error {
-	_, err := q.db.Exec(ctx, setProUntilStripe, arg.Until, arg.ID)
+// Ultra GIVEN rather than sold. Separate from the Pro grant rather than folded into it: the
+// two are different decisions a person makes, and one statement setting both would make
+// granting Ultra silently revoke a Pro grant that outlives it.
+func (q *Queries) SetUltraUntilGranted(ctx context.Context, arg SetUltraUntilGrantedParams) error {
+	_, err := q.db.Exec(ctx, setUltraUntilGranted, arg.Until, arg.ID)
 	return err
 }
 

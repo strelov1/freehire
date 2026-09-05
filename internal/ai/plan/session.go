@@ -63,7 +63,9 @@ func ceilingsHeld(highestSlot int) int {
 // session's charges reach, and how many turns it has already run.
 func (c Config) decideTurn(tier Tier, highestSlot, turnsSoFar int) TurnDecision {
 	d := TurnDecision{Turns: turnsSoFar}
-	if tier == TierPro {
+	// Every PAID tier, not pro specifically. A session on the more expensive plan running
+	// out of turns where the cheaper one did not is the one bug this rule can have.
+	if tier.Paid() {
 		d.Allowed, d.Unlimited = true, true
 		return d
 	}

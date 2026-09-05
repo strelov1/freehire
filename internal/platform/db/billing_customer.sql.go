@@ -46,11 +46,11 @@ func (q *Queries) GetUserIDByStripeCustomer(ctx context.Context, stripeCustomerI
 }
 
 const listSubscribersNearProExpiryStripe = `-- name: ListSubscribersNearProExpiryStripe :many
-SELECT id, stripe_customer_id, pro_until_stripe
+SELECT id, stripe_customer_id, pro_until_stripe, ultra_until_stripe
 FROM users
 WHERE stripe_customer_id IS NOT NULL
-  AND pro_until_stripe >= $1
-  AND pro_until_stripe < $2
+  AND ((pro_until_stripe >= $1 AND pro_until_stripe < $2)
+       OR (ultra_until_stripe >= $1 AND ultra_until_stripe < $2))
 LIMIT $3
 `
 
@@ -64,6 +64,7 @@ type ListSubscribersNearProExpiryStripeRow struct {
 	ID               int64              `json:"id"`
 	StripeCustomerID pgtype.Text        `json:"stripe_customer_id"`
 	ProUntilStripe   pgtype.Timestamptz `json:"pro_until_stripe"`
+	UltraUntilStripe pgtype.Timestamptz `json:"ultra_until_stripe"`
 }
 
 // The reconciler's second pass: accounts bound to a provider customer whose plan expiry
@@ -80,6 +81,10 @@ type ListSubscribersNearProExpiryStripeRow struct {
 // renewal would sit outside the window and never be re-checked — and the renewal whose
 // webhook was lost, which is the only reason this query exists, would stay lost. Each
 // provider's window belongs on that provider's own column.
+// EITHER tier's own column, because both lapse and both are repaired by the same re-read.
+// Predicating on the Pro column alone would leave an Ultra subscriber whose renewal webhook
+// was lost outside the window forever — they hold no Pro entitlement at all, so there is
+// nothing there to fall due.
 func (q *Queries) ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error) {
 	rows, err := q.db.Query(ctx, listSubscribersNearProExpiryStripe, arg.FromTime, arg.ToTime, arg.MaxRows)
 	if err != nil {
@@ -89,7 +94,12 @@ func (q *Queries) ListSubscribersNearProExpiryStripe(ctx context.Context, arg Li
 	items := []ListSubscribersNearProExpiryStripeRow{}
 	for rows.Next() {
 		var i ListSubscribersNearProExpiryStripeRow
-		if err := rows.Scan(&i.ID, &i.StripeCustomerID, &i.ProUntilStripe); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.StripeCustomerID,
+			&i.ProUntilStripe,
+			&i.UltraUntilStripe,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

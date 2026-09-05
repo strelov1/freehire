@@ -68,15 +68,19 @@ func (c Config) decide(tier Tier, f Feature, used int, alreadyCharged bool, now 
 		return d
 	}
 
-	// The fair-use guard belongs to the pro plan, which is the only one with no ceiling of
-	// its own to stop a runaway. A free account is already bounded by its daily allowance,
-	// and reaching this number there would mean the allowance was configured above the
-	// guard — a misconfiguration to fix, not a caller to accuse of automation.
+	// The fair-use guard belongs to whichever tier is UNLIMITED — the ones with no ceiling
+	// of their own to stop a runaway. A tier with a real daily allowance is already bounded
+	// by it, and reaching the guard there would mean the allowance was configured above it:
+	// a misconfiguration to fix, not a caller to accuse of automation.
+	//
+	// Read off the allowance rather than from a tier comparison. When Unlimited is set,
+	// Limit IS the guard — the convention this type already carried for pro — so a third
+	// tier needed no branch here at all.
 	//
 	// It is not subject to the enforcement switch. Shadow mode protects people from
-	// ceilings nobody has verified; the guard sits twenty times above human behaviour, so
-	// what reaches it is automation, and what it protects is the gateway rather than a price.
-	if tier == TierPro && used >= c.ProFairUse(f) {
+	// ceilings nobody has verified; the guard sits far above human behaviour, so what
+	// reaches it is automation, and what it protects is the gateway rather than a price.
+	if allowance.Unlimited && used >= allowance.Limit {
 		d.FairUse = true
 		return d
 	}

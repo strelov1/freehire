@@ -230,17 +230,28 @@ func (e *engine) SyncCaller(ctx context.Context, userID int64) error {
 	return e.sync(ctx, userID)
 }
 
-// sync is the shared body: read the provider whole, write this provider's source column.
+// sync is the shared body: read the provider whole, write this provider's source columns.
+//
+// One read answering for every tier, and one write applying all of it. Splitting either by
+// tier would reintroduce exactly what "derived whole, never adjusted" exists to prevent —
+// two reads that disagree, or an instant between two writes where an upgrading subscriber
+// holds neither tier.
 func (e *engine) sync(ctx context.Context, userID int64) error {
-	until, err := e.p.reach(ctx, userID)
+	ent, err := e.p.reach(ctx, userID)
 	if err != nil {
 		return err
 	}
 
-	if err := e.p.store(ctx, userID, pgtype.Timestamptz{Time: until, Valid: !until.IsZero()}); err != nil {
-		return fmt.Errorf("billing: writing the %s source for user %d: %w", e.p.name(), userID, err)
+	if err := e.p.store(ctx, userID, ent); err != nil {
+		return fmt.Errorf("billing: writing the %s sources for user %d: %w", e.p.name(), userID, err)
 	}
 	return nil
+}
+
+// nullable converts a reach to the pgtype the setters take. A zero time is NULL, which is
+// this provider saying it confers nothing.
+func nullable(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: !t.IsZero()}
 }
 
 // stamp converts a time to the pgtype the queries take.

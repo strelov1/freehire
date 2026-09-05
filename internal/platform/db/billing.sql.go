@@ -137,6 +137,11 @@ type ListSubscribersNearProExpiryRevenueCatParams struct {
 //
 // A non-NULL column is also exactly the footprint HasRevenueCatFootprint looks for, so this
 // pass can never ask the provider about an account it would thereby create.
+//
+// Deliberately NOT widened to ultra_until_revenuecat, unlike its Stripe counterpart. No
+// Ultra product exists in either store, so that column is NULL for every row and the extra
+// predicate could never match anything — it would be a branch nobody can reach, which is
+// worse than an absent one. Widen it in the same change that creates the store product.
 func (q *Queries) ListSubscribersNearProExpiryRevenueCat(ctx context.Context, arg ListSubscribersNearProExpiryRevenueCatParams) ([]int64, error) {
 	rows, err := q.db.Query(ctx, listSubscribersNearProExpiryRevenueCat, arg.FromTime, arg.ToTime, arg.MaxRows)
 	if err != nil {

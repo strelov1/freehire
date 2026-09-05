@@ -129,7 +129,7 @@ func TestDecideProHasNoPlanCeiling(t *testing.T) {
 func TestDecideFairUseGuardStopsAScript(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
 	cfg := enforcing()
-	guard := cfg.ProFairUse(FeatureFit)
+	guard := cfg.Allowance(TierPro, FeatureFit).Limit
 	d := cfg.decide(TierPro, FeatureFit, guard, false, now)
 
 	if d.Allowed {
@@ -143,7 +143,7 @@ func TestDecideFairUseGuardStopsAScript(t *testing.T) {
 func TestFairUseGuardHoldsEvenInShadow(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
 	cfg := DefaultConfig() // enforcement off
-	d := cfg.decide(TierPro, FeatureFit, cfg.ProFairUse(FeatureFit), false, now)
+	d := cfg.decide(TierPro, FeatureFit, cfg.Allowance(TierPro, FeatureFit).Limit, false, now)
 
 	// Shadow mode exists so nobody is refused on an unread number. The guard is not that
 	// kind of number: it sits twenty times above human behaviour, so anything reaching it

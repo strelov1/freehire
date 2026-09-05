@@ -81,6 +81,32 @@ func proUntilFrom(sub subscriber, proPrices []string) time.Time {
 	return bestEntitling(sub, proPrices).CurrentPeriodEnd
 }
 
+// entitlement is how far ONE provider's entitlement reaches, per tier. A zero time means
+// this provider confers that tier on nobody — which is not the same as the account not
+// holding it, since another origin may still confer.
+type entitlement struct {
+	Pro   time.Time
+	Ultra time.Time
+}
+
+// entitlementFrom resolves every tier from ONE re-read of the subscriber.
+//
+// Which tier a subscription confers is decided by which configured price list its price
+// appears in, reusing the same filter rather than a second copy of it. That is also why an
+// unset list confers nothing rather than everything: `entitles` already refuses an empty
+// list, so a deployment that names no Ultra prices simply never resolves anybody to ultra
+// and pro behaves exactly as before.
+//
+// A price could in principle appear in both lists, which would make one subscription confer
+// both tiers. That is a configuration mistake rather than a case to encode, and it fails
+// safe: the account resolves to ultra, which is the better of the two.
+func entitlementFrom(sub subscriber, proPrices, ultraPrices []string) entitlement {
+	return entitlement{
+		Pro:   proUntilFrom(sub, proPrices),
+		Ultra: proUntilFrom(sub, ultraPrices),
+	}
+}
+
 // bestEntitling is the subscription that decides the plan: of the ones that entitle, the one
 // reaching furthest. The zero subscription when none does.
 //

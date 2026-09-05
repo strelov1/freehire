@@ -1891,11 +1891,14 @@ type Querier interface {
 	// cases, which would otherwise be judged as the active `applied` stage by
 	// silence.ThresholdDays.
 	GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error)
-	// The whole of a user's plan. A timestamp in the future means pro; NULL or a past one
-	// means free. Read on the request path of every metered action, which is why it is a
-	// column read and never a call to a billing provider: a provider that is slow must not
-	// be able to slow down a user's next question.
-	GetProUntil(ctx context.Context, id int64) (pgtype.Timestamptz, error)
+	// The whole of a user's plan: how far each tier reaches. A future ultra_until means ultra,
+	// otherwise a future pro_until means pro, otherwise free.
+	//
+	// ONE row, not one query per tier. Read on the request path of every metered action, and
+	// two reads could land either side of a sync — resolving a tier from two different instants
+	// is how somebody momentarily becomes neither. It is a column read and never a call to a
+	// billing provider, so a provider that is slow cannot slow down a user's next question.
+	GetPlanUntils(ctx context.Context, id int64) (GetPlanUntilsRow, error)
 	// The plan and where it came from, in one read.
 	//
 	// The derived column and its three sources together, because the surface needs both: the
@@ -3106,6 +3109,11 @@ type Querier interface {
 	//
 	// A non-NULL column is also exactly the footprint HasRevenueCatFootprint looks for, so this
 	// pass can never ask the provider about an account it would thereby create.
+	//
+	// Deliberately NOT widened to ultra_until_revenuecat, unlike its Stripe counterpart. No
+	// Ultra product exists in either store, so that column is NULL for every row and the extra
+	// predicate could never match anything — it would be a branch nobody can reach, which is
+	// worse than an absent one. Widen it in the same change that creates the store product.
 	ListSubscribersNearProExpiryRevenueCat(ctx context.Context, arg ListSubscribersNearProExpiryRevenueCatParams) ([]int64, error)
 	// The reconciler's second pass: accounts bound to a provider customer whose plan expiry
 	// falls inside a window around now, so a renewal whose webhook was never delivered is
@@ -3121,6 +3129,10 @@ type Querier interface {
 	// renewal would sit outside the window and never be re-checked — and the renewal whose
 	// webhook was lost, which is the only reason this query exists, would stay lost. Each
 	// provider's window belongs on that provider's own column.
+	// EITHER tier's own column, because both lapse and both are repaired by the same re-read.
+	// Predicating on the Pro column alone would leave an Ultra subscriber whose renewal webhook
+	// was lost outside the window forever — they hold no Pro entitlement at all, so there is
+	// nothing there to fall due.
 	ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error)
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
@@ -4586,24 +4598,18 @@ type Querier interface {
 	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
 	// backfill needs no record of which rows it has visited.
 	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
-	// Pro GIVEN rather than sold: support's manual grant today, awarded days once add-invites
-	// lands. No provider sync touches it, which is the whole reason it is separate — before
-	// migration 0135 a hand-set value lived in the column the Stripe sync overwrites, and the
-	// next webhook silently undid it.
+	// Pro GIVEN rather than sold: support's manual grant. No provider sync touches it, which is
+	// the whole reason it is separate — before migration 0135 a hand-set value lived in the
+	// column the Stripe sync overwrites, and the next webhook silently undid it.
 	SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error
-	// How far the APP STORE or GOOGLE PLAY subscription reaches. Written only by the RevenueCat
-	// sync, and only over its own source column, for the same reason the Stripe setter is
-	// confined to its own: neither provider may answer for a plan it did not sell.
-	SetProUntilRevenueCat(ctx context.Context, arg SetProUntilRevenueCatParams) error
-	// How far the WEB subscription reaches. Written only by the Stripe sync, from Stripe's
-	// current view of the customer.
+	// How far the APP STORE or GOOGLE PLAY subscription reaches, for every tier. Written only by
+	// the RevenueCat sync, and only over its own source columns, for the same reason the Stripe
+	// setter is confined to its own: neither provider may answer for a plan it did not sell.
 	//
-	// It writes a source, not the plan. users.pro_until is derived by the schema as the furthest
-	// of three sources and refuses assignment outright (428C9) — see migration 0135 — so
-	// clearing this column says "Stripe confers nothing", never "this account is not Pro". The
-	// account may hold a store subscription or a manual grant, and before 0135 this write would
-	// have revoked either without a trace.
-	SetProUntilStripe(ctx context.Context, arg SetProUntilStripeParams) error
+	// There is no Ultra product in either store today, so this writes NULL to that column on
+	// every pass. Deliberately: a provider that only wrote the columns it had something to say
+	// about could never take back what it once said, which is the cancellation path.
+	SetRevenueCatEntitlement(ctx context.Context, arg SetRevenueCatEntitlementParams) error
 	// Write one job's precomputed similar-jobs list and stamp similar_computed_at
 	// together, so a job is never marked computed without its list landing. A nil/empty
 	// similar_job_ids is a valid, intentional write (a job whose only close matches were
@@ -4643,6 +4649,21 @@ type Querier interface {
 	// reconciler both take this path and both usually write the value already present, and a
 	// write that changes nothing should not wake a trigger or bloat a row.
 	SetStripeCustomerID(ctx context.Context, arg SetStripeCustomerIDParams) error
+	// How far the WEB subscription reaches, FOR EVERY TIER, from Stripe's current view of the
+	// customer.
+	//
+	// Both columns in one statement, and that is a correctness property rather than tidiness.
+	// A provider is re-read whole and its answer applied whole; written as two statements there
+	// is an instant between them where an upgrading subscriber has had Pro cleared and has not
+	// yet been given Ultra — visible to any request that lands in it, on every sync of every
+	// Ultra account.
+	//
+	// It writes SOURCES, not the plan. users.pro_until and users.ultra_until are derived by the
+	// schema as the furthest of their three sources and refuse assignment outright (428C9) — see
+	// migrations 0135 and 0141 — so clearing a column here says "Stripe confers nothing", never
+	// "this account is not Pro". The account may hold a store subscription or a manual grant,
+	// and before 0135 this write would have revoked either without a trace.
+	SetStripeEntitlement(ctx context.Context, arg SetStripeEntitlementParams) error
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
@@ -4651,6 +4672,10 @@ type Querier interface {
 	// (including a round trip through 'off'), so a candidate who already shared it once
 	// never has to reshare a new one.
 	SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error
+	// Ultra GIVEN rather than sold. Separate from the Pro grant rather than folded into it: the
+	// two are different decisions a person makes, and one statement setting both would make
+	// granting Ultra silently revoke a Pro grant that outlives it.
+	SetUltraUntilGranted(ctx context.Context, arg SetUltraUntilGrantedParams) error
 	// Persist the post-transaction counter. The row is guaranteed to exist (EnsureUsageDay
 	// ran first). Yesterday's rows are simply left behind rather than reset: a day that has
 	// rolled over is answered by a different key, so nothing has to expire anything and no

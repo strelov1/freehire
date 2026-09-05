@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 )
@@ -234,16 +232,32 @@ func (p *revenuecatProvider) knows(ctx context.Context, userID int64) (bool, err
 //
 // It does not ask knows() itself. Whether an unknown account may be asked about depends on WHO
 // is asking, and only the caller knows that — see engine.SyncUser and engine.SyncCaller.
-func (p *revenuecatProvider) reach(ctx context.Context, userID int64) (time.Time, error) {
+// It answers ZERO for ultra, because there is no Ultra product in either store. The zero is
+// reported rather than the field left out: this provider owns that column, and a provider
+// that never wrote a column could never clear it either.
+func (p *revenuecatProvider) reach(ctx context.Context, userID int64) (entitlement, error) {
 	body, err := p.subscriberBody(ctx, userID)
 	if err != nil {
-		return time.Time{}, err
+		return entitlement{}, err
 	}
-	return revenuecatReach(body, p.cfg.Entitlement, time.Now().UTC())
+	until, err := revenuecatReach(body, p.cfg.Entitlement, time.Now().UTC())
+	if err != nil {
+		return entitlement{}, err
+	}
+	return entitlement{Pro: until}, nil
 }
 
-func (p *revenuecatProvider) store(ctx context.Context, userID int64, until pgtype.Timestamptz) error {
-	return p.q.SetProUntilRevenueCat(ctx, db.SetProUntilRevenueCatParams{Until: until, ID: userID})
+// store writes both of this provider's source columns — the Ultra one always NULL today.
+//
+// Writing a column for a product that does not exist looks like waste and is not: it is what
+// makes the column revocable on the day one does, and until then it keeps this provider's
+// two columns in the same state as each other rather than one written and one never touched.
+func (p *revenuecatProvider) store(ctx context.Context, userID int64, ent entitlement) error {
+	return p.q.SetRevenueCatEntitlement(ctx, db.SetRevenueCatEntitlementParams{
+		ProUntil:   nullable(ent.Pro),
+		UltraUntil: nullable(ent.Ultra),
+		ID:         userID,
+	})
 }
 
 // dueSoon reaches the accounts whose store entitlement is about to lapse. The candidate set is
