@@ -29,9 +29,22 @@
 - [x] 3.3 Verify the sub-`lg` path is untouched: the quiet strip still renders under the
       title and the sticky bottom bar still carries the apply CTA.
 
-## 4. Verify
+## 4. The posting's dates
 
-- [x] 4.1 `pnpm --dir web test` and `pnpm --dir web lint` green.
-- [x] 4.2 Run the app and check the job page in the browser at desktop width: full tab
+- [x] 4.1 In `web/src/lib/utils.test.ts`, write the failing test for a short style on
+      `timeAgo` and `formatDateOrAgo`; then add the optional `style` argument, passing
+      `style: 'short'` through to a second cached `Intl.RelativeTimeFormat`.
+- [x] 4.2 Rewrite the `postingDates` snippet in `JobView.svelte` as a clock icon and a
+      refresh icon, each with the short relative time, an `sr-only` label carrying the word
+      it replaced, and a `title` carrying the field name and the exact timestamp.
+- [x] 4.3 Drop the duplicate: stop passing `postedAt` to `RealityBadge` in `JobView.svelte`,
+      then remove the now-orphaned `postingContrast` (`web/src/lib/reality.ts`), its tests,
+      and `RealityBadge`'s `postedAt` prop.
+
+## 5. Verify
+
+- [x] 5.1 `pnpm --dir web test` and `pnpm --dir web lint` green.
+- [x] 5.2 Run the app and check the job page in the browser at desktop width: full tab
       labels, green `Auto-apply` with `Pro` beside an outline `Show origin` on a Greenhouse
-      posting, plain green `Apply` on a non-Greenhouse one, and the phone layout unchanged.
+      posting, plain green `Apply` on a non-Greenhouse one, the dates reading as two icons,
+      and the phone layout unchanged. Check the `Pro` marker in both themes.

@@ -87,20 +87,29 @@ const TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['second', 1],
 ];
 
-// Built once: constructing an Intl formatter resolves a locale and loads its
+/** How much of the unit gets spelled out. `short` is for a label something else has
+ *  already named — an icon, a column heading — where "8 min. ago" says everything
+ *  "8 minutes ago" did in half the room. Abbreviating is `Intl`'s job and not ours: a
+ *  hand-written "min" is correct in two languages and wrong in the rest. */
+export type TimeAgoStyle = 'long' | 'short';
+
+// Built once each: constructing an Intl formatter resolves a locale and loads its
 // data, which dwarfs formatting with one — and the feed calls timeAgo per job
 // card. The locale is the runtime default, which cannot change within a process
-// or a browser session, so one instance is safe to share.
-let relativeTime: Intl.RelativeTimeFormat | undefined;
+// or a browser session, so one instance per style is safe to share.
+const relativeTime: Partial<Record<TimeAgoStyle, Intl.RelativeTimeFormat>> = {};
 
 /** Format an RFC3339 timestamp as a relative "N ago" label (e.g. "13 seconds
  *  ago", "2 days ago"); '' for null/invalid. How recently a job was posted is a
  *  key signal, so the list card shows it relative rather than as a bare date. */
-export function timeAgo(ts: string | null | undefined): string {
+export function timeAgo(ts: string | null | undefined, style: TimeAgoStyle = 'long'): string {
   const d = parseTs(ts);
   if (!d) return '';
   const seconds = Math.round((Date.now() - d.getTime()) / 1000);
-  const rtf = (relativeTime ??= new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }));
+  const rtf = (relativeTime[style] ??= new Intl.RelativeTimeFormat(undefined, {
+    numeric: 'auto',
+    style,
+  }));
   for (const [unit, span] of TIME_UNITS) {
     if (Math.abs(seconds) >= span || unit === 'second') {
       return rtf.format(-Math.round(seconds / span), unit);
@@ -117,10 +126,14 @@ const RECENT_MS = 86400 * 1000;
 /** timeAgo while the instant is still within the last day, formatDate once it is
  *  not; '' for null/invalid, like both. A timestamp in the FUTURE takes the date
  *  branch: "in 2 hours" on a posting date is a clock-skew artefact, and reading it
- *  as an age would be worse than reading it as a date. */
-export function formatDateOrAgo(ts: string | null | undefined): string {
+ *  as an age would be worse than reading it as a date.
+ *
+ *  `style` reaches only the relative branch. Past the day boundary there is nothing to
+ *  abbreviate, and a date a reader is comparing against another posting's must not be
+ *  shortened out from under them. */
+export function formatDateOrAgo(ts: string | null | undefined, style: TimeAgoStyle = 'long'): string {
   const d = parseTs(ts);
   if (!d) return '';
   const age = Date.now() - d.getTime();
-  return age >= 0 && age < RECENT_MS ? timeAgo(ts) : formatDate(ts);
+  return age >= 0 && age < RECENT_MS ? timeAgo(ts, style) : formatDate(ts);
 }

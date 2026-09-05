@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { realityBadge, postingContrast } from '$lib/reality';
+  import { realityBadge } from '$lib/reality';
   import type { Reality } from '$lib/generated/contracts';
   import { cn } from '$lib/ui';
 
@@ -9,20 +9,19 @@
   // inline when `detailed`), never a bare accusation. `detailed` renders complementary
   // facts beside the chip on the job detail page — deliberately NOT the age, which the
   // chip already carries, so "Open N days" never reads twice in a row.
+  //
+  // Nor the posting date. It used to add a "posting dated N ago" note here, which on the
+  // detail page landed on the same line as that page's own posting date and printed the
+  // identical phrase twice; the contrast that note existed to draw — a long-open role whose
+  // source rewrites its date every crawl — is already visible in the age chip standing
+  // beside the date.
   let {
     reality,
-    postedAt = null,
     detailed = false,
-  }: { reality?: Reality | null; postedAt?: string | null; detailed?: boolean } = $props();
+  }: { reality?: Reality | null; detailed?: boolean } = $props();
 
   const badge = $derived(realityBadge(reality));
-  // The posting-date contrast (when the source's date reads fresher than the true age)
-  // followed by the remaining evidence; empty when neither applies (chip shows alone).
-  const detail = $derived(
-    badge && reality
-      ? [postingContrast(reality, postedAt), badge.evidence].filter(Boolean).join(' · ')
-      : '',
-  );
+  const detail = $derived(badge?.evidence ?? '');
 
   const toneClass: Record<'warn' | 'muted', string> = {
     warn: 'border-warning/40 bg-warning/10 text-warning-strong',

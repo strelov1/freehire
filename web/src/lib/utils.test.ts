@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatCount, formatDate, formatDateOrAgo } from './utils';
+import { formatCount, formatDate, formatDateOrAgo, timeAgo } from './utils';
 
 // formatCount lives here rather than in activityChart because its callers share nothing
 // with a chart module: two axis labels (activity bars, skill pulse) and the job card's
@@ -83,5 +83,28 @@ describe('formatDateOrAgo', () => {
     expect(formatDateOrAgo(null)).toBe('');
     expect(formatDateOrAgo(undefined)).toBe('');
     expect(formatDateOrAgo('not a date')).toBe('');
+  });
+
+  // The short style is for a label an icon has already named, so the unit may be
+  // abbreviated but the NUMBER and the direction must survive. Asserted by shape rather
+  // than by string: `Intl` owns the abbreviation, and pinning "30 min. ago" here would be
+  // this repo asserting a CLDR spelling it does not control.
+  it('abbreviates the unit in the short style without losing the number', () => {
+    const long = formatDateOrAgo(at(0.5));
+    const short = formatDateOrAgo(at(0.5), 'short');
+    expect(short).toContain('30');
+    expect(short.length).toBeLessThan(long.length);
+    expect(timeAgo(at(3), 'short')).toContain('3');
+  });
+
+  // Past the day boundary the short style has nothing to shorten — it is a date either
+  // way, and a date the reader compares against another posting's must not be abbreviated
+  // out from under them.
+  it('leaves the date branch alone', () => {
+    expect(formatDateOrAgo(at(24), 'short')).toBe(formatDate(at(24)));
+  });
+
+  it('defaults to the long style', () => {
+    expect(formatDateOrAgo(at(3))).toBe(timeAgo(at(3)));
   });
 });

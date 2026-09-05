@@ -2,7 +2,17 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
+  import {
+    ArrowRight,
+    Bookmark,
+    Check,
+    CheckCircle2,
+    Clock,
+    Eye,
+    Flag,
+    MessageSquare,
+    RefreshCw,
+  } from '@lucide/svelte';
   import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { autoApplyButtonState, jobCtaPlan, undemotedExternalCta } from '$lib/autoApplyButton';
@@ -78,12 +88,12 @@
   // Both read as an age for their first day ("20 minutes ago") and as a date after it —
   // the same label the feed's card already gives a posting, so a reader arriving from
   // the list meets the answer in the form they just left.
-  const posted = $derived(formatDateOrAgo(job.posted_at));
+  const posted = $derived(formatDateOrAgo(job.posted_at, 'short'));
   // When the posting's own content last changed. `jobs.updated_at` is deliberately left
   // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
   // means "the words moved", not "the crawler came back" — which is the only reading that
   // earns a line beside the posting date.
-  const updated = $derived(formatDateOrAgo(job.updated_at));
+  const updated = $derived(formatDateOrAgo(job.updated_at, 'short'));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
@@ -436,14 +446,23 @@
      a single non-wrapping row whose company name is already truncating to fit. -->
 {#snippet postingDates(className: string)}
   {#if posted}
-    <div class={`items-center gap-x-2 text-xs text-muted-foreground ${className}`}>
-      <span class="whitespace-nowrap">
-        Posted <time datetime={job.posted_at} title={formatDateTime(job.posted_at)}>{posted}</time>
+    <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
+      <span
+        class="inline-flex items-center gap-1 whitespace-nowrap"
+        title={`Posted ${formatDateTime(job.posted_at)}`}
+      >
+        <Clock class="size-3.5 shrink-0" aria-hidden="true" />
+        <span class="sr-only">Posted</span>
+        <time datetime={job.posted_at}>{posted}</time>
       </span>
       {#if updated && updated !== posted}
-        <span aria-hidden="true">·</span>
-        <span class="whitespace-nowrap">
-          Updated <time datetime={job.updated_at} title={formatDateTime(job.updated_at)}>{updated}</time>
+        <span
+          class="inline-flex items-center gap-1 whitespace-nowrap"
+          title={`Updated ${formatDateTime(job.updated_at)}`}
+        >
+          <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
+          <span class="sr-only">Updated</span>
+          <time datetime={job.updated_at}>{updated}</time>
         </span>
       {/if}
     </div>
@@ -604,7 +623,7 @@
            the title — it is a disclosure with a criteria list inside, not a chip, and it
            supersedes this badge rather than joining it. -->
       {#if !supersedesReality(job.ghost)}
-        <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
+        <RealityBadge reality={job.reality} detailed />
       {/if}
 
       <!-- Freshness rides the same provenance line: like the backer and the reality

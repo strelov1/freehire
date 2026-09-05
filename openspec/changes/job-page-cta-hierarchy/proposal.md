@@ -29,6 +29,13 @@ grey `secondary` button beside a loud green `Apply` that only opens someone else
 Below `lg` nothing moves: the sticky bottom bar already carries Apply there, and the quiet
 strip already rides under the title.
 
+The same header states the posting's date three times — the reality badge's age chip, the
+contrast note beside it, and the dates group — and two of those three are the identical
+phrase. The contrast note goes (the chip and the date sit on one line, so the contrast is
+already there to read), and the dates group trades the words "Posted" and "Updated" for a
+clock and a refresh icon with the short relative time beside each, keeping the words in the
+accessible name and the exact instant in the tooltip.
+
 ## Capabilities
 
 ### New Capabilities
@@ -36,6 +43,8 @@ strip already rides under the title.
 - `job-page-actions`: how the job detail page ranks and places what a reader can do with a
   posting — which control is the primary CTA, where the CTAs sit relative to the title and
   the content tabs, and how the CTA pair changes when auto-apply is available.
+- `job-page-provenance`: how the same header states the facts ABOUT the posting — how
+  compactly its dates read, and the rule that its date is stated once per page.
 
 ### Modified Capabilities
 
@@ -50,4 +59,9 @@ strip already rides under the title.
 - `web/src/lib/autoApplyButton.ts` — gains `JobCtaPlan` and `jobCtaPlan`, the six-state
   table that maps the `kind` it already returns onto what each of the two buttons says and
   how loud it is, plus the `undemotedExternalCta` constant the mobile sticky bar renders.
+- `web/src/lib/utils.ts` — `timeAgo`/`formatDateOrAgo` gain an optional short style, passed
+  through to `Intl.RelativeTimeFormat` so the compact form stays locale-aware.
+- `web/src/lib/reality.ts` — `postingContrast` and its test are removed; `JobView` was its
+  only caller and the phrase it produced is what now reads twice.
+- `web/src/lib/components/RealityBadge.svelte` — loses the `postedAt` prop that fed it.
 - No backend, API, or schema change. No new dependency.
