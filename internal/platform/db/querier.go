@@ -4279,13 +4279,19 @@ type Querier interface {
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
 	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error
-	// Persists the answer-preview snapshot the orchestrator's resolve-preview step computes
-	// right after tailoring (openspec/changes/auto-apply-review-tracking), so the candidate's
-	// review reads an exact, previously-computed snapshot rather than a value approximated or
+	// Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
+	// tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+	// reads an exact, previously-computed snapshot rather than a value approximated or
 	// recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
-	// SetAutoApplyTailoredCV's own guard and for the same reason: a stale or retried step for an
-	// already-decided entry must not overwrite what the candidate already acted on.
-	SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (int64, error)
+	// SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
+	// must not overwrite what the candidate already acted on.
+	//
+	// Returns the job's own title/company/slug rather than affected-row-count alone (pgx.ErrNoRows
+	// means the guard fired, exactly like SetAutoApplyTailoredCV's own zero-rows case): the
+	// caller's "ready for review" notification needs those three columns, and this statement
+	// already has the job_id at hand from its own WHERE — a second round trip for exactly what
+	// this write already touched would be a query with no reason to exist.
+	SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error)
 	// Records which tailored CV a queue entry's tailoring run produced. Guarded by
 	// review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
 	// guard: PostAutoApplyTailor's own review_decision check happens before its (potentially

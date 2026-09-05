@@ -464,10 +464,16 @@ func (q *Queries) RecordAutoApplyFailure(ctx context.Context, arg RecordAutoAppl
 	return i, err
 }
 
-const setAutoApplyResolvedPreview = `-- name: SetAutoApplyResolvedPreview :execrows
-UPDATE auto_apply_queue
-SET resolved_preview = $1
-WHERE id = $2 AND review_decision IS NULL
+const setAutoApplyResolvedPreview = `-- name: SetAutoApplyResolvedPreview :one
+WITH updated AS (
+    UPDATE auto_apply_queue q
+    SET resolved_preview = $1
+    WHERE q.id = $2 AND q.review_decision IS NULL
+    RETURNING q.job_id
+)
+SELECT j.public_slug, j.title, j.company
+FROM jobs j
+JOIN updated u ON u.job_id = j.id
 `
 
 type SetAutoApplyResolvedPreviewParams struct {
@@ -475,18 +481,29 @@ type SetAutoApplyResolvedPreviewParams struct {
 	ID              int64  `json:"id"`
 }
 
-// Persists the answer-preview snapshot the orchestrator's resolve-preview step computes
-// right after tailoring (openspec/changes/auto-apply-review-tracking), so the candidate's
-// review reads an exact, previously-computed snapshot rather than a value approximated or
+type SetAutoApplyResolvedPreviewRow struct {
+	PublicSlug string `json:"public_slug"`
+	Title      string `json:"title"`
+	Company    string `json:"company"`
+}
+
+// Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
+// tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+// reads an exact, previously-computed snapshot rather than a value approximated or
 // recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
-// SetAutoApplyTailoredCV's own guard and for the same reason: a stale or retried step for an
-// already-decided entry must not overwrite what the candidate already acted on.
-func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+// SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
+// must not overwrite what the candidate already acted on.
+//
+// Returns the job's own title/company/slug rather than affected-row-count alone (pgx.ErrNoRows
+// means the guard fired, exactly like SetAutoApplyTailoredCV's own zero-rows case): the
+// caller's "ready for review" notification needs those three columns, and this statement
+// already has the job_id at hand from its own WHERE — a second round trip for exactly what
+// this write already touched would be a query with no reason to exist.
+func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error) {
+	row := q.db.QueryRow(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.ID)
+	var i SetAutoApplyResolvedPreviewRow
+	err := row.Scan(&i.PublicSlug, &i.Title, &i.Company)
+	return i, err
 }
 
 const setAutoApplyTailoredCV = `-- name: SetAutoApplyTailoredCV :execrows

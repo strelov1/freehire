@@ -140,16 +140,28 @@ UPDATE auto_apply_queue
 SET tailored_cv_id = sqlc.arg(tailored_cv_id)
 WHERE id = sqlc.arg(id) AND review_decision IS NULL;
 
--- name: SetAutoApplyResolvedPreview :execrows
--- Persists the answer-preview snapshot the orchestrator's resolve-preview step computes
--- right after tailoring (openspec/changes/auto-apply-review-tracking), so the candidate's
--- review reads an exact, previously-computed snapshot rather than a value approximated or
+-- name: SetAutoApplyResolvedPreview :one
+-- Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
+-- tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+-- reads an exact, previously-computed snapshot rather than a value approximated or
 -- recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
--- SetAutoApplyTailoredCV's own guard and for the same reason: a stale or retried step for an
--- already-decided entry must not overwrite what the candidate already acted on.
-UPDATE auto_apply_queue
-SET resolved_preview = sqlc.arg(resolved_preview)
-WHERE id = sqlc.arg(id) AND review_decision IS NULL;
+-- SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
+-- must not overwrite what the candidate already acted on.
+--
+-- Returns the job's own title/company/slug rather than affected-row-count alone (pgx.ErrNoRows
+-- means the guard fired, exactly like SetAutoApplyTailoredCV's own zero-rows case): the
+-- caller's "ready for review" notification needs those three columns, and this statement
+-- already has the job_id at hand from its own WHERE — a second round trip for exactly what
+-- this write already touched would be a query with no reason to exist.
+WITH updated AS (
+    UPDATE auto_apply_queue q
+    SET resolved_preview = sqlc.arg(resolved_preview)
+    WHERE q.id = sqlc.arg(id) AND q.review_decision IS NULL
+    RETURNING q.job_id
+)
+SELECT j.public_slug, j.title, j.company
+FROM jobs j
+JOIN updated u ON u.job_id = j.id;
 
 -- name: GetApplicationStage :one
 -- The caller's own current stage for a job, or pgx.ErrNoRows when no application row
