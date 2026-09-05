@@ -49,8 +49,29 @@ func (f *fakeRepo) TopPageViewed(_ context.Context, _ time.Time, limit int) ([]P
 	return f.candidates, nil
 }
 
-func (f *fakeRepo) RecentlyDigested(context.Context, time.Time) (map[int64]bool, error) {
-	return f.quarantine, nil
+// RecentlyDigested is derived from the ledger the fake actually maintains, not from a
+// field a test sets. An inert quarantine is what let the digest quarantine ITSELF
+// undetected: once a channel published day D, a second channel building the same day
+// read back its own ten ids. A fake that answers this question from `recorded` cannot
+// hide that again.
+func (f *fakeRepo) RecentlyDigested(_ context.Context, since, before time.Time) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	for id := range f.quarantine {
+		out[id] = true
+	}
+	for k, items := range f.recorded {
+		d, err := time.Parse(dayLayout, strings.SplitN(k, "|", 2)[0])
+		if err != nil {
+			return nil, err
+		}
+		if d.Before(since) || !d.Before(before) {
+			continue
+		}
+		for _, item := range items {
+			out[item.JobID] = true
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeRepo) PublishedForChannel(_ context.Context, d time.Time, channel string) (bool, error) {
@@ -142,6 +163,62 @@ func TestServiceBuild(t *testing.T) {
 		if !got.Empty() {
 			t.Errorf("got %v, want an empty digest", ids(got.Items))
 		}
+	})
+
+	// The digest must not quarantine itself. A second channel building a day a first
+	// one already published has to see the SAME list — that is what makes the ledger
+	// an archive of what went out, and what makes -day replay mean anything.
+	t.Run("a day already published to one channel builds the same list again", func(t *testing.T) {
+		repo := newFakeRepo(posting(1, "alpha", 90), posting(2, "beta", 50), posting(3, "gamma", 40))
+		svc := New(repo, fixedNow("2026-09-04"))
+
+		first, err := svc.Build(ctx, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Dispatch(ctx, first, []Publisher{&fakePublisher{name: "discord"}}); err != nil {
+			t.Fatal(err)
+		}
+
+		second, err := svc.Build(ctx, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertIDs(t, second.Items, ids(first.Items))
+	})
+
+	// ...but a day published EARLIER inside the window still quarantines.
+	t.Run("a posting published on an earlier day is quarantined", func(t *testing.T) {
+		repo := newFakeRepo(posting(1, "alpha", 90), posting(2, "beta", 50))
+		svc := New(repo, fixedNow("2026-09-04"))
+
+		yesterday := Digest{Day: day("2026-09-02"), Items: []Posting{posting(1, "alpha", 90)}}
+		if err := svc.Dispatch(ctx, yesterday, []Publisher{&fakePublisher{name: "discord"}}); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := svc.Build(ctx, time.Time{}) // builds 2026-09-03
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertIDs(t, got.Items, []int64{2})
+	})
+
+	t.Run("a posting published before the window may return", func(t *testing.T) {
+		repo := newFakeRepo(posting(1, "alpha", 90), posting(2, "beta", 50))
+		svc := New(repo, fixedNow("2026-09-04"))
+
+		// 2026-08-26 is eight days before the 2026-09-03 digest day.
+		old := Digest{Day: day("2026-08-26"), Items: []Posting{posting(1, "alpha", 90)}}
+		if err := svc.Dispatch(ctx, old, []Publisher{&fakePublisher{name: "discord"}}); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := svc.Build(ctx, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertIDs(t, got.Items, []int64{1, 2})
 	})
 
 	t.Run("a candidate query failure surfaces", func(t *testing.T) {

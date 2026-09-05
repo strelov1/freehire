@@ -50,7 +50,7 @@ func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, er
 	if err != nil {
 		return Digest{}, fmt.Errorf("candidates for %s: %w", day.Format(dayLayout), err)
 	}
-	quarantined, err := s.repo.RecentlyDigested(ctx, QuarantineSince(day))
+	quarantined, err := s.repo.RecentlyDigested(ctx, QuarantineSince(day), day)
 	if err != nil {
 		return Digest{}, fmt.Errorf("quarantine set: %w", err)
 	}

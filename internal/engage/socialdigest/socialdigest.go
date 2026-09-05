@@ -104,9 +104,11 @@ type Repository interface {
 	// first, up to limit.
 	TopPageViewed(ctx context.Context, day time.Time, limit int) ([]Posting, error)
 
-	// RecentlyDigested returns the job ids published in any channel since the given
-	// day — the quarantine set.
-	RecentlyDigested(ctx context.Context, since time.Time) (map[int64]bool, error)
+	// RecentlyDigested returns the job ids published in any channel in the days
+	// [since, before) — the quarantine set. `before` is the digest's own day and is
+	// exclusive: a digest must not quarantine itself, or a second channel building the
+	// day a first one already published would read back its own list and drop it.
+	RecentlyDigested(ctx context.Context, since, before time.Time) (map[int64]bool, error)
 
 	// PublishedForChannel reports whether this day already went out on this channel.
 	PublishedForChannel(ctx context.Context, day time.Time, channel string) (bool, error)
@@ -147,6 +149,8 @@ func ResolveDay(latest time.Time, hasData bool, now time.Time) (time.Time, error
 }
 
 // QuarantineSince is the earliest day whose published postings still block a repeat.
+// The window it opens runs up to, but does not include, the digest's own day — see
+// Repository.RecentlyDigested.
 func QuarantineSince(day time.Time) time.Time {
 	return truncateDay(day).AddDate(0, 0, -QuarantineDays)
 }

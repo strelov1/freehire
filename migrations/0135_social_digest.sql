@@ -79,14 +79,14 @@ CREATE TABLE public.social_digest_posts (
     PRIMARY KEY (day, channel, job_id)
 );
 
--- The quarantine lookup: "which of these job_ids appeared in a digest since <date>".
--- Leading with job_id because the query filters on a candidate set of ids and then
--- bounds the day; the primary key above leads with day and cannot serve it.
-CREATE INDEX social_digest_posts_job_day_idx
-    ON public.social_digest_posts (job_id, day DESC);
+-- No second index. Both questions above are answered by the primary key's leading
+-- `day`: the publish-once check is an equality on (day, channel), and the quarantine
+-- is `SELECT DISTINCT job_id WHERE day >= $1 AND day < $2` — a range scan that never
+-- leaves the index. A table this small does not deserve an index nothing reads.
 
 COMMENT ON TABLE public.social_digest_posts IS
     'Ledger of published daily social digests. Unique on (day, channel, job_id): the '
-    'publish-once check reads the (day, channel) prefix, the quarantine reads '
-    'job_id + day across all channels. Written only after a channel publishes '
-    'successfully; a dry run never writes here.';
+    'publish-once check reads the (day, channel) prefix, the quarantine scans a day '
+    'RANGE across all channels — [digest day - 7, digest day), the upper bound '
+    'exclusive so that a digest cannot quarantine itself. Written only after a '
+    'channel publishes successfully; a dry run never writes here.';

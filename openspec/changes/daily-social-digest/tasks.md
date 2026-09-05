@@ -29,7 +29,7 @@
 
 ## 5. Discord
 
-- [x] 5.1 Implement the Discord webhook publisher against `safehttp`, rendering the digest as an embed. Tests against `httptest`: the payload shape, a non-2xx response surfacing as an error.
+- [x] 5.1 Implement the Discord webhook publisher, rendering the digest as an embed. Tests against `httptest`: the payload shape, a non-2xx response surfacing as an error. **Uses a plain `http.Client`, not `safehttp`** — the webhook URL is operator configuration pointing at a fixed vendor host, not user input, so there is no SSRF surface to guard; the same reasoning `internal/engage/telegramnotify` writes down.
 - [x] 5.2 Wire configuration: absent webhook URL disables the channel with no error. Test both branches.
 
 ## 6. Worker
@@ -42,4 +42,5 @@
 
 - [x] 7.1 On the production host, check when logrotate runs relative to `rollup-views` at 02:30 UTC, and record the answer in the design's Open Questions.
 - [x] 7.2 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, and `go test -tags=integration ./...` for the touched packages.
+- [x] 7.4 Cover the new SQL with integration tests: the eligibility predicates one at a time (an inverted `NOT is_private` compiles and generates cleanly), the page-vs-API ranking, the ledger's publish-once and `ON CONFLICT`, and the quarantine window's exclusive upper bound. Extend `cmd/rollup-views`'s integration test to assert `page_uniques` separately from `uniques`.
 - [ ] 7.3 Run `cmd/social-digest -dry-run` against production data and read the rendered list. This is the check that the editorial constants are right; do not enable the timer before it has been read for several days.

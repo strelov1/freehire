@@ -62,15 +62,30 @@ func (q *Queries) LatestJobViewDay(ctx context.Context) (pgtype.Date, error) {
 }
 
 const recentlyDigestedJobIDs = `-- name: RecentlyDigestedJobIDs :many
-SELECT DISTINCT job_id FROM social_digest_posts WHERE day >= $1
+SELECT DISTINCT job_id
+FROM social_digest_posts
+WHERE day >= $1 AND day < $2
 `
 
-// The quarantine set: postings that appeared in a digest on or after `since`, in ANY
-// channel. Across channels on purpose — the list is the editorial unit and the channel
-// is only how it is delivered, so a posting shown on Discord yesterday should not lead
-// the LinkedIn post today.
-func (q *Queries) RecentlyDigestedJobIDs(ctx context.Context, since pgtype.Date) ([]int64, error) {
-	rows, err := q.db.Query(ctx, recentlyDigestedJobIDs, since)
+type RecentlyDigestedJobIDsParams struct {
+	Since  pgtype.Date `json:"since"`
+	Before pgtype.Date `json:"before"`
+}
+
+// The quarantine set: postings that appeared in a digest in the days [since, before),
+// in ANY channel. Across channels on purpose — the list is the editorial unit and the
+// channel is only how it is delivered, so a posting shown on Discord yesterday should
+// not lead another channel's post today.
+//
+// `before` is the digest's OWN day and the bound is exclusive, which is the whole
+// reason it exists. Without it the digest quarantines itself: once one channel has
+// published day D, a second channel building the same day reads back its own ten ids
+// and drops every one of them, so it publishes a different list under the same day —
+// or, on a day where barely ten postings clear the floor, publishes nothing and
+// reports it as a quiet day. `-day` replay breaks identically, which would defeat
+// treating this table as the archive of what actually went out.
+func (q *Queries) RecentlyDigestedJobIDs(ctx context.Context, arg RecentlyDigestedJobIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, recentlyDigestedJobIDs, arg.Since, arg.Before)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +122,7 @@ WHERE v.day = $1
   AND j.duplicate_of IS NULL
   AND NOT j.is_private
   AND j.ats_absent_at IS NULL
+  AND j.is_tech IS TRUE
 ORDER BY v.page_uniques DESC, j.id
 LIMIT $2
 `
@@ -137,6 +153,14 @@ type TopPageViewedJobsForDayRow struct {
 // a posting the source's own ATS has stopped listing must never be promoted. The full
 // ghost verdict (internal/job/ghost) is a hedged classification needing evidence this
 // query has no reason to gather; ats_absent_at is the strongest single column of it.
+//
+// is_tech IS TRUE, not "IS NOT FALSE". This is an IT job board publishing under its
+// own name, and the unfiltered list measured on 2026-09-02 led with "Manager
+// Operations", "Strategic Account Executive" and "Social Media Marketing" — the
+// catalogue carries non-tech postings and the most-viewed of them are exactly the ones
+// that rise. NULL means the dictionary could not decide, and "we are not sure this is
+// a tech job" is not a good enough reason to put it in front of people. The same
+// predicate gates enrichment spend (internal/platform/db/queries/enrichment.sql).
 //
 // OVER-FETCHES on purpose. The caller drops rows for the company cap and the
 // quarantine, so a LIMIT of exactly ten would return fewer than ten publishable

@@ -24,7 +24,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/engage/socialdigest"
@@ -45,14 +47,10 @@ func main() {
 func run() int {
 	// Parsed before the pool is opened: a typo in -day should cost nothing and say so
 	// immediately, not after a connection and a query.
-	var requested time.Time
-	if *dayArg != "" {
-		d, err := time.Parse("2006-01-02", *dayArg)
-		if err != nil {
-			log.Printf("social-digest: -day must be YYYY-MM-DD: %v", err)
-			return 1
-		}
-		requested = d
+	requested, err := parseDay(*dayArg)
+	if err != nil {
+		log.Printf("social-digest: %v", err)
+		return 1
 	}
 
 	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -71,6 +69,16 @@ func run() int {
 		return 0
 	}
 
+	// FRONTEND_ORIGIN defaults to localhost so that a developer's checkout runs, and
+	// every link in the published post is rooted at it. This is the one worker in the
+	// fleet whose output strangers read, so an unset origin here means ten dead links
+	// posted in public rather than a quiet local oddity. A dry run is exempt: rendering
+	// localhost links to a log is exactly what a developer's checkout is for.
+	if !*dryRun && !strings.HasPrefix(cfg.FrontendOrigin, "https://") {
+		log.Printf("social-digest: FRONTEND_ORIGIN is %q, which would publish links nobody can open; refusing", cfg.FrontendOrigin)
+		return 1
+	}
+
 	svc := socialdigest.New(socialdigest.NewPostgresRepository(db.New(pool)), time.Now)
 
 	digest, err := svc.Build(ctx, requested)
@@ -79,8 +87,15 @@ func run() int {
 		return 1
 	}
 	if digest.Empty() {
-		log.Printf("social-digest: %s had nothing above the floor of %d page views; publishing nothing",
-			digest.Day.Format("2006-01-02"), socialdigest.MinPageUniques)
+		// Several different things produce an empty list, and naming only one of them
+		// would send an operator hunting the wrong cause. The one that will actually
+		// happen first is the third: page_uniques is zero for every row written before
+		// migration 0135, so the digest is empty until cmd/rollup-views has run once
+		// with the split — the whole window between deploying this and the next night.
+		log.Printf("social-digest: nothing to publish for %s. Either no posting cleared the floor of %d page views, "+
+			"or every candidate was published within the last %d days, or cmd/rollup-views has not yet run with the "+
+			"page/API split and page_uniques is still zero for that day",
+			digest.Day.Format("2006-01-02"), socialdigest.MinPageUniques, socialdigest.QuarantineDays)
 		return 0
 	}
 
@@ -95,6 +110,23 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+// parseDay reads the -day flag. An empty value is the ordinary case and yields the
+// zero time, which the service reads as "discover the freshest day with data".
+//
+// It rejects rather than falls back, because a mistyped day and a day with nothing to
+// publish would otherwise look identical in the log — and the flag exists precisely to
+// replay a day somebody has a reason to care about.
+func parseDay(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	d, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("-day must be YYYY-MM-DD: %w", err)
+	}
+	return d, nil
 }
 
 // configuredPublishers builds one publisher per configured channel. A channel whose

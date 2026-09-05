@@ -93,18 +93,42 @@ func (p *DiscordPublisher) payload(d Digest) discordPayload {
 	}
 	return discordPayload{Embeds: []discordEmbed{{
 		Title:       "Most viewed on freehire — " + d.Day.Format("2 January 2006"),
-		Description: strings.TrimRight(b.String(), "\n"),
+		Description: truncateRunes(strings.TrimRight(b.String(), "\n"), discordDescriptionLimit),
 		Color:       discordEmbedColor,
 	}}}
 }
 
-// placeOf is where the job is, as one short phrase. Remote is worth more to a reader
-// than a city, so it wins when the posting claims both and there is room for one.
+// discordDescriptionLimit is Discord's cap on an embed description. Ten items sit
+// comfortably inside it, but titles in this catalogue are unbounded and
+// escapeDiscordMarkdown can nearly double one made of punctuation. Overflow would be
+// a 400 with nothing written to the ledger — recoverable, but it would cost the day
+// silently until somebody read the log, and a slightly clipped post costs nothing.
+const discordDescriptionLimit = 4096
+
+// truncateRunes cuts s to at most limit runes, marking the cut so a clipped post does
+// not read as a post that simply ended. Counted in runes, not bytes: Discord's limit
+// is a character count, and cutting a byte slice mid-rune would produce a payload it
+// rejects outright — trading a clipped post for no post at all.
+func truncateRunes(s string, limit int) string {
+	if len([]rune(s)) <= limit {
+		return s
+	}
+	const ellipsis = "…"
+	return string([]rune(s)[:limit-len([]rune(ellipsis))]) + ellipsis
+}
+
+// placeOf is where the job is, as ONE short phrase on one line. Remote is worth more
+// to a reader than a city, so it wins when the posting claims both and there is room
+// for one.
+//
+// jobs.location is whatever the source feed called the place, and some of them put a
+// newline in it. Collapsing whitespace here rather than escaping it later: a line
+// break would not be wrong-looking, it would silently restructure the list.
 func placeOf(p Posting) string {
 	if p.Remote {
 		return "Remote"
 	}
-	return strings.TrimSpace(p.Location)
+	return strings.Join(strings.Fields(p.Location), " ")
 }
 
 // escapeDiscordMarkdown neutralises the characters Discord reads as formatting. A

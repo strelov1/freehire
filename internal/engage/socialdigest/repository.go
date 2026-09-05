@@ -3,6 +3,7 @@ package socialdigest
 import (
 	"context"
 	"fmt"
+	"html"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -45,22 +46,37 @@ func (r *PostgresRepository) TopPageViewed(ctx context.Context, day time.Time, l
 	}
 	out := make([]Posting, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, Posting{
-			JobID:       row.ID,
-			Slug:        row.PublicSlug,
-			Title:       row.Title,
-			Company:     row.Company,
-			CompanySlug: row.CompanySlug,
-			Location:    row.Location,
-			Remote:      row.Remote,
-			PageUniques: int(row.PageUniques),
-		})
+		out = append(out, postingFromRow(row))
 	}
 	return out, nil
 }
 
-func (r *PostgresRepository) RecentlyDigested(ctx context.Context, since time.Time) (map[int64]bool, error) {
-	ids, err := r.q.RecentlyDigestedJobIDs(ctx, pgDate(since))
+// postingFromRow turns one stored row into something publishable.
+//
+// The HTML entities are unescaped here, at the one boundary where stored text becomes
+// text we are about to show, rather than in each publisher. Titles arrive from source
+// feeds carrying them — "Senior Specialist- Learning Design &amp; Capacity" is a real
+// row that would have gone out with the "&amp;" in it — and every channel would
+// otherwise have to remember this separately, which is the kind of thing exactly one
+// of them eventually forgets.
+func postingFromRow(row db.TopPageViewedJobsForDayRow) Posting {
+	return Posting{
+		JobID:       row.ID,
+		Slug:        row.PublicSlug,
+		Title:       html.UnescapeString(row.Title),
+		Company:     html.UnescapeString(row.Company),
+		CompanySlug: row.CompanySlug,
+		Location:    html.UnescapeString(row.Location),
+		Remote:      row.Remote,
+		PageUniques: int(row.PageUniques),
+	}
+}
+
+func (r *PostgresRepository) RecentlyDigested(ctx context.Context, since, before time.Time) (map[int64]bool, error) {
+	ids, err := r.q.RecentlyDigestedJobIDs(ctx, db.RecentlyDigestedJobIDsParams{
+		Since:  pgDate(since),
+		Before: pgDate(before),
+	})
 	if err != nil {
 		return nil, err
 	}

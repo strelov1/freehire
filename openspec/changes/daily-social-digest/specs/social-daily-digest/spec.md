@@ -57,6 +57,11 @@ The digest SHALL select at most ten postings for the day, applying these rules:
 
 - **Open only.** A posting that is closed, marked as a duplicate by any of the
   duplicate-marker columns, or carrying a ghost signal SHALL NOT be selected.
+- **Tech only.** A posting SHALL be selected only if it is positively classified
+  as a tech job. A posting the classifier could not decide about SHALL NOT be
+  selected: this catalogue carries non-tech postings, the most-viewed of them are
+  exactly the ones that rise, and "we are not sure this is a tech job" is not a
+  good enough reason to put it in front of people under our own name.
 - **View floor.** A posting with fewer than ten page uniques on the digest day
   SHALL NOT be selected.
 - **Company cap.** At most two postings from any one `company_slug` SHALL be
@@ -72,6 +77,16 @@ decision belongs in a commit.
 
 - **WHEN** the day's highest-viewed posting is closed
 - **THEN** it is not selected, and the next eligible posting takes its place
+
+#### Scenario: A non-tech posting is excluded however popular
+
+- **WHEN** the day's highest-viewed posting is classified as not a tech job
+- **THEN** it is not selected, and the next eligible posting takes its place
+
+#### Scenario: An unclassified posting is excluded
+
+- **WHEN** a posting's tech classification is unresolved
+- **THEN** it is not selected
 
 #### Scenario: A posting below the view floor is excluded
 

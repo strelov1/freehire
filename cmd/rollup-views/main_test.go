@@ -102,14 +102,33 @@ func TestProcessAppliesAndIsIdempotent(t *testing.T) {
 		t.Errorf("globex view_count = %d, want 1", v)
 	}
 
-	// The daily rollup carries the same per-(day, job) uniques.
-	var daily int32
+	// The daily rollup carries the same per-(day, job) uniques, and page_uniques
+	// carries only the page opens. acme had one page visitor and one API visitor, so
+	// the two columns must disagree — a `page_uniques = uniques` write would pass a
+	// test that only read one of them, and would then rank the digest on crawler
+	// traffic in public.
+	var daily, pageDaily int32
 	if err := pool.QueryRow(ctx,
-		"SELECT uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'", j1).Scan(&daily); err != nil {
+		"SELECT uniques, page_uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'",
+		j1).Scan(&daily, &pageDaily); err != nil {
 		t.Fatalf("read job_daily_views: %v", err)
 	}
 	if daily != 2 {
 		t.Errorf("acme daily uniques = %d, want 2", daily)
+	}
+	if pageDaily != 1 {
+		t.Errorf("acme daily page_uniques = %d, want 1 (the API visitor is not a page open)", pageDaily)
+	}
+
+	// globex was opened only through the page, so both columns agree there.
+	var globexUniques, globexPage int32
+	if err := pool.QueryRow(ctx,
+		"SELECT uniques, page_uniques FROM job_daily_views WHERE job_id = $1 AND day = DATE '2026-07-21'",
+		j2).Scan(&globexUniques, &globexPage); err != nil {
+		t.Fatalf("read job_daily_views: %v", err)
+	}
+	if globexUniques != 1 || globexPage != 1 {
+		t.Errorf("globex = %d/%d uniques/page_uniques, want 1/1", globexUniques, globexPage)
 	}
 
 	// Re-running over the same file must NOT double-count (processed-file cursor).
