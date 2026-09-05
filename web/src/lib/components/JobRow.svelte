@@ -493,14 +493,18 @@
        should not compete with Save for attention). `pointer-coarse` keeps it visible on
        touch, which has no hover to reveal anything. -->
   <div class="flex items-center gap-2 border-t border-border px-4 py-2.5">
-    <!-- No `aria-pressed` here, unlike the compact glyph: this button's NAME already
-         changes with the state, so the toggle role would have a screen reader announce
-         "On your board, pressed" — the same fact twice, in two vocabularies. The glyph
-         needs it precisely because its name cannot say which state it is in. -->
+    <!-- No `aria-pressed`, unlike the compact glyph: this button's visible name already
+         changes with the state, so the toggle role would announce the same fact twice in
+         two vocabularies. The glyph needs it precisely because its name cannot.
+         But only half of that visible name is an action. "Save to board" says what
+         activating does; "On your board" is a state, and on its own it leaves a screen
+         reader user with a button whose effect is unstated. So the saved case — and only
+         it — overrides the name with the action, while sighted readers keep the state. -->
     <button
       type="button"
       onclick={toggleSave}
       disabled={saving}
+      aria-label={saved ? 'Remove from your board' : undefined}
       class={[
         'flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
         saved

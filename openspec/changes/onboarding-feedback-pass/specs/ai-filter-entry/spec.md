@@ -13,6 +13,14 @@ The entry point SHALL remain visible to signed-out visitors, with activation pro
 sign-in — hiding it from them would hide the feature from exactly the people who have not
 yet been given a reason to sign in.
 
+It SHALL appear only where the modal edits a LIVE filter store — every surface that
+carried it in the sidebar, and no more. Two modals are therefore without it, both
+correctly: the profile editor, where a facet value is a plain choice rather than a search,
+and the homepage, which composes a query to navigate with instead of narrowing a list in
+front of the visitor. Giving the homepage one would mean inventing a second way for the
+interpretation to be applied; that is a feature, not this change, and it was not in the
+sidebar either.
+
 #### Scenario: A phone reaches the AI filter
 
 - **WHEN** a visitor on a sub-`md` viewport opens the filters modal

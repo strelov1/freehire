@@ -50,12 +50,23 @@ attention is on the field.
 ### Requirement: Reduced motion disables the rotation
 
 Where the user agent reports `prefers-reduced-motion: reduce`, the box SHALL render the
-first entry and SHALL NOT start a rotation timer.
+first entry and SHALL NOT start a rotation timer. The preference SHALL be re-read while
+the page is open, not sampled once.
+
+A visitor who enables the preference mid-visit SHALL keep the entry then displayed rather
+than being returned to the first one. Snapping back is itself a movement, and it would
+arrive at the exact moment somebody asked for less of it; the rule matches the freeze that
+already applies when the rotation is stopped by an interaction.
 
 #### Scenario: Reduced motion holds the first entry
 
 - **WHEN** a visitor with `prefers-reduced-motion: reduce` loads the box
 - **THEN** the placeholder shows the first role and never changes
+
+#### Scenario: Enabling reduced motion mid-visit stops without a jump
+
+- **WHEN** a visitor enables the preference while the box has already advanced
+- **THEN** the rotation stops on the entry then shown, and no further entry appears
 
 ### Requirement: The field's accessible name does not move
 
