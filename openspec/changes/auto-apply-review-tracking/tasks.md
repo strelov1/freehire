@@ -38,26 +38,26 @@ Runs in the SAME worker as the existing submit pass, not the orchestrator — se
 "The preview is computed once..." decision for why `cmd/auto-apply-orchestrate` (no database,
 no browser, by its own existing design) is the wrong place for this.
 
-- [ ] 3.1 New sqlc query `ClaimAutoApplyPreviewBatch`: leases entries with `tailored_cv_id IS
+- [x] 3.1 New sqlc query `ClaimAutoApplyPreviewBatch`: leases entries with `tailored_cv_id IS
       NOT NULL AND resolved_preview IS NULL AND review_decision IS NULL AND blocked_at IS NULL
       AND failed_at IS NULL`, reusing the existing `claimed_at` lease column (safe to share with
       `ClaimAutoApplyBatch`'s own lease — the two predicates are mutually exclusive on
       `review_decision`, so an entry is never claimable by both at once). New sqlc query
       `SetAutoApplyResolvedPreview` (already added in §1) is the write.
-- [ ] 3.2 In `internal/application/autoapply`, add `RunPreviews(ctx, store, answers, sidecar,
+- [x] 3.2 In `internal/application/autoapply`, add `RunPreviews(ctx, store, answers, sidecar,
       opts) (PreviewStats, error)`, mirroring `Run`'s own `outbox.RunPool`-based shape: a new
       `PreviewSidecar` interface (`Preview(ctx, Claimed, answers) (PreviewResult, error)`,
       implemented by `atsapply.PreviewClient`), and `Store` gains `ClaimForPreview`/`SetPreview`
       alongside its existing `Park`/`Fail` (reused as-is for a preview-pass failure/park).
-- [ ] 3.3 RED+GREEN: `RunPreviews` unit tests against a fake store/sidecar — a successful
+- [x] 3.3 RED+GREEN: `RunPreviews` unit tests against a fake store/sidecar — a successful
       preview call results in `SetPreview` called with the sidecar's result; a parked result
       calls `Park` with no unmapped fields (a form-level park, not a field-level one) and does
       not call `SetPreview`; a sidecar error is treated as a transient failure (`Fail`), same as
       `Run`'s own handling.
-- [ ] 3.4 `SetPreview`'s implementation also records the "ready for review" notification
+- [x] 3.4 `SetPreview`'s implementation also records the "ready for review" notification
       (`RecordNotification`, best-effort — see §8), replacing the notification call this task
       removes from `PostAutoApplyTailor` — see §8.1.
-- [ ] 3.5 Wire `autoapply.RunPreviews` into `cmd/auto-apply/main.go`, alongside the existing
+- [x] 3.5 Wire `autoapply.RunPreviews` into `cmd/auto-apply/main.go`, alongside the existing
       `autoapply.Run` call, using the same `atsapply.PreviewClient` (constructed alongside the
       existing `atsapply.Client`) and the same `answers`/`RunOptions`.
 
@@ -106,10 +106,10 @@ no browser, by its own existing design) is the wrong place for this.
 
 ## 8. Notification: relocate from tailor-completion to preview-ready
 
-- [ ] 8.1 Remove the "tailoring ready" `RecordNotification` call from `PostAutoApplyTailor`
+- [x] 8.1 Remove the "tailoring ready" `RecordNotification` call from `PostAutoApplyTailor`
       (`auto_apply_tailor.go`) — it fired too early (before there is a preview to show) and at
       the wrong target (`/tailor/[slug]`, which has no approve/decline affordance).
-- [ ] 8.2 Add the notification call to `SetPreview`'s implementation (§3.4) instead, targeting
+- [x] 8.2 Add the notification call to `SetPreview`'s implementation (§3.4) instead, targeting
       `auto_apply_ready_for_review` with the job's tracker slug.
 - [ ] 8.3 `notificationTarget.ts`: map the new notification type to `{kind: 'tracking', job:
       <id>}` → `/my/tracking?job=<id>` (dropping the old `auto_apply_tailor_ready` → `tailor`

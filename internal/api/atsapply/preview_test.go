@@ -109,7 +109,7 @@ func TestPreviewClient_ALeverAttemptParksWithoutTouchingAFetcherOrFormReader(t *
 	reader := &fakeFormReader{}
 	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"lever": fetcher}, forms: reader}
 
-	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "lever"}, nil, false)
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "lever"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestPreviewClient_PrefersAStoredFormOverALiveFetchForANonGreenhouseProvider
 	}}}
 	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"ashby": fetcher}, forms: reader}
 
-	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"first_name": "Ada"}, false)
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"first_name": "Ada"})
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestPreviewClient_FallsBackToALiveFetchWhenNoFormIsStored(t *testing.T) {
 	reader := &fakeFormReader{found: false}
 	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"ashby": fetcher}, forms: reader}
 
-	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"first_name": "Ada"}, false)
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"first_name": "Ada"})
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}

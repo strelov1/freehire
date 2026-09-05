@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/chromedp/chromedp"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -50,14 +51,19 @@ func NewPreviewClient(transport applyform.Transport, forms StoredFormReader) *Pr
 }
 
 // Preview resolves what an unattended submission of claimed would currently send, without
-// submitting anything. hasApprovedCV mirrors Client.resolve's own parameter: whether claimed
-// carries an approved tailored CV, the one fact that lets the résumé field resolve at all.
-func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (autoapply.PreviewResult, error) {
+// submitting anything. Satisfies autoapply.PreviewSidecar.
+func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, answers map[string]string) (autoapply.PreviewResult, error) {
 	if requiresCaptcha[claimed.Provider] {
 		// Submit will always park this provider before touching a browser or a fetcher;
 		// there is nothing to preview and nothing here should pretend otherwise.
 		return autoapply.PreviewResult{Parked: true, Reason: "requires_captcha"}, nil
 	}
+
+	// Mirrors Client.resolve's own hasApprovedCV derivation: the one fact that lets the
+	// résumé field resolve at all. ClaimAutoApplyPreviewBatch's own WHERE guarantees this
+	// is never the zero value here (tailored_cv_id IS NOT NULL), the same guarantee
+	// ClaimAutoApplyBatch's own comment already documents for Claimed.TailoredCVID.
+	hasApprovedCV := claimed.TailoredCVID != uuid.Nil
 
 	if claimed.Provider == "greenhouse" {
 		return p.previewGreenhouse(ctx, claimed, answers, hasApprovedCV)
