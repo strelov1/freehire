@@ -9,6 +9,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
@@ -150,6 +151,102 @@ func TestDBStore_Submit(t *testing.T) {
 		}
 		if stillQueued != 1 {
 			t.Error("queue entry not marked blocked")
+		}
+	})
+}
+
+// insertTailoredQueueRowForTest inserts a tailored, unreviewed entry — dbStore.
+// ClaimForPreview's own claimable shape (openspec/changes/auto-apply-review-tracking).
+func insertTailoredQueueRowForTest(t *testing.T, pool *pgxpool.Pool, user, job int64) int64 {
+	t.Helper()
+	var cvID uuid.UUID
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`, user).Scan(&cvID); err != nil {
+		t.Fatalf("insert cv: %v", err)
+	}
+	var queueID int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO auto_apply_queue (user_id, job_id, tailored_cv_id) VALUES ($1, $2, $3) RETURNING id`,
+		user, job, cvID).Scan(&queueID); err != nil {
+		t.Fatalf("insert tailored queue row: %v", err)
+	}
+	return queueID
+}
+
+func TestDBStore_ClaimForPreviewAndSetPreview(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := newDBStore(pool)
+	ctx := context.Background()
+
+	t.Run("ClaimForPreview leases a tailored, unreviewed entry", func(t *testing.T) {
+		truncateForAutoApply(t, pool)
+		user := insertUserForTest(t, pool, "preview-claim@example.test")
+		job := insertJobForTest(t, pool, "preview-claim-job")
+		queueID := insertTailoredQueueRowForTest(t, pool, user, job)
+
+		claimed, err := store.ClaimForPreview(ctx, 10, 300)
+		if err != nil {
+			t.Fatalf("ClaimForPreview: %v", err)
+		}
+		if len(claimed) != 1 || claimed[0].QueueID != queueID {
+			t.Fatalf("claimed = %+v, want the one tailored entry", claimed)
+		}
+	})
+
+	t.Run("SetPreview persists the preview and records a notification once", func(t *testing.T) {
+		truncateForAutoApply(t, pool)
+		user := insertUserForTest(t, pool, "preview-set@example.test")
+		job := insertJobForTest(t, pool, "preview-set-job")
+		queueID := insertTailoredQueueRowForTest(t, pool, user, job)
+
+		preview := autoapply.ResolvedPreview{Fields: []autoapply.PreviewField{{Label: "First name", Value: "Ada"}}}
+		if err := store.SetPreview(ctx, queueID, preview); err != nil {
+			t.Fatalf("SetPreview: %v", err)
+		}
+
+		var stored []byte
+		if err := pool.QueryRow(ctx, "SELECT resolved_preview FROM auto_apply_queue WHERE id = $1", queueID).Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		if len(stored) == 0 {
+			t.Error("resolved_preview was not persisted")
+		}
+
+		var notifCount int
+		var notifKind string
+		if err := pool.QueryRow(ctx,
+			"SELECT count(*), max(kind) FROM user_notifications WHERE user_id = $1", user).
+			Scan(&notifCount, &notifKind); err != nil {
+			t.Fatal(err)
+		}
+		if notifCount != 1 {
+			t.Errorf("notifications = %d, want 1", notifCount)
+		}
+		if notifKind != "auto_apply_ready_for_review" {
+			t.Errorf("notification kind = %q, want auto_apply_ready_for_review", notifKind)
+		}
+	})
+
+	t.Run("SetPreview against an already-approved entry writes nothing and does not notify", func(t *testing.T) {
+		truncateForAutoApply(t, pool)
+		user := insertUserForTest(t, pool, "preview-decided@example.test")
+		job := insertJobForTest(t, pool, "preview-decided-job")
+		queueID := insertTailoredQueueRowForTest(t, pool, user, job)
+		if _, err := pool.Exec(ctx, "UPDATE auto_apply_queue SET review_decision = 'approved' WHERE id = $1", queueID); err != nil {
+			t.Fatal(err)
+		}
+
+		preview := autoapply.ResolvedPreview{Fields: []autoapply.PreviewField{{Label: "First name", Value: "Ada"}}}
+		if err := store.SetPreview(ctx, queueID, preview); err != nil {
+			t.Fatalf("SetPreview: %v", err)
+		}
+
+		var notifCount int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM user_notifications WHERE user_id = $1", user).Scan(&notifCount); err != nil {
+			t.Fatal(err)
+		}
+		if notifCount != 0 {
+			t.Errorf("notifications = %d, want 0 — an already-decided entry must not notify", notifCount)
 		}
 	})
 }

@@ -172,19 +172,22 @@ type AssistantSession struct {
 }
 
 type AutoApplyQueue struct {
-	ID             int64              `json:"id"`
-	UserID         int64              `json:"user_id"`
-	JobID          int64              `json:"job_id"`
-	Attempts       int32              `json:"attempts"`
-	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
-	FailedAt       pgtype.Timestamptz `json:"failed_at"`
-	BlockedAt      pgtype.Timestamptz `json:"blocked_at"`
-	LastError      string             `json:"last_error"`
-	Unmapped       []byte             `json:"unmapped"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	TailoredCvID   *uuid.UUID         `json:"tailored_cv_id"`
-	ReviewedAt     pgtype.Timestamptz `json:"reviewed_at"`
-	ReviewDecision pgtype.Text        `json:"review_decision"`
+	ID              int64              `json:"id"`
+	UserID          int64              `json:"user_id"`
+	JobID           int64              `json:"job_id"`
+	Attempts        int32              `json:"attempts"`
+	ClaimedAt       pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt        pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt       pgtype.Timestamptz `json:"blocked_at"`
+	LastError       string             `json:"last_error"`
+	Unmapped        []byte             `json:"unmapped"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
+	ReviewDecision  pgtype.Text        `json:"review_decision"`
+	ResolvedPreview []byte             `json:"resolved_preview"`
+	PreviewAttempts int32              `json:"preview_attempts"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
 }
 
 type BillingEvent struct {

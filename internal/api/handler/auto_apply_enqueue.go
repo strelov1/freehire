@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -115,6 +117,8 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "already applied to this job")
 	}
 
+	h.ensureTrackedForAutoApply(c.Context(), userID, job)
+
 	id, err := h.queries.EnqueueAutoApply(c.Context(), db.EnqueueAutoApplyParams{UserID: userID, JobID: job.ID})
 	switch {
 	case err == nil:
@@ -147,5 +151,31 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		}
 	default:
 		return err
+	}
+}
+
+// ensureTrackedForAutoApply puts job on the caller's tracker board at stage `preparing`
+// when it is not there already (openspec/changes/auto-apply-review-tracking) — otherwise an
+// auto-apply attempt is invisible on the board until it happens to succeed. Never moves a
+// job that already carries a stage: GetApplicationStage's own NULL-or-no-row result is the
+// only trigger, so a candidate further along (say, `interview`) is left untouched.
+//
+// Best-effort: a failure here must never cost the candidate their auto-apply attempt, the
+// same convention every other side-effect write in this handler already follows
+// (h.publishSubmit, notifyTailoredCVReady's own successor in cmd/auto-apply).
+func (h *assistantHandlers) ensureTrackedForAutoApply(ctx context.Context, userID int64, job db.Job) {
+	current, err := h.queries.GetApplicationStage(ctx, db.GetApplicationStageParams{
+		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("auto-apply: reading current stage for user %d job %d: %v", userID, job.ID, err)
+		return
+	}
+	if current.Valid {
+		return
+	}
+	stage := "preparing"
+	if _, err := h.tracking.tracking.Track(ctx, userID, job.PublicSlug, &stage, nil, "auto_apply"); err != nil {
+		log.Printf("auto-apply: tracking job %d for user %d: %v", job.ID, userID, err)
 	}
 }

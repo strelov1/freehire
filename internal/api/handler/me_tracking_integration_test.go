@@ -446,3 +446,84 @@ func TestTrackedBoardPagesOrphanedApplicationsWithoutDuplication(t *testing.T) {
 		t.Errorf("meta.counts.board = %d, want %d", counts.Meta.Counts.Board, orphanCount)
 	}
 }
+
+// TestListMyJobs_AutoApplyStatusBadge covers openspec/changes/auto-apply-review-tracking:
+// the board list's own cheap status field (behind the card's "needs your review" badge),
+// derived from the same raw columns the drawer's own, richer read uses — never a second,
+// drifting derivation.
+func TestListMyJobs_AutoApplyStatusBadge(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	queries := db.New(pool)
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('autoapplybadge@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	var jobID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug)
+		 VALUES ('greenhouse', 'badge-job', 'http://example.test', 'Go Developer', 'badge-job')
+		 RETURNING id`).Scan(&jobID); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+
+	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))
+	stage := "preparing"
+	if _, err := tracking.Track(ctx, userID, "badge-job", &stage, nil, "auto_apply"); err != nil {
+		t.Fatalf("track: %v", err)
+	}
+	var queueID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO auto_apply_queue (user_id, job_id) VALUES ($1, $2) RETURNING id`, userID, jobID).Scan(&queueID); err != nil {
+		t.Fatalf("seed auto_apply_queue row: %v", err)
+	}
+	var cvID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`, userID).Scan(&cvID); err != nil {
+		t.Fatalf("seed cv: %v", err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE auto_apply_queue SET tailored_cv_id = $1, resolved_preview = '{\"fields\":[]}' WHERE id = $2", cvID, queueID); err != nil {
+		t.Fatalf("set tailored/preview: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(userID, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	h := &trackingHandlers{tracking: tracking}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/me/tracking?filter=board", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req, 10_000)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	}
+
+	var out struct {
+		Data []struct {
+			AutoApplyStatus *string `json:"auto_apply_status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out.Data) != 1 {
+		t.Fatalf("data = %+v, want one row", out.Data)
+	}
+	if out.Data[0].AutoApplyStatus == nil || *out.Data[0].AutoApplyStatus != "pending_review" {
+		t.Errorf("auto_apply_status = %v, want pending_review", out.Data[0].AutoApplyStatus)
+	}
+}

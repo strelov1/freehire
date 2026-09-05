@@ -208,34 +208,13 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		log.Printf("auto-apply: re-reading tailored cv %s after run: %v", tailored.ID, err)
 	}
 
-	// Only the run that first attaches a tailored CV to this entry notifies — a retried or
-	// resumed call against an entry that already had one (a stale Inngest retry after a
-	// timeout, or a deliberate re-tailor once more evidence is added) must not re-send a
-	// notification the candidate already got for the same review.
-	if entry.TailoredCvID == nil {
-		h.notifyTailoredCVReady(c.Context(), userID, job)
-	}
+	// No notification here (openspec/changes/auto-apply-review-tracking moved it): a
+	// tailored CV alone has nothing for the candidate to act on yet — cmd/auto-apply's own
+	// preview pass notifies once the answer preview it also needs is actually ready.
 
 	return c.JSON(fiber.Map{"data": autoApplyTailorResponse{
 		TailoredCVID: tailored.ID.String(), AutopilotReport: rec.AutopilotReport,
 	}})
-}
-
-// notifyTailoredCVReady records the in-app notification the candidate sees once a queue
-// entry's tailored CV is ready to review, linking into the same tailoring workspace an
-// interactive session shows (/tailor/[slug]) — best-effort, the same convention every other
-// engine's RecordNotification call already follows (internal/engage/notify, /nudge): a
-// failure here must never fail the run it accompanies.
-func (h *assistantHandlers) notifyTailoredCVReady(ctx context.Context, userID int64, job db.Job) {
-	if _, err := h.queries.RecordNotification(ctx, db.RecordNotificationParams{
-		UserID:     userID,
-		Kind:       "auto_apply_tailor_ready",
-		Title:      "Your tailored CV is ready to review",
-		Body:       fmt.Sprintf("We tailored your CV for %s at %s — take a look before it goes out.", job.Title, job.Company),
-		PublicSlug: pgtype.Text{String: job.PublicSlug, Valid: true},
-	}); err != nil {
-		log.Printf("auto-apply: recording tailored-cv-ready notification for user %d: %v", userID, err)
-	}
 }
 
 // autoApplyReviewRequest is the candidate's decision on one queue entry's tailored CV.

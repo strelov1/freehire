@@ -257,6 +257,19 @@ type Querier interface {
 	// what internal/applyform's own schema fetchers need to reuse their existing per-provider
 	// API calls rather than re-deriving them.
 	ClaimAutoApplyBatch(ctx context.Context, arg ClaimAutoApplyBatchParams) ([]ClaimAutoApplyBatchRow, error)
+	// Claim a batch of tailored entries that have no resolved answer preview yet, for
+	// cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+	// Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
+	// same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
+	// (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
+	// two passes can safely share the one claimed_at lease column rather than needing a second.
+	//
+	// Excludes on preview_failed_at, its OWN dead-letter marker (migration 0140) — not the
+	// submit pass's failed_at, which a still-unreviewed row can never have set anyway
+	// (ClaimAutoApplyBatch only ever claims an approved entry). blocked_at is still shared: a
+	// park during preview resolution (a captcha, an unscannable page) predicts the identical
+	// outcome the real submission would hit, so there is nothing a retry here would fix either.
+	ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error)
 	// Lease a batch of pending nudges, oldest first. FOR UPDATE OF n + SKIP LOCKED
 	// lets overlapping worker passes take disjoint rows so a nudge fires at most
 	// once; the lease predicate reclaims rows whose sender died (stale claimed_at).
@@ -1597,6 +1610,12 @@ type Querier interface {
 	// Authentication accepts only active identities. A pending Apple revocation
 	// must not sign the user back in and silently cancel an unlink request.
 	GetActiveUserByIdentity(ctx context.Context, arg GetActiveUserByIdentityParams) (GetActiveUserByIdentityRow, error)
+	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
+	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
+	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
+	// stage on an existing row and no row at all are both "not on the board" and both call for
+	// the same preparing default: the difference does not matter to the caller.
+	GetApplicationStage(ctx context.Context, arg GetApplicationStageParams) (pgtype.Text, error)
 	// Read one job's captured form for display. The only read path over this store, and it
 	// is by primary key — the display surface asks for exactly one posting's form, never a
 	// page of them, which is also why nothing here joins jobs.
@@ -1623,6 +1642,14 @@ type Querier interface {
 	// form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
 	// these two columns, both call sites would read a permanently stuck submission as
 	// indistinguishable from a healthy one still in flight.
+	//
+	// tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
+	// ride along on the same row read rather than a second query: they are exactly what the
+	// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+	// unmapped question list), and this is already "the caller's own existing auto-apply entry
+	// for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
+	// is: without it, an entry whose preview pass permanently gave up would read forever as
+	// "tailoring" — no preview, no failure, nothing to tell the candidate anything went wrong.
 	GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error)
 	// One read backing both the tailoring-trigger and the review-decision endpoints
 	// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
@@ -3845,6 +3872,15 @@ type Querier interface {
 	// place — its expiry gates the retry to a later run, so a failed entry is never
 	// reprocessed within the same run. Mirrors RecordApplyFormFailure.
 	RecordAutoApplyFailure(ctx context.Context, arg RecordAutoApplyFailureParams) (RecordAutoApplyFailureRow, error)
+	// RecordAutoApplyFailure's own counterpart for the preview pass, on its own columns
+	// (migration 0140). Before this query existed, a transient preview-resolution error (a
+	// flaky schema fetch, a browser launch hiccup) called RecordAutoApplyFailure and spent
+	// down the SAME attempts/failed_at budget the real ATS submission depends on — a run of
+	// bad luck during preview resolution could dead-letter a row that never even reached
+	// submission, reported to the candidate as "could not submit after retrying," which never
+	// happened. Same shape otherwise: bump attempts, record the error, dead-letter once
+	// attempts reach the max, leave the lease in place.
+	RecordAutoApplyPreviewFailure(ctx context.Context, arg RecordAutoApplyPreviewFailureParams) (RecordAutoApplyPreviewFailureRow, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.
@@ -4428,6 +4464,24 @@ type Querier interface {
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
 	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error
+	// Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
+	// tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+	// reads an exact, previously-computed snapshot rather than a value approximated or
+	// recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
+	// SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
+	// must not overwrite what the candidate already acted on.
+	//
+	// Returns the job's own title/company/slug rather than affected-row-count alone (pgx.ErrNoRows
+	// means the guard fired, exactly like SetAutoApplyTailoredCV's own zero-rows case): the
+	// caller's "ready for review" notification needs those three columns, and this statement
+	// already has the job_id at hand from its own WHERE — a second round trip for exactly what
+	// this write already touched would be a query with no reason to exist.
+	//
+	// Also releases the lease (claimed_at = NULL): without this, an approval that lands before
+	// the preview claim's own lease expires would sit unclaimed by ClaimAutoApplyBatch for up
+	// to AUTO_APPLY_LEASE_SECONDS after nothing is actually still working the row — a stale
+	// lease from a claim that already finished successfully, not a live one.
+	SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error)
 	// Records which tailored CV a queue entry's tailoring run produced. Guarded by
 	// review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
 	// guard: PostAutoApplyTailor's own review_decision check happens before its (potentially
@@ -4437,6 +4491,14 @@ type Querier interface {
 	// CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
 	// (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
 	// real. Zero rows here means exactly that race happened; the handler checks it.
+	//
+	// Also clears resolved_preview and resets the preview pass's own attempts/failed_at
+	// (migration 0140): a deliberate re-tailor (this entry already had a tailored_cv_id) means
+	// the candidate's profile or the tailoring evidence changed, so a preview computed against
+	// the PREVIOUS CV is stale and must be recomputed — leaving it would let the candidate
+	// review an answer preview that no longer matches what would actually be submitted. Reset,
+	// not left exhausted: an entry whose preview pass had already dead-lettered deserves a
+	// fresh attempt budget against the fresh CV, not a permanent unclaimable state.
 	SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) (int64, error)
 	// Apply the Go-computed cooldown window to a board (called only when the backoff
 	// policy says to cool down).

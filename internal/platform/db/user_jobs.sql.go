@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -401,10 +402,23 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        -- application: a job merely viewed or saved is not waiting on anyone.
        (CASE WHEN a.applied_at IS NOT NULL
              THEN GREATEST(a.applied_at, mail.newest_mail_at)
-        END)::timestamptz AS last_activity_at
+        END)::timestamptz AS last_activity_at,
+       -- The raw columns behind the card's auto-apply badge. aaq.id is the presence marker:
+       -- a LEFT JOIN with no match leaves every column NULL, which is indistinguishable from
+       -- a real attempt that has not been tailored yet unless the row's own existence is
+       -- read separately. Status is derived from these in Go (autoapply.DeriveStatus),
+       -- mirroring has_pending_suggestion's own reasoning above: one derivation, read by both
+       -- this list and the drawer's own single-application read (GetUserApplication), so the
+       -- badge and the banner can never disagree about what an entry's state means.
+       aaq.id AS auto_apply_id, aaq.tailored_cv_id AS auto_apply_tailored_cv_id,
+       aaq.review_decision AS auto_apply_review_decision,
+       aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at,
+       aaq.preview_failed_at AS auto_apply_preview_failed_at,
+       (aaq.resolved_preview IS NOT NULL)::boolean AS auto_apply_has_preview
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+LEFT JOIN auto_apply_queue aaq ON aaq.user_id = uj.user_id AND aaq.job_id = jobs.id
 LEFT JOIN LATERAL (
     SELECT count(*) FILTER (WHERE e.job_id = jobs.id)                AS email_count,
            max(e.received_at) FILTER (WHERE e.job_id = jobs.id)      AS newest_mail_at,
@@ -442,34 +456,41 @@ type ListUserJobsParams struct {
 }
 
 type ListUserJobsRow struct {
-	ID                   int64              `json:"id"`
-	PublicSlug           string             `json:"public_slug"`
-	Title                string             `json:"title"`
-	Company              string             `json:"company"`
-	CompanySlug          string             `json:"company_slug"`
-	ClosedAt             pgtype.Timestamptz `json:"closed_at"`
-	WorkMode             string             `json:"work_mode"`
-	Seniority            string             `json:"seniority"`
-	EmploymentType       string             `json:"employment_type"`
-	Countries            []string           `json:"countries"`
-	Regions              []string           `json:"regions"`
-	Skills               []string           `json:"skills"`
-	Collections          []string           `json:"collections"`
-	PostedAt             pgtype.Timestamptz `json:"posted_at"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	Blurb                string             `json:"blurb"`
-	LlmCountries         []string           `json:"llm_countries"`
-	LlmRegions           []string           `json:"llm_regions"`
-	ViewedAt             pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt              pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt            pgtype.Timestamptz `json:"applied_at"`
-	Stage                pgtype.Text        `json:"stage"`
-	Notes                pgtype.Text        `json:"notes"`
-	EmailCount           int64              `json:"email_count"`
-	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
-	FollowedUpAt         pgtype.Timestamptz `json:"followed_up_at"`
-	CvOpenedAt           pgtype.Timestamptz `json:"cv_opened_at"`
-	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
+	ID                       int64              `json:"id"`
+	PublicSlug               string             `json:"public_slug"`
+	Title                    string             `json:"title"`
+	Company                  string             `json:"company"`
+	CompanySlug              string             `json:"company_slug"`
+	ClosedAt                 pgtype.Timestamptz `json:"closed_at"`
+	WorkMode                 string             `json:"work_mode"`
+	Seniority                string             `json:"seniority"`
+	EmploymentType           string             `json:"employment_type"`
+	Countries                []string           `json:"countries"`
+	Regions                  []string           `json:"regions"`
+	Skills                   []string           `json:"skills"`
+	Collections              []string           `json:"collections"`
+	PostedAt                 pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	Blurb                    string             `json:"blurb"`
+	LlmCountries             []string           `json:"llm_countries"`
+	LlmRegions               []string           `json:"llm_regions"`
+	ViewedAt                 pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt                  pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt                pgtype.Timestamptz `json:"applied_at"`
+	Stage                    pgtype.Text        `json:"stage"`
+	Notes                    pgtype.Text        `json:"notes"`
+	EmailCount               int64              `json:"email_count"`
+	HasPendingSuggestion     bool               `json:"has_pending_suggestion"`
+	FollowedUpAt             pgtype.Timestamptz `json:"followed_up_at"`
+	CvOpenedAt               pgtype.Timestamptz `json:"cv_opened_at"`
+	LastActivityAt           pgtype.Timestamptz `json:"last_activity_at"`
+	AutoApplyID              pgtype.Int8        `json:"auto_apply_id"`
+	AutoApplyTailoredCvID    *uuid.UUID         `json:"auto_apply_tailored_cv_id"`
+	AutoApplyReviewDecision  pgtype.Text        `json:"auto_apply_review_decision"`
+	AutoApplyBlockedAt       pgtype.Timestamptz `json:"auto_apply_blocked_at"`
+	AutoApplyFailedAt        pgtype.Timestamptz `json:"auto_apply_failed_at"`
+	AutoApplyPreviewFailedAt pgtype.Timestamptz `json:"auto_apply_preview_failed_at"`
+	AutoApplyHasPreview      bool               `json:"auto_apply_has_preview"`
 }
 
 // A user's job interactions joined with a CARD of the job — what a list row draws, and no
@@ -545,6 +566,13 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.FollowedUpAt,
 			&i.CvOpenedAt,
 			&i.LastActivityAt,
+			&i.AutoApplyID,
+			&i.AutoApplyTailoredCvID,
+			&i.AutoApplyReviewDecision,
+			&i.AutoApplyBlockedAt,
+			&i.AutoApplyFailedAt,
+			&i.AutoApplyPreviewFailedAt,
+			&i.AutoApplyHasPreview,
 		); err != nil {
 			return nil, err
 		}
