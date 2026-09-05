@@ -19,7 +19,17 @@
   import InboxSettings from './InboxSettings.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
-  import { Mail, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
+  import {
+    Mail,
+    Search,
+    RefreshCw,
+    ChevronLeft,
+    CheckCheck,
+    Trash2,
+    Inbox,
+    Settings,
+  } from '@lucide/svelte';
+  import { TabStrip, tabStripId } from '$lib/ui';
   import { timeAgo, errorMessage, must } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
@@ -76,8 +86,14 @@
   // The message just soft-deleted, for a one-click Undo (per-email, like unlink).
   let lastDeleted = $state<{ id: number; subject: string } | null>(null);
 
-  // Which pane: the mail list ('inbox') or the account setup ('settings').
+  // Which pane: the mail list ('inbox') or the account setup ('settings'). Both are
+  // local state rather than routes, so the strip's tabs are buttons — see TabStrip.
   let tab = $state<'inbox' | 'settings'>('inbox');
+  const PANEL_ID = 'inbox-panel';
+  const TABS = [
+    { id: 'inbox', label: 'Inbox', icon: Inbox },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ] as const;
 
   // The selected message and its loaded body (reading pane).
   let selectedId = $state<number | null>(null);
@@ -424,333 +440,333 @@
   <p class="text-sm text-destructive">{error}</p>
 {:else}
   <div class="flex flex-col gap-4">
-    <!-- Tabs: keep the mail list and the account setup on separate panes. -->
-    <div class="flex gap-4 border-b border-border text-sm">
-      {#each [{ id: 'inbox', label: 'Inbox' }, { id: 'settings', label: 'Settings' }] as t (t.id)}
-        <button
-          type="button"
-          onclick={() => (tab = t.id as 'inbox' | 'settings')}
-          class="-mb-px border-b-2 px-1 py-2 transition-colors {tab === t.id
-            ? 'border-brand font-medium text-foreground'
-            : 'border-transparent text-muted-foreground hover:text-foreground'}"
-        >
-          {t.label}
-        </button>
-      {/each}
-    </div>
+    <TabStrip
+      tabs={TABS}
+      active={tab}
+      onSelect={(id) => (tab = id)}
+      label="Inbox sections"
+      panelId={PANEL_ID}
+    />
 
-    {#if tab === 'settings'}
-      <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => (error = m)} />
-    {:else if !hasAnySource}
-      <p class="py-8 text-center text-sm text-muted-foreground">
-        No mail source yet —
-        <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
-      </p>
-    {:else}
-      <!-- Toolbar: account switcher + label filter + search on the left; a compact
-           icon cluster (unread filter, mark-all-read, refresh) on the right. -->
-      <div class="flex flex-wrap items-center gap-2">
-        {#if presentSources.length > 1}
-          <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
-            {#each sourceOptions as opt (opt.value)}
-              <button
-                type="button"
-                onclick={() => setSource(opt.value as InboxSource)}
-                class="rounded px-3 py-1 transition-colors {source === opt.value
-                  ? 'bg-secondary font-medium text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'}"
-              >
-                {opt.label}
-              </button>
+    <div
+      id={PANEL_ID}
+      role="tabpanel"
+      aria-labelledby={tabStripId(PANEL_ID, tab)}
+      class="flex flex-col gap-4"
+    >
+      {#if tab === 'settings'}
+        <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => (error = m)} />
+      {:else if !hasAnySource}
+        <p class="py-8 text-center text-sm text-muted-foreground">
+          No mail source yet —
+          <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
+        </p>
+      {:else}
+        <!-- Toolbar: account switcher + label filter + search on the left; a compact
+             icon cluster (unread filter, mark-all-read, refresh) on the right. -->
+        <div class="flex flex-wrap items-center gap-2">
+          {#if presentSources.length > 1}
+            <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
+              {#each sourceOptions as opt (opt.value)}
+                <button
+                  type="button"
+                  onclick={() => setSource(opt.value as InboxSource)}
+                  class="rounded px-3 py-1 transition-colors {source === opt.value
+                    ? 'bg-secondary font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'}"
+                >
+                  {opt.label}
+                </button>
+              {/each}
+            </div>
+          {/if}
+
+          <select
+            bind:value={label}
+            onchange={reloadList}
+            aria-label="Filter by label"
+            class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
+              ? 'font-medium text-foreground'
+              : 'text-muted-foreground'}"
+          >
+            <option value="">All labels</option>
+            {#each LABEL_OPTIONS as [value, text] (value)}
+              <option {value}>{text}</option>
             {/each}
+          </select>
+
+          <div class="relative min-w-[11rem] flex-1">
+            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              placeholder="Search subject, sender, or body…"
+              bind:value={search}
+              oninput={onSearchInput}
+              class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
+            />
+          </div>
+
+          <!-- Compact icon actions, grouped: unread toggle · mark all read · refresh. -->
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              onclick={toggleUnread}
+              aria-pressed={unread}
+              title="Unread only"
+              aria-label="Unread only"
+              class="rounded-lg border p-2 transition-colors {unread
+                ? 'border-brand-ring bg-brand-muted/60 text-foreground'
+                : 'border-border text-muted-foreground hover:text-foreground'}"
+            >
+              <Mail class="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onclick={markAllRead}
+              disabled={markingAll}
+              title="Mark all read"
+              aria-label="Mark all read"
+              class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              <CheckCheck class="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onclick={refreshInbox}
+              disabled={refreshing}
+              title="Refresh"
+              aria-label="Refresh"
+              class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
+            </button>
+          </div>
+        </div>
+
+        {#if lastDeleted}
+          <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            Deleted “{lastDeleted.subject || '(no subject)'}”
+            <span aria-hidden="true">·</span>
+            <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">Undo</button>
           </div>
         {/if}
 
-        <select
-          bind:value={label}
-          onchange={reloadList}
-          aria-label="Filter by label"
-          class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
-            ? 'font-medium text-foreground'
-            : 'text-muted-foreground'}"
-        >
-          <option value="">All labels</option>
-          {#each LABEL_OPTIONS as [value, text] (value)}
-            <option {value}>{text}</option>
-          {/each}
-        </select>
-
-        <div class="relative min-w-[11rem] flex-1">
-          <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="Search subject, sender, or body…"
-            bind:value={search}
-            oninput={onSearchInput}
-            class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
-          />
-        </div>
-
-        <!-- Compact icon actions, grouped: unread toggle · mark all read · refresh. -->
-        <div class="flex items-center gap-1">
-          <button
-            type="button"
-            onclick={toggleUnread}
-            aria-pressed={unread}
-            title="Unread only"
-            aria-label="Unread only"
-            class="rounded-lg border p-2 transition-colors {unread
-              ? 'border-brand-ring bg-brand-muted/60 text-foreground'
-              : 'border-border text-muted-foreground hover:text-foreground'}"
-          >
-            <Mail class="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onclick={markAllRead}
-            disabled={markingAll}
-            title="Mark all read"
-            aria-label="Mark all read"
-            class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            <CheckCheck class="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onclick={refreshInbox}
-            disabled={refreshing}
-            title="Refresh"
-            aria-label="Refresh"
-            class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
-          </button>
-        </div>
-      </div>
-
-      {#if lastDeleted}
-        <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          Deleted “{lastDeleted.subject || '(no subject)'}”
-          <span aria-hidden="true">·</span>
-          <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">Undo</button>
-        </div>
-      {/if}
-
-      <!-- The number the default cost them, where they are already looking. It appears only
-           when something was hidden, so a clean mailbox says nothing at all. -->
-      {#if hidden > 0 && !includeOther}
-        <p class="pb-3 text-sm text-muted-foreground">
-          {hidden} message{hidden === 1 ? '' : 's'} not about an application {hidden === 1 ? 'is' : 'are'} hidden.
-          <button
-            type="button"
-            class="font-medium text-brand-strong underline-offset-2 hover:underline"
-            onclick={() => {
-              includeOther = true;
-              void fetchFirstPage('Could not load the hidden mail.');
-            }}
-          >
-            Show
-          </button>
-        </p>
-      {:else if includeOther}
-        <p class="pb-3 text-sm text-muted-foreground">
-          Showing mail that is not about an application.
-          <button
-            type="button"
-            class="font-medium text-brand-strong underline-offset-2 hover:underline"
-            onclick={() => {
-              includeOther = false;
-              void fetchFirstPage('Could not reload the inbox.');
-            }}
-          >
-            Hide
-          </button>
-        </p>
-      {/if}
-
-      {#if pager.items.length === 0}
-        <p class="py-12 text-center text-sm text-muted-foreground">
-          {filterActive ? 'No mail matches your filters.' : 'No mail yet — it appears here as it arrives.'}
-        </p>
-      {:else}
-        <!-- Fixed-height two-pane so the page itself never scrolls: each pane scrolls
-             internally, and the list infinite-loads in place. On md+ side by side; below
-             md a master-detail (open a message → the reading pane replaces the list). -->
-        <div class="grid h-[calc(100dvh-12rem)] min-h-[26rem] gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
-          <div
-            class="min-h-0 flex-col gap-1 overflow-y-auto pr-1 {selectedId === null ? 'flex' : 'hidden md:flex'}"
-          >
-            <ul class="flex flex-col gap-1">
-              {#each pager.items as m, i (m.id)}
-                <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
-                  <button
-                    type="button"
-                    onclick={() => openMessage(m.id)}
-                    aria-current={selectedId === m.id}
-                    class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {selectedId === m.id
-                      ? 'border-brand-ring bg-brand-muted/60'
-                      : 'border-transparent hover:border-border hover:bg-accent'}"
-                  >
-                    <div
-                      class="mt-0.5 flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
-                      style="background-color: {avatarColor(m.from_addr || m.from_name)}"
-                    >
-                      {avatarInitials(m.from_name, m.from_addr)}
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-baseline gap-2">
-                        {#if !m.read}
-                          <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
-                        {/if}
-                        <span class="min-w-0 flex-1 truncate text-sm {m.read ? 'font-medium text-foreground/90' : 'font-semibold text-foreground'}">
-                          {m.from_name || m.from_addr}
-                        </span>
-                        <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(m.received_at)}</span>
-                      </div>
-                      <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
-                        {m.subject || '(no subject)'}
-                      </div>
-                      {#if m.snippet}
-                        <div class="mt-0.5 truncate text-xs text-muted-foreground/80">{m.snippet}</div>
-                      {/if}
-                      {#if statusLabel(m.status_signal) || m.linked_slug}
-                        <div class="mt-1 flex items-center gap-1">
-                          <StatusChip signal={m.status_signal} class="text-[10px] leading-4" />
-                          {#if m.linked_slug}
-                            <span class="truncate text-[10px] text-muted-foreground/70">· {m.linked_company}</span>
-                          {:else if m.suggested_slug}
-                            <span class="text-[10px] text-brand-strong">· suggested</span>
-                          {/if}
-                        </div>
-                      {/if}
-                    </div>
-                  </button>
-                </li>
-              {/each}
-            </ul>
-
-            {#if pager.hasMore}
-              <!-- Scroll-to-bottom auto-load (inside the list's own scroll pane). -->
-              <InfiniteScroll
-                onLoad={loadMore}
-                enabled={!pager.loadingMore && !pager.loadMoreError && !reloading}
-              />
-            {/if}
-            {#if pager.loadingMore}
-              <p class="py-3 text-center text-xs text-muted-foreground">Loading…</p>
-            {/if}
-          </div>
-
-          <!-- Reading pane — borderless, flush, fills the pane height and scrolls
-               internally. On mobile it replaces the list once a message is open. -->
-          <div class="flex min-h-0 flex-col {selectedId === null ? 'hidden md:flex' : 'flex'}">
+        <!-- The number the default cost them, where they are already looking. It appears only
+             when something was hidden, so a clean mailbox says nothing at all. -->
+        {#if hidden > 0 && !includeOther}
+          <p class="pb-3 text-sm text-muted-foreground">
+            {hidden} message{hidden === 1 ? '' : 's'} not about an application {hidden === 1 ? 'is' : 'are'} hidden.
             <button
               type="button"
-              onclick={backToList}
-              class="mb-3 -ml-1 flex shrink-0 items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+              class="font-medium text-brand-strong underline-offset-2 hover:underline"
+              onclick={() => {
+                includeOther = true;
+                void fetchFirstPage('Could not load the hidden mail.');
+              }}
             >
-              <ChevronLeft class="h-4 w-4" /> Inbox
+              Show
             </button>
-            {#if bodyLoading}
-              <p class="py-16 text-center text-sm text-muted-foreground">Loading…</p>
-            {:else if !selected}
-              <div class="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
-                <Mail class="h-7 w-7 text-muted-foreground/50" />
-                <p class="text-sm text-muted-foreground">Select a message to read it.</p>
-              </div>
-            {:else}
-              {@const s = selected}
-              <div class="flex shrink-0 items-start gap-3">
-                <div
-                  class="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-semibold text-white"
-                  style="background-color: {avatarColor(s.from_addr || s.from_name)}"
-                >
-                  {avatarInitials(s.from_name, s.from_addr)}
-                </div>
-                <div class="min-w-0 flex-1">
-                  <h2 class="text-base font-semibold leading-snug tracking-tight">{s.subject || '(no subject)'}</h2>
-                  <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                    <span class="font-medium text-foreground/80">{s.from_name || s.from_addr}</span>
-                    {#if s.from_name}
-                      <span aria-hidden="true">·</span>
-                      <span class="truncate">{s.from_addr}</span>
-                    {/if}
-                    <span class="ml-auto shrink-0">{timeAgo(s.received_at)}</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onclick={deleteSelected}
-                  title="Delete"
-                  aria-label="Delete message"
-                  class="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
-              </div>
+          </p>
+        {:else if includeOther}
+          <p class="pb-3 text-sm text-muted-foreground">
+            Showing mail that is not about an application.
+            <button
+              type="button"
+              class="font-medium text-brand-strong underline-offset-2 hover:underline"
+              onclick={() => {
+                includeOther = false;
+                void fetchFirstPage('Could not reload the inbox.');
+              }}
+            >
+              Hide
+            </button>
+          </p>
+        {/if}
 
-              {@const linkState = inboxLinkState(s, lastUnlinked)}
-              <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                <StatusChip signal={s.status_signal} />
-                {#if linkState === 'linked' && s.linked_slug}
-                  <a
-                    href={resolve('/my/tracking/[id]', { id: s.linked_slug })}
-                    class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
-                  >
-                    Linked to {s.linked_company || 'application'} ↗
-                  </a>
-                  <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">Unlink</button>
-                {:else if linkState === 'suggested'}
-                  <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
-                    Looks like <span class="font-medium">{s.suggested_company || 'an application'}</span>
-                    <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">Link</button>
-                    <span aria-hidden="true">·</span>
-                    <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">Not this</button>
-                  </span>
-                {:else}
-                  {#if linkState === 'undo'}
-                    <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                      Unlinked
-                      <span aria-hidden="true">·</span>
-                      <button type="button" onclick={undoUnlink} class="font-medium text-brand-strong hover:underline">Undo</button>
-                    </span>
-                  {/if}
-                  <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />
-                {/if}
-              </div>
+        {#if pager.items.length === 0}
+          <p class="py-12 text-center text-sm text-muted-foreground">
+            {filterActive ? 'No mail matches your filters.' : 'No mail yet — it appears here as it arrives.'}
+          </p>
+        {:else}
+          <!-- Fixed-height two-pane so the page itself never scrolls: each pane scrolls
+               internally, and the list infinite-loads in place. On md+ side by side; below
+               md a master-detail (open a message → the reading pane replaces the list). -->
+          <div class="grid h-[calc(100dvh-12rem)] min-h-[26rem] gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
+            <div
+              class="min-h-0 flex-col gap-1 overflow-y-auto pr-1 {selectedId === null ? 'flex' : 'hidden md:flex'}"
+            >
+              <ul class="flex flex-col gap-1">
+                {#each pager.items as m, i (m.id)}
+                  <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
+                    <button
+                      type="button"
+                      onclick={() => openMessage(m.id)}
+                      aria-current={selectedId === m.id}
+                      class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {selectedId === m.id
+                        ? 'border-brand-ring bg-brand-muted/60'
+                        : 'border-transparent hover:border-border hover:bg-accent'}"
+                    >
+                      <div
+                        class="mt-0.5 flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
+                        style="background-color: {avatarColor(m.from_addr || m.from_name)}"
+                      >
+                        {avatarInitials(m.from_name, m.from_addr)}
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-baseline gap-2">
+                          {#if !m.read}
+                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
+                          {/if}
+                          <span class="min-w-0 flex-1 truncate text-sm {m.read ? 'font-medium text-foreground/90' : 'font-semibold text-foreground'}">
+                            {m.from_name || m.from_addr}
+                          </span>
+                          <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(m.received_at)}</span>
+                        </div>
+                        <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
+                          {m.subject || '(no subject)'}
+                        </div>
+                        {#if m.snippet}
+                          <div class="mt-0.5 truncate text-xs text-muted-foreground/80">{m.snippet}</div>
+                        {/if}
+                        {#if statusLabel(m.status_signal) || m.linked_slug}
+                          <div class="mt-1 flex items-center gap-1">
+                            <StatusChip signal={m.status_signal} class="text-[10px] leading-4" />
+                            {#if m.linked_slug}
+                              <span class="truncate text-[10px] text-muted-foreground/70">· {m.linked_company}</span>
+                            {:else if m.suggested_slug}
+                              <span class="text-[10px] text-brand-strong">· suggested</span>
+                            {/if}
+                          </div>
+                        {/if}
+                      </div>
+                    </button>
+                  </li>
+                {/each}
+              </ul>
 
-              {#if s.source === 'gmail'}
-                <div class="mt-2 flex shrink-0 justify-end">
-                  <!-- eslint-disable svelte/no-navigation-without-resolve -- external Gmail deep-link, not an internal route -->
-                  <a
-                    href={gmailUrl(s.external_id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-xs font-medium text-brand-strong hover:underline"
-                  ><!-- eslint-enable svelte/no-navigation-without-resolve -->
-                    Open in Gmail ↗
-                  </a>
-                </div>
+              {#if pager.hasMore}
+                <!-- Scroll-to-bottom auto-load (inside the list's own scroll pane). -->
+                <InfiniteScroll
+                  onLoad={loadMore}
+                  enabled={!pager.loadingMore && !pager.loadMoreError && !reloading}
+                />
               {/if}
+              {#if pager.loadingMore}
+                <p class="py-3 text-center text-xs text-muted-foreground">Loading…</p>
+              {/if}
+            </div>
 
-              <hr class="my-4 shrink-0 border-border" />
-
-              {#if s.body_html}
-                <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
-                <iframe
-                  title="Message body"
-                  sandbox=""
-                  srcdoc={s.body_html}
-                  class="min-h-0 w-full flex-1 rounded-md border border-border bg-white"
-                ></iframe>
+            <!-- Reading pane — borderless, flush, fills the pane height and scrolls
+                 internally. On mobile it replaces the list once a message is open. -->
+            <div class="flex min-h-0 flex-col {selectedId === null ? 'hidden md:flex' : 'flex'}">
+              <button
+                type="button"
+                onclick={backToList}
+                class="mb-3 -ml-1 flex shrink-0 items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+              >
+                <ChevronLeft class="h-4 w-4" /> Inbox
+              </button>
+              {#if bodyLoading}
+                <p class="py-16 text-center text-sm text-muted-foreground">Loading…</p>
+              {:else if !selected}
+                <div class="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
+                  <Mail class="h-7 w-7 text-muted-foreground/50" />
+                  <p class="text-sm text-muted-foreground">Select a message to read it.</p>
+                </div>
               {:else}
-                <pre class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
+                {@const s = selected}
+                <div class="flex shrink-0 items-start gap-3">
+                  <div
+                    class="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style="background-color: {avatarColor(s.from_addr || s.from_name)}"
+                  >
+                    {avatarInitials(s.from_name, s.from_addr)}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <h2 class="text-base font-semibold leading-snug tracking-tight">{s.subject || '(no subject)'}</h2>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span class="font-medium text-foreground/80">{s.from_name || s.from_addr}</span>
+                      {#if s.from_name}
+                        <span aria-hidden="true">·</span>
+                        <span class="truncate">{s.from_addr}</span>
+                      {/if}
+                      <span class="ml-auto shrink-0">{timeAgo(s.received_at)}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onclick={deleteSelected}
+                    title="Delete"
+                    aria-label="Delete message"
+                    class="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                </div>
+
+                {@const linkState = inboxLinkState(s, lastUnlinked)}
+                <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
+                  <StatusChip signal={s.status_signal} />
+                  {#if linkState === 'linked' && s.linked_slug}
+                    <a
+                      href={resolve('/my/tracking/[id]', { id: s.linked_slug })}
+                      class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
+                    >
+                      Linked to {s.linked_company || 'application'} ↗
+                    </a>
+                    <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">Unlink</button>
+                  {:else if linkState === 'suggested'}
+                    <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
+                      Looks like <span class="font-medium">{s.suggested_company || 'an application'}</span>
+                      <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">Link</button>
+                      <span aria-hidden="true">·</span>
+                      <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">Not this</button>
+                    </span>
+                  {:else}
+                    {#if linkState === 'undo'}
+                      <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                        Unlinked
+                        <span aria-hidden="true">·</span>
+                        <button type="button" onclick={undoUnlink} class="font-medium text-brand-strong hover:underline">Undo</button>
+                      </span>
+                    {/if}
+                    <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />
+                  {/if}
+                </div>
+
+                {#if s.source === 'gmail'}
+                  <div class="mt-2 flex shrink-0 justify-end">
+                    <!-- eslint-disable svelte/no-navigation-without-resolve -- external Gmail deep-link, not an internal route -->
+                    <a
+                      href={gmailUrl(s.external_id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-xs font-medium text-brand-strong hover:underline"
+                    ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+                      Open in Gmail ↗
+                    </a>
+                  </div>
+                {/if}
+
+                <hr class="my-4 shrink-0 border-border" />
+
+                {#if s.body_html}
+                  <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
+                  <iframe
+                    title="Message body"
+                    sandbox=""
+                    srcdoc={s.body_html}
+                    class="min-h-0 w-full flex-1 rounded-md border border-border bg-white"
+                  ></iframe>
+                {:else}
+                  <pre class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
+                {/if}
               {/if}
-            {/if}
+            </div>
           </div>
-        </div>
+        {/if}
       {/if}
-    {/if}
+    </div>
   </div>
 {/if}
 

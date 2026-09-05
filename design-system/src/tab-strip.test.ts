@@ -1,5 +1,6 @@
 import { render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { House } from '@lucide/svelte';
 import TabStrip, { tabStripId } from './tab-strip.svelte';
 import { must } from './test-utils';
 
@@ -89,6 +90,58 @@ describe('TabStrip', () => {
     });
 
     expect(getByRole('tablist').getAttribute('aria-label')).toBe('Profile sections');
+  });
+
+  // A strip whose tabs ARE routes has to be middle-clickable and openable in a new tab;
+  // a button plus a programmatic navigation looks identical and is neither.
+  it('renders a tab carrying an href as an anchor', () => {
+    const { getAllByRole } = render(TabStrip, {
+      tabs: [
+        { id: 'one', label: 'One', href: '/one' },
+        { id: 'two', label: 'Two', href: '/two' },
+      ],
+      active: 'one',
+      label: 'Demo sections',
+      panelId: 'demo-panel',
+    });
+
+    const tabs = getAllByRole('tab');
+    expect(must(tabs[0]).tagName).toBe('A');
+    expect(must(tabs[1]).getAttribute('href')).toBe('/two');
+  });
+
+  // Automatic activation is right for panes already rendered client-side and wrong for
+  // links: it would fire a navigation per keypress while the reader is still scanning.
+  it('moves focus without navigating when the tabs are links', async () => {
+    const onSelect = vi.fn();
+    const { getAllByRole } = render(TabStrip, {
+      tabs: [
+        { id: 'one', label: 'One', href: '/one' },
+        { id: 'two', label: 'Two', href: '/two' },
+      ],
+      active: 'one',
+      onSelect,
+      label: 'Demo sections',
+      panelId: 'demo-panel',
+    });
+
+    const tabs = getAllByRole('tab');
+    await fireArrow(must(tabs[0]), 'ArrowRight');
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(tabs[1]);
+  });
+
+  it('renders a tab icon when one is given', () => {
+    const { container } = render(TabStrip, {
+      tabs: [{ id: 'one', label: 'One', icon: House }],
+      active: 'one',
+      onSelect: vi.fn(),
+      label: 'Demo sections',
+      panelId: 'demo-panel',
+    });
+
+    expect(container.querySelectorAll('svg').length).toBe(1);
   });
 
   // The regression: the ResizeObserver effect only tracked `strip`, so a tab added

@@ -77,7 +77,7 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
-<h1 class="mb-1 text-lg font-semibold tracking-tight">{s.title}</h1>
+<h1 class="mb-1 text-2xl font-semibold tracking-tight">{s.title}</h1>
 <p class="mb-6 text-sm text-muted-foreground">{s.subtitle}</p>
 
 <section class="mb-8 rounded-lg border border-border p-4">

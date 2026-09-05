@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { notificationCenter } from '$lib/notificationCenter.svelte';
   import { Paginator } from '$lib/paginated.svelte';
@@ -55,18 +54,10 @@
 </svelte:head>
 
 <div class="max-w-2xl">
-  <div class="mb-4 flex items-center justify-between">
-    <div>
-      <h1 class="text-lg font-semibold">Notification history</h1>
-      <p class="text-sm text-muted-foreground">
-        Every new-job match, reminder, and application nudge you've been sent — see
-        <a href={resolve('/my/notifications/settings')} class="underline underline-offset-2 hover:text-foreground">
-          Settings
-        </a>
-        to change what you get.
-      </p>
-    </div>
-    {#if hasUnread}
+  <!-- The section heading lives in the layout, above the tab strip; this pane keeps only
+       its own action, and nothing at all when there is none. -->
+  {#if hasUnread}
+    <div class="mb-4 flex items-center justify-end">
       <button
         type="button"
         onclick={markAllRead}
@@ -74,8 +65,8 @@
       >
         Mark all read
       </button>
-    {/if}
-  </div>
+    </div>
+  {/if}
 
   {#if pager.status === 'loading'}
     <States state="loading" rows={6} />

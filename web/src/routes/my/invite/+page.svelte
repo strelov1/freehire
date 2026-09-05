@@ -39,7 +39,7 @@
   <header class="flex flex-col gap-2">
     <h1 class="text-2xl font-semibold tracking-tight">Invite a friend</h1>
     {#if summary}
-      <p class="text-muted-foreground">
+      <p class="text-sm text-muted-foreground">
         They get {summary.percent_off}% off their first month. You get {summary.percent_off}%
         off your next one, once they have actually paid.
       </p>

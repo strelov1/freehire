@@ -55,7 +55,7 @@
 <div class="space-y-6">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
     <div>
-      <h1 class="text-2xl font-semibold">Tailored CVs</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">Tailored CVs</h1>
       <p class="text-sm text-muted-foreground">
         CVs you tailored for specific roles. Open one to resume its tailoring session, or start a
         new one by opening the tailoring workspace from any vacancy.
