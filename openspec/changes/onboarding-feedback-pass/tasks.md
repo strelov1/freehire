@@ -1,19 +1,19 @@
 ## 1. Rotating role placeholder
 
-- [ ] 1.1 Add `web/src/lib/placeholderRoles.ts`: a `Category[]` list (`backend`,
+- [x] 1.1 Add `web/src/lib/placeholderRoles.ts`: a `Category[]` list (`backend`,
       `frontend`, `devops`, `qa`, `data_science`, `product`) and `rolePlaceholders()`
       composing `Search jobs — e.g. <label>` through `categoryLabel()`.
-- [ ] 1.2 Unit tests (`placeholderRoles.test.ts`): list non-empty and unique, every key
+- [x] 1.2 Unit tests (`placeholderRoles.test.ts`): list non-empty and unique, every key
       resolves to a non-empty label, every composed string carries its label.
-- [ ] 1.3 Split `HeaderSearch.svelte`'s `placeholder` prop into `placeholder` (may move)
+- [x] 1.3 Split `HeaderSearch.svelte`'s `placeholder` prop into `placeholder` (may move)
       and required `label` (static `aria-label`); update both call sites (`TopBar.svelte`,
       `HomeLandingView.svelte`) so the accessible name stops tracking the example.
-- [ ] 1.4 Add the `rotating?: string[]` prop and the timer: advance every 2.5s, stop
+- [x] 1.4 Add the `rotating?: string[]` prop and the timer: advance every 2.5s, stop
       permanently on first focus or input, hold at index 0 under `prefers-reduced-motion`,
       fade via a `::placeholder` colour transition.
-- [ ] 1.5 Pass `rolePlaceholders()` from the jobs call sites only; `/companies` keeps its
+- [x] 1.5 Pass `rolePlaceholders()` from the jobs call sites only; `/companies` keeps its
       static placeholder.
-- [ ] 1.6 simplify → tests green → `requesting-code-review` + `/code-review` → fix
+- [x] 1.6 simplify → tests green → `requesting-code-review` + `/code-review` → fix
       Critical/Important.
 
 ## 2. AI filter moves into the filter modal

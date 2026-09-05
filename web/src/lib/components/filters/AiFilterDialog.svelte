@@ -16,7 +16,11 @@
   // canonicalised against the real dictionaries. Nothing is applied until the preview
   // is accepted, and the preview names whatever the server could not place — a drop the
   // user is not told about is indistinguishable from a value that WAS applied.
-  let { store, onclose }: { store: FilterStore; onclose: () => void } = $props();
+  let {
+    store,
+    onclose,
+    onApplied,
+  }: { store: FilterStore; onclose: () => void; onApplied?: () => void } = $props();
 
   /** One previewed value. `exclude` draws it struck through, as the sidebar does; `key`
    *  is its identity in the keyed `{#each}` — `param:value`, never the label, which two
@@ -95,6 +99,11 @@
     if (!result) return;
     store.apply(filtersToParams(filtersFromInterpretation(result)).toString());
     onclose();
+    // After this dialog, not after its host's own apply: the write above is already
+    // live, so a host that defers its edits (the filter modal) has to hear about it —
+    // otherwise it would later apply the filters it staged before this ran, silently
+    // undoing them. See AiFilterButton for why closing is the honest response.
+    onApplied?.();
   }
 </script>
 

@@ -27,6 +27,7 @@
   import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
+  import AiFilterButton from './AiFilterButton.svelte';
   import SavedSearches from '../SavedSearches.svelte';
 
   // The job-search filter modal: a thin wrapper over FilterModalShell that supplies the
@@ -265,7 +266,7 @@
   {pane}
   headerAction={showProfileAction ? profileAction : undefined}
   {titleHint}
-  extra={extra ? extraStaged : undefined}
+  extra={extra || (store && !plain) ? aboveThePane : undefined}
   {footerNote}
 />
 
@@ -318,7 +319,20 @@
   {/if}
 {/snippet}
 
-{#snippet extraStaged()}
+{#snippet aboveThePane()}
+  <!-- The AI entry point lives here rather than in the filters sidebar, which is
+       `hidden md:block` — so on a phone, where the modal is the ONLY way to reach
+       filters at all, the feature did not exist. Above the pane because it is a way to
+       FILL the filters, so it reads before the controls that refine them.
+
+       `onApplied={onClose}` is not decoration: the dialog writes straight to the live
+       store, while this modal defers its own edits until Apply. Left open, it would
+       later apply what it had staged before the dialog ran and silently undo it. -->
+  {#if store && !plain}
+    <div class="mb-4">
+      <AiFilterButton {store} onApplied={onClose} />
+    </div>
+  {/if}
   {@render extra?.(staged)}
 {/snippet}
 

@@ -38,7 +38,6 @@
     onOpen,
     description,
     afterButton,
-    beforeButton,
   }: {
     groups: SummaryGroup[];
     active: number;
@@ -50,11 +49,6 @@
     /** Optional content under the All-filters button — the job summary uses it for the
      *  "Save filter" affordance; the company summary omits it. */
     afterButton?: Snippet;
-    /** Optional content ABOVE the All-filters button — the job summary uses it for the
-     *  "Describe with AI" entry point. Above rather than below because it is a way to
-     *  FILL the filters, so it reads before the controls that refine them; the company
-     *  summary omits it, since the interpretation speaks the job filter's vocabulary. */
-    beforeButton?: Snippet;
   } = $props();
 </script>
 
@@ -70,8 +64,6 @@
       <p class="text-xs text-muted-foreground">{description}</p>
     {/if}
   </div>
-
-  {@render beforeButton?.()}
 
   <button
     type="button"
