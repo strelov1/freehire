@@ -791,35 +791,43 @@
       <!-- `role="status"` because this appears in response to changing the Sort control,
            and a screen-reader user who just did that gets no other signal that the
            ordering they picked was not the one served. -->
+      <!-- `my-4`, not the nudges' `mt-3`: the feed below sets no top margin of its own,
+           so a block sitting between the toolbar and the first job row has to carry the
+           air on BOTH sides or it reads as glued to the list. -->
       <div
         role="status"
-        class="mt-3 rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm sm:p-4"
+        class="my-4 rounded-xl border border-brand/30 bg-brand/5 p-4 text-sm sm:p-5"
       >
         <p class="font-medium text-foreground">Sorted by match needs to know about you</p>
         <p class="mt-1 text-muted-foreground">
           We rank these against your own skills, and we don't have them yet. Showing the
           newest first for now.
         </p>
-        {#if isAuthenticated()}
-          <a
-            href={resolve('/my/profile')}
-            class="mt-2.5 inline-flex items-center gap-1.5 font-medium text-brand hover:underline"
-          >
-            Add your CV or skills
-            <ArrowRight class="size-4" aria-hidden="true" />
-          </a>
-        {:else}
-          <!-- Signed out there is no profile to fill in yet, so the first step is the
-               account that would hold one. -->
-          <button
-            type="button"
-            onclick={() => promptSignIn()}
-            class="mt-2.5 inline-flex items-center gap-1.5 font-medium text-brand hover:underline"
-          >
-            Sign in to add your CV
-            <ArrowRight class="size-4" aria-hidden="true" />
-          </button>
-        {/if}
+        <!-- The way out of this state is the whole point of the notice, so it is a
+             centred solid button rather than a link trailing the paragraph — the same
+             shape "Broaden search" uses below for the same kind of one-way-out. -->
+        <div class="mt-4 flex justify-center">
+          {#if isAuthenticated()}
+            <a
+              href={resolve('/my/profile')}
+              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+            >
+              Add your CV or skills
+              <ArrowRight class="size-4" aria-hidden="true" />
+            </a>
+          {:else}
+            <!-- Signed out there is no profile to fill in yet, so the first step is the
+                 account that would hold one. -->
+            <button
+              type="button"
+              onclick={() => promptSignIn()}
+              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+            >
+              Sign in to add your CV
+              <ArrowRight class="size-4" aria-hidden="true" />
+            </button>
+          {/if}
+        </div>
       </div>
     {/if}
 
