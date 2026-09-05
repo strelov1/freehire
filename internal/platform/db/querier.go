@@ -3183,6 +3183,14 @@ type Querier interface {
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
 	// until the next uncontended vote. Called first in the vote transaction.
 	LockJobForVote(ctx context.Context, id int64) error
+	// Same shape and same reasoning as SearchOutboxMetrics.
+	//
+	// This queue was the one of the four that nothing measured, and it is the one that failed
+	// silently for five weeks: cmd/classify-mail dead-lettered every message, then logged
+	// "done failed=0 dead-lettered=0" on each subsequent run — accurate, because a dead entry is
+	// never claimed again, and indistinguishable from an empty queue. Dead letters here read as
+	// mail nobody will ever link to an application.
+	MailClassificationOutboxMetrics(ctx context.Context) (MailClassificationOutboxMetricsRow, error)
 	// Record that this job's description is now the full text, closing the enqueue gate for
 	// good. A re-hydration is a deliberate act (drop the row, which reopens the gate), not
 	// something a crawl does by accident — mirrors apply_forms' own refresh story.

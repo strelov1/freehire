@@ -75,6 +75,37 @@ func (q *Queries) EnrichmentOutboxMetrics(ctx context.Context) (EnrichmentOutbox
 	return i, err
 }
 
+const mailClassificationOutboxMetrics = `-- name: MailClassificationOutboxMetrics :one
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM email_classification_outbox
+`
+
+type MailClassificationOutboxMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same shape and same reasoning as SearchOutboxMetrics.
+//
+// This queue was the one of the four that nothing measured, and it is the one that failed
+// silently for five weeks: cmd/classify-mail dead-lettered every message, then logged
+// "done failed=0 dead-lettered=0" on each subsequent run — accurate, because a dead entry is
+// never claimed again, and indistinguishable from an empty queue. Dead letters here read as
+// mail nobody will ever link to an application.
+func (q *Queries) MailClassificationOutboxMetrics(ctx context.Context) (MailClassificationOutboxMetricsRow, error) {
+	row := q.db.QueryRow(ctx, mailClassificationOutboxMetrics)
+	var i MailClassificationOutboxMetricsRow
+	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
+}
+
 const newestOpenJobCreatedAt = `-- name: NewestOpenJobCreatedAt :one
 SELECT created_at
 FROM jobs

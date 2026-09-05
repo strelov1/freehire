@@ -98,6 +98,12 @@ worker keeping up*. The notify pair exists because a starved subscription produc
 failure to notice: `notify` reported `delivered=1 failed=0` for weeks while 1.14M matches
 sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/agents/notifications.md)).
 An oldest-pending age climbing past a few passes is the signal; `failed` never moved.
+`email_classification_outbox` was added for the same reason and is the worse version of it:
+`cmd/classify-mail` dead-lettered all 2726 queued messages over five weeks and then logged
+`done failed=0 dead-lettered=0` on every run afterwards — accurate, because a dead entry is
+never claimed again, and identical to what an empty queue prints. **A queue this worker does
+not measure has no signal at all**: the per-run family above stayed green throughout, since
+the binary kept exiting 0. Adding an outbox means adding it here.
 These names are a contract with the dashboard and alert rules in `freehire-ops`, which
 cannot be compiled against this repo — `cmd/queue-metrics/render_test.go` pins the exact
 exposition text so a rename is a visible edit rather than a silent breakage.

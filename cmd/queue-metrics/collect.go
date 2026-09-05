@@ -19,6 +19,7 @@ type metricsQueries interface {
 	SearchOutboxMetrics(context.Context) (db.SearchOutboxMetricsRow, error)
 	EnrichmentOutboxMetrics(context.Context) (db.EnrichmentOutboxMetricsRow, error)
 	SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMetricsRow, error)
+	MailClassificationOutboxMetrics(context.Context) (db.MailClassificationOutboxMetricsRow, error)
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
@@ -41,6 +42,10 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	semantic, err := q.SemanticOutboxMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("semantic outbox metrics: %w", err)
+	}
+	mail, err := q.MailClassificationOutboxMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("mail classification outbox metrics: %w", err)
 	}
 	boards, err := q.BoardHealthMetrics(ctx)
 	if err != nil {
@@ -84,6 +89,7 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			{name: "search_outbox", depth: search.Depth, deadLetters: search.DeadLetters, oldestAgeSeconds: search.OldestAgeSeconds},
 			{name: "enrichment_outbox", depth: enrichment.Depth, deadLetters: enrichment.DeadLetters, oldestAgeSeconds: enrichment.OldestAgeSeconds},
 			{name: "semantic_outbox", depth: semantic.Depth, deadLetters: semantic.DeadLetters, oldestAgeSeconds: semantic.OldestAgeSeconds},
+			{name: "email_classification_outbox", depth: mail.Depth, deadLetters: mail.DeadLetters, oldestAgeSeconds: mail.OldestAgeSeconds},
 		},
 		notifyPendingSubscriptions: notifyBacklog.PendingSubscriptions,
 		notifyOldestAgeSeconds:     notifyBacklog.OldestAgeSeconds,

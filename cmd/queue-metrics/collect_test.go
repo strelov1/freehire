@@ -18,6 +18,7 @@ type fakeQueries struct {
 	search    db.SearchOutboxMetricsRow
 	enrich    db.EnrichmentOutboxMetricsRow
 	semantic  db.SemanticOutboxMetricsRow
+	mail      db.MailClassificationOutboxMetricsRow
 	boards    db.BoardHealthMetricsRow
 	newest    pgtype.Timestamptz
 	health    []db.ProviderIngestHealthRow
@@ -42,6 +43,10 @@ func (f fakeQueries) SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMe
 	return f.semantic, nil
 }
 
+func (f fakeQueries) MailClassificationOutboxMetrics(context.Context) (db.MailClassificationOutboxMetricsRow, error) {
+	return f.mail, nil
+}
+
 func (f fakeQueries) BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error) {
 	return f.boards, nil
 }
@@ -59,9 +64,12 @@ func populatedQueries() fakeQueries {
 		search:   db.SearchOutboxMetricsRow{Depth: 3, DeadLetters: 2, OldestAgeSeconds: 21600.5},
 		enrich:   db.EnrichmentOutboxMetricsRow{Depth: 1049297, DeadLetters: 41, OldestAgeSeconds: 5529600},
 		semantic: db.SemanticOutboxMetricsRow{Depth: 0, DeadLetters: 0, OldestAgeSeconds: 0},
-		boards:   db.BoardHealthMetricsRow{Healthy: 74894, Failing: 7002, Cooled: 1882},
-		notify:   db.NotifyBacklogMetricsRow{PendingSubscriptions: 12, OldestAgeSeconds: 184.25},
-		newest:   pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
+		// The shape prod was actually in: nothing live and every entry dead-lettered, which
+		// the worker's own log reported as "done failed=0 dead-lettered=0" for five weeks.
+		mail:   db.MailClassificationOutboxMetricsRow{Depth: 0, DeadLetters: 2726, OldestAgeSeconds: 0},
+		boards: db.BoardHealthMetricsRow{Healthy: 74894, Failing: 7002, Cooled: 1882},
+		notify: db.NotifyBacklogMetricsRow{PendingSubscriptions: 12, OldestAgeSeconds: 184.25},
+		newest: pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
 		health: []db.ProviderIngestHealthRow{
 			{
 				Provider:      "greenhouse",
@@ -114,6 +122,7 @@ func TestCollectAssemblesEveryQueueInOrder(t *testing.T) {
 		{name: "search_outbox", depth: 3, deadLetters: 2, oldestAgeSeconds: 21600.5},
 		{name: "enrichment_outbox", depth: 1049297, deadLetters: 41, oldestAgeSeconds: 5529600},
 		{name: "semantic_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
+		{name: "email_classification_outbox", depth: 0, deadLetters: 2726, oldestAgeSeconds: 0},
 	}
 	if len(got.queues) != len(want) {
 		t.Fatalf("collected %d queues, want %d", len(got.queues), len(want))
@@ -146,8 +155,8 @@ func TestCollectTreatsAnEmptyCatalogueAsAbsentNotAsAFailure(t *testing.T) {
 	if !got.newestJob.IsZero() {
 		t.Errorf("newestJob = %v, want the zero time so render omits the sample", got.newestJob)
 	}
-	if len(got.queues) != 3 {
-		t.Errorf("collected %d queues, want all 3 despite the empty catalogue", len(got.queues))
+	if len(got.queues) != 4 {
+		t.Errorf("collected %d queues, want all 4 despite the empty catalogue", len(got.queues))
 	}
 }
 

@@ -54,19 +54,27 @@ func (s *dbStore) ClaimBatch(ctx context.Context, leaseSeconds, batchSize int) (
 	}
 	out := make([]maillink.Claimed, len(rows))
 	for i, r := range rows {
-		out[i] = maillink.Claimed{
-			OutboxID: r.ID,
-			EmailID:  r.EmailID,
-			UserID:   r.UserID,
-			ThreadID: r.ThreadID,
-			FromAddr: r.FromAddr,
-			FromName: r.FromName,
-			Subject:  r.Subject,
-			Body:     r.BodyText,
-			BodyHTML: r.BodyHtml,
-		}
+		out[i] = claimedFrom(r)
 	}
 	return out, nil
+}
+
+// claimedFrom copies one claim row into the port's shape. It is a named function rather than a
+// literal inside the loop above so that store_test.go can hold it to taking every field: this
+// mapping silently dropped Source for five weeks, which stopped the whole queue.
+func claimedFrom(r db.ClaimEmailClassificationBatchRow) maillink.Claimed {
+	return maillink.Claimed{
+		OutboxID: r.ID,
+		EmailID:  r.EmailID,
+		UserID:   r.UserID,
+		Source:   r.Source,
+		ThreadID: r.ThreadID,
+		FromAddr: r.FromAddr,
+		FromName: r.FromName,
+		Subject:  r.Subject,
+		Body:     r.BodyText,
+		BodyHTML: r.BodyHtml,
+	}
 }
 
 func (s *dbStore) Applications(ctx context.Context, userID int64) ([]maillink.Application, error) {

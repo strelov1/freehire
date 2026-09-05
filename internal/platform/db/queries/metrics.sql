@@ -46,6 +46,23 @@ SELECT
     )::float8                                     AS oldest_age_seconds
 FROM semantic_outbox;
 
+-- name: MailClassificationOutboxMetrics :one
+-- Same shape and same reasoning as SearchOutboxMetrics.
+--
+-- This queue was the one of the four that nothing measured, and it is the one that failed
+-- silently for five weeks: cmd/classify-mail dead-lettered every message, then logged
+-- "done failed=0 dead-lettered=0" on each subsequent run — accurate, because a dead entry is
+-- never claimed again, and indistinguishable from an empty queue. Dead letters here read as
+-- mail nobody will ever link to an application.
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM email_classification_outbox;
+
 -- name: BoardHealthMetrics :one
 -- The ingest board fleet split into three mutually exclusive states, so the published
 -- gauges sum to the fleet size and a stacked graph reads correctly.
