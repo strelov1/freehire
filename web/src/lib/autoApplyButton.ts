@@ -13,7 +13,8 @@ export type AutoApplyButtonState =
   | { kind: 'idle' } // no attempt yet — the button is clickable
   | { kind: 'queued' } // a live, undecided attempt already exists
   | { kind: 'declined' } // the candidate's own prior decision, permanent
-  | { kind: 'applied' }; // a completed auto-apply already submitted this job for real
+  | { kind: 'applied' } // a completed auto-apply already submitted this job for real
+  | { kind: 'failed' }; // cmd/auto-apply gave up on this attempt (dead-lettered or parked)
 
 /** Decides the auto-apply button's state from the job's source, the caller's own
  *  auto_apply_status (undefined/null for no attempt or an anonymous caller), and whether
@@ -30,5 +31,6 @@ export function autoApplyButtonState(
   if (alreadyApplied) return { kind: 'applied' };
   if (status === 'queued') return { kind: 'queued' };
   if (status === 'declined') return { kind: 'declined' };
+  if (status === 'failed') return { kind: 'failed' };
   return { kind: 'idle' };
 }

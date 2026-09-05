@@ -24,4 +24,8 @@ describe('autoApplyButtonState', () => {
     expect(autoApplyButtonState('greenhouse', null, true)).toEqual({ kind: 'applied' });
     expect(autoApplyButtonState('greenhouse', 'queued', true)).toEqual({ kind: 'applied' });
   });
+
+  it('is failed when cmd/auto-apply gave up on the attempt', () => {
+    expect(autoApplyButtonState('greenhouse', 'failed')).toEqual({ kind: 'failed' });
+  });
 });

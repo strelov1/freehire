@@ -28,6 +28,31 @@ const autoApplyAlreadyDeclinedMessage = "this auto-apply attempt was already dec
 // (jobs.go), so the two can never drift apart on what "queued" is spelled as.
 const autoApplyStatusQueued = "queued"
 
+// autoApplyStatusFailed is the wire status for an entry cmd/auto-apply gave up on:
+// dead-lettered after exhausting its retries (RecordAutoApplyFailure's own failed_at) or
+// parked because the ATS form needed data we don't have (MarkAutoApplyBlocked's own
+// blocked_at). Both leave review_decision at 'approved' (only an approved entry is ever
+// claimed for submission), so without checking these two columns a permanently stuck
+// attempt reads exactly like a healthy one still in flight — a code review found this: the
+// candidate would see "queued" forever, with no way to learn the attempt died.
+const autoApplyStatusFailed = "failed"
+
+// autoApplyEntryStatus derives the wire status EnqueueAutoApply's idempotent path and
+// GetJob's overlay both report, from the same three columns
+// GetAutoApplyQueueEntryForJob reads. Declined is checked first: DeclineAutoApplyReview
+// also sets blocked_at (it reuses MarkAutoApplyBlocked's own park vocabulary), so checking
+// failed/blocked before review_decision would misreport the candidate's own decline as an
+// operational failure.
+func autoApplyEntryStatus(reviewDecision pgtype.Text, failedAt, blockedAt pgtype.Timestamptz) string {
+	if reviewDecision.Valid && reviewDecision.String == autoApplyReviewDeclined {
+		return autoApplyReviewDeclined
+	}
+	if failedAt.Valid || blockedAt.Valid {
+		return autoApplyStatusFailed
+	}
+	return autoApplyStatusQueued
+}
+
 // autoApplyQueuedResponse is the success body for both a fresh enqueue and an idempotent
 // repeat against an existing, undecided entry — the caller cannot (and need not) tell
 // the two apart.
@@ -106,13 +131,20 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		if ferr != nil {
 			return ferr
 		}
-		if existing.ReviewDecision.Valid && existing.ReviewDecision.String == autoApplyReviewDeclined {
+		switch autoApplyEntryStatus(existing.ReviewDecision, existing.FailedAt, existing.BlockedAt) {
+		case autoApplyReviewDeclined:
 			return fiber.NewError(fiber.StatusConflict, autoApplyAlreadyDeclinedMessage)
+		case autoApplyStatusFailed:
+			// cmd/auto-apply gave up on this entry (dead-lettered or parked on an
+			// unresolvable form field) — reporting "queued" here would tell the
+			// candidate their attempt is still in flight when it is permanently stuck.
+			return fiber.NewError(fiber.StatusConflict, "this auto-apply attempt could not be completed")
+		default:
+			// A live, undecided entry already exists (the common "page reload, a second
+			// tab" case per design.md) — reporting success without a second row is the
+			// intended idempotent behavior, not a fault to log.
+			return autoApplyQueuedResponse(c)
 		}
-		// A live, undecided entry already exists (the common "page reload, a second
-		// tab" case per design.md) — reporting success without a second row is the
-		// intended idempotent behavior, not a fault to log.
-		return autoApplyQueuedResponse(c)
 	default:
 		return err
 	}

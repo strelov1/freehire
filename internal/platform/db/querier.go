@@ -1502,6 +1502,12 @@ type Querier interface {
 	// status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
 	// a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
 	// exists yet for this (user, job) pair.
+	//
+	// failed_at/blocked_at are also read (a code review found their absence): once
+	// cmd/auto-apply claims an approved entry, a dead-letter (RecordAutoApplyFailure) or a
+	// form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
+	// these two columns, both call sites would read a permanently stuck submission as
+	// indistinguishable from a healthy one still in flight.
 	GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error)
 	// One read backing both the tailoring-trigger and the review-decision endpoints
 	// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing

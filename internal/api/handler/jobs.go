@@ -166,10 +166,7 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(c.Context(), db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
 		}); err == nil {
-			status := autoApplyStatusQueued
-			if entry.ReviewDecision.Valid && entry.ReviewDecision.String == autoApplyReviewDeclined {
-				status = autoApplyReviewDeclined
-			}
+			status := autoApplyEntryStatus(entry.ReviewDecision, entry.FailedAt, entry.BlockedAt)
 			view.AutoApplyStatus = &status
 		}
 	}

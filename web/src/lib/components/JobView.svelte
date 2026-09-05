@@ -325,10 +325,10 @@
      replacement for it — auto-apply still goes through the same ATS in the end, this
      button only starts the tailor-then-review sequence. Absent entirely off
      autoApplyButtonState's `hidden` (any source but Greenhouse today). `idle` is the only
-     clickable state; `queued`/`declined`/`applied` render disabled (the `disabled:opacity-50`
-     the button variant already carries) so a caller who already has an attempt, or already
-     applied for real, sees that at a glance rather than clicking into a 200 or a 409 that
-     changes nothing. -->
+     clickable state; `queued`/`declined`/`applied`/`failed` render disabled (the
+     `disabled:opacity-50` the button variant already carries) so a caller who already has
+     an attempt, already applied for real, or whose attempt cmd/auto-apply gave up on, sees
+     that at a glance rather than clicking into a 200 or a 409 that changes nothing. -->
 {#snippet autoApplyCta(className: string)}
   {#if autoApplyState.kind !== 'hidden'}
     <Button
@@ -344,6 +344,8 @@
         Auto-apply declined
       {:else if autoApplyState.kind === 'applied'}
         Already applied
+      {:else if autoApplyState.kind === 'failed'}
+        Auto-apply couldn't complete
       {:else}
         Auto-apply
       {/if}

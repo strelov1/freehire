@@ -401,3 +401,54 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 		t.Fatalf("status after decline = %v, want \"declined\"", got)
 	}
 }
+
+// TestGetJob_AutoApplyStatusOverlay_FailedEntry guards a gap a code review found:
+// GetAutoApplyQueueEntryForJob used to select only id and review_decision, so a
+// dead-lettered (failed_at) or parked (blocked_at) submission — both of which leave
+// review_decision at 'approved', since only an approved entry is ever claimed — was
+// indistinguishable from a healthy entry still in flight. The candidate would see
+// "queued" forever with no way to learn the attempt died.
+func TestGetJob_AutoApplyStatusOverlay_FailedEntry(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "failed@example.test")
+	makePro(t, pool, userID)
+	insertBaseCV(t, pool, userID)
+	jobID := seedEnqueueJob(t, pool, "greenhouse", "failed-job")
+
+	var queueID int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO auto_apply_queue (user_id, job_id, review_decision, reviewed_at, failed_at, last_error, attempts)
+		 VALUES ($1, $2, 'approved', now(), now(), 'boom', 3) RETURNING id`,
+		userID, jobID).Scan(&queueID); err != nil {
+		t.Fatalf("seed dead-lettered entry: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/jobs/failed-job", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if got := decodeAutoApplyStatus(t, resp); got == nil || *got != autoApplyStatusFailed {
+		t.Fatalf("status for a dead-lettered entry = %v, want %q", got, autoApplyStatusFailed)
+	}
+
+	repeat := enqueueRequest(t, app, "failed-job", cookie)
+	defer repeat.Body.Close()
+	if repeat.StatusCode != fiber.StatusConflict {
+		t.Fatalf("repeat enqueue status = %d, want 409 — a dead-lettered attempt must not report a false queued success", repeat.StatusCode)
+	}
+
+	var count int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM auto_apply_queue WHERE user_id = $1", userID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("auto_apply_queue rows = %d, want 1 (no second row)", count)
+	}
+}

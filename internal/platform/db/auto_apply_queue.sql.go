@@ -218,7 +218,7 @@ func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (Get
 }
 
 const getAutoApplyQueueEntryForJob = `-- name: GetAutoApplyQueueEntryForJob :one
-SELECT id, review_decision
+SELECT id, review_decision, failed_at, blocked_at
 FROM auto_apply_queue
 WHERE user_id = $1 AND job_id = $2
 `
@@ -229,8 +229,10 @@ type GetAutoApplyQueueEntryForJobParams struct {
 }
 
 type GetAutoApplyQueueEntryForJobRow struct {
-	ID             int64       `json:"id"`
-	ReviewDecision pgtype.Text `json:"review_decision"`
+	ID             int64              `json:"id"`
+	ReviewDecision pgtype.Text        `json:"review_decision"`
+	FailedAt       pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt      pgtype.Timestamptz `json:"blocked_at"`
 }
 
 // The caller's own existing auto-apply entry for one job, if any — the conflict-read path
@@ -238,10 +240,21 @@ type GetAutoApplyQueueEntryForJobRow struct {
 // status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
 // a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
 // exists yet for this (user, job) pair.
+//
+// failed_at/blocked_at are also read (a code review found their absence): once
+// cmd/auto-apply claims an approved entry, a dead-letter (RecordAutoApplyFailure) or a
+// form-field park (MarkAutoApplyBlocked) leaves review_decision at 'approved' — without
+// these two columns, both call sites would read a permanently stuck submission as
+// indistinguishable from a healthy one still in flight.
 func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoApplyQueueEntryForJobParams) (GetAutoApplyQueueEntryForJobRow, error) {
 	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryForJob, arg.UserID, arg.JobID)
 	var i GetAutoApplyQueueEntryForJobRow
-	err := row.Scan(&i.ID, &i.ReviewDecision)
+	err := row.Scan(
+		&i.ID,
+		&i.ReviewDecision,
+		&i.FailedAt,
+		&i.BlockedAt,
+	)
 	return i, err
 }
 
