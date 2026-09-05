@@ -28,8 +28,8 @@
   // answering a question it does not ask.
   const searchWording = $derived(
     page.url.pathname === '/companies'
-      ? { placeholder: 'Search companies…', label: 'Search companies', rotating: [] }
-      : { placeholder: 'Search jobs…', label: 'Search jobs', rotating: rolePlaceholders() },
+      ? { placeholder: 'Search companies…', label: 'Search companies' }
+      : { placeholder: rolePlaceholders(), label: 'Search jobs' },
   );
 
   // The homepage is the one exception: its whole content is a large centred copy of

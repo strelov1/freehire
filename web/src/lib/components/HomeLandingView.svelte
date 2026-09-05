@@ -237,13 +237,12 @@
 
     <!-- The box's root is `min-w-0 flex-1`, so this wrapper is what sets its width. -->
     <div class="flex w-full">
-      <!-- The rotating example narrows to roles while the accessible name stays broad:
-           this box does search companies and skills too, and an example is a starting
-           point rather than a boundary. Roles are what people actually type first. -->
+      <!-- The visible examples are roles; the accessible name is the broad one, because
+           this box does search companies and skills too. An example is a starting point
+           rather than a boundary, and a role is what people actually type first. -->
       <HeaderSearch
-        placeholder="Search jobs, companies, skills…"
+        placeholder={rolePlaceholders()}
         label="Search jobs, companies and skills"
-        rotating={rolePlaceholders()}
         size="hero"
         autofocus
         {counts}

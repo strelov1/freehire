@@ -31,17 +31,18 @@ describe('PLACEHOLDER_ROLES', () => {
 });
 
 describe('rolePlaceholders', () => {
-  it('composes one placeholder per role, in list order', () => {
-    const placeholders = rolePlaceholders();
-    expect(placeholders).toEqual(
-      PLACEHOLDER_ROLES.map((role) => expect.stringContaining(categoryLabel(role))),
-    );
-  });
-
-  it('phrases each one as an example rather than a command', () => {
-    for (const text of rolePlaceholders()) {
-      expect(text).toMatch(/^Search jobs — e\.g\. /);
-    }
+  // Pinned literally rather than re-derived from PLACEHOLDER_ROLES + categoryLabel:
+  // mapping the same inputs through the same functions would restate the implementation
+  // and pass however the wording changed. These are the strings that ship.
+  it('composes the placeholders a visitor actually reads', () => {
+    expect(rolePlaceholders()).toEqual([
+      'Search jobs — e.g. Backend',
+      'Search jobs — e.g. Frontend',
+      'Search jobs — e.g. DevOps',
+      'Search jobs — e.g. QA',
+      'Search jobs — e.g. Data Science',
+      'Search jobs — e.g. Product',
+    ]);
   });
 
   // Under prefers-reduced-motion the first entry is the only one anyone sees, so it
