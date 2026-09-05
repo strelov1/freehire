@@ -78,6 +78,13 @@ func TestDefaultConfigMatchesTheSpec(t *testing.T) {
 func TestEnforcementStartsOff(t *testing.T) {
 	cfg := DefaultConfig()
 	for _, feature := range AllFeatures() {
+		// auto-apply is the one exception, asserted deliberately in tier_test.go: pro's
+		// ceiling on it is what the tier above is sold on, so a ceiling that only counted
+		// would leave that tier selling nothing. Its route also already refused the whole
+		// free tier with 402 before the allowance took that gate's place.
+		if feature == FeatureAutoApply {
+			continue
+		}
 		if cfg.Enforced(feature) {
 			t.Errorf("%q ships enforcing; the numbers come from three weeks of one August under no paywall, "+
 				"and refusing on an unread number is what the shadow run exists to avoid", feature)
@@ -88,12 +95,25 @@ func TestEnforcementStartsOff(t *testing.T) {
 func TestEveryPlanOffersEveryFeature(t *testing.T) {
 	cfg := DefaultConfig()
 	for _, feature := range AllFeatures() {
+		// auto-apply is the one feature the free plan does not offer at all, and it is an
+		// exception to the rule this test states rather than a hole in it. It was already
+		// one before it was metered — the route refused every free caller with 402 — and
+		// what changed is only that the refusal now carries numbers. It is also the only
+		// action here that spends somebody ELSE's attention: a real application arriving at
+		// a real employer under our name.
+		if feature == FeatureAutoApply {
+			if cfg.FreeDaily(feature) != 0 {
+				t.Errorf("free auto-apply allows %d a day; it is a paid feature and stays one",
+					cfg.FreeDaily(feature))
+			}
+			continue
+		}
 		if cfg.FreeDaily(feature) <= 0 {
 			t.Errorf("%q is unreachable on the free plan; a plan differs in how much it allows, never in whether the feature exists", feature)
 		}
-		if cfg.ProFairUse(feature) <= cfg.FreeDaily(feature) {
+		if cfg.Allowance(TierPro, feature).Limit <= cfg.FreeDaily(feature) {
 			t.Errorf("pro's fair-use guard for %q (%d) is not above the free allowance (%d)",
-				feature, cfg.ProFairUse(feature), cfg.FreeDaily(feature))
+				feature, cfg.Allowance(TierPro, feature).Limit, cfg.FreeDaily(feature))
 		}
 	}
 }
@@ -109,8 +129,10 @@ func TestAllowanceForTier(t *testing.T) {
 	if !pro.Unlimited {
 		t.Error("pro reports a countable limit; the pro plan has no user-facing ceiling, only a fair-use guard behind it")
 	}
-	if pro.Limit != cfg.ProFairUse(FeatureFit) {
-		t.Errorf("pro fair-use guard = %d, want %d", pro.Limit, cfg.ProFairUse(FeatureFit))
+	// The figure itself, not a comparison with the accessor that produced it: reading the
+	// same call twice would assert nothing at all.
+	if pro.Limit != 60 {
+		t.Errorf("pro fit fair-use guard = %d, want 60", pro.Limit)
 	}
 }
 

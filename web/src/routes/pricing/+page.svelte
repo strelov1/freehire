@@ -55,6 +55,7 @@
     assistant: 'Assistant messages',
     dictation: 'Voice dictation',
     'cover-letter': 'Cover letters',
+    'auto-apply': 'Unattended applications',
   };
   const label = (id: string) => FEATURE_LABELS[id] ?? id;
 

@@ -22,10 +22,10 @@ import (
 // one number is a ceiling under a plan people had already bought, so it has to move without
 // a deploy on the day somebody complains.
 //
-// PLAN_FAIR_USE_<FEATURE> is the older spelling of the pro figure and still works. On every
-// feature but auto-apply that figure IS the fair-use guard; on auto-apply it is pro's real
-// daily ceiling. Same field, same effect, so PLAN_PRO_DAILY_<FEATURE> is simply the name
-// that reads correctly for both.
+// A tier's figure is its ceiling where it has one and its fair-use guard where it does not,
+// which is why one variable per tier moves both: they are the same number in the same field.
+// PLAN_FAIR_USE_<FEATURE> was the older spelling of the pro one and is gone — two names for
+// one field is a question every reader has to answer twice, and nothing had ever set it.
 //
 // An override that cannot be read keeps the default and says so in the log. The alternative
 // — a typo resolving to zero — would refuse the feature to every free account and look
@@ -41,12 +41,6 @@ func ConfigFromEnv() Config {
 		suffix := strings.ToUpper(string(f))
 		if n, ok := envPositive("PLAN_FREE_DAILY_" + suffix); ok {
 			fc.free.daily = n
-		}
-		// PLAN_FAIR_USE_<F> keeps its name and its meaning: the pro figure. On every feature
-		// but one that IS pro's fair-use guard, and on auto-apply it is pro's real ceiling —
-		// the same number in the same field, which is why one variable still moves it.
-		if n, ok := envPositive("PLAN_FAIR_USE_" + suffix); ok {
-			fc.pro.daily = n
 		}
 		if n, ok := envPositive("PLAN_PRO_DAILY_" + suffix); ok {
 			fc.pro.daily = n

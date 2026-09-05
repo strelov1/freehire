@@ -310,7 +310,7 @@ func TestProIsUnlimitedUntilTheFairUseGuard(t *testing.T) {
 	user := insertUser(t, pool, "pro-guard@example.test")
 	makePro(t, pool, user, now.Add(30*24*time.Hour))
 
-	guard := s.cfg.ProFairUse(FeatureFit)
+	guard := s.cfg.Allowance(TierPro, FeatureFit).Limit
 	for i := range guard {
 		d, err := s.Consume(ctx, user, FeatureFit, jobRef(i))
 		if err != nil {
@@ -395,6 +395,17 @@ func TestUsageOnProReportsUnlimited(t *testing.T) {
 		t.Fatalf("Usage: %v", err)
 	}
 	for _, u := range usage {
+		// auto-apply is the deliberate exception to "pro is the same product without the
+		// ceilings": pro carries a real daily count there, and it is what the tier above is
+		// sold on. Asserted as a countable limit rather than skipped, so the day somebody
+		// makes it unlimited this test says so.
+		if u.Feature == FeatureAutoApply {
+			if u.Unlimited {
+				t.Error("auto-apply reports unlimited to a pro caller; its ceiling is what " +
+					"the tier above is sold on")
+			}
+			continue
+		}
 		if !u.Unlimited {
 			t.Errorf("%q reports a countable limit to a pro caller; pro is the same product without the ceilings", u.Feature)
 		}

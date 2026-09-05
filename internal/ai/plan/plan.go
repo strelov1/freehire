@@ -69,7 +69,10 @@ const (
 // each one, so a feature added to the config and forgotten here is a feature the user
 // cannot see.
 func AllFeatures() []Feature {
-	return []Feature{FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation, FeatureCoverLetter}
+	return []Feature{
+		FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation, FeatureCoverLetter,
+		FeatureAutoApply,
+	}
 }
 
 // TierOf resolves a plan from the columns that decide it: the better tier still live wins.
@@ -256,37 +259,10 @@ func (c Config) WithFreeDaily(f Feature, n int) Config {
 	})
 }
 
-// WithTierDaily returns this configuration with one tier's figure for one feature set to n.
-// It moves the ceiling where the tier has one and the fair-use guard where it does not,
-// because those are the same number in the same place.
-func (c Config) WithTierDaily(tier Tier, f Feature, n int) Config {
-	return c.with(func(k Feature, fc *featureConfig) {
-		if k != f {
-			return
-		}
-		switch tier {
-		case TierFree:
-			fc.free.daily = n
-		case TierPro:
-			fc.pro.daily = n
-		case TierUltra:
-			fc.ultra.daily = n
-		}
-	})
-}
-
 // FreeDaily is the free plan's daily allowance for a feature. An unconfigured feature
 // allows nothing rather than everything: a surface somebody forgot to configure should
 // show up as refused in a shadow run, not as free in a bill.
 func (c Config) FreeDaily(f Feature) int { return c.features[f].free.daily }
-
-// ProFairUse is the guard above which even a pro account is refused for the rest of the day.
-//
-// Kept under its old name because the question is still the right one to ask, and still has
-// one answer. On auto-apply the same field is a real ceiling rather than a guard — the tier
-// carries no unlimited flag there — so this reports what pro may do, which is what every
-// caller wanted from it anyway.
-func (c Config) ProFairUse(f Feature) int { return c.features[f].pro.daily }
 
 // Enforced reports whether a refusal for this feature actually refuses. False is shadow
 // mode: the consumption is recorded and reported, and the caller is allowed through.
