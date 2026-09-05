@@ -27,6 +27,7 @@
   import { hasViewed } from '$lib/viewedJobs.svelte';
   import { isSaved, markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { markDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
+  import AddToListButton from './AddToListButton.svelte';
 
   // Single source of truth for how a job appears in any list (jobs list and
   // company detail). The whole card is a link to the job detail.
@@ -245,9 +246,10 @@
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-  <!-- pr-8 reserves the top-right corner for the save button (an overlay outside
-       this link), so the timestamp never slides under it. -->
-  <div class="flex items-center justify-between gap-3 pr-8">
+  <!-- pr-20 reserves the top-right corner for the save button AND the "Add to
+       list" button beside it (both overlays outside this link), so the timestamp
+       never slides under either. -->
+  <div class="flex items-center justify-between gap-3 pr-20">
     <div class="flex min-w-0 items-center gap-2">
       <EntityLogo
         name={job.company || 'Unknown company'}
@@ -469,6 +471,10 @@
 >
   <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
 </button>
+
+<!-- Add-to-list: a second overlay beside Save, independent of it — a job can be
+     saved, listed, both, or neither. -->
+<AddToListButton jobSlug={job.public_slug} class="absolute right-12 top-4" />
 
 <!-- Hide control: only the browse feed passes `onHide`, so this appears there and
      nowhere else. A quiet icon in the card's bottom-right corner, revealed on hover

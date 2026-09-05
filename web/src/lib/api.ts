@@ -53,7 +53,9 @@ import type {
   WebhookConfig,
   ConnectedIdentities,
   SavedSearch,
-  Board,
+  JobList,
+  PublicJobList,
+  JobListMembership,
   UserProfile,
   Subscription,
   TelegramStatus,
@@ -1287,22 +1289,69 @@ export function createApi(
     await call(`/api/v1/me/searches/${id}`, { method: 'DELETE' });
   }
 
-  /** Publish a saved search as a public board (cookie-only). Returns the updated set,
-   *  now carrying `public_slug`. An optional `authorLabel` is shown on the board; blank
-   *  renders it anonymously. Re-sharing keeps the existing slug. */
-  async function shareSavedSearch(id: number, authorLabel = ''): Promise<SavedSearch> {
-    return requestData<SavedSearch>(`/api/v1/me/searches/${id}/share`, jsonBody('POST', { author_label: authorLabel }));
+  // Job lists: named sets of specific jobs (cookie-only on the server), independent
+  // of the "save" star and of saved searches.
+
+  /** The current user's job lists, most recently updated first. */
+  async function listJobLists(): Promise<JobList[]> {
+    return requestData<JobList[]>('/api/v1/me/lists');
   }
 
-  /** Make a shared board private again (cookie-only). Idempotent. */
-  async function unshareSavedSearch(id: number): Promise<void> {
-    await call(`/api/v1/me/searches/${id}/share`, { method: 'DELETE' });
+  /** Create a named job list. `description` is optional (defaults to ""). A
+   *  duplicate name or the per-user cap is a 409. */
+  async function createJobList(name: string, description = ''): Promise<JobList> {
+    return requestData<JobList>('/api/v1/me/lists', jsonBody('POST', { name, description }));
   }
 
-  /** Public read of a shared board by slug — unauthenticated. Returns only display
-   *  fields (name, query, author_label). An unknown/unshared slug throws (404). */
-  async function getBoard(slug: string): Promise<Board> {
-    return requestData<Board>(`/api/v1/boards/${encodeURIComponent(slug)}`);
+  /** Overwrite a job list's name and/or description; an omitted field is unchanged. */
+  async function updateJobList(
+    id: number,
+    patch: { name?: string; description?: string },
+  ): Promise<JobList> {
+    return requestData<JobList>(`/api/v1/me/lists/${id}`, jsonBody('PATCH', patch));
+  }
+
+  /** Delete a job list by id. Its jobs and the user's separate "save" flags are
+   *  untouched. */
+  async function deleteJobList(id: number): Promise<void> {
+    await call(`/api/v1/me/lists/${id}`, { method: 'DELETE' });
+  }
+
+  /** Add a job (by its public slug) to one of the caller's lists. Idempotent: adding
+   *  an already-present job succeeds without duplicating membership. */
+  async function addJobToList(id: number, jobSlug: string): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/jobs`, jsonBody('POST', { job_slug: jobSlug }));
+  }
+
+  /** Remove a job (by its public slug) from one of the caller's lists. Idempotent. */
+  async function removeJobFromList(id: number, jobSlug: string): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/jobs/${encodeURIComponent(jobSlug)}`, { method: 'DELETE' });
+  }
+
+  /** Publish a job list as a public, read-only page (cookie-only). Returns the
+   *  updated list, now carrying `public_slug`. Re-sharing keeps the existing slug. */
+  async function shareJobList(id: number): Promise<JobList> {
+    return requestData<JobList>(`/api/v1/me/lists/${id}/share`, { method: 'POST' });
+  }
+
+  /** Make a shared job list private again (cookie-only). Idempotent. */
+  async function unshareJobList(id: number): Promise<void> {
+    await call(`/api/v1/me/lists/${id}/share`, { method: 'DELETE' });
+  }
+
+  /** Public read of a shared job list by slug — unauthenticated. An unknown/unshared
+   *  slug throws (404). */
+  async function getPublicJobList(slug: string): Promise<PublicJobList> {
+    return requestData<PublicJobList>(`/api/v1/lists/${encodeURIComponent(slug)}`);
+  }
+
+  /** Every one of the caller's job lists, flagged with whether the given job (by its
+   *  public slug) already belongs to it — what the job card's "Add to list" control
+   *  reads to render its toggle state. An unknown slug throws (404). */
+  async function listJobListMembership(jobSlug: string): Promise<JobListMembership[]> {
+    return requestData<JobListMembership[]>(
+      `/api/v1/me/lists/membership?job_slug=${encodeURIComponent(jobSlug)}`,
+    );
   }
 
   // The experience bank: what the product has recorded about what the user has done.
@@ -2386,9 +2435,16 @@ export function createApi(
     createSavedSearch,
     updateSavedSearch,
     deleteSavedSearch,
-    shareSavedSearch,
-    unshareSavedSearch,
-    getBoard,
+    listJobLists,
+    createJobList,
+    updateJobList,
+    deleteJobList,
+    addJobToList,
+    removeJobFromList,
+    shareJobList,
+    unshareJobList,
+    getPublicJobList,
+    listJobListMembership,
     getExperience,
     updateExperienceAtom,
     mergeExperienceAtoms,

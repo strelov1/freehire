@@ -15,6 +15,9 @@ export const accountNav = [
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox' },
+  // Named lists of specific jobs — independent of the "Save" star — optionally
+  // shared read-only by link. Replaces the retired public saved-search "boards".
+  { href: '/my/lists', label: 'Job lists' },
   // Personal skill-demand trend: how the market for the candidate's own profile
   // skills is moving, week over week. A check-in section, not a daily one — sits
   // with the occasional group below rather than the four everyday sections above.

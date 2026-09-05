@@ -15,6 +15,8 @@ type Querier interface {
 	// Flip a board's first successful crawl from pending to active. A no-op (0 rows) when
 	// the board is already active or does not exist, so the caller need not check first.
 	ActivateBoard(ctx context.Context, arg ActivateBoardParams) (int64, error)
+	// Add a job to a list. Idempotent: re-adding an already-present job changes nothing.
+	AddJobListItem(ctx context.Context, arg AddJobListItemParams) error
 	// Move an application forward to a new stage (the worker only calls this after
 	// checking the transition is strictly forward and high-confidence).
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
@@ -403,6 +405,10 @@ type Querier interface {
 	// Withdraw the absence stamp: the role turned up on the company's board after all.
 	// Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
 	ClearJobATSAbsent(ctx context.Context, jobIds []int64) error
+	// Unpublish a list: clear its slug, owner-scoped. Returns the affected row count: 1
+	// for an owned row (whether or not it was shared — unshare is an idempotent no-op
+	// when already private), 0 when missing or not the caller's (→ 404).
+	ClearJobListPublicSlug(ctx context.Context, arg ClearJobListPublicSlugParams) (int64, error)
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
 	// The application record stays: it holds the notes, and clearing progress is the
 	// candidate reconsidering, not a claim the process never happened.
@@ -415,10 +421,6 @@ type Querier interface {
 	// run crawls them this cycle instead of each waiting out its own backoff (up to a day)
 	// after a resolved provider-wide outage. Returns the number of boards cleared.
 	ClearProviderCooldowns(ctx context.Context, provider string) (int64, error)
-	// Unpublish a board: clear the slug and author label, owner-scoped. Returns the
-	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
-	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
-	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
 	// Clear a batch of jobs' embed provenance AND null the legacy jobs.semantic_embedding
 	// column (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch
 	// and DeleteJobSemanticChunks (see that query). Nothing writes semantic_embedding on
@@ -736,6 +738,15 @@ type Querier interface {
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.
 	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
+	// How many jobs a list holds — the per-list cap (maxJobsPerList) is enforced against
+	// this in the service before adding a job the list does not already contain. Also
+	// what bounds ListJobListItemCards' per-request cost on the public, unauthenticated
+	// read: capped write-time membership means a bounded read-time join, never an
+	// unbounded one.
+	CountJobListItems(ctx context.Context, listID int64) (int64, error)
+	// How many lists a user has — the per-user cap is enforced against this in the
+	// service before a create.
+	CountJobLists(ctx context.Context, userID int64) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -824,6 +835,9 @@ type Querier interface {
 	// Because all four outcomes are "no row", the repository asks GhostReportRefusalReason
 	// which one it was. That costs an extra query only on the failure path.
 	CreateGhostReport(ctx context.Context, arg CreateGhostReportParams) (GhostReport, error)
+	// Create a job list for a user. The UNIQUE (user_id, name) constraint rejects a
+	// duplicate name (surfaced by the repository as a unique-violation). Returns the row.
+	CreateJobList(ctx context.Context, arg CreateJobListParams) (JobList, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique
 	// violation to a domain "already offered" error. Starts pending, awaiting moderation.
@@ -1051,6 +1065,10 @@ type Querier interface {
 	// Bounded by max_rows so one drain run cannot turn into an unbounded delete on the first
 	// pass over a long-accumulated backlog; the next run takes the next slice.
 	DeleteIneligibleSearchOutbox(ctx context.Context, maxRows int32) (int64, error)
+	// Delete a list, scoped to its owner. Membership rows cascade; the referenced jobs
+	// and the user's separate save flags are untouched. Returns the affected row count:
+	// 0 means it does not exist or is not the caller's (the handler maps that to 404).
+	DeleteJobList(ctx context.Context, arg DeleteJobListParams) (int64, error)
 	// ---------------------------------------------------------------------------
 	// job_semantic_chunks: pgvector-backed per-chunk embeddings (see migration 0092
 	// and openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/5).
@@ -1698,6 +1716,10 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// Fetch one of a user's lists, owner-scoped. Used by share/add/remove to confirm
+	// ownership before mutating. No matching row → no row (the service maps that to
+	// ErrNotFound).
+	GetJobList(ctx context.Context, arg GetJobListParams) (JobList, error)
 	// The source job's chunk-generation marker (design.md's NearestJobsToJob rollup has no
 	// row to carry this on when a job's every candidate gets excluded, so it is its own
 	// query, read in the same round trip as NearestJobsToJob rather than folded into it).
@@ -1760,10 +1782,10 @@ type Querier interface {
 	// column read and never a call to a billing provider: a provider that is slow must not
 	// be able to slow down a user's next question.
 	GetProUntil(ctx context.Context, id int64) (pgtype.Timestamptz, error)
-	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
-	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
-	// never equals the param, so private sets are unreachable. No row → 404.
-	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
+	// Public read of a shared list by its slug — no auth, no owner-scoping. Exposes only
+	// the list's display fields; owner columns (user_id) are never selected. A NULL slug
+	// never equals the param, so private lists are unreachable. No row → 404.
+	GetPublicJobListBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicJobListBySlugRow, error)
 	// One offer by id — for the moderator's proof-CV view after role authorization.
 	GetReferralOffer(ctx context.Context, id uuid.UUID) (ReferralOffer, error)
 	// One referral request by id — for authorized CV access and marking, after the caller is
@@ -1792,10 +1814,9 @@ type Querier interface {
 	// service; the Mark* queries are additionally scoped to status='pending' as defense-in-depth
 	// against a concurrent second decision.
 	GetReport(ctx context.Context, id int64) (GetReportRow, error)
-	// Fetch one of a user's saved searches, owner-scoped. Used by the share use case to
-	// read the current name/public_slug before deciding whether to keep an existing slug
-	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
-	// service maps that to ErrNotFound).
+	// Fetch one of a user's saved searches, owner-scoped. Used by
+	// internal/engage/subscription to read the stored query when subscribing. No
+	// matching row (wrong id or another user's) returns no row.
 	GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error)
 	// The caller's single screening-answers record, keyed by user_id. No matching row means
 	// the candidate has not stated any screening answer yet.
@@ -2136,6 +2157,9 @@ type Querier interface {
 	// detail endpoint still serves it, and leaving it unmarked would make the facet's
 	// meaning depend on lifecycle state.
 	JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error)
+	// Whether a job already belongs to a list — lets the service treat re-adding an
+	// existing member as free (exempt from the per-list cap) while still capping growth.
+	JobListHasItem(ctx context.Context, arg JobListHasItemParams) (bool, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -2686,6 +2710,19 @@ type Querier interface {
 	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
 	// simply do not come back; the handler falls back to a generic label for a deleted job.
 	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
+	// The jobs in a list, newest-added first, projected to a CARD (title, company,
+	// status, facets) — never the full row (mirrors ListUserJobs: the description
+	// alone would dwarf everything else a card needs). Closed/expired jobs stay
+	// listed: a list is the user's own record of what they looked at, not a live
+	// availability feed.
+	ListJobListItemCards(ctx context.Context, listID int64) ([]ListJobListItemCardsRow, error)
+	// A user's job lists, most recently updated first, each flagged with whether the
+	// given job is already a member — what the job card's "Add to list" control reads
+	// to render its toggle state. jobID is resolved from the job's public slug by the
+	// caller before this runs.
+	ListJobListMembershipForJob(ctx context.Context, arg ListJobListMembershipForJobParams) ([]ListJobListMembershipForJobRow, error)
+	// A user's job lists, most recently updated first (the account-area order).
+	ListJobLists(ctx context.Context, userID int64) ([]ListJobListsRow, error)
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.
@@ -3879,6 +3916,8 @@ type Querier interface {
 	// usable destination on any configured channel) is retried promptly on a later pass
 	// instead of waiting out the lease.
 	ReleaseReminderClaim(ctx context.Context, id int64) error
+	// Remove a job from a list. Idempotent: removing an absent job is a no-op.
+	RemoveJobListItem(ctx context.Context, arg RemoveJobListItemParams) error
 	// Apply a resolved display name to every job under a slug-like company and
 	// re-key its company_slug (computed by the caller via normalize.Slug), so the
 	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
@@ -4158,6 +4197,13 @@ type Querier interface {
 	// min/max does not blank the other's payload value; each overlay only fires at all
 	// when at least one of its own bounds is set (the presence signal).
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
+	// Publish a list: set its public slug, owner-scoped, bumping updated_at. The service
+	// decides the slug (keeping an existing one on re-share, minting a fresh one
+	// otherwise), so this sets it verbatim; a collision with another list's slug raises a
+	// UNIQUE violation the service retries. No matching owner-scoped row returns no row
+	// (→ ErrNotFound). The job_count subquery matches ListJobLists' so a just-shared
+	// list's response carries its real count instead of 0.
+	SetJobListPublicSlug(ctx context.Context, arg SetJobListPublicSlugParams) (SetJobListPublicSlugRow, error)
 	// Write one row's requires_clearance, for cmd/backfill-clearance.
 	//
 	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
@@ -4172,13 +4218,6 @@ type Querier interface {
 	// webhook and its reconciler become the writers in the change that adds them, and they
 	// write this and nothing else.
 	SetProUntil(ctx context.Context, arg SetProUntilParams) error
-	// Publish a saved search as a board: set its public slug and (optional) author label,
-	// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing
-	// one on re-share, minting a fresh one otherwise), so this sets it verbatim; a
-	// collision with another board's slug raises a UNIQUE violation the service retries.
-	// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
-	// row returns no row (→ ErrNotFound).
-	SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error)
 	// Write one job's precomputed similar-jobs list and stamp similar_computed_at
 	// together, so a job is never marked computed without its list landing. A nil/empty
 	// similar_job_ids is a valid, intentional write (a job whose only close matches were
@@ -4538,6 +4577,12 @@ type Querier interface {
 	// row re-indexes. Stamps updated_at so `reindex --since` also captures it. Only the description
 	// and hash move; the deterministic facets are re-derived separately by cmd/backfill-derive.
 	UpdateJobDescription(ctx context.Context, arg UpdateJobDescriptionParams) (int64, error)
+	// Overwrite a list's name and/or description, scoped to its owner, bumping
+	// updated_at. Partial update: a NULL param leaves that column unchanged (COALESCE).
+	// No matching owner-scoped row returns no row (the handler maps that to 404). The
+	// job_count subquery matches ListJobLists' so the caller's job_count stays correct
+	// after a rename/re-describe, instead of silently reading 0.
+	UpdateJobList(ctx context.Context, arg UpdateJobListParams) (UpdateJobListRow, error)
 	// Moderator edit of a hand-curated job, addressed by public_slug and scoped to
 	// created_by IS NOT NULL so this path can only rewrite a moderator-authored posting,
 	// never an automated-source (ingest/telegram) one — regardless of the declared source.

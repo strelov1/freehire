@@ -419,6 +419,7 @@ func Register(app *fiber.App, cfg Config) {
 	reportsH := newReportHandlers(queries)
 	ghostReportsH := newGhostReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
+	jobListH := newJobListHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	webhookH := newWebhookHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
@@ -724,6 +725,9 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
 	savedSearchH.register(api, mw)
+	// Job lists: named sets of specific jobs, independent of "save", with an
+	// optional public read-only page (see jobListHandlers).
+	jobListH.register(api, mw)
 
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).

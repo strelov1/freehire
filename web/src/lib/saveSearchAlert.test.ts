@@ -27,7 +27,7 @@ class MemoryStorage {
 }
 
 const search = (id: number, query: string, name = `s${id}`): SavedSearch =>
-  ({ id, name, query, public_slug: '', author_label: '', created_at: '', updated_at: '' }) as SavedSearch;
+  ({ id, name, query, created_at: '', updated_at: '' }) as SavedSearch;
 
 // A SavedSearchesPort double that records create calls and grows its list on success.
 function makeSaved(opts: {

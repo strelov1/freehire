@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Pencil, Share2, Trash2 } from '@lucide/svelte';
+  import { Pencil, Trash2, Check } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api';
@@ -9,7 +9,7 @@
   import { notifications } from '$lib/notifications.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type { SavedSearch } from '$lib/types';
-  import { Button, ConfirmDialog, Input } from '$lib/ui';
+  import { Button, ConfirmDialog } from '$lib/ui';
   import { toSearchString } from '$lib/urlSearchString';
   import { ProviderIcon } from '$lib/ui';
   import AlertChannels from './filters/AlertChannels.svelte';
@@ -19,10 +19,11 @@
   // The account page for saved searches and their alerts: the Telegram connection at
   // the top, then the built-in "notify me about jobs matching my profile" toggle (needs
   // a candidate profile to derive filters from — hidden for an account with none), then
-  // each saved search as a card with its actions (open / rename / share / delete) and
-  // its per-channel alert toggles (the shared AlertChannels). Merges the former separate
+  // each saved search as a card with its actions (open / rename / delete) and its
+  // per-channel alert toggles (the shared AlertChannels). Merges the former separate
   // Notifications page — a subscription is always tied to a saved search, so it's
-  // managed per-row.
+  // managed per-row. Public sharing (formerly "boards") is retired in favor of job
+  // lists, which share specific jobs rather than a live query.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   const items = $derived(savedSearches.items);
@@ -33,14 +34,7 @@
   // beside the per-search toggles below.
   const telegram = $derived(notifications.telegram);
 
-  // Share flow: clicking "Share" on a row reveals an optional author-label input for that
-  // row (an inline per-row edit id); confirming publishes the board.
-  let shareEditId = $state<number | null>(null);
-  let authorLabel = $state('');
-  let busyId = $state<number | null>(null);
   let error = $state<string | null>(null);
-  // The row whose link was just copied, to flip its button label briefly.
-  let copiedId = $state<number | null>(null);
 
   async function load() {
     status = 'loading';
@@ -66,49 +60,11 @@
     }
   });
 
-  // The public board URL for a shared set. Browser-only (uses location.origin); the list
-  // renders after auth on the client, so origin is always available here.
-  function boardUrl(slug: string): string {
-    return `${location.origin}/b/${slug}`;
-  }
-
   // The stored query may carry a %2C from URLSearchParams' own encoding (see
   // urlSearchString.ts); normalize it back to a literal comma for the "Open" link
   // so a multi-value facet reads the same compact way it does everywhere else.
   function openHref(query: string): string {
     return `/jobs?${toSearchString(new URLSearchParams(query))}`;
-  }
-
-  function startShare(s: SavedSearch) {
-    shareEditId = s.id;
-    authorLabel = s.author_label;
-    error = null;
-  }
-
-  async function confirmShare(id: number) {
-    busyId = id;
-    error = null;
-    try {
-      await savedSearches.share(id, authorLabel.trim());
-      shareEditId = null;
-      authorLabel = '';
-    } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Could not share this search. Please try again.';
-    } finally {
-      busyId = null;
-    }
-  }
-
-  async function unshare(id: number) {
-    busyId = id;
-    error = null;
-    try {
-      await savedSearches.unshare(id);
-    } catch {
-      error = 'Could not unshare this search. Please try again.';
-    } finally {
-      busyId = null;
-    }
   }
 
   async function rename(s: SavedSearch) {
@@ -140,18 +96,6 @@
       error = 'Could not delete this search. Please try again.';
     }
   }
-
-  async function copyLink(s: SavedSearch) {
-    try {
-      await navigator.clipboard.writeText(boardUrl(s.public_slug));
-      copiedId = s.id;
-      setTimeout(() => {
-        if (copiedId === s.id) copiedId = null;
-      }, 1500);
-    } catch {
-      error = 'Could not copy the link.';
-    }
-  }
 </script>
 
 {#if !isAuthenticated()}
@@ -165,8 +109,7 @@
       <h1 class="text-2xl font-semibold tracking-tight">Saved searches &amp; alerts</h1>
       <p class="text-sm text-muted-foreground">
         Each saved set of filters can send you its new jobs — in Telegram, by email, or both.
-        Reuse one anytime, or share it as a public board. Create new saved searches from the
-        filters panel on the jobs page.
+        Reuse one anytime. Create new saved searches from the filters panel on the jobs page.
       </p>
     </div>
 
@@ -219,7 +162,6 @@
                 <span class="truncate text-sm font-medium">{s.name}</span>
                 <span class="text-xs text-muted-foreground">
                   {s.query === '' ? 'All jobs' : 'Custom filters'}
-                  {#if s.public_slug}· <span class="font-medium text-brand-strong">Shared</span>{/if}
                 </span>
               </div>
               <div class="flex shrink-0 items-center gap-1">
@@ -233,17 +175,6 @@
                 >
                   <Pencil class="size-4" />
                 </button>
-                {#if !s.public_slug}
-                  <button
-                    type="button"
-                    aria-label="Share “{s.name}”"
-                    title="Share as a public board"
-                    onclick={() => startShare(s)}
-                    class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <Share2 class="size-4" />
-                  </button>
-                {/if}
                 <button
                   type="button"
                   aria-label="Delete “{s.name}”"
@@ -260,46 +191,6 @@
             <div class="mt-3 border-t border-dashed border-border pt-3">
               <AlertChannels savedSearchId={s.id} />
             </div>
-
-            {#if s.public_slug}
-              <!-- Shared: the public link, its author label, copy, and unshare. -->
-              <div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2">
-                <a
-                  href={resolve('/b/[slug]', { slug: s.public_slug })}
-                  class="min-w-0 truncate text-xs text-brand-strong underline-offset-4 hover:underline"
-                >
-                  /b/{s.public_slug}
-                </a>
-                {#if s.author_label}
-                  <span class="text-xs text-muted-foreground">by {s.author_label}</span>
-                {/if}
-                <Button variant="ghost" size="sm" class="ml-auto" onclick={() => copyLink(s)}>
-                  {copiedId === s.id ? 'Copied' : 'Copy link'}
-                </Button>
-                <Button variant="ghost" size="sm" disabled={busyId === s.id} onclick={() => unshare(s.id)}>
-                  Unshare
-                </Button>
-              </div>
-            {:else if shareEditId === s.id}
-              <!-- Private + sharing: optional author label, then confirm. -->
-              <div class="mt-3 flex flex-wrap items-center gap-2">
-                <Input
-                  bind:value={authorLabel}
-                  placeholder="Author label (optional)"
-                  maxlength={60}
-                  class="w-56"
-                />
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={busyId === s.id}
-                  onclick={() => confirmShare(s.id)}
-                >
-                  {busyId === s.id ? 'Sharing…' : 'Create board'}
-                </Button>
-                <Button variant="ghost" size="sm" onclick={() => (shareEditId = null)}>Cancel</Button>
-              </div>
-            {/if}
           </article>
         {/each}
         </div>
