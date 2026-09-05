@@ -782,12 +782,12 @@
       </div>
     {/if}
 
-    {#if autoApplyOverrideStatus === 'queued'}
+    {#if autoApplyState.kind === 'queued'}
       <div
         class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
       >
         <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored résumé — you'll get
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
           a notification to review it.
         </span>
       </div>

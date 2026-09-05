@@ -251,7 +251,7 @@ func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Cla
 
 	path, err := c.renderResumeToTempFile(ctx, claimed)
 	if err != nil {
-		log.Printf("atsapply: render approved CV %d for user %d job %d: %v", claimed.TailoredCVID, claimed.UserID, claimed.JobID, err)
+		log.Printf("atsapply: render approved CV %s for user %d job %d: %v", claimed.TailoredCVID, claimed.UserID, claimed.JobID, err)
 		return nil, &autoapply.SidecarResult{
 			Status: autoapply.StatusParked,
 			Unmapped: []autoapply.UnmappedField{{
