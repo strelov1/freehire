@@ -44,7 +44,7 @@
   // One chip shape for both the flat card and the expandable summary, so the two never
   // drift apart by a padding step. The expandable one adds only its hover affordance.
   const chip =
-    'self-start inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5 text-sm leading-5 text-muted-foreground';
+    'self-start inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5 text-sm text-muted-foreground';
 </script>
 
 {#each groupTools(calls) as g, t (t)}

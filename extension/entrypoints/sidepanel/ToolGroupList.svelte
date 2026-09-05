@@ -76,8 +76,11 @@
     background: var(--muted);
     border: 1px solid var(--border);
     border-radius: 8px;
-    /* The summary's hover fill runs to the card's edge; without this it squares off
-       the two top corners. */
+  }
+
+  /* The summary's hover fill runs to the card's edge; without this it squares off the
+     two top corners. Only the expandable card has a summary to fill. */
+  details.tool {
     overflow: hidden;
   }
 
