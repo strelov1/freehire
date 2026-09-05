@@ -65,6 +65,13 @@ type Querier interface {
 	// reviewed" apart from "not found" before ever reaching this statement, so zero rows here
 	// would only mean a race with a concurrent decision on the same entry.
 	ApproveAutoApplyReview(ctx context.Context, id int64) (int64, error)
+	// Record that this account arrived through that account's link.
+	//
+	// ON CONFLICT DO NOTHING on the invitee, so a second attribution of the same account writes
+	// nothing rather than failing: an account is worth one reward for its whole life, and the
+	// table's unique constraint is what says so. Self-referral is refused by the table's own
+	// check constraint too; the service refuses it earlier so the common case is not an error.
+	AttributeInvite(ctx context.Context, arg AttributeInviteParams) (int64, error)
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
@@ -745,6 +752,9 @@ type Querier interface {
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.
 	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
+	// How many rewards this referrer has already earned, for the per-referrer ceiling. Counts
+	// granted rows only: an attribution that never paid costs nothing and must not use up a slot.
+	CountGrantedInviteRewards(ctx context.Context, referrerID int64) (int64, error)
 	// How many jobs a list holds — the per-list cap (maxJobsPerList) is enforced against
 	// this in the service before adding a job the list does not already contain. Also
 	// what bounds ListJobListItemCards' per-request cost on the public, unauthenticated
@@ -1412,6 +1422,16 @@ type Querier interface {
 	// For an existing user the row is left untouched; a stale period is reset later
 	// under the lock. remaining is seeded with the monthly grant for a fresh row.
 	EnsureBalance(ctx context.Context, arg EnsureBalanceParams) error
+	// The account's invite code, minted on first ask and never rotated.
+	//
+	// ON CONFLICT DO UPDATE rather than DO NOTHING, because DO NOTHING returns no row and the
+	// caller wants the code whether or not this call is the one that created it. The self-assign
+	// is the idiomatic way to make the existing row visible to RETURNING.
+	//
+	// The generated code can also collide on its own unique index. That conflict is NOT handled
+	// here: it means crypto/rand produced a value already held, which at this width is not a
+	// case to write code around — the caller retries and the second draw succeeds.
+	EnsureInviteCode(ctx context.Context, arg EnsureInviteCodeParams) (string, error)
 	// Enroll userID in the hosted mailbox, idempotently — a second call for the same
 	// user is a no-op. The address itself is never stored here; it is always derived
 	// from the account's username (see the add-username-claim change).
@@ -2040,6 +2060,16 @@ type Querier interface {
 	// unverified account should be told to confirm its address rather than that somebody
 	// already reported the job.
 	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
+	// Move one reward to granted at the amount it is worth today.
+	//
+	// Guarded on the current status, which is what makes the pass idempotent: a re-run over a
+	// row somebody else already granted affects no rows, and the caller reads that as "already
+	// done" rather than doing it twice. The amount is fixed here and never recomputed, so a
+	// later price change cannot revalue credit that has been earned.
+	GrantInviteReward(ctx context.Context, arg GrantInviteRewardParams) (int64, error)
+	// Whether this account has already spent its one redemption. Asked after a refusal, to turn
+	// the deliberately vague "no" above into the one explanation that is about the caller.
+	HasRedeemedPromoCode(ctx context.Context, userID int64) (bool, error)
 	// Whether this account has ever been seen by RevenueCat: a recorded delivery of theirs, or a
 	// store entitlement we already hold.
 	//
@@ -2184,6 +2214,13 @@ type Querier interface {
 	// row is inserted (pgx.ErrNoRows) when parent_reply_id is set but names a reply outside
 	// this thread.
 	InsertThreadReply(ctx context.Context, arg InsertThreadReplyParams) (ThreadReply, error)
+	// What the account's own invite page says: how many people came through the link, how many
+	// of them earned a reward, and what that adds up to.
+	//
+	// Aggregates only. There is deliberately no query that lists an account's invitees: naming
+	// who accepted an invite discloses that a particular person signed up for a job board, which
+	// is not the referrer's to know.
+	InviteStats(ctx context.Context, referrerID int64) (InviteStatsRow, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
@@ -3242,6 +3279,10 @@ type Querier interface {
 	// Scoped to the company and to open rows, so a row the exact pass claimed in the meantime is
 	// left alone. The IS DISTINCT FROM guard makes a re-run free.
 	MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error)
+	// Stamp a reward as placed on the referrer's balance. Guarded on the stamp being absent, so
+	// a repeat affects no rows. The credit itself carries an idempotency key on the provider's
+	// side, so the two guards fail in the same direction: never twice.
+	MarkInviteRewardDelivered(ctx context.Context, id int64) (int64, error)
 	// Mark a job as applied for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or updates applied_at in place, and
 	// seeds stage='applied' when the stage is unset OR still 'preparing' — CV
@@ -3447,6 +3488,18 @@ type Querier interface {
 	// The display name is the modal `company` across the aggregator rows, since two aggregators
 	// may spell the same employer differently and the name is what the harvest gate compares.
 	OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error)
+	// Does this account still owe itself the invitee's first-month discount?
+	//
+	// `pending` is the whole condition: once the reward is granted the invitee has paid, and a
+	// first-month discount they have already been past is not owed again.
+	PendingInviteDiscount(ctx context.Context, refereeID int64) (bool, error)
+	// The worker's grant pass: attributed signups that could plausibly have paid.
+	//
+	// Narrowed to invitees who hold a provider customer, because that binding is written when a
+	// purchase is first recorded — without one there is nothing to ask the provider about, and
+	// asking anyway would be one API call per person who signed up and never bought, which is
+	// almost all of them.
+	PendingInviteRewards(ctx context.Context, maxRows int32) ([]PendingInviteRewardsRow, error)
 	// What ClaimDueRuns WOULD take, without taking it. Shadow mode's read: the first
 	// deployment lands underneath a fleet still driven by the static timers, so a tick that
 	// advanced a due time would desynchronise state the real timers know nothing about.
@@ -3456,6 +3509,15 @@ type Querier interface {
 	// something other than what apply mode does, so they are asserted equivalent by an
 	// integration test rather than by inspection.
 	PreviewDueRuns(ctx context.Context, arg PreviewDueRunsParams) ([]PreviewDueRunsRow, error)
+	// Is this code usable right now? Read-only, and deliberately says nothing about WHY it is
+	// not: the route behind it is rate limited but still reachable by anyone with an account,
+	// and a refusal that distinguished "no such code" from "out of seats" would turn it into an
+	// oracle for guessing codes. No rows means no.
+	//
+	// The caller's own redemption history is checked separately, because that is a fact about
+	// the caller rather than about the code, and telling them "you have already used a code" is
+	// both useful and leaks nothing.
+	PreviewPromoCode(ctx context.Context, code string) (int16, error)
 	// Domains whose confident-hit count has reached the promotion threshold; the sync
 	// worker unions these into the Gmail search query.
 	PromotedDomains(ctx context.Context, threshold int32) ([]string, error)
@@ -3921,9 +3983,29 @@ type Querier interface {
 	// applied to has nothing to correct, and setting applied_at here would assert an application
 	// that was never made (0065).
 	RedateApplication(ctx context.Context, arg RedateApplicationParams) (RedateApplicationRow, error)
+	// Claim a seat and record the redemption, in ONE statement, returning the percentage.
+	//
+	// One statement because it has to be atomic and a transaction here would be the wrong tool.
+	// The seat is claimed by the same UPDATE that tests it, so two accounts racing for the last
+	// seat of a launch offer cannot both win — a read-then-write would let them, and the moment
+	// that matters is exactly the moment the offer is popular.
+	//
+	// The NOT EXISTS is the other half: an account redeems one code in its lifetime, so the
+	// claim must not even increment `uses` for somebody who is already ineligible. And where
+	// two different codes are redeemed concurrently by ONE account, both may pass that check
+	// against their own snapshot — the unique violation on promo_redemptions.user_id then aborts
+	// the losing statement WHOLE, seat increment included, because a single statement is a
+	// single subtransaction. That is the property this shape is buying.
+	//
+	// No rows back means refused, without saying which bound refused it.
+	RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) (int16, error)
 	// Whether a specific member is an approved referrer for a company — the authorization
 	// check for acting on / viewing a request in that company's pool.
 	ReferrerApprovedForCompany(ctx context.Context, arg ReferrerApprovedForCompanyParams) (bool, error)
+	// Who owns this invite code. No rows means a code nobody minted, which the attribution path
+	// treats as no attribution rather than as an error: the value came out of a cookie, and a
+	// cookie is whatever the visitor put in it.
+	ReferrerByInviteCode(ctx context.Context, code string) (int64, error)
 	// Recompute every company's denormalized state in one set-based pass: the open-job
 	// count plus the facet arrays derived from those open jobs — regions/countries from
 	// the jobs geography columns, remote_regions from those same regions but scoped to
@@ -4699,6 +4781,13 @@ type Querier interface {
 	// current work, not an archive, and each row carries two operation documents on the table
 	// behind every CV page.
 	TrimCVRevisions(ctx context.Context, arg TrimCVRevisionsParams) (int64, error)
+	// The worker's delivery pass: earned, but not yet placed on the referrer's balance.
+	//
+	// Unlike the grant pass this does NOT require the referrer to hold a customer. A referrer
+	// who has never bought anything has one created for them, because the alternative — holding
+	// the reward until their own checkout — meant marking credit consumed by a session that is
+	// abandoned far more often than it is completed.
+	UndeliveredInviteRewards(ctx context.Context, maxRows int32) ([]UndeliveredInviteRewardsRow, error)
 	// Clear a job's dismissed mark without deleting the interaction row, so view/
 	// apply/save history survives. No interaction row -> pgx.ErrNoRows; the handler
 	// treats that as "already not dismissed", never as a failure. This is the undo

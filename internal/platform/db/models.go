@@ -630,6 +630,25 @@ type InsightsVelocityDaily struct {
 	Removed    int32       `json:"removed"`
 }
 
+// One invite code per account, minted from crypto/rand the first time the account asks for its link, and never rotated. Uniqueness is the constraint here rather than a read-then-write, because a read-then-write is a race.
+type InviteCode struct {
+	UserID    int64              `json:"user_id"`
+	Code      string             `json:"code"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Who invited whom, and whether it earned anything. Written pending at the invitee's registration; moved to granted by cmd/billing-sync only once one of that invitee's invoices collected a non-zero amount — an active subscription that collected nothing never grants. referee_id is UNIQUE, so an account is worth one reward for life.
+type InviteReward struct {
+	ID          int64              `json:"id"`
+	ReferrerID  int64              `json:"referrer_id"`
+	RefereeID   int64              `json:"referee_id"`
+	Status      string             `json:"status"`
+	AmountCents int64              `json:"amount_cents"`
+	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
+	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Job struct {
 	ID                    int64              `json:"id"`
 	Source                string             `json:"source"`
@@ -868,6 +887,25 @@ type ProcessedViewLog struct {
 	Signature   int64              `json:"signature"`
 	Filename    string             `json:"filename"`
 	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
+// Operator-created discount codes. Written by INSERT only — no code path creates a row, and a test fails the build if a redeemable code appears in the repository. Seats are claimed by the same UPDATE that tests them, so two accounts cannot both take the last one. Setting active = false stops new redemptions without a deploy.
+type PromoCode struct {
+	Code       string             `json:"code"`
+	PercentOff int16              `json:"percent_off"`
+	MaxUses    pgtype.Int4        `json:"max_uses"`
+	Uses       int32              `json:"uses"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	Active     bool               `json:"active"`
+	Note       string             `json:"note"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// One row per account, ever: user_id is the primary key, so an account redeems at most one promo code in its lifetime. This is what stops two percentage discounts stacking on a subscription that only admits one coupon per checkout session.
+type PromoRedemption struct {
+	UserID     int64              `json:"user_id"`
+	Code       string             `json:"code"`
+	RedeemedAt pgtype.Timestamptz `json:"redeemed_at"`
 }
 
 type PrunedJob struct {

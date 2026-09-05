@@ -1,6 +1,6 @@
 ## 1. Schema
 
-- [ ] 1.1 Write `migrations/0140_promo_and_invites.sql`: `promo_codes` (code PK upper-cased by
+- [x] 1.1 Write `migrations/0140_promo_and_invites.sql`: `promo_codes` (code PK upper-cased by
   a check, `percent_off` smallint 1..100, `max_uses` int NULL, `uses` int NOT NULL DEFAULT 0,
   `expires_at` timestamptz NULL, `active` bool NOT NULL DEFAULT true, `note` text,
   `created_at`), `promo_redemptions` (`user_id` UNIQUE — one code per account for life —
@@ -8,7 +8,7 @@
   `invite_rewards` (`id`, `referrer_id`, `referee_id` UNIQUE, `status`, `amount_cents`,
   `granted_at`, `delivered_at`, `created_at`, CHECK `referrer_id <> referee_id`). Verify with
   `pnpm check:sql`.
-- [ ] 1.2 Add `internal/platform/db/queries/promo.sql`: the atomic seat claim
+- [x] 1.2 Add `internal/platform/db/queries/promo.sql`: the atomic seat claim
   (`UPDATE … WHERE … RETURNING`), redemption insert, preview read, invite-code upsert and
   lookup, reward insert, pending-rewards-for-payable-invitees, granted-count-per-referrer,
   accrued-undelivered-for-user, and the two stamps (granted, delivered). Run `make sqlc` and
@@ -27,10 +27,10 @@
   idempotent, and never rotates. Uniqueness comes from the constraint, not from a read.
 - [ ] 2.4 `Attribute(ctx, refereeID, code)`: writes a `pending` reward, refuses self-referral,
   and treats an unknown code and a duplicate invitee as no-ops rather than errors.
-- [ ] 2.5 `Stats(ctx, userID)`: invitee count, paid count, accrued undelivered credit. No
-  invitee identity in the result type at all — not filtered at the edge.
-- [ ] 2.6 `PendingDiscount(ctx, userID)`: resolves the one discount an account gets, credit
-  before percentage, and reports which it chose.
+- [ ] 2.5 `Stats(ctx, userID)`: invitee count, rewarded count, total credit earned. No invitee
+  identity in the result type at all — not filtered at the edge.
+- [ ] 2.6 `PendingDiscount(ctx, userID)`: the one percentage an account gets on a checkout —
+  a redeemed promo code or a pending invite — and which of the two it was.
 - [ ] 2.7 Reward-ceiling config: `INVITE_REWARD_MAX_PER_USER`, default 12; an unparseable or
   non-positive value logs and falls back rather than failing.
 
@@ -38,13 +38,15 @@
 
 - [ ] 3.1 Give `client.do` an optional header argument and thread it through the existing call
   sites unchanged.
-- [ ] 3.2 `client.createCoupon` (`duration=once`, percent or amount+currency) with an
-  idempotency key derived from account, code and price; attach it to the session as
-  `discounts[0][coupon]`.
-- [ ] 3.3 Add `billing.Discount` and the parameter on `Service.CheckoutURL`. A zero `Discount`
-  must produce a byte-identical request to today's.
+- [ ] 3.2 `client.createCoupon` (`duration=once`, `percent_off`) with an idempotency key
+  derived from account, code and price; attach it to the session as `discounts[0][coupon]`.
+- [ ] 3.3 Add `billing.Discount` (a percentage, nothing else) and the parameter on
+  `Service.CheckoutURL`. A zero `Discount` must produce a byte-identical request to today's.
 - [ ] 3.4 `client.creditCustomerBalance` → `POST /v1/customers/{id}/balance_transactions` with
   a negative amount and `Idempotency-Key` = the reward id.
+- [ ] 3.6 `Service.CreditAccount(ctx, userID, cents, key)`: resolve the account's customer,
+  creating and binding one through the write-once setter when there is none, then credit it.
+  Assert no second customer is created for an already-bound account.
 - [ ] 3.5 `client.hasCollectedPayment(ctx, customerID)`: any invoice with `amount_paid > 0`.
   Assert against a stub that an active-but-uncollected subscription answers false.
 
@@ -53,8 +55,9 @@
 - [ ] 4.1 Add the third pass to `cmd/billing-sync`: pending rewards whose invitee holds a
   `stripe_customer_id` → ask the provider → grant at 50% of list price, resolved at grant time
   and stored. Bounded by `INVITE_REWARD_MAX_PER_RUN`.
-- [ ] 4.2 Deliver a granted reward as a balance credit when the referrer has a customer; leave
-  it undelivered when they do not. Assert the pass is a no-op on a second run.
+- [ ] 4.2 Deliver every granted, undelivered reward through `Service.CreditAccount`. Assert
+  the pass is a no-op on a second run, and that a referrer who has never bought gets a
+  customer created for them rather than being skipped.
 - [ ] 4.3 Enforce the per-referrer ceiling: over it, the row stays `pending`, nothing is
   credited, and the invitee's own discount is untouched.
 - [ ] 4.4 Assert a store-only invitee (RevenueCat, no Stripe customer) never grants.
@@ -67,18 +70,27 @@
   over the limit, and that a preview consumes no seat.
 - [ ] 5.3 Accept an optional `code` on the existing checkout route: redeem, resolve the single
   discount, pass it to `billing`, and state in the response which discount was applied.
-- [ ] 5.4 Read the attribution cookie in the registration handler and call
-  `promo.Attribute`. A failure there must never fail a registration.
+- [ ] 5.4 Read the attribution cookie in the password registration handler and call
+  `promo.Attribute`, expiring the cookie on success. A failure there must never fail a
+  registration.
+- [ ] 5.5 Do the same in the OAuth callback — the majority signup path, and the one that
+  returns on a bodyless GET redirect, so the cookie is the only thing that can carry the code.
+  Assert with a test that an OAuth signup attributes.
 
 ## 6. Web
 
-- [ ] 6.1 `web/src/routes/r/[code]/+server.ts`: set the httpOnly, `SameSite=Lax`, 30-day
+- [ ] 6.1 Capture `?ref=` in `web/src/hooks.server.ts` on any request: set an httpOnly,
+  `SameSite=Lax`, `Secure`, 30-day cookie, and only when one is not already present (first
+  toucher wins). Unit-test the capture rule, including that a second code does not overwrite.
+- [ ] 6.2 `web/src/routes/r/[code]/+server.ts`: the short form of the same link — set the
   cookie and redirect to `/`.
-- [ ] 6.2 Promo-code field on `web/src/routes/pricing/+page.svelte`, wired to preview then
+- [ ] 6.3 Capture `?promo=` the same way into its own, non-httpOnly cookie, and read it in the
+  pricing page's server `load` to prefill the field.
+- [ ] 6.4 Promo-code field on `web/src/routes/pricing/+page.svelte`, wired to preview then
   checkout, showing the refusal text the API returns.
-- [ ] 6.3 Invite page: the account's link with copy-to-clipboard, invitee and paid counts, and
+- [ ] 6.5 Invite page: the account's link with copy-to-clipboard, invitee and paid counts, and
   accrued credit. Follow the existing account-section routing and its auth redirect gate.
-- [ ] 6.4 `pnpm --dir web lint` and `pnpm --dir web test` green (a fresh worktree needs
+- [ ] 6.6 `pnpm --dir web lint` and `pnpm --dir web test` green (a fresh worktree needs
   `svelte-kit sync` first).
 
 ## 7. Guards and docs

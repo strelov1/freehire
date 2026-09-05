@@ -44,6 +44,39 @@ the referrer named by it.
 - **WHEN** a visitor who already has an account opens `/r/<code>` and signs in
 - **THEN** no `invite_rewards` row is created — attribution happens at account creation only
 
+### Requirement: The code survives every path from the link to the account
+
+The referrer's code SHALL be carried in a cookie written by the server, captured from a `ref`
+query parameter on any request as well as from `/r/<code>`, and read by every registration
+path including the OAuth callback.
+
+#### Scenario: The link points at a deep page
+
+- **WHEN** a visitor opens any page of the site with `?ref=<code>` appended
+- **THEN** the attribution cookie is set, exactly as it would be for `/r/<code>`
+
+#### Scenario: The visitor registers through an identity provider
+
+- **WHEN** an attributed visitor signs up through OAuth, returning on a redirect that carries
+  no request body
+- **THEN** the callback reads the cookie and the attribution is recorded
+
+#### Scenario: A second link tries to take over
+
+- **WHEN** a visitor who already carries an attribution cookie opens a different invite link
+- **THEN** the cookie keeps the first code
+
+#### Scenario: Attribution fails
+
+- **WHEN** writing the `invite_rewards` row fails during registration
+- **THEN** the registration still succeeds and the failure is logged — a referral must never
+  cost somebody their account
+
+#### Scenario: Attribution succeeds
+
+- **WHEN** the `invite_rewards` row is written during registration
+- **THEN** the same response expires the attribution cookie
+
 ### Requirement: Nobody refers themselves, and an invitee is worth one reward for life
 
 An `invite_rewards` row SHALL be refused when the referrer and the invitee are the same
@@ -102,44 +135,51 @@ reward.
 - **WHEN** the invitee subscribes through the App Store or Google Play
 - **THEN** no reward is granted, because no invoice we can read collected anything
 
-### Requirement: The reward reaches the referrer whether or not they pay us
+### Requirement: The reward is delivered as a credit, and a customer is created if needed
 
-A granted reward SHALL be delivered as a credit on the referrer's provider customer when one
-exists, so the next invoice consumes it. When the referrer has no provider customer, the
-reward SHALL be held and applied as an amount-off discount at their own first checkout.
+A granted reward SHALL be delivered as a credit on the referrer's provider customer, which
+the provider consumes on that customer's next invoice. A referrer with no provider customer
+SHALL have one created and bound before the credit is placed. A reward SHALL never be
+delivered as a discount on a checkout session.
 
 #### Scenario: The referrer is a subscriber
 
 - **WHEN** a reward is granted for a referrer who has a provider customer
-- **THEN** a credit for the reward amount is placed on that customer, and the reward records
-  that it was delivered
+- **THEN** a credit for the reward amount is placed on that customer and the reward is
+  stamped delivered
 
 #### Scenario: The referrer has never bought anything
 
 - **WHEN** a reward is granted for a referrer with no provider customer
-- **THEN** the reward is held, and the account's invite page reports the accrued credit
+- **THEN** a customer is created, bound to the account, credited, and the reward is stamped
+  delivered
 
-#### Scenario: The holder eventually buys
+#### Scenario: The customer binding already exists
 
-- **WHEN** an account holding accrued rewards starts checkout
-- **THEN** the checkout session carries an amount-off discount equal to the accrued credit,
-  bounded by the price, and those rewards are marked consumed
+- **WHEN** delivery runs for a referrer whose account is already bound to a customer
+- **THEN** no second customer is created and the existing binding is unchanged
+
+#### Scenario: Delivery is retried
+
+- **WHEN** the delivery pass runs again over a reward it has already delivered
+- **THEN** no second credit is placed
 
 ### Requirement: A checkout session carries at most one discount
 
-Where more than one discount could apply to a checkout, exactly one SHALL be attached, and
-accrued referral credit SHALL take precedence over a percentage discount.
-
-#### Scenario: An invited account also holds accrued credit
-
-- **WHEN** an account with both a pending invite discount and accrued referral credit starts
-  checkout
-- **THEN** only the accrued credit is attached
+A checkout session SHALL carry at most one coupon, and the only discount that can reach a
+session is a percentage — from a redeemed promo code or from a pending invite. Referral
+credit never appears here.
 
 #### Scenario: A redeemed promo code and an invite discount collide
 
 - **WHEN** an invited account redeems a promo code and starts checkout
-- **THEN** exactly one discount is attached, and the response states which
+- **THEN** exactly one percentage discount is attached, and the response states which
+
+#### Scenario: An account holding credit buys
+
+- **WHEN** an account with accrued referral credit starts checkout
+- **THEN** the session carries no discount from that credit, and the credit is consumed by
+  the invoice the provider issues
 
 ### Requirement: Rewards per referrer are bounded
 
@@ -161,10 +201,10 @@ Attributions beyond the bound are still recorded; they simply never grant.
 ### Requirement: The invite page reports what the account has actually earned
 
 `GET /me/invite` SHALL return the account's link, how many invitees it has, how many have
-paid, and the credit accrued but not yet delivered. It SHALL NOT identify the invitees.
+earned a reward, and the total credit earned. It SHALL NOT identify the invitees.
 
 #### Scenario: A referrer with mixed invitees
 
 - **WHEN** an account with three invitees, one of whom has paid, reads its invite page
-- **THEN** the response reports three invitees, one paid, and the credit for one reward, and
-  carries no invitee email, name or account id
+- **THEN** the response reports three invitees, one reward, and the credit for one reward,
+  and carries no invitee email, name or account id

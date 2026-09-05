@@ -65,13 +65,13 @@ an extra parameter on `CheckoutURL`; it never learns why the discount exists.
 ```go
 // billing
 type Discount struct {
-    PercentOff     int32  // 1..100, or 0
-    AmountOffCents int64  // or 0
-    Label          string // what the buyer sees on the coupon
+    PercentOff int32  // 1..100; zero means no discount
+    Label      string // what the buyer sees on the coupon
 }
 ```
 
-Exactly one of the two amounts is set. The HTTP handler asks `promo`, hands the answer to
+A percentage and nothing else — see the delivery decision below for why a referral reward
+never arrives as a coupon. The HTTP handler asks `promo`, hands the answer to
 `billing`, and that is the only place the two meet. Both are in the `identity` block, so a
 direct import would pass depguard — the separation is a scope decision, not a layering one,
 and the seam is the plain value type.
@@ -124,26 +124,31 @@ the source of truth and we re-read it rather than keeping a copy.
 `invite_rewards.amount_cents`. A later price change must not silently revalue credit somebody
 has already earned, in either direction.
 
-### Delivery: a balance credit when we can, a held reward when we cannot
+### Delivery is always a balance credit, and the customer is created if there is not one
 
-A referrer with a `stripe_customer_id` gets a negative customer balance transaction, which
-the provider consumes on the next invoice. This is the only mechanism that does not require
-knowing when the next invoice is due.
+A negative customer balance transaction. The provider consumes it on the next invoice, which
+is the only mechanism that does not require knowing when the next invoice is due — and it is
+also, word for word, what the reward promises: half off next month.
 
-A referrer who has never bought has no customer to credit. The reward stays `granted` and
-undelivered; their own first checkout carries an `amount_off` coupon for the accrued total,
-bounded by the price, and the rewards it consumed are stamped.
+A referrer who has never bought has no customer to credit, so **one is created for them**
+(`POST /v1/customers`) and bound through the existing write-once `SetStripeCustomerID`. The
+credit then sits on it until they subscribe, and their first invoice consumes it.
+
+This replaces an earlier draft in which an undelivered reward became an `amount_off` coupon
+at the referrer's own checkout. That draft had a hole with no cheap fix: the credit had to be
+marked consumed when the session was created, but a session is abandoned far more often than
+it is completed, so an abandoned checkout burned the reward. Deferring the consumption until
+the invoice was paid would mean tracking which session carried which reward — a second
+ledger, disagreeing with the provider's. Creating the customer early costs one API call for
+somebody who has already earned a reward, which means somebody else has already paid us.
+
+Because of this, **there is exactly one kind of discount attached to a checkout session: a
+percentage.** Credit is never a coupon, so the question of which of two discounts wins does
+not arise, and `Discount` carries no amount.
 
 `POST /v1/customers/{id}/balance_transactions` needs an `Idempotency-Key` header, which the
 current `client.do` cannot set. It gains an optional header argument — the narrowest change
 that serves both this and coupon creation.
-
-### One discount per session, credit first
-
-Stripe admits one coupon per checkout session, so the choice is forced and must be explicit.
-Accrued referral credit wins over a percentage discount: it is money the account has already
-earned, and a percentage offer can be used later while credit consumed by a discounted
-invoice is gone. The response states which was applied so the page can say so.
 
 ### Seats are claimed by the statement that tests them
 
@@ -169,15 +174,55 @@ code in its lifetime, so a second offer cannot be stacked onto the first.
 reward however many times it is attributed. Both are constraints rather than checks, because
 a check that runs before a write is a race and a constraint is not.
 
-### `/r/<code>` is a SvelteKit route
+### The code is carried by a server-set cookie, and nothing else
 
-`web/src/routes/r/[code]/+server.ts` sets an httpOnly, `SameSite=Lax`, 30-day cookie and
-redirects to the site root. The API and the web app are same-origin, so the Go registration
-handler reads the same cookie.
+This is the part that decides whether the feature works at all, because the gap between
+clicking an invite link and creating an account is where attribution is normally lost.
 
-The alternative — a Go route at `/r/` — is a top-level path outside `/api/v1`, which means an
-nginx change on the production host to route it. That is the same "lives only on the host"
-hazard as a new systemd unit, for no gain.
+**A cookie, not `localStorage`.** The reference implementation this feature was modelled on
+keeps the code in `localStorage` and sends it in the body of the checkout request. That works
+there because it attributes at CHECKOUT — an ordinary POST the client composes. It cannot
+work here, because we attribute at REGISTRATION, and the majority registration path is
+OAuth: the visitor leaves for the provider and comes back on a **GET redirect, which has no
+body to carry anything**. A value only the browser's JavaScript can see is a value the OAuth
+callback cannot read. The cookie travels on that redirect by itself.
+
+**Set by the server, never by `document.cookie`.** Safari's tracking prevention caps
+JavaScript-written cookies at seven days. A 30-day window only survives if the cookie arrives
+as a `Set-Cookie` header, which is why this lives in `hooks.server.ts` and not in a component.
+httpOnly follows for free, and means an XSS cannot read or forge an attribution.
+
+**Captured from any URL shape.** `hooks.server.ts` reads `?ref=` on *every* request, so
+`freehire.me/?ref=x`, `freehire.me/jobs/some-job?ref=x` and a bare `/r/x` all work. The
+dedicated `/r/[code]` route exists only to make the link short and to redirect to the site
+root. Handling `?ref=` in one hook rather than on each page is what stops a shared deep link
+from silently attributing nothing.
+
+**First toucher wins.** The cookie is written only when absent. Otherwise a second invite
+link — or a link a bad actor gets a pending invitee to open — would overwrite an attribution
+already earned.
+
+**Cleared only once it has done its job.** Both registration paths (the password handler and
+the OAuth callback) read the cookie, attribute, and expire it in the same response. If
+attribution fails for any reason, the cookie stays and the next request tries again. Nothing
+clears it speculatively.
+
+`?promo=` gets the same treatment in a separate cookie, read by the pricing page's server
+`load` to prefill the field. It is not httpOnly, because prefilling is its whole purpose and
+the value is a code the visitor already has.
+
+*Deliberately not added: a `localStorage` mirror.* It could only help when a first-party
+httpOnly cookie is dropped — and in that browser the session cookie is dropped too, so the
+visitor cannot be signed in at all. It would be a second source of truth covering nothing.
+
+*Alternative considered:* a Go route at `/r/`. Rejected — it is a top-level path outside
+`/api/v1`, so it needs an nginx change on the production host, the same "lives only on the
+host" hazard as a new systemd unit, for no gain.
+
+*Consent:* the cookie is first-party, functional, and set because the visitor deliberately
+followed a link offering them a discount. It carries no identifier of the visitor — only the
+referrer's public code — and reaches no third party. It is therefore not gated behind the
+analytics consent banner (`web/src/lib/consent.ts`), which governs trackers.
 
 ### The ceiling is an environment variable
 
