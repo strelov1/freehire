@@ -40,6 +40,6 @@
 
 ## 7. Verification
 
-- [ ] 7.1 On the production host, check when logrotate runs relative to `rollup-views` at 02:30 UTC, and record the answer in the design's Open Questions.
-- [ ] 7.2 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, and `go test -tags=integration ./...` for the touched packages.
+- [x] 7.1 On the production host, check when logrotate runs relative to `rollup-views` at 02:30 UTC, and record the answer in the design's Open Questions.
+- [x] 7.2 Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, and `go test -tags=integration ./...` for the touched packages.
 - [ ] 7.3 Run `cmd/social-digest -dry-run` against production data and read the rendered list. This is the check that the editorial constants are right; do not enable the timer before it has been read for several days.

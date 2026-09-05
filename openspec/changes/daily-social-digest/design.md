@@ -187,10 +187,16 @@ or the new binary is simply never built.
 
 ## Open Questions
 
-- **When does logrotate run on the production host, relative to `rollup-views`
-  at 02:30 UTC?** To be answered with one command on the machine during
-  implementation. The "discover the freshest day" design means the answer cannot
-  break the digest — it only tells us whether the post is about yesterday or the
-  day before, which decides how the post is worded.
+- ~~When does logrotate run on the production host, relative to `rollup-views` at
+  02:30 UTC?~~ **Answered 2026-09-05 on the host:** `logrotate.timer` fires at
+  **00:00 UTC**, two and a half hours before `freehire-rollup-views.timer` at
+  02:31 UTC, and `access.log.1` carries the day that just ended. So the freshest
+  day in `job_daily_views` is **yesterday**, and the 13:00 UTC post is about
+  yesterday.
+
+  This does not retire the discover-the-day design. It cost nothing, and what it
+  protects against is precisely a schedule nobody will remember is load-bearing:
+  a logrotate moved past 02:31 would silently make every post a day older, and
+  the failure would look exactly like a working digest.
 - **The floor (10) and the quarantine (7 days)** are starting values, to be
   revisited after the week of dry runs in step 3.
