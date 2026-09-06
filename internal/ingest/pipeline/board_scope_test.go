@@ -221,6 +221,42 @@ func TestRunStillReportsABoardWhoseUnreadShareIsScattered(t *testing.T) {
 	}
 }
 
+// TestUnreadShareBoundary pins maxUnreadablePercent itself, which the tests either side of it
+// only bracket between 1% and 49%. The figure is argued at length in board_scope.go and it is
+// the whole safety margin of this mechanism: widening it is how a board that has genuinely gone
+// dark starts licensing closes again, and nothing about that reads as a mistake in a diff. So
+// the exact edge is held here rather than inferred — 5 in 100 still proves the board, 6 does
+// not, and moving the constant fails by name.
+func TestUnreadShareBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		unread   int
+		qualifos bool
+	}{
+		{unread: 5, qualifos: true},
+		{unread: 6, qualifos: false},
+	} {
+		t.Run(strconv.Itoa(tc.unread)+"-of-100", func(t *testing.T) {
+			src := fakeSource{provider: "jazzhr", jobs: unreadableBoard("Acme", 100, tc.unread)}
+			r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+			stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+				{Company: "Acme", Provider: "jazzhr", Board: "acme"},
+			})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			got := stats["jazzhr"]
+			if got.Unreadable != tc.unread {
+				t.Fatalf("stats = %+v, want Unreadable=%d (fixture assumption)", got, tc.unread)
+			}
+			if has := slices.Contains(got.QualifyingBoards, "acme"); has != tc.qualifos {
+				t.Errorf("board qualifies = %v with %d of 100 unread, want %v — maxUnreadablePercent is %d",
+					has, tc.unread, tc.qualifos, maxUnreadablePercent)
+			}
+		})
+	}
+}
+
 // TestRunReportsNoBoardWhenAlmostNoneOfItCouldBeRead: the other end of the same scale — a board
 // that read 3 of 500 has proved nothing, and must never license a close however clean its
 // listing walk looked.

@@ -117,6 +117,39 @@ func TestBoardCoverageResolvesNothingWhenTheBoardLacksTheVacancy(t *testing.T) {
 	}
 }
 
+// An Unreadable marker is a posting's identity WITHOUT its detail, yielded so the run can
+// withhold that employer's close scope. It answers both of pickPosting's predicates — and
+// unlike a SeenRefresh, which a link resolver can never meet because its seen-predicate
+// hydrates exactly the posting being asked about, this one fires on precisely the posting
+// somebody pasted. Returning it hands the caller a titleless job, which job.New refuses as an
+// invalid draft, which reaches POST /jobs/find as a 500 on a URL whose honest answer is "we
+// could not read a vacancy from that url".
+func TestBoardCoverageDoesNotResolveAPostingItCouldNotRead(t *testing.T) {
+	board := &fakeBoard{
+		provider: "recruitee",
+		jobs: []sources.Job{
+			{ExternalID: "111", URL: "https://acme.recruitee.com/o/junior-go", Title: "Junior Go", Company: "Acme"},
+			// The pasted link's own posting: seen in the listing, unreadable in detail.
+			{ExternalID: "222", URL: "https://acme.recruitee.com/o/senior-go", Company: "Acme", Unreadable: true},
+		},
+	}
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board})
+
+	for _, raw := range []string{
+		"https://acme.recruitee.com/o/senior-go", // matched by URL
+		"https://acme.recruitee.com/o/222",       // matched by the id in the last segment
+	} {
+		job, ok, err := bc.Resolve(context.Background(), raw)
+		if err != nil {
+			t.Errorf("Resolve(%q) err = %v, want nil — an unreadable page is not a board failure", raw, err)
+		}
+		if ok {
+			t.Errorf("Resolve(%q) ok = true (title %q), want false — a marker carries no vacancy, and "+
+				"the caller turns one into a 500", raw, job.Title)
+		}
+	}
+}
+
 func TestBoardCoverageReportsAFetchFailureAsAnError(t *testing.T) {
 	// An unreachable board must NOT look like "no such vacancy": the caller would record the
 	// link as unimportable and never retry.

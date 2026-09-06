@@ -138,15 +138,28 @@ func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.Comp
 // first and the posting id second: a board often serves one posting under several URLs (a
 // locale prefix, a slug that changed after the title was edited), but the id in the last path
 // segment survives all of those.
+//
+// An Unreadable marker is never a match. It carries a posting's identity WITHOUT its detail,
+// so it answers both predicates — and it is not the safe near-miss SeenRefresh is here, it is
+// the opposite: the marker exists precisely because that posting could not be read, which for
+// a pasted link is the target every time. Returning one would hand the caller a posting with
+// no title, which job.New rejects as an invalid draft, which reaches the reader as a 500 on a
+// URL whose honest answer is "we could not read a vacancy from that url".
 func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 	want := normalizeURL(raw)
 	for _, j := range jobs {
+		if j.Unreadable {
+			continue
+		}
 		if normalizeURL(j.URL) == want {
 			return j, true
 		}
 	}
 	for _, seg := range pathSegmentsFromEnd(raw) {
 		for _, j := range jobs {
+			if j.Unreadable {
+				continue
+			}
 			if j.ExternalID != "" && j.ExternalID == seg {
 				return j, true
 			}

@@ -33,6 +33,16 @@ func boardReachedPostings(st Stats) bool {
 // board, so refusing this one costs a crawl cycle of latency on a genuine removal. That is the
 // direction to err in — a wrongly closed posting reopens on the next successful crawl, but only
 // after it has left the search index and written a phantom removal into job_daily_stats.
+//
+// WHAT A BOARD-LEVEL SHARE DOES NOT COVER: the independence argument above holds per posting on
+// one board, and a multi-tenant board is several employers under one crawl. A successfactors hub
+// tenant with 20 postings going entirely dark on a 1,000-posting hub is 2% — under the threshold
+// — so the hub still qualifies and that tenant's postings are still phantom-closed. The
+// company-scoped half catches it only when the unreadable entries carry the right company, which
+// they do whenever the adapter reads the employer from the ENTRY rather than the page. Narrowing
+// this to a per-tenant share would need the tenant to be a dimension of Stats, which it is not
+// today; the note is here so the next reader does not mistake the threshold for a guarantee it
+// does not make.
 const maxUnreadablePercent = 5
 
 // boardReadWhatItListed reports whether the board's crawl actually READ the postings its

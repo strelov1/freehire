@@ -132,6 +132,14 @@ type Job struct {
 	// sets it: a HydratingSource re-lists a stored posting as SeenRefresh with no detail
 	// request at all, so the case does not arise there, and ingestStream does not read this
 	// marker. Mutually exclusive with Removed and SeenRefresh.
+	//
+	// EVERY OTHER READER OF A Fetch RESULT MUST SKIP IT. It carries identity without detail,
+	// so it satisfies an id or URL predicate while holding no title — and unlike SeenRefresh,
+	// which a link resolver can never match because its seen-predicate hydrates exactly the
+	// posting being asked about, this marker fires on precisely that posting. linksource's
+	// pickPosting skips it for that reason; a future reader that does not will turn "we could
+	// not read that page" into an invalid draft and a 500.
+
 	Unreadable bool
 	// ApplyForm is the application form the platform published for this posting, set ONLY
 	// by an adapter whose list endpoint already carries one. It is nil for every other

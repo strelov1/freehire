@@ -147,8 +147,13 @@ const jazzhrTwoPostingListing = `<html><body>
 // a dropped one leaves the posting missing from a crawl that reported no failure at all — and
 // the stale-job sweep closes a live vacancy once the grace window elapses.
 func TestJazzHRUnreadableDetailIsMarkedNotDropped(t *testing.T) {
-	// No route for /apply/lostLost22/... → GetHTML errors with a plain transport failure.
+	// routeErr, not an absent route: `route("/apply", ...)` matches by SUBSTRING, so it also
+	// answers /apply/lostLost22/lost — with the listing HTML, which carries no ld+json. That
+	// drives the parse branch and leaves the transport one, the branch this test is named for,
+	// unexercised. The two are different failures and the adapter treats them the same on
+	// purpose; each still needs its own cover.
 	fake := (&routedHTTP{}).
+		routeErr("/apply/lostLost22", errors.New("connection reset by peer")).
 		route("/apply/keptKept11/kept", jazzhrDetailHTML).
 		route("/apply", jazzhrTwoPostingListing)
 
