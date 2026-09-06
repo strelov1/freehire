@@ -300,10 +300,11 @@ without a SQL join between the two tables.
 
 The system SHALL store, on each `companies` row, a set of denormalized facet
 arrays derived from the company's **open** jobs (`closed_at IS NULL`):
-`regions`, `countries`, `domains`, `company_types`, `company_sizes`, and
-`remote_regions` (each a `TEXT[]`). Each array SHALL be the **distinct union** of
-the corresponding value across the company's open jobs, except `company_sizes`
-which is an `employee_count`-authoritative hybrid (below):
+`regions`, `countries`, `domains`, `company_types`, `company_sizes`,
+`remote_regions`, and `industries_derived` (each a `TEXT[]`). Each array SHALL be
+the **distinct union** of the corresponding value across the company's open jobs,
+except `company_sizes` (an `employee_count`-authoritative hybrid) and
+`industries_derived` (below), which are each described in their own terms:
 
 - `regions` and `countries` from the top-level `jobs.regions` / `jobs.countries`
   columns.
@@ -321,6 +322,14 @@ which is an `employee_count`-authoritative hybrid (below):
   over the company's open jobs. The `employee_count` value is a recorded company
   fact and is more accurate than the LLM's per-posting guess, so it wins when
   present.
+- `industries_derived` is a **second-order** derivation, computed from the
+  company's own `industries` and `domains` (not from `jobs` directly): it SHALL
+  be empty whenever the company's curated `industries` is non-empty, or whenever
+  `domains` holds more than two distinct values; otherwise it SHALL be the
+  distinct set of industries that `domains` maps to through the curated
+  domain→industry mapping. This is the materialized form of the precedence and
+  domain-count threshold described in the industries-facet requirement below —
+  computed once per recompute rather than evaluated per request.
 
 A company with no open jobs SHALL have every facet array empty (`'{}'`), except
 that `company_sizes` still reflects the company's `employee_count` bucket when one
@@ -376,6 +385,24 @@ they are eventually consistent with `jobs`.
 - **WHEN** every open job of a company (with no `employee_count`) is closed and the
   recompute runs again
 - **THEN** that company's facet arrays are all set to empty (`'{}'`)
+
+#### Scenario: industries_derived is empty for a company with a curated industry
+
+- **WHEN** the recompute runs for a company with a non-empty curated `industries`
+  and `domains` `{fintech}`
+- **THEN** that company's `industries_derived` is `{}`, regardless of `domains`
+
+#### Scenario: industries_derived maps domains within the threshold
+
+- **WHEN** the recompute runs for a company with an empty curated `industries` and
+  `domains` `{devtools, fintech}` (two distinct values)
+- **THEN** that company's `industries_derived` is `{developer-tools, fintech}`
+
+#### Scenario: industries_derived is empty above the domain-count threshold
+
+- **WHEN** the recompute runs for a company with an empty curated `industries` and
+  `domains` `{fintech, gamedev, healthcare}` (three distinct values)
+- **THEN** that company's `industries_derived` is `{}`
 
 ### Requirement: Companies carry a clean YC subindustry classification
 
@@ -529,11 +556,13 @@ value serializes as JSON `null`, and a facet array with no values serializes as 
 
 The `industries` facet on `GET /api/v1/companies` SHALL match a company through two
 **ordered** sources: the curated `companies.industries` array, and — only where that
-array is empty — the job-derived `companies.domains` array translated through a
-curated domain→industry mapping. A company an importer has classified SHALL be
-answered from that classification alone, and its domains SHALL NOT be consulted. The
-facet otherwise behaves exactly like the other array facets (OR within the facet, AND
-across facets, composing with `q`).
+array is empty **and** the company carries at most two distinct job-derived domains —
+the job-derived `companies.domains` array translated through a curated
+domain→industry mapping. A company an importer has classified SHALL be answered from
+that classification alone, and its domains SHALL NOT be consulted. A company with no
+curated industry but three or more distinct domains SHALL also NOT be matched through
+its domains. The facet otherwise behaves exactly like the other array facets (OR
+within the facet, AND across facets, composing with `q`).
 
 The sources are ordered rather than equal because they are not equally about the
 company. `companies.domains` is the union of the enrichment domain over every open
@@ -541,7 +570,12 @@ job the company holds, so for a company with many postings it drifts from what t
 company is toward the range of work it advertises: a large ride-hailing company
 accumulates `gamedev`, `edtech` and `govtech` from individual openings. Consulting
 that union for a company that has already been classified adds no reach and asserts
-industries the company is not in.
+industries the company is not in. The same drift correlates with domain count even
+for a company with no curated industry at all: a focused company's postings carry one
+or two domains, and three or more marks the union as describing hiring range rather
+than business — `freenow` (no curated industry, seven domains) is reachable under
+`fintech`, `gamedev`, `healthcare`, `mobility`, `saas`, `travel` today, none of them
+its actual business.
 
 The mapping SHALL be dict-only, in keeping with every other dictionary in the
 system: a domain value that names no curated industry honestly — including `other`,
@@ -549,11 +583,11 @@ and any value absent from `vocab.DomainValues` — SHALL map to nothing and SHAL
 contribute no industry. The mapping SHALL never invent a canonical value: every
 industry it produces must already exist in the curated vocabulary.
 
-Both query backends SHALL implement this identically, precedence included. `GET
-/api/v1/companies` is served by the Meilisearch companies index or by Postgres
-depending on the request, and the rendered list and its `meta.total` may be produced
-by different paths within one page; a company matching on one backend and not the
-other would make a page contradict its own count.
+Both query backends SHALL implement this identically, precedence and the domain-count
+threshold included. `GET /api/v1/companies` is served by the Meilisearch companies
+index or by Postgres depending on the request, and the rendered list and its
+`meta.total` may be produced by different paths within one page; a company matching
+on one backend and not the other would make a page contradict its own count.
 
 The `domains` query parameter SHALL keep filtering on the domain column directly,
 unchanged. Widening `industries` removes a duplicate *control*, not a contract.
@@ -573,7 +607,21 @@ unchanged. Widening `industries` removes a duplicate *control*, not a contract.
 #### Scenario: A company matches on its job-derived domain alone
 
 - **WHEN** a client requests `GET /api/v1/companies?industries=developer-tools` and a
-  company has an empty `industries` but `domains` containing `devtools`
+  company has an empty `industries` and at most two distinct `domains`, one of them
+  `devtools`
+- **THEN** that company is in the response
+
+#### Scenario: A company with no curated industry and three or more domains is not matched through its domains
+
+- **WHEN** a company has an empty `industries` and three or more distinct `domains`,
+  one of them mapping to the requested industry
+- **THEN** that company is absent from every `industries`-filtered response, even
+  though the same domain value would match on a company with one or two domains
+
+#### Scenario: The domain-count threshold is inclusive at two
+
+- **WHEN** a company has an empty `industries` and exactly two distinct `domains`,
+  one of them mapping to the requested industry
 - **THEN** that company is in the response
 
 #### Scenario: An unmapped domain yields no industry
@@ -596,4 +644,3 @@ unchanged. Widening `industries` removes a duplicate *control*, not a contract.
 - **WHEN** a client requests `GET /api/v1/companies?domains=devtools`
 - **THEN** the response contains exactly the companies whose `domains` array contains
   `devtools`, as before this change
-
