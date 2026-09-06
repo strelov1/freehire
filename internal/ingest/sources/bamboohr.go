@@ -63,8 +63,10 @@ func (b bambooHR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one posting's detail and maps it to a Job, returning ok=false when the
-// detail request fails so the caller can skip just that posting.
+// detail fetches one posting's detail and maps it to a Job. A posting the platform reports
+// gone is dropped (ok=false); one this crawl merely could not read comes back as an
+// unreadableDetail marker, since the detail request is this adapter's only source for the
+// posting and a dropped one is indistinguishable from a posting taken down.
 func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting) (Job, bool) {
 	url := fmt.Sprintf("https://%s.bamboohr.com/careers/%s/detail", e.Board, p.ID)
 
@@ -83,6 +85,9 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 		} `json:"result"`
 	}
 	if err := b.http.GetJSON(ctx, url, &d); err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(p.ID, url, e.Company), true
+		}
 		return Job{}, false
 	}
 

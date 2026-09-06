@@ -114,6 +114,25 @@ type Job struct {
 	// HydratingSource sets it (carrying just Title/Company/URL/ExternalID for the identity);
 	// all other adapters leave it false. Mutually exclusive with Removed.
 	SeenRefresh bool
+	// Unreadable marks a posting the board's listing NAMED but whose detail request could not
+	// be READ — a timeout, a refusal, a 5xx, an undecodable body, or a page that answered
+	// carrying no posting at all. It is the opposite of the platform stating the posting is
+	// GONE (404/410), which is information and is simply not yielded: this is the absence of
+	// information, and the difference decides whether a run may read "we did not see it" as
+	// evidence that it is no longer there.
+	//
+	// The pipeline writes nothing for it — there is nothing to write — and counts it in
+	// Stats.Unreadable, which withholds the run's close scopes for that board rather than
+	// failing it. Failing the board would turn a per-posting hole into a whole-board outage,
+	// cool the board to its 24-hour ceiling and freeze its entire catalogue.
+	//
+	// An adapter sets it INSTEAD of dropping the posting, carrying whatever identity it holds
+	// without the detail (ExternalID/URL/Company), so the employer whose close scope is
+	// withheld can be named. Only a buffered adapter whose detail is a posting's ONLY source
+	// sets it: a HydratingSource re-lists a stored posting as SeenRefresh with no detail
+	// request at all, so the case does not arise there, and ingestStream does not read this
+	// marker. Mutually exclusive with Removed and SeenRefresh.
+	Unreadable bool
 	// ApplyForm is the application form the platform published for this posting, set ONLY
 	// by an adapter whose list endpoint already carries one. It is nil for every other
 	// adapter, and nil is not a failure — most platforms do not describe their form in a

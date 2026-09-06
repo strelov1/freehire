@@ -18,14 +18,40 @@ import (
 // matching the first route whose substring is contained in the requested URL. It is
 // concurrency-safe so the SmartRecruiters adapter can fan out detail fetches.
 type routedHTTP struct {
-	routes []struct{ match, body string }
-	mu     sync.Mutex
-	calls  int
+	routes    []struct{ match, body string }
+	errRoutes []struct {
+		match string
+		err   error
+	}
+	mu    sync.Mutex
+	calls int
 }
 
 func (r *routedHTTP) route(match, body string) *routedHTTP {
 	r.routes = append(r.routes, struct{ match, body string }{match, body})
 	return r
+}
+
+// routeErr makes every request whose URL contains match fail with err, ahead of any body
+// route. It exists so a test can drive what an adapter does with a PARTICULAR failure — the
+// platform answering 404 for a posting it has taken down reads nothing like an origin refusing
+// to serve one, and only the first is evidence a posting is gone.
+func (r *routedHTTP) routeErr(match string, err error) *routedHTTP {
+	r.errRoutes = append(r.errRoutes, struct {
+		match string
+		err   error
+	}{match, err})
+	return r
+}
+
+// routedErr returns the error routed for url, or nil when none is.
+func (r *routedHTTP) routedErr(url string) error {
+	for _, rt := range r.errRoutes {
+		if strings.Contains(url, rt.match) {
+			return rt.err
+		}
+	}
+	return nil
 }
 
 func (r *routedHTTP) GetJSON(_ context.Context, url string, v any) error {
@@ -52,6 +78,9 @@ func (r *routedHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) 
 	r.mu.Lock()
 	r.calls++
 	r.mu.Unlock()
+	if err := r.routedErr(url); err != nil {
+		return nil, err
+	}
 	for _, rt := range r.routes {
 		if strings.Contains(url, rt.match) {
 			return html.Parse(strings.NewReader(rt.body))
@@ -64,6 +93,9 @@ func (r *routedHTTP) GetStream(_ context.Context, url, _ string, fn func(io.Read
 	r.mu.Lock()
 	r.calls++
 	r.mu.Unlock()
+	if err := r.routedErr(url); err != nil {
+		return err
+	}
 	for _, rt := range r.routes {
 		if strings.Contains(url, rt.match) {
 			return fn(strings.NewReader(rt.body))
@@ -76,6 +108,9 @@ func (r *routedHTTP) GetText(_ context.Context, url string) (string, error) {
 	r.mu.Lock()
 	r.calls++
 	r.mu.Unlock()
+	if err := r.routedErr(url); err != nil {
+		return "", err
+	}
 	for _, rt := range r.routes {
 		if strings.Contains(url, rt.match) {
 			return rt.body, nil
@@ -88,6 +123,9 @@ func (r *routedHTTP) decode(url string, unmarshal func([]byte, any) error, v any
 	r.mu.Lock()
 	r.calls++
 	r.mu.Unlock()
+	if err := r.routedErr(url); err != nil {
+		return err
+	}
 	for _, rt := range r.routes {
 		if strings.Contains(url, rt.match) {
 			return unmarshal([]byte(rt.body), v)
@@ -313,9 +351,12 @@ func TestSmartRecruitersFallbackDoesNotFireWhenRoleSectionsFilled(t *testing.T) 
 	}
 }
 
-func TestSmartRecruitersFetchSkipsFailedDetail(t *testing.T) {
-	// P2 has no detail route -> its detail fetch errors and the posting is skipped,
-	// but P1 still comes through.
+// A detail request the crawl could not READ must not look like a posting that is not there:
+// the detail is smartrecruiters' only source for a posting and is re-requested every run, so a
+// dropped one leaves a live vacancy missing from a crawl that reported no failure, and the
+// stale-job sweep closes it once the grace window elapses.
+func TestSmartRecruitersUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	// P2 has no detail route -> its detail fetch errors with a plain transport failure.
 	fake := (&routedHTTP{}).
 		route("offset=0", `{"totalFound": 2, "content": [
 			{"id": "P1", "name": "Engineer", "releasedDate": "2024-06-11T15:19:46.134Z", "location": {"city": "Berlin", "country": "de", "remote": false}},
@@ -329,8 +370,13 @@ func TestSmartRecruitersFetchSkipsFailedDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch should not abort the board on one failed detail: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "P1" {
-		t.Fatalf("want only P1 to survive, got %d jobs", len(jobs))
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "P1" {
+		t.Fatalf("read = %v, want only P1", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "P2" {
+		t.Fatalf("unreadable markers = %v, want one for P2", markers)
 	}
 }
 

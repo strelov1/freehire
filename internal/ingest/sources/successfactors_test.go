@@ -191,12 +191,46 @@ func TestSuccessFactorsTitleFallsBackToOgTitle(t *testing.T) {
 	}
 }
 
-func TestSuccessFactorsFailedDetailDropsOnlyThatPosting(t *testing.T) {
+// A page the crawl could not READ must not look like a posting that is not there: the page is
+// successfactors' only source for a posting and is re-requested every run, so a dropped one
+// leaves a live vacancy missing from a crawl that reported no failure, and the stale-job sweep
+// closes it once the grace window elapses. The marker names the employer even though nothing
+// was read, because the tenant is in the URL.
+func TestSuccessFactorsUnreadableDetailIsMarkedNotDropped(t *testing.T) {
 	ok := "https://jobs.tetrapak.com/job/Kept/111/"
-	bad := "https://jobs.tetrapak.com/job/Dropped/222/"
-	// No route for /job/Dropped/222 → GetHTML errors → that posting drops.
+	lost := "https://jobs.tetrapak.com/job/Lost/222/"
+	// No route for /job/Lost/222 → GetHTML errors with a transport failure.
 	fake := (&routedHTTP{}).
-		route("/job_sitemap.xml", sfSitemapXML(ok, bad)).
+		route("/job_sitemap.xml", sfSitemapXML(ok, lost)).
+		route("/job/Kept/111", sfDetailHTML)
+
+	jobs, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Tetra Pak", Board: "jobs.tetrapak.com",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "111" {
+		t.Fatalf("read = %v, want only the posting whose page answered", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "222" {
+		t.Fatalf("unreadable markers = %v, want one for the posting whose page did not", markers)
+	}
+	if markers[0].Company != "Tetra Pak" {
+		t.Errorf("marker Company = %q, want the board's employer — it names the close scope the run withholds", markers[0].Company)
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is
+// gone, so the crawl drops it and the board's evidence stays complete.
+func TestSuccessFactorsGoneDetailDropsThePosting(t *testing.T) {
+	ok := "https://jobs.tetrapak.com/job/Kept/111/"
+	lost := "https://jobs.tetrapak.com/job/Lost/222/"
+	fake := (&routedHTTP{}).
+		route("/job_sitemap.xml", sfSitemapXML(ok, lost)).
+		routeErr("/job/Lost/222", &StatusError{Method: "GET", Code: 410, URL: lost}).
 		route("/job/Kept/111", sfDetailHTML)
 
 	jobs, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{Board: "jobs.tetrapak.com"})
@@ -204,7 +238,7 @@ func TestSuccessFactorsFailedDetailDropsOnlyThatPosting(t *testing.T) {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "111" {
-		t.Fatalf("got %v, want only the kept posting", jobs)
+		t.Fatalf("got %v, want only the kept posting — a 410 is evidence, not a hole", jobs)
 	}
 }
 

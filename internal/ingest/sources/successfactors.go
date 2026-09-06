@@ -48,32 +48,39 @@ func (s successfactors) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error
 	}), nil
 }
 
-// detail fetches one job page and maps it to a Job, returning ok=false when the page
-// fetch fails so the caller can skip just that posting.
+// detail fetches one job page and maps it to a Job. A page the platform reports gone is
+// dropped (ok=false); a page this crawl merely could not read comes back as an
+// unreadableDetail marker, since the page is this adapter's only source for the posting and a
+// dropped one is indistinguishable from a posting taken down.
 func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sitemapLoc) (Job, bool) {
 	id := sfJobID(entry.Loc)
 	if id == "" {
 		return Job{}, false // no native id → would collide on the dedup key; skip it
 	}
 
+	// On a hub the configured company is only the hub's own name; the employer is the tenant
+	// the job URL names, resolved through the entry's curated map. An ordinary board keeps its
+	// configured company, whatever segments its URLs happen to carry. Resolved from the URL
+	// before the fetch, so an unreadable posting can still name the employer whose close scope
+	// it withholds.
+	company := e.Company
+	if e.Hub {
+		if name, ok := e.Tenants[sfTenant(entry.Loc)]; ok {
+			company = name
+		}
+	}
+
 	root, err := s.http.GetHTML(ctx, entry.Loc)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, entry.Loc, company), true
+		}
 		return Job{}, false
 	}
 
 	title := itempropText(root, "title")
 	if title == "" {
 		title = metaProperty(root, "og:title")
-	}
-
-	// On a hub the configured company is only the hub's own name; the employer is the tenant
-	// the job URL names, resolved through the entry's curated map. An ordinary board keeps its
-	// configured company, whatever segments its URLs happen to carry.
-	company := e.Company
-	if e.Hub {
-		if name, ok := e.Tenants[sfTenant(entry.Loc)]; ok {
-			company = name
-		}
 	}
 
 	return Job{

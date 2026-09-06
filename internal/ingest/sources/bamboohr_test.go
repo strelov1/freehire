@@ -98,14 +98,22 @@ func TestBambooHRFetchListsAndFetchesDetail(t *testing.T) {
 	}
 }
 
-func TestBambooHRFetchSkipsFailedDetail(t *testing.T) {
-	// id 53 has no detail route -> its detail fetch errors and the posting is skipped.
+// bambooTwoPostingList is a careers list naming one posting whose detail answers and one
+// whose detail the test breaks, so the two failure readings can be told apart.
+const bambooTwoPostingList = `{"result": [
+	{"id": "52", "jobOpeningName": "Designer", "isRemote": false},
+	{"id": "53", "jobOpeningName": "Broken", "isRemote": false}
+]}`
+
+// A detail request the crawl could not READ must not look like a posting that is not there:
+// the detail is bamboohr's only source for a posting and is re-requested every run, so a
+// dropped one leaves a live vacancy missing from a crawl that reported no failure, and the
+// stale-job sweep closes it once the grace window elapses.
+func TestBambooHRUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	// id 53 has no detail route -> its detail fetch errors with a plain transport failure.
 	fake := (&routedHTTP{}).
 		route("/careers/52/detail", bambooDetail("52", "Designer")).
-		route("/careers/list", `{"result": [
-			{"id": "52", "jobOpeningName": "Designer", "isRemote": false},
-			{"id": "53", "jobOpeningName": "Broken", "isRemote": false}
-		]}`)
+		route("/careers/list", bambooTwoPostingList)
 
 	jobs, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Acme", Provider: "bamboohr", Board: "acme",
@@ -113,8 +121,35 @@ func TestBambooHRFetchSkipsFailedDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch should not abort the board on one failed detail: %v", err)
 	}
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "52" {
+		t.Fatalf("read = %v, want only 52", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "53" {
+		t.Fatalf("unreadable markers = %v, want one for 53", markers)
+	}
+	if markers[0].Company != "Acme" {
+		t.Errorf("marker Company = %q, want the board's employer — it names the close scope the run withholds", markers[0].Company)
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is
+// gone, so the crawl drops it and the board's evidence stays complete.
+func TestBambooHRGoneDetailDropsThePosting(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/careers/52/detail", bambooDetail("52", "Designer")).
+		routeErr("/careers/53/detail", &StatusError{Method: "GET", Code: 404, URL: "https://acme.bamboohr.com/careers/53/detail"}).
+		route("/careers/list", bambooTwoPostingList)
+
+	jobs, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "bamboohr", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "52" {
-		t.Fatalf("want only 52 to survive, got %d jobs", len(jobs))
+		t.Fatalf("want only 52, got %v — a 404 is evidence, not a hole", jobs)
 	}
 }
 

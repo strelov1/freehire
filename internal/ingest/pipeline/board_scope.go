@@ -12,9 +12,50 @@ func boardReachedPostings(st Stats) bool {
 	return st.Ingested+st.Rejected+st.ATSCovered > 0
 }
 
+// maxUnreadablePercent is the share of a board's listed postings that may be unreadable before
+// the crawl stops counting as evidence of what is on that board. A share rather than a count,
+// and neither zero nor generous, for reasons that pull in opposite directions:
+//
+//   - Zero tolerance would switch the mechanism off for exactly the boards it matters most
+//     for. Per-posting failures are independent, so on a 5,000-posting board even a 0.1%
+//     per-request failure rate leaves under a 1% chance that any given run reads every one of
+//     them — the close would essentially never fire on a large board, while firing normally on
+//     a small one. A share scales with the board and keeps the rule the same rule at both ends.
+//   - The tolerance is nonetheless small because the failures that actually matter are
+//     WHOLESALE, not scattered: a refusing origin, a retired tenant, a rate-limit burst, a
+//     platform changing its markup — every measured incident in this area (seek's first prod
+//     crawl at 87%, solidjobs' truncation, freehire#725) failed most or all of a board. 5% sits
+//     an order of magnitude above the texture of the web and an order of magnitude below any of
+//     those.
+//
+// On a small board it is effectively zero tolerance (one unreadable posting in fifteen already
+// exceeds it), which is the right reading there: a zero-failure run is the norm on a small
+// board, so refusing this one costs a crawl cycle of latency on a genuine removal. That is the
+// direction to err in — a wrongly closed posting reopens on the next successful crawl, but only
+// after it has left the search index and written a phantom removal into job_daily_stats.
+const maxUnreadablePercent = 5
+
+// boardReadWhatItListed reports whether the board's crawl actually READ the postings its
+// listing named, within maxUnreadablePercent. It is the third qualification condition and the
+// one the other two cannot see: a board whose listing succeeded and whose readable postings all
+// saved has Failed == 0 and a healthy yield, while the postings whose detail requests died are
+// simply absent from everything the run recorded — and absence is exactly what the sweep reads
+// as removal.
+//
+// The denominator is every posting the board yielded, which the counters partition exactly:
+// Ingested, Rejected, ATSCovered and Skipped between them account for every posting the crawl
+// read, and Unreadable for every one it did not. Postings the platform answered 404/410 for are
+// deliberately NOT in it — the adapter never yields those, because a posting the platform says
+// is gone is evidence rather than a hole, and a board whose listing has gone entirely stale
+// should still be allowed to retire it.
+func boardReadWhatItListed(st Stats) bool {
+	listed := st.Ingested + st.Rejected + st.ATSCovered + st.Skipped + st.Unreadable
+	return st.Unreadable*100 <= listed*maxUnreadablePercent
+}
+
 // boardQualifies reports whether a run structurally PROVED it covered a board — the fact the
 // post-run sweep's board-scoped close needs before it may retire anything within that board
-// (freehire#2328, docs/agents/job-lifecycle.md). Two conditions, both read directly off this
+// (freehire#2328, docs/agents/job-lifecycle.md). Three conditions, all read directly off this
 // board's own Stats rather than through BoardHealth's tolerant health verdict:
 //
 //  1. the board's crawl reported zero failures (st.Failed == 0). A streaming board that dies
@@ -26,12 +67,18 @@ func boardReachedPostings(st Stats) bool {
 //     BoardHealth's verdict here instead of Stats.Failed would reintroduce that exposure.
 //  2. the crawl reached at least one posting (boardReachedPostings). A board that returned
 //     nothing is indistinguishable from a board whose crawl silently broke.
+//  3. the crawl READ the postings it listed (boardReadWhatItListed). On the ATS platforms
+//     whose detail request is a posting's only source, a dropped detail used to leave the
+//     posting missing from a run that reported no failure at all — so the sweep closed a live
+//     posting as unseen. Failed cannot answer this and must not: a dropped detail is a
+//     per-posting hole, and failing the board over one would cool it to its 24-hour ceiling
+//     and freeze the whole catalogue behind it.
 //
 // A boardless entry (e.Board == "") never qualifies: its postings are namespaced with an
 // empty board (externalid.Namespace("", id)), so a board-scoped LIKE pattern built from it
 // would match the provider's WHOLE catalogue rather than nothing.
 func boardQualifies(e sources.CompanyEntry, st Stats) bool {
-	return e.Board != "" && st.Failed == 0 && boardReachedPostings(st)
+	return e.Board != "" && st.Failed == 0 && boardReachedPostings(st) && boardReadWhatItListed(st)
 }
 
 // providerBoard identifies a board by name alone, ignoring region — the key the board-scoped

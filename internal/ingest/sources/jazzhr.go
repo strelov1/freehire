@@ -46,9 +46,10 @@ func (s jazzhr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one job page and maps its JobPosting ld+json to a Job, returning ok=false
-// when the page fetch fails, carries no JobPosting, or has no parseable id, so the caller
-// skips just that posting.
+// detail fetches one job page and maps its JobPosting ld+json to a Job. A page the platform
+// reports gone is dropped (ok=false); a page this crawl merely could not read comes back as an
+// unreadableDetail marker, since the detail request is this adapter's only source for the
+// posting and a dropped one is indistinguishable from a posting taken down.
 func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job, bool) {
 	id := jazzhrJobID(jobURL)
 	if id == "" {
@@ -56,11 +57,14 @@ func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 	}
 	root, err := s.http.GetHTML(ctx, jobURL)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, jobURL, e.Company), true
+		}
 		return Job{}, false
 	}
 	var p jazzhrPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false
+		return unreadableDetail(id, jobURL, e.Company), true
 	}
 
 	location := p.JobLocation.Address.Location()

@@ -201,8 +201,8 @@ func run() int {
 	logUnhealthyBoards(ctx, db.New(pool))
 
 	total := runStats.Total()
-	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d",
-		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d",
+		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable)
 
 	// A provider at 0% took the cheap write for nothing all run — a hashed field is churning
 	// between crawls, which costs a full row rewrite AND a pointless index push every pass.
@@ -265,7 +265,7 @@ func run() int {
 		window := sweepWindowFor(grace, provider)
 		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
 		bySource := sweepBySource(runStats[provider], fullCatalog[provider])
-		companySlugs := crawled.slugs(provider)
+		companySlugs := sweepableCompanies(crawled.slugs(provider), runStats[provider])
 
 		closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, bySource)
 		if err != nil {
@@ -356,6 +356,38 @@ func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListi
 	return boards
 }
 
+// sweepableCompanies narrows the crawled-company scope to the companies this run may actually
+// close within: those it wrote a job for (crawled), minus the ones a board withheld because its
+// crawl did not read what it listed (pipeline.Stats.UnprovenCompanies).
+//
+// The subtraction is what keeps the two halves of the fix honest. A board whose detail requests
+// died still WRITES everything it did manage to read — those rows' last_seen_at moves, their
+// content is refreshed, their company enters the crawled set exactly as before — and only the
+// permission to retire that company's unseen rows is withheld. Recording and closing are
+// separate decisions, and only the second one lacks the evidence.
+//
+// It withholds by COMPANY rather than by board because the crawled scope is the only handle the
+// provider-wide CloseUnseenJobs has; a company under two boards, one of which read cleanly, is
+// still withheld, which is the conservative reading and the correct one — the other board's
+// unread postings belong to that same company.
+//
+// Returns nil rather than an empty slice when nothing is left, which the close reads as an
+// empty text[] and matches no row (`company_slug = ANY('{}')`), i.e. it closes nothing.
+func sweepableCompanies(crawled []string, stats pipeline.Stats) []string {
+	if len(stats.UnprovenCompanies) == 0 {
+		return crawled
+	}
+	unproven := make(map[string]bool, len(stats.UnprovenCompanies))
+	for _, slug := range stats.UnprovenCompanies {
+		unproven[slug] = true
+	}
+	kept := slices.DeleteFunc(slices.Clone(crawled), func(slug string) bool { return unproven[slug] })
+	if len(kept) == 0 {
+		return nil
+	}
+	return kept
+}
+
 // sweepableProviders returns, sorted, the providers in a run that ingested at least one
 // job — the only ones safe to sweep (a zero-ingest provider proves only that its crawl
 // failed). Sorting gives a deterministic sweep order across runs and tests.
@@ -382,8 +414,14 @@ func shouldSweep(stats pipeline.Stats) bool {
 // failures: a fullCatalog adapter errors a truncated crawl, so Failed>0 means the listing was
 // incomplete and a source-scoped close would mass-close the postings it never reached. Such a run
 // falls back to the safe company-scoped CloseUnseenJobs. Callers gate on shouldSweep first.
+//
+// A posting the crawl could not READ disqualifies it too, and here with no tolerance at all
+// (unlike the board scope's maxUnreadablePercent): this is the broadest close in the system, it
+// drops the company scope that sweepableCompanies uses to withhold anything, and no fullCatalog
+// adapter emits the marker today — so the strict reading costs nothing now and is the one that
+// stays right if one ever does.
 func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
-	return fullCatalog && stats.Failed == 0
+	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0
 }
 
 // sweepWindowFor reports how long a provider's unseen jobs are spared before the sweep closes

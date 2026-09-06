@@ -95,9 +95,10 @@ func (s icims) jobLocs(ctx context.Context, host, board string) ([]string, error
 	return locs, nil
 }
 
-// detail fetches one job's "?in_iframe=1" fragment and maps its JobPosting ld+json to a
-// Job, returning ok=false when the fragment fetch fails or carries no JobPosting, so the
-// caller skips just that posting.
+// detail fetches one job's "?in_iframe=1" fragment and maps its JobPosting ld+json to a Job.
+// A fragment the platform reports gone is dropped (ok=false); one this crawl merely could not
+// read comes back as an unreadableDetail marker, since the fragment is this adapter's only
+// source for the posting and a dropped one is indistinguishable from a posting taken down.
 func (s icims) detail(ctx context.Context, e CompanyEntry, host string, vanity bool, loc string) (Job, bool) {
 	id := icimsJobID(loc)
 	// Classic hosts serve the fragment at <loc>?in_iframe=1. Vanity/careers-home locs are
@@ -108,11 +109,14 @@ func (s icims) detail(ctx context.Context, e CompanyEntry, host string, vanity b
 	}
 	root, err := s.http.GetHTML(ctx, frag)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, loc, e.Company), true
+		}
 		return Job{}, false
 	}
 	var p icimsPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false
+		return unreadableDetail(id, loc, e.Company), true
 	}
 
 	location := ""

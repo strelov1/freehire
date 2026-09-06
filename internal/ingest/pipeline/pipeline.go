@@ -188,11 +188,29 @@ type Stats struct {
 	Cooled     int
 	Rejected   int
 	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
+	// Unreadable counts postings the board's listing NAMED but whose detail this crawl could
+	// not read (sources.Job.Unreadable). It is deliberately not Failed: the board answered, so
+	// failing it would cool a working board and freeze its whole catalogue over a per-posting
+	// hole. What it does instead is withhold this run's close scopes for the board — an
+	// unreadable posting is missing from the crawl's evidence, and the sweep must not read a
+	// posting it could not see as a posting that is gone. See boardReadWhatItListed.
+	Unreadable int
 	// QualifyingBoards lists, per provider once merged into RunStats, the boards this run
 	// structurally PROVED it covered — see boardQualifies. It is the post-run sweep's board
 	// scope input (freehire#2328): cmd/ingest still gates a board-scoped close on the
 	// provider's adapter carrying the fullBoardListing marker before using any of these.
 	QualifyingBoards []string
+	// UnprovenCompanies lists the company slugs whose postings this run may NOT be used as
+	// evidence to close, because a board they are filed under did not read what it listed
+	// (boardReadWhatItListed). cmd/ingest subtracts them from the crawled-company scope of
+	// CloseUnseenJobs; the run still records everything it did manage to read, so the fix
+	// costs latency on a genuine removal and never a live posting.
+	//
+	// Carried per company rather than per board because the company scope is what the sweep
+	// speaks: a board's whole company set is withheld, not just the employers of the postings
+	// that failed, since a board that could not read part of itself has proved nothing about
+	// any of the employers on it.
+	UnprovenCompanies []string
 }
 
 // add accumulates another Stats into s, so the per-board and per-provider merges cannot
@@ -204,7 +222,9 @@ func (s *Stats) add(o Stats) {
 	s.Cooled += o.Cooled
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
+	s.Unreadable += o.Unreadable
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
+	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)
 }
 
 // RunStats is a run's outcome broken down by provider. A run may cover several providers
@@ -547,6 +567,15 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	canon := r.resolveCompanyAliases(ctx, e, raw)
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	for _, j := range raw {
+		// A posting the listing named but whose detail could not be read. There is nothing to
+		// write and nothing to refresh — the crawl never saw it — so it is only counted, and
+		// counting it is the point: it is what tells the sweep this board's evidence has holes
+		// in it. Handled ahead of the filter so it never enters the rejection denominator,
+		// exactly like the SeenRefresh branch below.
+		if j.Unreadable {
+			st.Unreadable++
+			continue
+		}
 		// A HydratingSource marks an already-ingested posting it re-listed but did not
 		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
 		// (which would wipe the description/facets hydrated when it was new).
@@ -591,6 +620,15 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	// save skips — those are stats.Skipped, not a board outage.
 	r.recordSuccess(ctx, e, st.Ingested)
 	st.Rejected = rej.rejected
+	// Too much of the board went unread for its crawl to be evidence of what is still on it,
+	// so this run's close scopes are withheld for every employer the board carries — the board
+	// scope through boardQualifies, the company scope through these slugs. Announced because
+	// an operator otherwise sees only a sweep that closed nothing.
+	if !boardReadWhatItListed(st) {
+		st.UnprovenCompanies = resolveAll(canon, distinctCompanySlugs(raw))
+		log.Printf("ingest: %s board %q (%s): %d/%d postings unreadable — withholding this run's stale-job close for it",
+			e.Provider, e.Board, e.Company, st.Unreadable, len(raw))
+	}
 	return st
 }
 

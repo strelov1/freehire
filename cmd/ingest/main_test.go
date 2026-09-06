@@ -77,11 +77,71 @@ func TestSweepBySource(t *testing.T) {
 		{"full-catalog, clean run", pipeline.Stats{Ingested: 1000, Failed: 0}, true, true},
 		{"full-catalog, a board failed", pipeline.Stats{Ingested: 1000, Failed: 1}, true, false},
 		{"not full-catalog, clean run", pipeline.Stats{Ingested: 1000, Failed: 0}, false, false},
+		// The source scope drops the company scope entirely, so it is the one close
+		// sweepableCompanies cannot narrow — a single unread posting disqualifies it.
+		{"full-catalog, one posting unread", pipeline.Stats{Ingested: 1000, Unreadable: 1}, true, false},
 	}
 	for _, tc := range cases {
 		if got := sweepBySource(tc.stats, tc.fullCatalog); got != tc.want {
 			t.Errorf("%s: sweepBySource = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// The company-scoped close asks "which companies did this run see enough of to retire their
+// unseen postings", and writing a job is no longer the whole answer: a board whose detail
+// requests died wrote everything it could read while missing postings that are still live, so
+// its companies are subtracted here. Recording and closing are separate decisions, and only
+// the second one lacks the evidence.
+func TestSweepableCompanies(t *testing.T) {
+	cases := []struct {
+		name    string
+		crawled []string
+		stats   pipeline.Stats
+		want    []string
+	}{
+		{
+			name:    "nothing withheld leaves the crawled scope untouched",
+			crawled: []string{"acme", "globex"},
+			want:    []string{"acme", "globex"},
+		},
+		{
+			name:    "a company whose board could not read what it listed is withheld",
+			crawled: []string{"acme", "globex"},
+			stats:   pipeline.Stats{UnprovenCompanies: []string{"globex"}},
+			want:    []string{"acme"},
+		},
+		{
+			// A company under two boards, one of which read cleanly, is still withheld: the
+			// other board's unread postings belong to that same company, and the close cannot
+			// tell them apart.
+			name:    "one withheld board withholds the company its other board also crawled",
+			crawled: []string{"acme"},
+			stats:   pipeline.Stats{UnprovenCompanies: []string{"acme", "acme"}},
+			want:    nil,
+		},
+		{
+			// nil rather than an empty slice, but either way the close's `= ANY($slugs)`
+			// matches no row — the point is that it closes NOTHING, never everything.
+			name:    "withholding every crawled company leaves no scope at all",
+			crawled: []string{"acme"},
+			stats:   pipeline.Stats{UnprovenCompanies: []string{"acme"}},
+			want:    nil,
+		},
+		{
+			name:    "a withheld company this run never wrote for changes nothing",
+			crawled: []string{"acme"},
+			stats:   pipeline.Stats{UnprovenCompanies: []string{"globex"}},
+			want:    []string{"acme"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sweepableCompanies(tc.crawled, tc.stats)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("sweepableCompanies(%v, %v) = %v, want %v", tc.crawled, tc.stats.UnprovenCompanies, got, tc.want)
+			}
+		})
 	}
 }
 
