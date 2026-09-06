@@ -462,6 +462,78 @@ func TestParse_HungarianSoftwareTitles(t *testing.T) {
 	}
 }
 
+// TestParse_HungarianOperationsTitles pins the Hungarian vocabulary for the
+// disciplines the software block above does not reach: running systems, testing
+// them, securing them, and the network and analytics seats beside them. Every case
+// is a live title, taken from the 7,207 open Hungarian postings the catalogue held
+// on 2026-09-06 — the software block was mined the same way, and the negatives are
+// again the point.
+//
+// The negatives are all bare nouns that read as technical to an English eye and are
+// not: "üzemeltető" is whoever runs a thing (a machine, a building, a fuel station),
+// "biztonsági" covers the armed guard and the fire warden, and "hálózat" is any
+// network including a retail chain's.
+func TestParse_HungarianOperationsTitles(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// Systems administration. "rendszergazda" is a closed compound with no
+		// non-IT sense: all 17 live occurrences are this role.
+		{"Rendszergazda", "devops"},
+		{"Linux rendszergazda", "devops"},
+		{"IT Rendszergazda (Microsoft)", "devops"},
+		{"Junior kliens rendszergazda", "devops"},
+		{"Üzemeltető Rendszergazda – Windows (Linux)", "devops"},
+		{"Junior / medior IT-rendszergazda", "devops"},
+		// The qualified "üzemeltető" compounds, closed and spaced. Hungarian writes
+		// both, so both are entries — a closed compound does not contain its spaced
+		// twin on a word boundary.
+		{"Rendszerüzemeltető", "devops"},
+		{"IT rendszerüzemeltető", "devops"},
+		{"Informatikai rendszerüzemeltető", "devops"},
+		{"Alkalmazás üzemeltető", "devops"},
+		{"Alkalmazásüzemeltető (banki rendszerek - fedezetlen hitelezés)", "devops"},
+		{"Szenior alkalmazás üzemeltető - Vault", "devops"},
+		{"IT üzemeltető", "devops"},
+		{"IT Infrastruktúra Üzemeltető", "devops"},
+		{"Informatikai üzemeltető", "devops"},
+		{"IT rendszer- és szoftverüzemeltető informatikus", "devops"},
+		// Network. "hálózatüzemeltető" is the closed compound again.
+		{"Hálózati mérnök", "network_engineering"},
+		{"Hálózati rendszermérnök", "network_engineering"},
+		{"Cisco hálózatüzemeltető mérnök", "network_engineering"},
+		// Testing. The bare "tesztelő" is admitted on the same footing English's
+		// bare "tester" already has: every live occurrence is a testing seat.
+		{"Manuális tesztelő", "qa"},
+		{"Automata tesztelő", "qa"},
+		{"Szoftvertesztelő", "qa"},
+		{"Tesztmenedzser (performancia tesztelés)", "qa"},
+		// Security, in its three live spellings.
+		{"Kiberbiztonsági munkatárs", "security"},
+		{"Senior Kiberbiztonsági szakértő", "security"},
+		{"Információbiztonsági felelős", "security"},
+		{"Információ Biztonsági Felelős (Regionális)", "security"},
+		{"IT biztonsági szakértő (GRC) (V-1218)", "security"},
+		{"Német nyelvű Senior IT-biztonsági tanácsadó (REF5386A)", "security"},
+		{"Junior informatikai biztonsági munkatárs", "security"},
+		// Analytics, noun and adjective form.
+		{"Adatelemző szakértő", "data_analytics"},
+		{"Adatelemzési Munkatárs", "data_analytics"},
+
+		// The bare nouns stay unresolved.
+		{"Gépész üzemeltető", ""},
+		{"Villamos Üzemeltető", ""},
+		{"Épületüzemeltetési mérnök", ""},
+		{"Létesítményüzemeltetési koordinátor", ""},
+		{"Biztonsági operátor és fegyveres biztonsági őr", ""},
+		{"Tűz- és munkabiztonsági szakértő", ""},
+		{"Országos Üzlethálózati Tréner (Audiológia és Értékesítés)", ""},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
 // TestParse_ITAdjacentCoverage covers professions found adjacent to the core IT
 // disciplines during a coverage audit: content/localization crafts that were
 // falling to the bare "designer" entry or resolving to nothing, and back-office

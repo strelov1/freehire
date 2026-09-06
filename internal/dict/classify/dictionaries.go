@@ -143,6 +143,10 @@ var categoryTable = []aliasEntry{
 	{"analytics engineer", "data_analytics"},
 	{"аналитик данных", "data_analytics"},
 	{"data аналитик", "data_analytics"},
+	// Hungarian, noun and adjective form. Both are closed compounds on "adat" (data)
+	// and neither has a non-analytical sense in the live sample.
+	{"adatelemző", "data_analytics"},
+	{"adatelemzési", "data_analytics"},
 	// BI is reporting/dashboards/metrics — the analytics side, so it routes here
 	// rather than to a thin bi_analytics category.
 	{"business intelligence analyst", "data_analytics"},
@@ -223,6 +227,25 @@ var categoryTable = []aliasEntry{
 	{"linux administrator", "devops"},
 	{"windows administrator", "devops"},
 	{"it administrator", "devops"},
+	// Hungarian. "rendszergazda" is the sysadmin, a closed compound with no second
+	// sense: all 17 occurrences among the 7,207 open Hungarian postings are this role.
+	//
+	// The operator noun "üzemeltető" is the "fejlesztő" problem again and is NOT here
+	// bare — it is whoever runs a thing, and the same sample spends it on machines
+	// ("Gépész üzemeltető"), electrical plant ("Villamos Üzemeltető"), buildings
+	// ("Épületüzemeltetési mérnök"), facilities ("Létesítményüzemeltetési koordinátor")
+	// and fuel stations. Only the qualified forms resolve. Hungarian writes both the
+	// closed compound and the spaced pair and prod carries both spellings of each, so
+	// both are listed: a closed compound never contains its spaced twin on a word
+	// boundary, which is also why "szoftverüzemeltető" needs its own entry.
+	{"rendszergazda", "devops"},
+	{"rendszerüzemeltető", "devops"},
+	{"alkalmazásüzemeltető", "devops"},
+	{"alkalmazás üzemeltető", "devops"},
+	{"szoftverüzemeltető", "devops"},
+	{"it üzemeltető", "devops"},
+	{"informatikai üzemeltető", "devops"},
+	{"infrastruktúra üzemeltető", "devops"},
 	// MLOps is DevOps practice specialized to ML artifacts (CI/CD, deployment,
 	// monitoring for models) — the operational lifecycle, not the modeling itself,
 	// which stays in ml_ai/ai_engineering above.
@@ -235,6 +258,13 @@ var categoryTable = []aliasEntry{
 	{"network administrator", "network_engineering"},
 	{"сетевой инженер", "network_engineering"},
 	{"сетевой администратор", "network_engineering"},
+	// Hungarian. The bare adjective "hálózati" is not here: a "hálózat" is any
+	// network, including a retail chain's ("Országos Üzlethálózati Tréner"), so only
+	// the engineering seats resolve. "hálózatüzemeltető" is the closed compound of
+	// the operator noun held back in the devops block above.
+	{"hálózati mérnök", "network_engineering"},
+	{"hálózati rendszermérnök", "network_engineering"},
+	{"hálózatüzemeltető", "network_engineering"},
 	{"backend", "backend"},
 	{"back-end", "backend"},
 	{"back end", "backend"},
@@ -291,6 +321,15 @@ var categoryTable = []aliasEntry{
 	{"sdet", "qa"},
 	{"тестировщик", "qa"},
 	{"тестирование", "qa"},
+	// Hungarian. "tesztelő" is admitted bare on the same footing as English "tester"
+	// above: every occurrence in the live Hungarian sample is a testing seat. The
+	// adjective "tesztelési" is NOT, because the sample spends it on calibration and
+	// manufacturing process work ("Kalibrálási- és tesztelési folyamatfejlesztő
+	// mérnök"). "szoftvertesztelő" is the closed compound, which does not contain the
+	// bare noun on a word boundary.
+	{"tesztelő", "qa"},
+	{"szoftvertesztelő", "qa"},
+	{"tesztmenedzser", "qa"},
 	// Physical security is not information security, and the bare alias below cannot
 	// tell them apart: "Security Guard" and "Security Officer" have been resolving to
 	// the infosec facet, which is wrong in both directions — a guard is not findable
@@ -316,6 +355,18 @@ var categoryTable = []aliasEntry{
 	{"безопасность", "security"},
 	{"безопасности", "security"},
 	{"кибербезопасность", "security"},
+	// Hungarian. The bare adjective "biztonsági" is the guard and the fire warden as
+	// often as the discipline — the live sample holds "Biztonsági operátor és
+	// fegyveres biztonsági őr" and "Tűz- és munkabiztonsági szakértő" — so it is not
+	// an entry and only the qualified forms are. Each is listed in the spellings prod
+	// actually carries: the closed compound, the spaced pair, and the hyphenated form,
+	// which are three different strings to a word-boundary match.
+	{"kiberbiztonsági", "security"},
+	{"információbiztonsági", "security"},
+	{"információ biztonsági", "security"},
+	{"it biztonsági", "security"},
+	{"it-biztonsági", "security"},
+	{"informatikai biztonsági", "security"},
 	// Narrower technical niches within security. Deliberately no bare "compliance" —
 	// sampled live titles are dominated by non-IT banking/legal/customs compliance
 	// (that population already routes to `legal` via "compliance officer/manager/
