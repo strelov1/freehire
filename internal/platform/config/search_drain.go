@@ -11,6 +11,18 @@ type SearchDrain struct {
 	LeaseSeconds int           // how long a claim is held before it can be reclaimed
 	MaxAttempts  int           // failed attempts before an entry is dead-lettered
 	CallTimeout  time.Duration // bounds a single batch's index operation
+	// MaxPerRun bounds how much of EITHER queue one run takes; 0 is unbounded and is
+	// the default. It exists because each pass drains until its queue is empty, and on
+	// this fleet a queue need never be empty — see the ordering note in
+	// cmd/search-drain/main.go for the run that measured it. Reordering the passes is
+	// what stopped removals starving; this is the lever for the case where one pass has
+	// to yield the process to the other on a schedule rather than on exhaustion.
+	//
+	// Left unbounded by default deliberately. A cap is not free: the run ends, the
+	// timer waits its interval, and a new process pays startup again, so a cap set below
+	// the arrival rate turns a queue that was draining into one that grows. Set it only
+	// against a measured arrival rate, and measure again after.
+	MaxPerRun int
 }
 
 // LoadSearchDrain reads the worker's tuning from the environment, all optional with
@@ -43,6 +55,7 @@ func LoadSearchDrain() SearchDrain {
 		// caused a real outage. This is a genuine backstop against a truly hung call,
 		// not a normal-operation tripwire — set it generously.
 		CallTimeout: time.Duration(envInt("SEARCH_DRAIN_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
+		MaxPerRun:   envInt("SEARCH_DRAIN_MAX_PER_RUN", 0),
 	}
 	// A non-positive batch size would make the claim's LIMIT 0 (silently no-op) or
 	// feed a negative LIMIT to Postgres; floor it so the worker always makes progress.
@@ -55,6 +68,12 @@ func LoadSearchDrain() SearchDrain {
 	// Floor it to the per-call timeout — the longest one batch can hold the lease.
 	if floor := int(c.CallTimeout.Seconds()); c.LeaseSeconds < floor {
 		c.LeaseSeconds = floor
+	}
+	// A negative cap would read as "unbounded" through outbox's `<= 0` check, which is the
+	// right behaviour but the wrong reason to arrive at it; normalise so the field says what
+	// it means to anything that logs or reports it.
+	if c.MaxPerRun < 0 {
+		c.MaxPerRun = 0
 	}
 	return c
 }
