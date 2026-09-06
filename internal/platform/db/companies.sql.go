@@ -734,9 +734,6 @@ derived_eligible AS (
       AND cardinality(COALESCE(dom.arr, '{}')) <= 2
 ),
 domain_industry_map AS (
-    -- Zips the two parallel parameter arrays back into (domain, industry) rows by
-    -- position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
-    -- two-array form of unnest(text[], text[]) the way a live Postgres does.
     SELECT d.domain, i.industry
     FROM unnest($1::text[]) WITH ORDINALITY AS d(domain, ord)
     JOIN unnest($2::text[]) WITH ORDINALITY AS i(industry, ord)
@@ -838,12 +835,15 @@ type RefreshCompanyFacetsParams struct {
 // domains union describes hiring range rather than business, see the change design).
 // A company outside this set gets industries_derived = '{}' by simply not appearing
 // in derived_ind below.
-// Translates each eligible company's domains to industries via the mapping the two
-// query parameters carry — internal/dict/industrytag.DomainIndustryPairs(), passed in
-// rather than duplicated as a second copy of the table in SQL. A company whose
-// domains all fail to join (none of them map to an industry, e.g. {other} or a
-// retired vocabulary value) simply produces no rows here and reads as '{}' below,
-// with no special case.
+// Zips the two parallel parameter arrays back into (domain, industry) rows by
+// position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
+// two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
+// themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
+// than duplicated as a second copy of the table in SQL.
+// Translates each eligible company's domains to industries via the mapping above. A
+// company whose domains all fail to join (none of them map to an industry, e.g.
+// {other} or a retired vocabulary value) simply produces no rows here and reads as
+// '{}' below, with no special case.
 func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshCompanyFacets, arg.MappingDomains, arg.MappingIndustries)
 	if err != nil {

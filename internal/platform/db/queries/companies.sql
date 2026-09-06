@@ -458,21 +458,21 @@ derived_eligible AS (
     WHERE cardinality(co.industries) = 0
       AND cardinality(COALESCE(dom.arr, '{}')) <= 2
 ),
--- Translates each eligible company's domains to industries via the mapping the two
--- query parameters carry — internal/dict/industrytag.DomainIndustryPairs(), passed in
--- rather than duplicated as a second copy of the table in SQL. A company whose
--- domains all fail to join (none of them map to an industry, e.g. {other} or a
--- retired vocabulary value) simply produces no rows here and reads as '{}' below,
--- with no special case.
+-- Zips the two parallel parameter arrays back into (domain, industry) rows by
+-- position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
+-- two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
+-- themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
+-- than duplicated as a second copy of the table in SQL.
 domain_industry_map AS (
-    -- Zips the two parallel parameter arrays back into (domain, industry) rows by
-    -- position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
-    -- two-array form of unnest(text[], text[]) the way a live Postgres does.
     SELECT d.domain, i.industry
     FROM unnest(sqlc.arg('mapping_domains')::text[]) WITH ORDINALITY AS d(domain, ord)
     JOIN unnest(sqlc.arg('mapping_industries')::text[]) WITH ORDINALITY AS i(industry, ord)
       ON i.ord = d.ord
 ),
+-- Translates each eligible company's domains to industries via the mapping above. A
+-- company whose domains all fail to join (none of them map to an industry, e.g.
+-- {other} or a retired vocabulary value) simply produces no rows here and reads as
+-- '{}' below, with no special case.
 derived_ind AS (
     SELECT de.company_slug,
            array_agg(DISTINCT map.industry ORDER BY map.industry) AS arr
