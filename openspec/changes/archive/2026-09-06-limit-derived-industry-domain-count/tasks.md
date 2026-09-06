@@ -81,9 +81,10 @@
       Both pass (`go test ./internal/search/search/...` and
       `-tags=integration ... -run TestIntegration_CompanySearch_IndustryPrecedence`
       against real Meilisearch via Docker).
-- [ ] 6.3 Deploy this step **before** the schema migration and backfill land, per
-      design.md's Migration Plan — the index must carry the attribute before
-      `reindex-companies` is run against it.
+- [x] 6.3 Superseded — see 8.1. There is no independent "deploy the attribute"
+      step to sequence: the live index only learns the new filterable
+      attribute when `cmd/reindex-companies` actually runs, and the Meili
+      fallback-to-Postgres path makes the ordering assumed here unnecessary.
 
 ## 7. Tests: fixtures and backend agreement
 
@@ -113,11 +114,37 @@
 
 ## 8. Rollout
 
-- [ ] 8.1 Deploy Meilisearch attribute change (section 6) first.
-- [ ] 8.2 Run the migration (`migrate`), deploy the code from sections 1-5.
-- [ ] 8.3 Run `recount-companies` to backfill `industries_derived`.
-- [ ] 8.4 Run `reindex-companies` on its own — never stacked with `make reindex`.
-- [ ] 8.5 Spot-check `freenow` (or another known wide-domain, no-curated-industry
-      company from the issue) on `/api/v1/companies?industries=` for each of its
-      domains' mapped industries — confirm it no longer matches any, since it
-      carries more than two domains.
+- [x] 8.1 Superseded by what shipping this actually showed: the Meilisearch
+      attribute is not pushed by a separate deploy step at all — `ensure()` on
+      the LIVE `companies` index only runs inside `CompanyRebuild.Prepare()`
+      (`cmd/reindex-companies`), so there is no independent "push settings
+      first" step to sequence ahead of the code deploy. That is fine because
+      `internal/api/handler/companies.go`'s Meili path already falls back to
+      Postgres on any Meili error (including "attribute not filterable"), so
+      the window between code deploy and the next successful
+      `reindex-companies` run degrades to the slower path, not to wrong
+      results.
+- [x] 8.2 PR #2513 merged to `main` (`75e09acb`) and deployed to production via
+      `release.sh` on host2. First attempt hit a `lock timeout` on
+      `ALTER TABLE companies ADD COLUMN` — the nightly `freehire-pg-backup`
+      `pg_dump` was mid-run and held an `AccessShareLock` on every table for
+      over an hour; unrelated to this change. Migration rolled back cleanly (no
+      partial state), release aborted without touching the live color, and a
+      retry once the backup finished applied `0142`/`0143` successfully.
+- [x] 8.3 Ran `recount-companies` by hand on host2 rather than waiting for its
+      6h45m timer: `companies updated=39201`, backfilling `industries_derived`
+      for the whole catalogue.
+- [x] 8.4 Ran on its own scheduled timer (`freehire-reindex-companies.timer`,
+      12:30 UTC), after the concurrent `freehire-reindexw` (jobs) rebuild that
+      was running at deploy time finished: `indexed=227878`. Confirmed via
+      `skip-if-reindexing.sh` never having to skip it (the two rebuilds' timers
+      did not collide this cycle).
+- [x] 8.5 Spot-checked `free-now` (freenow) against the live production API
+      (`freehire.me`), not just a local fixture: `industries=[]`, `domains=
+      {fintech,gamedev,mobility,saas,travel}` (5, above the ≤2 threshold) —
+      confirmed absent from `?industries=fintech`, `?industries=gaming`,
+      `?industries=transportation` and `?industries=travel` on both the
+      Meilisearch-served path (default routing) and the Postgres-forced path
+      (`sort=rating`), which returned the same top-5 companies for
+      `?industries=travel` (totals differed by 1 — ordinary staleness between
+      live Postgres and the last periodic Meili rebuild, not a disagreement).
