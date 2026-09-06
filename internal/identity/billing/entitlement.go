@@ -107,6 +107,62 @@ func entitlementFrom(sub subscriber, proPrices, ultraPrices []string) entitlemen
 	}
 }
 
+// billedSubscription is the subscription a subscriber's own billing section describes: the
+// one their PLAN came from, whichever tier that is.
+//
+// It asks each configured price list through the same `bestEntitling` the derivation above
+// uses, and then resolves between the two answers exactly as plan.TierOf resolves the tier
+// from the columns they become — ultra while it is live, then pro. Merging the two lists and
+// taking the furthest reach would be a different rule, and the difference is not academic:
+// both tiers can stand at once, which the provider's portal makes ordinary during an upgrade,
+// and the Ultra one need not reach furthest. Under a merged list, an account that upgraded
+// part-way through a Pro year would be shown its old Pro subscription as "your plan" — Pro's
+// price, Pro's renewal date — while every metered feature ran on Ultra's allowance.
+//
+// When NEITHER is live it falls back to the furthest of the two rather than to nothing, and
+// that case is real: `past_due` entitles by status while its period has already run out, so
+// the plan has lapsed but the subscription is the very thing the subscriber needs to see.
+// It returns the price list it selected under alongside the subscription, because one
+// provider subscription can carry an item from each tier — an upgrade that adds the new
+// price to the existing subscription rather than opening a second one — and then both
+// `bestEntitling` calls answer with that same subscription. Choosing "ultra" and then
+// reading whichever price the provider happened to list first would put Pro's amount under
+// Ultra's status, which is the contradiction this function exists to prevent.
+func billedSubscription(sub subscriber, proPrices, ultraPrices []string, now time.Time) (subscription, []string) {
+	pro, ultra := bestEntitling(sub, proPrices), bestEntitling(sub, ultraPrices)
+	switch {
+	case ultra.CurrentPeriodEnd.After(now):
+		return ultra, ultraPrices
+	case pro.CurrentPeriodEnd.After(now):
+		return pro, proPrices
+	case ultra.CurrentPeriodEnd.After(pro.CurrentPeriodEnd):
+		return ultra, ultraPrices
+	default:
+		return pro, proPrices
+	}
+}
+
+// tierFirst orders a subscription's price ids so the selected tier's come first.
+//
+// It ORDERS rather than filters, and the difference is the whole point: a subscriber on a
+// price we no longer sell is paying THAT price, so a tier list — which holds only what we
+// sell today — must decide which id to prefer and never which ids exist. Filtering would
+// turn a retired price into "we cannot read your bill".
+func tierFirst(ids, tier []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if slices.Contains(tier, id) {
+			out = append(out, id)
+		}
+	}
+	for _, id := range ids {
+		if !slices.Contains(tier, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // bestEntitling is the subscription that decides the plan: of the ones that entitle, the one
 // reaching furthest. The zero subscription when none does.
 //

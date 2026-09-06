@@ -3,8 +3,10 @@ package billing
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -90,5 +92,87 @@ func TestSubscriptionOverviewReadsTheSubscribedPrice(t *testing.T) {
 	// purpose: "renews on the 4th" beside "you cancelled" is a contradiction.
 	if out.RenewsAt == nil || out.EndsAt != nil {
 		t.Fatalf("want a renewal date and no end date, got renews=%v ends=%v", out.RenewsAt, out.EndsAt)
+	}
+}
+
+// subscribedTo answers the provider with one active subscription per price, and the price
+// behind each. The unix timestamps are the period ends, so a test says in one line which
+// subscriptions stand and how far each reaches.
+func subscribedTo(prices map[string]int64) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/subscriptions" {
+			items := make([]string, 0, len(prices))
+			for id, end := range prices {
+				items = append(items, fmt.Sprintf(
+					`{"status":"active","items":{"data":[{"current_period_end":%d,"price":{"id":%q}}]}}`, end, id))
+			}
+			_, _ = fmt.Fprintf(w, `{"object":"list","data":[%s]}`, strings.Join(items, ","))
+			return
+		}
+		if id, ok := strings.CutPrefix(r.URL.Path, "/prices/"); ok {
+			// The amount identifies the price on the way back, so an assertion on it says
+			// which subscription the section chose.
+			_, _ = fmt.Fprintf(w, `{"id":%q,"unit_amount":%d,"currency":"usd","recurring":{"interval":"month"}}`,
+				id, priceAmounts[id])
+			return
+		}
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+	}
+}
+
+// priceAmounts is what each configured price charges, in cents — the two tiers' real
+// figures, so a wrong choice reads as the wrong plan rather than as a wrong number.
+var priceAmounts = map[string]int64{proPrice: 500, ultraPrice: 1900}
+
+// Period ends far enough apart to tell the rules apart: both are live, and the Pro one
+// reaches further.
+const (
+	endsIn2030 = 1893456000
+	endsIn2100 = 4102444800
+)
+
+// TestSubscriptionOverviewDescribesAnUltraSubscription covers the tier this section could not
+// see. Ultra's price ids live in a list of their own, so reading only the Pro one left an
+// Ultra subscriber's own billing page answering "no subscription": a 404 with no log, and no
+// status, no amount, no renewal date and no receipts for the more expensive plan.
+func TestSubscriptionOverviewDescribesAnUltraSubscription(t *testing.T) {
+	// serviceWithProvider leaves this list alone, so a test that sells Ultra sets it — the
+	// state of any deployment where the tier is actually on sale.
+	t.Setenv("STRIPE_ULTRA_PRICE_IDS", ultraPrice)
+	s := serviceWithProvider(t, subscribedTo(map[string]int64{ultraPrice: endsIn2030}))
+
+	out, err := s.overviewFor(context.Background(), "cus_9")
+	if err != nil {
+		t.Fatalf("an Ultra subscriber has no billing section: %v", err)
+	}
+	if out.Status != "active" || out.AmountCents != priceAmounts[ultraPrice] {
+		t.Fatalf("overview read wrong: %+v", out)
+	}
+	if out.RenewsAt == nil || out.RenewsAt.Unix() != endsIn2030 {
+		t.Fatalf("want the Ultra subscription's renewal date, got %v", out.RenewsAt)
+	}
+}
+
+// TestSubscriptionOverviewDescribesTheTierThePlanCameFrom is the upgrade case. Both
+// subscriptions stand — the provider's portal makes that ordinary — and the older Pro one
+// reaches further, so a rule picking by reach shows Pro's price and Pro's date to somebody
+// whose allowances are all running on Ultra.
+func TestSubscriptionOverviewDescribesTheTierThePlanCameFrom(t *testing.T) {
+	t.Setenv("STRIPE_ULTRA_PRICE_IDS", ultraPrice)
+	s := serviceWithProvider(t, subscribedTo(map[string]int64{
+		proPrice:   endsIn2100,
+		ultraPrice: endsIn2030,
+	}))
+
+	out, err := s.overviewFor(context.Background(), "cus_9")
+	if err != nil {
+		t.Fatalf("want a billing section, got %v", err)
+	}
+	if out.AmountCents != priceAmounts[ultraPrice] {
+		t.Fatalf("the section describes the %d-cent subscription; the plan is Ultra, which "+
+			"charges %d", out.AmountCents, priceAmounts[ultraPrice])
+	}
+	if out.RenewsAt == nil || out.RenewsAt.Unix() != endsIn2030 {
+		t.Fatalf("want the Ultra subscription's renewal date, got %v", out.RenewsAt)
 	}
 }

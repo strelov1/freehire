@@ -97,6 +97,14 @@ transaction. `store.go` is the transaction around it and nothing else.
   names the features whose refusal is on (`match,tailor` or `all`), so the run ends one
   feature at a time without a deploy.
 
+  **A `PLAN_*_DAILY_<F>` suffix writes a dashed feature with an UNDERSCORE**
+  (`PLAN_PRO_DAILY_AUTO_APPLY`), while `PLAN_ENFORCE` names the feature exactly as the
+  ledger stores it (`auto-apply`). The two spellings differ because only one of them is an
+  environment variable NAME: systemd's `EnvironmentFile=` will not parse a dash in one, so a
+  suffix taken verbatim from the feature would put the lever out of reach on the only host
+  it exists for. The values themselves cannot change — they are in `usage_ledger` and in the
+  idempotency index.
+
 - **The fair-use guard belongs to the PRO plan and ignores the enforcement switch.** A free
   account is already bounded by its daily allowance, so reaching the guard there would mean
   the allowance was configured above it — a misconfiguration to fix, not a caller to accuse

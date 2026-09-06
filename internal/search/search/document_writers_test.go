@@ -43,8 +43,20 @@ func TestEveryJobDocumentWriterWidensGeography(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
+			name := d.Name()
+			// A dot- or underscore-prefixed directory is not part of this module: the go
+			// toolchain never descends into one, so `./...` cannot compile what lives there.
+			// This is a filesystem walk, not a package walk, and without the same rule it reads
+			// every git worktree checked out INSIDE the repo (.worktrees, .claude/worktrees) as
+			// another copy of every writer — so the suite goes red for anyone working in one,
+			// on a branch whose writers are none of this branch's business. It also subsumes
+			// the .git check that stood here, which never fired in a linked worktree anyway:
+			// there .git is a FILE, and this is the directory arm.
+			if path != root && (strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
+				return fs.SkipDir
+			}
 			// Vendored and generated trees hold no writers and would only slow the walk.
-			if name := d.Name(); name == "node_modules" || name == ".git" || name == "web" {
+			if name == "node_modules" || name == "web" {
 				return fs.SkipDir
 			}
 			return nil

@@ -38,7 +38,7 @@ func ConfigFromEnv() Config {
 		if enforced[f] {
 			fc.enforce = true
 		}
-		suffix := strings.ToUpper(string(f))
+		suffix := envSuffix(f)
 		if n, ok := envPositive("PLAN_FREE_DAILY_" + suffix); ok {
 			fc.free.daily = n
 		}
@@ -54,6 +54,20 @@ func ConfigFromEnv() Config {
 		cfg.TailorTurnsPerSession = n
 	}
 	return cfg
+}
+
+// envSuffix is the variable-name half of a feature: upper case, with the dash a name may
+// carry written as an underscore.
+//
+// The dash is not cosmetic. "cover-letter" and "auto-apply" are persisted in the ledger and
+// matched by the idempotency index, so those values cannot change — but systemd's
+// EnvironmentFile= will not accept a variable whose name holds a dash, so a suffix taken
+// verbatim asks for PLAN_PRO_DAILY_AUTO-APPLY, which is unsettable on the host it has to be
+// set on. Reading the underscored spelling is what makes the documented lever exist for the
+// two features that need it most: auto-apply is the one feature that ships enforcing, and
+// pro's ceiling on it is what the tier above is sold on.
+func envSuffix(f Feature) string {
+	return strings.ToUpper(strings.ReplaceAll(string(f), "-", "_"))
 }
 
 // enforcedFeatures reads the enforcement list. A name that matches no feature is ignored
