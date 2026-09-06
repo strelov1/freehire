@@ -250,14 +250,19 @@ func New(store Store, searcher Searcher, notifier Notifier, cfg Config) *Runner 
 // delivery outage loses nothing.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	var stats Stats
+	// Deferred so the counters land on EVERY exit, not only the clean one. A pass that
+	// stopped part-way is the pass whose figures somebody actually wants, and printing
+	// them last meant the run that ended early was also the run that said nothing.
+	defer func() {
+		log.Printf("notify: queries=%d failed_queries=%d matched=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
+			stats.Queries, stats.FailedQueries, stats.Matched, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
+	}()
 	if err := r.match(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("match: %w", err)
 	}
 	if err := r.deliver(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("deliver: %w", err)
 	}
-	log.Printf("notify: queries=%d failed_queries=%d matched=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
-		stats.Queries, stats.FailedQueries, stats.Matched, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
 	return stats, nil
 }
 

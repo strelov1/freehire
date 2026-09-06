@@ -73,6 +73,10 @@ func TestMatch_OneFailedQueryDoesNotCollapseThePass(t *testing.T) {
 // context: each would fail instantly and be counted, so one SIGTERM would report as
 // "every saved search is broken" — which is also exactly what MatchingCollapsed would
 // then turn into a red exit code.
+//
+// Stopping is also not FAILING. An unmatched query is matched by the next pass, exactly
+// as an undelivered claim is redelivered by it, so an ordinary `systemctl stop` must not
+// paint the unit red — the delivery loop already had that rule and matching now shares it.
 func TestMatch_CancellationStopsInsteadOfCountingEveryQueryFailed(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	store := &fakeStore{active: []db.ListActiveSubscriptionsRow{
@@ -87,8 +91,9 @@ func TestMatch_CancellationStopsInsteadOfCountingEveryQueryFailed(t *testing.T) 
 	cancel()
 	stats, err := r.Run(ctx)
 
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run error = %v, want it to carry context.Canceled", err)
+	if err != nil {
+		t.Fatalf("Run error = %v, want none — a stop is not an outage, and the next pass "+
+			"matches what this one did not", err)
 	}
 	if stats.FailedQueries != 0 {
 		t.Errorf("failed queries = %d, want 0 — a cancellation is one event, not %d broken searches",

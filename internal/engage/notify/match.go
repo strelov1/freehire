@@ -53,8 +53,15 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		if err := r.matchQuery(ctx, query, gsubs, excludedByUser, stats); err != nil {
 			// `done`, not the failure count: what a cancellation has to report is how
 			// far the stage got, and this branch runs before the failure is counted.
+			//
+			// It STOPS but does not fail, the same rule and for the same reason as the
+			// delivery loop below: an unmatched query is simply matched by the next pass,
+			// so an ordinary `systemctl stop` is not an outage and must not paint the unit
+			// red. Returning an error here would also have skipped Run's summary line —
+			// losing the counters exactly when somebody wants to know how far it got.
 			if cause := ctx.Err(); cause != nil {
-				return fmt.Errorf("cancelled after %d of %d queries: %w", done, stats.Queries, cause)
+				log.Printf("notify: matching stopped after %d of %d queries: %v", done, stats.Queries, cause)
+				return nil
 			}
 			stats.FailedQueries++
 			log.Printf("notify: match query %q failed: %v", query, err)

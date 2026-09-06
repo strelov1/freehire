@@ -143,8 +143,22 @@ FROM adzuna_description_outbox;
 -- of the other two counts would be a wrong reading, and leaving it out entirely is how a
 -- population that no run will ever pick up again becomes invisible.
 --
--- failed_at wins over blocked_at where a row somehow carries both, so the three counts
--- stay mutually exclusive and a stacked graph reads correctly.
+-- A dead letter here has TWO markers, not one. preview_failed_at (migration 0140,
+-- written by RecordAutoApplyPreviewFailure) retires the preview pass the same way
+-- failed_at retires the submit pass, and a row carrying only the first is claimed by
+-- neither: ClaimAutoApplyPreviewBatch excludes it directly, and ClaimAutoApplyBatch
+-- excludes it because review_decision never reaches 'approved' without a preview. Reading
+-- only failed_at is therefore the exact omission the paragraph above forbids, and
+-- auto_apply_review_info.go already reads both for the same reason.
+--
+-- A DECLINE is not parked work. DeclineAutoApplyReview reuses MarkAutoApplyBlocked's
+-- vocabulary and stamps blocked_at, nothing ever deletes the row, so counting it would
+-- make the gauge grow with ordinary candidate behaviour until the sidecar population it
+-- exists to publish is a rounding error inside it. Both other readers of this state guard
+-- the same way and say so — autoapply/status.go and auto_apply_enqueue.go.
+--
+-- The dead-letter markers win over blocked_at where a row carries both, so the three
+-- counts stay mutually exclusive and a stacked graph reads correctly.
 SELECT
     count(*) FILTER (
         WHERE failed_at IS NULL
@@ -152,8 +166,15 @@ SELECT
           AND tailored_cv_id IS NOT NULL
           AND review_decision = 'approved'
     )                                                                AS depth,
-    count(*) FILTER (WHERE failed_at IS NOT NULL)                    AS dead_letters,
-    count(*) FILTER (WHERE failed_at IS NULL AND blocked_at IS NOT NULL) AS blocked,
+    count(*) FILTER (
+        WHERE failed_at IS NOT NULL OR preview_failed_at IS NOT NULL
+    )                                                                AS dead_letters,
+    count(*) FILTER (
+        WHERE failed_at IS NULL
+          AND preview_failed_at IS NULL
+          AND blocked_at IS NOT NULL
+          AND review_decision IS DISTINCT FROM 'declined'
+    )                                                                AS blocked,
     COALESCE(
         EXTRACT(EPOCH FROM now() - min(created_at) FILTER (
             WHERE failed_at IS NULL

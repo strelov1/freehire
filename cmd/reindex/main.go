@@ -72,7 +72,7 @@ func run() int {
 	// simply had nothing to re-mark. The cancellation line forCompanyBatches assembles
 	// was thrown away with it.
 	if rcfg.DedupOnly {
-		return worker.ExitCode(refreshDuplicateMarkers(ctx, q), 0)
+		return dedupOnlyExit(ctx, q)
 	}
 
 	// Captured before anything else runs (including the duplicate-marker recompute
@@ -157,6 +157,19 @@ func run() int {
 // can still say so in its exit code. The full-rebuild callers ignore it, which is the
 // best-effort rule above, unchanged; REINDEX_DEDUP_ONLY does not, because in that mode
 // these three passes ARE the run.
+// dedupOnlyExit is the whole of the marker-only mode: the three passes, and their outcome
+// as an exit code.
+//
+// It is a function rather than two lines inside run() so that the second half can be
+// tested at all. run() needs a pool, a config and a Meilisearch client before it reaches
+// the branch, so a test asserting on the exit code has to go through this seam — and
+// without one, re-introducing the swallowed outcome (`refreshDuplicateMarkers(ctx, q);
+// return 0`) leaves every test in this package green, which is how it shipped that way
+// the first time.
+func dedupOnlyExit(ctx context.Context, q *db.Queries) int {
+	return worker.ExitCode(refreshDuplicateMarkers(ctx, q), 0)
+}
+
 func refreshDuplicateMarkers(ctx context.Context, q *db.Queries) int {
 	failed := 0
 

@@ -10,9 +10,11 @@ package db
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -234,5 +236,87 @@ func assertRoughlyAgo(t *testing.T, ts pgtype.Timestamptz, want time.Duration) {
 	}
 	if got := time.Since(ts.Time); got < want-time.Minute || got > want+time.Minute {
 		t.Errorf("timestamp is %v old, want ~%v", got, want)
+	}
+}
+
+// queueAutoApplyEntry adds one auto_apply_queue row in a named state. Everything here is a
+// column combination rather than a call to the real writers, because the point is what the
+// AGGREGATE makes of each state, not how a row reaches it.
+func queueAutoApplyEntry(t *testing.T, pool *pgxpool.Pool, externalID string, set string) {
+	t.Helper()
+	var userID int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO users (email) VALUES ($1) RETURNING id`, externalID+"@example.test").Scan(&userID); err != nil {
+		t.Fatalf("insert user for %s: %v", externalID, err)
+	}
+	jobID := queueJob(t, pool, externalID)
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO auto_apply_queue (user_id, job_id) VALUES ($1, $2)`, userID, jobID); err != nil {
+		t.Fatalf("insert auto_apply_queue entry %s: %v", externalID, err)
+	}
+	if set == "" {
+		return
+	}
+	// tailored_cv_id carries a foreign key, so the states that name one need a real CV
+	// rather than a generated uuid.
+	if strings.Contains(set, "tailored_cv_id") {
+		var cvID uuid.UUID
+		if err := pool.QueryRow(context.Background(),
+			`INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`, userID).Scan(&cvID); err != nil {
+			t.Fatalf("insert cv for %s: %v", externalID, err)
+		}
+		set = strings.ReplaceAll(set, "gen_random_uuid()", "'"+cvID.String()+"'::uuid")
+	}
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE auto_apply_queue SET `+set+` WHERE user_id = $1`, userID); err != nil {
+		t.Fatalf("shape auto_apply_queue entry %s (%s): %v", externalID, set, err)
+	}
+}
+
+// TestAutoApplyQueueMetricsCountsWhatAWorkerWillActuallyPickUp is the guard for the two
+// readings this aggregate is easiest to get wrong, both of which it shipped with.
+//
+// A DECLINE is not parked work. DeclineAutoApplyReview reuses the park vocabulary and
+// stamps blocked_at, and nothing ever deletes the row — so a `blocked` count that reads
+// blocked_at alone grows with ordinary candidate behaviour until the sidecar population it
+// exists to publish is a rounding error inside it, and the alert it was created for can
+// never be set.
+//
+// A dead letter has TWO markers. preview_failed_at retires the preview pass exactly as
+// failed_at retires the submit pass, and a row carrying only the first is claimed by
+// neither batch — the definition of a population that must not be left out.
+//
+// The three counts must also stay mutually exclusive: cmd/queue-metrics publishes them as
+// a stacked reading, so an entry counted twice is a graph that does not add up.
+func TestAutoApplyQueueMetricsCountsWhatAWorkerWillActuallyPickUp(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+
+	queueAutoApplyEntry(t, pool, "aa-owed", `tailored_cv_id = gen_random_uuid(), review_decision = 'approved'`)
+	queueAutoApplyEntry(t, pool, "aa-submit-dead", `failed_at = now()`)
+	queueAutoApplyEntry(t, pool, "aa-preview-dead", `preview_failed_at = now()`)
+	queueAutoApplyEntry(t, pool, "aa-parked", `blocked_at = now()`)
+	queueAutoApplyEntry(t, pool, "aa-declined", `blocked_at = now(), review_decision = 'declined'`)
+	// Awaiting the candidate: no decision yet, nothing wrong with it. In none of the three.
+	queueAutoApplyEntry(t, pool, "aa-awaiting", `tailored_cv_id = gen_random_uuid()`)
+
+	got, err := q.AutoApplyQueueMetrics(context.Background())
+	if err != nil {
+		t.Fatalf("AutoApplyQueueMetrics: %v", err)
+	}
+	if got.Depth != 1 {
+		t.Errorf("depth = %d, want 1 — only the approved entry is work a run will pick up", got.Depth)
+	}
+	if got.DeadLetters != 2 {
+		t.Errorf("dead letters = %d, want 2 — a preview that gave up is as unclaimable as a submit that did",
+			got.DeadLetters)
+	}
+	if got.Blocked != 1 {
+		t.Errorf("blocked = %d, want 1 — a candidate's own decline is not an attempt parked for want of data",
+			got.Blocked)
+	}
+	if sum := got.Depth + got.DeadLetters + got.Blocked; sum != 4 {
+		t.Errorf("the three counts total %d over 6 rows, want 4 — they are published stacked, so an "+
+			"entry counted twice is a graph that does not add up", sum)
 	}
 }
