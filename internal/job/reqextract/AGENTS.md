@@ -6,6 +6,10 @@ Reading a posting's own stated requirements out of its description markup, with 
 model call. The second producer of the enrichment contract's `requirements` field; the
 first is the LLM in [internal/ai/enrich](../../ai/enrich/AGENTS.md).
 
+The heading vocabulary has a second consumer: `MaskPreferred` lends it to
+`internal/job/jobfacts`, so the deterministic fact matchers know where a nice-to-have
+section ends instead of each guessing.
+
 ## Always true
 
 - **Three vocabularies, and all three are closed.** `requiredHeadings` and
@@ -34,6 +38,32 @@ first is the LLM in [internal/ai/enrich](../../ai/enrich/AGENTS.md).
   test to keep in step.
 - **Only the FIRST list after a heading belongs to it.** Taking a list closes its
   section.
+- **`MaskPreferred` blanks, it never deletes.** Its callers read punctuation as
+  structure — `jobfacts.EnglishLevel` binds a level word to an English keyword only
+  when no `.` or newline separates them — so a pass that cut a span out and rejoined
+  what surrounded it would introduce a sentence boundary the posting never wrote. That
+  is not hypothetical: the shape this replaced dropped the level from `English, B2
+  required`, one of the commonest phrasings there is. Replacing letters and digits with
+  spaces (`BlankWords`) leaves every boundary where the posting put it, and a
+  description with no preferred section comes back **byte-identical**, re-render
+  skipped.
+- **`MaskPreferred` closes a section only on a heading; `Derive` also closes on prose.**
+  The difference is deliberate and is the whole reason they are two walks over one
+  vocabulary. `Derive` wants the LIST under a heading, so prose between the two means
+  the list is no longer that heading's. A preferred SECTION is preferred throughout,
+  paragraphs included — which is the shape the defect was reported against. The cost is
+  that a preferred section a posting never closes masks the rest of the description;
+  that understates requirements rather than overstating them, which is the direction a
+  reader can detect.
+- **`headingDecision` reports whether it RECOGNIZED the heading, and `MaskPreferred`
+  needs the answer.** An unrecognized short line inside a preferred section is that
+  section's CONTENT. Treating it as a title (which `Derive` may, since a title is never
+  an item either way) leaves its words unmasked — that bug shipped in the first draft
+  and is what `PhD.` in a `<p>` slipped through.
+- **A preferred heading's own words are blanked with its section.** Leaving `Nice to
+  have` legible puts the marker phrase back into the text for `jobfacts`' second,
+  clause-level pass to find, which then blanks the sentence around it — requirements and
+  all. This cost a required `CISSP` in test before it was caught.
 - **The bound is `enrich.BoundRequirements`, never a local copy.** Both producers of
   the field obey one ceiling, and that function is exported for exactly this. Do not
   restate `maxRequirements` / `maxRequirementTextRunes` here.
@@ -103,8 +133,11 @@ cannot detect.
 
 ## Limitations
 
-- **English headings only.** The catalogue is majority English; more languages are an
-  additive change to the three vocabularies.
+- **Latin-alphabet headings, mostly English.** `normalizeHeading` transliterates before
+  matching (the same fold `normalize.Slug` applies), so an accented heading is spelled
+  once in the vocabulary — `Előnyt jelent` is entered as `elonyt jelent`, not as the
+  `el nyt jelent` a plain ASCII filter would have produced. Hungarian is in; more
+  languages are an additive change to the three vocabularies.
 - **No clustering.** Near-duplicate phrasings ("excellent written and verbal
   communication skills" vs "strong written and verbal communication skills") are stored
   as stated. Real, but a different problem.

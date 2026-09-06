@@ -25,7 +25,7 @@ var reDegreeOptional = regexp.MustCompile(`(?i)(equivalent(?:\s+\w+){0,2}\s+expe
 // requires, scanned deterministically from the description with the shared
 // credential vocabulary. Computed at read; nothing is stored.
 func RequiredCertifications(description string) []string {
-	return credentials.Scan(description)
+	return credentials.Scan(hardRequirementText(description))
 }
 
 // DegreeOptional reports whether the posting offers a degree "or equivalent
@@ -105,7 +105,7 @@ var (
 // wins over a "no degree" phrase (a posting that says "Bachelor's or equivalent;
 // no degree required for exceptional candidates" still has a degree signal).
 func EducationLevel(description string) string {
-	s := strings.ToLower(description)
+	s := strings.ToLower(hardRequirementText(description))
 	switch {
 	case rePhD.MatchString(s):
 		return "phd"
@@ -172,7 +172,7 @@ func statesNoExperience(s string) bool {
 // to 0 — the entry-level population states its requirement in prose rather than
 // as a figure, and reading digits alone left it indistinguishable from silence.
 func ExperienceYearsMin(description string) *int {
-	s := ageNoise.ReplaceAllString(strings.ToLower(description), " ")
+	s := ageNoise.ReplaceAllString(strings.ToLower(hardRequirementText(description)), " ")
 	best := -1
 	// Zero is the smallest value the walk below can reach, so seeding it also settles
 	// precedence: an explicit statement outranks any figure mentioned elsewhere, which
@@ -258,7 +258,7 @@ const englishScanMaxRunes = 20000
 // are named it returns the lowest (the minimum requirement); an explicit "no English"
 // phrase resolves to "none" only when no positive level is present.
 func EnglishLevel(description string) string {
-	s := strings.ToLower(description)
+	s := strings.ToLower(hardRequirementText(description))
 	s = truncateRunes(s, englishScanMaxRunes)
 	if !reEnglishKw.MatchString(s) {
 		return ""
