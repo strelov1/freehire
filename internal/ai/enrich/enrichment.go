@@ -50,6 +50,14 @@ const (
 	maxCityRunes = 100
 )
 
+// The enrichment model is the THIRD producer of experience_years_min, after a source
+// adapter's structured field and the description parse in internal/job/jobfacts. All
+// three share one ceiling, vocab.MaxExperienceYears, which is where the reasoning
+// lives — including which real prod readings it was written for.
+//
+// Bounding it here as well is not belt-and-braces: jobderive's bound sits on the WRITE
+// path and never sees this payload, which reaches the column by its own route.
+
 // maxRequirements and maxRequirementTextRunes bound the Requirements list the same
 // free-text way: extracted from the same attacker-influenced description, served
 // verbatim, so an unbounded model response must not persist indefinitely.
@@ -227,6 +235,19 @@ func (e *Enrichment) Sanitize() {
 	if e.SalaryMin != nil && e.SalaryMax != nil && *e.SalaryMin > *e.SalaryMax {
 		e.SalaryMin, e.SalaryMax = nil, nil
 	}
+
+	// Unlike salary, this one DOES take an absolute ceiling — a career has a length,
+	// and a currency does not. See maxExperienceYears for the readings it catches.
+	e.ExperienceYearsMin = believableYears(e.ExperienceYearsMin)
+}
+
+// believableYears drops a years-of-experience figure that is negative or past
+// vocab.MaxExperienceYears, leaving the field unstated rather than clamped.
+func believableYears(n *int) *int {
+	if n == nil || (*n >= 0 && *n <= vocab.MaxExperienceYears) {
+		return n
+	}
+	return nil
 }
 
 // positiveOrNil drops a non-positive salary figure to nil (an absent salary), so

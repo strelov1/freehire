@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -450,6 +452,58 @@ func TestSanitizeBoundsRequirements(t *testing.T) {
 		}
 		if !reflect.DeepEqual(e.Requirements, want) {
 			t.Errorf("Requirements = %v, want unchanged %v", e.Requirements, want)
+		}
+	})
+}
+
+// A stated years-of-experience figure is only believable up to a point. The failure it
+// guards is not a model that hallucinates: it is a model that reads the RIGHT number
+// off the WRONG subject, because "N years of experience" in a posting can describe the
+// candidate, the company, or the product, and the three are syntactically identical.
+//
+// Real prod examples, 2026-09-05: "With over 40 years of semiconductor process control
+// experience, chipmakers around the world rely on KLA" became experience_years_min=40,
+// and a cluster of postings carried 84. This field is a search FILTER, so such a job
+// stops matching anyone who searches honestly.
+func TestSanitizeCapsImplausibleExperienceYears(t *testing.T) {
+	years := func(n int) *int { return &n }
+
+	t.Run("a figure past the ceiling is dropped, not clamped", func(t *testing.T) {
+		for _, n := range []int{vocab.MaxExperienceYears + 1, 40, 60, 84} {
+			e := Enrichment{ExperienceYearsMin: years(n)}
+			e.Sanitize()
+			if e.ExperienceYearsMin != nil {
+				t.Errorf("ExperienceYearsMin = %d for input %d, want nil — clamping to the "+
+					"ceiling would state a requirement the posting never made",
+					*e.ExperienceYearsMin, n)
+			}
+		}
+	})
+
+	t.Run("a believable figure is untouched, including at the ceiling", func(t *testing.T) {
+		for _, n := range []int{0, 1, 5, 18, 21, 25, vocab.MaxExperienceYears} {
+			e := Enrichment{ExperienceYearsMin: years(n)}
+			e.Sanitize()
+			if e.ExperienceYearsMin == nil || *e.ExperienceYearsMin != n {
+				t.Errorf("ExperienceYearsMin = %v for input %d, want it kept — 18, 21 and 25 are "+
+					"all figures real postings genuinely state", e.ExperienceYearsMin, n)
+			}
+		}
+	})
+
+	t.Run("a negative figure is dropped", func(t *testing.T) {
+		e := Enrichment{ExperienceYearsMin: years(-3)}
+		e.Sanitize()
+		if e.ExperienceYearsMin != nil {
+			t.Errorf("ExperienceYearsMin = %d, want nil", *e.ExperienceYearsMin)
+		}
+	})
+
+	t.Run("an unstated figure stays unstated", func(t *testing.T) {
+		e := Enrichment{}
+		e.Sanitize()
+		if e.ExperienceYearsMin != nil {
+			t.Errorf("ExperienceYearsMin = %d, want nil", *e.ExperienceYearsMin)
 		}
 	})
 }
