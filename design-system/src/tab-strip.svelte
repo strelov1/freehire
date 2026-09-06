@@ -145,6 +145,13 @@
   }
 </script>
 
+<!-- The label and its optional glyph, shared by both elements a tab can be. -->
+{#snippet body(t: (typeof tabs)[number])}
+  {@const Icon = t.icon}
+  {#if Icon}<Icon class="size-4" aria-hidden="true" />{/if}
+  {t.label}
+{/snippet}
+
 <div class={cn('relative', extra)}>
   <div
     bind:this={strip}
@@ -155,12 +162,12 @@
     class="flex gap-4 overflow-x-auto border-b border-border sm:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
   >
     {#each tabs as t, i (t.id)}
-      {@const Icon = t.icon}
-      {@const cls =
-        `-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors ` +
-        (t.id === active
+      {@const cls = cn(
+        '-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors',
+        t.id === active
           ? 'border-brand text-foreground'
-          : 'border-transparent text-muted-foreground hover:text-foreground')}
+          : 'border-transparent text-muted-foreground hover:text-foreground',
+      )}
       {#if t.href !== undefined}
         <a
           bind:this={buttons[i]}
@@ -173,8 +180,7 @@
           onkeydown={onKeydown}
           class={cls}
         >
-          {#if Icon}<Icon class="size-4" aria-hidden="true" />{/if}
-          {t.label}
+          {@render body(t)}
         </a>
       {:else}
         <button
@@ -189,8 +195,7 @@
           onkeydown={onKeydown}
           class={cls}
         >
-          {#if Icon}<Icon class="size-4" aria-hidden="true" />{/if}
-          {t.label}
+          {@render body(t)}
         </button>
       {/if}
     {/each}

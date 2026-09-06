@@ -5,8 +5,9 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { TabStrip, tabStripId } from '$lib/ui';
-  import { activeNotificationTab, NOTIFICATION_TABS } from '$lib/notificationCenterTabs';
+  import { NOTIFICATION_TABS } from '$lib/notificationCenterTabs';
   import type { NotificationTabId } from '$lib/notificationCenterTabs';
+  import { activeRouteTab } from '$lib/routeTabs';
 
   // The notification center's shared chrome: history, search alerts, and settings
   // are three real routes (not a client-side view switch), so the strip's tabs carry
@@ -15,24 +16,19 @@
 
   let { children }: { children: Snippet } = $props();
 
-  // Kept here rather than in notificationCenterTabs.ts, which stays Svelte-free so the
-  // active-tab rule can be unit-tested — the same split accountNav/accountNavIcons makes.
+  // Kept here rather than in notificationCenterTabs.ts, which stays Svelte-free — the
+  // same split accountNav/accountNavIcons makes.
   const ICONS: Record<NotificationTabId, LucideIcon> = {
     history: Bell,
     searches: SearchCheck,
     settings: Settings,
   };
 
-  const active = $derived(activeNotificationTab(page.url.pathname));
   const PANEL_ID = 'notification-center-panel';
 
+  const active = $derived(activeRouteTab(page.url.pathname, NOTIFICATION_TABS, 'history'));
   const tabs = $derived(
-    NOTIFICATION_TABS.map((tab) => ({
-      id: tab.id,
-      label: tab.label,
-      icon: ICONS[tab.id],
-      href: resolve(tab.href),
-    })),
+    NOTIFICATION_TABS.map((tab) => ({ ...tab, icon: ICONS[tab.id], href: resolve(tab.href) })),
   );
 </script>
 

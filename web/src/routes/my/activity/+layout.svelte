@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '$lib/ui';
+  import { activeRouteTab } from '$lib/routeTabs';
   import { messages } from '$lib/components/activity.messages';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
@@ -17,29 +18,20 @@
   // so it is linkable, bookmarkable, and survives a reload. Saved is the index
   // route; History/Matches/Hidden get their own paths.
   //
-  // The strip is the same underline `TabStrip` every other `/my/*` section navigates
+  // The strip is the same underline `TabStrip` every other account section navigates
   // with, icons included — a sibling section of one account area reading differently
   // looks like a bug rather than a choice.
   const SECTIONS = [
-    { id: 'saved', path: '/my/activity', icon: Bookmark },
-    { id: 'history', path: '/my/activity/history', icon: History },
-    { id: 'matches', path: '/my/activity/matches', icon: Sparkles },
-    { id: 'hidden', path: '/my/activity/hidden', icon: EyeOff },
+    { id: 'saved', href: '/my/activity', icon: Bookmark },
+    { id: 'history', href: '/my/activity/history', icon: History },
+    { id: 'matches', href: '/my/activity/matches', icon: Sparkles },
+    { id: 'hidden', href: '/my/activity/hidden', icon: EyeOff },
   ] as const;
   const PANEL_ID = 'activity-tabpanel';
 
-  const path = $derived(page.url.pathname);
-  // Saved (index) matches exactly so it is not also active on the child routes.
-  const active = $derived(
-    SECTIONS.find((sec) => sec.path !== '/my/activity' && path.startsWith(sec.path))?.id ?? 'saved',
-  );
+  const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'saved'));
   const tabs = $derived(
-    SECTIONS.map((sec) => ({
-      id: sec.id,
-      label: s.tabs[sec.id],
-      icon: sec.icon,
-      href: resolve(sec.path),
-    })),
+    SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })),
   );
 </script>
 
