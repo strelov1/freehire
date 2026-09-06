@@ -60,13 +60,25 @@
     change. Nothing in this repository's build looks at a `.timer`, so it would have surfaced
     only as an Adzuna request count that never fell. Verified against `systemd-analyze
     calendar --iterations=4` on the host, and `systemd-analyze verify` accepts the unit.
-- [ ] 4.2 Copy the unit to the host and `systemctl daemon-reload` + restart the timer.
+- [x] 4.2 Copy the unit to the host and `systemctl daemon-reload` + restart the timer.
   `release.sh` flips the app and never touches a unit, so this step does not ship itself —
   the change is half-applied until it is done, and the half that is live (a 15-page adapter
   running hourly) is still ~4× the intended budget.
-- [ ] 4.3 Confirm with `systemctl list-timers freehire-ingest@adzuna` that the next
+- [x] 4.3 Confirm with `systemctl list-timers freehire-ingest@adzuna` that the next
   elapse matches the new cadence, and with `./deploy/check-drift.sh` that nothing else in
   `deploy/` has drifted from the host in the meantime.
+  - **Done 2026-09-06 21:15 UTC.** Both the unit and `deploy/bin/gen-ingest-timers.sh` were
+    copied (the generator matters as much: it writes this unit on the host, and without its
+    new arm the next run would have restored the hourly default). Host now reports
+    `OnCalendar=00/6:22:00`, `Persistent=false`, next elapse `2026-09-07 00:24:22 UTC` —
+    previously hourly.
+  - **The liveness guard was verified on prod, not assumed.** A scoped
+    `liveness -source=adzuna` under `systemd-run` exited 0 with no refusal logged, so `adzuna`
+    resolves in that host's registry and the new guard does not stop the worker. Worth doing
+    deliberately: had the credential been absent, the guard would have stopped every liveness
+    close, not just Adzuna's.
+  - Deployed by the autodeploy poller as `84b56ae7e` at 21:12 UTC; `max_days_old` and the
+    guard's message both present in the live binaries.
 
 ## 4b. Correct the record — the terms claim was wrong once
 
