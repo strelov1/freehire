@@ -50,6 +50,33 @@ const (
 	maxCityRunes = 100
 )
 
+// maxExperienceYears is the largest years-of-experience figure a posting is believed
+// to be stating about the CANDIDATE. Past it the value is dropped, not clamped: a
+// clamp would state a requirement the posting never made, while an absent field
+// correctly says "not stated".
+//
+// The failure it guards is not hallucination. "N years of experience" in a posting can
+// describe the candidate, the employer, or the product, and the three are syntactically
+// identical — only the subject separates them, and the prompt asks for the number
+// without naming whose it is. Measured on prod 2026-09-05: 29 open postings of 207,316
+// carried a figure above 20, among them a KLA listing at 40 ("With over 40 years of
+// semiconductor process control experience, chipmakers around the world rely on KLA" —
+// the COMPANY's age) and a cluster of seven at 84 whose descriptions contain no such
+// number at all.
+//
+// 30 is deliberately generous, and the number was moved UP once already: a first
+// attempt at 20 was written and its own test caught it discarding real data. Verified
+// on prod, every one of these is a figure a posting genuinely states about the
+// candidate — "18+ years of progressively responsible experience", "Minimum of 25 years
+// progressively senior experience", "25+ years of investment management experience".
+//
+// The ceiling therefore sits ABOVE the believable range rather than at the middle of
+// it, because the two errors are not symmetric. This field is a search FILTER: keeping
+// a wrong high value makes one posting unmatchable, while dropping a true one hides a
+// posting from the very people it was written for. Only the readings no career can
+// support — 40, 60, 84 — need to fall.
+const maxExperienceYears = 30
+
 // maxRequirements and maxRequirementTextRunes bound the Requirements list the same
 // free-text way: extracted from the same attacker-influenced description, served
 // verbatim, so an unbounded model response must not persist indefinitely.
@@ -227,6 +254,19 @@ func (e *Enrichment) Sanitize() {
 	if e.SalaryMin != nil && e.SalaryMax != nil && *e.SalaryMin > *e.SalaryMax {
 		e.SalaryMin, e.SalaryMax = nil, nil
 	}
+
+	// Unlike salary, this one DOES take an absolute ceiling — a career has a length,
+	// and a currency does not. See maxExperienceYears for the readings it catches.
+	e.ExperienceYearsMin = believableYears(e.ExperienceYearsMin)
+}
+
+// believableYears drops a years-of-experience figure that is negative or past
+// maxExperienceYears, leaving the field unstated rather than clamped.
+func believableYears(n *int) *int {
+	if n == nil || (*n >= 0 && *n <= maxExperienceYears) {
+		return n
+	}
+	return nil
 }
 
 // positiveOrNil drops a non-positive salary figure to nil (an absent salary), so
