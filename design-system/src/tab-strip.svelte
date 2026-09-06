@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts" generics="T extends string">
+  import type { LucideIcon } from '@lucide/svelte';
   import { cn } from './cn.js';
 
   // A horizontal tab strip that survives a narrow viewport. Past its own width the row
@@ -25,6 +26,10 @@
   // Distinct from `Tabs`: that primitive is a pill/segmented control with no overflow
   // handling, for a small fixed set of options. This one is for a row that can outgrow its
   // container.
+  //
+  // A tab carrying an `href` renders as an anchor rather than a button, because a strip whose
+  // tabs ARE routes (every account-section navigation) should be middle-clickable, openable in
+  // a new tab and preloadable — a button plus `goto` looks identical and is none of those.
   let {
     tabs,
     active,
@@ -33,9 +38,13 @@
     panelId,
     class: extra,
   }: {
-    tabs: readonly { id: T; label: string }[];
+    tabs: readonly { id: T; label: string; icon?: LucideIcon; href?: string }[];
     active: T;
-    onSelect: (id: T) => void;
+    /**
+     * Commits a selection. Optional, and unused by a strip of `href` tabs — there the
+     * navigation is the selection, and this component never owns the route.
+     */
+    onSelect?: (id: T) => void;
     /** Names the strip for assistive tech, e.g. "Profile sections". */
     label: string;
     /** id of the `role="tabpanel"` element these tabs drive. */
@@ -106,6 +115,10 @@
   // which suits panels that are already rendered client-side and cost nothing to show.
   // Home/End jump to the ends. Focus follows, since a roving tabindex leaves only the
   // selected tab reachable by Tab.
+  //
+  // A link tab is the exception: arrows move focus only, and Enter (the anchor's own
+  // activation) navigates. Activating on the arrow itself would fire a navigation per
+  // keypress while the reader is still scanning the row for the section they want.
   function onKeydown(event: KeyboardEvent) {
     let next: number;
     switch (event.key) {
@@ -127,10 +140,17 @@
     const target = tabs[next];
     if (!target) return; // only reachable with an empty `tabs`, where there is nothing to move to.
     event.preventDefault();
-    onSelect(target.id);
+    if (target.href === undefined) onSelect?.(target.id);
     buttons[next]?.focus();
   }
 </script>
+
+<!-- The label and its optional glyph, shared by both elements a tab can be. -->
+{#snippet body(t: (typeof tabs)[number])}
+  {@const Icon = t.icon}
+  {#if Icon}<Icon class="size-4" aria-hidden="true" />{/if}
+  {t.label}
+{/snippet}
 
 <div class={cn('relative', extra)}>
   <div
@@ -142,23 +162,42 @@
     class="flex gap-4 overflow-x-auto border-b border-border sm:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
   >
     {#each tabs as t, i (t.id)}
-      <button
-        bind:this={buttons[i]}
-        type="button"
-        role="tab"
-        id={tabStripId(panelId, t.id)}
-        aria-selected={t.id === active}
-        aria-controls={panelId}
-        tabindex={t.id === active ? 0 : -1}
-        onclick={() => onSelect(t.id)}
-        onkeydown={onKeydown}
-        class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {t.id ===
-        active
+      {@const cls = cn(
+        '-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors',
+        t.id === active
           ? 'border-brand text-foreground'
-          : 'border-transparent text-muted-foreground hover:text-foreground'}"
-      >
-        {t.label}
-      </button>
+          : 'border-transparent text-muted-foreground hover:text-foreground',
+      )}
+      {#if t.href !== undefined}
+        <a
+          bind:this={buttons[i]}
+          role="tab"
+          href={t.href}
+          id={tabStripId(panelId, t.id)}
+          aria-selected={t.id === active}
+          aria-controls={panelId}
+          tabindex={t.id === active ? 0 : -1}
+          onkeydown={onKeydown}
+          class={cls}
+        >
+          {@render body(t)}
+        </a>
+      {:else}
+        <button
+          bind:this={buttons[i]}
+          type="button"
+          role="tab"
+          id={tabStripId(panelId, t.id)}
+          aria-selected={t.id === active}
+          aria-controls={panelId}
+          tabindex={t.id === active ? 0 : -1}
+          onclick={() => onSelect?.(t.id)}
+          onkeydown={onKeydown}
+          class={cls}
+        >
+          {@render body(t)}
+        </button>
+      {/if}
     {/each}
   </div>
 </div>

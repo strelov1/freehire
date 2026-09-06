@@ -1,30 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { activeNotificationTab, NOTIFICATION_TABS } from './notificationCenterTabs';
-
-describe('activeNotificationTab', () => {
-  it('is history on the landing route', () => {
-    expect(activeNotificationTab('/my/notifications')).toBe('history');
-  });
-
-  it('is searches on the search-alerts route', () => {
-    expect(activeNotificationTab('/my/notifications/searches')).toBe('searches');
-  });
-
-  it('is settings on the settings route', () => {
-    expect(activeNotificationTab('/my/notifications/settings')).toBe('settings');
-  });
-
-  it('falls back to history on the digest detail sub-route', () => {
-    expect(activeNotificationTab('/my/notifications/42/jobs')).toBe('history');
-  });
-
-  it('falls back to history on an unrelated path', () => {
-    expect(activeNotificationTab('/my/profile')).toBe('history');
-  });
-});
+import { NOTIFICATION_TABS } from './notificationCenterTabs';
 
 describe('NOTIFICATION_TABS', () => {
   it('has one entry per tab id in display order', () => {
     expect(NOTIFICATION_TABS.map((t) => t.id)).toEqual(['history', 'searches', 'settings']);
+  });
+
+  // History is the index route, so it is a path-prefix of the other two — the case
+  // activeRouteTab's longest-match rule exists for. Asserted against the real tabs
+  // because the rule is only interesting over data shaped like this.
+  it('nests the other tabs under the history route', () => {
+    for (const tab of NOTIFICATION_TABS.filter((t) => t.id !== 'history')) {
+      expect(tab.href.startsWith('/my/notifications/')).toBe(true);
+    }
   });
 });

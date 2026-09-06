@@ -13,6 +13,6 @@
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
 <div class="max-w-3xl">
-  <h1 class="mb-4 text-lg font-semibold tracking-tight">{s.title}</h1>
+  <h1 class="mb-4 text-2xl font-semibold tracking-tight">{s.title}</h1>
   <ReferralsView />
 </div>

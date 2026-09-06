@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
+import { Briefcase, GraduationCap, Tags, User } from '@lucide/svelte';
 import TabStripDemo from '../.storybook/demos/TabStripDemo.svelte';
 
 const meta = {
@@ -16,6 +17,19 @@ export const Fitting: Story = {
       { id: 'overview', label: 'Overview' },
       { id: 'experience', label: 'Experience' },
       { id: 'skills', label: 'Skills' },
+    ],
+  },
+};
+
+// The treatment every `/my/*` section navigation uses: a leading glyph per tab, so the
+// row stays scannable once it is long enough that the labels alone blur together.
+export const WithIcons: Story = {
+  args: {
+    tabs: [
+      { id: 'profile', label: 'Profile', icon: User },
+      { id: 'skills', label: 'Skills', icon: Tags },
+      { id: 'experience', label: 'Experience', icon: Briefcase },
+      { id: 'education', label: 'Education', icon: GraduationCap },
     ],
   },
 };

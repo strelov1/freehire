@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { Calendar, Columns3, List, Workflow } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { routeTabClass, tablist } from '$lib/actions/tablist';
+  import { TabStrip, tabStripId } from '$lib/ui';
+  import { activeRouteTab } from '$lib/routeTabs';
 
   let { children }: { children: Snippet } = $props();
 
@@ -10,23 +12,19 @@
   // this layout adds only Tracking's own sub-navigation. Each view is its own URL
   // so it is linkable, bookmarkable, and survives a reload. Board is the index
   // route; Pipeline gets its own path. History and Matches live under Activity.
-  const path = $derived(page.url.pathname);
-  // Board (index) matches exactly so it is not also active on the child routes.
-  const boardActive = $derived(path === '/my/tracking');
-  const listActive = $derived(path.startsWith('/my/tracking/list'));
-  const pipelineActive = $derived(path.startsWith('/my/tracking/pipeline'));
-  const calendarActive = $derived(path.startsWith('/my/tracking/calendar'));
-  // The id of the active tab, so the routed panel can point back at it (aria-labelledby).
-  const activeTabId = $derived(
-    calendarActive
-      ? 'tracking-tab-calendar'
-      : pipelineActive
-        ? 'tracking-tab-pipeline'
-        : listActive
-          ? 'tracking-tab-list'
-          : 'tracking-tab-board',
-  );
+  //
+  // The strip is the same underline `TabStrip` every other account section navigates
+  // with, icons included.
+  const SECTIONS = [
+    { id: 'board', label: 'Board', href: '/my/tracking', icon: Columns3 },
+    { id: 'list', label: 'List', href: '/my/tracking/list', icon: List },
+    { id: 'pipeline', label: 'Pipeline', href: '/my/tracking/pipeline', icon: Workflow },
+    { id: 'calendar', label: 'Calendar', href: '/my/tracking/calendar', icon: Calendar },
+  ] as const;
+  const PANEL_ID = 'tracking-tabpanel';
 
+  const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'board'));
+  const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, href: resolve(sec.href) })));
 </script>
 
 <svelte:head>
@@ -37,50 +35,9 @@
 <div class="flex flex-col gap-4">
   <h1 class="text-2xl font-semibold tracking-tight">Tracking</h1>
 
-  <div role="tablist" aria-label="Tracking view" use:tablist={path} class="flex items-center gap-1">
-    <a
-      role="tab"
-      id="tracking-tab-board"
-      aria-selected={boardActive}
-      aria-controls="tracking-tabpanel"
-      href={resolve('/my/tracking')}
-      class={routeTabClass(boardActive)}
-    >
-      Board
-    </a>
-    <a
-      role="tab"
-      id="tracking-tab-list"
-      aria-selected={listActive}
-      aria-controls="tracking-tabpanel"
-      href={resolve('/my/tracking/list')}
-      class={routeTabClass(listActive)}
-    >
-      List
-    </a>
-    <a
-      role="tab"
-      id="tracking-tab-pipeline"
-      aria-selected={pipelineActive}
-      aria-controls="tracking-tabpanel"
-      href={resolve('/my/tracking/pipeline')}
-      class={routeTabClass(pipelineActive)}
-    >
-      Pipeline
-    </a>
-    <a
-      role="tab"
-      id="tracking-tab-calendar"
-      aria-selected={calendarActive}
-      aria-controls="tracking-tabpanel"
-      href={resolve('/my/tracking/calendar')}
-      class={routeTabClass(calendarActive)}
-    >
-      Calendar
-    </a>
-  </div>
+  <TabStrip {tabs} {active} label="Tracking view" panelId={PANEL_ID} />
 
-  <div role="tabpanel" id="tracking-tabpanel" aria-labelledby={activeTabId} tabindex="0">
+  <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabStripId(PANEL_ID, active)} tabindex="0">
     {@render children()}
   </div>
 </div>
