@@ -98,12 +98,56 @@ func TestPushNotifier_TitleAndBodyContent(t *testing.T) {
 		t.Fatalf("Send: %v", err)
 	}
 	call := transport.calls[0]
-	if call.title != "freehire" {
-		t.Errorf("title = %q, want %q", call.title, "freehire")
+	if want := "Backend Engineer"; call.title != want {
+		t.Errorf("title = %q, want %q", call.title, want)
 	}
-	wantBody := `3 new jobs for "Backend Engineer"`
-	if call.body != wantBody {
-		t.Errorf("body = %q, want %q", call.body, wantBody)
+	if want := "3 new jobs"; call.body != want {
+		t.Errorf("body = %q, want %q", call.body, want)
+	}
+}
+
+// renderDigest is the copy both the push channel and the notification-center
+// row read, so its wording is asserted on the renderer itself rather than once
+// per reader.
+func TestRenderDigest_Copy(t *testing.T) {
+	tests := []struct {
+		name                string
+		digest              Digest
+		wantTitle, wantBody string
+	}{
+		{
+			name:      "titles with the saved search that fired",
+			digest:    Digest{SavedSearchName: "Backend Engineer", Total: 3},
+			wantTitle: "Backend Engineer",
+			wantBody:  "3 new jobs",
+		},
+		{
+			// The same Plural the email and Telegram channels have always
+			// applied to this identical sentence.
+			name:      "one job is singular",
+			digest:    Digest{SavedSearchName: "Backend Engineer", Total: 1, Jobs: []DigestJob{{Slug: "a"}}},
+			wantTitle: "Backend Engineer",
+			wantBody:  "1 new job",
+		},
+		{
+			// The title is the only line the notification center prints in
+			// bold, so an unnamed saved search still needs a heading.
+			name:      "an unnamed saved search keeps a generic title",
+			digest:    Digest{Total: 2},
+			wantTitle: "New jobs",
+			wantBody:  "2 new jobs",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			title, body, _ := renderDigest(tt.digest)
+			if title != tt.wantTitle {
+				t.Errorf("title = %q, want %q", title, tt.wantTitle)
+			}
+			if body != tt.wantBody {
+				t.Errorf("body = %q, want %q", body, tt.wantBody)
+			}
+		})
 	}
 }
 

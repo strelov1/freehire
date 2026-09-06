@@ -67,9 +67,17 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 // exactly one job — that job's slug (empty otherwise). This is the single
 // source of the digest's push copy; the notification-center recording in
 // deliverOne reuses it verbatim rather than re-deriving the same wording.
+//
+// The title names the saved search that fired: it is what distinguishes one
+// digest from another, and the product name this slot used to carry said
+// nothing in either reader — a phone prints the app's name above a push banner
+// already, and the notification center is inside the app.
 func renderDigest(d Digest) (title, body, slug string) {
-	title = "freehire"
-	body = fmt.Sprintf("%d new jobs for %q", d.Total, d.SavedSearchName)
+	title = d.SavedSearchName
+	if title == "" {
+		title = "New jobs"
+	}
+	body = fmt.Sprintf("%d new job%s", d.Total, Plural(d.Total))
 	if d.Total == 1 {
 		slug = d.Jobs[0].Slug
 	}

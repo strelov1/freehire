@@ -205,7 +205,7 @@ func TestNotificationsEndToEnd_GetOne(t *testing.T) {
 	const jobsJSON = `[{"title":"Backend Engineer","company":"Acme","slug":"acme-backend-engineer"},{"title":"SRE","company":"Acme","slug":"acme-sre"}]`
 	if err := pool.QueryRow(context.Background(),
 		`INSERT INTO user_notifications (user_id, kind, title, body, jobs)
-		 VALUES ($1, 'subscription_digest', 'freehire', '2 new jobs for "Backend"', $2::jsonb)
+		 VALUES ($1, 'subscription_digest', 'Backend', '2 new jobs', $2::jsonb)
 		 RETURNING id`, aliceID, jobsJSON).Scan(&digestID); err != nil {
 		t.Fatalf("seed digest notification: %v", err)
 	}
