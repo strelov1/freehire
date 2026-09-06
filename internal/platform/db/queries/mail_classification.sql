@@ -162,12 +162,28 @@ WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint;
 --
 -- `prior` reads the pre-update value, so an advance that lands on the stage the row
 -- already carries records nothing; the ledger holds transitions.
+--
+-- The UPDATE refuses the no-op too, and that is the concurrent case rather than a second
+-- reading of the same rule. Two workers can both pass the caller's forward-stage check
+-- before either commits; the second then waits on the row lock, and under READ COMMITTED
+-- Postgres re-evaluates this WHERE once the lock is released — so `stage IS DISTINCT FROM`
+-- makes it match nothing and `upd` stays empty. Without it the second UPDATE writes the
+-- same stage while its `prior` still holds the snapshot's old one, and the ledger gains a
+-- duplicate transition that never happened.
+--
+-- source_ref is deliberately NOT the email's id, tempting though the provenance is:
+-- application_events_source_ref_key is UNIQUE on (user_id, kind, source_ref) among live
+-- rows, so one message could then carry at most one stage_set ever — and re-triaging a
+-- message from `interview` to `offer` is a correction a user can make. There is no
+-- retraction path for this kind to free the slot (unlike mail_linked, which the re-link
+-- flow retracts), so the second, correct event would either error or be dropped.
 WITH prior AS (
     SELECT a.stage FROM applications a
      WHERE a.user_id = sqlc.arg(user_id)::bigint AND a.job_id = sqlc.arg(job_id)::bigint
 ), upd AS (
     UPDATE applications SET stage = sqlc.arg(stage)::text
      WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint
+       AND stage IS DISTINCT FROM sqlc.arg(stage)::text
     RETURNING *
 )
 -- job_id and company_slug come off the application, like TrackApplicationByID: the row is

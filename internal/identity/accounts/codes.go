@@ -208,7 +208,14 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 		if errors.Is(consumeErr, ErrInvalidCode) {
 			// The failed guess is kept: the attempt counter is what bounds guessing, and
 			// rolling it back with the refusal would make the five-attempt limit unreachable.
-			_ = tx.Commit(ctx)
+			//
+			// A commit that FAILS is therefore not a detail to swallow — it rolls the attempt
+			// back, and answering "wrong code" would hand the guesser that attempt for free.
+			// The limit is a security control, so an unrecorded attempt has to read as a
+			// failure of ours rather than as a verdict on their code.
+			if err := tx.Commit(ctx); err != nil {
+				return fmt.Errorf("commit the failed attempt: %w", err)
+			}
 		}
 		return consumeErr
 	}

@@ -4062,6 +4062,12 @@ data: {"type":"result","stop_reason":"completed"}
           { name: 'unread', type: 'boolean', description: 'Only messages you have not opened.' },
           { name: 'link', type: 'string', description: 'One link state: `linked`, `suggested` (awaiting your word), or `unlinked`.' },
           { name: 'q', type: 'string', description: 'Match subject, sender, or body.' },
+          {
+            name: 'include_other',
+            type: 'boolean',
+            description:
+              'Also list the `other` label the default hides. Asking for it by `status=other` implies this.',
+          },
           { name: 'body', type: 'boolean', description: 'Include each message body; caps the page at 50.' },
           { name: 'limit', type: 'integer', description: 'Page size.' },
           { name: 'offset', type: 'integer', description: 'Page offset.' },

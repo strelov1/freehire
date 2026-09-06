@@ -5715,6 +5715,7 @@ List your mail, newest first, excluding deleted.
 | `unread` | boolean | no | Only messages you have not opened. |
 | `link` | string | no | One link state: `linked`, `suggested` (awaiting your word), or `unlinked`. |
 | `q` | string | no | Match subject, sender, or body. |
+| `include_other` | boolean | no | Also list the `other` label the default hides. Asking for it by `status=other` implies this. |
 | `body` | boolean | no | Include each message body; caps the page at 50. |
 | `limit` | integer | no | Page size. |
 | `offset` | integer | no | Page offset. |
