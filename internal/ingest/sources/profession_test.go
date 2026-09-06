@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // professionTestBoard is one of the two categories sources/profession.yml crawls.
@@ -456,6 +459,163 @@ func TestProfessionEducationAndLanguage(t *testing.T) {
 			if edu != tc.wantEdu || eng != tc.wantEng {
 				t.Errorf("professionEducationAndLanguage(%q) = %q/%q, want %q/%q",
 					tc.field, edu, eng, tc.wantEdu, tc.wantEng)
+			}
+		})
+	}
+}
+
+// professionGeneralBoard is a category the platform publishes that is not one of its two
+// IT sections. The fixture's sitemap index names it, so it resolves the same way itdev
+// does and only the filtering differs.
+const professionGeneralBoard = "education"
+
+// professionRecorder records every posting page requested. A prefilter is measured on the
+// requests it did NOT make, and nothing else in the fixture can see that: a detail fetch
+// for an unrouted URL fails, and a failed detail fetch is indistinguishable from the
+// taken-down posting the adapter is supposed to skip quietly.
+type professionRecorder struct {
+	*routedHTTP
+	mu    sync.Mutex
+	pages []string
+}
+
+func (r *professionRecorder) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	r.mu.Lock()
+	r.pages = append(r.pages, url)
+	r.mu.Unlock()
+	return r.routedHTTP.GetHTML(ctx, url)
+}
+
+// professionGeneralFixture wires the general category's sitemap around four postings that
+// each exercise one arm of the filter, and routes a page for all four — so a posting the
+// prefilter should have withheld would be fetched and stored rather than quietly failing.
+func professionGeneralFixture() *professionRecorder {
+	routed := (&routedHTTP{}).
+		route("sitemap-listings-index-hu.xml", professionSitemapIndexXML).
+		route("sitemap-listings-education-hu.xml", professionCategorySitemapXML(
+			// The slug names the role and the title confirms it.
+			"https://www.profession.hu/allas/rendszergazda-acme-kft-gyor-2990001",
+			// Neither the slug nor the role is technical.
+			"https://www.profession.hu/allas/ertekesitesi-tanacsado-acme-kft-budapest-2990100",
+			// The bare operator noun, which is a machinist here. The dictionary holds
+			// only its qualified forms, so the slug never matches.
+			"https://www.profession.hu/allas/gepesz-uzemelteto-acme-kft-2990101",
+			// The slug carries a technical term from the EMPLOYER's name, not the role.
+			// This is what the title check is for.
+			"https://www.profession.hu/allas/ertekesitesi-munkatars-devops-solutions-kft-2990102",
+		)).
+		route("-2990001", professionPostingHTML(professionPostingOpts{
+			title: "Rendszergazda", company: "ACME Kft.",
+			addressLine: "9024 Győr, Práter utca 9.",
+			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Linux szerverek üzemeltetése</li></ul>"}},
+		})).
+		route("-2990100", professionPostingHTML(professionPostingOpts{
+			title: "Értékesítési tanácsadó", company: "ACME Kft.",
+			addressLine: "Budapest",
+			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Ügyfelek felkeresése</li></ul>"}},
+		})).
+		route("-2990101", professionPostingHTML(professionPostingOpts{
+			title: "Gépész üzemeltető", company: "ACME Kft.",
+			addressLine: "Debrecen",
+			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Gépsorok kezelése</li></ul>"}},
+		})).
+		route("-2990102", professionPostingHTML(professionPostingOpts{
+			title: "Értékesítési munkatárs", company: "DevOps Solutions Kft.",
+			addressLine: "Budapest",
+			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Új ügyfelek szerzése</li></ul>"}},
+		}))
+	return &professionRecorder{routedHTTP: routed}
+}
+
+func professionGeneralEntry() CompanyEntry {
+	return CompanyEntry{
+		Company:  "Profession.hu — education",
+		Provider: "profession",
+		Board:    professionGeneralBoard,
+	}
+}
+
+// TestProfessionGeneralBoardKeepsOnlyConfirmedTechnicalPostings drives both gates over one
+// general-population category. The counts are the whole argument for crawling these boards
+// at all: four listed postings cost two detail requests, and one posting is stored.
+func TestProfessionGeneralBoardKeepsOnlyConfirmedTechnicalPostings(t *testing.T) {
+	fixture := professionGeneralFixture()
+	jobs, err := NewProfession(fixture).Fetch(context.Background(), professionGeneralEntry())
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "2990001" {
+		t.Fatalf("Fetch returned %d jobs, want just the sysadmin: %+v", len(jobs), jobs)
+	}
+	if jobs[0].Title != "Rendszergazda" {
+		t.Errorf("title = %q, want %q", jobs[0].Title, "Rendszergazda")
+	}
+	// The two postings whose slug states nothing technical are never requested; the one
+	// whose slug matched on its employer's name is, and is then turned away by its title.
+	wantPages := []string{
+		"https://www.profession.hu/allas/rendszergazda-acme-kft-gyor-2990001",
+		"https://www.profession.hu/allas/ertekesitesi-munkatars-devops-solutions-kft-2990102",
+	}
+	got := slices.Clone(fixture.pages)
+	slices.Sort(got)
+	slices.Sort(wantPages)
+	if !slices.Equal(got, wantPages) {
+		t.Errorf("requested pages = %v, want %v", got, wantPages)
+	}
+}
+
+// TestProfessionITBoardIsUnfiltered pins the exemption: the two dedicated IT sections are
+// already the slice the catalogue wants, so a posting there is stored on the platform's
+// own filing and never has to satisfy freehire's title dictionary. "Senior Engineer" is
+// the case that matters — a bare "engineer" resolves to no category by design, so on a
+// filtered board it would be dropped.
+func TestProfessionITBoardIsUnfiltered(t *testing.T) {
+	routed := (&routedHTTP{}).
+		route("sitemap-listings-index-hu.xml", professionSitemapIndexXML).
+		route("sitemap-listings-itdev-hu.xml", professionCategorySitemapXML(
+			"https://www.profession.hu/allas/rendszergazda-acme-kft-gyor-2990001",
+			"https://www.profession.hu/allas/senior-engineer-acme-kft-2989900",
+		)).
+		route("-2990001", professionPostingHTML(professionPostingOpts{
+			title: "Rendszergazda", company: "ACME Kft.", addressLine: "Győr",
+			sections: [][3]string{{"tasks", "Feladatok", "<ul><li>Linux</li></ul>"}},
+		})).
+		route("-2989900", professionPostingHTML(professionPostingOpts{
+			title: "Senior Engineer", company: "ACME Kft.", addressLine: "Budapest",
+			sections: [][3]string{{"tasks", "Feladatok", "<ul><li>Rendszerek tervezése</li></ul>"}},
+		}))
+	jobs, err := NewProfession(routed).Fetch(context.Background(), professionEntry())
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("Fetch returned %d jobs, want both: %+v", len(jobs), jobs)
+	}
+}
+
+// TestProfessionSlugCarriesTechnicalTerm pins the cheap gate on its own, including the
+// spellings the platform's slug forces on it: the terms are transliterated because the
+// slug is ASCII, and they match whole hyphen runs so a term cannot fire inside a longer
+// Hungarian compound.
+func TestProfessionSlugCarriesTechnicalTerm(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{"accented term matches its transliterated slug", "https://www.profession.hu/allas/szoftverfejleszto-acme-kft-1", true},
+		{"multi-word term matches a hyphen run", "https://www.profession.hu/allas/java-fejleszto-acme-kft-2", true},
+		{"english term on a hungarian board", "https://www.profession.hu/allas/senior-devops-mernok-acme-3", true},
+		{"sysadmin", "https://www.profession.hu/allas/linux-rendszergazda-acme-kft-4", true},
+		{"non-technical role", "https://www.profession.hu/allas/ertekesitesi-tanacsado-acme-kft-5", false},
+		{"the bare operator noun is not a term", "https://www.profession.hu/allas/gepesz-uzemelteto-acme-kft-6", false},
+		{"a term inside a longer compound does not fire", "https://www.profession.hu/allas/uzlethalozati-trener-acme-kft-7", false},
+		{"an empty slug matches nothing", "https://www.profession.hu/allas/-8", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := professionSlugCarriesTechnicalTerm(tc.url); got != tc.want {
+				t.Errorf("professionSlugCarriesTechnicalTerm(%q) = %v, want %v", tc.url, got, tc.want)
 			}
 		})
 	}

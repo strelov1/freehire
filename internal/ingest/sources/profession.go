@@ -6,10 +6,14 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/html"
 
+	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // profession adapts Profession.hu, Hungary's dominant job board. It is one central
@@ -25,6 +29,24 @@ import (
 // picks the slice. Measured over 128 live postings from the two IT sitemaps,
 // classify.ConfirmedNonTech rejected zero: the slice is already what the catalogue
 // wants.
+//
+// THE OTHER 21 CATEGORIES ARE CRAWLED THROUGH TWO GATES, because the platform's facet
+// is a good answer and not a complete one: technical postings are filed outside the IT
+// sections too, and an unfiltered crawl of those categories would ingest 11,388 general
+// postings to find them. The gates are ordered by what they cost. The slug of a posting
+// URL is already in hand from the sitemap, so professionSlugCarriesTechnicalTerm decides
+// whether the platform is asked for a detail page at all; the real title on that page
+// then has to satisfy professionTitleIsTechnical before the posting is stored. Both read
+// one dictionary (internal/dict/classify), so the cheap gate cannot come to mean
+// something the expensive one does not.
+//
+// Measured live on 2026-09-06 over the 21 general categories: 11,388 postings listed, 45
+// passed the slug gate, 30 were stored, 15 were turned away by their real title, and no
+// candidate page failed to load. That is ~99.6% of the detail requests avoided, and 30
+// postings on top of the 712 the two IT sections hold — about 4.2%. Read that 30 as a
+// floor rather than a measurement of what is there: the slug gate can only find terms the
+// dictionary carries, and Hungarian coverage, while no longer developer-only, is not
+// complete. Widening it is dictionary work and lands for every source at once.
 //
 // Traps, all verified live on 2026-09-03:
 //
@@ -145,12 +167,29 @@ func (s profession) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	if err != nil {
 		return nil, err
 	}
+	filtered := professionFiltersBoard(e.Board)
+	if filtered {
+		locs = slices.DeleteFunc(locs, func(loc string) bool {
+			return !professionSlugCarriesTechnicalTerm(loc)
+		})
+	}
 	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
 		id := professionExternalID(loc)
 		if seen(id) {
 			return Job{ExternalID: id, URL: loc, SeenRefresh: true}, true
 		}
-		return s.detail(ctx, loc, id)
+		job, ok := s.detail(ctx, loc, id)
+		if !ok {
+			return Job{}, false
+		}
+		// The title gate runs on new postings only, for the same reason the seen
+		// refresh above carries no title: a stored posting is not re-judged here. The
+		// slug gate, by contrast, runs before the seen check and so applies to both —
+		// which costs nothing, because a URL's slug never changes.
+		if filtered && !professionTitleIsTechnical(job.Title) {
+			return Job{}, false
+		}
+		return job, true
 	}), nil
 }
 
@@ -171,6 +210,95 @@ func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) 
 		return nil, fmt.Errorf("profession: category %s: %w", e.Board, err)
 	}
 	return locs, nil
+}
+
+// professionITBoards are the platform's two dedicated IT category sitemaps. A posting
+// filed in one of them is stored on the platform's own filing and is never asked to
+// satisfy freehire's title dictionary as well: measured over 128 live postings from these
+// two, classify.ConfirmedNonTech rejected none, and the dictionary resolves a category for
+// only about half — so filtering here would drop technical postings to no purpose. Every
+// other category is a general-population board and is filtered.
+var professionITBoards = map[string]bool{"itdev": true, "itops": true}
+
+// professionFiltersBoard reports whether a board's postings must clear both technical
+// gates before they are stored.
+func professionFiltersBoard(board string) bool {
+	return !professionITBoards[strings.ToLower(strings.TrimSpace(board))]
+}
+
+// professionSlugPattern captures the slug a posting URL carries ahead of its id. The slug
+// is the platform's own rendering of the title, the employer and the city, which is why it
+// is not an identity (professionExternalID is) and why matching it can only ever be a
+// prefilter: the employer's name is in there too.
+var professionSlugPattern = regexp.MustCompile(`/allas/([^/]+)-\d+(?:/|$)`)
+
+// professionSlugTerms are the technical title terms in the shape a URL slug states them:
+// transliterated to ASCII and hyphen-separated, because the platform's slug is ASCII and
+// the dictionary's Hungarian is not ("szoftverfejlesztő" is never in a URL).
+//
+// The vocabulary is classify's, restricted to the technical categories, rather than a
+// second list kept here. That is the whole reason this stays honest — a term added for any
+// source reaches this prefilter, and the gate below reads the same dictionary against the
+// real title, so the cheap gate cannot drift into meaning something the expensive one does
+// not. It is not a perfect shadow of that gate: classify.IsTech also admits a handful of
+// generalist titles ("programmer", "founding engineer") through terms it does not export,
+// so a posting whose slug states only one of those is not offered. That costs recall on a
+// board we otherwise would not crawl at all, which is why it is a seam and not a bug.
+var professionSlugTerms = sync.OnceValue(func() []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for category, aliases := range classify.CategoryAliases() {
+		if !slices.Contains(vocab.TechCategories, category) {
+			continue
+		}
+		for _, alias := range aliases {
+			term := normalize.Slug(alias)
+			if term == "" {
+				continue
+			}
+			if _, dup := seen[term]; dup {
+				continue
+			}
+			seen[term] = struct{}{}
+			out = append(out, term)
+		}
+	}
+	return out
+})
+
+// professionSlugCarriesTechnicalTerm reports whether a posting URL's slug states a term the
+// technical dictionary knows. It is the cheap gate: a sitemap yields nothing but URLs, and
+// a general category holds thousands of postings, so this decides whether the platform is
+// asked for a detail page at all. Measured against the live catalogue on 2026-09-06 it let
+// 45 of 11,388 non-IT postings through, avoiding about 99.6% of the detail requests taking
+// those boards unfiltered would have cost.
+//
+// Terms match whole hyphen runs, never substrings. Hungarian is agglutinative and writes
+// closed compounds, so a substring match would fire on every word that merely contains a
+// term — "üzlethálózati" (a chain of shops) contains "hálózati", and the retail trainer it
+// names is not a network engineer.
+func professionSlugCarriesTechnicalTerm(loc string) bool {
+	m := professionSlugPattern.FindStringSubmatch(loc)
+	if m == nil {
+		return false
+	}
+	padded := "-" + strings.ToLower(m[1]) + "-"
+	for _, term := range professionSlugTerms() {
+		if strings.Contains(padded, "-"+term+"-") {
+			return true
+		}
+	}
+	return false
+}
+
+// professionTitleIsTechnical reports whether a posting's real title states technical work.
+// It is the expensive gate, run on the title the detail page's ld+json states rather than
+// on the slug — the slug carries the employer's name, so "Értékesítési munkatárs" at
+// "DevOps Solutions Kft." reaches this point and is turned away here. On the live audit it
+// rejected 15 of the 45 postings the slug gate offered.
+func professionTitleIsTechnical(title string) bool {
+	return classify.IsTech(title) ||
+		slices.Contains(vocab.TechCategories, classify.Parse(title).Category)
 }
 
 // professionSitemapNeedle is the file-name fragment a category's sitemap ends with. It
