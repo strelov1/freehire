@@ -84,16 +84,20 @@
   before the 45-day age rule does). Note the actual figure in this file when it stabilises —
   the estimate is derived from an age histogram, not from having watched it happen.
 
-## 6. Refresh the duplicate markers once
+## 6. The duplicate markers — checked, and nothing to do
 
-- [ ] 6.1 Run `REINDEX_DEDUP_ONLY=1` on prod so aggregator suppression re-marks the 142,229
-  open Adzuna postings whose company is already held first-party. No need to pause
-  `search-drain` for it — the marker-only pass builds no Meilisearch client and runs no
-  rebuild. It is an operational step, not a code dependency: nothing in sections 1-4 waits on
-  it, and skipping it only leaves search showing duplicates it already shows today.
-- [ ] 6.2 Record how many markers it actually set. Suppression needs a TITLE twin, not merely
-  a covered company, so the reachable subset is smaller than 142,229 — 35,268 Adzuna postings
-  carry an aggregator marker today, and the gap between those figures is what this run moves.
+- [x] 6.1 ~~Run `REINDEX_DEDUP_ONLY=1` on prod.~~ **Not needed; the premise was wrong.**
+  `freehire-reindex-dedup-only.timer` already runs that exact pass six times a day (01:30,
+  10:30, 13:30, 16:30, 19:30, 22:30 UTC), `Result=success`, `ExecMainStatus=0`. The task was
+  written from CLAUDE.md, which describes the flag as existing "so the markers can refresh on
+  a tighter cadence" — true, and it says nothing about whether a timer was ever created for
+  it. One `systemctl list-timers` answered what the documentation could not.
+- [x] 6.2 ~~Record how many markers it set.~~ Answered without running anything: 35,268 is
+  not a partial figure working toward 142,229, it is the finished one. Suppression requires a
+  matching TITLE, not merely a covered company, so the ~107k difference is Adzuna postings
+  whose employer's own ATS lists nothing comparable — which the marker is right to leave
+  alone. Had the manual run gone ahead it would have written zero rows and been read as
+  confirmation.
 
 ## 7. Close out the issue
 

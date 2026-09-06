@@ -62,9 +62,15 @@ mechanism for it (`expireDespiteRegisteredPrefixes`). Adzuna joins it. No new ma
   its members.
 - **Add the missing `adzuna-source` capability spec.** Adzuna is the largest source in the
   catalogue and has no spec at all.
-- **Refresh the duplicate markers once after deploy** (`REINDEX_DEDUP_ONLY=1`), so the
-  142,229 open Adzuna postings whose company we already hold first-party are suppressed
-  where a title twin exists.
+- **Nothing about the duplicate markers.** An earlier draft of this proposal called for a
+  one-off `REINDEX_DEDUP_ONLY=1` pass to suppress the 142,229 open Adzuna postings whose
+  company we already hold first-party. Checking the host rather than the documentation shows
+  `freehire-reindex-dedup-only.timer` already runs that pass six times a day (01:30, 10:30,
+  13:30, 16:30, 19:30, 22:30 UTC), last exit 0. The 35,268 Adzuna postings carrying an
+  aggregator marker are therefore not a backlog — they are the complete answer, because
+  suppression needs a matching TITLE, not merely a covered company. The remaining ~107k are
+  postings the employer's own ATS does not list under any comparable title, which is exactly
+  what the marker declines to call a duplicate.
 
 ### Non-goals
 
@@ -100,8 +106,8 @@ mechanism for it (`expireDespiteRegisteredPrefixes`). Adzuna joins it. No new ma
   **The unit must be copied to the host**; `release.sh` flips the app and never touches a
   unit, so this half of the change does not ship itself.
 - **Schema:** none.
-- **Search:** no reindex is required by the change itself. The one-off
-  `REINDEX_DEDUP_ONLY=1` marker pass is an operational step, not a code dependency.
+- **Search:** no reindex is required, and no marker pass either — see "What Changes". The
+  scheduled `freehire-reindex-dedup-only.timer` already covers it.
 - **Expect the Adzuna slice of the catalogue to shrink**, from 301k toward roughly 150-180k
   over the following weeks, and faster than the 45-day window alone implies — Adzuna's own
   14-day `sweepGrace` closes what the date-ordered crawl stops re-seeing before the age rule
