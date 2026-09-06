@@ -172,6 +172,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"teamtailor", "teamtailor", modeHost}, // <tenant>.teamtailor.com; custom-domain career sites are absent (not URL-derivable)
 	{"factorial", "factorial", modeHost},   // <tenant>.factorial.<tld>
 	{"factorialhr", "factorial", modeHost}, // the .com.br/.pt/… base-domain variant — ONE ingest adapter serves both, and it reports "factorial"
+	{"gr8people", "gr8people", modeHost},   // <tenant>.gr8people.com
+	{"workgr8", "gr8people", modeHost},     // the workgr8.com base-domain variant — same vendor, confirmed live (identical frontend + GraphQL schema); ONE ingest adapter serves both, reporting "gr8people"
 	// CatsOne's adapter fetches https://<board>/careers, so the board is the whole host, exactly
 	// as catsone.yml stores it. It was listed as a subdomain, which yields the bare label — a
 	// board no crawl can resolve. (Its custom-domain tenants, e.g. jobs.evoplay.com.ua, stay
