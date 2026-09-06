@@ -24,7 +24,7 @@ type fakeStructuredResume struct {
 	ok  bool
 	err error
 	// provisional is identity-only contacts when the stamp is stale; provisionalOK is
-	// whether ProvisionalContacts should report them available.
+	// whether StructureForSeed should compose them in place of a current extract.
 	provisional   resumeextract.Structured
 	provisionalOK bool
 	// geo is the derived candidate geography; geoOK mirrors the freshness bool. Zero
@@ -35,13 +35,6 @@ type fakeStructuredResume struct {
 
 func (f fakeStructuredResume) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
 	return f.ret, f.ok, f.err
-}
-
-func (f fakeStructuredResume) ProvisionalContacts(context.Context, int64) (resumeextract.Structured, bool, error) {
-	if f.err != nil {
-		return resumeextract.Structured{}, false, f.err
-	}
-	return f.provisional, f.provisionalOK, nil
 }
 
 func (f fakeStructuredResume) Geography(context.Context, int64) (resume.Geography, bool, error) {

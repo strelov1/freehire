@@ -506,24 +506,36 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + board
 		return src, board, u.String(), true
-	}
 
-	// modePath / modePathNumeric: the board is the first path segment that isn't platform
-	// machinery — declined outright when the path leads with a segment that carries no board.
-	if leadsWithNoBoard(u, noBoardFirstSegments[apex]) {
+	case modePath, modePathNumeric:
+		// The board is the first path segment that isn't platform machinery — declined
+		// outright when the path leads with a segment that carries no board.
+		if leadsWithNoBoard(u, noBoardFirstSegments[apex]) {
+			return "", "", "", false
+		}
+		board = firstTenantSegment(u, reservedSegments[apex])
+		if board == "" {
+			return "", "", "", false
+		}
+		if mode == modePathNumeric && !allDigits(board) {
+			return "", "", "", false
+		}
+		u.RawQuery = ""
+		u.Fragment = ""
+		u.Path = strings.TrimSuffix(strings.TrimSuffix(u.Path, "/"), "/apply")
+		return src, board, u.String(), true
+
+	default:
+		// A mode with no branch of its own is a mode nobody has decided how to read, so
+		// there is nothing to read it as. The two cases above used to be served by an
+		// implicit tail after the switch, which silently made the first-path-segment rule
+		// the fallback for every mode ADDED LATER too: a new platform that keeps its board
+		// anywhere but the first path segment would have had whatever its URL leads with
+		// taken as the tenant — a board that does not exist, which the contribution flow
+		// records and pays for (see the package doc). Declining is the fail-safe reading:
+		// the link is simply not recognized, which is what an unsupported host already gets.
 		return "", "", "", false
 	}
-	board = firstTenantSegment(u, reservedSegments[apex])
-	if board == "" {
-		return "", "", "", false
-	}
-	if mode == modePathNumeric && !allDigits(board) {
-		return "", "", "", false
-	}
-	u.RawQuery = ""
-	u.Fragment = ""
-	u.Path = strings.TrimSuffix(strings.TrimSuffix(u.Path, "/"), "/apply")
-	return src, board, u.String(), true
 }
 
 // recognizeAPI resolves a URL on an ATS's own API host, where the board is the segment right

@@ -12,27 +12,21 @@ import (
 
 // resumeContactHeader returns contact fields preferring candidate-owned contacts, then
 // a current structured résumé, then provisional contacts while extract is pending.
+//
+// That precedence is StructureForSeed's own (see internal/candidate/resume/AGENTS.md), so
+// it is read once rather than composed a second time here — three reads of the same row,
+// each re-deciding the same stamp, is three chances for heal and seed to disagree about who
+// the candidate is. Its ok answers "is there anything worth seeding", body included; the
+// header only ever asks whether identity survived, which is contactHeaderEmpty's question.
 func (h *cvHandlers) resumeContactHeader(ctx context.Context, userID int64) (cv.Header, bool, error) {
 	if h.resume == nil {
 		return cv.Header{}, false, nil
 	}
-	if owned, err := h.resume.CandidateOwned(ctx, userID); err != nil {
-		return cv.Header{}, false, err
-	} else if !owned.IdentityEmpty() {
-		hdr := candidateprofile.ContactHeaderFromStructured(owned.AsStructured())
-		return hdr, !contactHeaderEmpty(hdr), nil
-	}
-	if st, ok, err := h.resume.Structured(ctx, userID); err != nil {
-		return cv.Header{}, false, err
-	} else if ok {
-		hdr := candidateprofile.ContactHeaderFromStructured(st)
-		return hdr, !contactHeaderEmpty(hdr), nil
-	}
-	contacts, ok, err := h.resume.ProvisionalContacts(ctx, userID)
-	if err != nil || !ok {
+	st, _, err := h.resume.StructureForSeed(ctx, userID)
+	if err != nil {
 		return cv.Header{}, false, err
 	}
-	hdr := candidateprofile.ContactHeaderFromStructured(contacts)
+	hdr := candidateprofile.ContactHeaderFromStructured(st)
 	return hdr, !contactHeaderEmpty(hdr), nil
 }
 

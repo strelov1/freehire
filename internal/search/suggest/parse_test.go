@@ -228,6 +228,29 @@ func TestParse_APrefixOfALongerPhraseIsStillBeingTyped(t *testing.T) {
 	}
 }
 
+// The unfinished word must survive a phrase that STARTS earlier and runs over it. The
+// guard bounds where a match may begin; a multi-word phrase reaching across the boundary
+// consumes the word under the cursor just as surely, and then there is nothing left to
+// complete — the query with no trailing space would answer exactly like the one with it.
+func TestParse_APhraseStartingEarlierCannotSwallowTheUnfinishedWord(t *testing.T) {
+	ph := phrases("Google", "Java Developer")
+
+	got := ph.Parse("google java developer")
+	if len(got.Recognised) != 1 {
+		t.Fatalf("recognised = %v, want only Google", got.Recognised)
+	}
+	if got.Fragment != "java developer" {
+		t.Errorf("fragment = %q, want the phrase still being typed", got.Fragment)
+	}
+
+	// With the space the last word IS finished, so both phrases are recognised and there
+	// is genuinely nothing left to complete. The two queries must not answer alike.
+	done := ph.Parse("google java developer ")
+	if len(done.Recognised) != 2 || done.Fragment != "" {
+		t.Errorf("recognised=%v fragment=%q, want both phrases and no fragment", done.Recognised, done.Fragment)
+	}
+}
+
 // The exact phrase is not "still being typed" merely because a longer one starts with
 // it — that is only true while the LAST word is unfinished.
 func TestParse_AFinishedPhraseIsRecognisedEvenIfLongerOnesExist(t *testing.T) {

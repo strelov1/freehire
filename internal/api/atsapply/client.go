@@ -166,11 +166,11 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		return autoapply.SidecarResult{}, fmt.Errorf("internal error: no browser session for a Greenhouse submission")
 	}
 
-	if cleanup, parked, err := c.attachApprovedResume(ctx, claimed, &plan); err != nil {
-		return autoapply.SidecarResult{}, err
-	} else if parked != nil {
+	cleanup, parked := c.attachApprovedResume(ctx, claimed, &plan)
+	if parked != nil {
 		return *parked, nil
-	} else if cleanup != nil {
+	}
+	if cleanup != nil {
 		defer cleanup()
 	}
 
@@ -229,15 +229,17 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 // Cleanup removes the temp file; the caller defers it so the file outlives the fill/submit
 // that reads it and is gone once Submit returns.
 //
-// A plan with no résumé field (nothing this attempt needs to attach) returns three nils —
+// A plan with no résumé field (nothing this attempt needs to attach) returns two nils —
 // nothing to render, nothing to park, nothing to clean up.
 //
-// A render failure parks the attempt naming the résumé field, rather than being retried as
-// a transient failure (design.md: "never guess, park instead" — the same rule an unresolved
-// form field already follows). c.cvs/c.renderer being unconfigured is treated identically:
-// it means this deployment cannot fill a résumé field at all yet, which is exactly the state
-// a required résumé field with no known answer parks for.
-func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Claimed, plan *Plan) (cleanup func(), parked *autoapply.SidecarResult, err error) {
+// There is no error return, because there is no failure here that is anyone's to retry: a
+// render failure parks the attempt naming the résumé field (design.md: "never guess, park
+// instead" — the same rule an unresolved form field already follows), and c.cvs/c.renderer
+// being unconfigured is treated identically, because it means this deployment cannot fill a
+// résumé field at all yet, which is exactly the state a required field with no known answer
+// parks for. Reporting an error alongside would suggest a third outcome that does not exist.
+// Same shape as unscannableFormResult below: the classified result, or nothing.
+func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Claimed, plan *Plan) (cleanup func(), parked *autoapply.SidecarResult) {
 	idx := -1
 	for i, f := range plan.Fields {
 		if f.Kind == "file" {
@@ -246,7 +248,7 @@ func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Cla
 		}
 	}
 	if idx == -1 {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	path, err := c.renderResumeToTempFile(ctx, claimed)
@@ -258,10 +260,10 @@ func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Cla
 				ID: plan.Fields[idx].ID, Label: "Resume/CV", Required: true,
 				Reason: "the approved tailored CV could not be rendered",
 			}},
-		}, nil
+		}
 	}
 	plan.Fields[idx].Value = path
-	return func() { _ = os.Remove(path) }, nil, nil
+	return func() { _ = os.Remove(path) }, nil
 }
 
 // renderResumeToTempFile renders claimed's approved tailored CV through the same Typst

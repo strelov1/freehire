@@ -218,6 +218,25 @@ func TestClientHonoursContext(t *testing.T) {
 	}
 }
 
+// The production client must refuse a redirect, exactly as the store provider's does. Every
+// call it makes carries `Bearer sk_…`, and Go's default policy would hand that header to the
+// original host's subdomains — or to a plain-HTTP hop — without being asked. The seam-built
+// client tests use keeps Go's default, so this asserts on the constructor the deployment
+// actually runs.
+func TestProviderClientRefusesToFollowARedirect(t *testing.T) {
+	c := newProviderClient("sk_test")
+	if c.http.CheckRedirect == nil {
+		t.Fatal("the production client follows redirects; the key must not travel off api.stripe.com")
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.stripe.com.evil.test/v1/subscriptions", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	if err := c.http.CheckRedirect(req, nil); err == nil {
+		t.Fatal("a redirect to a look-alike host was allowed; the key must not follow one anywhere")
+	}
+}
+
 // TestClientReadsThePeriodEndFromEitherPlace guards the migration that caused the bug. An
 // account pinned to an older API version still sends the field at the subscription level;
 // a current one sends it on the item. Reading only one place produces a subscription with no

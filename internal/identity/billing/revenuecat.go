@@ -454,18 +454,3 @@ func parseRevenueCatEvent(raw []byte) (Event, error) {
 		Payload:    envelope.Event,
 	}, nil
 }
-
-// refuseRedirect stops the SECRET key travelling anywhere it was not addressed to.
-//
-// Go's default policy follows up to ten hops and carries the Authorization header to the
-// original host and its subdomains — and it permits an HTTPS request to be redirected to
-// plain HTTP. safehttp re-dials every hop through the SSRF guard, which stops an internal
-// address, but the guard says nothing about a PUBLIC host reading a header meant for
-// api.revenuecat.com. That header is `Bearer sk_…`, the key that can grant and revoke a plan.
-//
-// So no hop at all. This is not a general HTTP client: it calls one documented endpoint that
-// does not redirect, so a redirect here is a misconfiguration or an attack, and neither is
-// worth following with a credential in hand.
-func refuseRedirect(req *http.Request, _ []*http.Request) error {
-	return fmt.Errorf("billing: refusing a redirect to %s — the RevenueCat key travels to one host only", req.URL.Host)
-}

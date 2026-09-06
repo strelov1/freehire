@@ -204,8 +204,14 @@ func (p *Phrases) Parse(query string) Parsed {
 	i := 0
 	for i < recognisable {
 		matched := false
-		// Never look past the end, and never past the longest phrase there is.
-		for n := min(longest, len(words)-i); n >= 1; n-- {
+		// Never look past what may be recognised, and never past the longest phrase there
+		// is. The bound is recognisable, not len(words): a match STARTING inside the
+		// recognisable prefix may still run over the unfinished word, and consuming it
+		// there loses the completion of the word under the cursor just as surely as
+		// starting on it would. `google java developer` (no trailing space) would
+		// otherwise recognise Google, then swallow `java developer` whole and offer
+		// nothing to complete.
+		for n := min(longest, recognisable-i); n >= 1; n-- {
 			if part, ok := byText[strings.Join(words[i:i+n], " ")]; ok {
 				out.Recognised = append(out.Recognised, part)
 				i += n
