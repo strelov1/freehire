@@ -37,9 +37,21 @@ first is the LLM in [internal/ai/enrich](../../ai/enrich/AGENTS.md).
 - **The bound is `enrich.BoundRequirements`, never a local copy.** Both producers of
   the field obey one ceiling, and that function is exported for exactly this. Do not
   restate `maxRequirements` / `maxRequirementTextRunes` here.
-- **The output is display material only.** 86% of stored requirement texts are
-  distinct (measured on prod 2026-09-04), so this can never be a facet, a filter, or a
-  search field. Do not add one.
+- **86% of stored requirement texts are distinct** (measured on prod 2026-09-04), so
+  this can never be a facet, a filter, or a search field. Do not add one.
+- **The job page does NOT render this list, and adding a section that does is a
+  mistake already made once.** The extractor fires exactly when the description
+  carries a `Requirements` heading with a list under it — which is exactly when the
+  page already SHOWS that list, in the description, a few centimetres higher. A
+  section built on this output is therefore verbatim duplication on every posting it
+  appears for. It shipped, ran on prod for a day, and was removed; see
+  `openspec/changes/surface-job-requirements/tasks.md` §10.
+  - The value of this column is structure, not display: a `{text, priority}` list a
+    matcher or an API consumer can read, extracted from prose no consumer can.
+  - If a surface for it is ever wanted, the honest one shows what the reader cannot
+    already see — the MODEL's list, which condenses prose into items the description
+    never presents as a list. That is `enrichment_version > 0` and a payload of its
+    own, not this column.
 
 ## How it works
 

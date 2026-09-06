@@ -8,7 +8,7 @@ Surfacing them is nearly free. Widening them is the second half: 133k is 2.9% of
 
 ## What Changes
 
-- **Render the list on the job page.** A "What they ask for" section in the right column of `JobView.svelte`, between the description and Skills, grouped `Required` then `Preferred`, every item verbatim. Absent when the list is empty.
+- ~~**Render the list on the job page.**~~ **Withdrawn.** A "What they ask for" section shipped, ran on prod for a day, and was removed: the extractor fires exactly when the description already displays that list, so the section was verbatim duplication on every posting it appeared for. See tasks.md §10. The list is still SERVED under `enrichment.requirements`; nothing renders it.
 - **Derive the same shape without an LLM.** A new deterministic extractor reads the posting's description HTML: it finds a heading in a controlled vocabulary (`Requirements`, `Qualifications`, `What you'll need`, `Nice to have`, …) and takes the `<li>` items of the list that follows it. Priority comes from the heading. No heading means no items — there is no fallback that guesses which list is the requirements list.
 - **Store the derivation** in a new `jobs.requirements_derived` column (migration 0139), written by `UpsertJob` at ingest.
 - **Merge it into the served field.** `SetJobEnrichment` gains a third overlay, chained after the two salary overlays it already carries: when the LLM payload states no requirements, the derived list fills them. `enrichment.requirements` stays the single field every consumer reads, and a later enrichment run cannot erase the derived list.
@@ -19,7 +19,6 @@ No breaking changes. The wire shape does not move; a field that was always prese
 ## Capabilities
 
 ### New Capabilities
-- `job-requirements-display`: the job detail page renders the posting's stated requirements, grouped by priority, verbatim, and renders nothing when there are none.
 - `posting-requirements-derivation`: a deterministic, dictionary-gated extraction of a posting's requirements from its description markup, stored per job and refreshable by a one-off backfill.
 
 ### Modified Capabilities
@@ -30,6 +29,6 @@ No breaking changes. The wire shape does not move; a field that was always prese
 - **Schema:** migration 0139 adds `jobs.requirements_derived jsonb NOT NULL DEFAULT '[]'::jsonb`.
 - **SQL:** `SetJobEnrichment` and `UpsertJob`'s conflict branch gain one overlay each; a new chunked update query for the backfill. `make sqlc` regeneration required.
 - **Go:** a new extractor package under `internal/job`; `internal/ingest/pipeline` passes the derived list through `UpsertJob`; new `cmd/backfill-requirements`.
-- **Web:** one new section in `web/src/lib/components/JobView.svelte`. The `Requirement[]` type is already generated in `web/src/lib/generated/contracts.ts`.
+- **Web:** none. A section was added and then removed (tasks.md §10); the helpers it needed went with it.
 - **Not affected:** no Meilisearch reindex (the job detail page reads a Postgres row and the field is never a filter), and no enrichment version bump (the derivation is orthogonal to the model payload and must not re-queue 1.3M rows).
 - **Downstream:** nothing else reads `enrichment.requirements` yet. `internal/candidate/matchanalysis` builds its own requirement list from a first LLM stage (`analyzer.go`'s `s1.Requirements`) and `internal/candidate/coverletter` takes that list, so neither inherits anything from this change. An earlier draft of this proposal claimed they did, and used it to argue for storing the derivation rather than parsing on the request path; that argument was wrong. The storage decision stands on its own smaller ground — the backfill needs somewhere to put its answer, and a per-request parse of every job body is work repeated on every read.
