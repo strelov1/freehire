@@ -57,6 +57,8 @@ func TestEducationLevel(t *testing.T) {
 		{"phd dotted", "Ph.D. or equivalent research experience.", "phd"},
 		{"phd beats bachelor", "Bachelor's or PhD in a quantitative field.", "phd"},
 		{"bachelor degree no apostrophe", "A bachelor degree in CS is required.", "bachelor"},
+		{"typographic apostrophe", "Bachelor’s degree required.", "bachelor"},
+		{"typographic apostrophe, master", "Master’s degree required.", "master"},
 		{"explicit none", "No degree required for this role.", "none"},
 		{"degree word alone not enough", "This is a degree of difficulty.", ""},
 		{"MS Office is not a master's", "Proficiency in MS Office and MS SQL Server.", ""},

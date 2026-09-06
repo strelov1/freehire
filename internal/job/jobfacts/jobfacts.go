@@ -93,10 +93,15 @@ func EmploymentType(title, description string) string {
 // "MS SQL" and "bs"/"b.s" with everyday text — and bare "master" is excluded because
 // "scrum master" is not a degree. The "'s" possessive, an explicit "<level> degree",
 // or the -Sc/MBA/PhD tokens are required instead.
+//
+// The possessive admits BOTH apostrophes. A description written in a rich-text editor
+// carries the typographic one, and an ASCII-only spelling read "Bachelor’s degree
+// required" as no degree at all — every one of the five most recent prod postings
+// naming a degree spelled it that way (checked 2026-09-06).
 var (
 	rePhD      = regexp.MustCompile(`\b(ph\.?\s?d|phd|doctorate|doctoral)\b`)
-	reMaster   = regexp.MustCompile(`\b(master'?s|master degree|m\.?sc|mba|graduate degree)\b`)
-	reBachelor = regexp.MustCompile(`\b(bachelor'?s|bachelor degree|b\.?sc|undergraduate degree)\b`)
+	reMaster   = regexp.MustCompile(`\b(master['’]?s|master degree|m\.?sc|mba|graduate degree)\b`)
+	reBachelor = regexp.MustCompile(`\b(bachelor['’]?s|bachelor degree|b\.?sc|undergraduate degree)\b`)
 	reNoDegree = regexp.MustCompile(`\b(no (?:degree|diploma)|degree not required|without a degree|no degree required)\b`)
 )
 

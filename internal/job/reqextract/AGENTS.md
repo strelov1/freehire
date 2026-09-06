@@ -47,6 +47,13 @@ section ends instead of each guessing.
   spaces (`BlankWords`) leaves every boundary where the posting put it, and a
   description with no preferred section comes back **byte-identical**, re-render
   skipped.
+- **A re-render is not a no-op on the TEXT, and `restoreLiterals` is why.** `x/net/html`
+  escapes an apostrophe, a quote and a bare `>` on the way out, all three of which a
+  description carries literally. `bachelor&#39;s` matches no vocabulary, so the escape
+  cost the requirement on exactly the postings this masker exists for — only a posting
+  WITH a preferred section is re-rendered at all. Every unit test stayed green; a query
+  against prod rows found it. `&amp;` and `&lt;` are NOT restored: the source wrote
+  those, so re-emitting them is the round trip, and undoing them would be a change.
 - **`MaskPreferred` closes a section only on a heading; `Derive` also closes on prose.**
   The difference is deliberate and is the whole reason they are two walks over one
   vocabulary. `Derive` wants the LIST under a heading, so prose between the two means
