@@ -203,9 +203,17 @@ func (s *Service) syncLedger(ctx context.Context, userID, id int64, mailSource s
 // fail the triage the caller successfully recorded.
 func (s *Service) advanceStage(ctx context.Context, userID, jobID int64, sig mailclassify.StatusSignal) {
 	current, err := s.q.GetUserJobStage(ctx, db.GetUserJobStageParams{UserID: userID, JobID: jobID})
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// No application row means the caller linked mail to a job they do not
 		// track; there is simply no stage to advance.
+		return
+	}
+	if err != nil {
+		// Anything else is the database failing to answer, which is a different fact and
+		// used to leave no trace at all — the stage silently stopped advancing for every
+		// triage while it lasted. The write below already logs; so does the worker's copy
+		// of this same read (cmd/classify-mail's CurrentStage).
+		log.Printf("inbox: read stage user=%d job=%d: %v", userID, jobID, err)
 		return
 	}
 	next, ok := mailclassify.AdvanceStage(current, sig)

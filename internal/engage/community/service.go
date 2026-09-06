@@ -3,6 +3,7 @@ package community
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 )
@@ -164,9 +165,12 @@ func (s *Service) Reply(ctx context.Context, threadID, parentReplyID, userID int
 	if err != nil {
 		return Reply{}, err
 	}
-	// Best-effort denormalized count; a rare drift is cosmetic, not correctness.
+	// Best-effort denormalized count; a rare drift is cosmetic, not correctness. Returning
+	// the error here contradicted that in the worst way: the reply is already committed and
+	// thread_replies carries no unique constraint, so the caller got a 500 for a post that
+	// went through and their retry wrote a second copy of it.
 	if err := s.repo.IncrementReplyCount(ctx, threadID); err != nil {
-		return Reply{}, err
+		log.Printf("community: bump reply count on thread %d: %v", threadID, err)
 	}
 	reply.AuthorHandle = persona.Handle
 	return reply, nil

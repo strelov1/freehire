@@ -86,3 +86,48 @@ func newGmailCallbackApp(t *testing.T) (*fiber.App, string) {
 	})
 	return app, frontend
 }
+
+// A consent the candidate DECLINED comes back with ?error=access_denied and no code, and
+// the provider echoes the state on that redirect too — so passing the state check says
+// nothing about whether anything was granted. Treating a missing code as "nothing to do"
+// sent them to ?gmail=connected, which told them their mailbox was connected at the exact
+// moment they had refused it, and the Integrations page then showed a Mail card with no
+// address behind it.
+func TestGoogleCallbacksReportARefusalInsteadOfClaimingSuccess(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		path  string
+		state string
+		query string
+		want  string
+	}{
+		{"mail declined", "/api/v1/me/gmail/callback", gmailStateCookieName, "error=access_denied", "gmail_error=denied"},
+		{"mail returned nothing", "/api/v1/me/gmail/callback", gmailStateCookieName, "", "gmail_error=exchange"},
+		{"calendar declined", "/api/v1/me/calendar/callback", calendarStateCookieName, "error=access_denied", "calendar_error=denied"},
+		{"calendar returned nothing", "/api/v1/me/calendar/callback", calendarStateCookieName, "", "calendar_error=exchange"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app, frontend := newGmailCallbackApp(t)
+			iss := auth.NewIssuer(testGmailSecret, time.Hour)
+			token, err := iss.Issue(1, testTokenVersion)
+			if err != nil {
+				t.Fatalf("issue: %v", err)
+			}
+			url := tc.path + "?state=abc"
+			if tc.query != "" {
+				url += "&" + tc.query
+			}
+			r := httptest.NewRequestWithContext(context.Background(), "GET", url, nil)
+			r.Header.Set("Cookie", auth.CookieName+"="+token+"; "+tc.state+"=abc")
+
+			resp, err := app.Test(r, -1)
+			if err != nil {
+				t.Fatalf("callback: %v", err)
+			}
+			defer resp.Body.Close()
+			if got, want := resp.Header.Get("Location"), frontend+"/my/integrations?"+tc.want; got != want {
+				t.Errorf("Location = %q, want %q", got, want)
+			}
+		})
+	}
+}

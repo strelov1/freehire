@@ -390,7 +390,15 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 	// résumé-storage being enabled. Nothing known degrades to an empty skeleton.
 	doc := cv.EmptyDocument()
 	if in.Seed {
-		if st, ok, err := h.seedSource().Structured(c.Context(), userID); err == nil && ok {
+		// A read that failed is not a candidate with nothing to seed from. Collapsing the
+		// two answered 201 with an empty skeleton for someone whose CV we hold, and the
+		// only way back is to notice and start again. Every other caller of this seed
+		// propagates (cv_reset.go).
+		st, ok, err := h.seedSource().Structured(c.Context(), userID)
+		if err != nil {
+			return err
+		}
+		if ok {
 			doc = cv.Seed(st)
 		}
 	}

@@ -32,6 +32,9 @@ type fakeRepo struct {
 	subjectNames map[string]subjectRow
 
 	failHandleOnce bool // simulate one handle collision then succeed
+	// countErr fails the denormalized reply-count bump, which the schema treats as
+	// decoration and the caller must not be told about.
+	countErr error
 }
 
 func newFakeRepo() *fakeRepo {
@@ -157,6 +160,9 @@ func (f *fakeRepo) InsertReply(_ context.Context, threadID, parentReplyID, autho
 }
 
 func (f *fakeRepo) IncrementReplyCount(_ context.Context, threadID int64) error {
+	if f.countErr != nil {
+		return f.countErr
+	}
 	t := f.threads[threadID]
 	t.ReplyCount++
 	f.threads[threadID] = t
@@ -476,5 +482,31 @@ func TestListRecentThreadsSeparatesTitleFromCompany(t *testing.T) {
 	}
 	if got[0].SubjectCompany != "" {
 		t.Fatalf("want the absent company reported absent, got %q", got[0].SubjectCompany)
+	}
+}
+
+// The reply is already committed by the time the denormalized counter is bumped, and
+// thread_replies carries no unique constraint. Returning the bump's error therefore
+// answered 500 (and raised a Sentry event) for a post that went through, and the user's
+// natural retry wrote a second copy of it. A drifting count is cosmetic; a duplicated post
+// under someone's pseudonym is not.
+func TestReplySucceedsWhenOnlyTheCounterBumpFails(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newService(repo, "company/acme")
+	th, _ := svc.CreateThread(context.Background(), CreateThreadInput{
+		UserID: 1, SubjectType: SubjectCompany, SubjectSlug: "acme", Title: "t", Body: "b"})
+	repo.countErr = errors.New("deadlock detected")
+
+	r, err := svc.Reply(context.Background(), th.ID, 0, 2, "same here")
+
+	if err != nil {
+		t.Fatalf("Reply = %v, want success: the reply is already stored, so the caller must "+
+			"not be told to try again", err)
+	}
+	if r.ID == 0 || r.AuthorHandle == "" {
+		t.Errorf("reply = %+v, want the stored reply with its persona", r)
+	}
+	if got := len(repo.replies[th.ID]); got != 1 {
+		t.Errorf("stored %d replies, want 1", got)
 	}
 }

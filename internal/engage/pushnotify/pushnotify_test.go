@@ -1,11 +1,15 @@
 package pushnotify
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -403,5 +407,40 @@ func TestExpoNotifier_CheckReceipts_PartialPruneFailureKeepsEarlierProgress(t *t
 	}
 	if len(store.deleted) != 1 || store.deleted[0] != 1 {
 		t.Errorf("deleted ticket ids = %v, want [1] — the ticket whose prune failed stays queued for retry", store.deleted)
+	}
+}
+
+// A receipt is the only copy of Expo's answer, and this pass deletes it whatever it said
+// (openspec/changes/push-notification-infra, Decision 3). What was never logged was
+// therefore lost outright: a push refused for any reason other than DeviceNotRegistered
+// left no trace anywhere, so a systematically failing send — a payload Expo rejects, a
+// project credential gone bad — was indistinguishable from a run that delivered everything.
+func TestExpoNotifier_CheckReceipts_LogsARefusalItThenDeletes(t *testing.T) {
+	srv := stubExpoReceipts(t, map[string]map[string]any{
+		"ticket-3": {
+			"status": "error", "message": "Message too big",
+			"details": map[string]any{"error": "MessageTooBig"},
+		},
+	})
+	store := &fakeTicketStore{due: []Ticket{{ID: 3, Token: "ExponentPushToken[fine]", TicketID: "ticket-3"}}}
+	n := newTestNotifier(&fakePruner{}, &fakeQueuer{}, store)
+	n.receiptsURL = srv.URL
+
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	if err := n.CheckReceipts(context.Background()); err != nil {
+		t.Fatalf("CheckReceipts: %v", err)
+	}
+	if len(store.deleted) != 1 || store.deleted[0] != 3 {
+		t.Fatalf("deleted ticket ids = %v, want [3] — the deletion itself is the argued design",
+			store.deleted)
+	}
+	for _, want := range []string{"ticket-3", "MessageTooBig", "Message too big", "rejected=1"} {
+		if !strings.Contains(logged.String(), want) {
+			t.Errorf("log does not mention %q; it is the only record this answer ever had:\n%s",
+				want, logged.String())
+		}
 	}
 }

@@ -3,6 +3,7 @@ package searchdrain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -164,6 +165,15 @@ type fakeIndexer struct {
 	// return its error — simulating a push that is genuinely still working server-side
 	// (Meilisearch never reported a failure) but outran the caller's CallTimeout.
 	blockUntilCtxDone bool
+	// stopRun cancels the run's own context from inside a push, standing in for the
+	// SIGTERM freehire-reindexw sends this service before every rebuild.
+	stopRun context.CancelFunc
+	// opaqueErr is returned INSTEAD of the context's own error once the context is
+	// done, standing in for *meilisearch.Error — which implements no Unwrap, so nothing
+	// downstream can recover a context sentinel from it.
+	opaqueErr error
+	// waveErr fails every call outright, batch and per-item alike.
+	waveErr error
 }
 
 func newFakeIndexer() *fakeIndexer { return &fakeIndexer{indexErr: map[int64]error{}} }
@@ -175,16 +185,25 @@ func (ix *fakeIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		ids[i] = j.ID
 	}
 	ix.indexCalls = append(ix.indexCalls, ids)
-	block := ix.blockUntilCtxDone
+	block, stop, opaque := ix.blockUntilCtxDone, ix.stopRun, ix.opaqueErr
 	ix.mu.Unlock()
 
-	if block {
+	if stop != nil {
+		stop()
+	}
+	if block || stop != nil {
 		<-ctx.Done()
+		if opaque != nil {
+			return opaque
+		}
 		return ctx.Err()
 	}
 
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
+	if ix.waveErr != nil {
+		return ix.waveErr
+	}
 	if ix.batchFails && len(jobs) > 1 {
 		return errors.New("batch index failed")
 	}
@@ -400,5 +419,101 @@ func TestRunnerMissingJobDeadLettersInFallback(t *testing.T) {
 	}
 	if len(store.failCalls) != 1 || store.failCalls[0].outboxID != 20 || store.failCalls[0].maxAttempts != 1 {
 		t.Errorf("failCalls = %+v, want one for outbox 20 with maxAttempts=1 (immediate dead-letter)", store.failCalls)
+	}
+}
+
+// An ordinary stop is not a poison row. freehire-reindexw runs
+// `ExecStartPre=+systemctl stop freehire-search-drain.service` before every rebuild, so
+// SIGTERM cancels this run's context mid-push several times a day. Classifying that as a
+// per-document failure drove the whole wave through the per-item path, and each item's
+// Fail runs on a background context — so the attempt REACHED Postgres. Three ordinary
+// stops over one entry set its failed_at, after which ClaimSearchOutboxBatch skips it and
+// EnqueueSearchOutbox's ON CONFLICT DO NOTHING never re-adds it: that job stays out of the
+// index until the next full rebuild.
+func TestRunnerSkipsWaveWhenTheRunIsCancelled(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	seed(store, 1, 2, 3)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ix.stopRun = cancel
+	// The error the SDK actually hands back: it carries no context sentinel to unwrap,
+	// which is why the guard has to ask the context instead.
+	ix.opaqueErr = errors.New("meilisearch: communication error")
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(ctx, opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 0 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Fatalf("stats = %+v, want all zero — a cancelled run learned nothing about these entries", stats)
+	}
+	if len(ix.indexCalls) != 1 {
+		t.Errorf("IndexBatch calls = %d, want 1 — a cancelled wave must not cascade into per-item pushes",
+			len(ix.indexCalls))
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none — an ordinary stop must not spend the attempt budget",
+			store.failCalls)
+	}
+}
+
+// A failed Complete comes AFTER a push that succeeded: the documents are in the index and
+// only the wave's rows are left undeleted. Complete is one DELETE over an id list, so it
+// cannot fail because of one row's content and per-row isolation buys nothing — while the
+// fallback re-pushes every document in the wave on its own, at roughly the cost of the
+// whole batch each. That is the shape of the 2026-08-05 incident.
+func TestRunnerLeavesTheWaveClaimedWhenCompleteFailsAfterASuccessfulPush(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	seed(store, 1, 2, 3)
+	for _, id := range []int64{1, 2, 3} {
+		store.completeErr[id] = errors.New("connection reset by peer")
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 0 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Fatalf("stats = %+v, want all zero — the wave is left claimed for its lease to expire", stats)
+	}
+	if len(ix.indexCalls) != 1 {
+		t.Errorf("IndexBatch calls = %d, want 1 — the wave was already pushed; re-pushing it one "+
+			"document at a time is hours of whole-index re-merges", len(ix.indexCalls))
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none — the pool being unwell says nothing about any entry",
+			store.failCalls)
+	}
+}
+
+// An Indexer that could not assemble the wave's documents says so with ErrSkipWave, and
+// the runner must not fall back: the per-item path would push the SAME incomplete
+// documents, one expensive call at a time. Today the only source is cmd/search-drain
+// failing to read the duplicate closure's geography, which does not merely fail to widen a
+// collapsed role's facets — it overwrites the widened ones with the canon's own.
+func TestRunnerSkipsWaveWhenTheIndexerCouldNotBuildIt(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	ix.waveErr = fmt.Errorf("%w: duplicate-closure geography for wave: %v",
+		ErrSkipWave, errors.New("connection reset by peer"))
+	seed(store, 1, 2, 3)
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 0 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Fatalf("stats = %+v, want all zero — the wave is left claimed for its lease to expire", stats)
+	}
+	if len(ix.indexCalls) != 1 {
+		t.Errorf("IndexBatch calls = %d, want 1 — falling back would push the same narrowed "+
+			"documents one at a time", len(ix.indexCalls))
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none — the wave was never built, so no entry is at fault",
+			store.failCalls)
 	}
 }

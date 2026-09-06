@@ -34,7 +34,7 @@ func LoadEmbed() Embed {
 		// search_drain.go). cmd/embed no longer pushes into any search index — its own batch
 		// is TEI calls plus one Postgres transaction — but the same generous ceiling is kept
 		// here too: a slow TEI backend or a large batch's DB transaction both deserve room
-		// before Runner.skipOnTimeout treats a batch as merely slow rather than failed.
+		// before Runner.skipOnContextEnd treats a batch as merely slow rather than failed.
 		CallTimeout: time.Duration(envInt("EMBED_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
 	}
 	// A non-positive batch size would make the claim's LIMIT 0 (silently no-op) or feed a

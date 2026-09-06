@@ -69,7 +69,12 @@ func (d *fakeDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
 		select {
 		case <-time.After(d.delay):
 		case <-ctx.Done():
-			return ctx.Err()
+			// What the SDK actually hands back, rather than the context's own error:
+			// *meilisearch.Error implements no Unwrap (search/client.go says so itself),
+			// so a guard that reads the ERROR cannot see the context ending — and the
+			// case it misses is the deadline landing inside the SDK's retry window,
+			// which engages on 502/503/504, i.e. exactly when it is needed.
+			return errors.New("meilisearch: communication error")
 		}
 	}
 	if d.failFirstN >= d.calls {
@@ -179,5 +184,41 @@ func TestDeletionRunnerDeadLettersARepeatedlyFailingEntry(t *testing.T) {
 	}
 	if stats.DeadLettered != 1 {
 		t.Errorf("DeadLettered = %d, want 1", stats.DeadLettered)
+	}
+	// One entry, one outcome — as the indexing runner's failN has always reported it.
+	// Counting the same entry as failed AND dead-lettered made a single exhausted entry
+	// read as two problems in the run's summary and in the exit code's inputs.
+	if stats.Failed != 0 {
+		t.Errorf("Failed = %d, want 0 — a dead-lettered entry is not also a failure", stats.Failed)
+	}
+}
+
+// The run being cancelled is not a per-document defect either, and it is the ordinary case
+// rather than an exotic one: freehire-reindexw stops this service before every rebuild.
+// Falling back here would ask the index to delete each id separately on a context that is
+// already done, and charge every entry an attempt for the privilege.
+func TestDeletionRunnerSkipsTheWaveWhenTheRunIsCancelled(t *testing.T) {
+	store := newFakeDeleteStore(50, 51)
+	deleter := &fakeDeleter{delay: time.Second}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	stats, err := DeletionRunner{Store: store, Deleter: deleter}.Run(ctx, deleteOptions())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Deleted != 0 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Errorf("stats = %+v, want all zero — a cancelled run learned nothing about these entries", stats)
+	}
+	if deleter.calls != 1 {
+		t.Errorf("deleter called %d times, want 1 — a cancelled wave must not fall back per item",
+			deleter.calls)
+	}
+	if len(store.failed) != 0 {
+		t.Errorf("recorded failures %v, want none — an ordinary stop must not spend the attempt budget",
+			store.failed)
+	}
+	if len(store.completed) != 0 {
+		t.Errorf("completed %d entries, want 0 — the lease must retry them", len(store.completed))
 	}
 }

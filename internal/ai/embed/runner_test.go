@@ -30,6 +30,9 @@ type fakeStore struct {
 	closedDone    []int64                    // all job ids CompleteClosed'd
 	failCalls     []failCall
 	attempts      map[int64]int // outbox id -> attempts so far
+	// jobsHook runs before each Jobs call, so a test can change the world between the
+	// batch attempt and the per-item fallback that follows it.
+	jobsHook func()
 }
 
 type failCall struct {
@@ -62,6 +65,9 @@ func (s *fakeStore) Claim(_ context.Context, batch, _ int) ([]Claimed, error) {
 }
 
 func (s *fakeStore) Jobs(_ context.Context, ids []int64) ([]db.Job, error) {
+	if s.jobsHook != nil {
+		s.jobsHook()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// A corrupted row aborts a whole multi-id load (a seq scan hits it); a single-id
@@ -139,6 +145,12 @@ type fakeIndexer struct {
 	// its error — simulating a push that is genuinely still working server-side (the
 	// index never reported a failure) but outran the caller's CallTimeout.
 	blockUntilCtxDone bool
+	// stopRun cancels the run's own context from inside a call, standing in for the
+	// SIGTERM a redeploy sends this worker.
+	stopRun context.CancelFunc
+	// opaqueErr is returned INSTEAD of the context's own error once the context is done,
+	// standing in for a backend whose error carries no context sentinel to unwrap.
+	opaqueErr error
 }
 
 func newFakeIndexer() *fakeIndexer { return &fakeIndexer{indexErr: map[int64]error{}} }
@@ -150,11 +162,17 @@ func (ix *fakeIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64]
 		ids[i] = j.ID
 	}
 	ix.indexCalls = append(ix.indexCalls, ids)
-	block := ix.blockUntilCtxDone
+	block, stop, opaque := ix.blockUntilCtxDone, ix.stopRun, ix.opaqueErr
 	ix.mu.Unlock()
 
-	if block {
+	if stop != nil {
+		stop()
+	}
+	if block || stop != nil {
 		<-ctx.Done()
+		if opaque != nil {
+			return nil, opaque
+		}
 		return nil, ctx.Err()
 	}
 
@@ -416,4 +434,76 @@ type emptyChunksIndexer struct{}
 
 func (emptyChunksIndexer) IndexOpen(_ context.Context, jobs []db.Job) (map[int64][]ChunkEmbedding, error) {
 	return nil, nil
+}
+
+// A redeploy's SIGTERM is not a poison row. Classifying it as one drove the whole wave
+// through the per-item path, where every failure is written on a BACKGROUND context — so
+// the attempt reached Postgres on the way out. Three of those dead-letter an entry, and
+// nothing brings it back: ClaimSemanticBatch filters `failed_at IS NULL`,
+// EnqueuePendingSemanticJobs is ON CONFLICT DO NOTHING, and this queue has no sweeper. The
+// posting's /similar list is then silently empty.
+func TestRunnerSkipsWaveWhenTheRunIsCancelled(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2, 3} {
+		store.jobs[id] = db.Job{ID: id}
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ix.stopRun = cancel
+	ix.opaqueErr = errors.New("embed backend: connection reset by peer")
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(ctx, opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 0 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Fatalf("stats = %+v, want all zero — a cancelled run learned nothing about these entries", stats)
+	}
+	if len(ix.indexCalls) != 1 {
+		t.Errorf("IndexOpen calls = %d, want 1 — a cancelled wave must not cascade into per-item calls",
+			len(ix.indexCalls))
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none — a shutdown must not spend the attempt budget",
+			store.failCalls)
+	}
+}
+
+// The same rule one entry down. The per-item path is reachable on its own — a genuine
+// batch failure falls into it, and the run can be cancelled while it is walking the wave —
+// and processOpenOne checked the context nowhere at all.
+func TestRunnerLeavesAnEntryClaimedWhenItsOwnCallIsCancelled(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2} {
+		store.jobs[id] = db.Job{ID: id}
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+		ix.indexErr[id] = errors.New("embed backend: connection reset by peer")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// The batch attempt fails for its own reason and the wave falls to per-item; the run
+	// is cancelled before the first of those calls, which is the ordinary shape of a
+	// redeploy landing mid-wave.
+	var loads int
+	store.jobsHook = func() {
+		if loads++; loads == 2 {
+			cancel()
+		}
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(ctx, opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Errorf("stats = %+v, want no failures charged — the entries were never judged", stats)
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none", store.failCalls)
+	}
 }

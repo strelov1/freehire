@@ -63,6 +63,25 @@ SELECT
     )::float8                                     AS oldest_age_seconds
 FROM email_classification_outbox;
 
+-- name: AppleRevocationJobMetrics :one
+-- Same shape as SearchOutboxMetrics, over a queue that records its state in a status
+-- column instead of a failed_at stamp, so the two FILTERs spell the same split in its
+-- own vocabulary: anything a run can still claim is depth, and `failed` is the dead
+-- letter — no run claims it again, and an abandoned `unlink` leaves its user_identities
+-- row in revocation_pending, where nothing can ever unlink that identity.
+--
+-- `processing` counts as live: the claim takes back a row stuck in it for ten minutes, so
+-- it is work still owed rather than work given up on.
+SELECT
+    count(*) FILTER (WHERE status IN ('pending', 'retry', 'processing')) AS depth,
+    count(*) FILTER (WHERE status = 'failed')                            AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at)
+            FILTER (WHERE status IN ('pending', 'retry', 'processing'))),
+        0
+    )::float8                                                            AS oldest_age_seconds
+FROM apple_revocation_jobs;
+
 -- name: BoardHealthMetrics :one
 -- The ingest board fleet split into three mutually exclusive states, so the published
 -- gauges sum to the fleet size and a stacked graph reads correctly.

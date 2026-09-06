@@ -52,12 +52,13 @@ func TestWorkerRevokesThenRemovesGrantAndIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	revoker := &recordingRevoker{}
-	processed, err := New(pool, revoker, ring).Run(ctx, 1)
+	stats, err := New(pool, revoker, ring).Run(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if processed != 1 || revoker.calls != 1 || revoker.token != refresh || revoker.clientID != clientID {
-		t.Fatalf("revocation mismatch: processed=%d revoker=%+v", processed, revoker)
+	if stats.Processed != 1 || stats.Revoked != 1 || stats.Failed != 0 || revoker.calls != 1 ||
+		revoker.token != refresh || revoker.clientID != clientID {
+		t.Fatalf("revocation mismatch: stats=%+v revoker=%+v", stats, revoker)
 	}
 	var grants, identities int
 	if err = pool.QueryRow(ctx, `SELECT count(*) FROM apple_grants WHERE user_id=$1`, userID).Scan(&grants); err != nil {
@@ -104,12 +105,12 @@ func TestWorkerRevokesExchangeCompensationWithoutTouchingIdentity(t *testing.T) 
 		t.Fatal(err)
 	}
 	revoker := &recordingRevoker{}
-	processed, err := New(pool, revoker, ring).Run(ctx, 1)
+	stats, err := New(pool, revoker, ring).Run(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if processed != 1 || revoker.token != "orphan-refresh" {
-		t.Fatalf("compensation not revoked: processed=%d revoker=%+v", processed, revoker)
+	if stats.Processed != 1 || stats.Revoked != 1 || revoker.token != "orphan-refresh" {
+		t.Fatalf("compensation not revoked: stats=%+v revoker=%+v", stats, revoker)
 	}
 	var status, identityStatus string
 	var ciphertext []byte
@@ -128,5 +129,56 @@ func TestWorkerRevokesExchangeCompensationWithoutTouchingIdentity(t *testing.T) 
 	}
 	if grants != 0 || identityStatus != "active" {
 		t.Fatalf("compensation cleanup grants=%d identity=%s", grants, identityStatus)
+	}
+}
+
+// refusingRevoker stands in for Apple answering with something no retry can fix.
+type refusingRevoker struct{}
+
+func (refusingRevoker) Revoke(context.Context, string, string) error { return apple.ErrPermanent }
+
+// A run that gave up on every revocation it claimed used to be byte-identical to a clean
+// one: `done` counted jobs touched, not jobs revoked, so cmd/apple-revoke printed
+// processed=1 and exited 0. Nothing else watches this queue, and the abandoned `unlink`
+// leaves user_identities in revocation_pending — a state from which that identity can
+// never be unlinked again.
+func TestWorkerReportsAJobItGaveUpOn(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users(email) VALUES('apple-permanent@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	const subject, clientID = "apple-permanent-subject", "me.freehire.mobile"
+	ring, err := apple.NewKeyRing("v1", map[string][]byte{"v1": bytes.Repeat([]byte{3}, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantID := uuid.New()
+	ciphertext, nonce, keyID, err := ring.Encrypt([]byte("refresh-secret"),
+		apple.GrantAAD("apple", subject, clientID, grantID.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `INSERT INTO apple_revocation_jobs(idempotency_key,reason,source_user_id,source_provider,source_provider_user_id,token_aad_row_id,client_id,token_ciphertext,token_nonce,encryption_key_id) VALUES($1,'unlink',$2,'apple',$3,$4,$5,$6,$7,$8)`,
+		"unlink:apple:"+grantID.String(), userID, subject, grantID, clientID, ciphertext, nonce, keyID); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := New(pool, refusingRevoker{}, ring).Run(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Processed != 1 || stats.Failed != 1 || stats.Revoked != 0 || stats.Retried != 0 {
+		t.Fatalf("stats = %+v, want one job given up on for good — that is what makes the run "+
+			"exit non-zero", stats)
+	}
+	var status string
+	if err = pool.QueryRow(ctx, `SELECT status FROM apple_revocation_jobs WHERE idempotency_key=$1`,
+		"unlink:apple:"+grantID.String()).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" {
+		t.Fatalf("status = %s, want failed", status)
 	}
 }

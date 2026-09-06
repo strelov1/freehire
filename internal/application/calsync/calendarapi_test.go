@@ -2,11 +2,14 @@ package calsync
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/application/gmailsync"
 )
 
 // The response shapes Google actually returns: a timed meeting, an all-day entry that
@@ -175,5 +178,28 @@ func TestListEventsStopsAtMaxPages(t *testing.T) {
 	}
 	if requests != maxPages {
 		t.Errorf("made %d requests, want exactly maxPages=%d", requests, maxPages)
+	}
+}
+
+// The reader marks WHAT the API answered and leaves the verdict to gmailsync.RevokedGrant,
+// which is the one place mail and calendar agree on what costs a candidate their shared
+// grant. A status kept only inside an error string cannot be read by either.
+func TestListEventsCarriesTheStatus(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusServiceUnavailable} {
+		reader := readerAgainstFunc(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		})
+
+		_, err := reader.ListEvents(context.Background(), time.Now(), time.Now().AddDate(0, 3, 0))
+		var apiErr *gmailsync.APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("ListEvents error = %v (%T), want a *gmailsync.APIError", err, err)
+		}
+		if apiErr.StatusCode != status {
+			t.Errorf("status = %d, want %d", apiErr.StatusCode, status)
+		}
+		if want := status == http.StatusForbidden; gmailsync.RevokedGrant(err) != want {
+			t.Errorf("RevokedGrant(%d) = %v, want %v", status, !want, want)
+		}
 	}
 }

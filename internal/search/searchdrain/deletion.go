@@ -2,7 +2,6 @@ package searchdrain
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
@@ -119,14 +118,14 @@ func (rn *deletionRun) processBatch(ctx context.Context, entries []Claimed) {
 		return
 	}
 
-	// A call-context timeout is not a per-document defect: the wave is skipped whole and
+	// A call context that ended is not a per-document defect: the wave is skipped whole and
 	// left claimed, so its lease expiry retries it fresh. Falling back here would turn one
 	// slow call into BatchSize equally slow ones, all competing for the same disk — the
 	// shape that produced a real outage on the indexing side (see the incident note in
 	// AGENTS.md).
-	if rn.timedOut(ctx, callCtx, err) {
-		log.Printf("search-drain: deletion wave of %d timed out, skipping (lease will retry): %v",
-			len(entries), err)
+	if ctxErr := callCtx.Err(); ctxErr != nil {
+		log.Printf("search-drain: deletion wave of %d abandoned (%v), skipping (lease will retry): %v",
+			len(entries), ctxErr, err)
 		return
 	}
 
@@ -141,14 +140,25 @@ func (rn *deletionRun) processOne(ctx context.Context, entry Claimed) {
 	defer cancel()
 
 	if err := rn.deleter.DeleteBatch(callCtx, []int64{entry.JobID}); err != nil {
+		// Same rule as the wave above, one entry down: a call that was abandoned taught
+		// us nothing about this entry, so it keeps its attempt budget and its claim.
+		if ctxErr := callCtx.Err(); ctxErr != nil {
+			log.Printf("search-drain: deletion for job %d abandoned (%v), leaving claimed: %v",
+				entry.JobID, ctxErr, err)
+			return
+		}
 		dead, failErr := rn.store.Fail(ctx, entry.OutboxID, err.Error(), rn.opt.MaxAttempts)
 		if failErr != nil {
 			log.Printf("search-drain: record deletion failure for job %d: %v", entry.JobID, failErr)
 		}
-		rn.stats.Failed++
-		if dead {
+		// One entry, one outcome — dead-lettered OR failed, never both, matching the
+		// indexing runner's failN. Counting it twice made a single exhausted entry read
+		// as two problems in the run's own summary line and in the exit code's inputs.
+		if failErr == nil && dead {
 			rn.stats.DeadLettered++
+			return
 		}
+		rn.stats.Failed++
 		return
 	}
 	if err := rn.store.Complete(ctx, []Claimed{entry}); err != nil {
@@ -160,17 +170,13 @@ func (rn *deletionRun) processOne(ctx context.Context, entry Claimed) {
 
 // callContext bounds one index operation, or returns the parent unchanged when no timeout is
 // configured.
+//
+// Whether the call context ended is the whole classification, so the two branches must not
+// differ in whether one exists: the untimed branch returns the parent, which is exactly
+// what "the run is being cancelled" needs it to report.
 func (rn *deletionRun) callContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if rn.opt.CallTimeout <= 0 {
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, rn.opt.CallTimeout)
-}
-
-// timedOut reports whether err is the call budget expiring rather than the index rejecting a
-// document. The parent still being live is what distinguishes "our own deadline fired" from
-// "the whole run is being cancelled", which must not be mistaken for a skippable wave.
-func (rn *deletionRun) timedOut(parent, call context.Context, err error) bool {
-	return errors.Is(err, context.DeadlineExceeded) &&
-		call.Err() != nil && parent.Err() == nil
 }

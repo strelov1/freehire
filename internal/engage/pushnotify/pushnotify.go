@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -47,6 +48,10 @@ const sendTimeout = 10 * time.Second
 // the token (app uninstalled, permission pulled) — Expo will never
 // successfully deliver to it again.
 const deviceNotRegistered = "DeviceNotRegistered"
+
+// receiptStatusOK is the one status that means the message actually arrived. Everything
+// else Expo answers is a refusal carrying a code in Details.Error.
+const receiptStatusOK = "ok"
 
 // receiptMinAgeMinutes is how long a ticket waits in the outbox before its
 // receipt is checked — Expo's own guidance is that delivery through APNs/FCM
@@ -180,7 +185,7 @@ func (n *ExpoNotifier) Send(ctx context.Context, token, title, body string, data
 	}
 
 	ticket := out.Data[0]
-	if ticket.Status == "ok" {
+	if ticket.Status == receiptStatusOK {
 		if err := n.queuer.EnqueuePushTicket(ctx, token, ticket.ID); err != nil {
 			return fmt.Errorf("pushnotify: enqueue ticket: %w", err)
 		}
@@ -205,6 +210,13 @@ type expoReceiptsResponse struct {
 // delivery answer, checks them, prunes any token a receipt reports
 // DeviceNotRegistered, and removes every checked ticket from the outbox
 // regardless of outcome. Intended to run on a schedule (cmd/push-receipts).
+//
+// The deletion is deliberate (openspec/changes/push-notification-infra, Decision 3) and
+// the receipt is the only copy of the answer, so what is NOT observed here is lost for
+// good. Every outcome is therefore counted and every unhappy one logged with the status
+// and error Expo gave: a run that delivered nothing used to be indistinguishable in the
+// log from one that delivered everything, and a systematically failing push — a bad
+// credential, a payload Expo rejects — produced no trace anywhere at all.
 func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 	due, err := n.tickets.ClaimDuePushTickets(ctx, receiptMinAgeMinutes, receiptBatchSize)
 	if err != nil {
@@ -225,6 +237,7 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 
 	processed := make([]int64, 0, len(due))
 	var pruneErrs []error
+	var delivered, pruned, rejected, unanswered int
 	for _, t := range due {
 		r, ok := receipts[t.TicketID]
 		if !ok {
@@ -233,9 +246,11 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 			// than losing its only detection window. The next scheduled
 			// pass claims it again; no special retry bookkeeping needed
 			// since it's already past the minimum age.
+			unanswered++
 			continue
 		}
-		if r.Details.Error == deviceNotRegistered {
+		switch {
+		case r.Details.Error == deviceNotRegistered:
 			if err := n.pruner.PruneDeadPushToken(ctx, t.Token); err != nil {
 				// Keep going rather than returning here: an earlier ticket in
 				// this same batch may already be fully resolved, and bailing
@@ -246,9 +261,22 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 				pruneErrs = append(pruneErrs, fmt.Errorf("prune dead token: %w", err))
 				continue
 			}
+			pruned++
+		case r.Status == receiptStatusOK:
+			delivered++
+		default:
+			// The only place this answer is ever readable. It is not actionable per
+			// ticket — there is nothing to retry and the token is still good — but a
+			// repeated code across a whole batch is how a broken payload or credential
+			// announces itself.
+			rejected++
+			log.Printf("pushnotify: receipt %s: status=%q error=%q message=%q",
+				t.TicketID, r.Status, r.Details.Error, r.Message)
 		}
 		processed = append(processed, t.ID)
 	}
+	log.Printf("pushnotify: receipts checked=%d delivered=%d pruned=%d rejected=%d unanswered=%d",
+		len(due), delivered, pruned, rejected, unanswered)
 
 	if len(processed) > 0 {
 		if err := n.tickets.DeletePushTickets(ctx, processed); err != nil {

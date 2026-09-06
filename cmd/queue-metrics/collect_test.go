@@ -19,6 +19,7 @@ type fakeQueries struct {
 	enrich    db.EnrichmentOutboxMetricsRow
 	semantic  db.SemanticOutboxMetricsRow
 	mail      db.MailClassificationOutboxMetricsRow
+	apple     db.AppleRevocationJobMetricsRow
 	boards    db.BoardHealthMetricsRow
 	newest    pgtype.Timestamptz
 	health    []db.ProviderIngestHealthRow
@@ -47,6 +48,10 @@ func (f fakeQueries) MailClassificationOutboxMetrics(context.Context) (db.MailCl
 	return f.mail, nil
 }
 
+func (f fakeQueries) AppleRevocationJobMetrics(context.Context) (db.AppleRevocationJobMetricsRow, error) {
+	return f.apple, nil
+}
+
 func (f fakeQueries) BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error) {
 	return f.boards, nil
 }
@@ -66,7 +71,11 @@ func populatedQueries() fakeQueries {
 		semantic: db.SemanticOutboxMetricsRow{Depth: 0, DeadLetters: 0, OldestAgeSeconds: 0},
 		// The shape prod was actually in: nothing live and every entry dead-lettered, which
 		// the worker's own log reported as "done failed=0 dead-lettered=0" for five weeks.
-		mail:   db.MailClassificationOutboxMetricsRow{Depth: 0, DeadLetters: 2726, OldestAgeSeconds: 0},
+		mail: db.MailClassificationOutboxMetricsRow{Depth: 0, DeadLetters: 2726, OldestAgeSeconds: 0},
+		// The queue cmd/apple-revoke drains. A `failed` job is never claimed again and
+		// leaves its identity stuck in revocation_pending, so its count is the one that
+		// needs watching.
+		apple:  db.AppleRevocationJobMetricsRow{Depth: 4, DeadLetters: 9, OldestAgeSeconds: 900},
 		boards: db.BoardHealthMetricsRow{Healthy: 74894, Failing: 7002, Cooled: 1882},
 		notify: db.NotifyBacklogMetricsRow{PendingSubscriptions: 12, OldestAgeSeconds: 184.25},
 		newest: pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
@@ -123,6 +132,7 @@ func TestCollectAssemblesEveryQueueInOrder(t *testing.T) {
 		{name: "enrichment_outbox", depth: 1049297, deadLetters: 41, oldestAgeSeconds: 5529600},
 		{name: "semantic_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
 		{name: "email_classification_outbox", depth: 0, deadLetters: 2726, oldestAgeSeconds: 0},
+		{name: "apple_revocation_jobs", depth: 4, deadLetters: 9, oldestAgeSeconds: 900},
 	}
 	if len(got.queues) != len(want) {
 		t.Fatalf("collected %d queues, want %d", len(got.queues), len(want))
@@ -155,8 +165,8 @@ func TestCollectTreatsAnEmptyCatalogueAsAbsentNotAsAFailure(t *testing.T) {
 	if !got.newestJob.IsZero() {
 		t.Errorf("newestJob = %v, want the zero time so render omits the sample", got.newestJob)
 	}
-	if len(got.queues) != 4 {
-		t.Errorf("collected %d queues, want all 4 despite the empty catalogue", len(got.queues))
+	if len(got.queues) != 5 {
+		t.Errorf("collected %d queues, want all 5 despite the empty catalogue", len(got.queues))
 	}
 }
 

@@ -79,14 +79,21 @@ func (f *fakePayments) HasCollectedAtLeast(_ context.Context, customerID string,
 	return f.collected[customerID] >= minCents, nil
 }
 
-// fakeCredits records what was placed on a referrer's balance.
+// fakeCredits records what was placed on a referrer's balance. failFor refuses one
+// referrer specifically, which is the shape a broken reward actually has — a deleted
+// provider customer, a currency the balance will not take — as against fail, which refuses
+// everybody.
 type fakeCredits struct {
-	placed map[int64]int64
-	keys   []string
-	fail   error
+	placed  map[int64]int64
+	keys    []string
+	fail    error
+	failFor map[int64]error
 }
 
 func (f *fakeCredits) CreditAccount(_ context.Context, userID, cents int64, key string) error {
+	if err := f.failFor[userID]; err != nil {
+		return err
+	}
 	if f.fail != nil {
 		return f.fail
 	}
@@ -246,5 +253,43 @@ func TestConfigFromEnvReadsTheCeiling(t *testing.T) {
 
 	if got := ConfigFromEnv().RewardCeiling; got != 3 {
 		t.Fatalf("ceiling = %d, want 3", got)
+	}
+}
+
+// One undeliverable reward must not take the queue with it. UndeliveredInviteRewards
+// orders by id and carries no attempt counter, so a row that can never be credited sat at
+// the head of every later run's page: returning on it meant every reward behind it went
+// undelivered forever, and nothing said so beyond one line in a worker log. The pass beside
+// it (GrantEarned) already logs and continues for the same reason.
+func TestDeliverKeepsGoingPastAnUndeliverableReward(t *testing.T) {
+	ledger := newFakeLedger()
+	ledger.undelivered = []EarnedReward{
+		{ID: 7, ReferrerID: 10, AmountCents: 250},
+		{ID: 8, ReferrerID: 11, AmountCents: 250},
+	}
+	credits := &fakeCredits{
+		placed:  map[int64]int64{},
+		failFor: map[int64]error{10: errors.New("no such customer")},
+	}
+	svc := newRewardService(ledger, Config{RewardCeiling: 12})
+
+	delivered, err := svc.DeliverEarned(context.Background(), 100, credits)
+
+	if err == nil {
+		t.Error("DeliverEarned reported success although one reward could not be credited; " +
+			"the exit code is how the failure is noticed at all")
+	}
+	if delivered != 1 {
+		t.Errorf("delivered = %d, want 1 — the healthy reward behind the broken one", delivered)
+	}
+	if credits.placed[11] != 250 {
+		t.Errorf("referrer 11 was credited %d, want 250 — a stuck row must not block the queue",
+			credits.placed[11])
+	}
+	if ledger.delivered[7] {
+		t.Error("the undeliverable reward was stamped delivered although nothing was credited")
+	}
+	if !ledger.delivered[8] {
+		t.Error("the reward behind it was credited but never stamped, so the next run repeats it")
 	}
 }

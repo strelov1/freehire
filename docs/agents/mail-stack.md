@@ -178,6 +178,19 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   the scopes recorded at consent, so a Google grant that predates the calendar consent never
   reaches the worker and never costs an API call to discover. The worker shares the Gmail
   Google grant and `gmailsync.CalendarScope`, and nothing else.
+- **Only `gmailsync.RevokedGrant` may cost a candidate their connection**, and both syncs ask
+  it rather than deciding for themselves. `gmail_connections.status` is SHARED between mail
+  and calendar (one grant covers both scopes), nothing but a browser consent clears it, and
+  the mail half is a restricted scope Google makes them re-approve — so a rule that read any
+  failure as a revocation would disconnect every mailbox we hold during one Google incident,
+  and the inbox's own Sync button would do it to one candidate on a bad afternoon. The rule
+  reads TWO carriers, because a revocation arrives on either leg: **401/403 from the API**
+  (`gmailsync.APIError`, which both readers attach to a non-200 so the status survives the
+  return), and **`invalid_grant` from the TOKEN endpoint**, which is where a real revocation
+  actually lands — the readers' client is built from a stored refresh token, so oauth2
+  exchanges it before any API call and the API is never reached. That one arrives as a
+  `*url.Error` wrapping `*oauth2.RetrieveError`. `invalid_client` is deliberately NOT a
+  revocation: that is our own credential being wrong.
 - **Two known gaps in the PUSH path, measured and not yet fixed.** They are why the pull
   direction has so much to find. `gmailsync.BuildQuery` fetched **431** messages over 120
   days from a mailbox holding **3297**; **739** hiring-shaped messages were never fetched,

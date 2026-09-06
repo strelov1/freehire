@@ -233,27 +233,36 @@ func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
 	if cookieState == "" || c.Query("state") != cookieState {
 		return redirect("gmail_error=state", errors.New("state cookie missing or mismatched"))
 	}
-	if code := c.Query("code"); code != "" {
-		refresh, email, granted, err := h.gmailConnector.Exchange(c.Context(), code)
-		if err != nil {
-			return redirect("gmail_error=exchange", err)
-		}
-		enc, err := h.gmailCipher.Encrypt(refresh)
-		if err != nil {
-			return redirect("gmail_error=exchange", err)
-		}
-		if err := h.queries.UpsertGmailConnection(c.Context(), db.UpsertGmailConnectionParams{
-			UserID: userID, Email: email, RefreshTokenEnc: enc,
-		}); err != nil {
-			return redirect("gmail_error=exchange", err)
-		}
-		// Record what this grant covers. cal-sync selects connections by their recorded
-		// scopes, so a row that never says what it holds is a row no worker can use.
-		if err := h.queries.RecordGrantScopes(c.Context(), db.RecordGrantScopesParams{
-			UserID: userID, Scopes: granted,
-		}); err != nil {
-			return redirect("gmail_error=exchange", err)
-		}
+	// Google echoes the state on its refusal redirect too, so reaching here says nothing
+	// about whether consent was given. A declined screen arrives as ?error=access_denied
+	// with no code at all, and treating that as "nothing to do" told the candidate their
+	// mailbox was connected when they had just refused it.
+	if refusal := c.Query("error"); refusal != "" {
+		return redirect("gmail_error=denied", errors.New(refusal))
+	}
+	code := c.Query("code")
+	if code == "" {
+		return redirect("gmail_error=exchange", errors.New("missing code"))
+	}
+	refresh, email, granted, err := h.gmailConnector.Exchange(c.Context(), code)
+	if err != nil {
+		return redirect("gmail_error=exchange", err)
+	}
+	enc, err := h.gmailCipher.Encrypt(refresh)
+	if err != nil {
+		return redirect("gmail_error=exchange", err)
+	}
+	if err := h.queries.UpsertGmailConnection(c.Context(), db.UpsertGmailConnectionParams{
+		UserID: userID, Email: email, RefreshTokenEnc: enc,
+	}); err != nil {
+		return redirect("gmail_error=exchange", err)
+	}
+	// Record what this grant covers. cal-sync selects connections by their recorded
+	// scopes, so a row that never says what it holds is a row no worker can use.
+	if err := h.queries.RecordGrantScopes(c.Context(), db.RecordGrantScopesParams{
+		UserID: userID, Scopes: granted,
+	}); err != nil {
+		return redirect("gmail_error=exchange", err)
 	}
 	return c.Redirect(h.frontendOrigin+integrationsPath+"?gmail=connected", fiber.StatusFound)
 }
@@ -289,23 +298,30 @@ func (h *inboxHandlers) CalendarCallback(c *fiber.Ctx) error {
 	if cookieState == "" || c.Query("state") != cookieState {
 		return redirect("calendar_error=state", errors.New("state cookie missing or mismatched"))
 	}
-	if code := c.Query("code"); code != "" {
-		refresh, granted, err := h.gmailConnector.ExchangeCalendar(c.Context(), code)
-		if err != nil {
-			return redirect("calendar_error=exchange", err)
-		}
-		enc, err := h.gmailCipher.Encrypt(refresh)
-		if err != nil {
-			return redirect("calendar_error=exchange", err)
-		}
-		if err := h.queries.UpsertCalendarGrant(c.Context(), db.UpsertCalendarGrantParams{
-			// What Google says the grant covers, not what we asked for: the two differ
-			// whenever a candidate declines part of a consent, and the record is what
-			// every worker's filter reads.
-			UserID: userID, RefreshTokenEnc: enc, Scopes: granted,
-		}); err != nil {
-			return redirect("calendar_error=exchange", err)
-		}
+	// A declined consent echoes the state and carries ?error=access_denied instead of a
+	// code, so the state check above cannot stand in for reading it — see GmailCallback.
+	if refusal := c.Query("error"); refusal != "" {
+		return redirect("calendar_error=denied", errors.New(refusal))
+	}
+	code := c.Query("code")
+	if code == "" {
+		return redirect("calendar_error=exchange", errors.New("missing code"))
+	}
+	refresh, granted, err := h.gmailConnector.ExchangeCalendar(c.Context(), code)
+	if err != nil {
+		return redirect("calendar_error=exchange", err)
+	}
+	enc, err := h.gmailCipher.Encrypt(refresh)
+	if err != nil {
+		return redirect("calendar_error=exchange", err)
+	}
+	if err := h.queries.UpsertCalendarGrant(c.Context(), db.UpsertCalendarGrantParams{
+		// What Google says the grant covers, not what we asked for: the two differ
+		// whenever a candidate declines part of a consent, and the record is what
+		// every worker's filter reads.
+		UserID: userID, RefreshTokenEnc: enc, Scopes: granted,
+	}); err != nil {
+		return redirect("calendar_error=exchange", err)
 	}
 	return c.Redirect(h.frontendOrigin+integrationsPath+"?calendar=connected", fiber.StatusFound)
 }

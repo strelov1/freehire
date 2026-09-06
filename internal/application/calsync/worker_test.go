@@ -2,11 +2,14 @@ package calsync
 
 import (
 	"context"
-	"errors"
+	"net/url"
 	"testing"
 	"time"
 
+	"golang.org/x/oauth2"
+
 	"github.com/strelov1/freehire/internal/application/calmatch"
+	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
 
@@ -118,6 +121,36 @@ func TestRunOnceStoresOnlyMeetingsItCouldAttach(t *testing.T) {
 	}
 }
 
+// A stored meeting keeps the provider's own event id beside the invitation's identifier.
+// They are different things, and the second is the ONLY one a cancellation is guaranteed
+// to carry: Google documents a deleted occurrence of a series as arriving with `id` and
+// nothing else. The column, its partial index and the second half of
+// CancelApplicationInterview's match all existed already — with the field dropped here,
+// every row stored an empty one, that branch matched nothing, and a called-off round of a
+// recurring interview stayed `confirmed` on the candidate's calendar for good.
+func TestRunOnceStoresTheProvidersOwnEventID(t *testing.T) {
+	store := &fakeStore{
+		connections: []Connection{{UserID: 7}},
+		candidates: map[int64][]calmatch.Candidate{
+			7: {{ApplicationID: 11, UIDs: []string{"derq@ashbyhq.com"}}},
+		},
+	}
+	reader := fakeReader{meetings: []Meeting{
+		{UID: "derq@ashbyhq.com", ProviderID: "evt-9f3", Title: "Technical screen", StartsAt: at(13, 9)},
+	}}
+
+	if err := newTestWorker(store, reader).RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.stored) != 1 {
+		t.Fatalf("stored %d meetings, want 1", len(store.stored))
+	}
+	if store.stored[0].ProviderID != "evt-9f3" {
+		t.Errorf("ProviderID = %q, want %q — a cancellation with no surviving iCalUID can be "+
+			"matched by nothing else", store.stored[0].ProviderID, "evt-9f3")
+	}
+}
+
 // A meeting no invitation named is not stored at all. There is no weaker tier to fall
 // back to: one existed, matched an employer's name in the title, and attached meetings to
 // the wrong employer often enough that removing it was the fix.
@@ -196,7 +229,9 @@ func TestRunOnceMarksAFailingGrantAndKeepsGoing(t *testing.T) {
 	// User 7's reader refuses; user 8's works.
 	w.newReader = func(_ context.Context, _ string) CalendarReader {
 		if len(store.reconsent) == 0 {
-			return fakeReader{err: &AuthError{err: errors.New("401 Unauthorized")}}
+			return fakeReader{err: &gmailsync.APIError{
+				Op: "calendar: list events", StatusCode: 401, Status: "401 Unauthorized",
+			}}
 		}
 		return fakeReader{meetings: []Meeting{{UID: "derq@ashbyhq.com", Title: "Screen", StartsAt: at(13, 9)}}}
 	}
@@ -225,7 +260,9 @@ func newTestWorker(store *fakeStore, reader CalendarReader) *Worker {
 // one incident — each needing a restricted-scope consent to restore.
 func TestRunOnceDoesNotRevokeAGrantOverAProviderFailure(t *testing.T) {
 	store := &fakeStore{connections: []Connection{{UserID: 7}}}
-	w := newTestWorker(store, fakeReader{err: errors.New("500 Internal Server Error")})
+	w := newTestWorker(store, fakeReader{err: &gmailsync.APIError{
+		Op: "calendar: list events", StatusCode: 500, Status: "500 Internal Server Error",
+	}})
 
 	err := w.RunOnce(context.Background())
 
@@ -234,5 +271,24 @@ func TestRunOnceDoesNotRevokeAGrantOverAProviderFailure(t *testing.T) {
 	}
 	if len(store.reconsent) != 0 {
 		t.Errorf("marked %v for re-consent over a provider failure — that flag is shared with mail", store.reconsent)
+	}
+}
+
+// The revocation this sync actually sees. The client is built from a stored refresh token,
+// so a candidate who withdrew consent at Google is refused at the TOKEN endpoint and the
+// calendar API is never reached — no 401, no 403, nothing for a status-only rule to catch.
+func TestRunOnceMarksReconsentWhenTheTokenEndpointRefusesTheRefreshToken(t *testing.T) {
+	store := &fakeStore{connections: []Connection{{UserID: 7}}}
+	w := newTestWorker(store, fakeReader{err: &url.Error{
+		Op:  "Get",
+		URL: "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+		Err: &oauth2.RetrieveError{ErrorCode: "invalid_grant"},
+	}})
+
+	if err := w.RunOnce(context.Background()); err == nil {
+		t.Error("RunOnce reported success although a grant was refused")
+	}
+	if len(store.reconsent) != 1 || store.reconsent[0] != 7 {
+		t.Errorf("marked %v for re-consent, want user 7 — invalid_grant IS the revocation", store.reconsent)
 	}
 }
