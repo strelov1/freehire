@@ -133,8 +133,13 @@ func appendCertifications(out []Blocker, job JobRequirements, cv CVEvidence) []B
 	}
 	for _, req := range job.RequiredCertifications {
 		met := held[req]
-		reason := fmt.Sprintf("Requires the %s certification.", req)
-		action := fmt.Sprintf("Do not claim the %s certification unless you currently hold it.", req)
+		// The label, not the slug: Reason and Action are rendered verbatim on the job
+		// page and go verbatim into all three stages of the analysis prompt, so the slug
+		// put "Requires the gcp-professional-cloud-architect certification." in front of
+		// a candidate.
+		name := credentials.Label(req)
+		reason := fmt.Sprintf("Requires the %s certification.", name)
+		action := fmt.Sprintf("Do not claim the %s certification unless you currently hold it.", name)
 		out = append(out, blocker(CategoryCertification, met, reason, action))
 	}
 	return out
@@ -207,10 +212,22 @@ func bestDegreeRank(degrees []string) (int, bool) {
 	return best, found
 }
 
+// canonicalSet resolves the résumé's certification lines to canonical slugs.
+//
+// Exact first, then whole-word containment — the shape degreeMatch (degrees.go) already
+// uses, and for the same reason. Canonical matches the WHOLE string, and a résumé entry
+// almost never is one: "CompTIA Security+ (2022)", "Certified Kubernetes Administrator
+// (CKA)" and "AWS Certified Solutions Architect – Associate" all returned ("", false).
+// With one other entry resolving, the len(held)==0 skip did not fire, and the candidate
+// got a hard blocker and a 60 score-cap for a certification they hold.
 func canonicalSet(certs []string) map[string]bool {
 	held := make(map[string]bool, len(certs))
 	for _, c := range certs {
 		if slug, ok := credentials.Canonical(c); ok {
+			held[slug] = true
+			continue
+		}
+		for _, slug := range credentials.ScanLine(c) {
 			held[slug] = true
 		}
 	}
