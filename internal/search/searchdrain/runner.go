@@ -314,6 +314,17 @@ func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
 			"retry: %v", entry.OutboxID, ctxErr, cause)
 		return
 	}
+	// ErrSkipWave says the entry is not at fault — a dependency the indexer needed was
+	// unreadable, so the document it would push is not the one we mean to publish. It has
+	// to be honoured HERE and not only where processBatch reads it: a batch that fell back
+	// for an unrelated reason re-enters the indexer per entry, meets the same failing
+	// dependency, and would spend a healthy row's whole attempt budget three runs in a row
+	// — which is the dead letter this sentinel exists to prevent.
+	if errors.Is(cause, ErrSkipWave) {
+		log.Printf("search-drain: outbox=%d not indexed, leaving claimed for lease-expiry "+
+			"retry: %v", entry.OutboxID, cause)
+		return
+	}
 	rn.failN(entry, cause, rn.opt.MaxAttempts)
 }
 

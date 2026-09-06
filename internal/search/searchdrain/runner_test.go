@@ -22,6 +22,11 @@ type fakeStore struct {
 	jobs    map[int64]db.Job // rows returned by Jobs
 	jobErr  map[int64]error  // load error for a job id (e.g. corrupted row)
 
+	// jobsBatchErr fails a MULTI-id load only, which is what a statement timeout on the
+	// wide read under database pressure looks like: the batch cannot be served, every
+	// single-id load still can, and the runner falls back to per-item.
+	jobsBatchErr error
+
 	completeErr map[int64]error // Complete error for a job id (single-item path)
 
 	completeBatches [][]int64 // job ids per Complete call (len>1 = a real batch)
@@ -62,6 +67,9 @@ func (s *fakeStore) Claim(_ context.Context, batch, _ int) ([]Claimed, error) {
 func (s *fakeStore) Jobs(_ context.Context, ids []int64) ([]db.Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(ids) > 1 && s.jobsBatchErr != nil {
+		return nil, s.jobsBatchErr
+	}
 	// A corrupted row aborts a whole multi-id load (a seq scan hits it); a single-id
 	// load surfaces the row's own error so the runner can isolate it.
 	for _, id := range ids {
@@ -515,5 +523,33 @@ func TestRunnerSkipsWaveWhenTheIndexerCouldNotBuildIt(t *testing.T) {
 	if len(store.failCalls) != 0 {
 		t.Errorf("failCalls = %+v, want none — the wave was never built, so no entry is at fault",
 			store.failCalls)
+	}
+}
+
+// The batch path is not the only way into the indexer. A wave that fell back for an
+// unrelated reason — here a statement timeout on the wide multi-id load — re-enters it one
+// entry at a time, meets the same unreadable dependency, and would spend a healthy row's
+// whole attempt budget. Three cron runs of that sets failed_at, and neither the claim nor
+// the ON CONFLICT DO NOTHING enqueue ever offers the row again: the posting stays out of the
+// facet index until the next full rebuild. So ErrSkipWave has to be honoured per entry too,
+// which is why the check lives in fail() rather than beside the batch call.
+func TestRunnerDoesNotChargeAnAttemptWhenTheFallbackMeetsTheSameUnbuildableWave(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	store.jobsBatchErr = errors.New("canceling statement due to statement timeout")
+	ix.waveErr = fmt.Errorf("%w: duplicate-closure geography for wave: %v",
+		ErrSkipWave, errors.New("connection reset by peer"))
+	seed(store, 1, 2, 3)
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none — the entries are healthy, the dependency is not",
+			store.failCalls)
+	}
+	if stats.Indexed != 0 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Fatalf("stats = %+v, want all zero — every entry is left claimed for its lease to expire", stats)
 	}
 }

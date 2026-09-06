@@ -2,14 +2,9 @@ package inbox
 
 import (
 	"context"
-	"errors"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 )
-
-// errNoRows stands in for pgx.ErrNoRows: the store's way of saying a row the
-// caller named is not theirs, or does not exist.
-var errNoRows = errors.New("no rows in result set")
 
 // fakeQueries is an in-memory stand-in for the store. It records what it was asked
 // so a test can assert on the call that was NOT made — which is most of what
