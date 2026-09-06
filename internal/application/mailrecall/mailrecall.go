@@ -54,6 +54,12 @@ const (
 	// message, this reads forty in a single call.
 	maxBodyRunes = 800
 
+	// maxHeaderRunes bounds the three header fields the sender writes. Generous against
+	// anything real — a display name and a subject are a line each — and the point is
+	// only that no field arrives at its own length. A 50 KB Subject is 50 KB of prompt,
+	// on every message in the batch beside it.
+	maxHeaderRunes = 200
+
 	// windowLead opens the net before the application's recorded date. applied_at is when
 	// the application was ENTERED — for one recorded from mail it is that message's own
 	// received_at, and for one entered by hand it can be days late — so a window starting
@@ -146,8 +152,11 @@ type Store interface {
 // Like Store, it offers no way to attach anything. The role travels with the employer
 // because mail whose only subject is the job title is a real class that hiring vocabulary
 // alone drops.
+//
+// It takes no user id: the mailbox is already one caller's, resolved by the factory that
+// produced it, and the only implementation signed the parameter away as `_ int64`.
 type Mailbox interface {
-	Search(ctx context.Context, userID int64, company, role string, since, until time.Time) ([]Message, error)
+	Search(ctx context.Context, company, role string, since, until time.Time) ([]Message, error)
 }
 
 // gen is the slice of *llm.Client this package uses, so the service is unit-tested
@@ -306,7 +315,7 @@ func (s *Service) Recall(ctx context.Context, userID int64, app Application) (Re
 func (s *Service) candidates(ctx context.Context, userID int64, app Application) ([]Message, error) {
 	since, until := app.AppliedAt.Add(-windowLead), app.AppliedAt.Add(windowTrail)
 	if s.mailbox != nil {
-		found, err := s.mailbox.Search(ctx, userID, app.Company, app.Role, since, until)
+		found, err := s.mailbox.Search(ctx, app.Company, app.Role, since, until)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrSearch, err)
 		}
@@ -386,9 +395,16 @@ func userPrompt(app Application, messages []Message) string {
 	fmt.Fprintf(&b, "Application\nEmployer: %s\nRole: %s\nRecorded: %s\n\nEmails\n",
 		app.Company, app.Role, app.AppliedAt.Format(time.DateOnly))
 	for i, m := range messages {
+		// Every field here is the sender's, and this prompt carries a BATCH — so one
+		// crafted message inflates the run judging every message beside it. body() was
+		// bounded from the start; the headers were the half nobody capped.
 		fmt.Fprintf(&b, "\n%s %d\nFrom: %s <%s>\nDate: %s\nSubject: %s\n\n%s\n",
-			delimiter, i+1, m.FromName, m.FromAddr, m.ReceivedAt.Format(time.DateOnly),
-			m.Subject, body(m))
+			delimiter, i+1,
+			llm.TruncateRunes(m.FromName, maxHeaderRunes),
+			llm.TruncateRunes(m.FromAddr, maxHeaderRunes),
+			m.ReceivedAt.Format(time.DateOnly),
+			llm.TruncateRunes(m.Subject, maxHeaderRunes),
+			body(m))
 	}
 	return b.String()
 }
