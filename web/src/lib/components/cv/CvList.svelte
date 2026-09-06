@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { FileText, Download, Trash2, ArrowRight, Settings } from '@lucide/svelte';
+  import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { companyLogoUrl } from '$lib/logo';
-  import { Button, ConfirmDialog, EntityLogo } from '$lib/ui';
-  import JdIntakeDialog from './JdIntakeDialog.svelte';
+  import { ConfirmDialog, EntityLogo } from '$lib/ui';
+  import { openCvIntake } from '$lib/cvIntakeDialog.svelte';
   import { type CvTailoredItem } from '$lib/cv';
 
   // The tailored-CV landing: one company card per CV the caller built for a vacancy, styled like
@@ -15,7 +15,6 @@
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
   let items = $state<CvTailoredItem[]>([]);
-  let showIntake = $state(false);
 
   onMount(load);
 
@@ -53,25 +52,6 @@
 </script>
 
 <div class="space-y-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-    <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Tailored CVs</h1>
-      <p class="text-sm text-muted-foreground">
-        CVs you tailored for specific roles. Open one to resume its tailoring session, or start a
-        new one by opening the tailoring workspace from any vacancy.
-      </p>
-    </div>
-    <div class="flex shrink-0 flex-wrap items-center gap-2">
-      <a
-        href={resolve('/my/cvs/appearance')}
-        class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-      >
-        <Settings class="size-4" />
-        Appearance defaults
-      </a>
-      <Button variant="outline" onclick={() => (showIntake = true)}>Tailor for a job</Button>
-    </div>
-  </div>
 
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
 
@@ -100,12 +80,13 @@
           </li>
         </ol>
         <div class="mt-6 text-center">
-          <a
-            href={resolve('/jobs')}
+          <button
+            type="button"
+            onclick={openCvIntake}
             class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
-            Browse jobs <ArrowRight class="size-4" />
-          </a>
+            Tailor for a job <ArrowRight class="size-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -152,10 +133,6 @@
     </ul>
   {/if}
 </div>
-
-{#if showIntake}
-  <JdIntakeDialog onClose={() => (showIntake = false)} />
-{/if}
 
 <ConfirmDialog
   bind:open={confirmRemoveOpen}

@@ -66,14 +66,13 @@
   <title>CV appearance defaults — freehire</title>
 </svelte:head>
 
-<div class="max-w-3xl space-y-6">
-  <div>
-    <h1 class="text-2xl font-semibold">CV appearance defaults</h1>
-    <p class="text-sm text-muted-foreground">
-      The template, typography, and margins a new CV starts with. Changing these only affects CVs
-      you create from now on — CVs you already have keep their own appearance.
-    </p>
-  </div>
+<div class="space-y-6">
+  <!-- No heading of its own: the CV section's layout titles the section above the tab
+       strip, and this pane is one of its two views rather than a second page. -->
+  <p class="text-sm text-muted-foreground">
+    The template, typography, and margins a new CV starts with. Changing these only affects CVs
+    you create from now on — CVs you already have keep their own appearance.
+  </p>
 
   {#if status === 'loading'}
     <p class="text-muted-foreground">Loading…</p>
