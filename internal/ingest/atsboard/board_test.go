@@ -60,6 +60,11 @@ func TestRecognize(t *testing.T) {
 		{"lever postings API", "https://api.lever.co/v0/postings/matchgroup?mode=json", "lever", "matchgroup", "https://api.lever.co/v0/postings/matchgroup", true},
 		{"api host without a board", "https://api.ashbyhq.com/posting-api/job-board", "", "", "", false},
 		{"api host off-prefix path", "https://api.lever.co/v1/something/else", "", "", "", false},
+		// jobappnetwork (talentReef): the platform's own public apply link already carries the
+		// board in this shape, so this is the same pathprefix mechanism reused on a host that is
+		// pasted by a person rather than called only by XHR.
+		{"jobappnetwork apply link", "https://apply.jobappnetwork.com/clients/20448/posting/7216553/", "jobappnetwork", "20448", "https://apply.jobappnetwork.com/clients/20448", true},
+		{"jobappnetwork host with no client segment", "https://apply.jobappnetwork.com/talentreef", "", "", "", false},
 
 		// SmartRecruiters serves a posting either bare (<company>/<posting>) or behind a portal
 		// segment (<portal>/<company>/<posting>). The employer is the segment before the
