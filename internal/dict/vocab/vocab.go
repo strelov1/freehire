@@ -289,11 +289,26 @@ func IsCurrencyCode(s string) bool { return currencyRE.MatchString(s) }
 // A figure past this is DROPPED, never clamped: a clamp would state a requirement the
 // posting never made, while an absent field correctly says "not stated".
 //
-// 30 is deliberately generous, and the number was moved up once during review after a
-// first attempt at 20 was caught discarding real data. Verified against prod, 18, 21
-// and 25 are all figures postings genuinely state about the candidate ("Minimum of 25
-// years progressively senior experience"). The ceiling sits ABOVE the believable range
-// rather than at the middle of it, because the two errors are not symmetric: this facet
-// is a search FILTER, so a wrong high value makes one posting unmatchable, while a
-// dropped true one hides a posting from the very people it was written for.
-const MaxExperienceYears = 30
+// 25 is where the evidence puts the line, and both sides of it were checked against
+// prod rather than guessed.
+//
+// At and below it, postings really do say this about the candidate: "18+ years of
+// progressively responsible experience", "Minimum of 25 years progressively senior
+// experience" (a Programme Director), "25+ years of investment management experience"
+// (a Senior Portfolio Manager).
+//
+// At and above 30, they do not. Every sampled row at exactly 30 — and there are 19,145
+// of them — is the EMPLOYER's age: "for the past 30 years our long-term commitment to
+// team members has been unsurpassed", "With over 30 years of expertise across Private
+// Equity", "maintained an A+ rating ... for over 30 years". Two of those postings are a
+// Dining Room Server and a Driver.
+//
+// The round-number shape of the whole tail says the same thing: 30 (19,145), 40
+// (12,043), 50 (9,437), 35 (3,194), 45 (2,446). Careers are not round; anniversaries
+// are.
+//
+// An earlier draft of this constant said 30 and cited the same 25-year postings as its
+// reason for being generous. That was measured on the enrichment BLOB, which holds the
+// model's value — 29 rows. The served facet is the COLUMN, written by two other
+// producers, and it carried 28,864. Measure the field a reader actually sees.
+const MaxExperienceYears = 25
