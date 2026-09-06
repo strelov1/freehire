@@ -62,10 +62,16 @@ is what lets the feed run out and the existing exit fire.
 
 ### Requirement: The crawl budget stays inside the platform's stated request limits
 
-Adzuna's terms state a ceiling of 250 requests per day and 2,500 per month. The system SHALL
-size the Adzuna crawl — page budget per board, boards, and run frequency together — to stay
-under the daily ceiling, and SHALL treat that ceiling as a property of the whole schedule
-rather than of any one run.
+Adzuna's terms state four ceilings — 25 requests per minute, 250 per day, 1,000 per week and
+2,500 per month — which do not agree with one another: the daily figure multiplies out to
+three times the monthly one. The system SHALL treat the request budget as a property of the
+whole schedule (page budget per board × boards × runs per day), not of any one run, and SHALL
+size it to the daily ceiling.
+
+Where the schedule exceeds a longer-period ceiling, that overage SHALL be an explicit,
+recorded decision rather than an omission, and the arithmetic against every stated ceiling
+SHALL be surfaced by the same check that enforces the daily one — a check that reports only
+the limit it satisfies would read as compliance the source does not have.
 
 The free API pays nothing and grants nothing: continued access rests on the platform's
 tolerance, and the catalogue's largest single source depends on it. A budget that exceeds the
@@ -78,6 +84,19 @@ A page SHALL carry at most 50 results; the platform rejects a larger request out
 
 - **WHEN** the configured boards, page budget and run frequency are multiplied out
 - **THEN** the resulting requests per day are below the platform's stated daily ceiling
+
+#### Scenario: A longer-period overage is reported, not hidden
+
+- **WHEN** the same schedule is multiplied out against the weekly and monthly ceilings and
+  exceeds them
+- **THEN** the overage and its multiple are reported alongside the daily figure, so the
+  schedule cannot read as compliant on the strength of the one ceiling it meets
+
+#### Scenario: A catch-up run cannot add to the day's budget
+
+- **WHEN** the crawl's timer is reactivated after a missed run
+- **THEN** no catch-up run is issued, because an extra run would spend a fifth of the day's
+  budget the ceiling has no room for
 
 #### Scenario: A page failure after the first page keeps what was gathered
 

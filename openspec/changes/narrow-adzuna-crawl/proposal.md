@@ -17,19 +17,27 @@ same ~2,000 postings each time, the oldest of them seven months old.
 
 What that costs, and what it returns:
 
-- **~470 requests/day** — roughly 14,000/month observed, against Adzuna's stated ceiling of
-  **250/day and 2,500/month**, so about **5.6× over the monthly limit**. (The hourly timer's
-  theoretical 3,840/day — 4 boards × 40 pages × 24 runs — is never reached, because most
-  firings find the ingest slots contended and do not run.) The only thing holding the source
-  up is that nobody has looked.
+- **~470 requests/day** — roughly 14,000/month observed. Adzuna's free tier states FOUR
+  limits, and they do not agree with one another: **25/min, 250/day, 1,000/week,
+  2,500/month**. 250/day is 7,500/month, three times the monthly figure, so the monthly one
+  binds at about **83 requests/day**. Today's spend is **5.6× the monthly ceiling**. (The
+  hourly timer's theoretical 3,840/day is never reached — most firings find the ingest slots
+  contended and do not run.) The only thing holding the source up is that nobody has looked.
 - **~6,300 new postings/day** actually written (`jobs.created_at`, 7-day mean). The budget
   buys 23,500 posting-slots and fills 27% of them.
 - Meanwhile Adzuna publishes **~17,300 new IT postings/day** across the four crawled
   countries. We capture roughly a third of it.
 
-Sending `sort_by=date` and cutting the budget to **240 requests/day** is not a trade: it is
-strictly better on every axis at once — half the requests, inside the platform's terms, and
-up to 12,000 posting-slots aimed at postings we do not already hold.
+Sending `sort_by=date` and cutting the budget to **240 requests/day** halves the requests
+while roughly doubling the intake: up to 12,000 posting-slots aimed at postings we do not
+already hold, against ~6,300 written today.
+
+**It does not bring us inside the terms, and this proposal does not claim it does.** 240/day
+is 7,200/month — still 2.9× the monthly ceiling, though 5.8× better than today. Sizing to
+2,500/month instead means ~83 requests/day, which caps intake at ~4,150 postings/day: BELOW
+the ~6,300 the wasteful crawl manages now, for the catalogue's largest single source. That
+was weighed and declined. Adzuna's own terms name the way out — *"higher limits are available
+upon request for publishing use cases"* — and requesting them is part of this change.
 
 The second half is the consequence. Today an Adzuna posting stays open because the
 relevance-ordered crawl keeps stumbling over it; the 14-day unseen sweep then reads that as

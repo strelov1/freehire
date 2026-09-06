@@ -68,10 +68,30 @@
   elapse matches the new cadence, and with `./deploy/check-drift.sh` that nothing else in
   `deploy/` has drifted from the host in the meantime.
 
+## 4b. Correct the record — the terms claim was wrong once
+
+- [x] 4b.1 An earlier draft of this change asserted 240/day was "inside the platform's terms".
+  It is not. Adzuna states FOUR ceilings (25/min, 250/day, 1,000/week, 2,500/month) and they
+  disagree: 250/day multiplies out to 7,500/month, three times the monthly figure. The
+  tightest governs, so the real ceiling is ~83 requests/day. Corrected in proposal.md,
+  design.md, specs/adzuna-source/spec.md and the budget test, which now reports the weekly
+  and monthly multiples instead of implying compliance from the one ceiling it enforces.
+- [x] 4b.2 The claim had already been published to issue #1759 and PR #2536. Both corrected
+  in place rather than quietly — a wrong compliance claim is exactly the kind a reader carries
+  forward.
+- [ ] 4b.3 **Request higher limits.** Adzuna's own terms say "higher limits are available upon
+  request for publishing use cases", which is what this is. It is the only route to being both
+  compliant and complete: 2,500 requests x 50 results is 125,000 posting-slots a month, a hard
+  ceiling that caps intake BELOW what today's wasteful crawl manages. Until it is granted the
+  crawl runs knowingly over the weekly and monthly ceilings, at 2.9x rather than today's 5.6x.
+  Contact route: the partner form Adzuna publishes for API licensing.
+
 ## 5. Verify against the platform, not against the tests
 
 - [ ] 5.1 After deploy, count a day's real requests rather than trusting the arithmetic: the
-  ingest logs report pages per board per run. Confirm the daily total is under 250. The
+  ingest logs report pages per board per run. Confirm the daily total is under 250, and record
+  the weekly and monthly figures too — those are the ceilings the crawl is knowingly over, so
+  they are the numbers the licence request will be argued against. The
   arithmetic assumes every board spends its full budget; `max_days_old` should make the quiet
   boards spend less, so the measured figure should come in BELOW 240, and a figure at or above
   it means the early exit is not firing.

@@ -122,13 +122,21 @@ func TestAdzunaFetchRequestsCorrectURL(t *testing.T) {
 		// was published 2026-02-10. The ordering is what makes a bounded crawl read what has
 		// been published since rather than the same slice every run.
 		"sort_by=date",
-		// The window is what lets a board's feed run out, so the page loop's empty-page exit
-		// is reachable — see TestAdzunaFetchStopsWhenTheWindowRunsOut.
-		"max_days_old=" + strconv.Itoa(adzunaMaxDaysOld),
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("request URL %q missing %q", got, want)
 		}
+	}
+	// The freshness window is compared as a PARSED value, not as a substring: substring
+	// matching would accept max_days_old=20 for max_days_old=2, and an order-of-magnitude
+	// widening is exactly the regression that would look fine and quietly re-admit the
+	// stale inventory this change exists to stop fetching.
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse request URL %q: %v", got, err)
+	}
+	if v := parsed.Query().Get("max_days_old"); v != strconv.Itoa(adzunaMaxDaysOld) {
+		t.Fatalf("max_days_old = %q, want %q", v, strconv.Itoa(adzunaMaxDaysOld))
 	}
 }
 
@@ -156,17 +164,38 @@ func TestAdzunaFetchStopsWhenTheWindowRunsOut(t *testing.T) {
 }
 
 // The page budget is one leg of a request budget the platform's terms bound, so it is worth
-// an assertion of its own: a silent bump here is spent against a daily ceiling nothing else
-// in the process checks.
+// an assertion of its own: a silent bump here is spent against a ceiling nothing else in the
+// process checks.
+//
+// Adzuna's free tier states FOUR limits — 25/min, 250/day, 1000/week, 2500/month — and they
+// do not agree with each other: 250/day is 7500/month, three times the monthly figure. The
+// monthly one therefore binds at ~83 requests/day, and this crawl is deliberately NOT sized
+// to it. The decision, recorded so it is not mistaken for an oversight: 240/day is a 5.8x
+// reduction on the ~14,000/month the hourly crawl was spending, and sizing to 2500/month
+// instead would cut INTAKE below what the wasteful crawl manages today (~4,000 postings/day
+// against ~6,300), for the catalogue's largest source. Adzuna's own terms invite the fix —
+// "higher limits are available upon request for publishing use cases" — and that request is
+// the task that closes this gap.
+//
+// So the daily ceiling is asserted, and the weekly/monthly overage is measured rather than
+// asserted: the numbers move in the log if someone raises the budget, instead of a green
+// test implying the terms are met.
 func TestAdzunaPageBudgetStaysWithinTheDailyCeiling(t *testing.T) {
 	const (
-		boards       = 4   // us, gb, de, au — every active adzuna board is category it-jobs
-		runsPerDay   = 4   // deploy/systemd/freehire-ingest@adzuna.timer
-		dailyCeiling = 250 // Adzuna's stated terms: 250/day, 2500/month
+		boards         = 4    // us, gb, de, au — every active adzuna board is category it-jobs
+		runsPerDay     = 4    // deploy/systemd/freehire-ingest@adzuna.timer, Persistent=false
+		dailyCeiling   = 250  // Adzuna's stated terms
+		weeklyCeiling  = 1000 // ditto
+		monthlyCeiling = 2500 // ditto — the one this crawl knowingly exceeds
 	)
-	if got := boards * adzunaMaxPages * runsPerDay; got > dailyCeiling {
-		t.Fatalf("crawl budget is %d requests/day, over Adzuna's stated ceiling of %d", got, dailyCeiling)
+	perDay := boards * adzunaMaxPages * runsPerDay
+	if perDay > dailyCeiling {
+		t.Fatalf("crawl budget is %d requests/day, over Adzuna's stated ceiling of %d", perDay, dailyCeiling)
 	}
+	t.Logf("adzuna budget: %d/day (ceiling %d), %d/week (ceiling %d, %.1fx), %d/month (ceiling %d, %.1fx) — the weekly and monthly overage is deliberate, pending a higher-limit request",
+		perDay, dailyCeiling,
+		perDay*7, weeklyCeiling, float64(perDay*7)/weeklyCeiling,
+		perDay*30, monthlyCeiling, float64(perDay*30)/monthlyCeiling)
 }
 
 // A blank country or category is refused rather than crawled (an empty country would 404, an

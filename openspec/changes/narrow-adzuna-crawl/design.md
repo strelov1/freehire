@@ -43,25 +43,49 @@ success. `page_uniques` is the only honest column here, the same trap
 catalogue. A number that small describes how applications are recorded, not how a source
 performs.
 
-## Why the request budget and catalogue coverage are not in tension
+## What the budget buys, and what it does not
 
-The first draft of this change presented a choice — obey the 250/day ceiling and lose
-coverage, or keep the volume and stay outside Adzuna's terms. That framing was wrong, and
-the reason it was wrong is worth keeping.
-
-It assumed each request returns something new. Measuring what the budget actually delivers
-dissolved it:
+The first draft presented a choice — obey the 250/day ceiling and lose coverage, or keep the
+volume and stay outside Adzuna's terms — and against THAT ceiling the choice really does
+dissolve, because the draft's hidden assumption (that each request returns something new) is
+false. Measuring what the budget actually delivers:
 
 | | today | after |
 |---|---:|---:|
 | requests/day | ~470 | **240** |
 | posting-slots bought (×50) | 23,500 | 12,000 |
 | new postings actually written/day | ~6,300 | up to ~12,000 |
-| within Adzuna's stated terms | no | **yes** |
+| against the 2,500/month ceiling | 5.6× over | **2.9× over** |
 
 `jobs.created_at` over the seven days to 2026-09-06: 4,838 / 4,264 / 1,773 / 9,456 / 8,225 /
 8,473 / 7,365 — a mean near 6,300. The budget's yield is **27%**. Once the yield is that
 low, halving the budget and doubling the intake stop being opposites.
+
+### The limit this reasoning first got wrong
+
+An earlier draft of this section claimed 240/day put the crawl "inside the platform's terms".
+It does not, and the mistake is worth recording because the shape of it will recur.
+
+Adzuna states **four** limits — 25/min, 250/day, 1,000/week, 2,500/month — and they are not
+four ways of saying one thing: 250/day is 7,500/month, three times the monthly figure. Where
+stated limits disagree the tightest one governs, so the real ceiling is **2,500/month ≈ 83
+requests/day**, not 250. The draft read the two figures it had as a restatement of each other
+and did the arithmetic against the convenient one. The weekly limit was not in the note at
+all; only the terms page had it.
+
+The consequence is a genuine trade-off, not a dissolved one:
+
+| budget | requests/month | intake/day | inside the terms |
+|---|---:|---:|---|
+| today | ~14,000 | ~6,300 | no (5.6×) |
+| **240/day (chosen)** | 7,200 | up to ~12,000 | no (2.9×) |
+| 80/day | 2,400 | ~4,000 | yes |
+
+2,500 requests × 50 results is **125,000 posting-slots a month**, a hard ceiling no
+arrangement of pages, boards or runs can raise. Full compliance therefore caps intake BELOW
+what today's wasteful crawl manages, for the source that carries 20,350 companies the
+catalogue holds nowhere else. 240/day was chosen knowingly: a 5.8× reduction now, with the
+licence request their own terms invite as the path to being both compliant and complete.
 
 ## Choosing the freshness window and the page budget
 

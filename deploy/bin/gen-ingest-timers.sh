@@ -84,6 +84,11 @@ for n in "${PROVIDERS[@]}"; do
   # hand-installed-drift story as dayforce. Generated in the workstream block below.
   [ "$n" = workstream ] && continue
   min=$(( (i*41) % 60 ))
+  # Reset per provider: this is one long loop in one shell, so a value set in a provider's
+  # case arm below would otherwise carry into every provider generated after it — and the
+  # only arm that sets it (adzuna) turns catch-up OFF, which is the direction that fails
+  # silently. Everything else wants Persistent=true.
+  persistent=true
   # Most boards crawl hourly, staggered across the minutes of the hour. reed has a
   # per-hour API request quota its full crawl blows past (403 "exceeded your per-hour
   # request limit"), so it crawls every 6h to stay under it.
@@ -100,6 +105,20 @@ for n in "${PROVIDERS[@]}"; do
     *)
       case "$n" in
         reed) cal="*-*-* 00/6:$(printf %02d "$min"):00" ;;
+        # adzuna is reed's case with a second twist. Its free API states 25/min, 250/day,
+        # 1000/week and 2500/month, and the crawl's whole budget is
+        # boards (4) x adzunaMaxPages (15) x runs/day, so the cadence is the only leg
+        # of it that lives out here: four runs is 240/day, one more would clear 250.
+        # Hourly (the default branch) was 4x that and bought nothing — until the adapter
+        # sent sort_by=date, Adzuna answered in relevance order, stable between runs, so
+        # 23 of 24 daily firings re-read the same slice.
+        #
+        # Persistent=false, unlike every other timer here: a catch-up run after a reboot
+        # or a daemon-reload is a FIFTH run that day, which is 300 requests and over the
+        # daily ceiling. Everywhere else a missed crawl is worth catching up; here the
+        # crawl reads a recency slice, so a late run mostly re-reads what the next one
+        # would have, and the ceiling is worth more than the catch-up.
+        adzuna) cal="*-*-* 00/6:22:00"; persistent=false ;;
         *)    cal="*:$(printf %02d "$min"):00" ;;
       esac ;;
   esac
@@ -108,7 +127,7 @@ for n in "${PROVIDERS[@]}"; do
 Description=timer ingest $n
 [Timer]
 OnCalendar=$cal
-Persistent=true
+Persistent=$persistent
 RandomizedDelaySec=180
 [Install]
 WantedBy=timers.target

@@ -22,7 +22,12 @@ Description=timer ingest adzuna
 # cadence while reading like a change. Re-verify with
 # `systemd-analyze calendar --iterations=4` if this line is ever edited.
 OnCalendar=00/6:22:00
-Persistent=true
+# Persistent=false, unlike the rest of the ingest fleet: a catch-up run after a reboot or a
+# daemon-reload would be a FIFTH run that day — 300 requests, over the 250/day ceiling. A
+# missed crawl here costs little, because the crawl reads a recency slice and the next run
+# re-reads most of what the missed one would have. Keep this in step with the adzuna arm of
+# deploy/bin/gen-ingest-timers.sh, which generates this same file on the host.
+Persistent=false
 RandomizedDelaySec=180
 [Install]
 WantedBy=timers.target
