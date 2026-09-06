@@ -25,7 +25,7 @@ const professionEducationSitemapXML = `<?xml version="1.0" encoding="UTF-8"?>
 </urlset>`
 
 func newProfessionProber() professionProber {
-	return professionProber{index: &professionCategoryIndex{}}
+	return professionProber{index: &professionCategoryIndex{}, client: professionProberFixture()}
 }
 
 func professionProberFixture() fakeGetter {
@@ -80,7 +80,8 @@ func TestProfessionProberProbeUnreachableCategoryErrors(t *testing.T) {
 	fixture := fakeGetter{
 		"https://www.profession.hu/sitemap-listings-index-hu.xml": professionIndexXML,
 	}
-	if _, _, err := (newProfessionProber()).probe(context.Background(), fixture, "education"); err == nil {
+	p := professionProber{index: &professionCategoryIndex{}, client: fixture}
+	if _, _, err := p.probe(context.Background(), nil, "education"); err == nil {
 		t.Error("probe on an unreadable category sitemap returned no error")
 	}
 }
@@ -106,15 +107,15 @@ func (c *countingGetter) GetXML(ctx context.Context, url string, v any) error {
 // live on 2026-09-06, arriving as "every category is unreachable".
 func TestProfessionProberReadsTheIndexOnce(t *testing.T) {
 	c := &countingGetter{fakeGetter: professionProberFixture()}
-	p := newProfessionProber()
-	boards, err := p.discover(context.Background(), c)
+	p := professionProber{index: &professionCategoryIndex{}, client: c}
+	boards, err := p.discover(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
 	for _, b := range boards {
 		// itdev's sitemap is not served by the fixture; the error is not what this test
 		// is about, only the requests made getting there.
-		_, _, _ = p.probe(context.Background(), c, b)
+		_, _, _ = p.probe(context.Background(), nil, b)
 	}
 	indexReads := 0
 	for _, u := range c.xml {
@@ -125,5 +126,21 @@ func TestProfessionProberReadsTheIndexOnce(t *testing.T) {
 	if indexReads != 1 {
 		t.Errorf("read the sitemap index %d times over discover + %d probes, want 1 (requests: %v)",
 			indexReads, len(boards), c.xml)
+	}
+}
+
+// TestProfessionProberIgnoresTheSharedClient pins that the prober reads the platform over
+// its own single-use-connection client rather than the harvest's shared one, which pools.
+// The prober reads exactly the sitemaps the crawl reads, so it meets exactly the wall the
+// crawl met — see sources.NewSingleUseConnClient.
+func TestProfessionProberIgnoresTheSharedClient(t *testing.T) {
+	p := professionProber{index: &professionCategoryIndex{}, client: professionProberFixture()}
+	// The shared client passed in would fail every route; the prober must not reach for it.
+	got, err := p.discover(context.Background(), fakeGetter{})
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if !slices.Equal(got, []string{"education", "itdev"}) {
+		t.Errorf("discover() = %v", got)
 	}
 }

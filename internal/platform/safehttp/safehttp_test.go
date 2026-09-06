@@ -136,3 +136,24 @@ func TestGuardedDialerRefusesLoopback(t *testing.T) {
 		t.Errorf("error %q does not mention the block", err)
 	}
 }
+
+// TestNewTransportWithoutKeepAliveDoesNotReuseConnections pins the one transport that
+// opens a fresh connection per request, and keeps the guard while doing it.
+//
+// It exists for a platform whose server mishandles a reused connection. Measured against
+// profession.hu from the production host on 2026-09-06: over one keep-alive transport the
+// first two requests answered and every later one failed with EOF, and one of the two that
+// "answered" returned 379 bytes where the document is 76,403 — a truncated body a caller
+// cannot tell from a short sitemap. The same five requests over this transport all
+// answered in full.
+func TestNewTransportWithoutKeepAliveDoesNotReuseConnections(t *testing.T) {
+	tr := NewTransportWithoutKeepAlive(5 * time.Second)
+	if !tr.DisableKeepAlives {
+		t.Error("DisableKeepAlives is false; the transport would pool connections")
+	}
+	// The guard is the reason this package exists, so a transport that dropped it while
+	// fixing connection reuse would be a worse bug than the one it fixes.
+	if tr.DialContext == nil {
+		t.Error("DialContext is nil; the transport would dial unguarded")
+	}
+}

@@ -710,3 +710,36 @@ func TestProfessionResolvesTheSitemapIndexOnce(t *testing.T) {
 			indexReads, fixture.xml)
 	}
 }
+
+// TestProfessionGetsASingleUseConnectionClient pins that the crawl hands this adapter a
+// client of its own rather than the shared one.
+//
+// The platform mishandles a connection it has already answered on. Measured from the
+// production host on 2026-09-06, the ingest run failed both boards in the same second with
+// a bare EOF while curl answered the identical URLs twenty seconds earlier — and the crawl
+// had been failing that way since 2026-09-04, with the two boards eventually cooled off
+// and 716 postings going stale. The shared client pools connections, so a fix that only
+// paced the crawl would have left it.
+func TestProfessionGetsASingleUseConnectionClient(t *testing.T) {
+	shared := NewClient()
+	registry := All(shared)
+	src, ok := registry["profession"]
+	if !ok {
+		t.Fatal("profession missing from the registry")
+	}
+	p, ok := src.(profession)
+	if !ok {
+		t.Fatalf("registry holds %T, not the profession adapter", src)
+	}
+	if p.http == nil {
+		t.Fatal("profession got no transport")
+	}
+	if any(p.http) == any(shared) {
+		t.Error("profession shares the pooled client; it needs one that does not reuse connections")
+	}
+	// The taxonomy path builds the registry with no transport at all, and must not panic
+	// or invent one on the way to Provider()/marker assertions.
+	if got := All(nil)["profession"].Provider(); got != "profession" {
+		t.Errorf("transport-free registry Provider() = %q", got)
+	}
+}

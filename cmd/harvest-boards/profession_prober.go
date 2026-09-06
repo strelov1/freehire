@@ -36,7 +36,16 @@ import (
 // label names the platform and the category — the shape the two IT rows already carry. A
 // curator who wants the platform's own wording for a category renames the row afterwards
 // (cmd/add-board --rename); nothing about the crawl depends on it.
-type professionProber struct{ index *professionCategoryIndex }
+// It reads over its OWN client, not the harvest's. The platform mishandles a connection it
+// has already answered on, and the shared client pools — so a prober that used it would
+// report the whole catalogue as unreachable after the first candidate or two, which is
+// precisely the failure that took the crawl down between 2026-09-04 and 2026-09-06. The
+// cost is the one adapterProber's doc comment already names for its own case: this
+// prober's requests fall outside the run's paced, counting client.
+type professionProber struct {
+	index  *professionCategoryIndex
+	client sources.XMLGetter
+}
 
 // professionCategoryIndex memoizes the category-to-sitemap map for one harvest run. Only a
 // successful read is kept: a transient failure on the first candidate must not decide the
@@ -46,7 +55,7 @@ type professionCategoryIndex struct {
 	sitemaps map[string]string
 }
 
-func (i *professionCategoryIndex) get(ctx context.Context, c httpClient) (map[string]string, error) {
+func (i *professionCategoryIndex) get(ctx context.Context, c sources.XMLGetter) (map[string]string, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	if i.sitemaps != nil {
@@ -60,16 +69,16 @@ func (i *professionCategoryIndex) get(ctx context.Context, c httpClient) (map[st
 	return sitemaps, nil
 }
 
-func (p professionProber) discover(ctx context.Context, c httpClient) ([]string, error) {
-	sitemaps, err := p.index.get(ctx, c)
+func (p professionProber) discover(ctx context.Context, _ httpClient) ([]string, error) {
+	sitemaps, err := p.index.get(ctx, p.client)
 	if err != nil {
 		return nil, err
 	}
 	return slices.Sorted(maps.Keys(sitemaps)), nil
 }
 
-func (p professionProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	sitemaps, err := p.index.get(ctx, c)
+func (p professionProber) probe(ctx context.Context, _ httpClient, board string) (string, int, error) {
+	sitemaps, err := p.index.get(ctx, p.client)
 	if err != nil {
 		return "", 0, err
 	}
@@ -80,7 +89,7 @@ func (p professionProber) probe(ctx context.Context, c httpClient, board string)
 		// this one no longer exists.
 		return "", 0, fmt.Errorf("profession: category %s is not in the sitemap index", board)
 	}
-	open, err := sources.ProfessionSitemapPostings(ctx, c, sitemap)
+	open, err := sources.ProfessionSitemapPostings(ctx, p.client, sitemap)
 	if err != nil {
 		return "", 0, fmt.Errorf("profession: category %s: %w", board, err)
 	}
