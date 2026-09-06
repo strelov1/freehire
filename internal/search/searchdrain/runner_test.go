@@ -553,3 +553,52 @@ func TestRunnerDoesNotChargeAnAttemptWhenTheFallbackMeetsTheSameUnbuildableWave(
 		t.Fatalf("stats = %+v, want all zero — every entry is left claimed for its lease to expire", stats)
 	}
 }
+
+// MaxPerRun bounds one run so the process is handed back rather than held until the queue
+// happens to be empty. Prod 2026-09-06: with no bound the indexing pass ran for over two
+// hours against a queue arrivals kept refilling, and the removal pass sharing the process
+// never got a turn. The leftovers must stay claimable, not be dropped.
+func TestRunnerStopsAtMaxPerRunAndLeavesTheRestQueued(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for id := int64(1); id <= 6; id++ {
+		store.jobs[id] = db.Job{ID: id}
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+
+	opts := opt()
+	opts.BatchSize = 2
+	opts.MaxPerRun = 4
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 4 {
+		t.Fatalf("stats = %+v, want indexed=4 — the run took the whole queue", stats)
+	}
+	if len(store.pending) != 2 {
+		t.Errorf("pending = %d, want 2 still claimable for the next run", len(store.pending))
+	}
+}
+
+// The default has to stay unbounded: a cap set below the arrival rate turns a queue that was
+// draining into one that grows, so it is opt-in and zero must not read as "take nothing".
+func TestRunnerZeroMaxPerRunDrainsEverything(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for id := int64(1); id <= 5; id++ {
+		store.jobs[id] = db.Job{ID: id}
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+
+	opts := opt()
+	opts.BatchSize = 2
+	opts.MaxPerRun = 0
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 5 || len(store.pending) != 0 {
+		t.Errorf("stats = %+v, pending = %d, want the whole queue drained", stats, len(store.pending))
+	}
+}

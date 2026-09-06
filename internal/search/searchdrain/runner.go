@@ -86,6 +86,11 @@ type RunOptions struct {
 	// CallTimeout bounds a single batch's (or fallback item's) index operation; 0
 	// means no per-call timeout.
 	CallTimeout time.Duration
+	// MaxPerRun bounds how many entries one Run takes; 0 is unbounded. Both this
+	// runner and DeletionRunner honour it, and cmd/search-drain passes the same value
+	// to each, so a bounded run splits its budget between the two passes rather than
+	// letting whichever goes first spend the whole process. See config.SearchDrain.
+	MaxPerRun int
 }
 
 // Stats reports what a run did.
@@ -130,6 +135,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	_, err := outbox.RunBatch(ctx, r.Store, outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
+		MaxPerRun:    opt.MaxPerRun,
 		OnWave: func(outbox.Stats) {
 			// A heartbeat per wave so a long drain shows running totals instead of
 			// going silent for hours.
