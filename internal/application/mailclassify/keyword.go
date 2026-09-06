@@ -42,6 +42,28 @@ var rejectionPhrases = []string{
 	"unable to extend an offer", "another candidate",
 }
 
+// decisiveRejectionPhrases is the subset that may VETO a positive signal, and it is a
+// subset for a reason measured on real phrasing.
+//
+// A weak member of the list above is harmless as a fourth-in-order match — nothing
+// stronger matched, so "other candidates" meaning a rejection is the best reading
+// available. As a veto over a strong positive it is wrong, because the same words are
+// ordinary inside good news: "pleased to offer you … we have decided to move forward with
+// you", "invite you to an interview — we are also speaking with other candidates this
+// week", "pleased to offer you the role after another candidate withdrew". Vetoing on the
+// whole list turned every one of those into `rejection`, which does not merely mislabel:
+// SuggestStage reads the implied stage whether or not it advances, so the candidate is
+// offered a move to `rejected` on the day they were hired.
+//
+// What survives here says the sender is closing the application, in words that have no
+// benign reading, plus the two that quote offer vocabulary while refusing.
+var decisiveRejectionPhrases = []string{
+	"we regret", "regret to inform", "not to proceed", "not moving forward", "not be moving forward",
+	"won't be moving forward", "won’t be moving forward", "decided not to move", "decided not to proceed",
+	"not be progressing", "will not be progressing", "not selected", "move forward with other",
+	"unable to extend an offer", "offer to another candidate",
+}
+
 // keywordRules is precision-first: only strong, unambiguous phrases. Rejection is
 // checked before acknowledgement so a "thank you for applying … unfortunately …"
 // email resolves to rejection, and ambiguous openers ("thank you for your
@@ -85,14 +107,15 @@ var keywordRules = []keywordRule{
 // asymmetry is deliberate now that it matters: a rejection line sits at the END of a long
 // quoted thread more often than at the top, and truncating to match the prompt would blind
 // this check to exactly the evidence it exists to find. The error it can produce instead —
-// a quoted old rejection outranking a fresh invitation — costs a label and never a stage.
+// a quoted old rejection outranking a fresh invitation — is bounded by decisiveRejectionPhrases,
+// which is why that list is a subset rather than the whole vocabulary.
 func KeywordStatus(subject, body string) (StatusSignal, bool) {
 	text := strings.ToLower(stripTags.ReplaceAllString(subject+" \n "+body, " "))
 	for _, r := range keywordRules {
 		if !containsAny(text, r.phrases) {
 			continue
 		}
-		if _, advances := StageFor(r.signal); advances && containsAny(text, rejectionPhrases) {
+		if _, advances := StageFor(r.signal); advances && containsAny(text, decisiveRejectionPhrases) {
 			return SignalRejection, true
 		}
 		return r.signal, true
