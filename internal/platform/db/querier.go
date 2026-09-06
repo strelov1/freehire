@@ -2523,14 +2523,30 @@ type Querier interface {
 	// postings per company, the final ten) happens in Go, where it is a pure function
 	// over a slice and can be tested without a database. Those are the rules most likely
 	// to be argued about and changed; keeping them out of SQL keeps that argument cheap.
-	// The freshest day the view rollup has produced. The digest asks for this rather than
-	// computing "yesterday" from the clock: cmd/rollup-views fires at 02:30 UTC and reads
-	// the rotated access log, so whether the freshest complete day is yesterday or the day
-	// before depends on when logrotate runs on the host. A digest that assumed the answer
-	// would fail by publishing a stale list silently, which is the worst way to fail.
+	// The freshest COMPLETED day the view rollup has produced. The digest asks for this
+	// rather than computing "yesterday" from the clock: cmd/rollup-views fires at 02:30 UTC
+	// and reads the rotated access log, so whether the freshest complete day is yesterday
+	// or the day before depends on when logrotate runs on the host. A digest that assumed
+	// the answer would fail by publishing a stale list silently, which is the worst way to
+	// fail.
 	//
-	// Returns NULL when the table is empty; the caller treats that as a broken pipeline,
-	// not as an empty day.
+	// The day in progress is EXCLUDED, and that predicate is the point of this query
+	// rather than a refinement of it. A plain max(day) reads TODAY: the 02:30 UTC rollup
+	// reaches past midnight into the log it is rotating and lands a few dozen rows on the
+	// current day, so by 13:00 UTC — when the digest runs — the freshest day is a stub
+	// whose best posting has one view. Nothing clears MinPageUniques, the run reports a
+	// quiet day and exits 0, and the completed day beside it is never published, because
+	// tomorrow's max(day) is fresher still. Measured on 2026-09-06: day 09-05 held 207020
+	// rows and 38 postings above the floor, day 09-06 held 34 rows and a maximum of one
+	// view; three digests had been lost this way. The failure is invisible from outside —
+	// a silent exit 0 is indistinguishable from a genuinely quiet day.
+	//
+	// The boundary is UTC because the column is: internal/application/viewlog/aggregate.go
+	// buckets each access-log record by rec.Time.UTC(). A bare CURRENT_DATE would follow
+	// the session's timezone instead and, east of UTC, cut off a day that had not closed.
+	//
+	// Returns NULL when there is no completed day; the caller treats that as a broken
+	// pipeline, not as an empty day.
 	LatestJobViewDay(ctx context.Context) (pgtype.Date, error)
 	// created_at of the most recently added open, public job — the "is the pipeline
 	// still writing rows" signal for the public /status endpoint. Same predicate and

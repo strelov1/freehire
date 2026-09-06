@@ -131,6 +131,53 @@ func TestLatestViewDayPicksTheNewest(t *testing.T) {
 	}
 }
 
+// The regression this query exists to prevent, and the reason it is not a plain
+// max(day). cmd/rollup-views fires at 02:30 UTC and reaches past midnight into the log
+// it is rotating, so it lands a handful of rows on the day still in progress. Reading
+// that stub as "the freshest day" makes every digest a quiet day: nothing in a few
+// hours of traffic clears MinPageUniques, the run exits 0, and the completed day beside
+// it is lost for good, because tomorrow's max(day) is fresher still.
+//
+// The days are relative to now on purpose. Fixed dates would make this test agree with
+// a plain max(day) the moment they fell into the past, which is exactly the shape of
+// the bug — it only shows on the day the rollup is writing.
+func TestLatestViewDayIgnoresTheDayInProgress(t *testing.T) {
+	pool := testdb.Pool(t)
+	id := seedJob(t, pool, seed{slug: "acme-1"})
+
+	today := truncateDay(time.Now())
+	yesterday := today.AddDate(0, 0, -1)
+	seedViews(t, pool, id, yesterday, 40, 40) // a completed day
+	seedViews(t, pool, id, today, 1, 1)       // the stub the rollup just wrote
+
+	got, ok, err := repo(pool).LatestViewDay(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || !got.Equal(yesterday) {
+		t.Errorf("got (%s, %v), want %s", got.Format(DayLayout), ok, yesterday.Format(DayLayout))
+	}
+}
+
+// A rollup holding only the day in progress has produced no publishable day at all.
+// Reporting that as "no data" is deliberate: the service turns it into ErrNoViewData
+// and the run exits non-zero. The alternative — treating it as a quiet day — is the
+// silent exit 0 that hid this bug in the first place, so the loud answer is the right
+// one even though a freshly deployed host sees it once.
+func TestLatestViewDayWithOnlyTheDayInProgress(t *testing.T) {
+	pool := testdb.Pool(t)
+	id := seedJob(t, pool, seed{slug: "acme-1"})
+	seedViews(t, pool, id, truncateDay(time.Now()), 1, 1)
+
+	got, ok, err := repo(pool).LatestViewDay(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Errorf("got (%s, true), want no completed day", got.Format(DayLayout))
+	}
+}
+
 // The headline requirement of the whole change, and a pure SQL property: a posting
 // with heavy API traffic must not outrank one with more page opens.
 func TestTopPageViewedRanksOnPageUniquesNotUniques(t *testing.T) {
