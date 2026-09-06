@@ -4559,6 +4559,16 @@ type Querier interface {
 	// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
 	// honest — a row already holding the wanted value is not rewritten — and makes the
 	// affected-row count real churn, so a second run reports zero.
+	//
+	// Setting a non-empty industries here immediately zeroes industries_derived rather
+	// than waiting for the next RefreshCompanyFacets: that column answers only where
+	// industries is empty, and leaving a stale non-empty value in place would let a
+	// company just curated by cmd/import-company-industries keep matching through
+	// domains it no longer speaks for — the #2082 bug, reopened for the gap between
+	// this write and the next periodic recompute (hours). The reverse case (industries
+	// becomes empty) is left for that recompute like every other job-derived facet: it
+	// only widens reach, never produces a false match, so it can stay eventually
+	// consistent.
 	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an

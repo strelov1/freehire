@@ -201,3 +201,55 @@ func TestRefreshCompanyFacetsIndustriesDerived(t *testing.T) {
 		}
 	})
 }
+
+// TestSetCompanyIndustriesClearsStaleDerived guards the #2082 precedence invariant
+// (a curated company is never matched through its domains) across the window between
+// an importer curating a company and the next periodic RefreshCompanyFacets run.
+// Without this, a company freshly curated by cmd/import-company-industries would
+// keep answering through a stale industries_derived left over from before it was
+// curated — reproducing #2082 for however long that window is.
+func TestSetCompanyIndustriesClearsStaleDerived(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "TRUNCATE companies RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	insertCompany(t, pool, "newly-curated", "Newly Curated Co")
+	// Seed industries_derived as a prior RefreshCompanyFacets run would have left it:
+	// no curated industry yet, so its domains answered "gaming".
+	if _, err := pool.Exec(ctx,
+		`UPDATE companies SET industries_derived = '{gaming}' WHERE slug = 'newly-curated'`); err != nil {
+		t.Fatalf("seed stale industries_derived: %v", err)
+	}
+
+	t.Run("curating a company immediately clears its stale derived industries", func(t *testing.T) {
+		if _, err := q.SetCompanyIndustries(ctx, SetCompanyIndustriesParams{
+			Slug: "newly-curated", Industries: []string{"logistics"},
+		}); err != nil {
+			t.Fatalf("SetCompanyIndustries: %v", err)
+		}
+		if got := companyTextArray(t, pool, "newly-curated", "industries_derived"); len(got) != 0 {
+			t.Errorf("industries_derived = %v after curating, want empty (not the stale 'gaming')", got)
+		}
+	})
+
+	t.Run("uncurating a company leaves its derived industries for the next recompute", func(t *testing.T) {
+		// The reverse direction only widens reach (never a false match), so it is left
+		// to the ordinary periodic recompute like every other job-derived facet.
+		if _, err := pool.Exec(ctx,
+			`UPDATE companies SET industries_derived = '{fintech}' WHERE slug = 'newly-curated'`); err != nil {
+			t.Fatalf("reseed industries_derived: %v", err)
+		}
+		if _, err := q.SetCompanyIndustries(ctx, SetCompanyIndustriesParams{
+			Slug: "newly-curated", Industries: []string{},
+		}); err != nil {
+			t.Fatalf("SetCompanyIndustries: %v", err)
+		}
+		if got := companyTextArray(t, pool, "newly-curated", "industries_derived"); !slices.Equal(got, []string{"fintech"}) {
+			t.Errorf("industries_derived = %v after uncurating, want unchanged [fintech]", got)
+		}
+	})
+}

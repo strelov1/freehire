@@ -2,7 +2,7 @@
 
 See proposal.md - Why. The relevant existing machinery:
 
-- `internal/dict/industrytag/domains.go` holds `domainIndustry` (17 pairs,
+- `internal/dict/industrytag/domains.go` holds `domainIndustry` (19 pairs,
   domain→industry) and its inverse `industryDomains`, exposed only as
   `DomainsForIndustries(industries []string) []string` — the direction the current
   request-time filter needs. Nothing today exposes the forward direction
@@ -35,7 +35,7 @@ See proposal.md - Why. The relevant existing machinery:
 
 **Non-Goals:**
 
-- Changing the domain→industry mapping table itself (the 17 pairs, `media`,
+- Changing the domain→industry mapping table itself (the 19 pairs, `media`,
   `mobility` aliases) — untouched, already correct per #2082's design.md.
 - Changing `companies.domains` or any other existing derived facet array.
 - A configurable threshold. `2` is fixed, per the coverage measurement in the issue
@@ -59,7 +59,7 @@ be), which is a net simplification, not just a threshold bolted on.
 Three options, discussed with the user (see proposal's Impact and the issue's own
 "suggested shape", which posed the first two):
 
-1. **Mirror the 17 pairs as a SQL `VALUES` literal** inside
+1. **Mirror the 19 pairs as a SQL `VALUES` literal** inside
    `RefreshCompanyFacets`. Stays set-based, but creates a second copy of the mapping
    that only a human keeps in sync with `internal/dict/industrytag` — the same
    failure mode `normalize.CompanySlug` was consolidated to prevent ("there were
