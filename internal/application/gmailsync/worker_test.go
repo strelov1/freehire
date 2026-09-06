@@ -30,6 +30,7 @@ type fakeStore struct {
 	syncedCursor   int64
 	syncedCalled   bool
 	reconsentUsers []int64
+	reconsentErr   error
 }
 
 func (f *fakeStore) ListConnected(context.Context) ([]Connection, error) { return f.conns, nil }
@@ -47,6 +48,9 @@ func (f *fakeStore) SetSynced(_ context.Context, _, cursor int64) error {
 	return nil
 }
 func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
+	if f.reconsentErr != nil {
+		return f.reconsentErr
+	}
 	f.reconsentUsers = append(f.reconsentUsers, userID)
 	return nil
 }
@@ -287,6 +291,33 @@ func TestRunOnceMarksReconsentWhenTheTokenEndpointRefusesTheRefreshToken(t *test
 	}
 	if stats.Reconsent != 1 {
 		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
+	}
+}
+
+// Counting a re-consent the store refused to record would report a transition that did not
+// happen. The mailbox is still `connected`, so the next run meets the same revoked grant and
+// tries again — and nothing else notices in the meantime: the candidate is supposed to be
+// told to reconnect by a status that was never written. That belongs in the failed count,
+// which is what the exit code reads.
+func TestRunOnceCountsAnUnwritableReconsentAsAFailure(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{
+		conns:        []Connection{{UserID: 9, Cursor: 0}},
+		encToken:     enc,
+		reconsentErr: errors.New("connection reset by peer"),
+	}
+	reader := &fakeReader{listErr: &APIError{
+		Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized",
+	}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if stats.Reconsent != 0 || stats.Failed != 1 {
+		t.Errorf("stats = %+v, want the connection counted as failed — the status never moved", stats)
 	}
 }
 

@@ -237,7 +237,12 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 
 	processed := make([]int64, 0, len(due))
 	var pruneErrs []error
-	var delivered, pruned, rejected, unanswered int
+	// The five outcomes below must add up to the batch. pruneFailed is the fifth for that
+	// reason and not only for its own sake: without it a batch whose prune failed reports
+	// checked=2 over counters totalling one, and a reader cannot tell whether a ticket was
+	// dropped or a counter was forgotten. The error is returned as well, but a run that
+	// retries the same failure every pass is a shape only the aggregate shows.
+	var delivered, pruned, pruneFailed, rejected, unanswered int
 	for _, t := range due {
 		r, ok := receipts[t.TicketID]
 		if !ok {
@@ -259,6 +264,7 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 				// out of processed, so it stays queued and the prune is
 				// retried on the next scheduled pass.
 				pruneErrs = append(pruneErrs, fmt.Errorf("prune dead token: %w", err))
+				pruneFailed++
 				continue
 			}
 			pruned++
@@ -275,8 +281,8 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 		}
 		processed = append(processed, t.ID)
 	}
-	log.Printf("pushnotify: receipts checked=%d delivered=%d pruned=%d rejected=%d unanswered=%d",
-		len(due), delivered, pruned, rejected, unanswered)
+	log.Printf("pushnotify: receipts checked=%d delivered=%d pruned=%d prune_failed=%d rejected=%d unanswered=%d",
+		len(due), delivered, pruned, pruneFailed, rejected, unanswered)
 
 	if len(processed) > 0 {
 		if err := n.tickets.DeletePushTickets(ctx, processed); err != nil {

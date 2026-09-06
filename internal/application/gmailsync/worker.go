@@ -143,7 +143,13 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		}
 		log.Printf("gmail-sync: user %d: list: %v — marking needs_reconsent", u.UserID, err)
 		if err := w.store.SetNeedsReconsent(ctx, u.UserID); err != nil {
+			// The status did not move, so the mailbox is still `connected` and the next
+			// run will meet the same revoked grant and try again. Counting this as a
+			// re-consent would report a transition that did not happen — and this is the
+			// one outcome the run must not call clean, because nothing else will notice:
+			// the user is told to reconnect by a status that was never written.
 			log.Printf("gmail-sync: user %d: set status: %v", u.UserID, err)
+			return outcomeFailed
 		}
 		return outcomeReconsent
 	}
