@@ -52,16 +52,6 @@ func NewInterpreter(client *llm.Client) *Interpreter {
 	return &Interpreter{client: client}
 }
 
-// As rebinds the interpreter to a client bound to one caller's gateway credential, so
-// the spend is theirs. The receiver is not mutated: an interpreter is shared by every
-// request, and a per-caller client written into it would leak across them.
-func (i *Interpreter) As(client *llm.Client) *Interpreter {
-	if i == nil {
-		return nil
-	}
-	return &Interpreter{client: client}
-}
-
 // Enabled reports whether interpretation can run at all.
 func (i *Interpreter) Enabled() bool { return i != nil && i.client != nil }
 

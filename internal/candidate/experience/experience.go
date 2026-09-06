@@ -17,12 +17,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// This file holds ONLY the wire shape and its sanitizer, so cmd/gen-contracts can
-// generate the TypeScript types from this file alone without dragging in the
-// server-only Store and Importer (mirrors cv.go vs store.go, structured.go vs
-// resumeextract.go).
+// This file holds ONLY the wire shape and its sanitizer, so what a client receives can be
+// read without the server-only Store and Importer beside it (mirrors cv.go vs store.go,
+// structured.go vs resumeextract.go). cmd/gen-contracts does NOT read this package — it
+// once was written as though it did, and that belief is what kept a private copy of
+// llm.TrimTruncateRunes here to avoid an import nothing was actually avoiding.
 
 // Field bounds for untrusted bank content. Atoms are written by the user AND by the
 // model, and are fed back into LLM prompts on retrieval, so Sanitize is both the
@@ -214,18 +216,7 @@ func ClaimKey(claim string) string {
 // clip trims s and truncates to at most max runes on a rune boundary, trimming again so
 // a mid-word cut never leaves a trailing space.
 func clip(s string, max int) string {
-	return strings.TrimSpace(truncateRunes(strings.TrimSpace(s), max))
-}
-
-// truncateRunes clamps s to at most max runes. Local rather than reused from internal/platform/llm
-// so this file stays free of any server-only dependency — cmd/gen-contracts generates the
-// TypeScript wire types from this file alone (see the package-level comment on Employment).
-func truncateRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return string(r[:max])
+	return llm.TrimTruncateRunes(s, max)
 }
 
 // limit returns at most n elements of s (nil-safe, preserves order).

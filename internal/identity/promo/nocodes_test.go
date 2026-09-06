@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/platform/modroot"
 )
 
 // This repository is public. A promo code readable from the source is a promo code that
@@ -139,23 +141,14 @@ func TestTheGuardWouldCatchACode(t *testing.T) {
 	}
 }
 
-// moduleRoot walks up from the package directory to the directory holding go.mod.
+// moduleRoot is modroot.Find with this test's own failure handling.
 func moduleRoot(t *testing.T) string {
 	t.Helper()
-	dir, err := os.Getwd()
+	root, err := modroot.Find()
 	if err != nil {
-		t.Fatalf("working directory: %v", err)
+		t.Fatalf("module root: %v", err)
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("no go.mod above the test's working directory")
-		}
-		dir = parent
-	}
+	return root
 }
 
 // walk visits every readable source file under root, which may also be a single file.

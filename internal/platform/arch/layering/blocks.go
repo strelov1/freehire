@@ -39,6 +39,11 @@ var blocks = map[string][]string{
 	// config-to-Settings conversion across eight cmd/ entrypoints or to add a package
 	// holding one function. The classification was wrong, not the code.
 	"platform": {
+		// aigateway is here for the same reason as llm: it is the HTTP half of talking to
+		// the OpenAI-compatible gateway and knows nothing about the domain. Its two callers
+		// sit in different blocks (ai/speech and api/realtime), so anywhere else it would be
+		// an upward edge for one of them.
+		"aigateway",
 		"arch", "arch/layering", "backfillpage", "blobstore", "cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "linktoken", "llm", "llmschema", "migrate",
 		"modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",

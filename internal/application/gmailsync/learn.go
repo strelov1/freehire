@@ -5,12 +5,12 @@ import "context"
 // The self-learning ATS-domain cache. It closes the overfitting trap of the
 // hardcoded allowlist: instead of a human adding every niche ATS domain seen in
 // one inbox, a domain earns its place after its mail is confidently classified as
-// job-application mail PromoteThreshold times. BuildQuery then unions the promoted
+// job-application mail PromoteThreshold times. BuildQueryFor then unions the promoted
 // domains into the sync query, so coverage grows from real classifications.
 //
 // Wiring (two seams): the write side — mailclassify/maillink calls RecordJobMail
 // with the sender when it confidently labels an email as an application — and the
-// read side — the sync Worker loads Promoted() and passes it to BuildQuery. The
+// read side — the sync Worker loads Promoted() and passes it to BuildQueryFor. The
 // DB adapter over the learned_ats_domains table (migration 0036) implements
 // LearnedDomainStore.
 

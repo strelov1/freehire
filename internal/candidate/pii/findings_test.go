@@ -9,7 +9,7 @@ import (
 // (word-boundary anchoring must never leave PII in the prompt).
 func TestRedactMasksValueAbuttingWordChar(t *testing.T) {
 	text := "mail: ada.lovelace@example.com2024 archived"
-	r := mustBuild(t, text, Contacts{}, nameDetector{})
+	r := mustBuild(t, text, nameDetector{})
 	if masked := r.Redact(text); strings.Contains(masked, "ada.lovelace@example.com") {
 		t.Fatalf("email abutting a digit leaked: %q", masked)
 	}
@@ -18,7 +18,7 @@ func TestRedactMasksValueAbuttingWordChar(t *testing.T) {
 // Finding 1b: a NAME span whose offsets fall inside a larger token must still be masked.
 func TestRedactMasksNameSpanInsideToken(t *testing.T) {
 	text := "IlyaStrelovX updated the resume"
-	r := mustBuild(t, text, Contacts{}, nameDetector{names: []string{"Strelov"}})
+	r := mustBuild(t, text, nameDetector{names: []string{"Strelov"}})
 	if masked := r.Redact(text); strings.Contains(masked, "Strelov") {
 		t.Fatalf("name span inside a token leaked: %q", masked)
 	}

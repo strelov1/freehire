@@ -103,18 +103,6 @@ func TestTranscribeSendsTheAudioAndReturnsTheText(t *testing.T) {
 	}
 }
 
-func TestTranscribeJoinsTheBaseURLWithoutDoublingTheSlash(t *testing.T) {
-	srv, got := gateway(t, http.StatusOK, `{"text":"ok"}`)
-	c := New(srv.URL+"/v1/", "sk-test", "whisper-1")
-
-	if _, err := c.Transcribe(context.Background(), []byte("a"), "a.webm"); err != nil {
-		t.Fatalf("Transcribe: %v", err)
-	}
-	if got.path != "/v1/audio/transcriptions" {
-		t.Errorf("path = %q, want /v1/audio/transcriptions", got.path)
-	}
-}
-
 func TestTranscribeReportsAnUpstreamRefusal(t *testing.T) {
 	srv, _ := gateway(t, http.StatusTooManyRequests, `{"error":{"message":"slow down"}}`)
 	c := New(srv.URL+"/v1", "sk-test", "whisper-1")

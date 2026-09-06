@@ -14,4 +14,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`arch/layering` `backfillpage` `blobstore` `cache` `config` `database` `db` `externalid` `flexjson` `htmltext` `isoweek` `linktoken` `llm` `llmschema` `migrate` `modroot` `observability` `outbox` `pgconv` `pgerr` `safehttp` `stringset` `testdb` `tokencrypt` `tracerlink` `worker`
+`aigateway` `arch/layering` `backfillpage` `blobstore` `cache` `config` `database` `db` `externalid` `flexjson` `htmltext` `isoweek` `linktoken` `llm` `llmschema` `migrate` `modroot` `observability` `outbox` `pgconv` `pgerr` `safehttp` `stringset` `testdb` `tokencrypt` `tracerlink` `worker`

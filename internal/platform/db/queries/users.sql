@@ -274,13 +274,6 @@ SET resume_extract_status = 'failed',
     resume_extract_for = $3
 WHERE id = $1 AND resume_uploaded_at = $3;
 
--- name: SetUserResumeExtractPending :exec
-UPDATE users
-SET resume_extract_status = 'pending',
-    resume_extract_detail = NULL,
-    resume_extract_for = $2
-WHERE id = $1 AND resume_uploaded_at = $2;
-
 -- name: GetUserResumeGeography :one
 -- The geography derived from the user's structured résumé, alongside the two stamps the
 -- caller needs to judge freshness (the derivation's own stamp and the current résumé

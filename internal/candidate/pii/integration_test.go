@@ -25,7 +25,7 @@ func TestLiveDetectorEndToEnd(t *testing.T) {
 	det := NewHTTPDetector(url, &http.Client{Timeout: 30 * time.Second})
 
 	cv := "Ivan Petrov\nivan@petrov.io | github.com/ivanp\nSenior Go Engineer at RingCentral in London"
-	r, err := Build(context.Background(), cv, Contacts{}, det)
+	r, err := Build(context.Background(), cv, det)
 	if err != nil {
 		t.Fatalf("Build against live detector: %v", err)
 	}

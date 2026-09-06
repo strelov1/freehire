@@ -24,11 +24,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/job/reqextract"
@@ -68,22 +64,6 @@ const pauseBetweenChunks = 200 * time.Millisecond
 // bounds memory without skipping anything.
 const rowsPerChunk = 500
 
-// envInt64 reads a positive tuning knob. An unset value takes the default; a SET but
-// unparseable or non-positive one fails the run rather than falling back, the same
-// reasoning HYDRATION_RETRY_DAYS uses: a typo in BACKFILL_REQUIREMENTS_FROM_ID would
-// otherwise silently re-walk the whole table and look exactly like a normal run.
-func envInt64(name string, fallback int64) (int64, error) {
-	raw, ok := os.LookupEnv(name)
-	if !ok || strings.TrimSpace(raw) == "" {
-		return fallback, nil
-	}
-	v, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
-	if err != nil || v <= 0 {
-		return 0, fmt.Errorf("%s=%q: want a positive integer", name, raw)
-	}
-	return v, nil
-}
-
 func main() { worker.Main(run) }
 
 func run() int {
@@ -96,17 +76,17 @@ func run() int {
 
 	// Read the knobs BEFORE touching the database, so a typo fails in a second rather
 	// than after a bounds scan.
-	step, err := envInt64("BACKFILL_REQUIREMENTS_CHUNK", defaultChunkSize)
+	step, err := worker.EnvInt64("BACKFILL_REQUIREMENTS_CHUNK", defaultChunkSize)
 	if err != nil {
 		log.Printf("backfill-requirements: %v", err)
 		return 1
 	}
-	maxPerRun, err := envInt64("BACKFILL_REQUIREMENTS_MAX", defaultMaxPerRun)
+	maxPerRun, err := worker.EnvInt64("BACKFILL_REQUIREMENTS_MAX", defaultMaxPerRun)
 	if err != nil {
 		log.Printf("backfill-requirements: %v", err)
 		return 1
 	}
-	resume, err := envInt64("BACKFILL_REQUIREMENTS_FROM_ID", 0)
+	resume, err := worker.EnvInt64("BACKFILL_REQUIREMENTS_FROM_ID", 0)
 	if err != nil {
 		log.Printf("backfill-requirements: %v", err)
 		return 1

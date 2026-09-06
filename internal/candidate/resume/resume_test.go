@@ -168,16 +168,6 @@ func (r *fakeRepo) SetExtractFailed(_ context.Context, userID int64, detail stri
 	return nil
 }
 
-func (r *fakeRepo) SetExtractPending(_ context.Context, userID int64, uploadedAt time.Time) error {
-	if cur, ok := r.uploadedAt[userID]; !ok || !cur.Valid || !cur.Time.Equal(uploadedAt) {
-		return nil
-	}
-	r.extractSt[userID] = ExtractStatusPending
-	r.extractDet[userID] = ""
-	r.extractFor[userID] = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
-	return nil
-}
-
 func TestStore_DisabledWhenNoBlobStore(t *testing.T) {
 	s := New(nil, newFakeRepo())
 	if s.Enabled() {

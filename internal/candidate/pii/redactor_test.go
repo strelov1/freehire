@@ -19,9 +19,9 @@ func (f nameDetector) Detect(_ context.Context, text string) ([]Span, error) {
 	return spans, nil
 }
 
-func mustBuild(t *testing.T, text string, known Contacts, d Detector) *Redactor {
+func mustBuild(t *testing.T, text string, d Detector) *Redactor {
 	t.Helper()
-	r, err := Build(context.Background(), text, known, d)
+	r, err := Build(context.Background(), text, d)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -30,7 +30,7 @@ func mustBuild(t *testing.T, text string, known Contacts, d Detector) *Redactor 
 
 func TestRedactMasksAllPII(t *testing.T) {
 	cv := "Ada Lovelace\nada.lovelace@example.com | github.com/adalovelace\nSenior Engineer at RingCentral in London"
-	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ada Lovelace"}})
+	r := mustBuild(t, cv, nameDetector{names: []string{"Ada Lovelace"}})
 	masked := r.Redact(cv)
 
 	for _, leak := range []string{"Ada Lovelace", "ada.lovelace@example.com", "github.com/adalovelace"} {
@@ -48,7 +48,7 @@ func TestRedactMasksAllPII(t *testing.T) {
 
 func TestRestoreRoundTrip(t *testing.T) {
 	cv := "Ada Lovelace — ada.lovelace@example.com — github.com/adalovelace"
-	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ada Lovelace"}})
+	r := mustBuild(t, cv, nameDetector{names: []string{"Ada Lovelace"}})
 	if got := r.Restore(r.Redact(cv)); got != cv {
 		t.Fatalf("round-trip mismatch:\n got %q\nwant %q", got, cv)
 	}
@@ -56,7 +56,7 @@ func TestRestoreRoundTrip(t *testing.T) {
 
 func TestDistinctValuesGetDistinctPlaceholders(t *testing.T) {
 	text := "primary a@x.com secondary b@y.com"
-	r := mustBuild(t, text, Contacts{}, nameDetector{})
+	r := mustBuild(t, text, nameDetector{})
 	masked := r.Redact(text)
 	if strings.Contains(masked, "a@x.com") || strings.Contains(masked, "b@y.com") {
 		t.Fatalf("emails not masked: %s", masked)
@@ -67,19 +67,6 @@ func TestDistinctValuesGetDistinctPlaceholders(t *testing.T) {
 	}
 	if strings.Count(masked, "[REDACTED_EMAIL_1]") != 1 || strings.Count(masked, "[REDACTED_EMAIL_2]") != 1 {
 		t.Fatalf("expected two numbered email placeholders, got: %s", masked)
-	}
-}
-
-func TestKnownContactsMaskedInOtherText(t *testing.T) {
-	// The CV text the Redactor is built from, plus a separate structured-JSON blob that
-	// carries the same contacts — both must mask with the SAME redactor (matchanalysis case).
-	cv := "Ada Lovelace works remotely"
-	structured := `{"full_name":"Ada Lovelace","email":"ada.lovelace@example.com"}`
-	known := Contacts{FullName: "Ada Lovelace", Email: "ada.lovelace@example.com"}
-	r := mustBuild(t, cv, known, nameDetector{names: []string{"Ada Lovelace"}})
-	masked := r.Redact(structured)
-	if strings.Contains(masked, "Ada Lovelace") || strings.Contains(masked, "ada.lovelace@example.com") {
-		t.Fatalf("known contacts leaked in structured blob: %s", masked)
 	}
 }
 
@@ -97,7 +84,7 @@ func TestContacts_RejectsHandleNameAndCleansLinks(t *testing.T) {
 		{Start: 11, End: 26, Kind: KindLink},        // "github.com/alex" (dup of regex)
 		{Start: 27, End: len(text), Kind: KindLink}, // "CONTACTS\n https://x.io" — garbled
 	}}
-	c := mustBuild(t, text, Contacts{}, det).Contacts()
+	c := mustBuild(t, text, det).Contacts()
 
 	if c.FullName != "" {
 		t.Errorf("FullName = %q, want empty (a @handle is not a name)", c.FullName)
@@ -116,7 +103,7 @@ func TestContacts_RejectsHandleNameAndCleansLinks(t *testing.T) {
 
 func TestContactsFromDetectedSpans(t *testing.T) {
 	cv := "Ivan Petrov ivan@petrov.io github.com/ivanp linkedin.com/in/ivanp"
-	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ivan Petrov"}})
+	r := mustBuild(t, cv, nameDetector{names: []string{"Ivan Petrov"}})
 	c := r.Contacts()
 	if c.FullName != "Ivan Petrov" {
 		t.Errorf("FullName = %q, want detected name", c.FullName)
@@ -135,7 +122,7 @@ func TestContacts_LocationFromAddressSpan(t *testing.T) {
 		{Start: 0, End: 11, Kind: KindName},
 		{Start: 12, End: 22, Kind: KindAddress}, // "Lisbon, PT"
 	}}
-	c := mustBuild(t, cv, Contacts{}, det).Contacts()
+	c := mustBuild(t, cv, det).Contacts()
 	if c.Location != "Lisbon, PT" {
 		t.Errorf("Location = %q, want the ADDRESS span", c.Location)
 	}
@@ -146,7 +133,7 @@ func TestContacts_LocationFromAddressSpan(t *testing.T) {
 
 func TestContacts_NoAddressSpanLeavesLocationEmpty(t *testing.T) {
 	cv := "Ivan Petrov ivan@petrov.io"
-	c := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ivan Petrov"}}).Contacts()
+	c := mustBuild(t, cv, nameDetector{names: []string{"Ivan Petrov"}}).Contacts()
 	if c.Location != "" {
 		t.Errorf("Location = %q, want empty when no ADDRESS span", c.Location)
 	}
@@ -154,39 +141,12 @@ func TestContacts_NoAddressSpanLeavesLocationEmpty(t *testing.T) {
 
 func TestWordBoundaryAvoidsOverRedaction(t *testing.T) {
 	text := "Mark shipped the benchmark on Mark's branch"
-	r := mustBuild(t, text, Contacts{}, nameDetector{names: []string{"Mark"}})
+	r := mustBuild(t, text, nameDetector{names: []string{"Mark"}})
 	masked := r.Redact(text)
 	if !strings.Contains(masked, "benchmark") {
 		t.Fatalf("over-redacted 'benchmark': %s", masked)
 	}
 	if strings.Contains(masked, "Mark shipped") {
 		t.Fatalf("standalone name not masked: %s", masked)
-	}
-}
-
-func TestKnownOnlyValueAvoidsOverRedaction(t *testing.T) {
-	// Same shape as TestWordBoundaryAvoidsOverRedaction, but "Mark" arrives only via known
-	// Contacts — never detected as a span. redactor.go:112 never populated boundarySafe for
-	// a known-only value, so it always fell back to plain substring replacement and would
-	// have mangled "benchmark" into a partially-redacted fragment.
-	text := "Mark shipped the benchmark on Mark's branch"
-	r := mustBuild(t, text, Contacts{FullName: "Mark"}, spansDetector{})
-	masked := r.Redact(text)
-	if !strings.Contains(masked, "benchmark") {
-		t.Fatalf("over-redacted 'benchmark' from a known-only value: %s", masked)
-	}
-	if strings.Contains(masked, "Mark shipped") {
-		t.Fatalf("standalone known name not masked: %s", masked)
-	}
-}
-
-func TestKnownContactAbsentFromTextDoesNotFailBuild(t *testing.T) {
-	// "Known contacts are always maskable... even when they do not appear verbatim in the
-	// text Build read" (package doc). A known value with zero occurrences must not trip the
-	// fail-closed self-check, which only makes sense for a value that was actually there.
-	text := "Backend engineer with distributed systems experience"
-	known := Contacts{FullName: "Priya Shah", Location: "Berlin"}
-	if _, err := Build(context.Background(), text, known, spansDetector{}); err != nil {
-		t.Fatalf("Build returned an error for a known contact absent from text: %v", err)
 	}
 }

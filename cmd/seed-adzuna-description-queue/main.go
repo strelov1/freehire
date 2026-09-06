@@ -16,12 +16,10 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
+	"github.com/strelov1/freehire/internal/platform/backfillpage"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
-
-// seedBatchSize bounds how many rows are read per keyset page.
-const seedBatchSize = 500
 
 // jobStore is the slice of the data layer this command needs: page adzuna's rows by keyset
 // and enqueue one for a capture. *db.Queries satisfies it; the test uses a fake.
@@ -51,37 +49,20 @@ func run() int {
 	return 0
 }
 
-// seedAll pages every source='adzuna' row by keyset (id > last seen, so concurrent writes
-// cannot skip or repeat rows) and enqueues the ones adzunadesc.Eligible accepts.
+// seedAll enqueues every source='adzuna' row adzunadesc.Eligible accepts. The keyset walk
+// itself (id > last seen, so concurrent writes cannot skip or repeat rows) is shared with
+// the sibling per-source passes via backfillpage.Rows.
 func seedAll(ctx context.Context, store jobStore) (scanned, queued int, err error) {
-	var afterID int64
-	for {
-		jobs, err := store.ListJobsBySourceAfter(ctx, db.ListJobsBySourceAfterParams{
-			Source:    "adzuna",
-			AfterID:   afterID,
-			BatchSize: seedBatchSize,
-		})
-		if err != nil {
-			return scanned, queued, err
+	err = backfillpage.Rows(ctx, store.ListJobsBySourceAfter, "adzuna", func(j db.Job) error {
+		scanned++
+		if !adzunadesc.Eligible(j.Source, j.URL) {
+			return nil
 		}
-		if len(jobs) == 0 {
-			return scanned, queued, nil
+		if _, err := store.EnqueueAdzunaDescriptionCapture(ctx, j.ID); err != nil {
+			return err
 		}
-		afterID = jobs[len(jobs)-1].ID
-
-		for _, j := range jobs {
-			scanned++
-			if !adzunadesc.Eligible(j.Source, j.URL) {
-				continue
-			}
-			if _, err := store.EnqueueAdzunaDescriptionCapture(ctx, j.ID); err != nil {
-				return scanned, queued, err
-			}
-			queued++
-		}
-
-		if len(jobs) < seedBatchSize {
-			return scanned, queued, nil
-		}
-	}
+		queued++
+		return nil
+	})
+	return scanned, queued, err
 }

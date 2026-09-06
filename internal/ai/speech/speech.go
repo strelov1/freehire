@@ -5,7 +5,9 @@
 // which models chat completions and has no audio surface at all; a multipart audio
 // POST bolted onto it would be reaching around the abstraction it exists to provide.
 // What it does share is the endpoint: the same gateway and the same key serve
-// /chat/completions and /audio/transcriptions, so the two are configured together.
+// /chat/completions and /audio/transcriptions, so the two are configured together — and
+// the HTTP half of talking to it is internal/platform/aigateway, shared with the other
+// non-chat surface on the same gateway (internal/api/realtime).
 package speech
 
 import (
@@ -16,9 +18,9 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net/http"
-	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/aigateway"
 )
 
 // ErrUpstream is what every failure on the gateway's side wraps: a refusal, a fault,
@@ -34,10 +36,7 @@ const requestTimeout = 2 * time.Minute
 
 // Client transcribes audio through one gateway.
 type Client struct {
-	baseURL string
-	apiKey  string
-	model   string
-	http    *http.Client
+	gw *aigateway.Client
 }
 
 // New builds a client, or returns nil when the gateway is not configured.
@@ -46,15 +45,18 @@ type Client struct {
 // the handler asks whether it has a client and renders 501 when it does not, which
 // the SPA reads as a surface that does not exist here rather than as a fault.
 func New(baseURL, apiKey, model string) *Client {
-	if baseURL == "" || apiKey == "" || model == "" {
+	gw := aigateway.New(aigateway.Config{
+		BaseURL:     baseURL,
+		APIKey:      apiKey,
+		Model:       model,
+		Timeout:     requestTimeout,
+		MaxResponse: maxResponse,
+		ErrUpstream: ErrUpstream,
+	})
+	if gw == nil {
 		return nil
 	}
-	return &Client{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
-		apiKey:  apiKey,
-		model:   model,
-		http:    &http.Client{Timeout: requestTimeout},
-	}
+	return &Client{gw: gw}
 }
 
 // Transcribe returns what was said in audio.
@@ -66,33 +68,13 @@ func New(baseURL, apiKey, model string) *Client {
 //
 // An empty result is a success, not a failure: it is what silence transcribes to.
 func (c *Client) Transcribe(ctx context.Context, audio []byte, filename string) (string, error) {
-	body, contentType, err := transcriptionBody(audio, filename, c.model)
+	body, contentType, err := transcriptionBody(audio, filename, c.gw.Model())
 	if err != nil {
 		return "", err
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/audio/transcriptions", body)
+	raw, err := c.gw.Post(ctx, "/audio/transcriptions", contentType, body)
 	if err != nil {
-		return "", fmt.Errorf("%w: build request: %w", ErrUpstream, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Content-Type", contentType)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrUpstream, err)
-	}
-	defer resp.Body.Close()
-
-	// Read before switching on the status: the gateway explains its refusals in the
-	// body, and that sentence is the only thing that distinguishes a bad key from a
-	// rate limit in a log.
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse))
-	if err != nil {
-		return "", fmt.Errorf("%w: read response: %w", ErrUpstream, err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("%w: status %d: %s", ErrUpstream, resp.StatusCode, strings.TrimSpace(string(raw)))
+		return "", err
 	}
 
 	var parsed struct {

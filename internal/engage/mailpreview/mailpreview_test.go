@@ -7,26 +7,18 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/engage/mailpreview"
+	"github.com/strelov1/freehire/internal/platform/modroot"
 )
 
-// repoRoot walks up from the package directory to the module root, so the test can
-// read the committed previews regardless of where `go test` was invoked.
+// repoRoot is modroot.Find with this test's own failure handling, so the test can read
+// the committed previews regardless of where `go test` was invoked.
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	dir, err := os.Getwd()
+	root, err := modroot.Find()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("module root: %v", err)
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find the module root")
-		}
-		dir = parent
-	}
+	return root
 }
 
 // TestPreviewsAreCurrent is the reason the rendered files are committed rather than

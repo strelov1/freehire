@@ -15,32 +15,23 @@ package migrate_test
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/platform/migrate"
+	"github.com/strelov1/freehire/internal/platform/modroot"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
-// repoRoot walks up from the test's working directory to the module root, so this test
-// can Load() the real on-disk migrations/*.sql regardless of how deep the package sits.
+// repoRoot is modroot.Find with the test's own failure handling, so this test can Load()
+// the real on-disk migrations/*.sql regardless of how deep the package sits.
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	dir, err := os.Getwd()
+	root, err := modroot.Find()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("module root: %v", err)
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("no go.mod above the working directory")
-		}
-		dir = parent
-	}
+	return root
 }
 
 // TestRun_AutoBaselinesAPreRunnerDatabase reproduces the real scenario against a real

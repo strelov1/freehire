@@ -115,15 +115,6 @@ var refusalRetryProviders = map[string]func(HTTPClient) Source{
 	},
 }
 
-// IsProxied reports whether provider is on the proxied-egress allowlist — the providers
-// ApplyProxyEgress routes through SOURCES_PROXY_URL. Callers outside the board crawl (the
-// single-URL resolve path in cmd/resolve-url) use it to route the same providers through
-// the same proxy.
-func IsProxied(provider string) bool {
-	_, ok := proxiedProviders[provider]
-	return ok
-}
-
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
 // named by SOURCES_PROXY_URL (form http://user:pass@host:port). It is a no-op when the
 // variable is empty (every provider stays direct) and returns an error — for fail-fast at

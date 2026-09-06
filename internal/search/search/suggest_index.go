@@ -153,21 +153,16 @@ func SearchSuggestions[T any](ctx context.Context, c *Client, query, filter stri
 	}
 	resp, err := c.manager.Index(suggestIndexUID).SearchWithContext(ctx, query, req)
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("search: suggest: %w", ctxErr)
-		}
 		// A dictionary that has not been built yet is "no suggestions", not a fault.
 		// Between a deploy and the first cmd/build-suggestions run the index does not
 		// exist, and the box asks for a completion on every settled keystroke — so
 		// surfacing this as an error made that whole window a broken-looking dropdown
-		// and a stream of 500s. Found in production, not in a test.
-		if isIndexMissing(err) {
+		// and a stream of 500s. Found in production, not in a test. It is checked
+		// under a live context only, so a cancelled caller still gets its sentinel.
+		if ctx.Err() == nil && isIndexMissing(err) {
 			return nil, nil
 		}
-		if isBadRequest(err) {
-			return nil, fmt.Errorf("search: suggest: %w: %v", ErrBadQuery, err)
-		}
-		return nil, fmt.Errorf("search: suggest: %w", err)
+		return nil, queryErr(ctx, "search: suggest", err)
 	}
 	var hits []T
 	if err := resp.Hits.DecodeInto(&hits); err != nil {

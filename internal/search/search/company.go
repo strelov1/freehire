@@ -236,13 +236,7 @@ func (c *Client) SearchCompanies(ctx context.Context, p CompanySearchParams) (Co
 		Offset: int64(p.Offset),
 	})
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return CompanyResult{}, fmt.Errorf("search: company query: %w", ctxErr)
-		}
-		if isBadRequest(err) {
-			return CompanyResult{}, fmt.Errorf("search: company query: %w: %v", ErrBadQuery, err)
-		}
-		return CompanyResult{}, fmt.Errorf("search: company query: %w", err)
+		return CompanyResult{}, queryErr(ctx, "search: company query", err)
 	}
 	var hits []CompanyDocument
 	if err := resp.Hits.DecodeInto(&hits); err != nil {

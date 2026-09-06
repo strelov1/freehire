@@ -75,7 +75,10 @@ legacy `company` as a fallback into the same stored field. Clients must not
 assume projects expose `company`.
 
 **File split.** `experience.go` holds the wire shape, `Sanitize`, `Validate` and
-`ClaimKey`, so `cmd/gen-contracts` can emit the TS types from that file alone.
+`ClaimKey`, so what a client receives reads without the server-only surface beside it.
+It is NOT read by `cmd/gen-contracts` — that package names its inputs explicitly and this
+is not one of them, and believing otherwise is what kept a private copy of
+`llm.TrimTruncateRunes` in it.
 `store.go` is the owner-scoped domain surface over a narrow `Repository`; `repository.go`
 adapts `*db.Queries` to it. `import.go` is the reconciliation. `retrieve.go` is the
 scoring. `import_resume.go` and `professional.go` are the two adapters that name a

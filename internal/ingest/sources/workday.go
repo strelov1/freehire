@@ -2,7 +2,6 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -402,18 +401,10 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 	}, true
 }
 
-// isWorkdayRateLimited reports whether err is a Workday rate-limit response (403 or 429). Some
-// Workday tenants return 403 for a burst of requests rather than 429 (the same distinction
-// eightfold.go already handles for that provider); the shared client already retries 429/5xx,
-// this adds 403.
-func isWorkdayRateLimited(err error) bool {
-	var se *StatusError
-	return errors.As(err, &se) && (se.Code == 403 || se.Code == 429)
-}
-
 // postJSONRetrying and getJSONRetrying retry a rate-limited (403/429) request with exponential
-// backoff instead of failing the whole board on one throttled response, mirroring eightfold.go's
-// getJSONRetrying/isRateLimited. A non-rate-limit error (e.g. 404) returns immediately.
+// backoff instead of failing the whole board on one throttled response. Some Workday tenants
+// return 403 for a burst of requests rather than 429, which is why isRateLimited counts it.
+// A non-rate-limit error (e.g. 404) returns immediately.
 func (s workday) postJSONRetrying(ctx context.Context, url string, body, v any) error {
 	return s.retrying(ctx, func() error { return s.http.PostJSON(ctx, url, body, v) })
 }
@@ -422,27 +413,8 @@ func (s workday) getJSONRetrying(ctx context.Context, url string, v any) error {
 	return s.retrying(ctx, func() error { return s.http.GetJSON(ctx, url, v) })
 }
 
-// retrying runs call, retrying with exponential backoff while the error is a rate limit
-// (isWorkdayRateLimited) and giving up after workdayRetryMaxAttempts.
 func (s workday) retrying(ctx context.Context, call func() error) error {
-	delay := s.retryBase
-	var err error
-	for attempt := 0; attempt <= workdayRetryMaxAttempts; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-			if delay < 30*time.Second {
-				delay *= 2
-			}
-		}
-		if err = call(); err == nil || !isWorkdayRateLimited(err) {
-			return err
-		}
-	}
-	return err
+	return retryWhile(ctx, workdayRetryMaxAttempts, s.retryBase, isRateLimited, call)
 }
 
 // workdayEmploymentType maps Workday's timeType ("Full time" / "Part time") onto the
