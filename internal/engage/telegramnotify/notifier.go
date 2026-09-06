@@ -68,6 +68,8 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Dig
 // notifications.
 func (n *Notifier) render(d notify.Digest) string {
 	var b strings.Builder
+	// Not notify.JobCount: the bold wraps the numeral alone, so the markup sits
+	// inside the phrase that helper returns whole.
 	fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s for %q\n\n", d.Total, notify.Plural(d.Total), html.EscapeString(d.SavedSearchName))
 
 	// Reserve room for the widest possible tail up front (d.Total is its worst-case

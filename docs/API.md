@@ -3615,7 +3615,7 @@ curl "https://freehire.me/api/v1/me/notifications?limit=20" -b cookies.txt
 
 ```json
 {
-  "data": [ { "id": 5, "kind": "subscription_digest", "title": "3 new jobs match Senior Go remote", "body": "...", "public_slug": null, "jobs": [ "...": "..." ], "created_at": "2026-06-19T10:00:00Z", "read_at": null } ],
+  "data": [ { "id": 5, "kind": "subscription_digest", "title": "Senior Go remote", "body": "3 new jobs", "public_slug": null, "jobs": [ "...": "..." ], "created_at": "2026-06-19T10:00:00Z", "read_at": null } ],
   "meta": { "total": 12, "unread_count": 3, "limit": 20, "offset": 0 }
 }
 ```

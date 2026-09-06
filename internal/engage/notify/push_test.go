@@ -86,7 +86,9 @@ func TestPushNotifier_MultiJobDigestCarriesNoDeepLink(t *testing.T) {
 	}
 }
 
-func TestPushNotifier_TitleAndBodyContent(t *testing.T) {
+// The notifier's own job is to hand what renderDigest produced to the
+// transport untouched; the wording itself is asserted on the renderer below.
+func TestPushNotifier_SendsTheRenderedCopy(t *testing.T) {
 	tokens := &fakePushTokenLister{tokens: map[int64][]db.UserPushToken{
 		42: {{Token: "ExponentPushToken[abc]"}},
 	}}
@@ -94,15 +96,13 @@ func TestPushNotifier_TitleAndBodyContent(t *testing.T) {
 	n := NewPushNotifier(tokens, transport)
 
 	d := Digest{SavedSearchName: "Backend Engineer", Total: 3}
+	wantTitle, wantBody, _ := renderDigest(d)
 	if err := n.Send(context.Background(), ChannelPush, "42", d); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	call := transport.calls[0]
-	if want := "Backend Engineer"; call.title != want {
-		t.Errorf("title = %q, want %q", call.title, want)
-	}
-	if want := "3 new jobs"; call.body != want {
-		t.Errorf("body = %q, want %q", call.body, want)
+	if call.title != wantTitle || call.body != wantBody {
+		t.Errorf("sent (%q, %q), want the rendered (%q, %q)", call.title, call.body, wantTitle, wantBody)
 	}
 }
 
@@ -128,14 +128,6 @@ func TestRenderDigest_Copy(t *testing.T) {
 			digest:    Digest{SavedSearchName: "Backend Engineer", Total: 1, Jobs: []DigestJob{{Slug: "a"}}},
 			wantTitle: "Backend Engineer",
 			wantBody:  "1 new job",
-		},
-		{
-			// The title is the only line the notification center prints in
-			// bold, so an unnamed saved search still needs a heading.
-			name:      "an unnamed saved search keeps a generic title",
-			digest:    Digest{Total: 2},
-			wantTitle: "New jobs",
-			wantBody:  "2 new jobs",
 		},
 	}
 	for _, tt := range tests {

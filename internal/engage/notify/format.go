@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -62,4 +63,16 @@ func Plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// JobCount renders the "3 new jobs" opening every digest channel builds on,
+// differing only in what it wraps around them: an email subject adds the search
+// name, the push body stands alone. Assembling it by hand is how the push body
+// came to read "1 new jobs" while the channels beside it were correct, so the
+// count and its plural travel together from here.
+//
+// Telegram is the one channel that cannot call this: it bolds the numeral alone
+// ("<b>3</b> new jobs"), so its markup falls inside the phrase.
+func JobCount(n int) string {
+	return fmt.Sprintf("%d new job%s", n, Plural(n))
 }
