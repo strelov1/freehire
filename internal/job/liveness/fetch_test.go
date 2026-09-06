@@ -67,6 +67,40 @@ func TestFetchCapturesFinalURLAfterRedirect(t *testing.T) {
 	}
 }
 
+// A response whose HEADERS arrived but whose BODY could not be read is not evidence
+// about the posting, and returning the real status with an empty body made it the worst
+// kind of evidence: probeJudge hands whatever it gets to Classify, and Classify(200,
+// url, "") falls through to insufficient_content — a death verdict — for a page that
+// answered 200. Two of those on separate runs close a live posting.
+func TestFetchOnATruncatedBodyReturnsZeroStatus(t *testing.T) {
+	// Promise 500 bytes, send seven, hang up: io.ReadAll fails with unexpected EOF
+	// after net/http has already parsed a 200. The same shape a gzip error or a
+	// client timeout that lands mid-body produces.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 500\r\n\r\npartial")
+		_ = buf.Flush()
+	}))
+	defer srv.Close()
+
+	status, _, body, err := Fetch(context.Background(), srv.Client(), srv.URL)
+	if err == nil {
+		t.Fatal("Fetch() over a truncated body must return an error")
+	}
+	if status != 0 {
+		t.Errorf("status = %d, want 0 — an unread body is Uncertain, and %d classifies as Expired",
+			status, status)
+	}
+	if body != "" {
+		t.Errorf("body = %q, want empty", body)
+	}
+}
+
 func TestFetchOnUnreachableHostReturnsZeroStatus(t *testing.T) {
 	// A closed server: the request fails at the transport, which must surface as a
 	// not-expired signal (status 0 + error), never a death verdict.

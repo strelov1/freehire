@@ -167,11 +167,15 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 
 // Fail records the attempt and reports whether the entry dead-lettered, which the statement
 // tells us by stamping failed_at — the same signal the enrichment and semantic queues return.
-func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, maxAttempts int) (bool, error) {
+// Which of the policy's two bounds decides that is the statement's own business; this only
+// carries the verdict across.
+func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, policy maillink.FailurePolicy) (bool, error) {
 	row, err := s.q.FailEmailClassification(ctx, db.FailEmailClassificationParams{
-		LastError:   cause,
-		MaxAttempts: int32(maxAttempts),
-		ID:          outboxID,
+		LastError:         cause,
+		MessageAtFault:    policy.MessageAtFault,
+		MaxAttempts:       int32(policy.MaxAttempts),
+		UpstreamGraceDays: int32(policy.UpstreamGraceDays),
+		ID:                outboxID,
 	})
 	if err != nil {
 		return false, err

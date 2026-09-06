@@ -39,17 +39,39 @@ RETURNING o.id, o.email_id, e.user_id, e.source, e.thread_id, e.from_addr, e.fro
 -- Persist the resolved link + classification and stamp classified_at + model in one
 -- write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 -- unlinked or suggestion-only email leaves job_id NULL.
+--
+-- The worker owns the classification (status_signal, the suggestion, the stamp) but NOT a
+-- link a person or an agent already made: the four link columns are kept whenever
+-- link_source already reads 'manual' or 'agent'. This is the same precaution
+-- AgentTriageEmail carries one statement below, reached from the other side — there a
+-- classify-only verdict must not detach an application, here a re-classification must not
+-- overwrite one.
+--
+-- It was needed because a hand-made link does not stamp classified_at (neither
+-- LinkEmailToJob, ConfirmEmailLink nor RejectEmailLink does) and
+-- EnqueuePendingEmailClassification selects on classified_at IS NULL — so the next
+-- five-minute tick re-processed every manually linked message and wrote its own answer
+-- over the person's. The deterministic cascade usually cannot reproduce that link:
+-- ListUserApplicationsForMatch excludes closed postings, and hosted mail carries no
+-- thread_id, so the common outcome was job_id NULL. ReconcileMailEvent runs in the same
+-- transaction, so the employer_reply event went with it and the company started reading
+-- as silent in the reply-rate rollup.
 UPDATE emails
-SET job_id               = sqlc.narg(job_id),
+SET job_id               = CASE WHEN emails.link_source IN ('manual', 'agent')
+                                THEN emails.job_id ELSE sqlc.narg(job_id) END,
     -- Kept in step with job_id, and derived rather than passed: the caller names a
     -- posting, and the application is what the ledger and the aggregates pair on. Left
     -- NULL when the user has no application for that posting — an unlinked fact is
     -- useful, a wrongly attached one is not.
-    application_id       = (SELECT a.id FROM applications a
-                             WHERE a.user_id = emails.user_id AND a.job_id = sqlc.narg(job_id)),
+    application_id       = CASE WHEN emails.link_source IN ('manual', 'agent')
+                                THEN emails.application_id
+                                ELSE (SELECT a.id FROM applications a
+                                       WHERE a.user_id = emails.user_id AND a.job_id = sqlc.narg(job_id)) END,
     suggested_job_id     = sqlc.narg(suggested_job_id),
-    link_source          = sqlc.narg(link_source),
-    match_confidence     = sqlc.narg(match_confidence),
+    link_source          = CASE WHEN emails.link_source IN ('manual', 'agent')
+                                THEN emails.link_source ELSE sqlc.narg(link_source) END,
+    match_confidence     = CASE WHEN emails.link_source IN ('manual', 'agent')
+                                THEN emails.match_confidence ELSE sqlc.narg(match_confidence) END,
     status_signal        = sqlc.narg(status_signal),
     classification_model = sqlc.arg(model),
     classified_at        = now()
@@ -102,16 +124,47 @@ DELETE FROM email_classification_outbox WHERE id = $1;
 
 -- name: FailEmailClassification :one
 -- Record a failed attempt: bump attempts, store the error, and dead-letter (set
--- failed_at) once attempts reach max_attempts. The lease (claimed_at) is
+-- failed_at) once the applicable bound is reached. The lease (claimed_at) is
 -- intentionally left in place — its expiry gates the retry to a later run and
 -- doubles as the crash reaper, so a failed entry is never reprocessed within the
 -- same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure, RETURNING included:
 -- failed_at is how the caller learns an entry dead-lettered, which is what decides the
 -- worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
+--
+-- Which bound applies depends on who is at fault (internal/application/maillink.messageAtFault),
+-- exactly as RecordEnrichmentFailure decides it:
+--
+--   message_at_fault → the attempt ceiling. Something about THIS message cannot be
+--                      processed, so each try is a real try at something that may be
+--                      impossible.
+--   otherwise        → the entry's queue age. Almost every failure this queue sees is
+--                      shared — Postgres, or the model gateway — and says nothing about
+--                      the message. An attempt counter does not measure how long an
+--                      outage lasts either: the lease makes a claimed entry re-claimable
+--                      minutes later, so three attempts can be spent inside a quarter of
+--                      an hour. Nothing in this repository ever clears failed_at and
+--                      EnqueuePendingEmailClassification is ON CONFLICT DO NOTHING, so a
+--                      short gateway outage used to bury the entire queue permanently —
+--                      the same shape that dead-lettered 172,875 enrichable postings
+--                      during two LiteLLM outages in July 2026, and the same shape as the
+--                      2726 messages lost to an unset Claimed.Source, which needed manual
+--                      SQL to recover.
+--
+-- The age bound still exists so an entry nothing can ever serve stops eventually. A
+-- non-positive window means "never bury on age" rather than "bury everything", for the
+-- reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 UPDATE email_classification_outbox
 SET attempts    = attempts + 1,
     last_error  = sqlc.arg(last_error),
-    failed_at   = CASE WHEN attempts + 1 >= sqlc.arg(max_attempts)::int THEN now() ELSE NULL END
+    failed_at   = CASE
+                      WHEN sqlc.arg(message_at_fault)::boolean
+                          THEN CASE WHEN attempts + 1 >= sqlc.arg(max_attempts)::int THEN now() END
+                      ELSE CASE
+                               WHEN sqlc.arg(upstream_grace_days)::int > 0
+                                   AND created_at < now() - make_interval(days => sqlc.arg(upstream_grace_days)::int)
+                                   THEN now()
+                           END
+                  END
 WHERE id = sqlc.arg(id)
 RETURNING attempts, failed_at;
 

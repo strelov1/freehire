@@ -3,6 +3,7 @@ package maillink
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -22,6 +23,7 @@ type fakeStore struct {
 	saved           []Result
 	savedOutbox     []int64
 	failCalls       int
+	failPolicies    []FailurePolicy
 	deadLetter      bool
 	failErr         error
 }
@@ -67,9 +69,11 @@ func (s *fakeStore) Save(_ context.Context, outboxID, _ int64, r Result, _ strin
 }
 
 // failCalls records every Fail the run made, and deadLetter decides what each reports — the
-// signal the worker's exit code is built from.
-func (s *fakeStore) Fail(context.Context, int64, string, int) (bool, error) {
+// signal the worker's exit code is built from. failPolicies keeps every policy it was handed,
+// which is how the bound a failure is held to is asserted.
+func (s *fakeStore) Fail(_ context.Context, _ int64, _ string, policy FailurePolicy) (bool, error) {
 	s.failCalls++
+	s.failPolicies = append(s.failPolicies, policy)
 	return s.deadLetter, s.failErr
 }
 
@@ -161,7 +165,7 @@ func (l *fakeLearner) Learn(_ context.Context, fromAddr string) error {
 
 func TestRunnerLearnsSenderOfApplicationMail(t *testing.T) {
 	store := &fakeStore{claimed: []Claimed{{
-		OutboxID: 100, EmailID: 200, UserID: 1,
+		OutboxID: 100, EmailID: 200, UserID: 1, Source: "gmail",
 		FromAddr: "no-reply@newats.example", Subject: "Thanks for applying", Body: "…",
 	}}}
 	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalAcknowledgement, Confidence: 0.9}}
@@ -178,7 +182,7 @@ func TestRunnerLearnsSenderOfApplicationMail(t *testing.T) {
 
 func TestRunnerDoesNotLearnNonApplicationMail(t *testing.T) {
 	store := &fakeStore{claimed: []Claimed{{
-		OutboxID: 101, EmailID: 201, UserID: 1,
+		OutboxID: 101, EmailID: 201, UserID: 1, Source: "gmail",
 		FromAddr: "news@newsletter.example", Subject: "Weekly digest", Body: "…",
 	}}}
 	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalOther, Confidence: 0.9}}
@@ -195,7 +199,7 @@ func TestRunnerDoesNotLearnNonApplicationMail(t *testing.T) {
 
 func TestRunnerDoesNotLearnLowConfidenceSignal(t *testing.T) {
 	store := &fakeStore{claimed: []Claimed{{
-		OutboxID: 102, EmailID: 202, UserID: 1,
+		OutboxID: 102, EmailID: 202, UserID: 1, Source: "gmail",
 		FromAddr: "no-reply@uncertain.example", Subject: "re: your message", Body: "…",
 	}}}
 	// A non-"other" signal the classifier itself is unsure about: below cfg.stage
@@ -213,6 +217,85 @@ func TestRunnerDoesNotLearnLowConfidenceSignal(t *testing.T) {
 	if len(learner.learned) != 0 {
 		t.Errorf("learned %v, want none (confidence 0.3 is below the learn threshold)", learner.learned)
 	}
+}
+
+// What the learner records is a DOMAIN read off From, and what it feeds decides which
+// senders a later sync will accept. Only Gmail authenticated that From. Hosted mail's is
+// whatever SMTP claimed and external mail's is whatever the caller's harness pushed, so on
+// those tiers anyone who can post to an address could nominate the domain they want trusted.
+func TestRunnerLearnsOnlyFromTheMailboxThatAuthenticatedTheSender(t *testing.T) {
+	for _, source := range []string{"hosted", "external", ""} {
+		t.Run("source="+source, func(t *testing.T) {
+			store := &fakeStore{claimed: []Claimed{{
+				OutboxID: 100, EmailID: 200, UserID: 1, Source: source,
+				FromAddr: "no-reply@spoofed.example", Subject: "Thanks for applying", Body: "…",
+			}}}
+			cls := &fakeClassifier{out: mailclassify.Classification{
+				Signal: mailclassify.SignalAcknowledgement, Confidence: 0.9,
+			}}
+			learner := &fakeLearner{}
+			r := New(store, cls, "test-model").WithLearner(learner)
+
+			if _, err := r.Run(context.Background()); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if len(learner.learned) != 0 {
+				t.Errorf("learned %v from %q mail, want none — that From is not authenticated",
+					learner.learned, source)
+			}
+		})
+	}
+}
+
+// A gateway outage is not the message's fault, and holding it to the attempt ceiling is
+// what buries a whole queue on one bad afternoon: the lease makes an entry re-claimable
+// minutes later, so three attempts are spent well inside a short outage, and nothing in the
+// repository ever clears failed_at.
+func TestRunnerHoldsAGatewayFailureToTheAgeBoundNotTheAttemptCeiling(t *testing.T) {
+	store := &fakeStore{claimed: []Claimed{{OutboxID: 1, EmailID: 11, UserID: 1, Subject: "a"}}}
+	r := New(store, &explodingClassifier{}, "test-model")
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.failPolicies) != 1 {
+		t.Fatalf("recorded %d failures, want 1", len(store.failPolicies))
+	}
+	got := store.failPolicies[0]
+	if got.MessageAtFault {
+		t.Error("a gateway failure was blamed on the message; the attempt ceiling would then bury the queue")
+	}
+	if got.UpstreamGraceDays <= 0 {
+		t.Errorf("UpstreamGraceDays = %d; a non-positive window means the age bound never fires "+
+			"and nothing bounds this failure at all", got.UpstreamGraceDays)
+	}
+}
+
+// The other side of the same rule: a model answer this package could not decode IS about
+// this message, and a retry draws a fresh sample against the same content. Without a bound
+// that entry would be retried until the age window ran out.
+func TestRunnerChargesAnUnparseableAnswerToTheMessage(t *testing.T) {
+	store := &fakeStore{claimed: []Claimed{{OutboxID: 1, EmailID: 11, UserID: 1, Subject: "a"}}}
+	cls := &failingClassifier{err: fmt.Errorf("%w: invalid character 'x'", mailclassify.ErrUnparseableResponse)}
+	r := New(store, cls, "test-model")
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.failPolicies) != 1 {
+		t.Fatalf("recorded %d failures, want 1", len(store.failPolicies))
+	}
+	if got := store.failPolicies[0]; !got.MessageAtFault || got.MaxAttempts <= 0 {
+		t.Errorf("policy = %+v, want MessageAtFault with a positive ceiling", got)
+	}
+}
+
+// failingClassifier fails every message with one chosen error, so the fault split can be
+// driven by cause rather than only by "something went wrong".
+type failingClassifier struct{ err error }
+
+func (c *failingClassifier) Classify(context.Context, mailclassify.Input) (mailclassify.Classification, error) {
+	return mailclassify.Classification{}, c.err
 }
 
 func TestRunnerAmbiguousMatchOffersLLMSuggestion(t *testing.T) {

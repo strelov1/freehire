@@ -118,6 +118,11 @@ const staleCutoff = sources.DefaultSweepGrace
 // otherwise close on evidence (whatjobs' own extended sweepGrace), for the tail its crawl
 // budget structurally can never re-reach.
 //
+// It is NOT the same statement, though: these sources are re-crawled, so the age guess has
+// to agree with what the crawl last saw before it may close anything
+// (CloseStaleUnseenUnprobeableJobs and unseenWindow below). Sharing the telegram statement
+// closed postings the crawl was still listing, and the next crawl reopened every one.
+//
 // A prefix, not a source list: whatjobs runs one CPC account PER COUNTRY
 // (internal/ingest/sources/whatjobs.go's whatjobsMarkets — ~50 as of writing), each its own
 // registered provider ("whatjobs" for the bare US market, "whatjobs-<cc>" for every
@@ -174,7 +179,8 @@ func run() int {
 	// The candidate set is "every open job whose source is not a registered ATS
 	// provider" — the registry keys are the exclusion list, so a new adapter never
 	// silently becomes a probe target.
-	atsProviders := providerKeys(sources.All(sources.NewClient()))
+	registry := sources.All(sources.NewClient())
+	atsProviders := providerKeys(registry)
 	// Guard: `source <> ALL('{}')` is vacuously TRUE in Postgres, so an empty
 	// exclusion list would select EVERY open job — including board jobs the ingest
 	// sweep owns. Refuse to run rather than risk URL-closing the whole catalogue.
@@ -288,19 +294,22 @@ func run() int {
 			expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
 	}
 
-	// expireDespiteRegistered's same age-based fallback, for the registered providers
-	// that need it (whatjobs today) — same query, same window, just a different source
-	// list and the reciprocal guard already checked above.
+	// expireDespiteRegistered's age-based fallback, for the registered providers that need
+	// it (whatjobs today). Same window on the posting's age, but a DIFFERENT statement:
+	// these sources are re-crawled, so age alone says nothing, and the crawl's own reading
+	// has to agree before the guess is allowed to close anything. See unseenWindow.
 	sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
-	expiredRegistered, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
-		Sources: sourcesToExpireDespiteRegistered,
-		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+	unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, sources.SweepGraceWindows(registry))
+	expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
+		Sources:    sourcesToExpireDespiteRegistered,
+		Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+		SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
 	})
 	if err != nil {
 		log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)
 	} else {
-		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d expireDespiteRegistered sources",
-			expiredRegistered, int(expiryWindow.Hours()/24), len(sourcesToExpireDespiteRegistered))
+		log.Printf("liveness: expired %d jobs posted more than %d days ago and unseen for %d days, from %d expireDespiteRegistered sources",
+			expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
 	}
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
@@ -497,6 +506,33 @@ func filterSources(list []string, sourceFilter string) []string {
 		return []string{sourceFilter}
 	}
 	return nil
+}
+
+// unseenWindow reports how long one of these sources' postings must have gone UNSEEN by
+// the crawl before the age rule may presume it filled — the second clock
+// CloseStaleUnseenUnprobeableJobs takes, and the whole difference between it and the
+// telegram statement.
+//
+// The answer is the provider's own post-run sweep window (sources.SweepGraceWindows,
+// declared by the adapter; DefaultSweepGrace when it declares none), because that window
+// is already this provider's answer to "unseen for long enough to mean removed": a
+// posting past it is one CloseUnseenJobs would have closed had its company_slug scope
+// been able to reach it, which is the exact leak this fallback exists to cover. Reading
+// it from the registry rather than restating a number keeps the two from drifting —
+// whatjobs widened its own window to 14 days precisely because a posting that drifts
+// past its crawl budget reads as unseen for days at a time.
+//
+// Where the named sources disagree it takes the WIDEST of their windows. That is the
+// under-closing bias every other verdict in this worker takes: this close rests on a
+// guess, so where the evidence is mixed the guess waits for the most patient of them.
+func unseenWindow(srcs []string, declared map[string]time.Duration) time.Duration {
+	window := sources.DefaultSweepGrace
+	for _, s := range srcs {
+		if d, ok := declared[s]; ok && d > window {
+			window = d
+		}
+	}
+	return window
 }
 
 // matchingProviders returns every entry of providers that equals one of prefixes or has
