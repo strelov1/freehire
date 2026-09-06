@@ -408,3 +408,42 @@ func TestSmartRecruitersFetchHybridPosting(t *testing.T) {
 		t.Error("Remote = true, want false: a hybrid posting is not remote")
 	}
 }
+
+// A 200 carrying nothing usable is the same hole as a failed request, and it does not look
+// like one anywhere: GetJSON returns no error, the LISTING already supplied the id, the name
+// and the location, and the posting goes on looking read while holding no URL and no
+// description. The run would count it toward the board's coverage and the sweep would close it
+// all the same — the very defect the marker exists to prevent, wearing a success.
+func TestSmartRecruitersEmptyDetailPayloadIsUnreadable(t *testing.T) {
+	for name, body := range map[string]string{
+		"empty object":     `{}`,
+		"null":             `null`,
+		"interstitial":     `{"someOtherShape": true}`,
+		"blank postingUrl": `{"postingUrl": "   "}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := (&routedHTTP{}).
+				route("offset=0", `{"totalFound": 2, "content": [
+					{"id": "P1", "name": "Engineer", "releasedDate": "2024-06-11T15:19:46.134Z", "location": {"city": "Berlin", "country": "de", "remote": false}},
+					{"id": "P2", "name": "Broken", "releasedDate": "2024-06-11T15:19:46.134Z", "location": {"city": "NYC", "country": "us", "remote": false}}
+				]}`).
+				route("/postings/P2", body).
+				route("/postings/P1", detailBody("P1", "P1"))
+
+			jobs, err := NewSmartRecruiters(fake).Fetch(context.Background(), CompanyEntry{
+				Company: "Acme", Provider: "smartrecruiters", Board: "Acme",
+			})
+			if err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+			read := readPostings(jobs)
+			if len(read) != 1 || read[0].ExternalID != "P1" {
+				t.Fatalf("read = %v, want only P1 — P2's detail answered with nothing", read)
+			}
+			markers := unreadableMarkers(jobs)
+			if len(markers) != 1 || markers[0].ExternalID != "P2" {
+				t.Fatalf("unreadable markers = %v, want one for P2", markers)
+			}
+		})
+	}
+}

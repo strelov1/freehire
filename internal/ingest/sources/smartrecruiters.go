@@ -139,6 +139,16 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		return Job{}, false
 	}
 
+	// A 200 is not the same as an answer. A body that is empty, `null`, or an interstitial
+	// decodes without error and leaves every detail field zero — and because the LISTING
+	// supplied the id, the title and the location, the posting would go on looking read while
+	// carrying no URL and no description at all. That is this whole change's defect wearing a
+	// success: the run would count it toward its coverage and the sweep would still close it.
+	// postingUrl is the tell, since every real detail payload carries one.
+	if strings.TrimSpace(d.PostingURL) == "" {
+		return unreadableDetail(p.ID, url, e.Company), true
+	}
+
 	// companyDescription is excluded while the role sections carry text — it is boilerplate,
 	// not the role. It is NOT excluded when they are all empty: some tenants write the whole
 	// ad into that one section, and dropping it there stores a posting with no body at all

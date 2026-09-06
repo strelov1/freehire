@@ -212,3 +212,38 @@ func TestBambooHRFetchFallsBackToIsRemote(t *testing.T) {
 			jobs[0].WorkMode, jobs[0].Remote)
 	}
 }
+
+// The same hole as smartrecruiters': a 200 with no jobOpening on it decodes cleanly, and the
+// listing has already supplied the id, the name and the location — so the posting looks read
+// while carrying no URL and no description, counts toward the board's coverage, and is closed
+// by the sweep anyway.
+func TestBambooHREmptyDetailPayloadIsUnreadable(t *testing.T) {
+	for name, body := range map[string]string{
+		"empty object":   `{}`,
+		"null":           `null`,
+		"no jobOpening":  `{"result": {}}`,
+		"blank shareUrl": `{"result": {"jobOpening": {"jobOpeningShareUrl": "  "}}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := (&routedHTTP{}).
+				route("/careers/53/detail", body).
+				route("/careers/52/detail", bambooDetail("52", "Designer")).
+				route("/careers/list", bambooTwoPostingList)
+
+			jobs, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{
+				Company: "Acme", Provider: "bamboohr", Board: "acme",
+			})
+			if err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+			read := readPostings(jobs)
+			if len(read) != 1 || read[0].ExternalID != "52" {
+				t.Fatalf("read = %v, want only 52 — 53's detail answered with nothing", read)
+			}
+			markers := unreadableMarkers(jobs)
+			if len(markers) != 1 || markers[0].ExternalID != "53" {
+				t.Fatalf("unreadable markers = %v, want one for 53", markers)
+			}
+		})
+	}
+}

@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // bambooHR adapts the BambooHR public careers API. Its list endpoint carries no
@@ -92,6 +93,14 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 	}
 
 	jo := d.Result.JobOpening
+	// A 200 is not the same as an answer: an empty body, a `null`, or an interstitial decodes
+	// without error and leaves every detail field zero. The LISTING already supplied the id,
+	// the name and the location, so such a posting would go on looking read while carrying no
+	// URL and no description — counted toward the board's coverage and closed by the sweep all
+	// the same. jobOpeningShareUrl is the tell, since every real jobOpening carries one.
+	if strings.TrimSpace(jo.ShareURL) == "" {
+		return unreadableDetail(p.ID, url, e.Company), true
+	}
 	location := joinNonEmpty(jo.Location.City, jo.Location.State, jo.Location.AddressCountry)
 	mode := firstNonEmpty(bambooHRLocationType(p.LocationType), workModeFromRemote(p.IsRemote))
 	return Job{
