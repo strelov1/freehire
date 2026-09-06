@@ -42,6 +42,20 @@ var fillProviders = map[string]bool{
 	"greenhouse": true,
 }
 
+// reasonSubmissionNotImplemented is the one park reason for two distinct gaps that both
+// mean "nothing here can ever act on this attempt, regardless of how well the form
+// resolves": fillProviders excluding a provider whose schema DID fetch (Ashby, Workable),
+// and errNoSchemaFetcher below, for a provider applyform.Fetchers never registered at all
+// (Recruitee) — the candidate has no reason to see two different-sounding permanent gaps.
+const reasonSubmissionNotImplemented = "submission not yet implemented for this provider"
+
+// errNoSchemaFetcher reports that applyform.Fetchers has no entry for a provider at all —
+// distinct from a fetcher's own call failing, which stays an ordinary retryable error.
+// fetchSchema and PreviewClient.schemaFor both return it so their callers can park honestly
+// (reasonSubmissionNotImplemented) instead of spending the ordinary retry/dead-letter budget
+// on a provider that will never gain a schema fetcher through a retry.
+var errNoSchemaFetcher = errors.New("no schema fetcher registered for this provider")
+
 // Client drives a headless browser to resolve and, where possible, submit one application
 // attempt. It implements autoapply.SidecarClient — the in-process replacement for the
 // Python/Patchright sidecar the design originally proposed (see design.md's "chromedp, not
@@ -107,6 +121,9 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 
 	apiForm, err := c.fetchSchema(ctx, claimed)
 	if err != nil {
+		if errors.Is(err, errNoSchemaFetcher) {
+			return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: reasonSubmissionNotImplemented}, nil
+		}
 		return autoapply.SidecarResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
 	}
 
@@ -160,7 +177,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		// Fill/submit is only wired for Greenhouse so far — see fill.go. A form for
 		// another provider that DID fully resolve still parks rather than being
 		// submitted through a path never built or verified.
-		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: "submission not yet implemented for this provider"}, nil
+		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: reasonSubmissionNotImplemented}, nil
 	}
 	if browserCtx == nil {
 		return autoapply.SidecarResult{}, fmt.Errorf("internal error: no browser session for a Greenhouse submission")
@@ -305,7 +322,7 @@ func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.C
 func (c *Client) fetchSchema(ctx context.Context, claimed autoapply.Claimed) (applyform.Form, error) {
 	fetcher, ok := c.fetchers[claimed.Provider]
 	if !ok {
-		return applyform.Form{}, fmt.Errorf("no schema fetcher for provider %q", claimed.Provider)
+		return applyform.Form{}, fmt.Errorf("%w: %q", errNoSchemaFetcher, claimed.Provider)
 	}
 	return fetcher.Fetch(ctx, applyform.Claimed{
 		JobID:      claimed.JobID,

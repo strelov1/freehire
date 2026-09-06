@@ -191,10 +191,10 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	// Caller's own auto-apply status for this job (openspec/changes/auto-apply-submit-trigger),
 	// same caller-scoped, signed-in-only overlay as MyVote above. No row is the common
 	// case (nil, omitted) and is not logged as an error; a real lookup failure also
-	// degrades to nil rather than failing the whole job read. Scoped to Greenhouse — the
-	// only source auto-apply resolves today (autoApplyEnqueueSource) — so every other
-	// job's read skips a query that could only ever come back empty.
-	if userID, ok := auth.UserID(c); ok && job.Source == autoApplyEnqueueSource {
+	// degrades to nil rather than failing the whole job read. Scoped to the same sources
+	// the enqueue endpoint accepts (autoApplyEnqueueSources) — so every other job's read
+	// skips a query that could only ever come back empty.
+	if userID, ok := auth.UserID(c); ok && autoApplyEnqueueSources[job.Source] {
 		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(c.Context(), db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
 		}); err == nil {

@@ -25,6 +25,23 @@ func TestSubmit_LeverAlwaysParksOnCaptchaWithoutTouchingFetchersOrBrowser(t *tes
 	}
 }
 
+// Recruitee (and any other source jobs.source can carry that internal/ingest/applyform
+// never registered a Fetcher for) has no schema fetcher at all — before this fix,
+// fetchSchema's plain error bubbled up as an ordinary retryable Fail, so an attempt for one
+// of these silently burned the whole retry budget toward a dead-letter instead of parking
+// honestly like Ashby/Workable's own "submission not yet implemented" outcome.
+func TestSubmit_ParksHonestlyWhenNoSchemaFetcherIsRegistered(t *testing.T) {
+	c := &Client{fetchers: nil}
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "recruitee"}, nil)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if result.Status != autoapply.StatusParked || result.Reason != reasonSubmissionNotImplemented {
+		t.Errorf("result = %+v, want parked/%s", result, reasonSubmissionNotImplemented)
+	}
+}
+
 func TestUnscannableFormResult_MapsBothReasonsToParked(t *testing.T) {
 	for _, reason := range []unscannableFormReason{reasonCaptchaProtected, reasonUnrecognizedLayout} {
 		result, parked := unscannableFormResult(&unscannableFormError{reason: reason})

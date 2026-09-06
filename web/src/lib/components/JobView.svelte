@@ -26,7 +26,7 @@
   import { track } from '$lib/analytics';
   import { foreignContentLang } from '$lib/seo';
   import type { Display } from '$lib/generated/contracts';
-  import type { Job, UserJob } from '$lib/types';
+  import type { Job, PlanState, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
   import { formatDate, formatDateOrAgo, formatDateTime } from '$lib/utils';
@@ -62,6 +62,11 @@
   // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
   let interaction = $state.raw<UserJob | null>(null);
   let showApplyPrompt = $state(false);
+  // The signed-in user's own plan (null when signed out or not yet loaded), fetched
+  // alongside `interaction` below — auto-apply is the one caller-scoped feature on this
+  // page whose visibility (not just its outcome) depends on the plan tier.
+  let userPlan = $state.raw<PlanState | null>(null);
+  const isPro = $derived(userPlan?.plan === 'pro' || userPlan?.plan === 'ultra');
   // Open-thread count for the "Discussion · N" badge; loaded client-side so the
   // page renders immediately and the number fills in. Failures leave it hidden.
   let threadCount = $state<number | null>(null);
@@ -178,6 +183,26 @@
     track('job_view', { slug, source: job.source });
   });
 
+  // The caller's plan, fetched once per signed-in session rather than per job: unlike
+  // `interaction` below it does not depend on `job.public_slug`, so navigating between job
+  // pages does not re-fetch or flicker it back to null while a plan that has not changed
+  // reloads. A failed fetch leaves it null, which the auto-apply gate above already treats
+  // the same as "not Pro" — a safe, if conservative, default rather than a broken page.
+  $effect(() => {
+    if (!isAuthenticated()) {
+      userPlan = null;
+      return;
+    }
+    let alive = true;
+    api
+      .myPlan()
+      .then((p) => alive && (userPlan = p))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  });
+
   // Record a view for signed-in users once the page hydrates (browser only).
   // Silent history that also tells us whether they
   // already applied; a failed view must not break the page. Re-runs on client
@@ -290,15 +315,16 @@
     }
   }
 
-  // Auto-apply (openspec/changes/auto-apply-submit-trigger): PRO-only, Greenhouse-only.
-  // Eligibility (plan tier, base CV) is not known client-side — the button stays
-  // clickable and the backend's own 402/409 message is what tells an ineligible
-  // caller why, surfaced below rather than pre-empted here.
+  // Auto-apply (openspec/changes/auto-apply-submit-trigger): Pro (or above) and one of the
+  // ATS providers auto-apply can queue against — both are gated on VISIBILITY (isPro above),
+  // not just what happens on click. Base-CV existence is the one eligibility fact still not
+  // known client-side — the backend's own 409 is what tells a caller with no base CV why,
+  // surfaced below rather than pre-empted here.
   let autoApplyOverrideStatus = $state<string | null>(null);
   let autoApplySubmitting = $state(false);
   let autoApplyError = $state<string | null>(null);
   const autoApplyState = $derived(
-    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied),
+    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied, isPro),
   );
   // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
@@ -358,13 +384,9 @@
      button only starts the tailor-then-review sequence. What it says and how loud it is
      both come from the CTA plan; the only thing decided here is that a submission already
      in flight also disables it, which is a fact about THIS component's request rather than
-     about the posting.
-     The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
-     background and foreground, none of which read as a plan marker on `bg-brand`. It takes
-     the PAGE's `foreground` for its fill and `background` for its text — near-black on
-     white in the light theme, near-white on black in the dark one — so it stays the highest
-     contrast thing on a brand-green button in either. A tint of the button's own foreground
-     was the first try and it dissolved into the fill. -->
+     about the posting. No `Pro` marker: only a Pro (or above) caller ever sees this button
+     at all (autoApplyState above), so labelling the requirement here would state a fact
+     about nothing left to decide. -->
 {#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
   {#if cta.autoApply}
     {@const autoApply = cta.autoApply}
@@ -376,13 +398,6 @@
       class={className}
     >
       {autoApply.label}
-      {#if autoApply.pro}
-        <span
-          class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
-        >
-          Pro
-        </span>
-      {/if}
     </Button>
   {/if}
 {/snippet}
