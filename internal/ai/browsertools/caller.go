@@ -96,7 +96,17 @@ func (c *Caller) Call(ctx context.Context, tool string, args any) (json.RawMessa
 			return nil, fmt.Errorf("browser-tool answer is not JSON: %w", err)
 		}
 		if answer.Error != "" {
-			return nil, errors.New(answer.Error)
+			// The relay's own "nobody is attached" answer comes back as the sentinel it
+			// was written from, so a caller can tell that state apart from a tool that
+			// ran and failed. Everything else is the executor's own words, which only
+			// the user can act on and this package cannot classify — but it can say WHO
+			// is speaking, and that is the part a caller needs: an answer the browser
+			// produced is the user's to act on however it is worded, so it must not be
+			// reported as our fault just because we could not read the sentence.
+			if answer.Error == ErrNotConnected.Error() {
+				return nil, ErrNotConnected
+			}
+			return nil, fmt.Errorf("%w: %s", ErrExecutorReported, answer.Error)
 		}
 		return answer.Result, nil
 	}

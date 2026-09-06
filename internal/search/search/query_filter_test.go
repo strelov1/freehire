@@ -438,3 +438,32 @@ func TestFilterFromValues_EmptyValueIgnored(t *testing.T) {
 		t.Errorf("FilterFromValues(empty facet value) = %v, want nil", got)
 	}
 }
+
+// Narrows is the question "would this saved search come back narrowed?", and it has to be
+// answered by the same two things a search is built from — the free text and the filter —
+// because anything else answers a different question. The `q`-only case is the one a
+// filter-shaped check gets wrong: FilterFromValues returns nil for it, yet it is the
+// narrowest search most people ever save.
+func TestNarrows(t *testing.T) {
+	cases := []struct {
+		query string
+		want  bool
+	}{
+		{"", false},
+		{"q=", false},
+		{"q=%20%20", false}, // whitespace is not a query
+		{"sort=created_at&order=desc&limit=20&offset=0", false},
+		{"remote=remote_unspecified", false}, // a facet no filter reads any more
+		{"country=it", false},                // the facet is `countries`
+		{"q=golang", true},
+		{"seniority=senior", true},
+		{"posted_within_days=7", true},
+		{"skills_exclude=php", true},
+		{"countries=de&sort=created_at", true},
+	}
+	for _, c := range cases {
+		if got := Narrows(vals(c.query)); got != c.want {
+			t.Errorf("Narrows(%q) = %v, want %v", c.query, got, c.want)
+		}
+	}
+}

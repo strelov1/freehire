@@ -43,6 +43,17 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		return id
 	}
 
+	// A private job: what InsertPrivateJob writes for a job description the candidate
+	// pasted into the JD-tailor intake. Open, technical and embedded like any other row,
+	// so it was a legitimate neighbour of a public posting before this filter existed.
+	seedPrivateJob := func(externalID, slug, title string) int64 {
+		id := seedJob(externalID, slug, title, false)
+		if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true WHERE id = $1`, id); err != nil {
+			t.Fatalf("mark job %s private: %v", externalID, err)
+		}
+		return id
+	}
+
 	const knownSlug = "go-dev-acme-aaaa1111"
 	sourceID := seedJob("gh:source", knownSlug, "Go Dev", false)
 
@@ -54,16 +65,17 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		openIDs[i] = seedJob(externalID, slug, "Open Neighbour", false)
 	}
 	closedID := seedJob("gh:closed", "neighbour-closed-cccc9999", "Closed Neighbour", true)
+	privateID := seedPrivateJob("gh:private", "neighbour-private-dddd8888", "Private Neighbour")
 	const danglingID int64 = 987654321 // never inserted: simulates a hard-deleted (cmd/prune) stale entry.
 
-	// Interleave the closed and dangling ids among the open ones so a passing test
-	// proves order preservation AND graceful dropping at once, not just one or the
+	// Interleave the closed, private and dangling ids among the open ones so a passing
+	// test proves order preservation AND graceful dropping at once, not just one or the
 	// other: the stored order is
-	//   [open0, open1, closed, open2, dangling, open3, open4, open5, open6, open7]
+	//   [open0, open1, closed, open2, dangling, private, open3, open4, open5, open6, open7]
 	// and the only correct filtered-and-reordered output is the open ids in their
-	// original relative order with the other two removed.
+	// original relative order with the other three removed.
 	similarJobIDs := []int64{
-		openIDs[0], openIDs[1], closedID, openIDs[2], danglingID,
+		openIDs[0], openIDs[1], closedID, openIDs[2], danglingID, privateID,
 		openIDs[3], openIDs[4], openIDs[5], openIDs[6], openIDs[7],
 	}
 	if _, err := pool.Exec(ctx,
@@ -110,7 +122,25 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		}
 	}
 
-	t.Run("default limit: closed and dangling neighbours dropped, order preserved", func(t *testing.T) {
+	// The private neighbour is the one whose privacy this endpoint could not merely
+	// weaken but end: the route is unauthenticated and answers with the whole jobview,
+	// and a private posting is unlisted everywhere else — its unguessable public_slug is
+	// the whole of its privacy. Asserted by slug across every case below, because the
+	// count assertions alone would pass with the private row swapped in for an open one.
+	var privateSlug string
+	if err := pool.QueryRow(ctx, `SELECT public_slug FROM jobs WHERE id = $1`, privateID).Scan(&privateSlug); err != nil {
+		t.Fatalf("look up the private neighbour's slug: %v", err)
+	}
+	assertPrivateWithheld := func(t *testing.T, data []any) {
+		t.Helper()
+		for i, slug := range slugsOf(data) {
+			if slug == privateSlug {
+				t.Errorf("position %d published the private neighbour %q", i, slug)
+			}
+		}
+	}
+
+	t.Run("default limit: closed, private and dangling neighbours dropped, order preserved", func(t *testing.T) {
 		resp, body := get("/api/v1/jobs/" + knownSlug + "/similar")
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -126,6 +156,7 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 				t.Errorf("position %d: slug = %q, want %q (full got=%v)", i, got[i], want[i], got)
 			}
 		}
+		assertPrivateWithheld(t, data)
 		first, _ := data[0].(map[string]any)
 		if _, leaked := first["id"]; leaked {
 			t.Errorf("internal id leaked: %v", first)
@@ -158,6 +189,9 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		if len(data) != len(openIDs) {
 			t.Fatalf("data len = %d, want %d (all open neighbours)", len(data), len(openIDs))
 		}
+		// The widest page anyone can ask for is where a withheld row would show up if
+		// the filter were merely truncating rather than dropping.
+		assertPrivateWithheld(t, data)
 	})
 
 	t.Run("never-backfilled job serves an empty list, not an error", func(t *testing.T) {

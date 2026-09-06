@@ -4,8 +4,8 @@
 Precomputes `GET /jobs/:slug/similar`'s data: for every job with embedding chunks
 (`job_semantic_chunks`, written by `internal/ai/embed`) but no current
 `jobs.similar_job_ids`, runs the nearest-neighbour-over-chunks rollup
-(`db.NearestJobsToJob` — already excludes the source job, closed jobs, and same-company
-jobs) and writes the result. The full design rationale lives in the package doc comment
+(`db.NearestJobsToJob` — already excludes the source job, closed jobs, private jobs and
+same-company jobs) and writes the result. The full design rationale lives in the package doc comment
 (`runner.go`) and `openspec/changes/drop-hybrid-search-pgvector-similar/design.md`
 Decisions 3/4/5 — read those before this file, this only covers what they don't.
 
@@ -41,6 +41,13 @@ Decisions 3/4/5 — read those before this file, this only covers what they don'
   (`ClearSimilarComputedAtBatch`, inside `CompleteOpen`'s transaction) — that's what
   makes a plain `IS NULL` check in `PendingJobIDs` already mean "missing OR stale," no
   chunk-timestamp comparison needed.
+- **A private job is never a NEIGHBOUR, but may be a SOURCE.** `InsertPrivateJob` (the
+  JD-tailor intake) writes an open, technical row, so it is embedded and eligible like
+  any other — and `GET /jobs/:slug/similar` is unauthenticated and answers with the whole
+  `jobview`, which would publish the unguessable slug such a posting's privacy rests on.
+  The predicate is in `NearestJobsToJob`; the handler drops one too, because the lists
+  already stored were computed without it. Asking what a pasted JD resembles is the
+  feature, so the source side stays open.
 - An empty neighbour list is a valid, intentional write (a job whose only close matches
   are same-company yields none) — it still stamps `similar_computed_at` so the job
   isn't endlessly re-picked.

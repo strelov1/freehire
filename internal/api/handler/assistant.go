@@ -700,7 +700,21 @@ func (h *assistantHandlers) streamSSE(
 		// ten seconds, mid-answer, for no reason the user can see. Bounded rather than
 		// cleared because a cleared deadline is forever: a reader that stopped reading
 		// would block the write, and with it this goroutine, for the life of the process.
-		stream := newSSEStream(w, conn, sseWriteTimeout)
+		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
+
+		// Registered first so it unwinds last: the turn's slot, its allowance and the
+		// heartbeat are released by the defers below, and the client must not be told the
+		// turn is over while the session still holds it.
+		//
+		// The frame says StopError, exactly what Runner.fail emits — a panic ended the
+		// turn without an answer, which is a failure and not a cancellation, and the
+		// client's error branch is the one that ends the turn and offers the retry route
+		// (POST /assistant/sessions/:id/retry) rather than leaving the composer queued
+		// behind a turn nothing will finish.
+		defer recoverStream(hub, "assistant: turn", func() {
+			stream.event(string(assistant.EventResult),
+				assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopError, IsError: true})
+		})
 
 		defer cancel()
 

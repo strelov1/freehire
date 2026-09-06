@@ -16,8 +16,13 @@ built from the same services the HTTP handlers use.
   turn. Only a model/transport failure ends a turn as errored.
 - **Every turn ends with exactly one `result` event.** A client that receives no
   terminal event waits forever, so the loop emits one on every path: an answer,
-  the step cap, cancellation, and failure — and so does the handler on the one path
-  that never reaches the loop, a queued message whose wait ran out.
+  the step cap, cancellation, and failure — including a turn that dies BEFORE the
+  loop, on the first transcript write. And so does the handler on the two paths that
+  never reach the loop at all: a queued message whose wait ran out, and a panic on the
+  stream's own goroutine (`recoverStream`, `internal/api/handler`), which the server's
+  recover middleware cannot see. A client only raises on a read failure, so a stream
+  that simply stops reads to it as a turn that ended cleanly — and it then never ends
+  the turn, queueing every later message behind one that is already over.
 - **A turn is bounded two ways**: tool-calling rounds and the LLM client's per-call
   timeout. Zero/negative bounds fall back to defaults rather than meaning
   "unbounded" — an unbounded loop on a metered gateway is a runaway bill. The round

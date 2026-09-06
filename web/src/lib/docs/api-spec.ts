@@ -156,6 +156,12 @@ export const GROUPS: Group[] = [
         path: '/jobs',
         auth: 'none',
         summary: 'List jobs, newest first, with limit/offset pagination.',
+        description:
+          'Takes no filters at all — `limit` and `offset` are the whole vocabulary. ' +
+          'Anything else is ignored rather than refused, and listed in ' +
+          '`meta.ignored_params`: a filter param sent here returns the entire ' +
+          'catalogue, which is indistinguishable from a narrow result unless you ' +
+          'check. Use `/jobs/search` to filter.',
         query: [
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
@@ -1332,8 +1338,9 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         summary: 'A batch of open jobs for the swipe triage deck.',
         description:
           'Runs the same query as search (same facets, `q`, and sort), then excludes ' +
-          'the jobs you have already saved or dismissed. `503` when search is ' +
-          'unavailable.',
+          'the jobs you have already saved or dismissed. A param no filter reads is ' +
+          'ignored rather than refused, and listed in `meta.ignored_params`, exactly ' +
+          'as in search. `503` when search is unavailable.',
         query: [
           { name: 'q', type: 'string', description: 'Optional full-text query (as in search).', example: 'golang' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },

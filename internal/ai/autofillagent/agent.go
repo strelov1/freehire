@@ -11,6 +11,7 @@ package autofillagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -73,6 +74,17 @@ type Planner interface {
 	Choose(ctx context.Context, question Field, options []string, profile Profile) (string, error)
 }
 
+// The two states a run can end in that are not faults. They are sentinels because the
+// caller has to tell them from a gateway failure, our own deadline or a model answer that
+// is not JSON: those are ours to fix and belong in the error inbox, while these two are
+// the user's page and the deployment's configuration, and read as advice.
+var (
+	// ErrNoFillableFields is a page with no form on it — nothing to do, nothing wrong.
+	ErrNoFillableFields = errors.New("no fillable fields on this page")
+	// ErrUnavailable is autofill on a deployment with no language model configured.
+	ErrUnavailable = errors.New("agent autofill is unavailable: no language model is configured")
+)
+
 // Run drives one autofill turn: read the form, plan, fill, report.
 func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Report, error) {
 	fields, err := readForm(ctx, tools)
@@ -80,7 +92,7 @@ func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Re
 		return Report{}, err
 	}
 	if len(fields) == 0 {
-		return Report{}, fmt.Errorf("no fillable fields on this page")
+		return Report{}, ErrNoFillableFields
 	}
 
 	planned, err := planner.Plan(ctx, fields, profile)

@@ -123,3 +123,40 @@ func TestSwipeDeck_DisabledReturns503(t *testing.T) {
 		t.Fatalf("status = %d, want 503", status)
 	}
 }
+
+// The deck runs the same filter as /jobs/search and drops an unread param the same way,
+// so it owes the caller the same warning. Without it a deck built from `?country=it` is
+// the whole catalogue shuffled past someone who believes they are triaging Italy — and
+// unlike a list, a deck gives no total to notice that in.
+func TestSwipeDeck_ReportsIgnoredParams(t *testing.T) {
+	fake := &fakeSearcher{}
+	app, iss := deckApp(fake, nil)
+
+	status, body := deckGet(t, app, iss, "/api/v1/me/tracking/swipe?country=it")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "country" || first["did_you_mean"] != "countries" {
+		t.Errorf("ignored_params[0] = %v, want country -> countries", first)
+	}
+}
+
+// The deck's own transport params are not filters and must not be accused of anything —
+// a warning on every well-formed request is a warning nobody reads.
+func TestSwipeDeck_CleanQueryReportsNothingIgnored(t *testing.T) {
+	fake := &fakeSearcher{}
+	app, iss := deckApp(fake, nil)
+
+	_, body := deckGet(t, app, iss, "/api/v1/me/tracking/swipe?q=go&sort=posted_at&order=asc&limit=10&offset=0&countries=it")
+
+	meta, _ := body["meta"].(map[string]any)
+	if _, present := meta["ignored_params"]; present {
+		t.Errorf("meta.ignored_params = %v, want the key absent", meta["ignored_params"])
+	}
+}

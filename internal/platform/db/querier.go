@@ -3725,6 +3725,13 @@ type Querier interface {
 	// this repo's "unknown company" sentinel, see jobs.company_slug NOT NULL DEFAULT ''),
 	// any candidate sharing the source's exact company_slug is excluded, so two different
 	// companies that both merely lack a resolved slug don't spuriously exclude each other.
+	//
+	// Private candidates are excluded there too. A user-pasted job description (InsertPrivateJob,
+	// for the JD-tailor intake) is open, carries the derived is_tech, and is therefore embedded
+	// and eligible like any other row — so without this predicate it becomes a legitimate
+	// neighbour of a public posting, and GET /jobs/:slug/similar (unauthenticated, whole
+	// jobview) publishes the unguessable slug its privacy rests on. The SOURCE job may still be
+	// private: asking what a pasted JD resembles is the feature.
 	NearestJobsToJob(ctx context.Context, arg NearestJobsToJobParams) ([]NearestJobsToJobRow, error)
 	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
 	// coalescing into anything older would reorder the log.

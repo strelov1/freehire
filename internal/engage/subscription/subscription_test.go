@@ -78,8 +78,19 @@ func TestCreate_UnknownChannelRejected(t *testing.T) {
 // anyone means. On prod 2026-09-04 one such subscription held 248k undelivered matches
 // and, through a claim ordered by subscription id, starved every subscription created
 // after it.
+//
+// A blank query is only the obvious half of it. The queries below are all non-empty
+// strings that the delivery worker reads as no filter at all — a facet that has been
+// retired, a param mistyped in the singular, a saved sort with nothing to sort — so a
+// guard on emptiness lets each of them through and mails the same 248k.
 func TestCreateRefusesAnUnfilteredSavedSearch(t *testing.T) {
-	for _, query := range []string{"", "   "} {
+	for _, query := range []string{
+		"",
+		"   ",
+		"remote=remote_unspecified", // a retired facet: no filter reads `remote`
+		"country=it",                // the facet is `countries`; this narrows nothing
+		"sort=created_at&limit=20",  // transport params only
+	} {
 		repo := &fakeRepo{savedSearchQuery: query}
 		_, err := New(repo).Create(context.Background(), 1, 2, "telegram")
 		if !errors.Is(err, ErrUnfilteredSearch) {
@@ -87,6 +98,29 @@ func TestCreateRefusesAnUnfilteredSavedSearch(t *testing.T) {
 		}
 		if repo.created != nil {
 			t.Errorf("query %q: nothing must be stored", query)
+		}
+	}
+}
+
+// The other side of the same gate: a query that DOES narrow must still be subscribable,
+// including the one that carries no facet at all. Free text is what the matcher searches
+// on, so a saved search of `q=golang` is as narrow as any facet and refusing it would
+// take away the most ordinary subscription there is.
+func TestCreateAcceptsEverySavedSearchThatNarrows(t *testing.T) {
+	for _, query := range []string{
+		"q=golang",                           // free text only
+		"seniority=senior",                   // one facet
+		"countries=de&sort=created_at",       // a facet beside a transport param
+		"posted_within_days=7",               // a scalar filter, not a facet
+		"skills_exclude=php",                 // an exclusion is a filter too
+		"q=golang&remote=remote_unspecified", // the retired facet does not spoil the text
+	} {
+		repo := &fakeRepo{savedSearchQuery: query}
+		if _, err := New(repo).Create(context.Background(), 1, 2, "telegram"); err != nil {
+			t.Errorf("query %q: err = %v, want nil", query, err)
+		}
+		if repo.created == nil {
+			t.Errorf("query %q: want the subscription stored", query)
 		}
 	}
 }

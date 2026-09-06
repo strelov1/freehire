@@ -124,6 +124,21 @@ func FilterFromValues(v url.Values) any {
 	return filterFromValues(v, time.Now())
 }
 
+// Narrows reports whether a parsed query selects less than the whole catalogue:
+// free text, or at least one filter fragment FilterFromValues honours. It reads
+// exactly the two things a search is built from (SearchParams.Query and
+// SearchParams.Filter), so a query it calls narrowing is one that will actually
+// come back narrowed.
+//
+// It exists because the raw query STRING answers a different question. A saved
+// search of `remote=remote_unspecified` (a retired facet) or `country=it` (a typo
+// for `countries`) is a non-empty string that no filter reads, so anything gating
+// on emptiness lets it through as a real filter — and a subscription to one asks
+// to be notified about every posting in the catalogue.
+func Narrows(v url.Values) bool {
+	return strings.TrimSpace(v.Get("q")) != "" || FilterFromValues(v) != nil
+}
+
 // maxWithinDays is the largest day count the two date bounds honour — a century, which
 // is further back than any posting and than the catalogue itself.
 //

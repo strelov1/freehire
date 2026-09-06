@@ -238,6 +238,13 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- this repo's "unknown company" sentinel, see jobs.company_slug NOT NULL DEFAULT ''),
 -- any candidate sharing the source's exact company_slug is excluded, so two different
 -- companies that both merely lack a resolved slug don't spuriously exclude each other.
+--
+-- Private candidates are excluded there too. A user-pasted job description (InsertPrivateJob,
+-- for the JD-tailor intake) is open, carries the derived is_tech, and is therefore embedded
+-- and eligible like any other row — so without this predicate it becomes a legitimate
+-- neighbour of a public posting, and GET /jobs/:slug/similar (unauthenticated, whole
+-- jobview) publishes the unguessable slug its privacy rests on. The SOURCE job may still be
+-- private: asking what a pasted JD resembles is the feature.
 WITH source_chunks AS (
     SELECT embedding
     FROM job_semantic_chunks
@@ -259,7 +266,7 @@ nearest AS (
 )
 SELECT j2.id AS job_id, MIN(nearest.distance)::float8 AS distance
 FROM nearest
-JOIN jobs j2 ON j2.id = nearest.job_id AND j2.closed_at IS NULL
+JOIN jobs j2 ON j2.id = nearest.job_id AND j2.closed_at IS NULL AND NOT j2.is_private
 CROSS JOIN source_job sj
 WHERE (sj.company_slug = '' OR j2.company_slug IS DISTINCT FROM sj.company_slug)
 GROUP BY j2.id
