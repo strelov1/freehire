@@ -22,6 +22,19 @@ for this set only when BOTH hold:
   network landing page, a tracking redirect, or a host that refuses automated requests — so
   no probe can produce a death verdict from it.
 
+A set-two posting SHALL additionally have gone unseen by the crawl for longer than that
+source's own declared post-run sweep window before age may close it. Age alone is sound only
+where nothing re-crawls the source; where something does, the crawl's most recent reading is
+evidence and MUST be allowed to contradict the guess. The unseen window SHALL be read from
+the source's declared sweep grace rather than restated, since that window is already the
+provider's own answer to "unseen for long enough to mean removed", and where the set's
+members declare different windows the WIDEST SHALL apply.
+
+Closing a set-two posting the crawl is still listing does not merely close it early: the next
+crawl reopens it through the ordinary upsert, which restamps `updated_at`, recomputes the
+posting's semantic chunks, and notifies everyone who applied to it that it closed. The second
+clock exists because that flap was observed, not as a precaution.
+
 Membership in either set SHALL be an explicit, deliberate opt-in held in one place, never
 inferred from a source's shape, so that a newly added adapter can never drift into being
 closed by a guess. A source in set two SHALL NOT also be listed in set one: set one's members
@@ -53,9 +66,16 @@ SHALL be biased toward under-closing: a job exactly at the boundary survives one
 
 - **WHEN** the liveness worker runs and an open job's source is a set-two member
   (`whatjobs` and its per-country markets, or `adzuna`) with an effective posting date 46
-  days in the past
+  days in the past, and the crawl has not seen it for longer than that source's declared
+  sweep window
 - **THEN** the job is closed with reason `expired`, even though the ingest sweep also covers
   that source
+
+#### Scenario: A posting the crawl is still listing survives its own age
+
+- **WHEN** the liveness worker runs and an open set-two job's effective posting date is 46
+  days in the past but the crawl saw it yesterday
+- **THEN** the job stays open, because the crawl's reading is evidence and outranks the guess
 
 #### Scenario: Age does not close a job an ordinary sweep or probe covers
 

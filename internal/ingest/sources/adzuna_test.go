@@ -115,10 +115,57 @@ func TestAdzunaFetchRequestsCorrectURL(t *testing.T) {
 		t.Fatalf("want 1 request, got %d", len(http.gotURLs))
 	}
 	got := http.gotURLs[0]
-	for _, want := range []string{"/jobs/us/search/1", "app_id=myid", "app_key=mykey", "category=it-jobs"} {
+	for _, want := range []string{
+		"/jobs/us/search/1", "app_id=myid", "app_key=mykey", "category=it-jobs",
+		// Without an explicit order Adzuna answers in relevance order, which is stable
+		// between runs: measured live on 2026-09-06, the first result of this very request
+		// was published 2026-02-10. The ordering is what makes a bounded crawl read what has
+		// been published since rather than the same slice every run.
+		"sort_by=date",
+		// The window is what lets a board's feed run out, so the page loop's empty-page exit
+		// is reachable — see TestAdzunaFetchStopsWhenTheWindowRunsOut.
+		"max_days_old=" + strconv.Itoa(adzunaMaxDaysOld),
+	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("request URL %q missing %q", got, want)
 		}
+	}
+}
+
+// A board whose freshness window holds less than the page budget could carry stops at the
+// empty page and leaves the rest of its budget unspent. This is the behaviour max_days_old
+// exists for: the request budget is shared across boards and a day's runs, so a quiet board
+// walking its full 15 pages spends requests a busy board then cannot have.
+func TestAdzunaFetchStopsWhenTheWindowRunsOut(t *testing.T) {
+	http := &adzunaHTTP{pages: []string{
+		adzunaPageJSON(adzunaJobJSON("1", "A")),
+		adzunaPageJSON(""),
+	}}
+
+	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "it-jobs"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d", len(jobs))
+	}
+	// Two requests, not adzunaMaxPages: the empty second page ends the board.
+	if len(http.gotURLs) != 2 {
+		t.Fatalf("want the crawl to stop after the empty page (2 requests), got %d", len(http.gotURLs))
+	}
+}
+
+// The page budget is one leg of a request budget the platform's terms bound, so it is worth
+// an assertion of its own: a silent bump here is spent against a daily ceiling nothing else
+// in the process checks.
+func TestAdzunaPageBudgetStaysWithinTheDailyCeiling(t *testing.T) {
+	const (
+		boards       = 4   // us, gb, de, au — every active adzuna board is category it-jobs
+		runsPerDay   = 4   // deploy/systemd/freehire-ingest@adzuna.timer
+		dailyCeiling = 250 // Adzuna's stated terms: 250/day, 2500/month
+	)
+	if got := boards * adzunaMaxPages * runsPerDay; got > dailyCeiling {
+		t.Fatalf("crawl budget is %d requests/day, over Adzuna's stated ceiling of %d", got, dailyCeiling)
 	}
 }
 

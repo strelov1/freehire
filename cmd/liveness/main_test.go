@@ -86,6 +86,62 @@ func TestUnseenWindowNeverNarrowsBelowTheDefault(t *testing.T) {
 	}
 }
 
+// adzuna is a single provider, not a family, so it exercises the bare-name arm of the match
+// while whatjobs exercises the dashed one. The negative half matters as much: "adzuna" must
+// not sweep up an unrelated provider that merely starts with those letters, since every
+// member it matches is closed by a guess rather than by evidence.
+func TestMatchingProvidersResolvesAdzunaWithoutOverreaching(t *testing.T) {
+	providers := []string{"adzuna", "adzunajobs", "greenhouse", "whatjobs-de"}
+	got := matchingProviders(providers, []string{"adzuna"})
+	want := []string{"adzuna"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("matchingProviders() = %v, want %v", got, want)
+	}
+}
+
+// Both members declare a 14-day sweep grace today, so adding adzuna must not move the second
+// clock the age rule takes. If either ever widens its own window, this asserts the rule
+// follows the more patient of them rather than silently keeping the old number.
+func TestUnseenWindowUnchangedByAddingAdzuna(t *testing.T) {
+	declared := sources.SweepGraceWindows(sources.All(nil))
+	whatjobsOnly := unseenWindow([]string{"whatjobs"}, declared)
+	withAdzuna := unseenWindow([]string{"whatjobs", "adzuna"}, declared)
+	if withAdzuna < whatjobsOnly {
+		t.Fatalf("adding adzuna narrowed the unseen window: %v -> %v", whatjobsOnly, withAdzuna)
+	}
+}
+
+// Every expireDespiteRegistered member is credential-gated — adzuna registers only when
+// ADZUNA_APP_ID/ADZUNA_APP_KEY are set, each whatjobs market only when its publisher id is —
+// and this worker builds the registry from the same credential-gated constructor the crawler
+// uses. On a host missing the credential the source silently leaves the age rule AND enters
+// the URL probe, so which lifecycle mechanism owns a source would turn on an environment
+// variable that describes crawling. Naming the unmatched prefix is what turns that into a
+// refusal instead.
+func TestUnmatchedPrefixesNamesAPrefixNoProviderMatches(t *testing.T) {
+	providers := []string{"whatjobs", "whatjobs-de", "greenhouse"}
+	got := unmatchedPrefixes(providers, []string{"whatjobs", "adzuna"})
+	want := []string{"adzuna"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("unmatchedPrefixes() = %v, want %v", got, want)
+	}
+}
+
+func TestUnmatchedPrefixesEmptyWhenEveryPrefixMatches(t *testing.T) {
+	providers := []string{"whatjobs", "whatjobs-de", "adzuna", "greenhouse"}
+	if got := unmatchedPrefixes(providers, []string{"whatjobs", "adzuna"}); len(got) != 0 {
+		t.Fatalf("unmatchedPrefixes() = %v, want empty", got)
+	}
+}
+
+// The bare-name match must count: adzuna is one provider, not a family, so a check that only
+// recognised "<prefix>-" members would refuse to run on a perfectly healthy host.
+func TestUnmatchedPrefixesAcceptsABareNameMatch(t *testing.T) {
+	if got := unmatchedPrefixes([]string{"adzuna"}, []string{"adzuna"}); len(got) != 0 {
+		t.Fatalf("unmatchedPrefixes() = %v, want empty", got)
+	}
+}
+
 func TestMatchingProvidersEmptyOnNoMatch(t *testing.T) {
 	got := matchingProviders([]string{"himalayas", "jobicy"}, []string{"whatjobs"})
 	if len(got) != 0 {

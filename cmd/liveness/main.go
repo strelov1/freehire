@@ -129,7 +129,18 @@ const staleCutoff = sources.DefaultSweepGrace
 // other), all sharing the identical unprobeable-URL shape. Matching by prefix against the
 // live registry (see the derivation in run()) means a newly onboarded market is covered
 // automatically instead of silently falling through an enumerated list.
-var expireDespiteRegisteredPrefixes = []string{"whatjobs"}
+//
+// adzuna reaches the same classification by a different route, and the obvious objection —
+// "its url is an adzuna page, so just probe it" — was tested rather than assumed. Following
+// 40 stored urls on 2026-09-06: roughly three quarters answered 403 Access Denied, Adzuna's
+// bot protection on the `…/land/ad/<id>` tracking redirect we store (it carries the
+// attribution parameters that credit a click to this publisher, so it is not the employer's
+// page and never will be). A 403 classifies uncertain, correctly — it is the platform
+// declining to answer, not a verdict — so a probe can never close an adzuna posting, however
+// long it runs. The leak on the other side is new as of the date-ordered crawl: a bounded
+// crawl reading newest-first never revisits an ageing posting, so the sweep stops being
+// offered it. Both halves of the membership test therefore hold.
+var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna"}
 
 func main() {
 	worker.Main(run)
@@ -213,8 +224,15 @@ func run() int {
 	}
 
 	// Derived from the live registry rather than enumerated (see
-	// expireDespiteRegisteredPrefixes) — every whatjobs market this run, no drift guard
-	// needed, since membership follows atsProviders by construction.
+	// expireDespiteRegisteredPrefixes), so a newly onboarded whatjobs market is covered this
+	// run without being named anywhere. That construction is why the list holds prefixes,
+	// and it is a complete answer for a member being ADDED — but not for one being ABSENT,
+	// which is what a missing crawl credential produces. Guard that case explicitly.
+	if missing := unmatchedPrefixes(atsProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+		log.Printf("liveness: %q matches no registered ATS provider — refusing to run (a source that cannot be age-expired would silently fall to the URL probe instead)",
+			strings.Join(missing, ", "))
+		return 1
+	}
 	expireDespiteRegistered := matchingProviders(atsProviders, expireDespiteRegisteredPrefixes)
 
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
@@ -533,6 +551,27 @@ func unseenWindow(srcs []string, declared map[string]time.Duration) time.Duratio
 		}
 	}
 	return window
+}
+
+// unmatchedPrefixes returns the configured prefixes that match no registered provider —
+// the drift guard matchingProviders' own derivation cannot give, because a prefix matching
+// nothing yields an empty set that is indistinguishable from a source with nothing to close.
+//
+// The case that makes this load-bearing is not a typo. Every expireDespiteRegisteredPrefixes
+// member is CREDENTIAL-GATED (sources.All registers adzuna only with ADZUNA_APP_ID/_KEY, and
+// each whatjobs market only with its publisher id), and this worker builds the registry from
+// that same constructor. On a host without the credential the source drops out of the age
+// rule and, by the same absence, drops INTO the orphan probe — so which lifecycle mechanism
+// owns a source would turn on an environment variable about crawling, silently, in the
+// direction that leaves its postings open for ever.
+func unmatchedPrefixes(providers, prefixes []string) []string {
+	var out []string
+	for _, prefix := range prefixes {
+		if len(matchingProviders(providers, []string{prefix})) == 0 {
+			out = append(out, prefix)
+		}
+	}
+	return out
 }
 
 // matchingProviders returns every entry of providers that equals one of prefixes or has
