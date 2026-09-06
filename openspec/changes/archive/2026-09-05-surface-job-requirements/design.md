@@ -2,7 +2,7 @@
 
 The brainstormed design, with the full prod measurement table behind every number
 here, is at
-[docs/superpowers/specs/2026-09-04-job-requirements-surface-design.md](../../../docs/superpowers/specs/2026-09-04-job-requirements-surface-design.md).
+[docs/superpowers/specs/2026-09-04-job-requirements-surface-design.md](../../../../docs/superpowers/specs/2026-09-04-job-requirements-surface-design.md).
 
 `enrich.Enrichment.Requirements` was added to the enrichment prompt on 2026-08-18.
 It is bounded by `Sanitize` (30 entries, 200 runes each), passes through
