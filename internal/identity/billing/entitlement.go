@@ -122,18 +122,45 @@ func entitlementFrom(sub subscriber, proPrices, ultraPrices []string) entitlemen
 // When NEITHER is live it falls back to the furthest of the two rather than to nothing, and
 // that case is real: `past_due` entitles by status while its period has already run out, so
 // the plan has lapsed but the subscription is the very thing the subscriber needs to see.
-func billedSubscription(sub subscriber, proPrices, ultraPrices []string, now time.Time) subscription {
+// It returns the price list it selected under alongside the subscription, because one
+// provider subscription can carry an item from each tier — an upgrade that adds the new
+// price to the existing subscription rather than opening a second one — and then both
+// `bestEntitling` calls answer with that same subscription. Choosing "ultra" and then
+// reading whichever price the provider happened to list first would put Pro's amount under
+// Ultra's status, which is the contradiction this function exists to prevent.
+func billedSubscription(sub subscriber, proPrices, ultraPrices []string, now time.Time) (subscription, []string) {
 	pro, ultra := bestEntitling(sub, proPrices), bestEntitling(sub, ultraPrices)
 	switch {
 	case ultra.CurrentPeriodEnd.After(now):
-		return ultra
+		return ultra, ultraPrices
 	case pro.CurrentPeriodEnd.After(now):
-		return pro
+		return pro, proPrices
 	case ultra.CurrentPeriodEnd.After(pro.CurrentPeriodEnd):
-		return ultra
+		return ultra, ultraPrices
 	default:
-		return pro
+		return pro, proPrices
 	}
+}
+
+// tierFirst orders a subscription's price ids so the selected tier's come first.
+//
+// It ORDERS rather than filters, and the difference is the whole point: a subscriber on a
+// price we no longer sell is paying THAT price, so a tier list — which holds only what we
+// sell today — must decide which id to prefer and never which ids exist. Filtering would
+// turn a retired price into "we cannot read your bill".
+func tierFirst(ids, tier []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if slices.Contains(tier, id) {
+			out = append(out, id)
+		}
+	}
+	for _, id := range ids {
+		if !slices.Contains(tier, id) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // bestEntitling is the subscription that decides the plan: of the ones that entitle, the one

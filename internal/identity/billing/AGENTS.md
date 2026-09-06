@@ -50,7 +50,12 @@ answer 404, and its worker exits without opening a connection.
   looking at a 404; picking the furthest reach out of a merged list is the same bug wearing a
   union, since both tiers stand at once during an upgrade and the Pro one can reach further.
   When neither is live the furthest still shows: `past_due` entitles by status with its period
-  already run out, and that is the state a subscriber most needs to see.
+  already run out, and that is the state a subscriber most needs to see. It hands the chosen
+  list back with the subscription, because one subscription can carry an item of each tier
+  after an upgrade — then both lists answer with the same row and `priceOf` would otherwise
+  read whichever item the provider listed first, putting Pro's amount under Ultra's status.
+  `tierFirst` ORDERS the ids and never filters them: a price we no longer sell is still the
+  price somebody is being charged.
 
 - **The source column is derived whole, never adjusted.** That is what makes a repeat free, an
   out-of-order delivery harmless, and refunds, cancellations and failed cards need no code

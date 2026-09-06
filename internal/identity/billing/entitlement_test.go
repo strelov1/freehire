@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -220,6 +221,19 @@ func TestBilledSubscription(t *testing.T) {
 			want: proPrice,
 		},
 		{
+			// One subscription carrying an item of each tier, which is what an upgrade that
+			// adds a price to the existing subscription leaves behind. Both price lists then
+			// answer with this same row, so choosing the tier is not enough — the amount has
+			// to be read from the tier that was chosen, not from whichever item the provider
+			// listed first. Pro's id is first here deliberately.
+			name: "one subscription holding an item of each tier",
+			sub: sub(subscription{
+				Status: "active", CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"),
+				PriceIDs: []string{proPrice, ultraPrice},
+			}),
+			want: ultraPrice,
+		},
+		{
 			name: "no subscription at all",
 			sub:  sub(),
 			want: "",
@@ -228,17 +242,38 @@ func TestBilledSubscription(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := billedSubscription(tc.sub, []string{proPrice}, []string{ultraPrice}, now)
+			got, tier := billedSubscription(tc.sub, []string{proPrice}, []string{ultraPrice}, now)
 			if tc.want == "" {
 				if got.Status != "" {
 					t.Fatalf("want the zero subscription, got %+v", got)
 				}
 				return
 			}
-			if len(got.PriceIDs) != 1 || got.PriceIDs[0] != tc.want {
-				t.Fatalf("want the subscription for %s, got %+v", tc.want, got)
+			// What the section actually charges is the FIRST id priceOf will resolve, so
+			// assert through the same ordering it uses rather than on the raw slice.
+			ordered := tierFirst(got.PriceIDs, tier)
+			if len(ordered) == 0 || ordered[0] != tc.want {
+				t.Fatalf("want the section to bill %s, got %v (subscription %+v)", tc.want, ordered, got)
 			}
 		})
+	}
+}
+
+// TestTierFirstOrdersAndNeverDrops pins the property that makes it safe for priceOf to take a
+// tier list at all: it decides the ORDER, never the membership. A price we have stopped
+// selling is still the price somebody is being charged, and a list of what we sell today must
+// not be able to turn their bill into "we could not read it".
+func TestTierFirstOrdersAndNeverDrops(t *testing.T) {
+	retired := "price_retired_annual"
+	got := tierFirst([]string{proPrice, retired, ultraPrice}, []string{ultraPrice})
+	want := []string{ultraPrice, proPrice, retired}
+	if !slices.Equal(got, want) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+
+	// A tier list that matches nothing must leave the order alone rather than empty it.
+	if got := tierFirst([]string{retired}, []string{ultraPrice}); !slices.Equal(got, []string{retired}) {
+		t.Fatalf("a price outside every configured list must still be tried, got %v", got)
 	}
 }
 

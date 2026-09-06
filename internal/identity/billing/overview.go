@@ -89,7 +89,7 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 	// section must describe the subscription the plan came from, not another one — which
 	// means asking BOTH configured price lists, since an account on Ultra has no Pro price
 	// to be found under.
-	best := billedSubscription(sub, s.cfg.Prices, s.cfg.UltraPrices, time.Now().UTC())
+	best, tierPrices := billedSubscription(sub, s.cfg.Prices, s.cfg.UltraPrices, time.Now().UTC())
 
 	// No eligible subscription: a free account, or a former subscriber whose last one has
 	// ended. Both must read as "no section", not as a section full of zeroes — the surface
@@ -99,7 +99,7 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 		return Overview{}, ErrNoSubscription
 	}
 
-	amount, currency, interval, err := s.priceOf(ctx, best)
+	amount, currency, interval, err := s.priceOf(ctx, best, tierPrices)
 	if err != nil {
 		// We know they are subscribed but not what for. Saying nothing is the only honest
 		// answer; saying "$0" is a statement about their money that we cannot stand behind.
@@ -125,9 +125,12 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 // It ERRORS rather than returning zeroes when no price resolves. A zero amount is not a
 // missing value on this screen — it renders as "free", which is the one thing a paying
 // subscriber must never be told.
-func (s *Service) priceOf(ctx context.Context, sub subscription) (int64, string, string, error) {
+// The tier list decides only the ORDER it tries them in: one subscription can carry an item
+// from each tier during an upgrade, and the amount on screen has to belong to the tier the
+// status above it names.
+func (s *Service) priceOf(ctx context.Context, sub subscription, tierPrices []string) (int64, string, string, error) {
 	var lastErr error
-	for _, id := range sub.PriceIDs {
+	for _, id := range tierFirst(sub.PriceIDs, tierPrices) {
 		p, err := s.client.price(ctx, id)
 		if err == nil {
 			return p.AmountCents, p.Currency, p.Interval, nil
