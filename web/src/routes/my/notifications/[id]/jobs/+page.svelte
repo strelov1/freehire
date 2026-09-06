@@ -50,7 +50,9 @@
   {:else if status === 'error'}
     <States state="error" />
   {:else if item}
-    <h1 class="mb-1 text-lg font-semibold">{item.title}</h1>
+    <!-- An h2, not an h1: the notification center's layout titles the section above the
+         tab strip, and one digest is a heading under it rather than a second page title. -->
+    <h2 class="mb-1 text-lg font-semibold">{item.title}</h2>
     <p class="mb-4 text-sm text-muted-foreground">{item.body}</p>
 
     {#if item.jobs && item.jobs.length > 0}

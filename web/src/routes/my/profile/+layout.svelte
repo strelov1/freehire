@@ -109,19 +109,20 @@
   <title>Profile — freehire</title>
 </svelte:head>
 
-<!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
+<!-- The account shell (my/+layout) owns the container, auth gate, and noindex. The
+     heading sits above the gate so the section is titled while it is still loading and
+     whether or not a profile exists yet, the way every other /my section titles itself. -->
+<div class="mb-6 flex flex-col gap-1">
+  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
+  <p class="text-sm text-muted-foreground">{s.description}</p>
+</div>
+
 {#if status === 'loading'}
   <States state="loading" />
 {:else if status === 'error'}
   <States state="error" message="Couldn't load your profile." />
 {:else if profile === null}
   <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
-  <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
-    <p class="text-sm text-muted-foreground">
-      Your CV, skills and role — measured against live market demand.
-    </p>
-  </div>
   <div class="w-full">
     <ProfileForm
       profile={null}
@@ -141,16 +142,6 @@
        re-announced on every tab switch. -->
   <div class="mb-6">
     <AccountSetupCard />
-  </div>
-
-  <!-- Same heading the set-up branch above renders, so the page does not lose its title
-       the moment a profile exists — and so this section is titled like every other
-       /my/* one. -->
-  <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
-    <p class="text-sm text-muted-foreground">
-      Your CV, skills and role — measured against live market demand.
-    </p>
   </div>
 
   <TabStrip

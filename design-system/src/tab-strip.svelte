@@ -119,14 +119,21 @@
   // A link tab is the exception: arrows move focus only, and Enter (the anchor's own
   // activation) navigates. Activating on the arrow itself would fire a navigation per
   // keypress while the reader is still scanning the row for the section they want.
+  //
+  // Which is why a step is measured from the tab that HAS focus, not from the selected
+  // one: on a link strip the selection does not move until the reader presses Enter, so
+  // measuring from `active` returns the same neighbour on every press and the row cannot
+  // be walked at all. On a button strip the two agree, since it activates as it goes.
   function onKeydown(event: KeyboardEvent) {
+    const focused = buttons.indexOf(document.activeElement as HTMLElement);
+    const from = focused === -1 ? activeIndex : focused;
     let next: number;
     switch (event.key) {
       case 'ArrowRight':
-        next = (activeIndex + 1) % tabs.length;
+        next = (from + 1) % tabs.length;
         break;
       case 'ArrowLeft':
-        next = (activeIndex - 1 + tabs.length) % tabs.length;
+        next = (from - 1 + tabs.length) % tabs.length;
         break;
       case 'Home':
         next = 0;
