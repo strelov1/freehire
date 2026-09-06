@@ -620,3 +620,46 @@ func TestProfessionSlugCarriesTechnicalTerm(t *testing.T) {
 		})
 	}
 }
+
+// TestProfessionCategories pins what the platform's own sitemap index is read for: the
+// complete list of categories, so nothing downstream has to keep a copy of it.
+func TestProfessionCategories(t *testing.T) {
+	// The index carries entries that are not category sitemaps — the platform publishes
+	// article and company indexes beside them — and they must not become boards.
+	const indexXML = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<sitemap><loc>https://www.profession.hu/sitemap-listings-education-hu.xml</loc></sitemap>
+<sitemap><loc>https://www.profession.hu/sitemap-listings-itdev-hu.xml</loc></sitemap>
+<sitemap><loc>https://www.profession.hu/sitemap-listings-itops-hu.xml</loc></sitemap>
+<sitemap><loc>https://www.profession.hu/sitemap-companies-hu.xml</loc></sitemap>
+<sitemap><loc>https://www.profession.hu/sitemap-articles-hu.xml</loc></sitemap>
+</sitemapindex>`
+	http := (&routedHTTP{}).route("sitemap-listings-index-hu.xml", indexXML)
+	got, err := ProfessionCategories(context.Background(), http)
+	if err != nil {
+		t.Fatalf("ProfessionCategories: %v", err)
+	}
+	want := []string{"education", "itdev", "itops"}
+	if !slices.Equal(got, want) {
+		t.Errorf("ProfessionCategories() = %v, want %v", got, want)
+	}
+}
+
+// TestProfessionCategorySize pins the cheap liveness measure a board harvest needs: how
+// many postings a category lists, counted from its sitemap rather than by crawling it.
+func TestProfessionCategorySize(t *testing.T) {
+	http := professionFixture()
+	n, err := ProfessionCategorySize(context.Background(), http, professionTestBoard)
+	if err != nil {
+		t.Fatalf("ProfessionCategorySize: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("ProfessionCategorySize(%q) = %d, want 3", professionTestBoard, n)
+	}
+	// A category the index does not name is an error rather than an empty board: the two
+	// are the same number and mean opposite things, and only the caller knows which of
+	// them should stop a harvest.
+	if _, err := ProfessionCategorySize(context.Background(), http, "nosuchcategory"); err == nil {
+		t.Error("ProfessionCategorySize on an unpublished category returned no error")
+	}
+}

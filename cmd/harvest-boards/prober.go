@@ -796,9 +796,12 @@ var probers = map[string]prober{
 	"ukgready":        ukgreadyProber{},
 	"edjoin":          edjoinProber{},
 	"workstream":      workstreamProber{},
-	"cornerstone":     adapterProber{provider: "cornerstone", newSource: func() sources.Source { return sources.NewCornerstone(sources.NewClient()) }},
-	"taleo":           adapterProber{provider: "taleo", newSource: func() sources.Source { return sources.NewTaleo(sources.NewCookieClient()) }},
-	"neogov":          adapterProber{provider: "neogov", newSource: func() sources.Source { return sources.NewNeogov(sources.NewClient()) }},
+	// Not an ATS: its boards are the platform's own job categories, enumerated from its
+	// sitemap index rather than seeded. See profession_prober.go.
+	"profession":  professionProber{},
+	"cornerstone": adapterProber{provider: "cornerstone", newSource: func() sources.Source { return sources.NewCornerstone(sources.NewClient()) }},
+	"taleo":       adapterProber{provider: "taleo", newSource: func() sources.Source { return sources.NewTaleo(sources.NewCookieClient()) }},
+	"neogov":      adapterProber{provider: "neogov", newSource: func() sources.Source { return sources.NewNeogov(sources.NewClient()) }},
 }
 
 // hireologyProber probes a careers.hireology.com tenant (slug = board) via the public

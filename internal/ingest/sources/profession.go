@@ -212,6 +212,55 @@ func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) 
 	return locs, nil
 }
 
+// professionCategoryPattern captures the category id out of a sitemap file name. The
+// index also lists the platform's company and article sitemaps, which name no category
+// and must not become boards.
+var professionCategoryPattern = regexp.MustCompile(`/sitemap-listings-([a-z0-9-]+)-hu\.xml$`)
+
+// ProfessionCategories returns every category the platform publishes, read from its own
+// sitemap index. It is exported for cmd/harvest-boards, which enumerates a provider's
+// boards rather than being handed a seed list for it: the index IS the catalogue of
+// categories, so a board list kept anywhere else would be a copy that drifts.
+//
+// The index is also where the crawl resolves a board, so the URL shape lives in this file
+// only. A caller that rebuilt it would be a second answer to "where is a category's
+// sitemap", and the two would disagree silently the first time the platform moved one.
+func ProfessionCategories(ctx context.Context, c XMLGetter) ([]string, error) {
+	doc, err := getSitemap(ctx, c, professionSitemapIndex)
+	if err != nil {
+		return nil, fmt.Errorf("profession: sitemap index: %w", err)
+	}
+	var out []string
+	for _, s := range doc.Sitemaps {
+		if m := professionCategoryPattern.FindStringSubmatch(strings.TrimSpace(s.Loc)); m != nil {
+			out = append(out, m[1])
+		}
+	}
+	return out, nil
+}
+
+// ProfessionCategorySize returns how many postings a category's sitemap lists. It is the
+// cheap liveness measure a board harvest needs — one XML request, against the whole crawl
+// an adapter probe would otherwise cost for each of 23 categories.
+//
+// A category the index does not name is an error, not a zero. Both are "no postings" to a
+// counter and they mean opposite things: one is a category the platform has retired, the
+// other a category that is simply empty today.
+func ProfessionCategorySize(ctx context.Context, c XMLGetter, board string) (int, error) {
+	sitemap, err := resolveSubSitemap(ctx, c, professionSitemapIndex, professionSitemapNeedle(board))
+	if err != nil {
+		return 0, fmt.Errorf("profession: category %s: %w", board, err)
+	}
+	if sitemap == "" {
+		return 0, fmt.Errorf("profession: category %s is not in the sitemap index", board)
+	}
+	locs, err := sitemapJobLocs(ctx, c, sitemap, professionExternalID)
+	if err != nil {
+		return 0, fmt.Errorf("profession: category %s: %w", board, err)
+	}
+	return len(locs), nil
+}
+
 // professionITBoards are the platform's two dedicated IT category sitemaps. A posting
 // filed in one of them is stored on the platform's own filing and is never asked to
 // satisfy freehire's title dictionary as well: measured over 128 live postings from these
