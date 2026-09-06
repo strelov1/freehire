@@ -668,6 +668,24 @@ func TestDerive_DropsImplausibleExperienceYears(t *testing.T) {
 		}
 	})
 
+	// The whole tail above the ceiling is round — 30 (19,145 rows), 40, 50, 35, 45 —
+	// because careers are not round and anniversaries are. Every sampled row at 30 is
+	// the employer's age, on postings like these two.
+	t.Run("an employer's anniversary is not a server's required experience", func(t *testing.T) {
+		for _, tc := range []struct{ title, description string }{
+			{"Dining Room Server", "As a family company, we can do things differently, and for " +
+				"the past 30 years, our long-term commitment to team members has been unsurpassed."},
+			{"Account Executive", "We have maintained an A+ rating from A.M. Best, the industry's " +
+				"leading authority, for over 30 years."},
+		} {
+			d := Derive(Input{Title: tc.title, Source: "manual", ExternalID: "5", Description: tc.description})
+			if d.ExperienceYearsMin != nil {
+				t.Errorf("%s: ExperienceYearsMin = %d, want nil — that is the company's age",
+					tc.title, *d.ExperienceYearsMin)
+			}
+		}
+	})
+
 	t.Run("a believable structured signal is kept", func(t *testing.T) {
 		for _, n := range []int{0, 5, 18, 25, vocab.MaxExperienceYears} {
 			d := Derive(Input{
