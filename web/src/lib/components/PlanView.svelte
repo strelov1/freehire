@@ -138,23 +138,32 @@
             <span class="text-xs text-muted-foreground">{s.planStrip.freeSubtitle}</span>
           {/if}
         </div>
-        {#if plan.plan === 'free'}
-          <!-- To /pricing rather than straight to checkout: the choice between monthly and
-               annual belongs on a page that can explain it, and sending someone to a payment
-               form without it silently sells them the monthly one. -->
-          <a
-            class="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-            href={resolve('/pricing')}>{s.planStrip.upgrade}</a
-          >
+        <!-- Both, not one or the other. A subscriber below the top tier has two things to do
+             here and they are different: buy the plan above, and change or cancel the one
+             they have. Showing only "Manage subscription" left a Pro subscriber with no way
+             to reach Ultra from the page that tells them what plan they are on. -->
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          {#if plan.plan !== 'ultra'}
+            <!-- To /pricing rather than straight to checkout: the choice between monthly and
+                 annual belongs on a page that can explain it, and sending someone to a payment
+                 form without it silently sells them the monthly one. -->
+            <a
+              class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+              href={resolve('/pricing')}
+              >{plan.plan === 'free' ? s.planStrip.upgrade : s.planStrip.upgradeUltra}</a
+            >
+          {/if}
           <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own page, not a SvelteKit route -->
-        {:else if manageUrl}
-          <a
-            class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm font-medium"
-            href={manageUrl}
-            target="_blank"
-            rel="noopener noreferrer">{s.planStrip.manageSubscription}</a
-          ><!-- eslint-enable svelte/no-navigation-without-resolve -->
-        {/if}
+          {#if manageUrl}
+            <a
+              class="rounded-md border border-border px-3 py-1.5 text-sm font-medium"
+              href={manageUrl}
+              target="_blank"
+              rel="noopener noreferrer">{s.planStrip.manageSubscription}</a
+            >
+          {/if}
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
+        </div>
       </div>
 
       {#if billing}
