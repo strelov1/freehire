@@ -1,8 +1,33 @@
 [Unit]
 Description=timer ingest adzuna
 [Timer]
-OnCalendar=*:22:00
-Persistent=true
+# Four runs a day, not hourly. This cadence is one leg of a REQUEST BUDGET Adzuna's terms
+# bound (250/day, 2500/month): 4 boards x adzunaMaxPages (15) x 4 runs = 240 requests/day.
+# The other two legs live in internal/ingest/sources/adzuna.go, which carries the same
+# arithmetic — raising either there without lowering this puts the catalogue's largest
+# single source outside the terms it is served under.
+#
+# Hourly bought nothing it does not buy now. Until the adapter sent sort_by=date, Adzuna
+# answered in relevance order, which is stable between runs, so 23 of the 24 daily firings
+# re-read the same slice; measured 2026-09-06, the first result of that request was published
+# seven months earlier. Ordering by date is what makes a run's pages land on postings the
+# catalogue does not already hold, and four such runs deliver more than twenty-four of the old
+# ones did.
+#
+# Off the hour and randomised so this does not land with the rest of the ingest fleet.
+#
+# `00/6:22:00`, verified with systemd-analyze rather than reasoned about: 00:22, 06:22, 12:22,
+# 18:22 UTC. The obvious-looking `*/6:22:00` does not parse at all, and `*:22:00/6` DOES parse
+# — as every hour at :22, repeating on the SECOND — so it would have shipped the old hourly
+# cadence while reading like a change. Re-verify with
+# `systemd-analyze calendar --iterations=4` if this line is ever edited.
+OnCalendar=00/6:22:00
+# Persistent=false, unlike the rest of the ingest fleet: a catch-up run after a reboot or a
+# daemon-reload would be a FIFTH run that day — 300 requests, over the 250/day ceiling. A
+# missed crawl here costs little, because the crawl reads a recency slice and the next run
+# re-reads most of what the missed one would have. Keep this in step with the adzuna arm of
+# deploy/bin/gen-ingest-timers.sh, which generates this same file on the host.
+Persistent=false
 RandomizedDelaySec=180
 [Install]
 WantedBy=timers.target

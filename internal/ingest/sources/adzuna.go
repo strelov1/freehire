@@ -33,13 +33,35 @@ type adzuna struct {
 
 const (
 	adzunaBaseURL = "https://api.adzuna.com/v1/api/jobs"
-	// adzunaPageSize is the commonly documented page-size ceiling for this API.
+	// adzunaPageSize is this API's page-size ceiling, confirmed live rather than assumed:
+	// results_per_page=100 answers HTTP 400.
 	adzunaPageSize = 50
-	// adzunaMaxPages bounds one board's crawl. A single category in a single country routinely
-	// reports tens of thousands of results (46k for gb/it-jobs at last check), far deeper than
-	// any crawl should walk every cycle, so the board is read as a bounded recent slice — same
-	// trade-off whatjobsMaxPages documents.
-	adzunaMaxPages = 40
+	// adzunaSortOrder makes the crawl read the NEWEST postings first. Without it Adzuna
+	// answers in relevance order, which is stable between runs, so a bounded crawl re-reads
+	// one fixed slice for ever: measured live on 2026-09-06, the first result of the request
+	// this adapter used to send was published 2026-02-10, seven months earlier. The budget was
+	// buying 23.5k posting-slots a day and writing ~6.3k new postings — a 27% yield. Ordering
+	// by date is what aims the budget at postings the catalogue does not already hold.
+	adzunaSortOrder = "date"
+	// adzunaMaxDaysOld bounds a request to recently published postings. It is NOT redundant
+	// with adzunaSortOrder, and that is the whole reason it exists: Fetch's loop ends when a
+	// page comes back empty, and against a feed tens of thousands deep that never happens
+	// inside adzunaMaxPages. A quiet board (au publishes ~176 postings between runs) would
+	// otherwise spend its full page budget on postings the pipeline's seen-set discards, and
+	// those requests are drawn from the same daily ceiling a busy board needs. Two days rather
+	// than one so a missed run does not open a gap the next run cannot close.
+	adzunaMaxDaysOld = 2
+	// adzunaMaxPages bounds one board's crawl. Unlike a plain "how deep is sensible" figure,
+	// this is one leg of a REQUEST BUDGET the platform's terms bound: Adzuna's free API states
+	// 250 requests/day and 2500/month, and the crawl spends
+	//
+	//	boards (4) x adzunaMaxPages (15) x runs/day (4, see the systemd timer) = 240/day
+	//
+	// so raising any one of the three without lowering another puts the catalogue's largest
+	// single source outside the terms it is served under. TestAdzunaPageBudgetStaysWithinThe-
+	// DailyCeiling holds the arithmetic; the timer's cadence is the leg that lives outside
+	// this repository's build, in deploy/systemd/freehire-ingest@adzuna.timer.
+	adzunaMaxPages = 15
 	// adzunaSweepGrace widens the unseen sweep for the same reason whatjobs' does: redirect_url
 	// routes through Adzuna's own domain rather than the employer's site, so a posting's liveness
 	// cannot be probed directly, and the crawl reaches only a bounded slice of a much deeper feed.
@@ -138,6 +160,8 @@ func adzunaPageURL(country, category string, page int, appID, appKey string) str
 		"results_per_page": {fmt.Sprint(adzunaPageSize)},
 		"category":         {category},
 		"content-type":     {"application/json"},
+		"sort_by":          {adzunaSortOrder},
+		"max_days_old":     {fmt.Sprint(adzunaMaxDaysOld)},
 	}
 	return fmt.Sprintf("%s/%s/search/%d?%s", adzunaBaseURL, country, page, q.Encode())
 }
