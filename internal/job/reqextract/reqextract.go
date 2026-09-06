@@ -18,6 +18,7 @@ package reqextract
 import (
 	"strings"
 
+	"github.com/mozillazg/go-unidecode"
 	xhtml "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
@@ -58,6 +59,11 @@ var preferredHeadings = []string{
 	"would be a plus",
 	"a plus",
 	"it would be great if you",
+	// Hungarian: "Előnyt jelent" — "counts as an advantage" — is how the Hungarian
+	// boards head their nice-to-have section. Spelled here the way normalizeHeading
+	// transliterates it.
+	"elonyt jelent",
+	"elony",
 }
 
 // closingHeadings are the section titles that END a requirements section without
@@ -93,10 +99,13 @@ var closingHeadings = []string{
 	"what you get",
 	"what you will get",
 	"why join us",
+	"amit ajanlunk", // Hungarian: "Amit ajánlunk" — "what we offer"
+	"amit kinalunk", // Hungarian: "Amit kínálunk" — "what we provide"
 }
 
 var requiredHeadings = []string{
 	"requirements",
+	"elvarasok", // Hungarian: "Elvárások" — "requirements"
 	"requirement",
 	"required",
 	"required qualifications",
@@ -157,7 +166,7 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 			case wrapsAList(n):
 
 			case isHeadingCandidate(n):
-				priority = headingDecision(n, priority)
+				priority, _ = headingDecision(n, priority)
 				return // the heading's own text is never an item
 
 			case priority != "" && (n.DataAtom == atom.Ul || n.DataAtom == atom.Ol):
@@ -239,7 +248,14 @@ func isHeadingCandidate(n *xhtml.Node) bool {
 }
 
 // headingDecision returns the section priority in force after this node, given the one
-// in force before it. Three outcomes, and the difference between them is what decides
+// in force before it, and whether the node was RECOGNIZED as a section title at all.
+//
+// Derive ignores the second value: a heading candidate's own text is never a list item,
+// recognized or not. [MaskPreferred] needs it — an unrecognized short line inside a
+// preferred section is that section's CONTENT, and treating it as a title would leave
+// the words it carries unmasked.
+//
+// Three outcomes, and the difference between them is what decides
 // whether a list two elements down is read as requirements:
 //
 //   - The text is in the requirements vocabulary: it OPENS a section at that priority.
@@ -256,22 +272,22 @@ func isHeadingCandidate(n *xhtml.Node) bool {
 //
 // Prose never reaches here: a text block longer than maxHeadingRunes is not a
 // candidate, and the walk closes the section on it in a later case instead.
-func headingDecision(n *xhtml.Node, open string) string {
+func headingDecision(n *xhtml.Node, open string) (string, bool) {
 	heading := normalizeHeading(textOf(n))
 	if matches(heading, preferredHeadings) {
-		return "preferred"
+		return "preferred", true
 	}
 	if matches(heading, requiredHeadings) {
-		return "required"
+		return "required", true
 	}
 	if matches(heading, closingHeadings) {
-		return ""
+		return "", true
 	}
 	switch n.DataAtom {
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
-		return ""
+		return "", true
 	default:
-		return open
+		return open, false
 	}
 }
 
@@ -329,13 +345,19 @@ func allTail(words []string) bool {
 	return true
 }
 
-// normalizeHeading lowercases a heading and reduces it to letters, digits and single
-// spaces, so "Requirements:", "REQUIREMENTS", "Nice-to-have" and "What you'll need"
-// all reach the vocabulary in the one spelling it is written in.
+// normalizeHeading lowercases a heading and reduces it to ASCII letters, digits and
+// single spaces, so "Requirements:", "REQUIREMENTS", "Nice-to-have" and "What you'll
+// need" all reach the vocabulary in the one spelling it is written in.
+//
+// The transliteration is what lets an accented heading be spelled once. Without it
+// every non-ASCII letter falls through to the separator case, so "Előnyt jelent"
+// would arrive as "el nyt jelent" and the vocabulary would have to carry that
+// spelling — a form no one reading the list could check against a real posting. It is
+// the same fold [normalize.Slug] applies for the same reason.
 func normalizeHeading(s string) string {
 	var b strings.Builder
 	space := false
-	for _, r := range strings.ToLower(s) {
+	for _, r := range strings.ToLower(unidecode.Unidecode(s)) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			if space && b.Len() > 0 {
