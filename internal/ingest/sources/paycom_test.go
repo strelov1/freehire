@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -122,5 +123,41 @@ func TestPaycomFetchBootstrapsListsAndMaps(t *testing.T) {
 	}
 	if r := byID["537487"]; !r.Remote {
 		t.Errorf("job 537487 should be Remote (remoteType=Remote)")
+	}
+}
+
+// paycomRetiredPortal is the portal's verbatim answer for a client key it no longer serves,
+// captured from prod on 2026-09-06: a 122-byte page under HTTP 200, with no session JWT and
+// no Mantle host in it.
+const paycomRetiredPortal = `
+<div style="text-align:center">
+    <p style="padding-top: 140px; font-size: 22px;">Job board does not exist.</p>
+</div>
+`
+
+// A retired client key must come back as ErrBoardGone rather than as the missing-token
+// error, which reads as a parse bug against a portal that was never served. 51 prod boards
+// sat under that message from July to September 2026.
+func TestPaycomFetchReportsBoardGone(t *testing.T) {
+	fake := &paycomFake{pages: map[string]string{"/portal/": paycomRetiredPortal}}
+	_, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "deadkey"})
+	if !errors.Is(err, ErrBoardGone) {
+		t.Fatalf("err = %v, want it to wrap ErrBoardGone", err)
+	}
+	if !strings.Contains(err.Error(), "deadkey") {
+		t.Errorf("err = %q, want the board named in it", err)
+	}
+}
+
+// A portal that is served but yields no token is a different failure and must keep saying so
+// — otherwise a transport or markup change would be filed as a dead board.
+func TestPaycomFetchKeepsTokenFailureDistinctFromBoardGone(t *testing.T) {
+	fake := &paycomFake{pages: map[string]string{"/portal/": `<html><body>Loading...</body></html>`}}
+	_, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "livekey"})
+	if err == nil {
+		t.Fatal("a portal with no session token must fail")
+	}
+	if errors.Is(err, ErrBoardGone) {
+		t.Errorf("err = %v, want a token failure, not ErrBoardGone", err)
 	}
 }

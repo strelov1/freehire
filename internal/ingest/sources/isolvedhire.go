@@ -1,11 +1,13 @@
 package sources
 
 import (
+	"bufio"
 	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -46,6 +48,41 @@ func (s isolvedFamily) Provider() string { return s.provider }
 // the stable enumeration key.
 var isolvedJobID = regexp.MustCompile(`/jobs/(\d+)`)
 
+// isolvedNoticePeek is how much of the sitemap stream is inspected for a platform notice.
+// Both notices are the document's first line and well under 200 bytes; the margin covers a
+// leading BOM or doctype without reaching into a real sitemap's first <url> entry.
+const isolvedNoticePeek = 512
+
+// isolvedNotices are the platform's own answers for a board it does not serve, each held as
+// the stable fragment of its sentence rather than the whole line: the notices are wrapped in
+// marketing markup that changes, and a predicate matching the full sentence would silently
+// stop matching after a reword — which is the failure this whole check exists to end.
+//
+// Both count as gone, though they do not mean the same thing. The first is a subdomain that
+// resolves to no tenant at all. The second is a tenant whose site the vendor switched off,
+// which an unpaid invoice and a departed company produce alike, so it may return. It is
+// counted anyway because the alternative is worse in both directions: the 39 prod boards in
+// that state have been failing since July under a message that explains nothing, and a board
+// retired by mistake is one command to restore, whereas one that keeps failing quietly is
+// only ever found by an audit like the one that produced this list.
+var isolvedNotices = []string{
+	"typed the url for this website incorrectly",
+	"career site has been disabled",
+}
+
+// isolvedBoardGone reports whether the head of a sitemap response is one of those notices
+// rather than a sitemap. Matched case-insensitively: the fragments are prose, and prose that
+// gets recapitalised is the same answer.
+func isolvedBoardGone(head string) bool {
+	lower := strings.ToLower(head)
+	for _, notice := range isolvedNotices {
+		if strings.Contains(lower, notice) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s isolvedFamily) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	smURL := fmt.Sprintf("https://%s.%s/sitemap.xml", e.Board, s.host)
 
@@ -55,7 +92,20 @@ func (s isolvedFamily) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 	seen := map[string]struct{}{}
 	var ids []string
 	err := s.http.GetStream(ctx, smURL, "application/xml", func(r io.Reader) error {
-		dec := xml.NewDecoder(r)
+		// A tenant the platform no longer serves answers 200 with an HTML notice at this
+		// URL rather than a 404, so the head of the stream is inspected before it reaches
+		// the XML decoder — otherwise the notice arrives as a syntax error on line 3 and
+		// says nothing about the board. Peeking leaves the bytes in place for the decoder.
+		br := bufio.NewReader(r)
+		head, err := br.Peek(isolvedNoticePeek)
+		if err != nil && err != io.EOF && err != bufio.ErrBufferFull {
+			return err
+		}
+		if isolvedBoardGone(string(head)) {
+			return ErrBoardGone
+		}
+
+		dec := xml.NewDecoder(br)
 		for {
 			tok, err := dec.Token()
 			if err == io.EOF {
