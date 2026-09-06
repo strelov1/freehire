@@ -10,8 +10,6 @@
   <title>CV template default — freehire</title>
 </svelte:head>
 
-<CvAppearancePane
-  intro="The template a new CV starts with. Changing it only affects CVs you create from now on — CVs you already have keep their own appearance."
->
+<CvAppearancePane lead="The template a new CV starts with.">
   <TemplateGallery bind:value={cvAppearance.templateId} />
 </CvAppearancePane>

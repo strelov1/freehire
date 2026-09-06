@@ -5,29 +5,35 @@
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
   import { Button } from '$lib/ui';
-  import {
-    cvAppearance,
-    ensureCvAppearanceLoaded,
-    saveCvAppearance,
-  } from '$lib/cvAppearance.svelte';
+  import { cvAppearance } from '$lib/cvAppearance.svelte';
 
-  let { intro, children }: { intro: string; children: Snippet } = $props();
+  // `lead` is the half that differs; the caveat below it is the same on both tabs and
+  // so belongs here rather than in two prop strings to keep in step.
+  let { lead, children }: { lead: string; children: Snippet } = $props();
 
-  onMount(ensureCvAppearanceLoaded);
+  onMount(() => {
+    // A "Saved." or an error raised on the other tab belongs to that visit, not to this
+    // one — the store outlives the pane, so the pane clears it on arrival.
+    cvAppearance.clearSaveStatus();
+    void cvAppearance.ensureLoaded();
+  });
 </script>
 
 <div class="space-y-6">
-  <p class="text-sm text-muted-foreground">{intro}</p>
+  <p class="text-sm text-muted-foreground">
+    {lead} Changes here only affect CVs you create from now on — CVs you already have keep their
+    own appearance.
+  </p>
 
-  {#if cvAppearance.status === 'loading'}
+  {#if cvAppearance.loadFailed}
+    <p class="text-sm text-destructive">Could not load your appearance defaults.</p>
+  {:else if !cvAppearance.loaded}
     <p class="text-muted-foreground">Loading…</p>
-  {:else if cvAppearance.status === 'error'}
-    <p class="text-sm text-destructive">{cvAppearance.loadError}</p>
   {:else}
     {@render children()}
 
     <div class="flex flex-wrap items-center gap-2">
-      <Button variant="primary" disabled={cvAppearance.saving} onclick={saveCvAppearance}>
+      <Button variant="primary" disabled={cvAppearance.saving} onclick={() => cvAppearance.save()}>
         Save defaults
       </Button>
     </div>

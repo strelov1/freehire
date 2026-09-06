@@ -52,7 +52,6 @@
 </script>
 
 <div class="space-y-6">
-
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
 
   {#if status === 'loading'}
