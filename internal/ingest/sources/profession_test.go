@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -477,6 +478,7 @@ type professionRecorder struct {
 	*routedHTTP
 	mu    sync.Mutex
 	pages []string
+	xml   []string
 }
 
 func (r *professionRecorder) GetHTML(ctx context.Context, url string) (*html.Node, error) {
@@ -484,6 +486,13 @@ func (r *professionRecorder) GetHTML(ctx context.Context, url string) (*html.Nod
 	r.pages = append(r.pages, url)
 	r.mu.Unlock()
 	return r.routedHTTP.GetHTML(ctx, url)
+}
+
+func (r *professionRecorder) GetXML(ctx context.Context, url string, v any) error {
+	r.mu.Lock()
+	r.xml = append(r.xml, url)
+	r.mu.Unlock()
+	return r.routedHTTP.GetXML(ctx, url, v)
 }
 
 // professionGeneralFixture wires the general category's sitemap around four postings that
@@ -621,45 +630,83 @@ func TestProfessionSlugCarriesTechnicalTerm(t *testing.T) {
 	}
 }
 
-// TestProfessionCategories pins what the platform's own sitemap index is read for: the
-// complete list of categories, so nothing downstream has to keep a copy of it.
-func TestProfessionCategories(t *testing.T) {
+// TestProfessionCategorySitemaps pins what the platform's own sitemap index is read for:
+// every category it publishes, against the URL of that category's sitemap, so nothing
+// downstream has to keep a copy of the list or resolve the index again to use it.
+func TestProfessionCategorySitemaps(t *testing.T) {
 	// The index carries entries that are not category sitemaps — the platform publishes
 	// article and company indexes beside them — and they must not become boards.
 	const indexXML = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 <sitemap><loc>https://www.profession.hu/sitemap-listings-education-hu.xml</loc></sitemap>
 <sitemap><loc>https://www.profession.hu/sitemap-listings-itdev-hu.xml</loc></sitemap>
-<sitemap><loc>https://www.profession.hu/sitemap-listings-itops-hu.xml</loc></sitemap>
 <sitemap><loc>https://www.profession.hu/sitemap-companies-hu.xml</loc></sitemap>
 <sitemap><loc>https://www.profession.hu/sitemap-articles-hu.xml</loc></sitemap>
 </sitemapindex>`
 	http := (&routedHTTP{}).route("sitemap-listings-index-hu.xml", indexXML)
-	got, err := ProfessionCategories(context.Background(), http)
+	got, err := ProfessionCategorySitemaps(context.Background(), http)
 	if err != nil {
-		t.Fatalf("ProfessionCategories: %v", err)
+		t.Fatalf("ProfessionCategorySitemaps: %v", err)
 	}
-	want := []string{"education", "itdev", "itops"}
-	if !slices.Equal(got, want) {
-		t.Errorf("ProfessionCategories() = %v, want %v", got, want)
+	want := map[string]string{
+		"education": "https://www.profession.hu/sitemap-listings-education-hu.xml",
+		"itdev":     "https://www.profession.hu/sitemap-listings-itdev-hu.xml",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("ProfessionCategorySitemaps() = %v, want %v", got, want)
 	}
 }
 
-// TestProfessionCategorySize pins the cheap liveness measure a board harvest needs: how
-// many postings a category lists, counted from its sitemap rather than by crawling it.
-func TestProfessionCategorySize(t *testing.T) {
-	http := professionFixture()
-	n, err := ProfessionCategorySize(context.Background(), http, professionTestBoard)
+// TestProfessionSitemapPostings pins the cheap liveness measure a board harvest needs: how
+// many postings a category lists, counted from its sitemap rather than by crawling it. The
+// category page listed beside the postings is not one.
+func TestProfessionSitemapPostings(t *testing.T) {
+	const sitemapXML = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://www.profession.hu/allas/tanar-acme-kft-1001</loc></url>
+<url><loc>https://www.profession.hu/allas/rendszergazda-acme-kft-1002</loc></url>
+<url><loc>https://www.profession.hu/kategoria/oktatas</loc></url>
+</urlset>`
+	http := (&routedHTTP{}).route("sitemap-listings-education-hu.xml", sitemapXML)
+	n, err := ProfessionSitemapPostings(context.Background(), http,
+		"https://www.profession.hu/sitemap-listings-education-hu.xml")
 	if err != nil {
-		t.Fatalf("ProfessionCategorySize: %v", err)
+		t.Fatalf("ProfessionSitemapPostings: %v", err)
 	}
-	if n != 3 {
-		t.Errorf("ProfessionCategorySize(%q) = %d, want 3", professionTestBoard, n)
+	if n != 2 {
+		t.Errorf("ProfessionSitemapPostings() = %d, want 2", n)
 	}
-	// A category the index does not name is an error rather than an empty board: the two
-	// are the same number and mean opposite things, and only the caller knows which of
-	// them should stop a harvest.
-	if _, err := ProfessionCategorySize(context.Background(), http, "nosuchcategory"); err == nil {
-		t.Error("ProfessionCategorySize on an unpublished category returned no error")
+}
+
+// TestProfessionResolvesTheSitemapIndexOnce pins that a crawl reads the platform's sitemap
+// index once however many of its categories it visits.
+//
+// This is load, not tidiness. The index is where a board's own sitemap is resolved, so
+// re-reading it per board scaled with the number of boards — invisible while the crawl was
+// the two IT categories, and 23 requests for the same document once the general categories
+// joined. Measured live on 2026-09-06, the platform answered the first request and then
+// closed the connection on the rest: it rate-limits hard enough that this alone took a
+// board harvest from working to reporting every category as unreachable.
+func TestProfessionResolvesTheSitemapIndexOnce(t *testing.T) {
+	fixture := &professionRecorder{routedHTTP: (&routedHTTP{}).
+		route("sitemap-listings-index-hu.xml", professionSitemapIndexXML).
+		route("sitemap-listings-itdev-hu.xml", professionCategorySitemapXML()).
+		route("sitemap-listings-itops-hu.xml", professionCategorySitemapXML())}
+
+	src := NewProfession(fixture)
+	for _, board := range []string{"itdev", "itops"} {
+		if _, err := src.Fetch(context.Background(), CompanyEntry{Provider: "profession", Board: board}); err != nil {
+			t.Fatalf("Fetch(%s): %v", board, err)
+		}
+	}
+	indexReads := 0
+	for _, u := range fixture.xml {
+		if strings.Contains(u, "sitemap-listings-index-hu.xml") {
+			indexReads++
+		}
+	}
+	if indexReads != 1 {
+		t.Errorf("read the sitemap index %d times across two boards, want 1 (requests: %v)",
+			indexReads, fixture.xml)
 	}
 }

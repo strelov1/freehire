@@ -86,6 +86,44 @@ import (
 //     dictionary and the enrichment pass.
 type profession struct {
 	http professionHTTP
+	// index memoizes the sitemap index for the life of the adapter, which is the life of
+	// one crawl: the pipeline builds the registry once and shares an adapter across every
+	// board it visits. See professionIndex for why that matters here and nowhere else.
+	index *professionIndex
+}
+
+// professionIndex holds the platform's sitemap index once it has been read, so a crawl
+// resolves it once however many categories it visits.
+//
+// resolveSubSitemap re-reads the index on every call, which is the right shape for a
+// provider with one board and was invisible while this crawl was the two IT categories.
+// With all 23 it is 23 requests for one document, and the platform does not tolerate that:
+// measured live on 2026-09-06 it answered the first and then closed the connection on the
+// rest, which reads downstream as every category being unreachable rather than as the
+// crawl asking too often.
+//
+// Only a successful read is cached. Caching the error would spend one transient failure on
+// every remaining board in the run, and a crawl that can be retried per board should be.
+// The lock is held across the fetch on purpose: concurrent boards then wait for the one
+// request instead of racing to make their own, which is the whole point.
+type professionIndex struct {
+	mu       sync.Mutex
+	sitemaps map[string]string
+}
+
+// get returns each category id to the URL of its sitemap.
+func (i *professionIndex) get(ctx context.Context, c XMLGetter) (map[string]string, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.sitemaps != nil {
+		return i.sitemaps, nil
+	}
+	sitemaps, err := ProfessionCategorySitemaps(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	i.sitemaps = sitemaps
+	return sitemaps, nil
 }
 
 // professionHTTP is the transport profession needs: the sitemaps as XML, and each
@@ -96,7 +134,9 @@ type professionHTTP interface {
 }
 
 // NewProfession builds the Profession.hu adapter over the given HTTP client.
-func NewProfession(c professionHTTP) Source { return profession{http: c} }
+func NewProfession(c professionHTTP) Source {
+	return profession{http: c, index: &professionIndex{}}
+}
 
 func (profession) Provider() string { return "profession" }
 
@@ -198,11 +238,12 @@ func (s profession) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 // difference between a mistyped board and an empty one, which nothing downstream could
 // tell apart otherwise.
 func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) {
-	sitemap, err := resolveSubSitemap(ctx, s.http, professionSitemapIndex, professionSitemapNeedle(e.Board))
+	sitemaps, err := s.index.get(ctx, s.http)
 	if err != nil {
 		return nil, fmt.Errorf("profession: category %s: %w", e.Board, err)
 	}
-	if sitemap == "" {
+	sitemap, ok := sitemaps[strings.ToLower(strings.TrimSpace(e.Board))]
+	if !ok {
 		return nil, fmt.Errorf("profession: category %s is not in the sitemap index", e.Board)
 	}
 	locs, err := sitemapJobLocs(ctx, s.http, sitemap, professionExternalID)
@@ -217,46 +258,42 @@ func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) 
 // and must not become boards.
 var professionCategoryPattern = regexp.MustCompile(`/sitemap-listings-([a-z0-9-]+)-hu\.xml$`)
 
-// ProfessionCategories returns every category the platform publishes, read from its own
-// sitemap index. It is exported for cmd/harvest-boards, which enumerates a provider's
-// boards rather than being handed a seed list for it: the index IS the catalogue of
-// categories, so a board list kept anywhere else would be a copy that drifts.
+// ProfessionCategorySitemaps reads the platform's sitemap index — ONE request — and returns
+// every category it publishes against the URL of that category's sitemap. It is exported
+// for cmd/harvest-boards, which enumerates this provider's boards rather than being handed
+// a seed list for them: the index IS the catalogue of categories, so a board list kept
+// anywhere else would be a copy that drifts.
+//
+// It returns the URLs and not just the names so a caller that goes on to read those
+// sitemaps does not have to resolve the index again per category. That is the shape the
+// platform's rate limiting requires, not a convenience — see professionIndex.
 //
 // The index is also where the crawl resolves a board, so the URL shape lives in this file
 // only. A caller that rebuilt it would be a second answer to "where is a category's
 // sitemap", and the two would disagree silently the first time the platform moved one.
-func ProfessionCategories(ctx context.Context, c XMLGetter) ([]string, error) {
+func ProfessionCategorySitemaps(ctx context.Context, c XMLGetter) (map[string]string, error) {
 	doc, err := getSitemap(ctx, c, professionSitemapIndex)
 	if err != nil {
 		return nil, fmt.Errorf("profession: sitemap index: %w", err)
 	}
-	var out []string
+	out := map[string]string{}
 	for _, s := range doc.Sitemaps {
-		if m := professionCategoryPattern.FindStringSubmatch(strings.TrimSpace(s.Loc)); m != nil {
-			out = append(out, m[1])
+		loc := strings.TrimSpace(s.Loc)
+		if m := professionCategoryPattern.FindStringSubmatch(loc); m != nil {
+			out[m[1]] = loc
 		}
 	}
 	return out, nil
 }
 
-// ProfessionCategorySize returns how many postings a category's sitemap lists. It is the
-// cheap liveness measure a board harvest needs — one XML request, against the whole crawl
-// an adapter probe would otherwise cost for each of 23 categories.
-//
-// A category the index does not name is an error, not a zero. Both are "no postings" to a
-// counter and they mean opposite things: one is a category the platform has retired, the
-// other a category that is simply empty today.
-func ProfessionCategorySize(ctx context.Context, c XMLGetter, board string) (int, error) {
-	sitemap, err := resolveSubSitemap(ctx, c, professionSitemapIndex, professionSitemapNeedle(board))
+// ProfessionSitemapPostings returns how many postings a category sitemap lists. It is the
+// cheap liveness measure a board harvest needs — one XML request against the whole crawl an
+// adapter probe would otherwise cost for each of 23 categories — and it takes the sitemap
+// URL rather than the category so that the index is not re-read to find it.
+func ProfessionSitemapPostings(ctx context.Context, c XMLGetter, sitemapURL string) (int, error) {
+	locs, err := sitemapJobLocs(ctx, c, sitemapURL, professionExternalID)
 	if err != nil {
-		return 0, fmt.Errorf("profession: category %s: %w", board, err)
-	}
-	if sitemap == "" {
-		return 0, fmt.Errorf("profession: category %s is not in the sitemap index", board)
-	}
-	locs, err := sitemapJobLocs(ctx, c, sitemap, professionExternalID)
-	if err != nil {
-		return 0, fmt.Errorf("profession: category %s: %w", board, err)
+		return 0, err
 	}
 	return len(locs), nil
 }
@@ -348,12 +385,6 @@ func professionSlugCarriesTechnicalTerm(loc string) bool {
 func professionTitleIsTechnical(title string) bool {
 	return classify.IsTech(title) ||
 		slices.Contains(vocab.TechCategories, classify.Parse(title).Category)
-}
-
-// professionSitemapNeedle is the file-name fragment a category's sitemap ends with. It
-// carries both delimiters so a short board id cannot match a longer category's name.
-func professionSitemapNeedle(board string) string {
-	return "-" + strings.ToLower(strings.TrimSpace(board)) + "-hu.xml"
 }
 
 // detail fetches one posting page and maps it. It reports ok=false — so the caller skips

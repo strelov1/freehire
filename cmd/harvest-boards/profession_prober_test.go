@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -22,6 +24,10 @@ const professionEducationSitemapXML = `<?xml version="1.0" encoding="UTF-8"?>
 <url><loc>https://www.profession.hu/kategoria/oktatas</loc></url>
 </urlset>`
 
+func newProfessionProber() professionProber {
+	return professionProber{index: &professionCategoryIndex{}}
+}
+
 func professionProberFixture() fakeGetter {
 	return fakeGetter{
 		"https://www.profession.hu/sitemap-listings-index-hu.xml":     professionIndexXML,
@@ -34,7 +40,7 @@ func professionProberFixture() fakeGetter {
 // are enumerated rather than seeded. The non-category sitemaps in the index must not
 // become boards.
 func TestProfessionProberDiscover(t *testing.T) {
-	got, err := professionProber{}.discover(context.Background(), professionProberFixture())
+	got, err := newProfessionProber().discover(context.Background(), professionProberFixture())
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -48,7 +54,7 @@ func TestProfessionProberDiscover(t *testing.T) {
 // request; probing it through the adapter — which is what proberFor falls back to without
 // this type — would crawl every posting in all 23 categories.
 func TestProfessionProberProbe(t *testing.T) {
-	company, open, err := professionProber{}.probe(context.Background(), professionProberFixture(), "education")
+	company, open, err := newProfessionProber().probe(context.Background(), professionProberFixture(), "education")
 	if err != nil {
 		t.Fatalf("probe: %v", err)
 	}
@@ -74,7 +80,50 @@ func TestProfessionProberProbeUnreachableCategoryErrors(t *testing.T) {
 	fixture := fakeGetter{
 		"https://www.profession.hu/sitemap-listings-index-hu.xml": professionIndexXML,
 	}
-	if _, _, err := (professionProber{}).probe(context.Background(), fixture, "education"); err == nil {
+	if _, _, err := (newProfessionProber()).probe(context.Background(), fixture, "education"); err == nil {
 		t.Error("probe on an unreadable category sitemap returned no error")
+	}
+}
+
+// countingGetter counts every XML request, so the prober can be held to reading the
+// platform's sitemap index once per run rather than once per candidate.
+type countingGetter struct {
+	fakeGetter
+	mu  sync.Mutex
+	xml []string
+}
+
+func (c *countingGetter) GetXML(ctx context.Context, url string, v any) error {
+	c.mu.Lock()
+	c.xml = append(c.xml, url)
+	c.mu.Unlock()
+	return c.fakeGetter.GetXML(ctx, url, v)
+}
+
+// TestProfessionProberReadsTheIndexOnce pins the load fix. probeAll runs candidates
+// concurrently, so resolving the index per candidate would ask for one document 23 times
+// in parallel — which is what the platform closed the connection on when it was measured
+// live on 2026-09-06, arriving as "every category is unreachable".
+func TestProfessionProberReadsTheIndexOnce(t *testing.T) {
+	c := &countingGetter{fakeGetter: professionProberFixture()}
+	p := newProfessionProber()
+	boards, err := p.discover(context.Background(), c)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	for _, b := range boards {
+		// itdev's sitemap is not served by the fixture; the error is not what this test
+		// is about, only the requests made getting there.
+		_, _, _ = p.probe(context.Background(), c, b)
+	}
+	indexReads := 0
+	for _, u := range c.xml {
+		if strings.Contains(u, "sitemap-listings-index-hu.xml") {
+			indexReads++
+		}
+	}
+	if indexReads != 1 {
+		t.Errorf("read the sitemap index %d times over discover + %d probes, want 1 (requests: %v)",
+			indexReads, len(boards), c.xml)
 	}
 }
