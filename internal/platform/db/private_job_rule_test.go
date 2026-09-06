@@ -31,7 +31,6 @@ var privatePredicateExemptions = map[string]string{
 	"ListCompanyBoardTitles":                  "scoped to the ats/company board sources, which a private posting's source is never one of",
 	"UnseenJobIDs":                            "the post-ingest close sweep, scoped to the source a crawl just ran and the company slugs it touched",
 	"UnseenJobIDsBySource":                    "the same sweep, scoped to one source; a private posting's source is never crawled",
-	"ClaimSearchOutboxBatch":                  "leases search_outbox entries, and InsertPrivateJob enqueues none — unlike every crawl write path",
 
 	// --- Writes back to the private row itself: the effect stays inside the row, so it
 	// reaches its creator and nobody else. ---
@@ -43,7 +42,11 @@ var privatePredicateExemptions = map[string]string{
 	"SelectStaleRegisteredCandidates":  "the same probe's registered-source candidate set",
 	"MarkLivenessExpired":              "the strike write for one probed row",
 	"ListJobsForRequirementsBackfill":  "a one-off backfill reading a description to fill that row's own requirements_derived",
-	"ResidualTitleGroups":              "cmd/prune's candidate grouping — dry-run by default, and a removal takes a row out of its creator's view, not into anyone else's",
+	"ResidualTitleGroups": "cmd/mine-titles's operator report: 2-3 word groups mined from live " +
+		"unclassified titles, read by a person and copied into the non-tech dictionary. The " +
+		"predicate is owed here and is a follow-up, not an exemption on the merits — a pasted " +
+		"JD's title fragments reaching that console is small but real. Recorded honestly rather " +
+		"than blessed: the earlier reason named cmd/prune, which does not call this at all.",
 
 	// --- Aggregates: a sample, never a posting. ---
 	// The other seven insights rollups count with `count(*) FILTER (WHERE closed_at IS
