@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"sort"
@@ -76,7 +77,10 @@ func (h *authHandlers) OAuthStart(c *fiber.Ctx) error {
 
 	state, err := oauth.NewState()
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to start sign-in")
+		// Returned rather than phrased as fiber.NewError(500, …): a failing CSPRNG is
+		// exactly the fault the error inbox exists for, and a *fiber.Error carries no
+		// cause for it to show. The caller sees the generic 500 body — see classify.
+		return fmt.Errorf("mint oauth state: %w", err)
 	}
 	oauth.SetStateCookie(c, state, h.cookieSecure)
 	// Remember where the SPA wants the user back, so sign-in from a deep page

@@ -62,9 +62,18 @@ reachable only through a `*fiber.Ctx`.
   the SSE writer goroutine (fasthttp recovers no panics there) would take the process down.
 - **A follower checks the leader's success before trusting the cache.** A failed leader leaves an
   OLDER or absent row, and serving it would dress a stale analysis up as this run's live result.
-- **Best-effort where it says so:** the cache write and the debit are logged, never surfaced — the
-  analysis is already computed by then. `Balance` answers nil on any failure; the atomic `Debit`
-  is the real ceiling, not the pre-check.
+- **"Succeeded" means the CACHE WRITE, and `Run` tracks it separately from the refund.** Two
+  questions, two flags: `cached` is what `Claim.Release` publishes to followers, `produced` is
+  what decides the refund. They differ in exactly one case — the chain produced an analysis and
+  the write failed — and one boolean answered it wrongly for the follower, who was told to trust
+  a cache holding an older row or nothing. The refund must NOT switch to `cached`: the caller
+  that received the analysis got what it paid for, which is what `Follow`'s "a leader whose cache
+  write failed still returned the analysis to whoever paid for it" is about. `Ensure`/`compute`
+  keep one flag because neither is handed the result, so for them the two questions coincide.
+- **Best-effort where it says so:** the cache write and the debit are logged, never surfaced to
+  the caller — the analysis is already computed by then. `Cache` still RETURNS its error, because
+  the follower cannot see the log and the claim is the only channel to it. `Balance` answers nil
+  on any failure; the atomic `Debit` is the real ceiling, not the pre-check.
 
 ## Reading a cached analysis
 

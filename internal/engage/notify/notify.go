@@ -209,12 +209,26 @@ func DefaultConfig() Config {
 
 // Stats is the per-pass summary logged by the worker.
 type Stats struct {
-	Queries   int // distinct queries matched this pass
-	Matched   int // newly recorded (subscription, job) matches
-	Delivered int // digests sent
-	SoftSkips int // digests skipped (e.g. Telegram not linked)
-	Deferred  int // digests held back by quiet hours or a not-yet-due daily digest time
-	Failed    int // digest deliveries that errored
+	Queries       int // distinct queries matched this pass
+	FailedQueries int // distinct queries whose search or record step errored and was skipped
+	Matched       int // newly recorded (subscription, job) matches
+	Delivered     int // digests sent
+	SoftSkips     int // digests skipped (e.g. Telegram not linked)
+	Deferred      int // digests held back by quiet hours or a not-yet-due daily digest time
+	Failed        int // digest deliveries that errored
+}
+
+// MatchingCollapsed reports whether the MATCH stage produced nothing because every
+// query it ran failed — the outcome the run has to go red on.
+//
+// It is deliberately narrower than "any query failed". Matching is isolated per query
+// exactly like the per-board ingest crawl, and one saved search whose filter Meilisearch
+// dislikes must not fail a pass that served the other fifty-two; the count in the log is
+// what makes that one visible. All of them failing is a different statement — an
+// unreachable index or a broken credential — and it is the one this worker used to print
+// as `queries=53 matched=0 ... failed=0` before exiting 0.
+func (s Stats) MatchingCollapsed() bool {
+	return s.Queries > 0 && s.FailedQueries == s.Queries
 }
 
 // Runner executes matching + delivery passes.
@@ -236,14 +250,19 @@ func New(store Store, searcher Searcher, notifier Notifier, cfg Config) *Runner 
 // delivery outage loses nothing.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	var stats Stats
+	// Deferred so the counters land on EVERY exit, not only the clean one. A pass that
+	// stopped part-way is the pass whose figures somebody actually wants, and printing
+	// them last meant the run that ended early was also the run that said nothing.
+	defer func() {
+		log.Printf("notify: queries=%d failed_queries=%d matched=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
+			stats.Queries, stats.FailedQueries, stats.Matched, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
+	}()
 	if err := r.match(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("match: %w", err)
 	}
 	if err := r.deliver(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("deliver: %w", err)
 	}
-	log.Printf("notify: queries=%d matched=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
-		stats.Queries, stats.Matched, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
 	return stats, nil
 }
 

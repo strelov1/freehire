@@ -289,7 +289,10 @@ func buildSearchFilter(c *fiber.Ctx) any {
 // recomputed.
 //
 // Best-effort: a failed lookup leaves the signal off the page rather than failing
-// the search.
+// the search — but not silently. These stamps are a structural tier of this path,
+// so a persistent failure here is the badge disappearing from every search result
+// while the endpoint keeps answering 200; without the log there is nothing to see
+// it by (see logGhostLookup for why cancellation is told apart on the context).
 func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, views []jobview.Job) {
 	if len(hits) == 0 || h.queries == nil {
 		return
@@ -301,6 +304,7 @@ func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, vi
 
 	stampRows, err := h.queries.ListJobGhostStamps(c.Context(), ids)
 	if err != nil {
+		logGhostLookup(c.Context(), "absence stamps", len(ids), err)
 		return
 	}
 	stamps := make(map[int64]db.ListJobGhostStampsRow, len(stampRows))

@@ -20,8 +20,17 @@ import (
 // (avoid-skills) preference, so a subscription never receives a job older than
 // it or carrying a skill its subscriber currently avoids.
 //
-// One failing query is logged and skipped, not fatal — the same isolation as the
-// per-board ingest crawl.
+// One failing query is logged, COUNTED and skipped, not fatal — the same isolation as
+// the per-board ingest crawl, which also counts its failed boards rather than only
+// logging them. Without the count a pass in which every query failed printed
+// `queries=53 matched=0 ... failed=0` and exited 0, which is byte-identical to a pass
+// with genuinely nothing new to match; Stats.MatchingCollapsed is what the worker
+// turns that into an exit code with.
+//
+// A cancelled context ends the stage instead of counting the rest as failures: the
+// remaining queries would each fail instantly against the same dead context, so one
+// SIGTERM would otherwise read as "every saved search is broken". Same reasoning, and
+// the same shape, as forCompanyBatches in cmd/reindex.
 func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	subs, err := r.store.ListActiveSubscriptions(ctx)
 	if err != nil {
@@ -39,11 +48,26 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	}
 
 	stats.Queries = len(groups)
+	done := 0
 	for query, gsubs := range groups {
 		if err := r.matchQuery(ctx, query, gsubs, excludedByUser, stats); err != nil {
+			// `done`, not the failure count: what a cancellation has to report is how
+			// far the stage got, and this branch runs before the failure is counted.
+			//
+			// It STOPS but does not fail, the same rule and for the same reason as the
+			// delivery loop below: an unmatched query is simply matched by the next pass,
+			// so an ordinary `systemctl stop` is not an outage and must not paint the unit
+			// red. Returning an error here would also have skipped Run's summary line —
+			// losing the counters exactly when somebody wants to know how far it got.
+			if cause := ctx.Err(); cause != nil {
+				log.Printf("notify: matching stopped after %d of %d queries: %v", done, stats.Queries, cause)
+				return nil
+			}
+			stats.FailedQueries++
 			log.Printf("notify: match query %q failed: %v", query, err)
 			continue
 		}
+		done++
 	}
 	return nil
 }

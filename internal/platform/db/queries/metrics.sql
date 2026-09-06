@@ -82,6 +82,126 @@ SELECT
     )::float8                                                            AS oldest_age_seconds
 FROM apple_revocation_jobs;
 
+-- name: SearchDeleteOutboxMetrics :one
+-- Same shape and same reasoning as SearchOutboxMetrics, over the removal side of the
+-- facet index.
+--
+-- Its dead letters are the sharper half of the pair. An entry this queue gives up on
+-- leaves a CLOSED posting in the live index — searchable, clickable, and 404ing on
+-- arrival — until the next full rebuild sweeps it out, and search_delete_outbox's
+-- UNIQUE (job_id) plus the ON CONFLICT DO NOTHING every enqueue carries means that
+-- posting can never be queued for removal again in the meantime.
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM search_delete_outbox;
+
+-- name: ApplyFormOutboxMetrics :one
+-- Same shape and same reasoning as SearchOutboxMetrics. The depth here is the one that
+-- carries information rather than the dead letters: cmd/capture-apply-form takes
+-- APPLY_FORM_MAX_PER_RUN entries a run against a backlog that started at ~185k, so
+-- whether the drain is gaining on it is a question only this gauge answers.
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM apply_form_outbox;
+
+-- name: AdzunaDescriptionOutboxMetrics :one
+-- Same shape and same reasoning as SearchOutboxMetrics. Same bounded-drain question as
+-- apply_form_outbox: ADZUNA_DESCRIPTION_MAX_PER_RUN defaults to 500 and is deliberately
+-- conservative, so the depth is what says whether that figure is still the right one.
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM adzuna_description_outbox;
+
+-- name: AutoApplyQueueMetrics :one
+-- Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
+-- than two, so it cannot be a copy of it.
+--
+-- Depth is ClaimAutoApplyBatch's own predicate minus the lease: a submission attempt is
+-- only ever claimed once the candidate has approved a tailored CV for it, so an entry
+-- still awaiting that review is deliberately NOT depth — it is waiting on a person, and
+-- counting it would make ordinary candidate behaviour look like a stalled worker.
+--
+-- Blocked is the third state and the reason this needs its own gauge. `Park is not a
+-- retry` (internal/application/autoapply/AGENTS.md): an attempt the sidecar could not
+-- fully resolve is excluded from the claim by blocked_at without touching attempts, so
+-- it is neither work still owed nor work retried to exhaustion. Folding it into either
+-- of the other two counts would be a wrong reading, and leaving it out entirely is how a
+-- population that no run will ever pick up again becomes invisible.
+--
+-- A dead letter here has TWO markers, not one. preview_failed_at (migration 0140,
+-- written by RecordAutoApplyPreviewFailure) retires the preview pass the same way
+-- failed_at retires the submit pass, and a row carrying only the first is claimed by
+-- neither: ClaimAutoApplyPreviewBatch excludes it directly, and ClaimAutoApplyBatch
+-- excludes it because review_decision never reaches 'approved' without a preview. Reading
+-- only failed_at is therefore the exact omission the paragraph above forbids, and
+-- auto_apply_review_info.go already reads both for the same reason.
+--
+-- A DECLINE is not parked work. DeclineAutoApplyReview reuses MarkAutoApplyBlocked's
+-- vocabulary and stamps blocked_at, nothing ever deletes the row, so counting it would
+-- make the gauge grow with ordinary candidate behaviour until the sidecar population it
+-- exists to publish is a rounding error inside it. Both other readers of this state guard
+-- the same way and say so — autoapply/status.go and auto_apply_enqueue.go.
+--
+-- The dead-letter markers win over blocked_at where a row carries both, so the three
+-- counts stay mutually exclusive and a stacked graph reads correctly.
+SELECT
+    count(*) FILTER (
+        WHERE failed_at IS NULL
+          AND blocked_at IS NULL
+          AND tailored_cv_id IS NOT NULL
+          AND review_decision = 'approved'
+    )                                                                AS depth,
+    count(*) FILTER (
+        WHERE failed_at IS NOT NULL OR preview_failed_at IS NOT NULL
+    )                                                                AS dead_letters,
+    count(*) FILTER (
+        WHERE failed_at IS NULL
+          AND preview_failed_at IS NULL
+          AND blocked_at IS NOT NULL
+          AND review_decision IS DISTINCT FROM 'declined'
+    )                                                                AS blocked,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (
+            WHERE failed_at IS NULL
+              AND blocked_at IS NULL
+              AND tailored_cv_id IS NOT NULL
+              AND review_decision = 'approved'
+        )),
+        0
+    )::float8                                                        AS oldest_age_seconds
+FROM auto_apply_queue;
+
+-- name: PushTicketOutboxMetrics :one
+-- Depth and age only: this queue carries neither attempts nor failed_at, because
+-- DeletePushTickets removes a ticket on every terminal receipt outcome and an
+-- unprocessed batch (Expo unreachable) simply stays queued for the next run. There is no
+-- give-up state to measure, so the caller publishes no dead-letter sample for it rather
+-- than a zero that would claim a measurement nobody took.
+--
+-- That makes the AGE the whole signal here. Every row is live by construction, so a
+-- depth that merely grows says the fleet is busy, while an oldest entry older than a few
+-- scheduled runs says cmd/push-receipts is not draining — the one failure this queue can
+-- have and the one it would otherwise report as a perfectly healthy backlog.
+SELECT
+    count(*)                                                    AS depth,
+    COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::float8 AS oldest_age_seconds
+FROM push_ticket_outbox;
+
 -- name: BoardHealthMetrics :one
 -- The ingest board fleet split into three mutually exclusive states, so the published
 -- gauges sum to the fleet size and a stacked graph reads correctly.

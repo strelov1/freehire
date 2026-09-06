@@ -56,6 +56,10 @@ type Querier interface {
 	// job_id and company_slug come off the application, like TrackApplicationByID: the row is
 	// the application, and the employer is denormalised on it.
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
+	// Same shape and same reasoning as SearchOutboxMetrics. Same bounded-drain question as
+	// apply_form_outbox: ADZUNA_DESCRIPTION_MAX_PER_RUN defaults to 500 and is deliberately
+	// conservative, so the depth is what says whether that figure is still the right one.
+	AdzunaDescriptionOutboxMetrics(ctx context.Context) (AdzunaDescriptionOutboxMetricsRow, error)
 	// Persist an agent-produced verdict for one message, scoped to the caller (0 rows
 	// when the message is not theirs → 404). This is SetEmailClassification's sibling:
 	// the same columns, written in one update, so a message is never left classified
@@ -104,6 +108,11 @@ type Querier interface {
 	// A visitor who did both is one visitor in each, so the two do not sum with an API
 	// count; the only relation between them is page_delta <= total_delta.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
+	// Same shape and same reasoning as SearchOutboxMetrics. The depth here is the one that
+	// carries information rather than the dead letters: cmd/capture-apply-form takes
+	// APPLY_FORM_MAX_PER_RUN entries a run against a backlog that started at ~185k, so
+	// whether the drain is gaining on it is a question only this gauge answers.
+	ApplyFormOutboxMetrics(ctx context.Context) (ApplyFormOutboxMetricsRow, error)
 	// Records an approval. Guarded by review_decision IS NULL so a second attempt at an
 	// already-reviewed entry affects zero rows rather than overwriting a recorded decision —
 	// the handler reads the row first (GetAutoApplyQueueEntryForReview) to tell "already
@@ -130,6 +139,38 @@ type Querier interface {
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
+	// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
+	// than two, so it cannot be a copy of it.
+	//
+	// Depth is ClaimAutoApplyBatch's own predicate minus the lease: a submission attempt is
+	// only ever claimed once the candidate has approved a tailored CV for it, so an entry
+	// still awaiting that review is deliberately NOT depth — it is waiting on a person, and
+	// counting it would make ordinary candidate behaviour look like a stalled worker.
+	//
+	// Blocked is the third state and the reason this needs its own gauge. `Park is not a
+	// retry` (internal/application/autoapply/AGENTS.md): an attempt the sidecar could not
+	// fully resolve is excluded from the claim by blocked_at without touching attempts, so
+	// it is neither work still owed nor work retried to exhaustion. Folding it into either
+	// of the other two counts would be a wrong reading, and leaving it out entirely is how a
+	// population that no run will ever pick up again becomes invisible.
+	//
+	// A dead letter here has TWO markers, not one. preview_failed_at (migration 0140,
+	// written by RecordAutoApplyPreviewFailure) retires the preview pass the same way
+	// failed_at retires the submit pass, and a row carrying only the first is claimed by
+	// neither: ClaimAutoApplyPreviewBatch excludes it directly, and ClaimAutoApplyBatch
+	// excludes it because review_decision never reaches 'approved' without a preview. Reading
+	// only failed_at is therefore the exact omission the paragraph above forbids, and
+	// auto_apply_review_info.go already reads both for the same reason.
+	//
+	// A DECLINE is not parked work. DeclineAutoApplyReview reuses MarkAutoApplyBlocked's
+	// vocabulary and stamps blocked_at, nothing ever deletes the row, so counting it would
+	// make the gauge grow with ordinary candidate behaviour until the sidecar population it
+	// exists to publish is a rounding error inside it. Both other readers of this state guard
+	// the same way and say so — autoapply/status.go and auto_apply_enqueue.go.
+	//
+	// The dead-letter markers win over blocked_at where a row carries both, so the three
+	// counts stay mutually exclusive and a stacked graph reads correctly.
+	AutoApplyQueueMetrics(ctx context.Context) (AutoApplyQueueMetricsRow, error)
 	// Queries over the application record — the durable half of what used to live in
 	// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
 	// Point one batch of pre-existing ledger events at the application they belong to.
@@ -1134,6 +1175,25 @@ type Querier interface {
 	// Note what this does NOT reap: entries whose job row is gone. For search_outbox that is
 	// garbage, since a vanished job cannot be indexed. Here it is the whole point — cmd/prune
 	// hard-deletes jobs, and their documents still have to leave the index.
+	//
+	// **It has no Go caller, and that is the decision, not an oversight.** No outbox in this
+	// repository reaps its dead letters — there is no DeleteDead… for search_outbox,
+	// enrichment_outbox or semantic_outbox — so scheduling this one would answer the
+	// give-up question differently for one queue than for the other nine. Worse, running it
+	// would delete the only record that a removal was abandoned, which is exactly what
+	// `freehire_queue_dead_letters{queue="search_delete_outbox"}` now publishes. Reaping is
+	// how a stranded population stops being visible, not how it gets fixed.
+	//
+	// What it would ALSO not fix: every enqueue is `ON CONFLICT (job_id) DO NOTHING` against
+	// a UNIQUE key, so while a dead-lettered entry sits here that posting cannot be re-queued
+	// for removal — not by a later close, and not by cmd/prune's hard delete. Deleting the
+	// entry would re-open that door only for a posting something closes AGAIN, which a
+	// closed posting is not. The bounded harm is the reason this is left as it stands: a
+	// full `make reindex` streams only OPEN jobs into the fresh index, so the stale document
+	// leaves on the next scheduled rebuild regardless. Re-arming the row (an `ON CONFLICT …
+	// DO UPDATE` that clears failed_at where it is set) is the fix if the gauge ever shows
+	// this happening; it is ten identical CTEs across jobs.sql and pruning.sql, and worth
+	// doing on evidence rather than on the strength of the reading above.
 	DeleteDeadSearchDeleteOutbox(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	// Void a debit taken as a RESERVATION for work that then produced nothing.
 	//
@@ -3871,6 +3931,17 @@ type Querier interface {
 	// The `count = 1` condition is what makes this safe: a phrase two people have searched
 	// survives however old it is, so a seasonal query does not vanish between seasons.
 	PruneSearchQueries(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	// Depth and age only: this queue carries neither attempts nor failed_at, because
+	// DeletePushTickets removes a ticket on every terminal receipt outcome and an
+	// unprocessed batch (Expo unreachable) simply stays queued for the next run. There is no
+	// give-up state to measure, so the caller publishes no dead-letter sample for it rather
+	// than a zero that would claim a measurement nobody took.
+	//
+	// That makes the AGE the whole signal here. Every row is live by construction, so a
+	// depth that merely grows says the fleet is busy, while an oldest entry older than a few
+	// scheduled runs says cmd/push-receipts is not draining — the one failure this queue can
+	// have and the one it would otherwise report as a perfectly healthy backlog.
+	PushTicketOutboxMetrics(ctx context.Context) (PushTicketOutboxMetricsRow, error)
 	// One row per company with its current open-count and the open-count as of @prev_ts,
 	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
 	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
@@ -4554,6 +4625,15 @@ type Querier interface {
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error)
+	// Same shape and same reasoning as SearchOutboxMetrics, over the removal side of the
+	// facet index.
+	//
+	// Its dead letters are the sharper half of the pair. An entry this queue gives up on
+	// leaves a CLOSED posting in the live index — searchable, clickable, and 404ing on
+	// arrival — until the next full rebuild sweeps it out, and search_delete_outbox's
+	// UNIQUE (job_id) plus the ON CONFLICT DO NOTHING every enqueue carries means that
+	// posting can never be queued for removal again in the meantime.
+	SearchDeleteOutboxMetrics(ctx context.Context) (SearchDeleteOutboxMetricsRow, error)
 	// Aggregates behind cmd/queue-metrics, the worker that publishes pipeline depth to
 	// Prometheus. Every query here is read-only and takes no locks by design: it runs once a
 	// minute alongside ingest, search-drain, and reindex, and must never be the reason one of

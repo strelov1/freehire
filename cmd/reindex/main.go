@@ -64,9 +64,15 @@ func run() int {
 	// Marker-only mode stops here, before anything Meilisearch-related — see
 	// config.Reindex.DedupOnly for why this can run far more often than a full
 	// Dedup+rebuild invocation.
+	//
+	// It is also the one mode whose exit code can carry the passes' outcome. They are
+	// log-and-continue because "a marker refresh failure must not stop the rebuild that
+	// follows it" — and here there is no rebuild to protect, so a run in which all three
+	// passes failed used to exit 0, indistinguishable from one in which the catalogue
+	// simply had nothing to re-mark. The cancellation line forCompanyBatches assembles
+	// was thrown away with it.
 	if rcfg.DedupOnly {
-		refreshDuplicateMarkers(ctx, q)
-		return 0
+		return dedupOnlyExit(ctx, q)
 	}
 
 	// Captured before anything else runs (including the duplicate-marker recompute
@@ -146,24 +152,49 @@ func run() int {
 // must not stop the rebuild that follows it, which also owns index settings and
 // compaction. Each is done per company in short transactions — never a table-wide
 // lock that would stall the ingest.
-func refreshDuplicateMarkers(ctx context.Context, q *db.Queries) {
+//
+// It returns how many of the three passes failed, so a caller with no rebuild behind it
+// can still say so in its exit code. The full-rebuild callers ignore it, which is the
+// best-effort rule above, unchanged; REINDEX_DEDUP_ONLY does not, because in that mode
+// these three passes ARE the run.
+// dedupOnlyExit is the whole of the marker-only mode: the three passes, and their outcome
+// as an exit code.
+//
+// It is a function rather than two lines inside run() so that the second half can be
+// tested at all. run() needs a pool, a config and a Meilisearch client before it reaches
+// the branch, so a test asserting on the exit code has to go through this seam — and
+// without one, re-introducing the swallowed outcome (`refreshDuplicateMarkers(ctx, q);
+// return 0`) leaves every test in this package green, which is how it shipped that way
+// the first time.
+func dedupOnlyExit(ctx context.Context, q *db.Queries) int {
+	return worker.ExitCode(refreshDuplicateMarkers(ctx, q), 0)
+}
+
+func refreshDuplicateMarkers(ctx context.Context, q *db.Queries) int {
+	failed := 0
+
 	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
+		failed++
 		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
 	}
 
 	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
+		failed++
 		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
 	}
 
 	if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
+		failed++
 		log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
 	}
+
+	return failed
 }
 
 // rebuilder builds a brand-new index out of band and atomically swaps it into

@@ -46,6 +46,16 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	}
 
 	for _, subID := range order {
+		// A cancelled run stops here rather than walking the rest of the claimed
+		// subscriptions: each would fail instantly against the same dead context and be
+		// counted a delivery failure, so one SIGTERM would report as an outage across
+		// every subscription. Their claims simply expire and the next pass retries them,
+		// which is what the lease is for.
+		if ctx.Err() != nil {
+			log.Printf("notify: delivery stopped after %d of %d claimed subscriptions: %v",
+				stats.Delivered+stats.SoftSkips+stats.Deferred+stats.Failed, len(order), ctx.Err())
+			return nil
+		}
 		r.deliverOne(ctx, subID, jobsBySub[subID], stats)
 	}
 	return nil
@@ -55,8 +65,13 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, stats *Stats) {
 	info, err := r.store.GetSubscriptionForDelivery(ctx, subID)
 	if err != nil {
+		// Counted, not merely logged. This digest did not go out and nothing burned an
+		// attempt toward the dead-letter limit, so the only trace it leaves is the exit
+		// code — and a pass that failed to read every subscription it claimed used to
+		// print `delivered=0 failed=0` and exit 0, which reads as an idle queue.
 		log.Printf("notify: load subscription %d for delivery: %v", subID, err)
 		r.release(ctx, subID, jobIDs)
+		stats.Failed++
 		return
 	}
 
@@ -89,8 +104,11 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 
 	jobs, err := r.store.GetJobsForDigest(ctx, jobIDs)
 	if err != nil {
+		// Counted for the same reason as the subscription read above: the digest is not
+		// going out, and releasing the claim leaves no other record that it did not.
 		log.Printf("notify: load jobs for subscription %d: %v", subID, err)
 		r.release(ctx, subID, jobIDs)
+		stats.Failed++
 		return
 	}
 

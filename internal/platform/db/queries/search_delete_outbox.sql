@@ -59,6 +59,25 @@ RETURNING failed_at;
 -- Note what this does NOT reap: entries whose job row is gone. For search_outbox that is
 -- garbage, since a vanished job cannot be indexed. Here it is the whole point — cmd/prune
 -- hard-deletes jobs, and their documents still have to leave the index.
+--
+-- **It has no Go caller, and that is the decision, not an oversight.** No outbox in this
+-- repository reaps its dead letters — there is no DeleteDead… for search_outbox,
+-- enrichment_outbox or semantic_outbox — so scheduling this one would answer the
+-- give-up question differently for one queue than for the other nine. Worse, running it
+-- would delete the only record that a removal was abandoned, which is exactly what
+-- `freehire_queue_dead_letters{queue="search_delete_outbox"}` now publishes. Reaping is
+-- how a stranded population stops being visible, not how it gets fixed.
+--
+-- What it would ALSO not fix: every enqueue is `ON CONFLICT (job_id) DO NOTHING` against
+-- a UNIQUE key, so while a dead-lettered entry sits here that posting cannot be re-queued
+-- for removal — not by a later close, and not by cmd/prune's hard delete. Deleting the
+-- entry would re-open that door only for a posting something closes AGAIN, which a
+-- closed posting is not. The bounded harm is the reason this is left as it stands: a
+-- full `make reindex` streams only OPEN jobs into the fresh index, so the stale document
+-- leaves on the next scheduled rebuild regardless. Re-arming the row (an `ON CONFLICT …
+-- DO UPDATE` that clears failed_at where it is set) is the fix if the gauge ever shows
+-- this happening; it is ten identical CTEs across jobs.sql and pruning.sql, and worth
+-- doing on evidence rather than on the strength of the reading above.
 DELETE FROM search_delete_outbox
 WHERE failed_at IS NOT NULL
   AND failed_at < sqlc.arg(cutoff);

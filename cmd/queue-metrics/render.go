@@ -8,10 +8,19 @@ import (
 
 // queueMetrics is one outbox queue's measurement. oldestAgeSeconds is the age of the
 // oldest LIVE entry, so a queue whose only old entries are dead-lettered reads as young.
+//
+// deadLetters and blocked are pointers because not every queue has the state they
+// measure: push_ticket_outbox carries neither attempts nor failed_at, and only
+// auto_apply_queue can park an entry. A nil omits that queue from the family rather than
+// publishing a zero — the same zero-versus-absent rule newestJob and lastSuccess follow,
+// applied to a state that does not exist rather than to one that measured empty. A
+// permanent zero would read as "given up on nothing so far", which is a claim about a
+// measurement nobody took.
 type queueMetrics struct {
 	name             string
 	depth            int64
-	deadLetters      int64
+	deadLetters      *int64
+	blocked          *int64
 	oldestAgeSeconds float64
 }
 
@@ -62,11 +71,13 @@ func render(s snapshot) string {
 	var b strings.Builder
 
 	writeFamily(&b, "freehire_queue_depth", "Live entries waiting in a pipeline outbox queue.",
-		func(q queueMetrics) string { return fmt.Sprintf("%d", q.depth) }, s.queues)
+		func(q queueMetrics) (string, bool) { return fmt.Sprintf("%d", q.depth), true }, s.queues)
 	writeFamily(&b, "freehire_queue_dead_letters", "Entries a pipeline outbox queue has given up on.",
-		func(q queueMetrics) string { return fmt.Sprintf("%d", q.deadLetters) }, s.queues)
+		func(q queueMetrics) (string, bool) { return countSample(q.deadLetters) }, s.queues)
+	writeFamily(&b, "freehire_queue_blocked", "Entries a pipeline outbox queue has parked for want of data a retry cannot supply.",
+		func(q queueMetrics) (string, bool) { return countSample(q.blocked) }, s.queues)
 	writeFamily(&b, "freehire_queue_oldest_age_seconds", "Age of the oldest live entry in a pipeline outbox queue.",
-		func(q queueMetrics) string { return fmt.Sprintf("%.3f", q.oldestAgeSeconds) }, s.queues)
+		func(q queueMetrics) (string, bool) { return fmt.Sprintf("%.3f", q.oldestAgeSeconds), true }, s.queues)
 
 	writeHeader(&b, "freehire_notify_pending_subscriptions",
 		"Active subscriptions with at least one undelivered match.")
@@ -159,13 +170,38 @@ func boardStates(healthy, failing, cooled int64) [3]boardState {
 	}
 }
 
-// writeFamily emits one metric family: its HELP and TYPE lines, then one sample per
-// queue, labelled by queue name.
-func writeFamily(b *strings.Builder, name, help string, value func(queueMetrics) string, queues []queueMetrics) {
-	writeHeader(b, name, help)
-	for _, q := range queues {
-		fmt.Fprintf(b, "%s{queue=%q} %s\n", name, q.name, value(q))
+// countSample renders an optional count, reporting whether the queue has that state at
+// all. It is the one place the nil-means-omit rule on queueMetrics is applied, so the
+// two optional families cannot answer it differently.
+func countSample(n *int64) (string, bool) {
+	if n == nil {
+		return "", false
 	}
+	return fmt.Sprintf("%d", *n), true
+}
+
+// writeFamily emits one metric family: its HELP and TYPE lines, then one sample per
+// queue that HAS the state, labelled by queue name. A queue whose value function
+// declines is left out of that family — see queueMetrics on why an absent sample and a
+// zero are different statements.
+//
+// A family no queue answers is omitted head and all, the same rule the provider
+// timestamp family follows: a bare HELP/TYPE pair with no samples is valid and says
+// nothing.
+func writeFamily(b *strings.Builder, name, help string, value func(queueMetrics) (string, bool), queues []queueMetrics) {
+	var samples strings.Builder
+	for _, q := range queues {
+		v, ok := value(q)
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(&samples, "%s{queue=%q} %s\n", name, q.name, v)
+	}
+	if samples.Len() == 0 {
+		return
+	}
+	writeHeader(b, name, help)
+	b.WriteString(samples.String())
 }
 
 // writeHeader emits the HELP and TYPE lines a family must be preceded by. Every metric
