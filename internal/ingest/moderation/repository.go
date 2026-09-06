@@ -60,9 +60,16 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	return job.FromRow(row)
 }
 
-// BySlug loads a job by its public slug, returning ErrJobNotFound when no job matches or
+// BySlug loads a job by its public slug, returning ErrJobNotFound when no job matches,
 // the matched job was not moderator-authored (created_by IS NULL) — so the edit path can
-// never touch an automated-source (ATS/telegram) vacancy, whatever its declared source.
+// never touch an automated-source (ATS/telegram) vacancy, whatever its declared source —
+// or the matched job is private.
+//
+// created_by does not say "a moderator wrote this" on its own: InsertPrivateJob stamps it
+// with the submitter too, so before the is_private check a moderator who knew the slug of
+// a jd-tailor-intake private JD could read it here and then rewrite it through Update.
+// GetJobBySlug carries no is_private predicate by design — internal/ingest/jdresolve says
+// so, and leaves ownership to each caller. This is this caller's half of that bargain.
 func (r *QueriesRepository) BySlug(ctx context.Context, slug string) (job.Job, job.Extras, error) {
 	row, err := r.q.GetJobBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -71,7 +78,7 @@ func (r *QueriesRepository) BySlug(ctx context.Context, slug string) (job.Job, j
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if !row.CreatedBy.Valid {
+	if !row.CreatedBy.Valid || row.IsPrivate {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	return job.FromRow(row)

@@ -294,6 +294,11 @@ type Querier interface {
 	// a re-import of the same URL would otherwise find itself. Served by the partial
 	// jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
 	// non-partial fallback.
+	// A canon must not be private either. InsertPrivateJob derives company_slug and
+	// role_fingerprint like every other write path, so a pasted JD can land in a public
+	// posting's role cluster; electing it here would mark the incoming public posting a
+	// duplicate of a row nothing lists, removing BOTH from search — the import's own
+	// posting and the private one it was pointed at.
 	CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error)
 	// Claim a batch of live, unleased captures, freshest posting first, by stamping
 	// claimed_at. Mirrors ClaimApplyFormBatch: FOR UPDATE OF o locks only outbox rows, SKIP
@@ -3097,6 +3102,15 @@ type Querier interface {
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
 	// duplicate_of IS NULL collapses role-cluster reposts to their canonical row, matching
 	// the /jobs list so a company page shows one card per role, not every repost.
+	//
+	// AND NOT is_private excludes the jd-tailor-intake private-job path. InsertPrivateJob
+	// derives a company_slug from whatever employer the pasted text names, so without this a
+	// private JD naming a company the catalogue already knows appears in that company's PUBLIC
+	// list — full pasted text, and first, since this orders by created_at DESC. The route is
+	// anonymous (GET /api/v1/companies/:slug/jobs, mounted under mw.optional), so the leak
+	// needs no account at all, and the same query backs the assistant's company-jobs tool.
+	// RefreshCompanyFacets already excludes private rows from companies.job_count, so before
+	// this clause the page contradicted its own counter.
 	ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyParams) ([]Job, error)
 	// Keyset scan for the reindex command: pages by the immutable primary key, so
 	// concurrent inserts/updates (which shift posted_at ordering) cannot make the
@@ -3261,6 +3275,11 @@ type Querier interface {
 	// representative open job's source and URL so the backfill worker can locate the
 	// ATS board. Only boards with live jobs matter, so dead ones never appear. The Go
 	// side re-validates slug-likeness authoritatively before touching anything.
+	//
+	// AND NOT is_private excludes the jd-tailor-intake private-job path: the representative
+	// row here supplies the URL the worker reads a real display name from, and the name it
+	// reads is written to the PUBLIC companies row (RenameSlugCompany below). A JD one user
+	// pasted in is not a board, and it must not be the source of an employer's public name.
 	ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
@@ -3697,6 +3716,11 @@ type Querier interface {
 	// — and the floor has to be applied AFTER it: "Product Owner", "product owner" and
 	// "PRODUCT OWNER" are three rows here and one suggestion, so a floor applied to these
 	// counts would drop a title that clears it comfortably once merged.
+	// AND NOT is_private excludes the jd-tailor-intake private-job path: the dictionary this
+	// mines is served to every visitor as they type, so a title one user pasted in privately
+	// must not become public vocabulary. The frequency floor is not the guard — it is applied
+	// after normalisation, so a private title merges into a public one's count rather than
+	// standing alone under it.
 	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
 	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
 	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
@@ -3747,6 +3771,11 @@ type Querier interface {
 	// Returns no row when the catalogue is empty, which the caller must distinguish from a
 	// zero timestamp: zero reads as 1970, i.e. an infinitely stale catalogue, whereas an
 	// empty catalogue is a fresh-install state and not an incident.
+	//
+	// AND NOT is_private for the same reason the public twin of this question carries it
+	// (jobs.sql's LatestOpenJobAddedAt): a jd-tailor-intake row is a user pasting a job
+	// description in, not the crawler producing one, so counting it would let one paste hide
+	// an ingest that has stopped — the exact incident this gauge exists to raise.
 	NewestOpenJobCreatedAt(ctx context.Context) (pgtype.Timestamptz, error)
 	// The subscription-digest backlog: how many active subscriptions have something
 	// undelivered, and how old the oldest undelivered match is.
@@ -3779,6 +3808,13 @@ type Querier interface {
 	//
 	// The display name is the modal `company` across the aggregator rows, since two aggregators
 	// may spell the same employer differently and the name is what the harvest gate compares.
+	//
+	// NOT ats.is_private sits on the EXCLUSION test, which is where it can change an answer:
+	// a private posting's source is 'pasted'/'weblink' (internal/job/privatejob), so it is
+	// never a candidate row above, but it does satisfy "a source outside the aggregator set"
+	// and would silently disqualify a company nobody's board is actually crawled for. This is
+	// the argument CompaniesWithFreshNonAggregatorCoverage above already writes out in full:
+	// a JD one user pasted in is not evidence that we cover an employer.
 	OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error)
 	// Does this account still owe itself the invitee's first-month discount?
 	//
@@ -5294,6 +5330,14 @@ type Querier interface {
 	// Moderator edit of a hand-curated job, addressed by public_slug and scoped to
 	// created_by IS NOT NULL so this path can only rewrite a moderator-authored posting,
 	// never an automated-source (ingest/telegram) one — regardless of the declared source.
+	// AND NOT is_private is the second half of that scope, not a duplicate of it:
+	// InsertPrivateJob stamps created_by too, so created_by IS NOT NULL alone also matched
+	// every jd-tailor-intake private JD, and a moderator holding the slug could rewrite one
+	// user's private text. The refusal in moderation.QueriesRepository.BySlug is what stops
+	// the service path reaching this statement at all — the company_upsert CTE below is
+	// independent of the UPDATE and would mint a public companies row from a private JD's
+	// employer even on a zero-row update, which is exactly what InsertPrivateJob refuses to
+	// do. This clause is the guard in the statement for any caller that arrives without it.
 	// The partial merge (nil = unchanged) and facet re-derivation happen in the service; this
 	// query writes the resulting full field set, so geography/skills/company_slug stay
 	// consistent with the edited content. The source identity (url/external_id/public_slug)

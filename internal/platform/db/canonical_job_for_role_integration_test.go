@@ -113,6 +113,28 @@ func TestCanonicalJobForRole(t *testing.T) {
 			t.Errorf("err = %v, want pgx.ErrNoRows", err)
 		}
 	})
+
+	t.Run("a private posting is no canon", func(t *testing.T) {
+		// InsertPrivateJob derives company_slug and role_fingerprint like every other write
+		// path, so a JD one user pasted in can land in a public posting's role cluster.
+		// Electing it here would mark the incoming import a duplicate of a row nothing
+		// lists — removing the import from search and pointing it at content only its
+		// submitter may read.
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
+			                  role_fingerprint, is_private)
+			VALUES ('pasted', 'private:go', '', 'Senior Go Engineer', 'private-go-acme', 'Acme', 'acme',
+			        'fp-private', true)`); err != nil {
+			t.Fatalf("seed private job: %v", err)
+		}
+		_, err := q.CanonicalJobForRole(ctx, CanonicalJobForRoleParams{
+			CompanySlug: "acme", RoleFingerprint: fp("fp-private"),
+			Source: "weblink", ExternalID: "https://storefront.test/private",
+		})
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("err = %v, want pgx.ErrNoRows", err)
+		}
+	})
 }
 
 func TestMarkJobDuplicateOfRole(t *testing.T) {

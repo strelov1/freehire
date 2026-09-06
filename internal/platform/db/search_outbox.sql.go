@@ -23,6 +23,17 @@ WITH claimable AS (
           WHERE j.id = o.job_id
             AND j.closed_at IS NULL
             AND j.duplicate_of IS NULL
+            -- A private posting must never be drained into the public facet index, and
+            -- "InsertPrivateJob enqueues none" is not enough to stop it: the role-duplicate
+            -- pass requeues every row whose duplicate_of goes back to NULL, and canon is
+            -- MIN(id) among OPEN rows with failover when the canon closes. So a pasted JD
+            -- marked a duplicate of the public posting it was copied from is ELECTED canon
+            -- the moment that public one soft-closes, and is requeued from there — title,
+            -- company, description and public_slug into the index anyone searches.
+            -- Constructed against Postgres before this line existed; the row was claimed.
+            -- cmd/reindex already drops private rows on the full rebuild; this is the same
+            -- rule on the incremental path, which is the one that had no predicate at all.
+            AND NOT j.is_private
       )
     ORDER BY o.job_posted_at DESC NULLS LAST, o.job_id DESC
     FOR UPDATE OF o SKIP LOCKED

@@ -122,7 +122,17 @@ type Fields struct {
 	// dictionary columns over it. These never participate in the write surface.
 	ID            int64
 	ManuallyAdded bool
-	Enrichment    enrich.Enrichment
+	// Private marks the jd-tailor-intake posting a single user pasted in, visible only
+	// to them (jobs.is_private, written by InsertPrivateJob — see internal/job/privatejob).
+	//
+	// It is here because it was NOT, and four separate reads leaked or rewrote a private
+	// posting for want of it: nothing above a db.Job row could even ask the question, so
+	// every check had to be a predicate remembered in one more SQL statement. A caller
+	// holding a loaded Job can now ask directly. It stays off the write surface — private
+	// is decided by which query wrote the row, not by a field a caller may set — and off
+	// the wire shape (jobview), which is served to whoever asks.
+	Private    bool
+	Enrichment enrich.Enrichment
 	// RequirementsDerived is the posting's own requirements read out of its
 	// description markup (internal/job/reqextract), nil when it states none. It is the
 	// second producer of the served enrichment.requirements: the projection folds it in

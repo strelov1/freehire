@@ -136,3 +136,34 @@ func TestJobFromRow_ProjectsManualSalary(t *testing.T) {
 		t.Errorf("ManualSalary = %v, want nil for a row with no manual salary", none.Fields().ManualSalary)
 	}
 }
+
+// The aggregate carries jobs.is_private, so a caller holding a loaded Job can ask whether
+// it is the private jd-tailor-intake posting instead of hoping the query it came from
+// remembered the predicate. created_by is deliberately set on the private row: it is the
+// SUBMITTER there, so ManuallyAdded alone cannot tell the two provenances apart — that
+// conflation is what let the moderator edit path reach a private JD.
+func TestJobFromRow_ProjectsPrivate(t *testing.T) {
+	private, err := jobFromRow(db.Job{
+		ID: 9, Source: "pasted", ExternalID: "uuid", Title: "Pasted job description",
+		PublicSlug: "pasted-job-description-acme-9f2c",
+		CreatedBy:  pgtype.Int8{Int64: 42, Valid: true},
+		IsPrivate:  true,
+	})
+	if err != nil {
+		t.Fatalf("jobFromRow(private): %v", err)
+	}
+	if !private.Fields().Private {
+		t.Error("Private = false, want true for a row with is_private set")
+	}
+	if !private.Fields().ManuallyAdded {
+		t.Error("ManuallyAdded = false: created_by is set on a private row too, which is the point")
+	}
+
+	public, err := jobFromRow(db.Job{ID: 10, Source: "greenhouse", ExternalID: "gh:1", Title: "t", PublicSlug: "s"})
+	if err != nil {
+		t.Fatalf("jobFromRow(public): %v", err)
+	}
+	if public.Fields().Private {
+		t.Error("Private = true, want false for an ordinary crawled row")
+	}
+}

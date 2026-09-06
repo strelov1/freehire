@@ -586,6 +586,7 @@ SELECT DISTINCT ON (company_slug)
 FROM jobs
 WHERE closed_at IS NULL
   AND duplicate_of IS NULL
+  AND NOT is_private
   AND company_slug <> ''
   AND company ~ '^[a-z0-9._-]+$'
 ORDER BY company_slug, created_at DESC
@@ -603,6 +604,11 @@ type ListSlugLikeCompaniesForBackfillRow struct {
 // representative open job's source and URL so the backfill worker can locate the
 // ATS board. Only boards with live jobs matter, so dead ones never appear. The Go
 // side re-validates slug-likeness authoritatively before touching anything.
+//
+// AND NOT is_private excludes the jd-tailor-intake private-job path: the representative
+// row here supplies the URL the worker reads a real display name from, and the name it
+// reads is written to the PUBLIC companies row (RenameSlugCompany below). A JD one user
+// pasted in is not a board, and it must not be the source of an employer's public name.
 func (q *Queries) ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error) {
 	rows, err := q.db.Query(ctx, listSlugLikeCompaniesForBackfill)
 	if err != nil {

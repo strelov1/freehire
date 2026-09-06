@@ -627,3 +627,80 @@ func TestListCompaniesYCStageFlags(t *testing.T) {
 		}
 	})
 }
+
+// A company's public page must not list the jd-tailor-intake private postings that name
+// it. InsertPrivateJob derives a company_slug from whatever employer the pasted text
+// names, the route is anonymous, and the list is ordered newest-first — so a private JD
+// naming a company the catalogue already knows arrived at the TOP of that company's page,
+// with its full pasted body. The page also contradicted itself: RefreshCompanyFacets
+// already leaves private rows out of companies.job_count.
+func TestGetCompanyOmitsPrivateJobs(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, job_count) VALUES ('stealthco', 'Stealth Co', 1)`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+	var submitterID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('paster@example.test') RETURNING id`).Scan(&submitterID); err != nil {
+		t.Fatalf("seed submitter: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company, company_slug, description, public_slug)
+		 VALUES ('greenhouse', 'gh:stealth:1', 'http://ats.test/s1', 'Public Role', 'Stealth Co', 'stealthco',
+		         'Public body', 'public-role-stealthco-cccc3333')`); err != nil {
+		t.Fatalf("seed public job: %v", err)
+	}
+	// Written after the public one, so newest-first ordering would put it first.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company, company_slug, description, public_slug,
+		                   created_by, is_private)
+		 VALUES ('pasted', 'private:stealth:1', '', 'Private Role', 'Stealth Co', 'stealthco',
+		         'Confidential body', 'private-role-stealthco-dddd4444', $1, true)`, submitterID); err != nil {
+		t.Fatalf("seed private job: %v", err)
+	}
+
+	h := &companiesHandlers{queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/companies/:slug", h.GetCompany)
+
+	resp, err := app.Test(httptest.NewRequestWithContext(ctx, "GET", "/api/v1/companies/stealthco", nil))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	var body struct {
+		Data struct {
+			Jobs []struct {
+				PublicSlug string `json:"public_slug"`
+			} `json:"jobs"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	var slugs []string
+	for _, j := range body.Data.Jobs {
+		slugs = append(slugs, j.PublicSlug)
+	}
+	sort.Strings(slugs)
+	if strings.Join(slugs, ",") != "public-role-stealthco-cccc3333" {
+		t.Errorf("company jobs = %v, want only the public posting", slugs)
+	}
+	// Belt and braces on the leak that matters: the pasted body must not be on the wire
+	// under any key, whatever the projection is shaped like.
+	if strings.Contains(string(raw), "Confidential body") {
+		t.Error("the private posting's pasted description reached the anonymous company page")
+	}
+}
