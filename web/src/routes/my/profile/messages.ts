@@ -1,9 +1,11 @@
 import { defineMessages } from '$lib/i18n/t';
 
-// Only the tab-strip labels — the views themselves (ProfileForm,
+// The section heading and the tab-strip labels — the views themselves (ProfileForm,
 // ExperienceBankView, etc.) are out of scope for this pass.
 export const messages = defineMessages(
   {
+    title: 'Profile',
+    description: 'Your CV, skills and role — measured against live market demand.',
     tabs: {
       profile: 'Profile',
       contacts: 'Contacts',
@@ -17,6 +19,8 @@ export const messages = defineMessages(
   },
   {
     ru: {
+      title: 'Профиль',
+      description: 'Ваше резюме, навыки и роль — в сравнении с живым спросом рынка.',
       tabs: {
         profile: 'Профиль',
         contacts: 'Контакты',

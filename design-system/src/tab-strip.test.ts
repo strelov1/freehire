@@ -10,6 +10,12 @@ const TABS = [
   { id: 'three', label: 'Three' },
 ];
 
+const LINK_TABS = [
+  { id: 'one', label: 'One', href: '/one' },
+  { id: 'two', label: 'Two', href: '/two' },
+  { id: 'three', label: 'Three', href: '/three' },
+];
+
 function setup(active = 'one') {
   const onSelect = vi.fn();
   const { getAllByRole, rerender } = render(TabStrip, {
@@ -115,10 +121,7 @@ describe('TabStrip', () => {
   it('moves focus without navigating when the tabs are links', async () => {
     const onSelect = vi.fn();
     const { getAllByRole } = render(TabStrip, {
-      tabs: [
-        { id: 'one', label: 'One', href: '/one' },
-        { id: 'two', label: 'Two', href: '/two' },
-      ],
+      tabs: LINK_TABS,
       active: 'one',
       onSelect,
       label: 'Demo sections',
@@ -129,6 +132,40 @@ describe('TabStrip', () => {
     await fireArrow(must(tabs[0]), 'ArrowRight');
 
     expect(onSelect).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(tabs[1]);
+  });
+
+  // The regression a single press could not see: a link strip does not move its selection
+  // on an arrow, so a step measured from `active` returned the same neighbour every time
+  // and the row could not be walked past its first hop.
+  it('keeps walking a link strip across successive presses', async () => {
+    const { getAllByRole } = render(TabStrip, {
+      tabs: LINK_TABS,
+      active: 'one',
+      label: 'Demo sections',
+      panelId: 'demo-panel',
+    });
+
+    const tabs = getAllByRole('tab');
+    await fireArrow(must(tabs[0]), 'ArrowRight');
+    await fireArrow(must(tabs[1]), 'ArrowRight');
+
+    expect(document.activeElement).toBe(tabs[2]);
+  });
+
+  it('walks a link strip backwards from the focused tab too', async () => {
+    const { getAllByRole } = render(TabStrip, {
+      tabs: LINK_TABS,
+      active: 'one',
+      label: 'Demo sections',
+      panelId: 'demo-panel',
+    });
+
+    const tabs = getAllByRole('tab');
+    // Off the left end of the selected tab wraps to the last, then back one.
+    await fireArrow(must(tabs[0]), 'ArrowLeft');
+    await fireArrow(must(tabs[2]), 'ArrowLeft');
+
     expect(document.activeElement).toBe(tabs[1]);
   });
 
