@@ -286,6 +286,10 @@ var apiBoards = []struct{ host, source, prefix string }{
 	{"api.ashbyhq.com", "ashby", "posting-api/job-board"},
 	{"boards-api.greenhouse.io", "greenhouse", "v1/boards"},
 	{"api.lever.co", "lever", "v0/postings"},
+	// jobappnetwork (talentReef): the platform's own public apply link IS this shape
+	// (apply.jobappnetwork.com/clients/<clientId>/posting/<id>/…), so a person-pasted or
+	// harvested URL resolves through the same mechanism as the XHR-only hosts above.
+	{"apply.jobappnetwork.com", "jobappnetwork", "clients"},
 }
 
 // noBoardHosts are hosts under a supported ATS's domain that serve the platform's own

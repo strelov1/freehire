@@ -214,6 +214,9 @@ func All(c HTTPClient) map[string]Source {
 		// employer's eight-hex career-site id. Rate-paced on every path: its AWS API Gateway
 		// origin meters by request rate per IP (see workstreamRequestInterval).
 		NewWorkstream(pacedHTMLGetter(c, workstreamRequestInterval, workstreamRequestBurst)),
+		// jobappnetwork (talentReef): another hourly/frontline-leaning ATS, board = the
+		// employer's numeric client id from its own public apply-link URL shape.
+		NewJobAppNetwork(c),
 		NewSenior(c),
 		NewTrakstar(c),
 		NewFactorial(c),
