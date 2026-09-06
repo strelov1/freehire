@@ -97,16 +97,20 @@
 
 ## 7. Close out the issue
 
-- [ ] 7.1 Post the measurement and the verdict to issue #1759 — step 4 asked whether Adzuna's
+- [x] 7.1 Post the measurement and the verdict to issue #1759 — step 4 asked whether Adzuna's
   remainder is exclusive, and it is: 20,350 companies and 81,730 open postings exist in the
   catalogue through Adzuna and nowhere else. Adzuna is kept and narrowed, not deprecated.
-- [ ] 7.2 Note in #1759 that its step 2 instructions are stale: `sources/` was retired in
+- [x] 7.2 Note in #1759 that its step 2 instructions are stale: `sources/` was retired in
   #2406 and `cmd/harvest-boards` now writes to the `boards` table. A reader following the
   issue's text lands on a directory that no longer exists.
-- [ ] 7.3 Note that batch 2/2 (`breezy`, `freshteam`, `personio`, `trakstar`, `workable`) was
+- [x] 7.3 Note that batch 2/2 (`breezy`, `freshteam`, `personio`, `trakstar`, `workable`) was
   promised in a comment on 2026-08-12 and never landed — no PR references it. Either finish it
   or say plainly that it was dropped; a half-finished batch recorded as "to follow" reads as
   in-progress forever.
+  - Posted 2026-09-06, with the figure that should decide it: orphan companies reachable only
+    through Adzuna were 18,726 when #1759 was opened and are **26,867** today. The aggregator
+    adds companies faster than 480 onboarded boards remove them, so batch 2 is worth finishing
+    on its own merits but is not the lever the issue was hoping for.
 
 ## 8. Out of scope, recorded so it is not lost
 
