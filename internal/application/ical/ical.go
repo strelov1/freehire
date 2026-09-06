@@ -15,6 +15,18 @@ import (
 	"strings"
 )
 
+// maxBody caps the body UID will parse, and it is a bound on work done for an
+// unauthenticated sender rather than a format rule. cmd/mail-ingest parses a message
+// BEFORE it resolves the recipient and before it acks the SQS entry, one at a time, in the
+// one Restart=always daemon on the host with no MemoryMax — so the time one text/calendar
+// part costs is time every hosted mailbox spends waiting for its own mail.
+//
+// A megabyte is far above anything an invitation carries (a full attendee list with a long
+// description is kilobytes) and far below SES's own 30 MB inbound ceiling, which is the
+// only other bound on this path. Over the cap reads as absence — the same answer every
+// other unreadable invitation already gets.
+const maxBody = 1 << 20
+
 // UID returns the first UID property in the body, or "" when it carries none.
 //
 // The first PROPERTY, not the first VEVENT's: a body whose VTODO precedes its VEVENT
@@ -26,6 +38,9 @@ import (
 // so a confident wrong answer would attach a meeting to an application that no
 // invitation named — and the candidate would prepare for the wrong employer.
 func UID(body []byte) string {
+	if len(body) > maxBody {
+		return ""
+	}
 	for _, line := range unfold(body) {
 		name, value, ok := splitProperty(line)
 		if !ok || !strings.EqualFold(name, "UID") {
@@ -44,20 +59,38 @@ func UID(body []byte) string {
 // leading space or tab. Real identifiers from Google and the ATS platforms are long
 // enough that this happens every time, so a line-by-line reader returns a truncated UID
 // — non-empty, well-formed, and matching no calendar event that will ever exist.
+//
+// The accumulator is a strings.Builder rather than `lines[len(lines)-1] += r[1:]`. Strings
+// are immutable, so that += reallocated and copied the whole logical line on every
+// continuation: quadratic in the number of continuations, measured at 70s on a 6.4 MB
+// body. maxBody bounds how much of that an unauthenticated sender may buy, but a cap alone
+// would still leave minutes of CPU inside it, and the daemon parses one message at a time.
 func unfold(body []byte) []string {
 	// Tolerate bare LF as well as the CRLF the format specifies: a message that has been
 	// through a gateway is not always still canonical.
 	raw := strings.Split(strings.ReplaceAll(string(bytes.TrimSpace(body)), "\r\n", "\n"), "\n")
 
-	var lines []string
+	var (
+		lines   []string
+		current strings.Builder
+		open    bool
+	)
 	for _, r := range raw {
-		if strings.HasPrefix(r, " ") || strings.HasPrefix(r, "\t") {
-			if len(lines) > 0 {
-				lines[len(lines)-1] += r[1:]
-				continue
-			}
+		// A continuation before any content line is not one — nothing precedes it to
+		// fold into, so it stands as its own line, leading whitespace and all.
+		if open && (strings.HasPrefix(r, " ") || strings.HasPrefix(r, "\t")) {
+			current.WriteString(r[1:])
+			continue
 		}
-		lines = append(lines, r)
+		if open {
+			lines = append(lines, current.String())
+			current.Reset()
+		}
+		current.WriteString(r)
+		open = true
+	}
+	if open {
+		lines = append(lines, current.String())
 	}
 	return lines
 }

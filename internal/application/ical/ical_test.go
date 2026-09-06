@@ -1,6 +1,10 @@
 package ical
 
-import "testing"
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
 
 // crlf builds a calendar body with the line endings the format actually uses. Writing
 // "\n" in a literal would test a document no mail server sends.
@@ -89,6 +93,87 @@ func TestUIDReportsAbsenceRatherThanGuessing(t *testing.T) {
 				t.Errorf("UID = %q, want empty", got)
 			}
 		})
+	}
+}
+
+// The sender of a text/calendar part is whoever mailed the hosted address, and
+// cmd/mail-ingest parses before it resolves the recipient and before it acks — one
+// message at a time, in the one Restart=always daemon on the host with no MemoryMax. So
+// the work one body may cost is a property worth pinning, not a detail.
+//
+// Over the cap reads as absence, which is what every other unparseable invitation already
+// reads as: internal/application/calmatch simply makes no automatic link.
+func TestUIDRefusesABodyTooLargeToBeAnInvitation(t *testing.T) {
+	head := crlf("BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:oversized@example.test")
+	pad := bytes.Repeat([]byte("X-PADDING:xxxxxxxxxxxxxxxxxxxx\r\n"), maxBody/32+1)
+	body := append(head, pad...)
+	if len(body) <= maxBody {
+		t.Fatalf("test body is %d bytes, want more than the %d-byte cap", len(body), maxBody)
+	}
+
+	if got := UID(body); got != "" {
+		t.Errorf("UID = %q, want empty for a body over the cap", got)
+	}
+}
+
+// The cap must not be reachable by an invitation anyone actually sends. A calendar part
+// with a long description and a full attendee list is kilobytes, so a body just under the
+// bound is still read normally.
+func TestUIDReadsABodyJustUnderTheCap(t *testing.T) {
+	head := crlf("BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:roomy@example.test")
+	pad := bytes.Repeat([]byte("X-PADDING:xxxxxxxxxxxxxxxxxxxx\r\n"), (maxBody-len(head))/32-1)
+	body := append(head, pad...)
+	if len(body) > maxBody {
+		t.Fatalf("test body is %d bytes, want at most the %d-byte cap", len(body), maxBody)
+	}
+
+	if want := "roomy@example.test"; UID(body) != want {
+		t.Errorf("UID = %q, want %q", UID(body), want)
+	}
+}
+
+// unfold used to join continuations with `lines[len(lines)-1] += r[1:]`, which reallocates
+// and copies everything accumulated so far on every continuation line — quadratic, and
+// measured at 70s on a 6.4 MB body. The cap above bounds the damage; this pins the shape,
+// because a cap alone would still leave minutes of CPU inside it.
+//
+// Doubling the input must roughly double the work, so the assertion is on ALLOCATED BYTES
+// rather than on wall time: it is the copying that grew, and a byte count is the same
+// number on a busy CI runner as on an idle laptop. Quadratic growth here was ~4x per
+// doubling; the ceiling of 3x leaves ample room for a linear implementation's slack.
+func TestUnfoldCostGrowsWithTheBodyNotItsSquare(t *testing.T) {
+	folded := func(continuations int) []byte {
+		var b strings.Builder
+		b.WriteString("BEGIN:VEVENT\r\nUID:long@example.test\r\n")
+		for i := 0; i < continuations; i++ {
+			b.WriteString(" xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n")
+		}
+		b.WriteString("END:VEVENT\r\n")
+		return []byte(b.String())
+	}
+	small := testing.Benchmark(func(b *testing.B) {
+		body := folded(4000)
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = unfold(body)
+		}
+	})
+	large := testing.Benchmark(func(b *testing.B) {
+		body := folded(8000)
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = unfold(body)
+		}
+	})
+
+	smallBytes := small.AllocedBytesPerOp()
+	largeBytes := large.AllocedBytesPerOp()
+	if smallBytes == 0 {
+		t.Fatal("measured no allocation for the smaller body; the benchmark did not run")
+	}
+	if ratio := float64(largeBytes) / float64(smallBytes); ratio > 3 {
+		t.Errorf("doubling the body multiplied allocated bytes by %.1f (%d → %d); want linear growth, at most 3x",
+			ratio, smallBytes, largeBytes)
 	}
 }
 
