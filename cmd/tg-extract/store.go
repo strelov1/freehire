@@ -19,9 +19,9 @@ const maxAttempts = 2
 
 // extractStore adapts the generated queries + pool to telegram.ExtractStore.
 // Complete writes every extracted job through the canonical UpsertJob (which
-// upserts the company and gates on the dedup key) plus the enrichment enqueue,
-// and marks the post extracted — all in one transaction, so a crash never
-// half-persists a post.
+// upserts the company and gates on the dedup key) plus the enrichment and search
+// enqueues, and marks the post extracted — all in one transaction, so a crash
+// never half-persists a post.
 type extractStore struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
@@ -77,8 +77,8 @@ func (s *extractStore) CompleteLinks(ctx context.Context, post telegram.PendingP
 }
 
 // write persists every job through the canonical UpsertJob (which upserts the company and
-// gates on the dedup key), enqueues enrichment for each, and marks the post extracted — all in
-// one transaction, so a crash never half-persists a post.
+// gates on the dedup key), enqueues each for enrichment and for the live facet index, and
+// marks the post extracted — all in one transaction, so a crash never half-persists a post.
 //
 // It maps and nothing else. Building the aggregate, and refusing a mis-extraction that has no
 // title or identity, is the runner's — which is what lets a run report how many it refused
@@ -102,6 +102,13 @@ func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, job
 			JobID:         saved.Job.ID,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s/%s: %w", f.Source, f.ExternalID, err)
+		}
+		// And for the live facet index, in the same transaction — otherwise an extracted
+		// vacancy reaches /jobs/search and the facet counts only on the next full
+		// rebuild-and-swap. This is a stream, not the occasional curated write: every
+		// other write path (cmd/ingest, cmd/hydrate-adzuna-description) queues here too.
+		if err := qtx.EnqueueSearchOutbox(ctx, saved.Job.ID); err != nil {
+			return fmt.Errorf("enqueue search outbox %s/%s: %w", f.Source, f.ExternalID, err)
 		}
 	}
 
