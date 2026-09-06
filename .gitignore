@@ -186,5 +186,8 @@ extension/*.zip
 # Go / Vitest coverage profiles and HTML (make cover, pnpm test:coverage).
 /coverage/
 /web/coverage/
+
+# Playwright e2e run artifacts (pnpm --dir web run test:e2e).
+/web/test-results/
 .pnpm-store/
 .tmp-containers/
