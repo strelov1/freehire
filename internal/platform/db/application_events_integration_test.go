@@ -366,3 +366,123 @@ func TestRedateApplication_MovesTheAppliedEventWithTheColumn(t *testing.T) {
 		t.Errorf("applied_count = %d, want 1: correcting a date is not a second application", appliedCount)
 	}
 }
+
+// The mail path's stage advance must record the transition, and record it against the
+// MESSAGE — not now(), and not nothing at all.
+//
+// AdvanceUserJobStage was a bare UPDATE until 2026-09-06, so the one stage-writer driven by
+// employer mail was also the one that left no ledger row. ListInterviewPrepCandidates reads
+// `kind='stage_set' AND signal='interview'` and nothing else, so cmd/nudge found no
+// candidate an employer's own invitation had produced — and jobtracking.SuggestStage
+// returns nil once the stage already matches what the mail implies, so there was nothing to
+// click either.
+func TestAdvanceUserJobStage_RecordsTheTransitionDatedByTheMessage(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "advance@example.test", true)
+	job := seedResponseJob(t, q, "advance-1", "acme")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	// A message from well before today, so reading now() instead of received_at is visible.
+	wrote := time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)
+	var emailID int64
+	if err := q.db.QueryRow(ctx,
+		`INSERT INTO emails (user_id, source, external_id, received_at, job_id, status_signal)
+		 VALUES ($1, 'gmail', 'advance-m1', $2, $3, 'interview_invitation') RETURNING id`,
+		user, wrote, job).Scan(&emailID); err != nil {
+		t.Fatalf("seed email: %v", err)
+	}
+
+	advance := func(stage string) {
+		t.Helper()
+		if err := q.AdvanceUserJobStage(ctx, AdvanceUserJobStageParams{
+			UserID: user, JobID: job, Stage: stage, EmailID: emailID, EventSource: "mail_gmail",
+		}); err != nil {
+			t.Fatalf("advance to %s: %v", stage, err)
+		}
+	}
+	advance("interview")
+
+	var stage, signal, source string
+	var occurred time.Time
+	if err := q.db.QueryRow(ctx,
+		`SELECT a.stage, ev.signal, ev.source, ev.occurred_at
+		   FROM applications a
+		   JOIN application_events ev ON ev.user_id = a.user_id AND ev.kind = 'stage_set'
+		  WHERE a.user_id = $1 AND a.job_id = $2`, user, job).Scan(&stage, &signal, &source, &occurred); err != nil {
+		t.Fatalf("read the advance and its event: %v", err)
+	}
+	if stage != "interview" {
+		t.Errorf("stage = %q, want interview", stage)
+	}
+	// The event's signal is the stage the column moved to. That is what
+	// ListInterviewPrepCandidates matches on (`signal='interview'`), so a stage_set carrying
+	// anything else is invisible to cmd/nudge.
+	if signal != "interview" {
+		t.Errorf("event signal = %q, want the stage it moved to", signal)
+	}
+	if source != "mail_gmail" {
+		t.Errorf("event source = %q, want mail_gmail", source)
+	}
+	if !occurred.Equal(wrote) {
+		t.Errorf("event occurred_at = %v, want the message's %v — now() would stamp a year of "+
+			"imported mail as today, and LastStageSetAt silences a suggestion older than it",
+			occurred, wrote)
+	}
+
+	// The ledger holds transitions: advancing onto the stage the row already carries
+	// records nothing, exactly as TrackJob's own `prior` CTE decides it.
+	advance("interview")
+	var events int
+	if err := q.db.QueryRow(ctx,
+		`SELECT count(*) FROM application_events WHERE user_id = $1 AND kind = 'stage_set'`,
+		user).Scan(&events); err != nil {
+		t.Fatalf("count stage_set events: %v", err)
+	}
+	if events != 1 {
+		t.Errorf("two advances to the same stage produced %d events, want 1", events)
+	}
+}
+
+// LastStageSetAt is what silences a mail-driven stage suggestion, and it means "when the
+// stage was last set other than by mail". Now that the mail path records its own
+// auto-advances as stage_set rows, that has to be a predicate rather than a description:
+// a mail-derived event silencing a suggestion computed from the same messages would answer
+// the question on the candidate's behalf.
+func TestLastStageSetAt_IgnoresTheStagesMailSetItself(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "laststage@example.test", true)
+	job := seedResponseJob(t, q, "laststage-1", "acme")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	set := func(stage, source string, at time.Time) {
+		t.Helper()
+		if _, err := q.db.Exec(ctx,
+			`INSERT INTO application_events (user_id, job_id, kind, signal, occurred_at, source)
+			 VALUES ($1, $2, 'stage_set', $3, $4, $5)`, user, job, stage, at, source); err != nil {
+			t.Fatalf("insert stage_set (%s): %v", source, err)
+		}
+	}
+	candidate := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	set("screening", "user", candidate)
+	set("interview", "mail_gmail", time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC))
+
+	got, err := q.LastStageSetAt(ctx, LastStageSetAtParams{
+		UserID: user, JobID: pgtype.Int8{Int64: job, Valid: true},
+		ExcludeSources: []string{"mail_gmail", "mail_hosted", "mail_external"},
+	})
+	if err != nil {
+		t.Fatalf("LastStageSetAt: %v", err)
+	}
+	if !got.Valid || !got.Time.Equal(candidate) {
+		t.Errorf("last_stage_set_at = %v, want the candidate's own %v — a mail-sourced "+
+			"auto-advance must not read as the candidate having answered", got, candidate)
+	}
+}

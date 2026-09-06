@@ -100,10 +100,23 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   and say nothing anywhere about why nothing moved. The Emails tab now states the implication per
   message, and `jobtracking.SuggestStage` offers the change in one press. It applies nothing by
   itself; `AdvanceStage` is unchanged and still reads only `advances:true`.
+- **An automatic advance writes `stage_set` beside the column, in one statement.**
+  `AdvanceUserJobStage` was a bare `UPDATE` until 2026-09-06, which made the mail path the one
+  stage-writer that moved an application and recorded nothing — and the ledger, not the column,
+  is what the aggregates read. `ListInterviewPrepCandidates` selects `kind='stage_set' AND
+  signal='interview'` and nothing else, so `cmd/nudge` found no interview an employer's own
+  invitation had produced; and since `SuggestStage` returns nil once the stage already matches
+  what the mail implies, there was nothing to click either. **`occurred_at` is the message's own
+  `received_at`**, read inside the statement, for the reason `RecordEmailApplicationEvent` gives:
+  `now()` would compress a year of imported mail into the day a mailbox was connected.
 - **The suggestion is silenced by the ledger, not by a flag.** A `stage_set` in
   `application_events` later than the message means the candidate has already answered — whichever
-  stage they chose. `LastStageSetAt` reads it. Do not add a dismissal column: it would be a second
-  store of a decision the ledger already holds, and the two would drift.
+  stage they chose. `LastStageSetAt` reads it, **excluding the mail sources** (`appevent.MailSources`):
+  now that mail records its own auto-advances there, a mail-derived event silencing a suggestion
+  computed from the same messages would answer the question on the candidate's behalf. `system`
+  stays in — an auto-expire is a decision about the application, not a reading of a message. Do
+  not add a dismissal column: it would be a second store of a decision the ledger already holds,
+  and the two would drift.
 - **The classifier prompt carries the same three lessons the matcher learned.** The
   sender display name is usually the ATS, not the employer; a calendar invite the
   candidate organised themselves is `other`, not `interview_invitation`; and an
@@ -259,6 +272,15 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   sweeping the backlog through it would silently zero its owner's unread count. For the
   in-process reader this is structural: `inbox.Queries` has no read-marking method, so
   `Search` cannot mark even by mistake.
+- **Mark-all-read carries every filter the listing does, and that is a hand-kept pairing.**
+  Keeping the bulk write out of `inbox.Queries` is what makes `Search` unable to mark — and
+  it also means `MarkAllEmailsRead`'s predicates are a second copy of `ListEmails`'s, with
+  nothing compiling them together. Two went missing that way: `unclassified` and
+  `include_other`, both parsed and validated by the handler, neither reaching the statement,
+  so `read-all?unclassified=1` emptied the WHOLE unread mailbox instead of the triage queue
+  in front of the person pressing it. There is no undo. `include_other` is fed
+  `Query.ShowsOther()`, not the raw flag, or `read-all?status=other` marks nothing.
+  `TestMarkAllReadHonoursEveryFilterTheListingDoes` walks the three cases.
 - The whole `/me/gmail|inbox|emails|mailbox` surface is `mw.key` — a session cookie **or** a
   full-scope API key, so a user's own agent harness drives it. The lone exception is the
   Gmail OAuth connect/callback pair, which stays cookie-only: it redirects a browser to

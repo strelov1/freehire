@@ -4062,6 +4062,12 @@ data: {"type":"result","stop_reason":"completed"}
           { name: 'unread', type: 'boolean', description: 'Only messages you have not opened.' },
           { name: 'link', type: 'string', description: 'One link state: `linked`, `suggested` (awaiting your word), or `unlinked`.' },
           { name: 'q', type: 'string', description: 'Match subject, sender, or body.' },
+          {
+            name: 'include_other',
+            type: 'boolean',
+            description:
+              'Also list the `other` label the default hides. Asking for it by `status=other` implies this.',
+          },
           { name: 'body', type: 'boolean', description: 'Include each message body; caps the page at 50.' },
           { name: 'limit', type: 'integer', description: 'Page size.' },
           { name: 'offset', type: 'integer', description: 'Page offset.' },
@@ -4219,9 +4225,15 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/inbox/read-all',
         auth: 'cookie-or-key',
         summary: 'Mark every unread message matching the filters as read.',
+        description:
+          'It takes the same filters as `GET /me/inbox` and marks exactly what that ' +
+          'listing shows — including the default that hides the `other` label, so an ' +
+          'unfiltered call leaves that mail unread. There is no undo.',
         query: [
           { name: 'source', type: 'string', description: 'Narrow to one account.' },
           { name: 'status', type: 'string', description: 'Narrow to one label.' },
+          { name: 'unclassified', type: 'boolean', description: 'Narrow to mail nothing has judged yet.' },
+          { name: 'include_other', type: 'boolean', description: 'Also mark the `other` label the default hides.' },
           { name: 'link', type: 'string', description: 'Narrow to one link state.' },
           { name: 'q', type: 'string', description: 'Narrow by search.' },
         ],

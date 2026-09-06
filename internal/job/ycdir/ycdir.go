@@ -56,9 +56,17 @@ type Record struct {
 
 // Map converts a directory entry to a Record. It returns ok=false for an entry
 // with no usable name (empty slug).
+//
+// The slug is normalize.CompanySlug, the key the catalogue actually stores companies
+// under — not normalize.Slug, which keeps the corporate form the catalogue strips.
+// Measured against live yc-oss (6202 records): 76 current and 369 former names slugged
+// to something no company row can contain, so the import silently created a reference
+// row instead of enriching the real company. Nothing reported it — loadStats.inserted
+// counted the orphan as new — while the employer kept no yc_batch/yc_status/yc_stage/
+// yc_flags, no badge and no yc_* filter.
 func Map(e Entry) (Record, bool) {
 	name := strings.TrimSpace(e.Name)
-	slug := normalize.Slug(name)
+	slug := normalize.CompanySlug(name)
 	if slug == "" {
 		return Record{}, false
 	}
@@ -133,12 +141,15 @@ func flags(e Entry) []string {
 	return out
 }
 
-// formerSlugs returns the normalized slugs of the entry's former names, dropping
-// blanks; used to match a company we ingest under an old name.
+// formerSlugs returns the company slugs of the entry's former names, dropping blanks;
+// used to match a company we ingest under an old name. normalize.CompanySlug for the
+// same reason Map uses it: these are looked up against the catalogue's company_slug,
+// and a former name written with its corporate form ("CircuitHub, Inc.") is exactly the
+// spelling a directory keeps and the catalogue never has.
 func formerSlugs(names []string) []string {
 	var out []string
 	for _, n := range names {
-		if s := normalize.Slug(n); s != "" {
+		if s := normalize.CompanySlug(n); s != "" {
 			out = append(out, s)
 		}
 	}

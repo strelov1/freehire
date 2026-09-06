@@ -44,6 +44,11 @@ structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/serv
 - **Restore is exact.** Placeholders are unique per kind (`[REDACTED_KIND_n]`), so
   `Restore` maps model output back to the original values regardless of order — the LLM
   sees and emits only placeholders.
+- **`PlaceholderPrefix`/`ContainsPlaceholder` are the marker's one spelling.** A consumer
+  that PERSISTS model output has to be able to recognise a placeholder the model copied
+  into a field it was not asked for — `resumeextract` blanks those (scrub.go). Restore is
+  the wrong tool for that: it would put the real value back into a field a de-identified
+  reader is about to see.
 
 ## Consumers
 - `internal/candidate/resumeextract` — redacts the stored CV before the structured-parse

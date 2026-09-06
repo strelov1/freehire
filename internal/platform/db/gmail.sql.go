@@ -559,37 +559,57 @@ WHERE user_id = $1
   AND deleted_at IS NULL
   AND ($2::text = '' OR source = $2)
   AND ($3::text = '' OR status_signal = $3)
+  AND ($4::bool = false OR classified_at IS NULL)
+  -- The listing's ` + "`" + `other` + "`" + ` default, and the same reading of it: asking FOR the label is
+  -- asking for it (inbox.Query.ShowsOther), so ` + "`" + `?status=other` + "`" + ` marks the page it shows
+  -- rather than nothing at all.
+  AND ($5::bool OR coalesce(status_signal, '') <> 'other')
   AND (
-    $4::text = ''
-    OR ($4 = 'linked'    AND application_id IS NOT NULL)
-    OR ($4 = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
-    OR ($4 = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
+    $6::text = ''
+    OR ($6 = 'linked'    AND application_id IS NOT NULL)
+    OR ($6 = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR ($6 = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
   )
   AND (
-    $5::text = ''
-    OR subject   ILIKE '%' || $5 || '%'
-    OR from_name ILIKE '%' || $5 || '%'
-    OR from_addr ILIKE '%' || $5 || '%'
-    OR body_text ILIKE '%' || $5 || '%'
+    $7::text = ''
+    OR subject   ILIKE '%' || $7 || '%'
+    OR from_name ILIKE '%' || $7 || '%'
+    OR from_addr ILIKE '%' || $7 || '%'
+    OR body_text ILIKE '%' || $7 || '%'
   )
 `
 
 type MarkAllEmailsReadParams struct {
-	UserID int64  `json:"user_id"`
-	Src    string `json:"src"`
-	Status string `json:"status"`
-	Link   string `json:"link"`
-	Q      string `json:"q"`
+	UserID       int64  `json:"user_id"`
+	Src          string `json:"src"`
+	Status       string `json:"status"`
+	Unclassified bool   `json:"unclassified"`
+	IncludeOther bool   `json:"include_other"`
+	Link         string `json:"link"`
+	Q            string `json:"q"`
 }
 
 // Bulk mark-as-read for the caller, honoring the same optional filters as the
 // listing, so "mark all read" means "everything currently shown". Only unread,
 // live rows are touched; returns how many it marked.
+//
+// ALL SIX of ListEmails' filters, not four. It carried neither `unclassified` nor
+// `include_other` until 2026-09-06 while the handler parsed and validated both, so
+// `read-all?unclassified=1` — the triage queue's own button — emptied the whole unread
+// mailbox instead of the page in front of the person pressing it. There is no undo.
+// The two predicate sets are hand-maintained copies of each other — the mark-as-read
+// methods stay outside inbox.Queries on purpose — so they are free to drift again.
+// TestMarkAllEmailsReadTakesEveryListingFilter (mark_all_read_filter_rule_test.go)
+// compares the two generated parameter structs and fails when a filter reaches one and
+// not the other, because the failure mode is a predicate that is simply ABSENT: nothing
+// refuses it, nothing logs, and no behavioural test exists for the case nobody thought of.
 func (q *Queries) MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error) {
 	result, err := q.db.Exec(ctx, markAllEmailsRead,
 		arg.UserID,
 		arg.Src,
 		arg.Status,
+		arg.Unclassified,
+		arg.IncludeOther,
 		arg.Link,
 		arg.Q,
 	)

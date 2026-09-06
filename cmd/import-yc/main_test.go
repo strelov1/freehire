@@ -92,7 +92,7 @@ func (f *fakeStore) UpsertYCCompany(_ context.Context, p db.UpsertYCCompanyParam
 func TestLoad(t *testing.T) {
 	entries := []ycdir.Entry{
 		{Name: "Stripe", OneLiner: "Payments", Industry: "Fintech", Subindustry: "Fintech -> Payments", TeamSize: 8000, Batch: "Summer 2009", Status: "Public", Stage: "Growth", TopCompany: true},
-		{Name: "New Co", Batch: "Winter 2024", Status: "Active"},
+		{Name: "Newco Robotics", Batch: "Winter 2024", Status: "Active"},
 		{Name: "Meta", FormerNames: []string{"Facebook"}, Batch: "Summer 2005", Status: "Public"}, // current absent, former exists
 		{Name: "Benchmark", TeamSize: 7, Batch: "Winter 2023", Status: "Active"},                  // homonym: tiny YC vs big non-YC company
 		{Name: "   "}, // blank → skipped
@@ -100,7 +100,7 @@ func TestLoad(t *testing.T) {
 	// "meta" slug absent, but its former name "facebook" exists → enriches facebook.
 	// "benchmark" exists with 1326 jobs but the YC entry has 7 employees → collision.
 	fs := &fakeStore{
-		exists:    map[string]bool{"stripe": true, "new-co": false, "meta": false, "facebook": true, "benchmark": true},
+		exists:    map[string]bool{"stripe": true, "newco-robotics": false, "meta": false, "facebook": true, "benchmark": true},
 		jobCounts: map[string]int32{"stripe": 543, "facebook": 600, "benchmark": 1326},
 	}
 
@@ -148,9 +148,9 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("company_info not JSON: %v", err)
 	}
 
-	// New Co: no batch text beyond the single value, non-nil arrays.
+	// Newco Robotics: no batch text beyond the single value, non-nil arrays.
 	newco := fs.calls[1]
-	if newco.Slug != "new-co" || !reflect.DeepEqual(newco.YcStatus, []string{"Active"}) {
+	if newco.Slug != "newco-robotics" || !reflect.DeepEqual(newco.YcStatus, []string{"Active"}) {
 		t.Errorf("newco slug/status = %q/%v", newco.Slug, newco.YcStatus)
 	}
 	if newco.YcBatch == nil || newco.Industries == nil {

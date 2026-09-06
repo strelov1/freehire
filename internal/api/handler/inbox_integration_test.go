@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -220,5 +221,118 @@ func TestSoftDeleteSurvivesResync(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Errorf("re-synced deleted message reappeared: %d rows, want 0", len(rows))
+	}
+}
+
+// TestMarkAllReadHonoursEveryFilterTheListingDoes covers the fix for MarkAllEmailsRead
+// carrying four of the six filters the handler parses and validates.
+//
+// "Mark all read" means the page in front of the person pressing it, and there is no undo.
+// `unclassified` was missing, so `read-all?unclassified=1` — the triage queue's own button
+// — emptied the WHOLE unread mailbox; `include_other` was missing, so the same call also
+// read mail the listing deliberately hides.
+func TestMarkAllReadHonoursEveryFilterTheListingDoes(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var uid int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('markall@example.test') RETURNING id`).Scan(&uid); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	// Three unread messages: one nothing has judged (the unclassified queue), one judged
+	// to be about an application, and one judged irrelevant (the label the listing hides).
+	seed := func(ext, status string, classified bool) {
+		t.Helper()
+		var classifiedAt any
+		if classified {
+			classifiedAt = time.Now()
+		}
+		var signal any
+		if status != "" {
+			signal = status
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO emails (user_id, source, external_id, subject, body_text, status_signal,
+			                     classified_at, received_at, read_at)
+			 VALUES ($1, 'hosted', $2, 'Subject', 'body', $3, $4, now(), NULL)`,
+			uid, ext, signal, classifiedAt); err != nil {
+			t.Fatalf("seed email %s: %v", ext, err)
+		}
+	}
+	seed("mk-pending", "", false)
+	seed("mk-rejection", "rejection", true)
+	seed("mk-other", "other", true)
+
+	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
+	cookie, _ := iss.Issue(uid, testTokenVersion)
+	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "inbox.freehire.test")
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	ra := auth.RequireAuth(iss, testVersions)
+	app.Post("/api/v1/me/inbox/read-all", ra, h.MarkAllReadInbox)
+
+	markAll := func(query string) int64 {
+		t.Helper()
+		r := httptest.NewRequestWithContext(ctx, fiber.MethodPost, "/api/v1/me/inbox/read-all"+query, nil)
+		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		resp, err := app.Test(r, -1)
+		if err != nil {
+			t.Fatalf("POST %s: %v", query, err)
+		}
+		var body struct {
+			Data struct {
+				Marked int64 `json:"marked"`
+			} `json:"data"`
+		}
+		if code := decodeJSON(t, resp, &body); code != 200 {
+			t.Fatalf("POST %s status = %d, want 200", query, code)
+		}
+		return body.Data.Marked
+	}
+	unreadExternalIDs := func() []string {
+		t.Helper()
+		rows, err := pool.Query(ctx,
+			`SELECT external_id FROM emails WHERE user_id = $1 AND read_at IS NULL ORDER BY external_id`, uid)
+		if err != nil {
+			t.Fatalf("read unread: %v", err)
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var ext string
+			if err := rows.Scan(&ext); err != nil {
+				t.Fatalf("scan unread: %v", err)
+			}
+			out = append(out, ext)
+		}
+		return out
+	}
+
+	// The triage queue's own button: only the message nothing has judged.
+	if n := markAll("?unclassified=1"); n != 1 {
+		t.Errorf("read-all?unclassified=1 marked %d, want 1 — it must touch only the "+
+			"unclassified page, not the whole unread mailbox", n)
+	}
+	if got := unreadExternalIDs(); !reflect.DeepEqual(got, []string{"mk-other", "mk-rejection"}) {
+		t.Fatalf("unread after ?unclassified=1 = %v, want the classified two untouched", got)
+	}
+
+	// The default view hides `other`, so the unfiltered call must leave it unread.
+	if n := markAll(""); n != 1 {
+		t.Errorf("read-all marked %d, want 1 — the `other` label the listing hides is not "+
+			"on the page being marked", n)
+	}
+	if got := unreadExternalIDs(); !reflect.DeepEqual(got, []string{"mk-other"}) {
+		t.Fatalf("unread after the default read-all = %v, want the hidden `other` still unread", got)
+	}
+
+	// Asking FOR that label is asking for it (Query.ShowsOther), so this marks it rather
+	// than cancelling itself out against the hide default and marking nothing.
+	if n := markAll("?status=other"); n != 1 {
+		t.Errorf("read-all?status=other marked %d, want 1", n)
+	}
+	if got := unreadExternalIDs(); got != nil {
+		t.Errorf("unread after ?status=other = %v, want none left", got)
 	}
 }

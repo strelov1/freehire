@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
@@ -95,11 +96,15 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 	}
 
 	// The candidate's own last word on the stage, which silences an offer they have already
-	// answered. A failure here must not cost them the application: the ledger read is an
-	// input to an optional prompt, not to the record itself, so it degrades to "never set" —
-	// the direction that shows the offer rather than hiding it.
+	// answered. Mail-sourced stage_set rows are excluded because the mail path records its
+	// own auto-advances there, and one of those silencing a suggestion computed from the
+	// same messages would answer the question on the candidate's behalf. A failure here
+	// must not cost them the application: the ledger read is an input to an optional
+	// prompt, not to the record itself, so it degrades to "never set" — the direction that
+	// shows the offer rather than hiding it.
 	lastStageSet, err := h.queries.LastStageSetAt(c.Context(), db.LastStageSetAtParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+		ExcludeSources: appevent.MailSources,
 	})
 	if err != nil {
 		lastStageSet = pgtype.Timestamptz{}

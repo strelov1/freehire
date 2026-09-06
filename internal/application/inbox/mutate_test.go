@@ -72,7 +72,7 @@ func TestTriageWithAnUnknownSlugWritesNothing(t *testing.T) {
 
 // A linked verdict that implies progress moves the application forward.
 func TestTriageAdvancesTheStageOfALinkedApplication(t *testing.T) {
-	q := &fakeQueries{jobID: 42, stage: "applied"}
+	q := &fakeQueries{jobID: 42, stage: "applied", email: db.GetEmailRow{Source: "hosted"}}
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "interview_invitation", Slug: "go-dev-acme"}); err != nil {
 		t.Fatalf("Triage: %v", err)
@@ -85,10 +85,56 @@ func TestTriageAdvancesTheStageOfALinkedApplication(t *testing.T) {
 	}
 }
 
+// A stage the mail moved must be RECORDED as moved, naming the message that moved it.
+//
+// This path wrote the column and nothing else until 2026-09-06, and the loss is not merely
+// a gap in a history: ListInterviewPrepCandidates reads `kind='stage_set' AND
+// signal='interview'` and nothing else, so cmd/nudge found no candidate an employer's own
+// invitation had produced — while SuggestStage returns nil once the stage already matches
+// what the mail implies, leaving nothing to click either.
+//
+// The event is attributed to the message's own mailbox, which is also what dates it (the
+// query reads that message's received_at rather than now(), so importing a year of mail
+// does not stamp the whole year as today).
+func TestTriageRecordsTheStageItAdvancedAgainstTheMessage(t *testing.T) {
+	q := &fakeQueries{jobID: 42, stage: "applied", email: db.GetEmailRow{Source: "hosted"}}
+
+	if _, err := New(q, nil).Triage(context.Background(), 7, 812,
+		Verdict{Signal: "interview_invitation", Slug: "go-dev-acme"}); err != nil {
+		t.Fatalf("Triage: %v", err)
+	}
+	if q.lastAdvance.EmailID != 812 {
+		t.Errorf("the advance names email %d, want 812 — the message is what dates the event",
+			q.lastAdvance.EmailID)
+	}
+	if q.lastAdvance.EventSource != appevent.SourceMailHosted {
+		t.Errorf("the advance is attributed to %q, want %q", q.lastAdvance.EventSource, appevent.SourceMailHosted)
+	}
+}
+
+// An unrecognised mail store has no event source, and stamping one anyway would admit
+// unknown provenance to the ledger's day math. The move is not made rather than made
+// unrecorded — the whole point of writing the event beside the column.
+func TestTriageRefusesToAdvanceMailFromAnUnknownStore(t *testing.T) {
+	q := &fakeQueries{jobID: 42, stage: "applied", email: db.GetEmailRow{Source: "imap"}}
+	logged := captureLog(t)
+
+	if _, err := New(q, nil).Triage(context.Background(), 7, 812,
+		Verdict{Signal: "interview_invitation", Slug: "go-dev-acme"}); err != nil {
+		t.Fatalf("Triage: %v", err)
+	}
+	if q.advancedTo != "" {
+		t.Errorf("advanced to %q, want no advance — the move could not be recorded", q.advancedTo)
+	}
+	if !strings.Contains(logged.String(), "unknown mail source") {
+		t.Errorf("logged %q, want the unrecognised store named", logged.String())
+	}
+}
+
 // The verdict is already durable by the time the stage is considered, so a failed
 // advance must not fail the triage the caller successfully recorded.
 func TestTriageSurvivesAFailedStageAdvance(t *testing.T) {
-	q := &fakeQueries{jobID: 42, stage: "applied", advanceErr: errors.New("deadlock")}
+	q := &fakeQueries{jobID: 42, stage: "applied", advanceErr: errors.New("deadlock"), email: db.GetEmailRow{Source: "hosted"}}
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {
 		t.Fatalf("Triage failed because the stage advance did: %v", err)
@@ -99,7 +145,7 @@ func TestTriageSurvivesAFailedStageAdvance(t *testing.T) {
 // not an error, it is simply nothing to do, and it must leave no trace: this is the
 // ordinary case, and a log line per triage would bury the one below.
 func TestTriageIgnoresAnUntrackedJob(t *testing.T) {
-	q := &fakeQueries{jobID: 42, stageErr: pgx.ErrNoRows}
+	q := &fakeQueries{jobID: 42, stageErr: pgx.ErrNoRows, email: db.GetEmailRow{Source: "hosted"}}
 	logged := captureLog(t)
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {
@@ -120,7 +166,7 @@ func TestTriageIgnoresAnUntrackedJob(t *testing.T) {
 // so. The triage itself is still recorded — the verdict is already durable and a failed
 // advance must not undo it.
 func TestTriageLeavesATraceWhenTheStageReadFails(t *testing.T) {
-	q := &fakeQueries{jobID: 42, stageErr: errors.New("connection refused")}
+	q := &fakeQueries{jobID: 42, stageErr: errors.New("connection refused"), email: db.GetEmailRow{Source: "hosted"}}
 	logged := captureLog(t)
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {

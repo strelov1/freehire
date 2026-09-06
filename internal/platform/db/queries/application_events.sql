@@ -167,12 +167,21 @@ SELECT COALESCE(max(b.id), 0)::bigint AS last_id,
 --
 -- Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
 -- predicate.
+--
+-- MAIL-SOURCED events are excluded too, because since 2026-09-06 the mail path records its
+-- own auto-advances here and this read has to keep meaning what it says. A mail-derived
+-- event silencing a mail-derived suggestion is circular: both are computed from the same
+-- messages, and the auto-advance is precisely the case where the candidate has NOT been
+-- asked yet. `system` stays in — an auto-expire is a decision about the application, not a
+-- reading of a message. The caller passes appevent's own vocabulary, so the exclusion
+-- cannot drift from the sources the writers use.
 SELECT max(occurred_at)::timestamptz AS last_stage_set_at
   FROM application_events
  WHERE user_id = $1
    AND job_id = $2
    AND kind = 'stage_set'
-   AND retracted_at IS NULL;
+   AND retracted_at IS NULL
+   AND source <> ALL(sqlc.arg(exclude_sources)::text[]);
 
 -- name: ListApplicationEvents :many
 -- One application's live events, newest first — what the application panel renders as its

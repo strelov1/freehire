@@ -17,6 +17,7 @@ Maps yc-oss directory entries to company-info fields, consumed by `cmd/import-yc
 
 - `UpsertYCCompany` updates matched companies and inserts unmatched as reference rows (`is_reference=true`), holding the full YC directory (~6k).
 - **Matching by current-name slug OR any `former_names` slug** (first existing wins) — renamed companies enriched in place, not duplicated. Upsert never overwrites `name` on conflict.
+- **Both slugs are `normalize.CompanySlug`**, the key the catalogue stores companies under — never `normalize.Slug`. A miss here is silent by construction: an unmatched entry is not an error, it becomes a reference row and `loadStats.inserted` counts it, so a directory spelling the catalogue can never hold ("Stripe, Inc.") reads as a company we do not have. It was `normalize.Slug` until 2026-09-06, which cost 76 current and 369 former names on the live directory. `TestMappedSlugsAreCompanySlugStable` pins every produced slug as a fixed point of the rule.
 - The `yc_*` columns are **curated (importer-owned) and exempt from `RefreshCompanyFacets`** — recompute never references them, guarded by a test.
 
 ## Company Page

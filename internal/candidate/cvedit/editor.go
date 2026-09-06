@@ -172,9 +172,22 @@ func (e *Editor) Commit(ctx context.Context, cvID uuid.UUID, userID int64, ch Ch
 
 // authorize answers "may this actor make this change at all" — a question about the batch, not
 // about the document, so it is settled before anything is locked.
+//
+// The ADDRESS is checked here too, and not left to the entry points. Path is a bare string,
+// so an Op can carry one ParsePath would refuse, and everything downstream trusts it: the
+// policy asks pathTouches, which answers "no" in both directions for an address it cannot
+// read (an empty Path addresses the whole State and DefaultPolicy admits an agent to it),
+// and Apply resolves a negative index by panicking. Three callers ran the loop themselves
+// and every one of them was one forgotten line away from that; the same argument
+// CommitDocument makes when it refuses ActorAgent rather than trusting every future caller.
 func (e *Editor) authorize(ctx context.Context, userID int64, ch Change) error {
 	if len(ch.Ops) == 0 {
 		return fmt.Errorf("%w: a change with no operations", ErrInvalidOp)
+	}
+	for i, op := range ch.Ops {
+		if _, err := ParsePath(string(op.Path)); err != nil {
+			return fmt.Errorf("%w: operation %d: %s", ErrInvalidOp, i+1, err)
+		}
 	}
 	if err := e.policy.Allows(ch.Actor, ch.Ops); err != nil {
 		return err
@@ -203,7 +216,7 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	// original trailing bullets vanished. Refuse that class of loss before Save
 	// unless an operator turned the guard off (SetRefuseListCap(false)).
 	if e.refuseListCap {
-		if err := refuseIfSanitizeDropsContent(applied, after); err != nil {
+		if err := refuseIfSanitizeDropsContent(applied); err != nil {
 			return cv.Meta{}, Revision{}, err
 		}
 	}
@@ -372,7 +385,7 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 		// PUT /me/cvs/:id (the editor's autosave) and Reset from résumé both go through
 		// here, and a pasted section or a bank seed can carry more than the cap.
 		if e.refuseListCap {
-			if err := refuseIfSanitizeDropsContent(next, State{}); err != nil {
+			if err := refuseIfSanitizeDropsContent(next); err != nil {
 				return err
 			}
 		}

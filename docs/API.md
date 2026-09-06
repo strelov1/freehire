@@ -5715,6 +5715,7 @@ List your mail, newest first, excluding deleted.
 | `unread` | boolean | no | Only messages you have not opened. |
 | `link` | string | no | One link state: `linked`, `suggested` (awaiting your word), or `unlinked`. |
 | `q` | string | no | Match subject, sender, or body. |
+| `include_other` | boolean | no | Also list the `other` label the default hides. Asking for it by `status=other` implies this. |
 | `body` | boolean | no | Include each message body; caps the page at 50. |
 | `limit` | integer | no | Page size. |
 | `offset` | integer | no | Page offset. |
@@ -5960,12 +5961,16 @@ curl -X POST "https://freehire.me/api/v1/me/emails/4821/application" \
 
 Mark every unread message matching the filters as read.
 
+It takes the same filters as `GET /me/inbox` and marks exactly what that listing shows — including the default that hides the `other` label, so an unfiltered call leaves that mail unread. There is no undo.
+
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `source` | string | no | Narrow to one account. |
 | `status` | string | no | Narrow to one label. |
+| `unclassified` | boolean | no | Narrow to mail nothing has judged yet. |
+| `include_other` | boolean | no | Also mark the `other` label the default hides. |
 | `link` | string | no | Narrow to one link state. |
 | `q` | string | no | Narrow by search. |
 

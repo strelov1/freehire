@@ -12,20 +12,77 @@ import (
 )
 
 const advanceUserJobStage = `-- name: AdvanceUserJobStage :exec
-UPDATE applications SET stage = $1::text
- WHERE user_id = $2::bigint AND job_id = $3::bigint
+WITH prior AS (
+    SELECT a.stage FROM applications a
+     WHERE a.user_id = $3::bigint AND a.job_id = $4::bigint
+), upd AS (
+    UPDATE applications SET stage = $5::text
+     WHERE user_id = $3::bigint AND job_id = $4::bigint
+       AND stage IS DISTINCT FROM $5::text
+    RETURNING id, user_id, company_slug, role_title, job_id, applied_at, stage, notes, followed_up_at, created_at
+)
+INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+SELECT u.user_id, u.id, u.job_id, u.company_slug, 'stage_set', u.stage, em.received_at, $1::text
+  FROM upd u
+  JOIN emails em ON em.id = $2::bigint AND em.user_id = u.user_id
+ WHERE u.stage IS NOT NULL
+   AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
 `
 
 type AdvanceUserJobStageParams struct {
-	Stage  string `json:"stage"`
-	UserID int64  `json:"user_id"`
-	JobID  int64  `json:"job_id"`
+	EventSource string `json:"event_source"`
+	EmailID     int64  `json:"email_id"`
+	UserID      int64  `json:"user_id"`
+	JobID       int64  `json:"job_id"`
+	Stage       string `json:"stage"`
 }
 
 // Move an application forward to a new stage (the worker only calls this after
-// checking the transition is strictly forward and high-confidence).
+// checking the transition is strictly forward and high-confidence), and record the
+// transition in the ledger under the same predicate that moves the column — exactly as
+// TrackJob and TrackApplicationByID do it.
+//
+// It was a bare UPDATE until 2026-09-06, so the mail path was the one stage-writer that
+// moved an application and recorded nothing. The consequence is not an incomplete
+// history: ListInterviewPrepCandidates selects `kind='stage_set' AND signal='interview'`
+// and nothing else, so cmd/nudge found no candidate an employer's own invitation had
+// produced. Worse, jobtracking.SuggestStage returns nil once the stage already matches
+// what the mail implies — so after an auto-advance there was nothing to click either, and
+// the interview-prep nudge simply did not exist for the mailbox-connected users it was
+// built for.
+//
+// occurred_at is the MESSAGE's received_at, read here rather than passed, for the reason
+// RecordEmailApplicationEvent gives: now() would compress a year of imported history into
+// the day a mailbox was connected, and LastStageSetAt silences a stage suggestion older
+// than it — so an import would silence every suggestion at once.
+//
+// `prior` reads the pre-update value, so an advance that lands on the stage the row
+// already carries records nothing; the ledger holds transitions.
+//
+// The UPDATE refuses the no-op too, and that is the concurrent case rather than a second
+// reading of the same rule. Two workers can both pass the caller's forward-stage check
+// before either commits; the second then waits on the row lock, and under READ COMMITTED
+// Postgres re-evaluates this WHERE once the lock is released — so `stage IS DISTINCT FROM`
+// makes it match nothing and `upd` stays empty. Without it the second UPDATE writes the
+// same stage while its `prior` still holds the snapshot's old one, and the ledger gains a
+// duplicate transition that never happened.
+//
+// source_ref is deliberately NOT the email's id, tempting though the provenance is:
+// application_events_source_ref_key is UNIQUE on (user_id, kind, source_ref) among live
+// rows, so one message could then carry at most one stage_set ever — and re-triaging a
+// message from `interview` to `offer` is a correction a user can make. There is no
+// retraction path for this kind to free the slot (unlike mail_linked, which the re-link
+// flow retracts), so the second, correct event would either error or be dropped.
+// job_id and company_slug come off the application, like TrackApplicationByID: the row is
+// the application, and the employer is denormalised on it.
 func (q *Queries) AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error {
-	_, err := q.db.Exec(ctx, advanceUserJobStage, arg.Stage, arg.UserID, arg.JobID)
+	_, err := q.db.Exec(ctx, advanceUserJobStage,
+		arg.EventSource,
+		arg.EmailID,
+		arg.UserID,
+		arg.JobID,
+		arg.Stage,
+	)
 	return err
 }
 

@@ -44,6 +44,18 @@ type replacement struct {
 	re          *regexp.Regexp // non-nil ⇒ word-boundary match (bounds over-redaction)
 }
 
+// PlaceholderPrefix opens every placeholder this package writes ("[REDACTED_NAME_1]").
+//
+// It is exported because a consumer that PERSISTS model output has to be able to
+// recognise one: the model sees only the masked text, and a placeholder it copied into a
+// field is a redaction artefact, never a fact about the candidate. Restore is the wrong
+// tool there — it would put the real name back into a field a de-identified reader is
+// about to see — so the consumer blanks instead, and it must not restate this string.
+const PlaceholderPrefix = "[REDACTED_"
+
+// ContainsPlaceholder reports whether s carries a redaction placeholder.
+func ContainsPlaceholder(s string) bool { return strings.Contains(s, PlaceholderPrefix) }
+
 // Build detects PII in text (regex floor ∪ model spans) and returns a Redactor. It is
 // fail-closed: a nil detector or a detector error returns an error rather than a partial
 // (regex-only) redactor, so callers can refuse to send the CV to the LLM.
@@ -96,7 +108,7 @@ func Build(ctx context.Context, text string, d Detector) (*Redactor, error) {
 		counts[vk.kind]++
 		rep := replacement{
 			value:       vk.value,
-			placeholder: fmt.Sprintf("[REDACTED_%s_%d]", vk.kind, counts[vk.kind]),
+			placeholder: fmt.Sprintf("%s%s_%d]", PlaceholderPrefix, vk.kind, counts[vk.kind]),
 		}
 		// Word-boundary only for the "wordy" kinds AND only when every detected occurrence
 		// is boundary-complete; everything else is masked plainly (leak-proof). Specific

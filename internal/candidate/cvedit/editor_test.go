@@ -499,3 +499,60 @@ func TestASecondTurnDoesNotJoinThePreviousRunsBatch(t *testing.T) {
 		t.Fatalf("the second turn's edit is filed under %v, want its own run", repo.revisions[1].BatchID)
 	}
 }
+
+// TestCommitRefusesAnAddressParsePathWouldNot puts the address check where the batch is
+// authorized, rather than at each entry point.
+//
+// Path is a bare string, so nothing in the type stops a caller handing the editor one
+// ParsePath would refuse, and every layer past authorize trusts it:
+//
+//   - The EMPTY path addresses the whole State. The policy admits it to the agent —
+//     pathTouches("", "header.email") is false in BOTH directions — so a `set` on it
+//     replaces the entire document, contact block included, which is the one thing the
+//     agent's policy exists to deny.
+//   - A NEGATIVE index parses to no steps at all, and resolveList reads steps[len-1]
+//     straight away: a `remove` on it takes the process down.
+//
+// Three production callers ran ParsePath themselves and each was one forgotten line away
+// from both. This is the same argument CommitDocument makes when it refuses ActorAgent
+// outright rather than trusting every future caller.
+func TestCommitRefusesAnAddressParsePathWouldNot(t *testing.T) {
+	t.Run("the empty path is not a licence to rewrite the whole document", func(t *testing.T) {
+		repo := newFakeRepo()
+		e, _ := newEditor(repo, nil)
+
+		_, _, err := e.Commit(context.Background(), repo.cvID, 1, Change{
+			Actor:  ActorAgent,
+			Origin: OriginTailorAgent,
+			Ops: []Op{{Kind: OpSet, Path: Path(""), Value: map[string]any{
+				"header": map[string]any{"email": "reply-to-me@example.test"},
+			}}},
+		})
+		if !errors.Is(err, ErrInvalidOp) {
+			t.Fatalf("Commit on the empty path = %v, want ErrInvalidOp", err)
+		}
+		if repo.saves != 0 || len(repo.revisions) != 0 {
+			t.Fatalf("a refused address wrote the document or the feed (saves=%d revisions=%d)", repo.saves, len(repo.revisions))
+		}
+		if repo.state.Header.Email != "ada@example.com" || repo.state.Summary != "Ten years of Go" {
+			t.Fatalf("the whole document was replaced through an unaddressable path: %+v", repo.state.Header)
+		}
+	})
+
+	t.Run("a negative index is refused, not resolved", func(t *testing.T) {
+		repo := newFakeRepo()
+		e, _ := newEditor(repo, nil)
+
+		_, _, err := e.Commit(context.Background(), repo.cvID, 1, Change{
+			Actor:  ActorAgent,
+			Origin: OriginTailorAgent,
+			Ops:    []Op{{Kind: OpRemove, Path: Path("experience[-1]")}},
+		})
+		if !errors.Is(err, ErrInvalidOp) {
+			t.Fatalf("Commit on a negative index = %v, want ErrInvalidOp", err)
+		}
+		if repo.saves != 0 || len(repo.revisions) != 0 {
+			t.Fatalf("a refused address wrote the document or the feed (saves=%d revisions=%d)", repo.saves, len(repo.revisions))
+		}
+	})
+}

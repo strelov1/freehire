@@ -32,8 +32,8 @@ type Record struct {
 }
 
 // Dataset is a source of member records for a collection, resolved by the import
-// worker via its pure Parse (matching to our catalogue happens via normalize.Slug
-// in Match). The payload is either fetched from URL (an external dataset we
+// worker via its pure Parse (matching to our catalogue happens via
+// normalize.CompanySlug in Collection.Members). The payload is either fetched from URL (an external dataset we
 // control) or supplied inline via Data (a file embedded in the binary, for a list
 // that is our own curated fact rather than a third-party feed) — exactly one is set.
 // ResolveURL is set instead of URL by a source that republishes at a new address
@@ -301,7 +301,7 @@ const (
 // foundation-model labs, ML infrastructure/platforms, and applied-AI products.
 // "AI company" is a fact about the company (so all of its roles belong here),
 // distinct from the job-level `enrichment.category = ml_ai` facet (a single ML/AI
-// role at any company). Entries are canonical company slugs (normalize.Slug);
+// role at any company). Entries are canonical company slugs (normalize.CompanySlug);
 // where a name is commonly written several ways, the variants are both listed so
 // the match lands whatever name our adapters use. Unmatched entries are logged.
 var AICompanySlugs = []string{
@@ -322,7 +322,7 @@ var AICompanySlugs = []string{
 
 // AINativeSlugs is the curated AI-native cohort sourced from the remotepilot.dev
 // directory — model/inference APIs, vector databases, and agent/dev tooling built
-// around AI. Entries are canonical company slugs (normalize.Slug), each verified
+// around AI. Entries are canonical company slugs (normalize.CompanySlug), each verified
 // against the exact name our adapters ingest (the board-file company), e.g.
 // "openrouter.ai" → openrouter-ai, "trmlabs" → trmlabs, "qdrant.tech" → qdrant-tech.
 // Only the exact ingested form is listed: a brand-name variant (openrouter,
@@ -357,7 +357,7 @@ var Mag7Slugs = []string{
 // Airbnb, Uber, …) — those are not Big Tech and several are YC, so they surface in
 // the `yc` collection instead. Name variants (alphabet/google, meta/facebook) are
 // both listed so a company matches whichever name our adapters use.
-// Entries are canonical company slugs (as produced by normalize.Slug), matched
+// Entries are canonical company slugs (as produced by normalize.CompanySlug), matched
 // against the companies present in the catalogue at import time; unmatched entries
 // are simply logged.
 var BigTechSlugs = []string{
@@ -410,7 +410,8 @@ var indianRootsData []byte
 
 // ParseSlugList parses a newline-delimited slug list (the embedded eastern_roots.txt
 // and indian_roots.txt): one entry per line, blank lines and #-comment lines skipped,
-// surrounding whitespace trimmed. Entries are returned verbatim (Match normalizes them).
+// surrounding whitespace trimmed. Entries are returned verbatim (Collection.Members
+// normalizes them).
 func ParseSlugList(data []byte) ([]string, error) {
 	var out []string
 	for _, line := range strings.Split(string(data), "\n") {
@@ -471,11 +472,10 @@ type MatchStat struct {
 // deduplicated and sorted; unmatched names are returned verbatim, in input order,
 // for logging.
 //
-// Two things differ by kind. An editorial collection matches on normalize.Slug —
-// unchanged, because every existing collection reconciles through this path and a
-// changed match rule would silently rewrite its membership. A credential matches on
-// RegisterSlug, which strips the legal form a public register appends to a name, and
-// first drops rows whose name identifies more than one organisation.
+// Both kinds match on normalize.CompanySlug, because both look the result up in a map
+// keyed by the CATALOGUE's company slug, and that is what the catalogue keys by. What
+// still differs by kind is the ambiguity drop: a credential first discards rows whose
+// name identifies more than one organisation.
 //
 // A company is tagged when ANY of its records passes the gate: a register lists an
 // organisation once per route it holds, so a work-route row must win even when a
@@ -591,7 +591,7 @@ func ParseEUStartups(data []byte) ([]string, error) {
 
 // ParseYC extracts the company names from a yc-oss dataset payload (a JSON array of
 // company objects). Only the name is read; matching to our catalogue happens via
-// normalize.Slug in Match.
+// normalize.CompanySlug in Collection.Members.
 func ParseYC(data []byte) ([]string, error) {
 	var raw []ycCompany
 	if err := json.Unmarshal(data, &raw); err != nil {

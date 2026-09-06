@@ -3,6 +3,8 @@ package ycdir
 import (
 	"reflect"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
 func TestMapFullEntry(t *testing.T) {
@@ -66,8 +68,11 @@ func TestMapFullEntry(t *testing.T) {
 	if r.Stage != "Early" {
 		t.Errorf("stage = %q, want Early", r.Stage)
 	}
-	if !reflect.DeepEqual(r.FormerSlugs, []string{"old-circuithub-inc"}) {
-		t.Errorf("former slugs = %v, want [old-circuithub-inc]", r.FormerSlugs)
+	// The corporate form is not part of who the employer is, so it is not part of the
+	// slug either — the catalogue never stores "…-inc", and a former slug carrying one
+	// matches nothing.
+	if !reflect.DeepEqual(r.FormerSlugs, []string{"old-circuithub"}) {
+		t.Errorf("former slugs = %v, want [old-circuithub]", r.FormerSlugs)
 	}
 	// flags sorted: hiring, top_company.
 	if !reflect.DeepEqual(r.Flags, []string{"hiring", "top_company"}) {
@@ -110,6 +115,54 @@ func TestMapMissingOptionalsOmitted(t *testing.T) {
 	}
 	if r.Subindustry != "" {
 		t.Errorf("subindustry = %q, want empty (no subindustry given)", r.Subindustry)
+	}
+}
+
+// TestMappedSlugsAreCompanySlugStable guards the import against the slug rule it silently
+// depends on, in the manner of collections' TestHandListSlugsAreCompanySlugStable.
+//
+// cmd/import-yc looks every slug this mapper produces up against the catalogue's
+// company_slug, which is normalize.CompanySlug. A slug that rule would never produce —
+// one still carrying a corporate form — matches nothing, and NOTHING SAYS SO: the import
+// files the entry as a fresh reference row and counts it as inserted, so the real
+// employer stays un-enriched while the run reports success. Measured on live yc-oss
+// before this was fixed: 76 current and 369 former names.
+//
+// The test is that every produced slug is a fixed point of the rule.
+func TestMappedSlugsAreCompanySlugStable(t *testing.T) {
+	// The shapes yc-oss actually carries: bare names, every common corporate form, and
+	// the punctuated spellings of them.
+	entries := []Entry{
+		{Name: "CircuitHub", FormerNames: []string{"Old CircuitHub Inc"}},
+		{Name: "Stripe, Inc.", FormerNames: []string{"/dev/payments"}},
+		{Name: "Rippling Inc", FormerNames: []string{"EnterpriseOS, Inc."}},
+		{Name: "Zapier LLC"},
+		{Name: "Adyen N.V.", FormerNames: []string{"Adyen B.V."}},
+		{Name: "Deel Ltd.", FormerNames: []string{"Deel Limited"}},
+		{Name: "Monzo Bank Ltd", FormerNames: []string{"Mondo Bank Limited"}},
+		{Name: "Klarna Bank AB", FormerNames: []string{"Kreditor Europe AB"}},
+		{Name: "Wise plc"},
+	}
+	var checked int
+	for _, e := range entries {
+		r, ok := Map(e)
+		if !ok {
+			t.Errorf("Map(%q) = ok false, want a record", e.Name)
+			continue
+		}
+		for _, slug := range append([]string{r.Slug}, r.FormerSlugs...) {
+			checked++
+			if got := normalize.CompanySlug(slug); got != slug {
+				t.Errorf("%q yielded slug %q, which is not what the slug rule produces (%q) — "+
+					"the catalogue keys companies by normalize.CompanySlug, so this matches nothing",
+					e.Name, slug, got)
+			}
+		}
+	}
+	// A detector that has stopped seeing the entries passes for the same reason a clean
+	// table does; count the population so the two are told apart.
+	if checked != 16 {
+		t.Errorf("checked %d slugs, want 16 — has the table been edited without this count?", checked)
 	}
 }
 

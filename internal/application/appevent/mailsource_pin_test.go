@@ -38,10 +38,10 @@ func TestNoEventMailSourceIsOrphaned(t *testing.T) {
 	// The MAIL event sources specifically, not everything trusted for day math. Being
 	// trusted means a date was set by somebody other than the candidate, and mail is no
 	// longer the only such witness: calendar_google is written by internal/application/calsync, which
-	// the inbox knows nothing about. Listing the mail three here keeps the original pin —
-	// a fourth mail store added without a mapping still fails — without asserting that
+	// the inbox knows nothing about. Taking the mail three keeps the original pin — a
+	// fourth mail store added without a mapping still fails — without asserting that
 	// every observed source must come through the inbox.
-	for _, s := range []string{appevent.SourceMailGmail, appevent.SourceMailHosted, appevent.SourceMailExternal} {
+	for _, s := range appevent.MailSources {
 		if !mapped[s] {
 			t.Errorf("mail event source %q has no inbox source mapping to it — it can never be written", s)
 		}
