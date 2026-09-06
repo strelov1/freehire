@@ -12,9 +12,7 @@
   <title>CV typography defaults — freehire</title>
 </svelte:head>
 
-<CvAppearancePane
-  intro="The type and margins a new CV starts with. Changing these only affects CVs you create from now on — CVs you already have keep their own appearance."
->
+<CvAppearancePane lead="The type and margins a new CV starts with.">
   <StyleSettings bind:style={cvAppearance.style} fonts={cvAppearance.fonts} />
 
   <section class="space-y-2">

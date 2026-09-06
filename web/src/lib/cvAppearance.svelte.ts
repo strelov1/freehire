@@ -2,112 +2,144 @@
 // Nothing here writes to any CV: saving only seeds what the next base CV is created
 // with, and an existing CV keeps its own appearance.
 //
-// A module rather than per-page state because the Template and Typography tabs are two
+// One store rather than per-page state because the Template and Typography tabs are two
 // routes over ONE record: the API reads and writes all three fields together, so a pane
-// that owned its own copy would re-fetch on every tab switch and drop whatever the other
+// that owned its own copy would refetch on every tab switch and drop whatever the other
 // pane had edited but not yet saved. Held here, the edits survive the switch and one
 // Save from either tab writes the whole record.
+//
+// A UserResource (see userResource.svelte.ts) because that is what makes it per-USER:
+// the base registers the instance so the sign-out sweep drops it, which is the only
+// thing standing between user A's template and user B signing in on the same tab.
 
-import { api, ApiError } from './api';
-import type { Margins, Style } from './generated/contracts';
-import type { CvFont } from './cv';
+import { api, ApiError } from '$lib/api';
+import { UserResource } from '$lib/userResource.svelte';
+import type { Margins, Style } from '$lib/generated/contracts';
+import type { CvAppearanceDefaults, CvFont } from '$lib/cv';
 
-let status = $state<'loading' | 'ready' | 'error'>('loading');
-let loadError = $state<string | null>(null);
-let fonts = $state.raw<CvFont[]>([]);
+const BLANK_MARGINS: Margins = { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 };
 
-let templateId = $state('');
-let style = $state<Style>({});
-let margins = $state<Margins>({ top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 });
+/** What one load fetches: the defaults themselves plus the font list the type controls
+ *  offer. Two calls, one resource — a pane needs both before it can render anything. */
+type Loaded = { defaults: CvAppearanceDefaults; fonts: CvFont[] };
 
-let saving = $state(false);
-let saveError = $state<string | null>(null);
-let saved = $state(false);
-let savedTimer: ReturnType<typeof setTimeout> | undefined;
+class CvAppearanceStore extends UserResource<Loaded> {
+  // Bound by the panes' controls, which is why these carry setters where this repo's
+  // other stores expose getters and named mutators: `bind:` needs somewhere to write.
+  #templateId = $state('');
+  #style = $state<Style>({});
+  #margins = $state<Margins>({ ...BLANK_MARGINS });
+  #fonts = $state.raw<CvFont[]>([]);
 
-let loaded = false;
+  // The base treats a failed load as "leave the default state", which is right for a
+  // read-mostly cache and wrong for a form: a pane showing blank defaults invites a
+  // Save that would overwrite the real record with them. So the failure is recorded
+  // here and the panes refuse to show controls until a load has actually succeeded.
+  #loadFailed = $state(false);
 
-export const cvAppearance = {
-  get status() {
-    return status;
-  },
-  get loadError() {
-    return loadError;
-  },
-  get fonts() {
-    return fonts;
-  },
-  get saving() {
-    return saving;
-  },
-  get saveError() {
-    return saveError;
-  },
-  get saved() {
-    return saved;
-  },
-  // Written by the panes' controls (`bind:`), which is why these carry setters.
-  get templateId() {
-    return templateId;
-  },
+  #saving = $state(false);
+  #saveError = $state<string | null>(null);
+  #saved = $state(false);
+  #savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  get templateId(): string {
+    return this.#templateId;
+  }
   set templateId(value: string) {
-    templateId = value;
-  },
-  get style() {
-    return style;
-  },
+    this.#templateId = value;
+  }
+
+  get style(): Style {
+    return this.#style;
+  }
   set style(value: Style) {
-    style = value;
-  },
-  get margins() {
-    return margins;
-  },
+    this.#style = value;
+  }
+
+  get margins(): Margins {
+    return this.#margins;
+  }
   set margins(value: Margins) {
-    margins = value;
-  },
-};
+    this.#margins = value;
+  }
 
-/** Reads the defaults once per session. Both panes call it on mount; the second call is
- *  a no-op, so switching tabs neither refetches nor discards an unsaved edit. */
-export async function ensureCvAppearanceLoaded(): Promise<void> {
-  if (loaded) return;
-  loaded = true;
-  status = 'loading';
-  try {
-    const [defaults, fontList] = await Promise.all([
-      api.getCvAppearanceDefaults(),
-      api.listCvFonts(),
-    ]);
-    templateId = defaults.template_id;
-    style = defaults.style;
-    margins = defaults.margins;
-    fonts = fontList;
-    status = 'ready';
-  } catch (e) {
-    // Let the next visit try again rather than leaving the section permanently broken.
-    loaded = false;
-    loadError = e instanceof ApiError ? e.message : 'Could not load your appearance defaults.';
-    status = 'error';
+  get fonts(): CvFont[] {
+    return this.#fonts;
+  }
+  get loadFailed(): boolean {
+    return this.#loadFailed;
+  }
+  get saving(): boolean {
+    return this.#saving;
+  }
+  get saveError(): string | null {
+    return this.#saveError;
+  }
+  get saved(): boolean {
+    return this.#saved;
+  }
+
+  protected async load(): Promise<Loaded> {
+    this.#loadFailed = false;
+    try {
+      const [defaults, fonts] = await Promise.all([
+        api.getCvAppearanceDefaults(),
+        api.listCvFonts(),
+      ]);
+      return { defaults, fonts };
+    } catch (e) {
+      this.#loadFailed = true;
+      throw e; // the base leaves `loaded` false, so the next visit retries.
+    }
+  }
+
+  protected apply({ defaults, fonts }: Loaded) {
+    this.#templateId = defaults.template_id;
+    this.#style = defaults.style;
+    this.#margins = defaults.margins;
+    this.#fonts = fonts;
+  }
+
+  protected clearState() {
+    this.#templateId = '';
+    this.#style = {};
+    this.#margins = { ...BLANK_MARGINS };
+    this.#fonts = [];
+    this.#loadFailed = false;
+    this.clearSaveStatus();
+  }
+
+  /** Drops a "Saved."/error left by the other tab. Called when a pane mounts, so the
+   *  note belongs to the pane the reader is looking at rather than to the section. */
+  clearSaveStatus() {
+    clearTimeout(this.#savedTimer);
+    this.#saveError = null;
+    this.#saved = false;
+  }
+
+  /** Writes all three fields, whichever tab asked. The record is one row; a pane that
+   *  sent only its own slice would clear the other's. */
+  async save(): Promise<void> {
+    this.#saving = true;
+    this.#saveError = null;
+    this.#saved = false;
+    try {
+      const result = await api.setCvAppearanceDefaults({
+        template_id: this.#templateId,
+        style: this.#style,
+        margins: this.#margins,
+      });
+      this.apply({ defaults: result, fonts: this.#fonts });
+      this.markLoaded();
+      this.#saved = true;
+      clearTimeout(this.#savedTimer);
+      this.#savedTimer = setTimeout(() => (this.#saved = false), 2000);
+    } catch (e) {
+      this.#saveError = e instanceof ApiError ? e.message : 'Could not save your appearance defaults.';
+    } finally {
+      this.#saving = false;
+    }
   }
 }
 
-/** Writes all three fields, whichever tab asked. The record is one row; a pane that sent
- *  only its own slice would clear the other's. */
-export async function saveCvAppearance(): Promise<void> {
-  saving = true;
-  saveError = null;
-  saved = false;
-  try {
-    const result = await api.setCvAppearanceDefaults({ template_id: templateId, style, margins });
-    templateId = result.template_id;
-    style = result.style;
-    margins = result.margins;
-    saved = true;
-    clearTimeout(savedTimer);
-    savedTimer = setTimeout(() => (saved = false), 2000);
-  } catch (e) {
-    saveError = e instanceof ApiError ? e.message : 'Could not save your appearance defaults.';
-  } finally {
-    saving = false;
-  }
-}
+export const cvAppearance = new CvAppearanceStore();
