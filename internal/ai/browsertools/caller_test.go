@@ -3,6 +3,8 @@ package browsertools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -60,8 +62,20 @@ func TestCallerSurfacesAnExecutorErrorAsAnError(t *testing.T) {
 	caller := hub.NewCaller(7)
 	defer caller.Close()
 
-	if _, err := caller.Call(context.Background(), "read_form", nil); err == nil || err.Error() != "no active tab" {
-		t.Fatalf("err = %v, want the executor's message", err)
+	_, err := caller.Call(context.Background(), "read_form", nil)
+	// The executor's own sentence has to survive — it is the only part the user can act
+	// on, and the panel prints it. It also has to be MATCHABLE, because a caller mapping
+	// errors by kind cannot tell this from a fault by reading the string, and answering
+	// "no active tab" with an internal error hides the one thing the reader could fix.
+	if err == nil || !strings.Contains(err.Error(), "no active tab") {
+		t.Fatalf("err = %v, want it to carry the executor's message", err)
+	}
+	if !errors.Is(err, browsertools.ErrExecutorReported) {
+		t.Errorf("err = %v, want it to match ErrExecutorReported so a caller can tell "+
+			"the browser's state from our fault", err)
+	}
+	if errors.Is(err, browsertools.ErrNotConnected) {
+		t.Error("an executor that answered must not read as no extension attached")
 	}
 }
 

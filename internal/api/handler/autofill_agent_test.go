@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,9 +117,10 @@ func (emptyProfileSources) Get(context.Context, int64) (screeninganswers.Answers
 // for a given tool. Answering inside Send is safe — Hub.Forward releases its lock before
 // delivering, and the harness's own reply channel is buffered.
 type extensionSocket struct {
-	hub    *browsertools.Hub
-	user   int64
-	result func(tool string) string // the raw JSON the tool call resolves to
+	hub     *browsertools.Hub
+	user    int64
+	result  func(tool string) string // the raw JSON the tool call resolves to
+	errText string                   // when set, the socket answers with an error frame instead
 }
 
 func (s extensionSocket) Send(frame []byte) error {
@@ -130,6 +132,10 @@ func (s extensionSocket) Send(frame []byte) error {
 		return err
 	}
 	answer := fmt.Sprintf(`{"id":%q,"result":%s}`, call.ID, s.result(call.Tool))
+	if s.errText != "" {
+		// The shape executor.ts produces for anything thrown on the browser's side.
+		answer = fmt.Sprintf(`{"id":%q,"error":%q}`, call.ID, s.errText)
+	}
 	s.hub.Forward(s.user, browsertools.RoleExtension, []byte(answer))
 	return nil
 }
@@ -209,6 +215,34 @@ func TestRunAgentAutofillAnswersEachFailureAsWhatItIs(t *testing.T) {
 		}
 		if body["error"] != autofillagent.ErrUnavailable.Error() {
 			t.Errorf("error = %v, want %q", body["error"], autofillagent.ErrUnavailable)
+		}
+	})
+
+	// The most common failure of all, and the one the shared mapper must NOT take: the
+	// extension answered, and what it said is that the browser could not do it. "No active
+	// tab" and a content script Chrome has already discarded arrive here as the executor's
+	// own sentence, and both are fixed by the person reading the panel. Answering them with
+	// "internal server error" would hide the one thing they could act on and file a report
+	// about a tab somebody closed.
+	t.Run("what the browser reports is the browser's state, not our fault", func(t *testing.T) {
+		for _, reported := range []string{
+			"no active tab",
+			"Could not establish connection. Receiving end does not exist.",
+		} {
+			t.Run(reported, func(t *testing.T) {
+				status, body := run(t, func(hub *browsertools.Hub) {
+					hub.Join(userID, browsertools.RoleExtension, extensionSocket{
+						hub: hub, user: userID, errText: reported,
+						result: func(string) string { return `{"fields":[]}` },
+					})
+				})
+				if status != fiber.StatusConflict {
+					t.Fatalf("status = %d, want 409 — the browser named a state the user can fix", status)
+				}
+				if msg, _ := body["error"].(string); !strings.Contains(msg, reported) {
+					t.Errorf("error = %v, want it to carry %q so the panel can show it", body["error"], reported)
+				}
+			})
 		}
 	})
 

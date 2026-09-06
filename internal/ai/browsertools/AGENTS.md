@@ -23,7 +23,13 @@ against whatever page the user is on and sends results back.
   the wire text IS the encoding, and an in-process caller has to tell "nobody is there
   to run this" (a state its user fixes) from a tool that ran and failed (which may be
   a fault worth reporting). Everything else in an `{id, error}` frame is the
-  extension's own words, which this package cannot classify.
+  extension's own words, which this package cannot classify — but it does say WHO
+  spoke, by wrapping them in the exported `ErrExecutorReported`. That is the
+  distinction a caller actually needs: "no active tab" and a content script Chrome has
+  already discarded are the MOST COMMON way a browser call fails, and they are the
+  user's to fix however they are worded. Without the sentinel the only discriminator is
+  the string, so an HTTP caller mapping errors by kind answers the ordinary case with
+  "internal server error" and files a report about a tab somebody closed.
 - **Last connection wins.** Re-joining in a role replaces the previous socket; the
   displaced connection's `leave` is a no-op, so it cannot evict its successor.
 - **A connected end is not yet a joined end.** `Join` runs in the websocket

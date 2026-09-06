@@ -50,9 +50,15 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 	)
 	if err != nil {
 		switch {
-		// The run needs the caller's browser attached and a form on the page. Either
-		// missing is a state the user can fix, and the sentence names what to do.
-		case errors.Is(err, browsertools.ErrNotConnected), errors.Is(err, autofillagent.ErrNoFillableFields):
+		// The run needs the caller's browser attached, a readable page, and a form on it.
+		// Each of those missing is a state the user can fix, and the sentence names what
+		// to do. ErrExecutorReported carries the extension's own words — "no active tab",
+		// a discarded content script — and those are the MOST COMMON way this call fails,
+		// so routing them to the default branch below would answer the ordinary case with
+		// "internal server error" and file a report about a tab somebody closed.
+		case errors.Is(err, browsertools.ErrNotConnected),
+			errors.Is(err, browsertools.ErrExecutorReported),
+			errors.Is(err, autofillagent.ErrNoFillableFields):
 			return fiber.NewError(fiber.StatusConflict, err.Error())
 		// Autofill is not configured on this deployment — the same answer the other
 		// model-backed endpoints give for the same reason.

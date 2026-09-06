@@ -128,6 +128,18 @@ func counterpart(r Role) Role {
 // comparing strings of its own.
 var ErrNotConnected = errors.New("the browser extension is not connected")
 
+// ErrExecutorReported wraps whatever the extension said went wrong on its side: no active
+// tab, a content script the browser has already discarded, a page that refuses to be read.
+//
+// It exists for the same reason ErrNotConnected does, one step further out. Those answers
+// arrive as the executor's own sentence and this package cannot classify them — but a
+// caller must still be able to tell "the browser could not do it" from "we could not",
+// because the first is a state the user fixes and the second is ours to fix. Without a
+// sentinel the only discriminator is the string, so every stale content script reads as an
+// internal fault: an unhelpful sentence in the side panel and an error report about a tab
+// somebody closed.
+var ErrExecutorReported = errors.New("the browser reported")
+
 // notConnected builds the error result for a call that has no executor. The id is
 // echoed from the call so the harness can correlate it; a frame we cannot parse
 // gets an empty id, which is still better than no answer at all.
