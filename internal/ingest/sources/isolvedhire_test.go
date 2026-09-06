@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -78,5 +79,67 @@ func TestApplicantProHost(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].URL != "https://acme.applicantpro.com/jobs/1792515" {
 		t.Fatalf("applicantpro url wrong: %+v", jobs)
+	}
+}
+
+// The two notices below are the platform's verbatim answers for a board it does not serve,
+// captured from prod on 2026-09-06. Both arrive as HTTP 200 at the sitemap URL, which is why
+// the adapter has to read the body to tell them from a sitemap.
+const (
+	isolvedDisabledNotice = `This career site has been disabled. Contact the Sales Representative in charge of ` +
+		`this account to find out how to enable this career site.
+<!-- GA4 - Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1QL0HHW9LT"></script>`
+	isolvedNoTenantNotice = `You may have typed the url for this website incorrectly. Please double check what ` +
+		`you typed and try again.
+<!-- GA4 - Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1QL0HHW9LT"></script>`
+)
+
+// A board the platform no longer serves must come back as ErrBoardGone and not as whatever
+// the XML decoder made of the notice. Before this check the disabled page surfaced in
+// board_health as "XML syntax error on line 3", under which 41 gone boards sat unnoticed
+// from July to September 2026.
+func TestIsolvedFetchReportsBoardGone(t *testing.T) {
+	for name, notice := range map[string]string{
+		"disabled by the vendor": isolvedDisabledNotice,
+		"no such tenant":         isolvedNoTenantNotice,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := (&routedHTTP{}).route("/sitemap.xml", notice)
+			_, err := NewIsolvedHire(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+			if !errors.Is(err, ErrBoardGone) {
+				t.Fatalf("err = %v, want it to wrap ErrBoardGone", err)
+			}
+			if !strings.Contains(err.Error(), "acme") {
+				t.Errorf("err = %q, want the board named in it", err)
+			}
+		})
+	}
+}
+
+// The notice check reads only the head of the stream and must leave every byte for the
+// decoder — a sitemap whose first bytes are inspected still has to parse in full.
+func TestIsolvedFetchStillReadsASitemapAfterThePeek(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", isolvedSitemapXML).
+		route("/jobs/", isolvedDetailHTML)
+	jobs, err := NewIsolvedHire(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("jobs = %d, want 1 — the peek consumed part of the stream", len(jobs))
+	}
+}
+
+// A real sitemap that happens to carry a posting worded like the notice is still a sitemap.
+// The check looks at the head only, so a match deeper in the document must not fire.
+func TestIsolvedBoardGoneIgnoresNoticeWordingInsideASitemap(t *testing.T) {
+	if isolvedBoardGone(isolvedSitemapXML) {
+		t.Error("a plain sitemap was read as a gone board")
+	}
+	if !isolvedBoardGone(strings.ToUpper(isolvedDisabledNotice)) {
+		t.Error("the notice must match regardless of case")
 	}
 }

@@ -41,6 +41,10 @@ const (
 	paycomPageSize   = 50
 	// paycomMaxPages bounds pagination so a miscounted total can't loop forever.
 	paycomMaxPages = 200
+	// paycomNoSuchBoard is the portal's own answer for a client key it no longer serves,
+	// delivered as a 122-byte page under HTTP 200. Matched on the sentence alone, without
+	// the surrounding markup, so restyling the notice does not silence the check.
+	paycomNoSuchBoard = "Job board does not exist."
 )
 
 func (s paycom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -49,6 +53,12 @@ func (s paycom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	page, err := s.http.GetText(ctx, fmt.Sprintf("%s/%s/jobs/1", paycomPortalBase, e.Board))
 	if err != nil {
 		return nil, fmt.Errorf("paycom: bootstrap %s: %w", e.Board, err)
+	}
+	// A retired client key still answers 200, with a one-line notice in place of the portal
+	// shell. Checked before the JWT: without it the crawl fails on the missing token, which
+	// reads as a parse bug against a portal that was never served.
+	if strings.Contains(page, paycomNoSuchBoard) {
+		return nil, fmt.Errorf("paycom: board %q: %w", e.Board, ErrBoardGone)
 	}
 	jwt := paycomSessionJWT(page)
 	mantle := paycomMantleHost(page)
