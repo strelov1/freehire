@@ -55,7 +55,7 @@ func TestIsATSSender_RelayDomains(t *testing.T) {
 }
 
 func TestBuildQuery(t *testing.T) {
-	q := BuildQuery(1_700_000_000, nil)
+	q := BuildQueryFor("", 1_700_000_000, nil)
 	if !strings.Contains(q, "from:(") {
 		t.Errorf("query missing from:() clause: %q", q)
 	}
@@ -69,7 +69,7 @@ func TestBuildQuery(t *testing.T) {
 
 func TestBuildQueryNoWatermark(t *testing.T) {
 	// A zero watermark (first run) omits the after: clause → full backfill.
-	q := BuildQuery(0, nil)
+	q := BuildQueryFor("", 0, nil)
 	if strings.Contains(q, "after:") {
 		t.Errorf("zero watermark should omit after:, got %q", q)
 	}
@@ -78,12 +78,12 @@ func TestBuildQueryNoWatermark(t *testing.T) {
 // TestBuildQueryLearnedDomains locks in that promoted self-learning domains are
 // unioned into the sender clause, so the query grows without hardcoding.
 func TestBuildQueryLearnedDomains(t *testing.T) {
-	q := BuildQuery(0, []string{"teamex.io", "ceipalmail.com"})
+	q := BuildQueryFor("", 0, []string{"teamex.io", "ceipalmail.com"})
 	if !strings.Contains(q, "teamex.io") || !strings.Contains(q, "ceipalmail.com") {
 		t.Errorf("learned domains not unioned into query: %q", q)
 	}
 	// A nil learned set must not change the hardcoded core.
-	if strings.Contains(BuildQuery(0, nil), "teamex.io") {
+	if strings.Contains(BuildQueryFor("", 0, nil), "teamex.io") {
 		t.Error("nil learned set should not inject domains")
 	}
 }
@@ -93,7 +93,7 @@ func TestBuildQueryLearnedDomains(t *testing.T) {
 // Gmail full-text. Everything the query pulls is LLM-classified downstream, so the
 // query is recall-first.
 func TestBuildQueryRecallSignals(t *testing.T) {
-	q := BuildQuery(1_700_000_000, nil)
+	q := BuildQueryFor("", 1_700_000_000, nil)
 	wants := []string{
 		`"thank you for applying"`,    // strong English phrase
 		`"recebemos sua candidatura"`, // pt: multilingual recall
@@ -181,7 +181,7 @@ func TestBuildRecallQueryWithoutARole(t *testing.T) {
 // "we've received your … application" where the list knew only "your application at", and
 // an invitation reading "interview invite" where it knew only "invite you to interview".
 func TestBuildQueryCoversTheWordingsEmployersActuallyUse(t *testing.T) {
-	q := BuildQuery(0, nil)
+	q := BuildQueryFor("", 0, nil)
 	for _, phrase := range []string{
 		"received your application", "interview invite", "interview invitation",
 	} {
@@ -213,7 +213,7 @@ func TestBuildQueryExcludesTheConnectedAddress(t *testing.T) {
 	if strings.Contains(q, `OR -from:`) {
 		t.Errorf("the exclusion was OR-ed into the alternatives:\n%s", q)
 	}
-	if plain := BuildQuery(0, nil); strings.Contains(plain, "-from:") {
+	if plain := BuildQueryFor("", 0, nil); strings.Contains(plain, "-from:") {
 		t.Errorf("an address nobody gave leaked into the query:\n%s", plain)
 	}
 }

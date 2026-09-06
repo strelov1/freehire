@@ -16,8 +16,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -39,13 +37,6 @@ import (
 // the code.
 const defaultChunkSize = 50_000
 
-func chunkSize() int64 {
-	if v, err := strconv.ParseInt(os.Getenv("BACKFILL_SLUG_CHUNK"), 10, 64); err == nil && v > 0 {
-		return v
-	}
-	return defaultChunkSize
-}
-
 // pauseBetweenChunks lets the host breathe between statements. The pass competes with
 // the ingest and with whatever reindex is running, and it is never urgent — the
 // suppression it feeds degrades to suppressing less, not to suppressing wrongly, until
@@ -62,6 +53,14 @@ func run() int {
 	}
 	defer cleanup()
 
+	// Read the knob BEFORE touching the database, so a typo fails in a second rather
+	// than after a bounds scan.
+	step, err := worker.EnvInt64("BACKFILL_SLUG_CHUNK", defaultChunkSize)
+	if err != nil {
+		log.Printf("backfill-slug-folded: %v", err)
+		return 1
+	}
+
 	q := db.New(pool)
 	bounds, err := q.CompanySlugFoldedBackfillBounds(ctx)
 	if err != nil {
@@ -72,7 +71,6 @@ func run() int {
 		log.Print("backfill-slug-folded: nothing to do")
 		return 0
 	}
-	step := chunkSize()
 	log.Printf("backfill-slug-folded: %d rows to fill, ids %d..%d, chunk=%d (%d statements)",
 		bounds.Remaining, bounds.MinID, bounds.MaxID, step, (bounds.MaxID-bounds.MinID)/step+1)
 

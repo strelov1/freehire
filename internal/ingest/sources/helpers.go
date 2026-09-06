@@ -1,9 +1,12 @@
 package sources
 
 import (
+	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -223,4 +226,51 @@ func firstNonEmpty(parts ...string) string {
 		}
 	}
 	return ""
+}
+
+// retryDelayCap bounds the exponential backoff retryWhile applies. Past half a minute the
+// wait is no longer riding out a burst, it is holding a board's whole crawl open.
+const retryDelayCap = 30 * time.Second
+
+// retryWhile runs call, retrying while retry says the error is worth another attempt and
+// giving up after maxAttempts retries (so at most maxAttempts+1 calls). The wait starts at
+// base and doubles up to retryDelayCap; a cancelled context ends the wait and the walk.
+//
+// The predicate is the caller's, not this function's: what a status code MEANS is the
+// adapter's judgement (http.go's shared client deliberately leaves status branching to
+// them), and the two adapters that share this loop happen to have reached the same one.
+// The attempt count and the base delay stay at each adapter's own call site, where its own
+// measurement of the platform's cap is written down.
+func retryWhile(ctx context.Context, maxAttempts int, base time.Duration, retry func(error) bool, call func() error) error {
+	delay := base
+	var err error
+	for attempt := 0; attempt <= maxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			if delay < retryDelayCap {
+				delay *= 2
+			}
+		}
+		if err = call(); err == nil || !retry(err) {
+			return err
+		}
+	}
+	return err
+}
+
+// isRateLimited reports whether err is a rate-limit response (HTTP 403 or 429). The shared
+// client surfaces a non-2xx response as a typed *StatusError, so the status code is matched
+// structurally (errors.As) rather than scraped from the message.
+//
+// 403 is in here because both platforms that need it return 403 for a burst rather than
+// 429: Eightfold caps an IP at ~290 requests per window, and some Workday tenants answer a
+// burst the same way. The shared client already retries 429/5xx/network on its own; this is
+// what the two adapters add on top.
+func isRateLimited(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == 403 || se.Code == 429)
 }

@@ -4,14 +4,14 @@
 Fail-closed masking of personally-identifiable information in CV text before it reaches an
 LLM: a regex floor (email, URL, @handle, phone) unioned with name/address spans from the
 co-located privacy-filter model (`services/pii-filter`, reached over HTTP), producing a
-reversible `Redactor` of numbered placeholders. Used on every CV→LLM path: fit analysis and
-the structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/server`,
+reversible `Redactor` of numbered placeholders. Used on the CV→LLM path that survives: the
+structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/server`,
 `cmd/backfill-experience`, `cmd/backfill-resume-structured`.
 
 ## Always true
-- **Fail-closed, twice.** `Build(ctx, text, known, detector)` (redactor.go:50) returns an
+- **Fail-closed, twice.** `Build(ctx, text, detector)` (redactor.go:50) returns an
   ERROR on a nil detector or a detector error rather than a partial regex-only redactor —
-  callers refuse to send the CV at all. Then a post-build self-check (redactor.go:120-127)
+  callers refuse to send the CV at all. Then a post-build self-check (redactor.go:112-120)
   masks the source text and refuses the whole redactor if any detected value survives, so a
   boundary quirk we did not foresee fails safe instead of leaking.
 - **The detector is the seam, not the model.** `Detector` (client.go:13) returns spans
@@ -21,18 +21,20 @@ the structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/
 - **`PII_FILTER_URL` empty disables the features entirely.** cmd/server treats an unset URL
   as "fail the CV→LLM paths closed" (cmd/server/main.go:245), not as "send unmasked" — the
   analysis buttons degrade rather than leak.
-- **Known contacts are always maskable** (redactor.go:13-22, 93-99): caller-authoritative
-  values from a structured résumé are masked wherever they surface, even when absent from
-  the text Build read, so the raw CV and its structured JSON are redacted by one Redactor.
+- **Build reads one text and masks what it detected there.** It takes no caller-supplied
+  contact list: `Build` once accepted one so `matchanalysis` could mask a structured JSON
+  blob with the redactor built from the raw CV, and that consumer was deleted — the
+  surviving caller passed an empty set, which made the whole known-contacts path a proven
+  no-op. Restoring it means restoring the second text it existed for.
 - **Word-boundary masking is the exception, plain replacement the rule.** Only the "wordy"
   kinds (NAME, ADDRESS) get `\b`-anchored regexes, and only when EVERY detected occurrence
   of the value is boundary-complete; one occurrence abutting a word char makes the value
-  unsafe and it is masked plainly (redactor.go:72-77, 109-116). Emails/phones/links are
+  unsafe and it is masked plainly (redactor.go:72-77, 101-108). Emails/phones/links are
   always plain — they never occur inside a real word, so over-redaction is not a risk but
   leaking is. Replacements run longest-first so a value contained in another masks first.
 - **Contact fields are extracted deterministically, never by the LLM.** `Redactor.Contacts()`
   (redactor.go:34) recovers first name/email/phone/location and all links from the detected
-  spans; `fillContact` (redactor.go:140-164) is defensive on purpose — the model mis-tags
+  spans; `fillContact` (redactor.go:132-156) is defensive on purpose — the model mis-tags
   handles as people and its URL spans swallow neighbours, so only well-formed values
   (`isPlausibleName`, `isCleanLink`) become stored contact fields.
 - **The phone regex knows about employment ranges.** A bare `YYYY-YYYY` is explicitly
@@ -44,8 +46,8 @@ the structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/
   sees and emits only placeholders.
 
 ## Consumers
-- `internal/candidate/resumeextract` — redacts the stored CV before the fit-analysis and structured-
-  parse prompts, fills contact fields from `Contacts()`.
+- `internal/candidate/resumeextract` — redacts the stored CV before the structured-parse
+  prompt, fills contact fields from `Contacts()`.
 - `internal/api/handler/handler.go`, `cmd/server` — wire the detector from config.
 - `cmd/backfill-experience`, `cmd/backfill-resume-structured` — same detector for batch
   re-parses; both log and exit early when `PII_FILTER_URL` is unset.

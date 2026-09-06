@@ -36,10 +36,10 @@ func LoadIngestScheduler() IngestScheduler {
 		Apply:        os.Getenv("INGEST_SCHEDULER_APPLY") == "1",
 		Cap:          envInt("INGEST_SCHEDULER_CAP", 10),
 		Grace:        time.Duration(envInt("INGEST_SCHEDULER_GRACE_SECONDS", 120)) * time.Second,
-		IngestBinary: envStr("INGEST_SCHEDULER_BINARY", "/opt/freehire/src/hire-current/ingest"),
-		WorkingDir:   envStr("INGEST_SCHEDULER_WORKDIR", "/opt/freehire/src/hire-current"),
-		EnvFile:      envStr("INGEST_SCHEDULER_ENV_FILE", "/opt/freehire/.env"),
-		RunAs:        envStr("INGEST_SCHEDULER_RUN_AS", "freehire"),
+		IngestBinary: env("INGEST_SCHEDULER_BINARY", "/opt/freehire/src/hire-current/ingest"),
+		WorkingDir:   env("INGEST_SCHEDULER_WORKDIR", "/opt/freehire/src/hire-current"),
+		EnvFile:      env("INGEST_SCHEDULER_ENV_FILE", "/opt/freehire/.env"),
+		RunAs:        env("INGEST_SCHEDULER_RUN_AS", "freehire"),
 	}
 	// A non-positive cap would make every tick read as saturated and the fleet would stop
 	// crawling while every check stayed green — the failure mode this whole change exists
@@ -54,11 +54,4 @@ func LoadIngestScheduler() IngestScheduler {
 		c.Grace = time.Second
 	}
 	return c
-}
-
-func envStr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

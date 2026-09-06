@@ -20,8 +20,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -34,13 +32,6 @@ import (
 // the sequence has run far ahead of the live row count through pruning, so most chunks cover empty
 // stretches. See cmd/backfill-slug-folded, which measured that distinction into hours.
 const defaultChunkSize = 50_000
-
-func chunkSize() int64 {
-	if v, err := strconv.ParseInt(os.Getenv("BACKFILL_MARKER_CHUNK"), 10, 64); err == nil && v > 0 {
-		return v
-	}
-	return defaultChunkSize
-}
 
 // pauseBetweenChunks lets the host breathe between statements. This pass competes with the ingest
 // and whatever reindex is running, and it is never urgent — until it completes, the markers it
@@ -57,6 +48,14 @@ func run() int {
 	}
 	defer cleanup()
 
+	// Read the knob BEFORE touching the database, so a typo fails in a second rather
+	// than after a bounds scan.
+	step, err := worker.EnvInt64("BACKFILL_MARKER_CHUNK", defaultChunkSize)
+	if err != nil {
+		log.Printf("backfill-duplicate-marker-owner: %v", err)
+		return 1
+	}
+
 	q := db.New(pool)
 	bounds, err := q.DuplicateMarkerOwnerBackfillBounds(ctx)
 	if err != nil {
@@ -71,7 +70,6 @@ func run() int {
 	// The same provider set the suppression pass runs against, so a row seeded as the aggregator
 	// pass's is one that pass would actually claim.
 	aggregators := sources.AggregatorProviders(sources.Taxonomy())
-	step := chunkSize()
 	log.Printf("backfill-duplicate-marker-owner: %d rows to seed, ids %d..%d, chunk=%d (%d statements)",
 		bounds.Remaining, bounds.MinID, bounds.MaxID, step, (bounds.MaxID-bounds.MinID)/step+1)
 

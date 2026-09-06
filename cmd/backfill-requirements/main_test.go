@@ -76,45 +76,6 @@ func TestDerive(t *testing.T) {
 	})
 }
 
-// A knob that is set but unreadable fails the run rather than falling back. A typo in
-// BACKFILL_REQUIREMENTS_FROM_ID would otherwise silently re-walk the whole table and
-// look exactly like an ordinary run — the same reasoning HYDRATION_RETRY_DAYS uses.
-func TestEnvInt64(t *testing.T) {
-	const knob = "BACKFILL_REQUIREMENTS_TEST_KNOB"
-
-	t.Run("unset takes the default", func(t *testing.T) {
-		got, err := envInt64(knob, 42)
-		if err != nil || got != 42 {
-			t.Errorf("envInt64 = %d, %v; want 42, nil", got, err)
-		}
-	})
-
-	t.Run("empty takes the default", func(t *testing.T) {
-		t.Setenv(knob, "   ")
-		got, err := envInt64(knob, 42)
-		if err != nil || got != 42 {
-			t.Errorf("envInt64 = %d, %v; want 42, nil", got, err)
-		}
-	})
-
-	t.Run("a positive value is used", func(t *testing.T) {
-		t.Setenv(knob, " 7 ")
-		got, err := envInt64(knob, 42)
-		if err != nil || got != 7 {
-			t.Errorf("envInt64 = %d, %v; want 7, nil", got, err)
-		}
-	})
-
-	for _, bad := range []string{"abc", "0", "-1", "1_000"} {
-		t.Run("a set but unusable value fails: "+bad, func(t *testing.T) {
-			t.Setenv(knob, bad)
-			if _, err := envInt64(knob, 42); err == nil {
-				t.Errorf("envInt64(%q) = nil error, want a failure rather than the default", bad)
-			}
-		})
-	}
-}
-
 func equalIDs(a, b []int64) bool {
 	if len(a) != len(b) {
 		return false

@@ -90,17 +90,12 @@ var recallPhrases = []string{
 	"собеседование",                // ru: interview
 }
 
-// BuildQuery builds a Gmail search query for job-application mail newer than the
-// given Unix watermark. It ORs the hardcoded ATS sender core with any learned
-// domains (extraDomains, promoted by the self-learning cache) and multilingual
-// application phrases, so non-ATS-domain mail is still synced; the whole union is
-// time-bounded by after:. A zero watermark omits the time clause for a first-run
+// BuildQueryFor builds a Gmail search query for job-application mail newer than the
+// given Unix watermark, excluding the connected address. It ORs the hardcoded ATS sender
+// core with any learned domains (extraDomains, promoted by the self-learning cache) and
+// multilingual application phrases, so non-ATS-domain mail is still synced; the whole
+// union is time-bounded by after:. A zero watermark omits the time clause for a first-run
 // backfill.
-func BuildQuery(afterUnix int64, extraDomains []string) string {
-	return BuildQueryFor("", afterUnix, extraDomains)
-}
-
-// BuildQueryFor is BuildQuery with the connected address excluded.
 //
 // The candidate's own replies match these phrasings as readily as an employer's — they are
 // replies to them — and fetching one buys nothing: the worker drops a message whose sender

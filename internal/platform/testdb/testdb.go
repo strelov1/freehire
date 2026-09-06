@@ -18,7 +18,6 @@ package testdb
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/strelov1/freehire/internal/platform/modroot"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -146,7 +146,7 @@ func (c *container) dsn(database string) string {
 // initdb runs a mounted migrations/ dir in — so a new migration is never
 // silently missing from the test schema.
 func migrationScripts() ([]string, error) {
-	root, err := repoRoot()
+	root, err := modroot.Find()
 	if err != nil {
 		return nil, err
 	}
@@ -159,23 +159,4 @@ func migrationScripts() ([]string, error) {
 	}
 	sort.Strings(scripts)
 	return scripts, nil
-}
-
-// repoRoot walks up from the test's working directory to the module root, so the
-// harness doesn't care how deep the package under test sits.
-func repoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("no go.mod above the working directory")
-		}
-		dir = parent
-	}
 }

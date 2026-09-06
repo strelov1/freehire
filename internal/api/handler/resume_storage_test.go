@@ -417,11 +417,3 @@ func (r *fakeResumeRepo) SetExtractFailed(_ context.Context, _ int64, detail str
 	r.extractFor = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
 	return nil
 }
-
-func (r *fakeResumeRepo) SetExtractPending(_ context.Context, _ int64, uploadedAt time.Time) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.extractStatus, r.extractDetail = resume.ExtractStatusPending, ""
-	r.extractFor = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
-	return nil
-}

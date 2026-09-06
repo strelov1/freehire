@@ -494,6 +494,29 @@ func isBadRequest(err error) bool {
 	return errors.As(err, &me) && me.StatusCode == http.StatusBadRequest
 }
 
+// queryErr is how every query against every index reports a failure, under the op
+// prefix the caller names.
+//
+// It exists because the classification is not obvious twice over. A cancelled or
+// expired context surfaces here wrapped in a Meilisearch communication error that does
+// NOT chain to context.Canceled (the SDK's *Error has no Unwrap), so the sentinel has
+// to be re-raised directly or errors.Is stops working upstream and a client disconnect
+// reads as a fault. And a 400 is the engine refusing input that came from the caller,
+// so it is tagged ErrBadQuery for handlers to render as 400 without Sentry.
+//
+// A package-level function rather than a method: disjunctiveFacetCounts is deliberately
+// a free function (it takes its searcher, so it is testable without an engine) and has
+// no client in scope.
+func queryErr(ctx context.Context, op string, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("%s: %w", op, ctxErr)
+	}
+	if isBadRequest(err) {
+		return fmt.Errorf("%s: %w: %v", op, ErrBadQuery, err)
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
 // buildSearchRequest translates SearchParams into the SDK's request. It is split out
 // of Search so the vector/hybrid pairing is unit-testable without a live engine: a
 // Vector sent without an embedder name is a 400, so the two must never drift apart.
@@ -517,17 +540,7 @@ func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
 	resp, err := c.facet.SearchWithContext(ctx, p.Query, buildSearchRequest(p))
 	if err != nil {
-		// A cancelled/expired context surfaces here wrapped in a Meilisearch
-		// communication error that does NOT chain to context.Canceled (the SDK's
-		// *Error has no Unwrap), so re-raise the context sentinel directly to keep
-		// errors.Is working upstream — a client disconnect must not read as a fault.
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return SearchResult{}, fmt.Errorf("search: query: %w", ctxErr)
-		}
-		if isBadRequest(err) {
-			return SearchResult{}, fmt.Errorf("search: query: %w: %v", ErrBadQuery, err)
-		}
-		return SearchResult{}, fmt.Errorf("search: query: %w", err)
+		return SearchResult{}, queryErr(ctx, "search: query", err)
 	}
 
 	var hits []JobDocument

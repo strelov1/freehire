@@ -80,7 +80,6 @@ type Repository interface {
 	GetCandidateContacts(ctx context.Context, userID int64) ([]byte, error)
 	SetCandidateContacts(ctx context.Context, userID int64, blob []byte) error
 	SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error
-	SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error
 }
 
 // Geography is where the candidate is, as derived from their CV and stored. Countries is
@@ -604,12 +603,5 @@ func (r *QueriesRepository) SetExtractFailed(ctx context.Context, userID int64, 
 		ID:                  userID,
 		ResumeExtractDetail: pgtype.Text{String: detail, Valid: detail != ""},
 		ResumeExtractFor:    pgtype.Timestamptz{Time: uploadedAt, Valid: true},
-	})
-}
-
-func (r *QueriesRepository) SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
-	return r.q.SetUserResumeExtractPending(ctx, db.SetUserResumeExtractPendingParams{
-		ID:               userID,
-		ResumeExtractFor: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
 	})
 }

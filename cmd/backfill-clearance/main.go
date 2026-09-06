@@ -27,8 +27,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -61,13 +59,6 @@ const readBatch = 500
 // simply marks fewer postings, never the wrong ones.
 const pauseBetweenBatches = 100 * time.Millisecond
 
-func maxPerRun() int {
-	if v, err := strconv.Atoi(os.Getenv("BACKFILL_CLEARANCE_MAX")); err == nil && v > 0 {
-		return v
-	}
-	return 0 // unbounded
-}
-
 func main() { worker.Main(run) }
 
 func run() int {
@@ -77,6 +68,16 @@ func run() int {
 		return 1
 	}
 	defer cleanup()
+
+	// Read the cap BEFORE gathering candidates, so a typo fails in a second rather than
+	// after a full pass over the index. Unset means unbounded; a value we cannot read is
+	// an error rather than a fallback, because falling back to unbounded is exactly the
+	// opposite of what an operator who set a cap asked for, and nothing prints it.
+	maxPerRun, err := worker.EnvInt64("BACKFILL_CLEARANCE_MAX", 0)
+	if err != nil {
+		log.Printf("backfill-clearance: %v", err)
+		return 1
+	}
 
 	sc := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
@@ -89,9 +90,9 @@ func run() int {
 		log.Print("backfill-clearance: no candidates")
 		return 0
 	}
-	if n := maxPerRun(); n > 0 && len(ids) > n {
-		log.Printf("backfill-clearance: capping this run at %d of %d candidates", n, len(ids))
-		ids = ids[:n]
+	if maxPerRun > 0 && int64(len(ids)) > maxPerRun {
+		log.Printf("backfill-clearance: capping this run at %d of %d candidates", maxPerRun, len(ids))
+		ids = ids[:maxPerRun]
 	}
 	log.Printf("backfill-clearance: %d candidates", len(ids))
 

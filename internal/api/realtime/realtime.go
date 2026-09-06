@@ -6,6 +6,7 @@
 // with internal/ai/speech is the gateway — the same base URL and key serve
 // /chat/completions, /audio/transcriptions, and /realtime/client_secrets alike — so a
 // deployment configures one credential and names three models, not three credentials.
+// The HTTP half of that is internal/platform/aigateway, shared with internal/ai/speech.
 package realtime
 
 import (
@@ -14,10 +15,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/aigateway"
 )
 
 // ErrUpstream is what every failure on the gateway's side wraps: a refusal, a fault,
@@ -36,10 +36,7 @@ const maxResponse = 1 << 16
 
 // Client mints Realtime API client secrets through one gateway.
 type Client struct {
-	baseURL string
-	apiKey  string
-	model   string
-	http    *http.Client
+	gw *aigateway.Client
 }
 
 // New builds a client, or returns nil when the gateway is not configured.
@@ -48,15 +45,18 @@ type Client struct {
 // the handler asks whether it has a client and renders 501 when it does not, which the
 // SPA reads as a surface that does not exist here rather than as a fault.
 func New(baseURL, apiKey, model string) *Client {
-	if baseURL == "" || apiKey == "" || model == "" {
+	gw := aigateway.New(aigateway.Config{
+		BaseURL:     baseURL,
+		APIKey:      apiKey,
+		Model:       model,
+		Timeout:     requestTimeout,
+		MaxResponse: maxResponse,
+		ErrUpstream: ErrUpstream,
+	})
+	if gw == nil {
 		return nil
 	}
-	return &Client{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
-		apiKey:  apiKey,
-		model:   model,
-		http:    &http.Client{Timeout: requestTimeout},
-	}
+	return &Client{gw: gw}
 }
 
 // mintRequest is the client_secrets request body: a realtime session naming its
@@ -104,7 +104,7 @@ const (
 // which one this deployment is configured with — hardcoding it in the browser would
 // drift silently from REALTIME_MODEL the moment ops changes it.
 func (c *Client) Model() string {
-	return c.model
+	return c.gw.Model()
 }
 
 // CallsURL is where the browser POSTs its WebRTC SDP offer — at THIS gateway, never
@@ -115,14 +115,14 @@ func (c *Client) Model() string {
 // the caller's behalf. Sent to OpenAI directly, it looks like a malformed API key,
 // because it is not one.
 func (c *Client) CallsURL() string {
-	return c.baseURL + "/realtime/calls"
+	return c.gw.URL("/realtime/calls")
 }
 
 // MintClientSecret returns a short-lived credential scoped to one Realtime session.
 func (c *Client) MintClientSecret(ctx context.Context, instructions string) (string, error) {
 	var payload mintRequest
 	payload.Session.Type = "realtime"
-	payload.Session.Model = c.model
+	payload.Session.Model = c.gw.Model()
 	payload.Session.Instructions = instructions
 	payload.Session.Audio.Input.TurnDetection.Type = turnDetectionType
 	payload.Session.Audio.Input.Transcription.Model = transcriptionModel
@@ -131,29 +131,9 @@ func (c *Client) MintClientSecret(ctx context.Context, instructions string) (str
 	if err != nil {
 		return "", fmt.Errorf("%w: build request: %w", ErrUpstream, err)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/realtime/client_secrets", bytes.NewReader(body))
+	raw, err := c.gw.Post(ctx, "/realtime/client_secrets", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("%w: build request: %w", ErrUpstream, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrUpstream, err)
-	}
-	defer resp.Body.Close()
-
-	// Read before switching on the status: the gateway explains its refusals in the
-	// body, and that sentence is the only thing that distinguishes a bad key from a
-	// rate limit in a log.
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse))
-	if err != nil {
-		return "", fmt.Errorf("%w: read response: %w", ErrUpstream, err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("%w: status %d: %s", ErrUpstream, resp.StatusCode, strings.TrimSpace(string(raw)))
+		return "", err
 	}
 
 	var parsed struct {

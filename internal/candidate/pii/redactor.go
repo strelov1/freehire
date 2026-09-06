@@ -10,9 +10,9 @@ import (
 	"unicode"
 )
 
-// Contacts are the caller's authoritative contact values (e.g. from a structured résumé).
-// They are always maskable even when they do not appear verbatim in the CV text Build reads,
-// so the same Redactor masks them wherever they surface (raw CV and structured JSON alike).
+// Contacts are the contact values recovered from a CV's detected spans — what
+// Redactor.Contacts returns, and the deterministic source the structured-CV parse fills
+// its contact fields from instead of trusting the model.
 type Contacts struct {
 	FullName string
 	Email    string
@@ -44,10 +44,10 @@ type replacement struct {
 	re          *regexp.Regexp // non-nil ⇒ word-boundary match (bounds over-redaction)
 }
 
-// Build detects PII in text (regex floor ∪ model spans ∪ known contacts) and returns a
-// Redactor. It is fail-closed: a nil detector or a detector error returns an error rather
-// than a partial (regex-only) redactor, so callers can refuse to send the CV to the LLM.
-func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redactor, error) {
+// Build detects PII in text (regex floor ∪ model spans) and returns a Redactor. It is
+// fail-closed: a nil detector or a detector error returns an error rather than a partial
+// (regex-only) redactor, so callers can refuse to send the CV to the LLM.
+func Build(ctx context.Context, text string, d Detector) (*Redactor, error) {
 	if d == nil {
 		return nil, errors.New("pii: detector not configured")
 	}
@@ -90,35 +90,6 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 			boundarySafe[v] = ok
 		}
 	}
-	// A known value never passes through the spans loop above, so boundarySafe has no
-	// entry for it unless the identical value also happened to be detected. Without one,
-	// wordish(v) && wordyKind[kind] && boundarySafe[v] is always false for it, so a known
-	// NAME/ADDRESS falls back to plain substring replacement even when every literal
-	// occurrence in text is boundary-complete — the over-redaction the \b-anchored path
-	// exists to avoid. Scan text directly for the value and apply the same completeness
-	// rule the spans loop uses, so a known contact gets the identical boundary-aware
-	// treatment a detected one does. A value absent from text is left out of boundarySafe
-	// entirely (not even set to false): both replacement strategies are a no-op for it, and
-	// adding it would make the fail-closed self-check below spuriously fail on a value that
-	// was never there to redact — "known contacts are always maskable" holds regardless.
-	addKnown := func(v, kind string) {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return
-		}
-		add(v, kind)
-		if _, ok := boundarySafe[v]; !ok && strings.Contains(text, v) {
-			boundarySafe[v] = valueBoundarySafe(text, v)
-		}
-	}
-	addKnown(known.FullName, KindName)
-	addKnown(known.Email, KindEmail)
-	addKnown(known.Phone, KindPhone)
-	addKnown(known.Location, KindAddress)
-	for _, l := range known.Links {
-		addKnown(l, KindLink)
-	}
-
 	counts := make(map[string]int)
 	reps := make([]replacement, 0, len(vals))
 	for _, vk := range vals {
@@ -256,25 +227,6 @@ func wordish(v string) bool {
 
 func isWord(c byte) bool {
 	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
-// valueBoundarySafe reports whether every literal occurrence of v in text sits between
-// non-word characters — the same completeness check the spans loop applies per detected
-// span, but by scanning text directly for v instead of relying on a supplied span. Callers
-// must only invoke it when v is known to occur in text at least once.
-func valueBoundarySafe(text, v string) bool {
-	safe := true
-	for start := 0; ; {
-		i := strings.Index(text[start:], v)
-		if i < 0 {
-			return safe
-		}
-		s, e := start+i, start+i+len(v)
-		if (s != 0 && isWord(text[s-1])) || (e != len(text) && isWord(text[e])) {
-			safe = false
-		}
-		start = e
-	}
 }
 
 // sanitizeSpans drops model spans with out-of-range or inverted offsets.

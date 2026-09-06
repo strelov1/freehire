@@ -108,13 +108,6 @@ func TestCallsURLPointsAtOurOwnGatewayNotOpenAI(t *testing.T) {
 	}
 }
 
-func TestCallsURLJoinsTheBaseURLWithoutDoublingTheSlash(t *testing.T) {
-	c := New("https://gw.example/v1/", "sk-test", "gpt-realtime-2.1")
-	if got := c.CallsURL(); got != "https://gw.example/v1/realtime/calls" {
-		t.Errorf("CallsURL() = %q, want https://gw.example/v1/realtime/calls", got)
-	}
-}
-
 func TestMintClientSecretSendsInstructionsAndReturnsTheValue(t *testing.T) {
 	srv, got := gateway(t, http.StatusOK, `{"value":"ek_abc123","expires_at":1234}`)
 	c := New(srv.URL+"/v1", "sk-test", "gpt-realtime-2.1")
@@ -153,18 +146,6 @@ func TestMintClientSecretSendsInstructionsAndReturnsTheValue(t *testing.T) {
 	}
 	if got.transcriptModel == "" {
 		t.Error("session.audio.input.transcription.model is empty, want it set")
-	}
-}
-
-func TestMintClientSecretJoinsTheBaseURLWithoutDoublingTheSlash(t *testing.T) {
-	srv, got := gateway(t, http.StatusOK, `{"value":"ek_abc123"}`)
-	c := New(srv.URL+"/v1/", "sk-test", "gpt-realtime-2.1")
-
-	if _, err := c.MintClientSecret(context.Background(), "hi"); err != nil {
-		t.Fatalf("MintClientSecret: %v", err)
-	}
-	if got.path != "/v1/realtime/client_secrets" {
-		t.Errorf("path = %q, want /v1/realtime/client_secrets", got.path)
 	}
 }
 

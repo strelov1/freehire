@@ -74,7 +74,7 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	cvText = clip(cvText, maxCVRunes)
 	// De-identify the CV before it reaches the LLM. Fail-closed: a detector error means no
 	// CV is sent (the caller degrades best-effort, persisting no structured résumé).
-	red, err := pii.Build(ctx, cvText, pii.Contacts{}, e.detector)
+	red, err := pii.Build(ctx, cvText, e.detector)
 	if err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: pii: %w", err)
 	}

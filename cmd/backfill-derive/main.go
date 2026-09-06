@@ -65,9 +65,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"slices"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -120,8 +118,15 @@ func run() int {
 	}
 	defer cleanup()
 
+	// Default 1: the original single-threaded pass. BACKFILL_CONCURRENCY=6 has degraded
+	// prod before, so hold it at 2-3 and measure.
+	concurrency, err := worker.EnvInt64("BACKFILL_CONCURRENCY", 1)
+	if err != nil {
+		log.Printf("backfill-derive: %v", err)
+		return 1
+	}
+
 	queries := db.New(pool)
-	concurrency := backfillConcurrency()
 	log.Printf("backfill-derive starting: concurrency=%d", concurrency)
 	scanned, updated, slugsMoved, err := backfillAll(ctx, queries, concurrency)
 	if err != nil {
@@ -148,15 +153,6 @@ func run() int {
 	log.Printf("backfill-derive done: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d (follow with a reindex)",
 		scanned, updated, slugsMoved, orphaned)
 	return 0
-}
-
-// backfillConcurrency reads the worker-pool size from BACKFILL_CONCURRENCY,
-// defaulting to 1 (the original single-threaded pass) for any unset/invalid value.
-func backfillConcurrency() int {
-	if n, err := strconv.Atoi(os.Getenv("BACKFILL_CONCURRENCY")); err == nil && n > 0 {
-		return n
-	}
-	return 1
 }
 
 // deriveRow re-derives a job's facets, role_fingerprint, and slugs, and reports
@@ -233,7 +229,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 // how many rows were written (updated) and how many of those moved a slug (slugsMoved),
 // so the caller knows whether to reconcile companies. The first store error cancels the
 // run and is returned.
-func backfillAll(ctx context.Context, store deriveStore, concurrency int) (scanned, updated, slugsMoved int, err error) {
+func backfillAll(ctx context.Context, store deriveStore, concurrency int64) (scanned, updated, slugsMoved int, err error) {
 	start := time.Now()
 	return backfillProgress(ctx, store, concurrency, progressEvery, func(scanned, updated, slugs int64) {
 		log.Printf("backfill-derive: scanned %d, updated %d, slugs_moved %d, %s elapsed",
@@ -267,7 +263,7 @@ func loadAliasRegistry(ctx context.Context, store deriveStore) (map[string]strin
 	return canon, nil
 }
 
-func backfillProgress(ctx context.Context, store deriveStore, concurrency int, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
+func backfillProgress(ctx context.Context, store deriveStore, concurrency, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -341,7 +337,7 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency int, e
 
 	// Workers (consumers): derive + write in parallel.
 	var workerWG sync.WaitGroup
-	for i := 0; i < concurrency; i++ {
+	for i := int64(0); i < concurrency; i++ {
 		workerWG.Add(1)
 		go func() {
 			defer workerWG.Done()
