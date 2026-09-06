@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { FileText, Settings } from '@lucide/svelte';
+  import { FileText, LayoutTemplate, Type } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Button, TabStrip, tabStripId } from '$lib/ui';
@@ -11,16 +11,19 @@
   let { children }: { children: Snippet } = $props();
 
   // The account shell (my/+layout) owns the container, auth gate, and noindex; this
-  // layout adds the CV section's own navigation. The list and the appearance defaults
-  // are two views of one section rather than a page and a link off it, so they read as
-  // the same underline TabStrip every other account section navigates with.
+  // layout adds the CV section's own navigation — the same underline TabStrip every other
+  // account section navigates with. The appearance defaults used to be one "Settings"
+  // page reached by a button; they are the section's other two views, and the record
+  // behind them is shared (see cvAppearance.svelte.ts), so a tab switch keeps an
+  // unsaved edit.
   //
   // Starting a tailored CV is an action on the section, not one of its views, so it
-  // stays a button beside the strip — and stays reachable from the settings tab too,
-  // which is why the dialog is mounted here rather than inside the list.
+  // stays a button beside the strip — and stays reachable from every tab, which is why
+  // the dialog is mounted here rather than inside the list.
   const SECTIONS = [
     { id: 'list', label: 'List', href: '/my/cvs', icon: FileText },
-    { id: 'settings', label: 'Settings', href: '/my/cvs/appearance', icon: Settings },
+    { id: 'template', label: 'Template', href: '/my/cvs/template', icon: LayoutTemplate },
+    { id: 'typography', label: 'Typography', href: '/my/cvs/typography', icon: Type },
   ] as const;
   const PANEL_ID = 'cvs-panel';
 
