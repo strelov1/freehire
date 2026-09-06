@@ -63,7 +63,11 @@ const (
 //
 // The tests below mount the gate FIRST, so an authenticated caller really is
 // authenticated when the limiter runs. That is what makes them a guard: they fail if
-// anyone reintroduces a user-keyed budget here, whatever the ordering.
+// anyone reintroduces a user-keyed budget here, whatever the ordering. A second guard
+// drives these routes exactly as `register` mounts them, which is what the tests that
+// missed the defect could not do — they mounted the key function on a bare app, where the
+// handler order under test is the test's own. See internal/api/handler/AGENTS.md for the
+// rule this settled on.
 
 // publicReadLimiter throttles the cheap public reads as one shared budget.
 func publicReadLimiter(throttler ratelimit.Throttler) fiber.Handler {
