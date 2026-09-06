@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -96,7 +97,20 @@ func enqueueRequest(t *testing.T, app *fiber.App, slug, cookie string) *http.Res
 	return resp
 }
 
-func TestPostJobAutoApply_RefusesNonGreenhouseSource(t *testing.T) {
+func getJobRequest(t *testing.T, app *fiber.App, slug, cookie string) *http.Response {
+	t.Helper()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/jobs/"+slug, nil)
+	if cookie != "" {
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	}
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	return resp
+}
+
+func TestPostJobAutoApply_RefusesAnUnsupportedSource(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyEnqueueTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
@@ -105,12 +119,40 @@ func TestPostJobAutoApply_RefusesNonGreenhouseSource(t *testing.T) {
 	userID, cookie := autoApplyTailorUser(t, pool, iss, "nongh@example.test")
 	makePro(t, pool, userID)
 	insertBaseCV(t, pool, userID)
-	seedEnqueueJob(t, pool, "lever", "nongh-job")
+	seedEnqueueJob(t, pool, "smartrecruiters", "nongh-job")
 
 	resp := enqueueRequest(t, app, "nongh-job", cookie)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Fatalf("status = %d, want 400 for a non-Greenhouse job", resp.StatusCode)
+		t.Fatalf("status = %d, want 400 for a source auto-apply cannot queue against", resp.StatusCode)
+	}
+}
+
+// TestPostJobAutoApply_AcceptsEveryQueueableSource covers every ATS auto-apply can queue an
+// attempt against today — Greenhouse is the only one that can currently SUBMIT (fillProviders
+// in internal/api/atsapply), but Ashby/Workable/Lever/Recruitee attempts still tailor and
+// review, then park honestly (see auto_apply_tailor_integration_test.go's own park-reason
+// coverage) rather than being refused at the door.
+func TestPostJobAutoApply_AcceptsEveryQueueableSource(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	for _, source := range []string{"greenhouse", "ashby", "workable", "lever", "recruitee"} {
+		t.Run(source, func(t *testing.T) {
+			userID, cookie := autoApplyTailorUser(t, pool, iss, source+"@example.test")
+			makePro(t, pool, userID)
+			insertBaseCV(t, pool, userID)
+			seedEnqueueJob(t, pool, source, source+"-job")
+
+			resp := enqueueRequest(t, app, source+"-job", cookie)
+			defer resp.Body.Close()
+			if resp.StatusCode != fiber.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status = %d, want 200 queued for source %q: %s", resp.StatusCode, source, body)
+			}
+		})
 	}
 }
 
@@ -424,17 +466,7 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 	insertBaseCV(t, pool, userID)
 	seedEnqueueJob(t, pool, "greenhouse", "status-job")
 
-	get := func(slug, cookie string) *http.Response {
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/jobs/"+slug, nil)
-		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
-		}
-		resp, err := app.Test(req)
-		if err != nil {
-			t.Fatalf("request: %v", err)
-		}
-		return resp
-	}
+	get := func(slug, cookie string) *http.Response { return getJobRequest(t, app, slug, cookie) }
 
 	beforeResp := get("status-job", cookie)
 	defer beforeResp.Body.Close()
@@ -472,6 +504,35 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 	defer declinedResp.Body.Close()
 	if got := decodeAutoApplyStatus(t, declinedResp); got == nil || *got != "declined" {
 		t.Fatalf("status after decline = %v, want \"declined\"", got)
+	}
+}
+
+// TestGetJob_AutoApplyStatusOverlay_NonGreenhouseSource guards the overlay for every source
+// auto-apply can now queue against, not only Greenhouse — the enqueue gate
+// (autoApplyEnqueueSources) and this read's own gate must name the same set, or a
+// successfully queued Ashby/Workable/Lever/Recruitee attempt would read back as no attempt
+// at all and the button would look idle forever.
+func TestGetJob_AutoApplyStatusOverlay_NonGreenhouseSource(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "ashby-status@example.test")
+	makePro(t, pool, userID)
+	insertBaseCV(t, pool, userID)
+	seedEnqueueJob(t, pool, "ashby", "ashby-status-job")
+
+	enqueueResp := enqueueRequest(t, app, "ashby-status-job", cookie)
+	defer enqueueResp.Body.Close()
+	if enqueueResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("enqueue status = %d, want 200", enqueueResp.StatusCode)
+	}
+
+	resp := getJobRequest(t, app, "ashby-status-job", cookie)
+	defer resp.Body.Close()
+	if got := decodeAutoApplyStatus(t, resp); got == nil || *got != "queued" {
+		t.Fatalf("status after enqueue for an Ashby posting = %v, want \"queued\"", got)
 	}
 }
 

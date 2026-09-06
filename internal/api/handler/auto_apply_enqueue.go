@@ -14,11 +14,20 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// autoApplyEnqueueSource is the only ATS this feature resolves a résumé upload field for
-// today (openspec/changes/auto-apply-tailored-resume's own scope decision) — enqueuing for
-// any other source would create an attempt that can tailor and get reviewed but can never
-// actually submit. See openspec/changes/auto-apply-submit-trigger.
-const autoApplyEnqueueSource = "greenhouse"
+// autoApplyEnqueueSources are the ATS providers auto-apply can queue an attempt against at
+// all. Only Greenhouse can currently SUBMIT one (fillProviders in internal/api/atsapply) —
+// an Ashby/Workable/Lever/Recruitee attempt still tailors and gets reviewed like any other,
+// then parks with an honest, named reason once cmd/auto-apply reaches it, rather than being
+// refused at the door. Widening this list is a product decision (a candidate spends a real
+// daily tailoring turn on an attempt that is not yet guaranteed to submit), not a technical
+// one — see openspec/changes/auto-apply-submit-trigger.
+var autoApplyEnqueueSources = map[string]bool{
+	"greenhouse": true,
+	"ashby":      true,
+	"workable":   true,
+	"lever":      true,
+	"recruitee":  true,
+}
 
 // autoApplyAlreadyDeclinedMessage is what a permanently-declined pair answers with —
 // distinct wording from autoApplyDeclineReason (auto_apply_tailor.go), which is the stored
@@ -87,8 +96,8 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 	if err != nil {
 		return err // pgx.ErrNoRows -> 404, per RenderError's own mapping
 	}
-	if job.Source != autoApplyEnqueueSource {
-		return fiber.NewError(fiber.StatusBadRequest, "auto-apply is only available for Greenhouse postings today")
+	if !autoApplyEnqueueSources[job.Source] {
+		return fiber.NewError(fiber.StatusBadRequest, "auto-apply cannot queue an attempt against this posting's ATS")
 	}
 
 	if h.cv == nil || h.cv.cvStore == nil {

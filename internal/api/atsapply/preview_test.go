@@ -121,6 +121,23 @@ func TestPreviewClient_ALeverAttemptParksWithoutTouchingAFetcherOrFormReader(t *
 	}
 }
 
+// Mirrors TestSubmit_ParksHonestlyWhenNoSchemaFetcherIsRegistered: the preview pass runs
+// BEFORE Submit ever does (it is what actually reaches a Recruitee-sourced entry first, per
+// cmd/auto-apply's own run order), so it needs the same honest park — otherwise a
+// Recruitee attempt with no stored form burns the preview's own retry budget toward a
+// dead-letter before the candidate ever gets a tailored CV to review.
+func TestPreviewClient_ParksHonestlyWhenNoSchemaFetcherIsRegistered(t *testing.T) {
+	p := &PreviewClient{fetchers: nil, forms: nil}
+
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "recruitee"}, nil)
+	if err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	if !result.Parked || result.Reason != reasonSubmissionNotImplemented {
+		t.Errorf("result = %+v, want parked/%s", result, reasonSubmissionNotImplemented)
+	}
+}
+
 func TestPreviewClient_PrefersAStoredFormOverALiveFetchForANonGreenhouseProvider(t *testing.T) {
 	fetcher := &fakeFetcher{form: applyform.Form{Fields: []applyform.Field{
 		{ID: "should_not_be_used", Type: applyform.TypeText, Required: true},

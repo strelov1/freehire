@@ -2,6 +2,7 @@ package atsapply
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/chromedp/chromedp"
@@ -71,6 +72,9 @@ func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, 
 
 	apiForm, err := p.schemaFor(ctx, claimed)
 	if err != nil {
+		if errors.Is(err, errNoSchemaFetcher) {
+			return autoapply.PreviewResult{Parked: true, Reason: reasonSubmissionNotImplemented}, nil
+		}
 		return autoapply.PreviewResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
 	}
 	return autoapply.PreviewResult{Preview: PreviewAnswers(mergedFromAPIOnly(apiForm), answers, hasApprovedCV)}, nil
@@ -89,7 +93,7 @@ func (p *PreviewClient) schemaFor(ctx context.Context, claimed autoapply.Claimed
 	}
 	fetcher, ok := p.fetchers[claimed.Provider]
 	if !ok {
-		return applyform.Form{}, fmt.Errorf("no schema fetcher for provider %q", claimed.Provider)
+		return applyform.Form{}, fmt.Errorf("%w: %q", errNoSchemaFetcher, claimed.Provider)
 	}
 	return fetcher.Fetch(ctx, applyform.Claimed{
 		JobID: claimed.JobID, Provider: claimed.Provider,
