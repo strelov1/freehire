@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -177,5 +178,67 @@ func TestJobviteListingErrorIsBoardLevel(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Fetch: want board-level error on listing failure, got nil")
+	}
+}
+
+// Jobvite's detail page is its ONLY source for a posting and is re-fetched on every run, so a
+// dropped one leaves a live vacancy absent from a crawl that reported no failure at all — and
+// the stale sweep reads absence as removal. Both ways of failing to READ it must yield a
+// marker instead: the request failing, and a 200 arriving without the ld+json the mapping
+// needs (an interstitial, a consent wall, a markup change).
+func TestJobviteUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	board := "hbg"
+	for name, fake := range map[string]*routedHTTP{
+		"transport failure": (&routedHTTP{}).
+			routeErr("/"+board+"/job/lostLost22", errors.New("connection reset by peer")).
+			route("/"+board+"/job/keptKept11", jobviteDetailHTML("Editorial Assistant", "keptKept11")).
+			route("/"+board+"/jobs", jobviteListingHTML(board, "keptKept11", "lostLost22")),
+		"page carries no JobPosting": (&routedHTTP{}).
+			route("/"+board+"/job/lostLost22", `<html><body>Checking your browser…</body></html>`).
+			route("/"+board+"/job/keptKept11", jobviteDetailHTML("Editorial Assistant", "keptKept11")).
+			route("/"+board+"/jobs", jobviteListingHTML(board, "keptKept11", "lostLost22")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			jobs, err := NewJobvite(fake).Fetch(context.Background(), CompanyEntry{
+				Company: "Hachette Book Group", Provider: "jobvite", Board: board,
+			})
+			if err != nil {
+				t.Fatalf("Fetch should not abort the board on one unreadable detail: %v", err)
+			}
+			read := readPostings(jobs)
+			if len(read) != 1 || read[0].ExternalID != "keptKept11" {
+				t.Fatalf("read = %v, want only the posting whose detail answered", read)
+			}
+			markers := unreadableMarkers(jobs)
+			if len(markers) != 1 || markers[0].ExternalID != "lostLost22" {
+				t.Fatalf("unreadable markers = %v, want one for the posting whose detail did not", markers)
+			}
+			if markers[0].Company != "Hachette Book Group" {
+				t.Errorf("marker Company = %q, want the board's employer — it names the close scope the "+
+					"run withholds", markers[0].Company)
+			}
+		})
+	}
+}
+
+// The other half of the distinction: a 404 is the platform's own answer that the posting is
+// gone. That is evidence, so the crawl drops it and the board's coverage stays complete.
+func TestJobviteGoneDetailDropsThePosting(t *testing.T) {
+	board := "hbg"
+	fake := (&routedHTTP{}).
+		routeErr("/"+board+"/job/lostLost22", &StatusError{
+			Method: "GET", Code: 404, URL: "https://jobs.jobvite.com/" + board + "/job/lostLost22",
+		}).
+		route("/"+board+"/job/keptKept11", jobviteDetailHTML("Editorial Assistant", "keptKept11")).
+		route("/"+board+"/jobs", jobviteListingHTML(board, "keptKept11", "lostLost22"))
+
+	jobs, err := NewJobvite(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Hachette Book Group", Provider: "jobvite", Board: board,
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "keptKept11" {
+		t.Fatalf("got %v, want only the kept posting — a 404 is evidence, not a hole", jobs)
 	}
 }

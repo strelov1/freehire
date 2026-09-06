@@ -3,8 +3,10 @@ package pipeline
 import (
 	"context"
 	"slices"
+	"strconv"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
@@ -146,6 +148,155 @@ func TestRunReportsOnlyBoardsItActuallyCrawled(t *testing.T) {
 	}
 	if slices.Contains(got, "globex") {
 		t.Errorf("QualifyingBoards = %v, must not contain a board this run never crawled", got)
+	}
+}
+
+// unreadableBoard returns n postings of which unread are marked Unreadable — the shape an ATS
+// adapter yields when a posting's detail request, its ONLY source, could not be read.
+func unreadableBoard(company string, n, unread int) []sources.Job {
+	jobs := make([]sources.Job, 0, n)
+	for i := range n {
+		id := strconv.Itoa(i)
+		if i < unread {
+			jobs = append(jobs, sources.Job{ExternalID: id, Company: company, Unreadable: true})
+			continue
+		}
+		jobs = append(jobs, sources.Job{ExternalID: id, Title: "Backend Engineer", Company: company})
+	}
+	return jobs
+}
+
+// TestRunReportsNoBoardWhenTooMuchOfItWentUnread is the defect this dimension exists for. On
+// the ATS platforms whose detail request is a posting's only source, a detail that failed used
+// to leave the posting simply absent from a crawl that reported Failed=0 and a healthy yield —
+// so both sweeps read a live vacancy as gone and closed it. The run must instead withhold its
+// close scopes for that board: no board scope, and the board's companies out of the company one.
+func TestRunReportsNoBoardWhenTooMuchOfItWentUnread(t *testing.T) {
+	src := fakeSource{provider: "jazzhr", jobs: unreadableBoard("Acme", 2, 1)}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "jazzhr", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["jazzhr"]
+	if got.Unreadable != 1 || got.Ingested != 1 {
+		t.Fatalf("stats = %+v, want Unreadable=1 Ingested=1 (fixture assumption)", got)
+	}
+	if len(got.QualifyingBoards) != 0 {
+		t.Errorf("QualifyingBoards = %v, want none — half the board went unread", got.QualifyingBoards)
+	}
+	if !slices.Contains(got.UnprovenCompanies, normalize.CompanySlug("Acme")) {
+		t.Errorf("UnprovenCompanies = %v, want it to contain %q so the company-scoped close skips it",
+			got.UnprovenCompanies, normalize.CompanySlug("Acme"))
+	}
+}
+
+// TestRunStillReportsABoardWhoseUnreadShareIsScattered: zero tolerance would switch the close
+// off for exactly the boards it matters most for — per-posting failures are independent, so a
+// large board almost never reads every single posting in one run. One unreadable posting in a
+// hundred is the texture of the web, not a broken crawl.
+func TestRunStillReportsABoardWhoseUnreadShareIsScattered(t *testing.T) {
+	src := fakeSource{provider: "jazzhr", jobs: unreadableBoard("Acme", 100, 1)}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "jazzhr", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["jazzhr"]
+	if got.Unreadable != 1 {
+		t.Fatalf("stats = %+v, want Unreadable=1 (fixture assumption)", got)
+	}
+	if !slices.Contains(got.QualifyingBoards, "acme") {
+		t.Errorf("QualifyingBoards = %v, want it to contain %q — one posting in a hundred is not a broken crawl",
+			got.QualifyingBoards, "acme")
+	}
+	if len(got.UnprovenCompanies) != 0 {
+		t.Errorf("UnprovenCompanies = %v, want none", got.UnprovenCompanies)
+	}
+}
+
+// TestUnreadShareBoundary pins maxUnreadablePercent itself, which the tests either side of it
+// only bracket between 1% and 49%. The figure is argued at length in board_scope.go and it is
+// the whole safety margin of this mechanism: widening it is how a board that has genuinely gone
+// dark starts licensing closes again, and nothing about that reads as a mistake in a diff. So
+// the exact edge is held here rather than inferred — 5 in 100 still proves the board, 6 does
+// not, and moving the constant fails by name.
+func TestUnreadShareBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		unread   int
+		qualifos bool
+	}{
+		{unread: 5, qualifos: true},
+		{unread: 6, qualifos: false},
+	} {
+		t.Run(strconv.Itoa(tc.unread)+"-of-100", func(t *testing.T) {
+			src := fakeSource{provider: "jazzhr", jobs: unreadableBoard("Acme", 100, tc.unread)}
+			r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+			stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+				{Company: "Acme", Provider: "jazzhr", Board: "acme"},
+			})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			got := stats["jazzhr"]
+			if got.Unreadable != tc.unread {
+				t.Fatalf("stats = %+v, want Unreadable=%d (fixture assumption)", got, tc.unread)
+			}
+			if has := slices.Contains(got.QualifyingBoards, "acme"); has != tc.qualifos {
+				t.Errorf("board qualifies = %v with %d of 100 unread, want %v — maxUnreadablePercent is %d",
+					has, tc.unread, tc.qualifos, maxUnreadablePercent)
+			}
+		})
+	}
+}
+
+// TestRunReportsNoBoardWhenAlmostNoneOfItCouldBeRead: the other end of the same scale — a board
+// that read 3 of 500 has proved nothing, and must never license a close however clean its
+// listing walk looked.
+func TestRunReportsNoBoardWhenAlmostNoneOfItCouldBeRead(t *testing.T) {
+	src := fakeSource{provider: "jazzhr", jobs: unreadableBoard("Acme", 500, 497)}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "jazzhr", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["jazzhr"]
+	if got.Ingested != 3 {
+		t.Fatalf("stats = %+v, want Ingested=3 (fixture assumption)", got)
+	}
+	if len(got.QualifyingBoards) != 0 {
+		t.Errorf("QualifyingBoards = %v, want none — the crawl read 3 postings of 500", got.QualifyingBoards)
+	}
+}
+
+// TestRunRecordsWhatAWithheldBoardDidRead: withholding the close must not withhold the WRITE.
+// Everything the crawl managed to read is still saved, so the fix costs latency on a genuine
+// removal and never a posting's freshness.
+func TestRunRecordsWhatAWithheldBoardDidRead(t *testing.T) {
+	store := &fakeStore{}
+	src := fakeSource{provider: "jazzhr", jobs: unreadableBoard("Acme", 2, 1)}
+	r := Runner{Registry: registry(src), Store: store}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "jazzhr", Board: "acme"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 {
+		t.Fatalf("saved %d jobs, want the one posting the crawl could read", len(store.saved))
+	}
+	if got := store.saved[0].Fields().ExternalID; got != "acme:1" {
+		t.Errorf("saved external id = %q, want the readable posting's", got)
 	}
 }
 

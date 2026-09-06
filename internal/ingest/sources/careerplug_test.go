@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,69 @@ func TestCareerPlugFetchPaginatesThenMaps(t *testing.T) {
 	}
 	if _, ok := byID["200"]; !ok {
 		t.Errorf("missing job 200 (second listing page not followed)")
+	}
+}
+
+// CareerPlug's detail page is its ONLY source for a posting and is re-fetched on every run, so
+// a dropped one leaves a live vacancy missing from a crawl that reported no failure — which the
+// stale sweep reads as a removal. Both ways of failing to READ the page must therefore yield a
+// marker: the request failing, and the page arriving without the ld+json the mapping needs. The
+// second is not hypothetical — an interstitial, a consent wall or a markup change all serve 200
+// with no JobPosting on it.
+func TestCareerPlugUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	for name, fake := range map[string]*routedHTTP{
+		"transport failure": (&routedHTTP{}).
+			routeErr("/jobs/200", errors.New("connection reset by peer")).
+			route("/jobs/100", careerplugDetailA).
+			route("/jobs?page=2", careerplugList2).
+			route("/jobs", careerplugList1),
+		"page carries no JobPosting": (&routedHTTP{}).
+			route("/jobs/200", `<html><body>Checking your browser…</body></html>`).
+			route("/jobs/100", careerplugDetailA).
+			route("/jobs?page=2", careerplugList2).
+			route("/jobs", careerplugList1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			jobs, err := NewCareerPlug(fake).Fetch(context.Background(), CompanyEntry{
+				Company: "Golden Corral", Provider: "careerplug", Board: "acme",
+			})
+			if err != nil {
+				t.Fatalf("Fetch should not abort the board on one unreadable detail: %v", err)
+			}
+			read := readPostings(jobs)
+			if len(read) != 1 || read[0].ExternalID != "100" {
+				t.Fatalf("read = %v, want only the posting whose detail answered", read)
+			}
+			markers := unreadableMarkers(jobs)
+			if len(markers) != 1 || markers[0].ExternalID != "200" {
+				t.Fatalf("unreadable markers = %v, want one for the posting whose detail did not", markers)
+			}
+			if markers[0].Company != "Golden Corral" {
+				t.Errorf("marker Company = %q, want the ENTRY's employer — the page that would have named "+
+					"the franchise is the page we could not read, and the marker names the close scope "+
+					"the run withholds", markers[0].Company)
+			}
+		})
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is gone.
+// That is evidence, so the crawl drops it and the board's coverage stays complete — otherwise a
+// board whose listing has gone stale could never retire anything.
+func TestCareerPlugGoneDetailDropsThePosting(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("/jobs/200", &StatusError{Method: "GET", Code: 404, URL: "https://acme.careerplug.com/jobs/200"}).
+		route("/jobs/100", careerplugDetailA).
+		route("/jobs?page=2", careerplugList2).
+		route("/jobs", careerplugList1)
+
+	jobs, err := NewCareerPlug(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Golden Corral", Provider: "careerplug", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "100" {
+		t.Fatalf("got %v, want only the kept posting — a 404 is evidence, not a hole", jobs)
 	}
 }

@@ -120,10 +120,11 @@ func TestBreezyRegisteredInAll(t *testing.T) {
 	}
 }
 
-func TestBreezyFetchSkipsPositionWithoutDescription(t *testing.T) {
-	// id 53's page carries no JobPosting ld+json, so its detail fetch yields no
-	// description and the posting is dropped (a description-less job is useless to
-	// enrichment).
+// A page that answered but carries no JobPosting yields no description, so the posting is
+// still not stored — but it is MARKED rather than dropped. The one cause that would explain an
+// empty page across a whole board is Breezy changing its markup, and reading that as "every
+// posting is gone" is a mass-close of a live board.
+func TestBreezyPositionWithoutDescriptionIsMarkedNotDropped(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("/p/52-designer", jobPostingHTML("Designer", "<p>Real work.</p>")).
 		route("/p/53-broken", `<html><head></head><body>no job posting here</body></html>`).
@@ -142,7 +143,12 @@ func TestBreezyFetchSkipsPositionWithoutDescription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch should not abort the board on one description-less detail: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "52" {
-		t.Fatalf("want only 52 to survive, got %d jobs", len(jobs))
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "52" {
+		t.Fatalf("read = %v, want only 52", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "53" {
+		t.Fatalf("unreadable markers = %v, want one for 53", markers)
 	}
 }

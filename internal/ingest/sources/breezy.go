@@ -63,17 +63,22 @@ func (b breezy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // detail fetches one position page for its JobPosting description, mapping the listing
-// fields plus that description to a Job. It returns ok=false when the page fetch fails or
-// carries no description, so the caller drops just that posting (a description-less job is
-// useless to enrichment).
+// fields plus that description to a Job. A description-less job is useless to enrichment, so
+// the posting is not stored either way — but a page the platform reports gone is dropped
+// (ok=false) while a page this crawl could not read, or that answered with no description at
+// all, comes back as an unreadableDetail marker: the page is the only source of the body, and
+// a dropped posting is indistinguishable from one taken down.
 func (b breezy) detail(ctx context.Context, e CompanyEntry, p breezyPosting) (Job, bool) {
 	root, err := b.http.GetHTML(ctx, p.URL)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(p.ID, p.URL, e.Company), true
+		}
 		return Job{}, false
 	}
 	desc, ok := breezyDescription(root)
 	if !ok {
-		return Job{}, false
+		return unreadableDetail(p.ID, p.URL, e.Company), true
 	}
 
 	location := joinNonEmpty(p.Location.City, p.Location.Country.Name)

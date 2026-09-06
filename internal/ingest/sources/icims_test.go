@@ -315,20 +315,48 @@ func TestICIMSRemoteFromJobLocationType(t *testing.T) {
 	}
 }
 
-func TestICIMSFailedDetailDropsOnlyThatPosting(t *testing.T) {
+// A fragment the crawl could not READ must not look like a posting that is not there: the
+// fragment is icims' only source for a posting and is re-requested every run, so a dropped one
+// leaves a live vacancy missing from a crawl that reported no failure, and the stale-job sweep
+// closes it once the grace window elapses.
+func TestICIMSUnreadableDetailIsMarkedNotDropped(t *testing.T) {
 	ok := "https://careers-acme.icims.com/jobs/111/kept/job"
-	bad := "https://careers-acme.icims.com/jobs/222/dropped/job"
-	// No route for /jobs/222/...?in_iframe=1 → GetHTML errors → that posting drops.
+	lost := "https://careers-acme.icims.com/jobs/222/lost/job"
+	// No route for /jobs/222/...?in_iframe=1 → GetHTML errors with a transport failure.
 	fake := (&routedHTTP{}).
-		route("/sitemap.xml", icimsSitemapXML(ok, bad)).
+		route("/sitemap.xml", icimsSitemapXML(ok, lost)).
 		route("/jobs/111/kept/job?in_iframe=1", icimsDetailHTML)
 
-	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "111" {
+		t.Fatalf("read = %v, want only the posting whose fragment answered", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "222" {
+		t.Fatalf("unreadable markers = %v, want one for the posting whose fragment did not", markers)
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is
+// gone, so the crawl drops it and the board's evidence stays complete.
+func TestICIMSGoneDetailDropsThePosting(t *testing.T) {
+	ok := "https://careers-acme.icims.com/jobs/111/kept/job"
+	lost := "https://careers-acme.icims.com/jobs/222/lost/job"
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", icimsSitemapXML(ok, lost)).
+		routeErr("/jobs/222/lost/job", &StatusError{Method: "GET", Code: 404, URL: lost}).
+		route("/jobs/111/kept/job?in_iframe=1", icimsDetailHTML)
+
+	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "111" {
-		t.Fatalf("got %v, want only the kept posting", jobs)
+		t.Fatalf("got %v, want only the kept posting — a 404 is evidence, not a hole", jobs)
 	}
 }
 

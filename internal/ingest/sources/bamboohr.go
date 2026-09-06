@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // bambooHR adapts the BambooHR public careers API. Its list endpoint carries no
@@ -63,8 +64,10 @@ func (b bambooHR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one posting's detail and maps it to a Job, returning ok=false when the
-// detail request fails so the caller can skip just that posting.
+// detail fetches one posting's detail and maps it to a Job. A posting the platform reports
+// gone is dropped (ok=false); one this crawl merely could not read comes back as an
+// unreadableDetail marker, since the detail request is this adapter's only source for the
+// posting and a dropped one is indistinguishable from a posting taken down.
 func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting) (Job, bool) {
 	url := fmt.Sprintf("https://%s.bamboohr.com/careers/%s/detail", e.Board, p.ID)
 
@@ -83,10 +86,21 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 		} `json:"result"`
 	}
 	if err := b.http.GetJSON(ctx, url, &d); err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(p.ID, url, e.Company), true
+		}
 		return Job{}, false
 	}
 
 	jo := d.Result.JobOpening
+	// A 200 is not the same as an answer: an empty body, a `null`, or an interstitial decodes
+	// without error and leaves every detail field zero. The LISTING already supplied the id,
+	// the name and the location, so such a posting would go on looking read while carrying no
+	// URL and no description — counted toward the board's coverage and closed by the sweep all
+	// the same. jobOpeningShareUrl is the tell, since every real jobOpening carries one.
+	if strings.TrimSpace(jo.ShareURL) == "" {
+		return unreadableDetail(p.ID, url, e.Company), true
+	}
 	location := joinNonEmpty(jo.Location.City, jo.Location.State, jo.Location.AddressCountry)
 	mode := firstNonEmpty(bambooHRLocationType(p.LocationType), workModeFromRemote(p.IsRemote))
 	return Job{

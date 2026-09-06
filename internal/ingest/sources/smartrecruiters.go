@@ -108,8 +108,10 @@ func (s smartRecruiters) listPostings(ctx context.Context, board string) ([]smar
 	return postings, nil
 }
 
-// detail fetches one posting's detail and maps it to a Job, returning ok=false when the
-// detail request fails so the caller can skip just that posting.
+// detail fetches one posting's detail and maps it to a Job. A posting the platform reports
+// gone is dropped (ok=false); one this crawl merely could not read comes back as an
+// unreadableDetail marker, since the detail request is this adapter's only source for the
+// posting and a dropped one is indistinguishable from a posting taken down.
 func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecruitersPosting) (Job, bool) {
 	url := fmt.Sprintf("%s/%s/postings/%s", smartRecruitersBaseURL, e.Board, p.ID)
 
@@ -131,7 +133,20 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		} `json:"jobAd"`
 	}
 	if err := s.http.GetJSON(ctx, url, &d); err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(p.ID, url, e.Company), true
+		}
 		return Job{}, false
+	}
+
+	// A 200 is not the same as an answer. A body that is empty, `null`, or an interstitial
+	// decodes without error and leaves every detail field zero — and because the LISTING
+	// supplied the id, the title and the location, the posting would go on looking read while
+	// carrying no URL and no description at all. That is this whole change's defect wearing a
+	// success: the run would count it toward its coverage and the sweep would still close it.
+	// postingUrl is the tell, since every real detail payload carries one.
+	if strings.TrimSpace(d.PostingURL) == "" {
+		return unreadableDetail(p.ID, url, e.Company), true
 	}
 
 	// companyDescription is excluded while the role sections carry text — it is boilerplate,

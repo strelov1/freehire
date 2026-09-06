@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -22,6 +23,10 @@ const defaultDetailWorkers = 8
 // their postings' relative order. Adapters whose list endpoint omits the description
 // (SmartRecruiters, Rippling, BambooHR) share this so the bound and isolation behave
 // identically across platforms.
+//
+// An adapter whose detail request is a posting's ONLY source must not spend that drop on a
+// request it merely could not READ: it returns unreadableDetail(...) with ok=true instead, so
+// the pipeline can tell a posting that is gone from one this crawl failed to see.
 func fetchDetails[P any](postings []P, workers int, fetch func(P) (Job, bool)) []Job {
 	jobs := make([]*Job, len(postings))
 	sem := make(chan struct{}, workers)
@@ -68,6 +73,40 @@ func fetchDetailsStream[P any](postings []P, workers int, fetch func(P) (Job, bo
 		}(p)
 	}
 	wg.Wait()
+}
+
+// detailUnreadable reports whether a failed detail request left the crawl WITHOUT information
+// about the posting, rather than telling it something. A 404 or a 410 is the platform's own
+// answer that the posting no longer exists — evidence, on which not seeing it again is the
+// right reading. Anything else (a timeout, a refusal, a 5xx, an undecodable body) says only
+// that this request failed, and a crawl that files it as an absence closes a live posting once
+// the sweep's grace window elapses.
+//
+// It classifies what SURVIVED the shared client's own retries — 429, 5xx and network errors
+// are retried before an error ever reaches an adapter — and matches the status structurally
+// through *StatusError, the same way isRateLimited does rather than scraping the message.
+func detailUnreadable(err error) bool {
+	var se *StatusError
+	if !errors.As(err, &se) {
+		return true // a transport or decode failure states nothing about the posting
+	}
+	return se.Code != http.StatusNotFound && se.Code != http.StatusGone
+}
+
+// unreadableDetail is the marker a link-only adapter yields in place of a posting whose detail
+// it could not read (see Job.Unreadable). It carries the identity the adapter holds without the
+// detail; company is what lets the pipeline name the employer whose close scope this run may
+// not license, and is the board's configured employer when nothing better is known.
+//
+// Two cases deliberately stay a plain drop rather than becoming a marker. A link carrying no
+// posting id at all is not a posting this catalogue could ever have stored, so no close can
+// reach it. And a page the platform answers 404/410 for is gone, which is the whole point of
+// the distinction. Everything in between — including a 200 that carries no posting — is a
+// marker: the one cause that would explain an empty page across a WHOLE board is the platform
+// changing its markup, and reading that as "every posting is gone" is the mass-close this
+// exists to prevent.
+func unreadableDetail(externalID, url, company string) Job {
+	return Job{Unreadable: true, ExternalID: externalID, URL: url, Company: company}
 }
 
 // isRemote infers a job's remote flag from its location text. Adapters share it so

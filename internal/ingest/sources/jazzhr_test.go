@@ -137,21 +137,57 @@ func TestJazzHRCompanyFallsBackToEntry(t *testing.T) {
 	}
 }
 
-func TestJazzHRFailedDetailDropsOnlyThatPosting(t *testing.T) {
-	listing := `<html><body>
+const jazzhrTwoPostingListing = `<html><body>
 <a href="/apply/keptKept11/kept">kept</a>
-<a href="/apply/dropDrop22/dropped">dropped</a>
+<a href="/apply/lostLost22/lost">lost</a>
 </body></html>`
-	// No route for /apply/dropDrop22/... → GetHTML errors → that posting drops.
+
+// A detail request the crawl could not READ must not look like a posting that is not there.
+// The detail page is jazzhr's only source for a posting, and it is re-fetched on every run, so
+// a dropped one leaves the posting missing from a crawl that reported no failure at all — and
+// the stale-job sweep closes a live vacancy once the grace window elapses.
+func TestJazzHRUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	// routeErr, not an absent route: `route("/apply", ...)` matches by SUBSTRING, so it also
+	// answers /apply/lostLost22/lost — with the listing HTML, which carries no ld+json. That
+	// drives the parse branch and leaves the transport one, the branch this test is named for,
+	// unexercised. The two are different failures and the adapter treats them the same on
+	// purpose; each still needs its own cover.
+	fake := (&routedHTTP{}).
+		routeErr("/apply/lostLost22", errors.New("connection reset by peer")).
+		route("/apply/keptKept11/kept", jazzhrDetailHTML).
+		route("/apply", jazzhrTwoPostingListing)
+
+	jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme Corp", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch should not abort the board on one failed detail: %v", err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "keptKept11" {
+		t.Fatalf("read = %v, want only the posting whose detail answered", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "lostLost22" {
+		t.Fatalf("unreadable markers = %v, want one for the posting whose detail did not", markers)
+	}
+	if markers[0].Company != "Acme Corp" {
+		t.Errorf("marker Company = %q, want the board's employer — it names the close scope the run withholds", markers[0].Company)
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is
+// gone, so the crawl drops it and the board's evidence stays complete — otherwise a board
+// whose listing has gone stale could never retire anything.
+func TestJazzHRGoneDetailDropsThePosting(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("/apply/keptKept11/kept", jazzhrDetailHTML).
-		route("/apply", listing)
+		routeErr("/apply/lostLost22/lost", &StatusError{Method: "GET", Code: 404, URL: "https://acme.applytojob.com/apply/lostLost22/lost"}).
+		route("/apply", jazzhrTwoPostingListing)
 
-	jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme Corp", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "keptKept11" {
-		t.Fatalf("got %v, want only the kept posting", jobs)
+		t.Fatalf("got %v, want only the kept posting — a 404 is evidence, not a hole", jobs)
 	}
 }
