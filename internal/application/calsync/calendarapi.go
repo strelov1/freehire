@@ -163,14 +163,6 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 	return out, nil
 }
 
-// AuthError marks a failure that means the grant itself is no longer good, as against
-// one that means the provider is unwell. Only the first may cost a candidate their
-// connection.
-type AuthError struct{ err error }
-
-func (e *AuthError) Error() string { return e.err.Error() }
-func (e *AuthError) Unwrap() error { return e.err }
-
 // eventsPage is one response page.
 type eventsPage struct {
 	Items         []calendarEvent `json:"items"`
@@ -188,16 +180,18 @@ func (r *APIReader) page(ctx context.Context, q url.Values) (eventsPage, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("calendar: list events: %s", resp.Status)
-		// 401 and 403 are the grant saying no. Everything else — a 500, a rate limit, a
-		// timeout — is Google having a bad day, and must not be read as a revocation:
-		// the status flag it would set is SHARED with mail, so one incident would
-		// disconnect every candidate's mailbox at once and each would have to redo a
-		// restricted-scope consent.
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return eventsPage{}, &AuthError{err: err}
+		// The status travels with the error rather than being decided here. 401 and 403
+		// are the grant saying no; everything else — a 500, a rate limit, a timeout — is
+		// Google having a bad day and must not be read as a revocation, because the flag
+		// it would set is SHARED with mail: one incident would disconnect every
+		// candidate's mailbox at once and each would have to redo a restricted-scope
+		// consent. gmailsync.RevokedGrant is the one place that rule is written, since a
+		// second copy of it here would be a second answer for one grant.
+		return eventsPage{}, &gmailsync.APIError{
+			Op:         "calendar: list events",
+			StatusCode: resp.StatusCode,
+			Status:     resp.Status,
 		}
-		return eventsPage{}, err
 	}
 	var body eventsPage
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {

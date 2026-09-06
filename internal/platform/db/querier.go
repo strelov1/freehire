@@ -46,6 +46,15 @@ type Querier interface {
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
 	// key rejects a duplicate rather than silently reordering the conversation.
 	AppendAssistantMessage(ctx context.Context, arg AppendAssistantMessageParams) (AssistantMessage, error)
+	// Same shape as SearchOutboxMetrics, over a queue that records its state in a status
+	// column instead of a failed_at stamp, so the two FILTERs spell the same split in its
+	// own vocabulary: anything a run can still claim is depth, and `failed` is the dead
+	// letter — no run claims it again, and an abandoned `unlink` leaves its user_identities
+	// row in revocation_pending, where nothing can ever unlink that identity.
+	//
+	// `processing` counts as live: the claim takes back a row stuck in it for ten minutes, so
+	// it is work still owed rather than work given up on.
+	AppleRevocationJobMetrics(ctx context.Context) (AppleRevocationJobMetricsRow, error)
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per

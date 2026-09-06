@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -63,11 +65,11 @@ func TestInterviewInvitationReadsAnHTMLOnlyBody(t *testing.T) {
 // No invitation is an ordinary answer, not a failure: plenty of interviews are
 // arranged outside the mailbox we can see.
 func TestInterviewInvitationReportsWhenThereIsNone(t *testing.T) {
-	q := &fakeQueries{invitationErr: errNoRows}
+	q := &fakeQueries{invitationErr: pgx.ErrNoRows}
 	s := New(q, nil)
 
 	_, err := s.InterviewInvitation(context.Background(), 1, 42)
-	if !errors.Is(err, errNoRows) {
+	if !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("error = %v, want the store's no-rows error passed through", err)
 	}
 }

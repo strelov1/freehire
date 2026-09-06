@@ -57,32 +57,68 @@ func (w *Worker) WithLearnedDomains(src DomainSource) *Worker {
 	return w
 }
 
+// Stats reports what a run did, so the command can say it and exit accordingly.
+//
+// Without this a run that reached nobody was byte-identical to a clean one: RunOnce
+// returned nil either way, cmd/gmail-sync exited 0, and freehire_worker_last_run_success
+// read 1 straight through a total failure. Nothing else measures this sync.
+type Stats struct {
+	Connections int
+	Synced      int
+	// Failed counts connections whose sync did not complete — a token that would not
+	// decrypt, a provider having a bad day, a message that would not store. The next run
+	// retries them.
+	Failed int
+	// Reconsent counts connections whose grant was refused and flagged. No later run
+	// retries those: only a browser consent clears the flag.
+	Reconsent int
+}
+
+// outcome is what one connection's pass amounted to.
+type outcome int
+
+const (
+	outcomeSynced outcome = iota
+	outcomeFailed
+	outcomeReconsent
+)
+
 // RunOnce syncs all connected users once.
-func (w *Worker) RunOnce(ctx context.Context) error {
+func (w *Worker) RunOnce(ctx context.Context) (Stats, error) {
 	users, err := w.store.ListConnected(ctx)
 	if err != nil {
-		return err
+		return Stats{}, err
 	}
+	stats := Stats{Connections: len(users)}
 	for _, u := range users {
-		w.syncUser(ctx, u)
+		switch w.syncUser(ctx, u) {
+		case outcomeSynced:
+			stats.Synced++
+		case outcomeReconsent:
+			stats.Reconsent++
+		default:
+			stats.Failed++
+		}
 	}
-	return nil
+	return stats, nil
 }
 
 // SyncUser syncs one connected user's mail on demand (a manual refresh from the
-// inbox), reusing the same best-effort per-user path as the cron worker.
-func (w *Worker) SyncUser(ctx context.Context, u Connection) { w.syncUser(ctx, u) }
+// inbox), reusing the same best-effort per-user path as the cron worker. The outcome is
+// dropped: the caller is a background goroutine behind a button, and the user reads the
+// result by watching their inbox fill.
+func (w *Worker) SyncUser(ctx context.Context, u Connection) { _ = w.syncUser(ctx, u) }
 
-func (w *Worker) syncUser(ctx context.Context, u Connection) {
+func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	encToken, err := w.store.RefreshToken(ctx, u.UserID)
 	if err != nil {
 		log.Printf("gmail-sync: user %d: read token: %v", u.UserID, err)
-		return
+		return outcomeFailed
 	}
 	refresh, err := w.cipher.Decrypt(encToken)
 	if err != nil {
 		log.Printf("gmail-sync: user %d: decrypt token: %v", u.UserID, err)
-		return
+		return outcomeFailed
 	}
 	learned, err := w.domains.Promoted(ctx)
 	if err != nil {
@@ -95,12 +131,27 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 
 	ids, err := reader.ListATSMessageIDs(ctx, u.Email, u.Cursor)
 	if err != nil {
-		// A revoked/expired grant surfaces here; flag it for re-consent and move on.
+		if !RevokedGrant(err) {
+			// A rate limit, a 500, a reset connection, or this process being stopped
+			// mid-run. None of them says anything about the grant, and the flag they
+			// used to set is shared with the calendar and cleared only by a browser
+			// consent — so one Google incident, or one redeploy, disconnected every
+			// mailbox we hold. It is reachable from a button, too: the on-demand sync
+			// runs this same path.
+			log.Printf("gmail-sync: user %d: list: %v", u.UserID, err)
+			return outcomeFailed
+		}
 		log.Printf("gmail-sync: user %d: list: %v — marking needs_reconsent", u.UserID, err)
 		if err := w.store.SetNeedsReconsent(ctx, u.UserID); err != nil {
+			// The status did not move, so the mailbox is still `connected` and the next
+			// run will meet the same revoked grant and try again. Counting this as a
+			// re-consent would report a transition that did not happen — and this is the
+			// one outcome the run must not call clean, because nothing else will notice:
+			// the user is told to reconnect by a status that was never written.
 			log.Printf("gmail-sync: user %d: set status: %v", u.UserID, err)
+			return outcomeFailed
 		}
-		return
+		return outcomeReconsent
 	}
 
 	newest := u.Cursor
@@ -167,5 +218,10 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 	}
 	if err := w.store.SetSynced(ctx, u.UserID, newest); err != nil {
 		log.Printf("gmail-sync: user %d: set synced: %v", u.UserID, err)
+		return outcomeFailed
 	}
+	if sawFailure {
+		return outcomeFailed
+	}
+	return outcomeSynced
 }

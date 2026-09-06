@@ -18,12 +18,12 @@ package calsync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/strelov1/freehire/internal/application/calmatch"
+	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
 
@@ -175,8 +175,11 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 		// limit is Google having a bad day, and the flag is SHARED with mail — treating
 		// every failure as a revocation would disconnect every mailbox we hold during one
 		// Google incident, each needing a restricted-scope consent to restore.
-		var authErr *AuthError
-		if !errors.As(err, &authErr) {
+		//
+		// A real revocation does not arrive as a calendar 403 at all: the client is built
+		// from a stored refresh token, so Google refuses it at the TOKEN endpoint before
+		// this request is made. RevokedGrant covers both carriers.
+		if !gmailsync.RevokedGrant(err) {
 			return fmt.Errorf("list events: %w", err)
 		}
 		if markErr := w.store.SetNeedsReconsent(ctx, u.UserID); markErr != nil {
@@ -218,11 +221,18 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 			UserID:        u.UserID,
 			ApplicationID: match.ApplicationID,
 			UID:           ev.UID,
-			Title:         ev.Title,
-			StartsAt:      ev.StartsAt,
-			EndsAt:        ev.EndsAt,
-			JoinURL:       ev.JoinURL,
-			Status:        StatusConfirmed,
+			// The provider's own event id, which is a different thing from the UID and
+			// the ONLY identifier a cancellation is guaranteed to carry. Omitting it
+			// stored an empty column for every meeting, which made the second half of
+			// CancelApplicationInterview's match unreachable: a cancelled occurrence of a
+			// recurring series arrives with no iCalUID, matched nothing, and left the
+			// meeting standing as confirmed forever.
+			ProviderID: ev.ProviderID,
+			Title:      ev.Title,
+			StartsAt:   ev.StartsAt,
+			EndsAt:     ev.EndsAt,
+			JoinURL:    ev.JoinURL,
+			Status:     StatusConfirmed,
 		}); err != nil {
 			return fmt.Errorf("store %s: %w", ev.UID, err)
 		}

@@ -92,7 +92,11 @@ func (r *apiReader) GetMessage(ctx context.Context, id string) (Message, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Message{}, fmt.Errorf("gmail: get message %s: %s", id, resp.Status)
+		return Message{}, &APIError{
+			Op:         fmt.Sprintf("gmail: get message %s", id),
+			StatusCode: resp.StatusCode,
+			Status:     resp.Status,
+		}
 	}
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -112,7 +116,7 @@ func (r *apiReader) getJSON(ctx context.Context, u string, out any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("gmail: %s: %s", u, resp.Status)
+		return &APIError{Op: "gmail: " + u, StatusCode: resp.StatusCode, Status: resp.Status}
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

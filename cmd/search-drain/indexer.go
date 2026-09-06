@@ -9,6 +9,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
+	"github.com/strelov1/freehire/internal/search/searchdrain"
 )
 
 // searchIndexer adapts the search client to searchdrain.Indexer: build each job's
@@ -81,11 +82,18 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	if len(geoIDs) > 0 {
 		rows, err := ix.q.DuplicateClosureGeoFor(ctx, geoIDs)
 		if err != nil {
-			log.Printf("search-drain: duplicate-closure geography for wave: %v", err)
-		} else {
-			for _, r := range rows {
-				geo[r.OwnerID] = r
-			}
+			// Not a degradation this wave may absorb, unlike the counts above. The push
+			// is a field-level update and countries/regions/cities are always in the
+			// payload, so a document built without the closure union does not merely
+			// fail to widen a collapsed multi-city role — it OVERWRITES the widened
+			// values already indexed with the canon's own (see
+			// search.JobDocument.MergeClosureGeography). Skip the wave; the lease
+			// expires and a later run reads the geography again.
+			return fmt.Errorf("%w: duplicate-closure geography for wave: %v",
+				searchdrain.ErrSkipWave, err)
+		}
+		for _, r := range rows {
+			geo[r.OwnerID] = r
 		}
 	}
 

@@ -20,6 +20,7 @@ type metricsQueries interface {
 	EnrichmentOutboxMetrics(context.Context) (db.EnrichmentOutboxMetricsRow, error)
 	SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMetricsRow, error)
 	MailClassificationOutboxMetrics(context.Context) (db.MailClassificationOutboxMetricsRow, error)
+	AppleRevocationJobMetrics(context.Context) (db.AppleRevocationJobMetricsRow, error)
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
@@ -46,6 +47,10 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	mail, err := q.MailClassificationOutboxMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("mail classification outbox metrics: %w", err)
+	}
+	appleRevocations, err := q.AppleRevocationJobMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("apple revocation job metrics: %w", err)
 	}
 	boards, err := q.BoardHealthMetrics(ctx)
 	if err != nil {
@@ -90,6 +95,12 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			{name: "enrichment_outbox", depth: enrichment.Depth, deadLetters: enrichment.DeadLetters, oldestAgeSeconds: enrichment.OldestAgeSeconds},
 			{name: "semantic_outbox", depth: semantic.Depth, deadLetters: semantic.DeadLetters, oldestAgeSeconds: semantic.OldestAgeSeconds},
 			{name: "email_classification_outbox", depth: mail.Depth, deadLetters: mail.DeadLetters, oldestAgeSeconds: mail.OldestAgeSeconds},
+			// Not an outbox by name, but the same thing by shape and by hazard: a queue
+			// one worker drains, whose given-up entries nothing ever claims again. A
+			// queue this worker does not measure has no signal at all — cmd/apple-revoke
+			// exits 0 either way, so the per-run family stays green through a backlog of
+			// identities stranded in revocation_pending.
+			{name: "apple_revocation_jobs", depth: appleRevocations.Depth, deadLetters: appleRevocations.DeadLetters, oldestAgeSeconds: appleRevocations.OldestAgeSeconds},
 		},
 		notifyPendingSubscriptions: notifyBacklog.PendingSubscriptions,
 		notifyOldestAgeSeconds:     notifyBacklog.OldestAgeSeconds,

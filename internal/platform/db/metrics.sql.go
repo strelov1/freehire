@@ -11,6 +11,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const appleRevocationJobMetrics = `-- name: AppleRevocationJobMetrics :one
+SELECT
+    count(*) FILTER (WHERE status IN ('pending', 'retry', 'processing')) AS depth,
+    count(*) FILTER (WHERE status = 'failed')                            AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at)
+            FILTER (WHERE status IN ('pending', 'retry', 'processing'))),
+        0
+    )::float8                                                            AS oldest_age_seconds
+FROM apple_revocation_jobs
+`
+
+type AppleRevocationJobMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same shape as SearchOutboxMetrics, over a queue that records its state in a status
+// column instead of a failed_at stamp, so the two FILTERs spell the same split in its
+// own vocabulary: anything a run can still claim is depth, and `failed` is the dead
+// letter — no run claims it again, and an abandoned `unlink` leaves its user_identities
+// row in revocation_pending, where nothing can ever unlink that identity.
+//
+// `processing` counts as live: the claim takes back a row stuck in it for ten minutes, so
+// it is work still owed rather than work given up on.
+func (q *Queries) AppleRevocationJobMetrics(ctx context.Context) (AppleRevocationJobMetricsRow, error) {
+	row := q.db.QueryRow(ctx, appleRevocationJobMetrics)
+	var i AppleRevocationJobMetricsRow
+	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
+}
+
 const boardHealthMetrics = `-- name: BoardHealthMetrics :one
 SELECT
     count(*) FILTER (

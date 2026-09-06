@@ -34,11 +34,15 @@ func run() int {
 		log.Printf("apple-revoke: %v", err)
 		return 1
 	}
-	done, err := applejobs.New(pool, client, ring).Run(ctx, 100)
+	stats, err := applejobs.New(pool, client, ring).Run(ctx, 100)
 	if err != nil {
 		log.Printf("apple-revoke: %v", err)
 		return 1
 	}
-	log.Printf("apple-revoke: processed=%d", done)
-	return 0
+	log.Printf("apple-revoke: processed=%d revoked=%d retried=%d failed=%d",
+		stats.Processed, stats.Revoked, stats.Retried, stats.Failed)
+	// A job given up on is this queue's dead letter: nothing claims it again, and an
+	// abandoned `unlink` leaves its identity in revocation_pending where it can never be
+	// unlinked. Printing processed=100 and exiting 0 made that invisible.
+	return worker.ExitCode(stats.Retried, stats.Failed)
 }

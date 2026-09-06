@@ -3,8 +3,11 @@ package gmailsync
 import (
 	"context"
 	"errors"
+	"net/url"
 	"testing"
 	"time"
+
+	"golang.org/x/oauth2"
 
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
@@ -27,6 +30,7 @@ type fakeStore struct {
 	syncedCursor   int64
 	syncedCalled   bool
 	reconsentUsers []int64
+	reconsentErr   error
 }
 
 func (f *fakeStore) ListConnected(context.Context) ([]Connection, error) { return f.conns, nil }
@@ -44,6 +48,9 @@ func (f *fakeStore) SetSynced(_ context.Context, _, cursor int64) error {
 	return nil
 }
 func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
+	if f.reconsentErr != nil {
+		return f.reconsentErr
+	}
 	f.reconsentUsers = append(f.reconsentUsers, userID)
 	return nil
 }
@@ -83,7 +90,8 @@ func TestRunOnceSyncsUser(t *testing.T) {
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if err := w.RunOnce(context.Background()); err != nil {
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 	if len(store.upserted) != 2 {
@@ -91,6 +99,9 @@ func TestRunOnceSyncsUser(t *testing.T) {
 	}
 	if !store.syncedCalled || store.syncedCursor != t2.Unix() {
 		t.Errorf("cursor = %d (called=%v), want %d", store.syncedCursor, store.syncedCalled, t2.Unix())
+	}
+	if (stats != Stats{Connections: 1, Synced: 1}) {
+		t.Errorf("stats = %+v, want one connection cleanly synced", stats)
 	}
 }
 
@@ -116,7 +127,7 @@ func TestRunOnceExpandsThread(t *testing.T) {
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if err := w.RunOnce(context.Background()); err != nil {
+	if _, err := w.RunOnce(context.Background()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 	got := map[string]bool{}
@@ -161,7 +172,8 @@ func TestRunOnceFreezesWatermarkOnFailure(t *testing.T) {
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if err := w.RunOnce(context.Background()); err != nil {
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m2" {
@@ -172,6 +184,10 @@ func TestRunOnceFreezesWatermarkOnFailure(t *testing.T) {
 	}
 	if store.syncedCursor >= t1.Unix() {
 		t.Errorf("cursor = %d, want < %d (m1's timestamp) so the failed message is retried next run", store.syncedCursor, t1.Unix())
+	}
+	if stats.Failed != 1 || stats.Synced != 0 {
+		t.Errorf("stats = %+v, want the connection counted as failed — a partial sync is what "+
+			"the exit code exists to report", stats)
 	}
 }
 
@@ -200,7 +216,7 @@ func TestRunOnceRewindsWatermarkWhenASuccessPrecedesAFailure(t *testing.T) {
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if err := w.RunOnce(context.Background()); err != nil {
+	if _, err := w.RunOnce(context.Background()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m2" {
@@ -231,7 +247,7 @@ func TestRunOnceRewindsWatermarkOnAFailedThreadSibling(t *testing.T) {
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if err := w.RunOnce(context.Background()); err != nil {
+	if _, err := w.RunOnce(context.Background()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m1" {
@@ -242,20 +258,121 @@ func TestRunOnceRewindsWatermarkOnAFailedThreadSibling(t *testing.T) {
 	}
 }
 
+// A 401 from the Gmail API is the grant saying no, and the only kind of failure that may
+// cost the candidate their connection.
 func TestRunOnceRevokedTokenMarksReconsent(t *testing.T) {
-	c := testCipher(t)
-	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
-	reader := &fakeReader{listErr: errors.New("401 invalid_grant")}
-	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+	store, stats := runWithListError(t, &APIError{
+		Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized",
+	})
 
-	if err := w.RunOnce(context.Background()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
 	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
 		t.Errorf("reconsent = %v, want [9]", store.reconsentUsers)
 	}
 	if store.syncedCalled {
 		t.Error("should not advance cursor when listing failed")
 	}
+	if stats.Reconsent != 1 || stats.Synced != 0 {
+		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
+	}
+}
+
+// The revocation that actually happens in production never reaches the Gmail API at all:
+// the reader's client is built from a stored refresh token, so Google refuses it at the
+// TOKEN endpoint and oauth2 hands back a *url.Error wrapping *oauth2.RetrieveError.
+func TestRunOnceMarksReconsentWhenTheTokenEndpointRefusesTheRefreshToken(t *testing.T) {
+	store, stats := runWithListError(t, &url.Error{
+		Op:  "Get",
+		URL: "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+		Err: &oauth2.RetrieveError{ErrorCode: "invalid_grant", ErrorDescription: "Token has been expired or revoked."},
+	})
+
+	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
+		t.Errorf("reconsent = %v, want [9] — invalid_grant at the token endpoint IS the revocation", store.reconsentUsers)
+	}
+	if stats.Reconsent != 1 {
+		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
+	}
+}
+
+// Counting a re-consent the store refused to record would report a transition that did not
+// happen. The mailbox is still `connected`, so the next run meets the same revoked grant and
+// tries again — and nothing else notices in the meantime: the candidate is supposed to be
+// told to reconnect by a status that was never written. That belongs in the failed count,
+// which is what the exit code reads.
+func TestRunOnceCountsAnUnwritableReconsentAsAFailure(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{
+		conns:        []Connection{{UserID: 9, Cursor: 0}},
+		encToken:     enc,
+		reconsentErr: errors.New("connection reset by peer"),
+	}
+	reader := &fakeReader{listErr: &APIError{
+		Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized",
+	}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if stats.Reconsent != 0 || stats.Failed != 1 {
+		t.Errorf("stats = %+v, want the connection counted as failed — the status never moved", stats)
+	}
+}
+
+// Everything else is Google having a bad day, or this process being stopped. The status
+// flag is SHARED with the calendar and only a browser consent clears it, so one incident
+// read as a revocation disconnects every mailbox we hold at once — and the on-demand sync
+// behind the inbox's Sync button runs this same path, so a click at a bad moment did it
+// to one candidate on its own.
+func TestRunOnceDoesNotDisconnectOverATransientFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"rate limit", &APIError{Op: "gmail: list", StatusCode: 429, Status: "429 Too Many Requests"}},
+		{"provider fault", &APIError{Op: "gmail: list", StatusCode: 503, Status: "503 Service Unavailable"}},
+		{"connection reset", errors.New("read tcp: connection reset by peer")},
+		{"run cancelled", context.Canceled},
+		{"our own client credential is wrong", &url.Error{
+			Op:  "Post",
+			URL: "https://oauth2.googleapis.com/token",
+			Err: &oauth2.RetrieveError{ErrorCode: "invalid_client"},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, stats := runWithListError(t, tc.err)
+
+			if len(store.reconsentUsers) != 0 {
+				t.Errorf("marked %v for re-consent over %v", store.reconsentUsers, tc.err)
+			}
+			if store.syncedCalled {
+				t.Error("should not advance cursor when listing failed")
+			}
+			if stats.Failed != 1 || stats.Reconsent != 0 {
+				t.Errorf("stats = %+v, want the connection counted as failed and retried next run", stats)
+			}
+		})
+	}
+}
+
+// runWithListError syncs one connection whose listing fails with err, returning what the
+// store saw and what the run reported.
+func runWithListError(t *testing.T, listErr error) (*fakeStore, Stats) {
+	t.Helper()
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
+	reader := &fakeReader{listErr: listErr}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if stats.Connections != 1 {
+		t.Fatalf("connections = %d, want 1", stats.Connections)
+	}
+	return store, stats
 }

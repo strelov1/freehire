@@ -2,6 +2,7 @@ package promo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -114,6 +115,13 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 // between the two records money that never moved, and nothing would ever look at that row
 // again. The other way round, a failure after the credit costs one repeat — which the
 // idempotency key on the provider's side absorbs.
+//
+// One row's failure never ends the pass, the way GrantEarned's does not: the query orders
+// by id and carries no attempt counter, so a single undeliverable reward — a referrer
+// whose provider customer was deleted, a currency the balance will not take — sat at the
+// head of every later run's page and blocked every reward behind it, forever. The failures
+// are collected and returned after the loop, so a run that could not deliver everything
+// still says so and still exits non-zero.
 func (s *Service) DeliverEarned(ctx context.Context, max int32, credits Credits) (int, error) {
 	rewards, err := s.repo.UndeliveredRewards(ctx, max)
 	if err != nil {
@@ -121,18 +129,25 @@ func (s *Service) DeliverEarned(ctx context.Context, max int32, credits Credits)
 	}
 
 	delivered := 0
+	var failures []error
 	for _, reward := range rewards {
 		key := fmt.Sprintf("invite_reward_%d", reward.ID)
 		if err := credits.CreditAccount(ctx, reward.ReferrerID, reward.AmountCents, key); err != nil {
-			return delivered, fmt.Errorf("promo: crediting user %d for reward %d: %w",
-				reward.ReferrerID, reward.ID, err)
+			failures = append(failures, fmt.Errorf("promo: crediting user %d for reward %d: %w",
+				reward.ReferrerID, reward.ID, err))
+			continue
 		}
 		if _, err := s.repo.MarkDelivered(ctx, reward.ID); err != nil {
-			return delivered, fmt.Errorf("promo: stamping reward %d delivered: %w", reward.ID, err)
+			// The credit went through and the stamp did not, so the next run repeats
+			// this row — which the idempotency key absorbs. Carry on rather than
+			// abandoning the rows behind it for the same reason as above.
+			failures = append(failures, fmt.Errorf("promo: stamping reward %d delivered: %w",
+				reward.ID, err))
+			continue
 		}
 		delivered++
 	}
-	return delivered, nil
+	return delivered, errors.Join(failures...)
 }
 
 // ceiling is the configured bound, falling back when nothing sensible was configured.

@@ -65,6 +65,17 @@ type Indexer interface {
 	IndexBatch(ctx context.Context, jobs []db.Job) error
 }
 
+// ErrSkipWave is what an Indexer returns when it could not assemble the wave's documents
+// COMPLETELY — not because one document is defective, but because something every
+// document in the wave needs was unavailable.
+//
+// The runner leaves such a wave claimed for its lease to expire rather than falling back
+// per item, because the fallback would push the same incomplete documents one at a time
+// and pay the whole-index re-merge for each. A push is a field-level update over a fixed
+// set of fields, so an incomplete document does not merely fail to add something: it
+// OVERWRITES what is already indexed.
+var ErrSkipWave = errors.New("searchdrain: wave left claimed for lease-expiry retry")
+
 // RunOptions are the per-run knobs.
 type RunOptions struct {
 	// BatchSize is the claim wave size and the index-push batch size — the lever that
@@ -144,7 +155,7 @@ type run struct {
 // processWave is search-drain's outbox.BatchProcessor: run the existing
 // batch-attempt-then-per-item-fallback cycle (processBatch, unchanged below) and
 // report this wave's delta. Always returns a nil error — processBatch fully handles
-// every item itself (including its own fallback and skipOnTimeout), so
+// every item itself (including its own fallback and skipOnContextEnd), so
 // outbox.RunBatch's outer per-item Processor (unreachableFallback) is never invoked.
 func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	before := rn.stats
@@ -176,7 +187,7 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 
 	jobs, err := rn.store.Jobs(callCtx, jobIDs(entries))
 	if err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "load jobs") {
+		if rn.skipOnContextEnd(callCtx, entries, "load jobs") {
 			return
 		}
 		rn.fallback(ctx, entries)
@@ -187,38 +198,59 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 		return
 	}
 	if err := rn.indexer.IndexBatch(callCtx, jobs); err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "index") {
+		if rn.skipOnContextEnd(callCtx, entries, "index") {
+			return
+		}
+		if errors.Is(err, ErrSkipWave) {
+			log.Printf("search-drain: batch of %d not indexed, leaving claimed for "+
+				"lease-expiry retry: %v", len(entries), err)
 			return
 		}
 		rn.fallback(ctx, entries)
 		return
 	}
 	if err := rn.store.Complete(callCtx, entries); err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "complete") {
-			return
-		}
-		rn.fallback(ctx, entries)
+		// The push already succeeded, so the documents are in the index and the only
+		// thing left undone is deleting the wave's rows. Complete is one DELETE over an
+		// id list — it cannot fail because of a single row's content, so isolating one
+		// entry from the rest buys nothing, while the fallback would re-push every
+		// document in the wave on its own (see processOne) at roughly the cost of the
+		// whole batch each. Leave the wave claimed and let its lease expire, exactly as
+		// the deletion runner does; the re-push a later run makes is idempotent.
+		log.Printf("search-drain: complete indexed batch of %d (leaving claimed for "+
+			"lease-expiry retry): %v", len(entries), err)
 		return
 	}
 	rn.stats.Indexed += len(entries)
 	log.Printf("search-drain: indexed batch of %d in %s", len(entries), since(start))
 }
 
-// skipOnTimeout reports whether callCtx expired — a normal-but-slow operation simply
-// outran CallTimeout, not a per-document defect Meilisearch reported — and, if so,
-// logs and leaves the wave claimed for its lease to expire, so a later run retries the
-// WHOLE batch fresh. Falling back to per-item on a mere timeout would be actively
-// harmful here: this Meili index's cost is dominated by a fixed whole-index re-merge,
-// so a single document costs about as much to push as the whole batch (see the package
-// doc), and per-item fallback would turn one slow-but-fine batch into up to
-// len(entries) equally slow calls — exactly what produced the 2026-08-05 outage this
-// guards against.
-func (rn *run) skipOnTimeout(callCtx context.Context, entries []Claimed, stage string) bool {
-	if !errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+// skipOnContextEnd reports whether callCtx ended before the stage finished — either a
+// normal-but-slow operation outran CallTimeout, or the run itself is being cancelled —
+// and, if so, logs and leaves the wave claimed for its lease to expire, so a later run
+// retries the WHOLE batch fresh.
+//
+// It classifies on the CONTEXT rather than on the error, which covers both endings and
+// needs no cooperation from the SDK that produced the error (Meilisearch's own *Error
+// implements no Unwrap, so errors.Is against a context sentinel is blind to it).
+//
+// Both endings matter. Falling back to per-item on a mere timeout is actively harmful:
+// this Meili index's cost is dominated by a fixed whole-index re-merge, so a single
+// document costs about as much to push as the whole batch (see the package doc), and the
+// fallback would turn one slow-but-fine batch into up to len(entries) equally slow calls
+// — exactly what produced the 2026-08-05 outage. Cancellation is worse than harmful, it
+// is wrong: freehire-reindexw stops this service before every rebuild, so an ORDINARY
+// stop would drive the whole wave through the fallback, and each item's Fail runs on a
+// background context and therefore REACHES Postgres. Three stops over one entry set its
+// failed_at, after which the claim skips it and the enqueue's ON CONFLICT DO NOTHING
+// never re-adds it — that job stays out of the index until the next full rebuild.
+func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stage string) bool {
+	cause := callCtx.Err()
+	if cause == nil {
 		return false
 	}
-	log.Printf("search-drain: batch of %d timed out during %s after %s — leaving claimed for "+
-		"lease-expiry retry, not falling back to per-item", len(entries), stage, rn.opt.CallTimeout)
+	log.Printf("search-drain: batch of %d abandoned during %s (%v, budget %s) — leaving claimed "+
+		"for lease-expiry retry, not falling back to per-item", len(entries), stage, cause, rn.opt.CallTimeout)
 	return true
 }
 
@@ -240,7 +272,7 @@ func (rn *run) processOne(ctx context.Context, entry Claimed) {
 			rn.failN(entry, fmt.Errorf("load job: %w", err), 1)
 			return
 		}
-		rn.fail(entry, fmt.Errorf("load job: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("load job: %w", err))
 		return
 	}
 	if len(jobs) == 0 {
@@ -252,11 +284,11 @@ func (rn *run) processOne(ctx context.Context, entry Claimed) {
 		return
 	}
 	if err := rn.indexer.IndexBatch(callCtx, jobs); err != nil {
-		rn.fail(entry, fmt.Errorf("index: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("index: %w", err))
 		return
 	}
 	if err := rn.store.Complete(callCtx, []Claimed{entry}); err != nil {
-		rn.fail(entry, fmt.Errorf("complete: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("complete: %w", err))
 		return
 	}
 	rn.stats.Indexed++
@@ -270,7 +302,29 @@ func (rn *run) callContext(ctx context.Context) (context.Context, context.Cancel
 	return context.WithTimeout(ctx, rn.opt.CallTimeout)
 }
 
-func (rn *run) fail(entry Claimed, cause error) {
+// fail records a failed attempt against one entry — unless the call context ended first,
+// in which case nothing was learned about the entry at all. A wave abandoned mid-flight
+// (CallTimeout, or SIGTERM stopping the service before a rebuild) must not be charged an
+// attempt: the write goes through on a background context, so three ordinary stops would
+// dead-letter a perfectly good job, and the enqueue's ON CONFLICT DO NOTHING means nothing
+// re-adds it.
+func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
+	if ctxErr := callCtx.Err(); ctxErr != nil {
+		log.Printf("search-drain: outbox=%d abandoned (%v), leaving claimed for lease-expiry "+
+			"retry: %v", entry.OutboxID, ctxErr, cause)
+		return
+	}
+	// ErrSkipWave says the entry is not at fault — a dependency the indexer needed was
+	// unreadable, so the document it would push is not the one we mean to publish. It has
+	// to be honoured HERE and not only where processBatch reads it: a batch that fell back
+	// for an unrelated reason re-enters the indexer per entry, meets the same failing
+	// dependency, and would spend a healthy row's whole attempt budget three runs in a row
+	// — which is the dead letter this sentinel exists to prevent.
+	if errors.Is(cause, ErrSkipWave) {
+		log.Printf("search-drain: outbox=%d not indexed, leaving claimed for lease-expiry "+
+			"retry: %v", entry.OutboxID, cause)
+		return
+	}
 	rn.failN(entry, cause, rn.opt.MaxAttempts)
 }
 

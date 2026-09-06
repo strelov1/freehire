@@ -56,23 +56,38 @@ func (w *Worker) claim(ctx context.Context) (job, error) {
 	return j, err
 }
 
-func (w *Worker) Run(ctx context.Context, limit int) (int, error) {
+// Stats reports what a run did. A count of jobs touched is not an outcome: a run that gave
+// up on every revocation it claimed used to print the same number as a run that revoked
+// them all, and exit 0 either way. A permanently failed `unlink` also strands its
+// user_identities row in revocation_pending, where nothing can ever unlink it again.
+type Stats struct {
+	Processed int
+	Revoked   int
+	// Retried counts jobs left for a later attempt — the provider was unreachable, or
+	// answered in a way that may not repeat.
+	Retried int
+	// Failed counts jobs given up on for good: a permanent provider error, grant material
+	// that would not decrypt, or the attempt ceiling reached. No later run claims them.
+	Failed int
+}
+
+func (w *Worker) Run(ctx context.Context, limit int) (Stats, error) {
+	var stats Stats
 	if w.apple == nil || w.keys == nil {
-		return 0, errors.New("apple revocation: not configured")
+		return stats, errors.New("apple revocation: not configured")
 	}
 	if limit <= 0 {
 		limit = 100
 	}
-	done := 0
-	for done < limit {
+	for stats.Processed < limit {
 		j, err := w.claim(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return done, nil
+			return stats, nil
 		}
 		if err != nil {
-			return done, err
+			return stats, err
 		}
-		done++
+		stats.Processed++
 		aad := apple.GrantAAD("apple", j.subject, j.clientID, j.grantID.String())
 		plain, err := w.keys.Decrypt(j.ciphertext, j.nonce, j.keyID, aad)
 		if err == nil {
@@ -83,15 +98,22 @@ func (w *Worker) Run(ctx context.Context, limit int) (int, error) {
 		}
 		if err == nil {
 			if err = w.complete(ctx, j); err != nil {
-				return done, err
+				return stats, err
 			}
+			stats.Revoked++
 			continue
 		}
-		if err = w.retry(ctx, j, err); err != nil {
-			return done, err
+		givenUp, err := w.retry(ctx, j, err)
+		if err != nil {
+			return stats, err
 		}
+		if givenUp {
+			stats.Failed++
+			continue
+		}
+		stats.Retried++
 	}
-	return done, nil
+	return stats, nil
 }
 
 func (w *Worker) complete(ctx context.Context, j job) error {
@@ -122,7 +144,9 @@ func (w *Worker) complete(ctx context.Context, j job) error {
 	return err
 }
 
-func (w *Worker) retry(ctx context.Context, j job, cause error) error {
+// retry records the failure and reports whether the job was given up on for good, so the
+// caller can tell a run that will heal itself from one that will not.
+func (w *Worker) retry(ctx context.Context, j job, cause error) (givenUp bool, err error) {
 	attempt := j.attempts + 1
 	status := "retry"
 	class := "provider_unavailable"
@@ -137,11 +161,10 @@ func (w *Worker) retry(ctx context.Context, j job, cause error) error {
 		status = "failed"
 		class = "retry_exhausted"
 	}
-	_, err := w.pool.Exec(ctx, `UPDATE apple_revocation_jobs SET status=$2,next_attempt_at=$3,last_error_class=$4,updated_at=now() WHERE id=$1`, j.id, status, w.now().Add(delay), class)
-	if err != nil {
-		return err
+	if _, err := w.pool.Exec(ctx, `UPDATE apple_revocation_jobs SET status=$2,next_attempt_at=$3,last_error_class=$4,updated_at=now() WHERE id=$1`, j.id, status, w.now().Add(delay), class); err != nil {
+		return false, err
 	}
-	return nil
+	return status == "failed", nil
 }
 
 func min(a, b int) int {

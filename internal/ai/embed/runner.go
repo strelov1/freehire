@@ -12,7 +12,6 @@ package embed
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -208,7 +207,7 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 
 	jobs, err := rn.store.Jobs(callCtx, jobIDs(entries))
 	if err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "load jobs") {
+		if rn.skipOnContextEnd(callCtx, entries, "load jobs") {
 			return
 		}
 		rn.fallbackOpen(ctx, entries)
@@ -220,14 +219,14 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 	}
 	chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
 	if err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "embed/index") {
+		if rn.skipOnContextEnd(callCtx, entries, "embed/index") {
 			return
 		}
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
 	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel, chunks); err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "complete open") {
+		if rn.skipOnContextEnd(callCtx, entries, "complete open") {
 			return
 		}
 		rn.fallbackOpen(ctx, entries)
@@ -237,22 +236,32 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 	log.Printf("embed: indexed batch of %d in %s", len(entries), since(start))
 }
 
-// skipOnTimeout reports whether callCtx expired — a normal-but-slow operation simply
-// outran CallTimeout, not a per-document defect the embed backend or Postgres
-// reported — and, if so, logs and leaves the wave claimed for its lease to expire, so
-// a later run retries the WHOLE batch fresh. Falling back to per-item on a mere
-// timeout would still waste real work here: a per-item TEI call pays its per-request
-// overhead len(entries) times over instead of once, and a per-item CompleteOpen
-// replaces one batched Postgres transaction (stamp + chunk rows + outbox delete for
-// the whole wave) with len(entries) of them — real multiplication even though it is no
-// longer Meili's old fixed whole-index re-merge cost (the mechanism
+// skipOnContextEnd reports whether callCtx ended before the stage finished — either a
+// normal-but-slow operation outran CallTimeout, or the run itself is being cancelled —
+// and, if so, logs and leaves the wave claimed for its lease to expire, so a later run
+// retries the WHOLE batch fresh.
+//
+// It classifies on the CONTEXT rather than on the error, which covers both endings
+// without depending on what the embed backend or the driver chose to wrap.
+//
+// Falling back to per-item on a mere timeout would still waste real work: a per-item TEI
+// call pays its per-request overhead len(entries) times over instead of once, and a
+// per-item CompleteOpen replaces one batched Postgres transaction (stamp + chunk rows +
+// outbox delete for the whole wave) with len(entries) of them — real multiplication even
+// though it is no longer Meili's old fixed whole-index re-merge cost (the mechanism
 // internal/search/searchdrain's identically-named guard still targets for its own index).
-func (rn *run) skipOnTimeout(callCtx context.Context, entries []Claimed, stage string) bool {
-	if !errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+// Falling back on a CANCELLATION is worse: the per-item path's Fail writes on a background
+// context, so a redeploy's SIGTERM would charge the whole wave an attempt on its way out,
+// and three of those dead-letter the entry — after which ClaimSemanticBatch skips it,
+// EnqueuePendingSemanticJobs' ON CONFLICT DO NOTHING never re-adds it, no sweeper exists,
+// and /similar is silently empty for that posting.
+func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stage string) bool {
+	cause := callCtx.Err()
+	if cause == nil {
 		return false
 	}
-	log.Printf("embed: batch of %d timed out during %s after %s — leaving claimed for "+
-		"lease-expiry retry, not falling back to per-item", len(entries), stage, rn.opt.CallTimeout)
+	log.Printf("embed: batch of %d abandoned during %s (%v, budget %s) — leaving claimed for "+
+		"lease-expiry retry, not falling back to per-item", len(entries), stage, cause, rn.opt.CallTimeout)
 	return true
 }
 
@@ -274,7 +283,7 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 			rn.failN(entry, fmt.Errorf("load job: %w", err), 1)
 			return
 		}
-		rn.fail(entry, fmt.Errorf("load job: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("load job: %w", err))
 		return
 	}
 	if len(jobs) == 0 {
@@ -286,11 +295,11 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 	}
 	chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
 	if err != nil {
-		rn.fail(entry, fmt.Errorf("embed/index: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("embed/index: %w", err))
 		return
 	}
 	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel, chunks); err != nil {
-		rn.fail(entry, fmt.Errorf("complete open: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("complete open: %w", err))
 		return
 	}
 	rn.stats.Indexed++
@@ -309,7 +318,7 @@ func (rn *run) processClosedBatch(ctx context.Context, entries []Claimed) {
 	defer cancel()
 
 	if err := rn.store.CompleteClosed(callCtx, entries); err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "complete closed") {
+		if rn.skipOnContextEnd(callCtx, entries, "complete closed") {
 			return
 		}
 		rn.fallbackClosed(ctx, entries)
@@ -329,7 +338,7 @@ func (rn *run) processClosedOne(ctx context.Context, entry Claimed) {
 	defer cancel()
 
 	if err := rn.store.CompleteClosed(callCtx, []Claimed{entry}); err != nil {
-		rn.fail(entry, fmt.Errorf("complete closed: %w", err))
+		rn.fail(callCtx, entry, fmt.Errorf("complete closed: %w", err))
 		return
 	}
 	rn.stats.Removed++
@@ -343,7 +352,17 @@ func (rn *run) callContext(ctx context.Context) (context.Context, context.Cancel
 	return context.WithTimeout(ctx, rn.opt.CallTimeout)
 }
 
-func (rn *run) fail(entry Claimed, cause error) {
+// fail records a failed attempt against one entry — unless the call context ended first,
+// in which case nothing was learned about the entry at all. A wave abandoned mid-flight
+// (CallTimeout, or a redeploy's SIGTERM) must not be charged an attempt: failN writes on a
+// background context, so the attempt reaches Postgres even during shutdown, and three of
+// them dead-letter an entry nothing will ever re-queue.
+func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
+	if ctxErr := callCtx.Err(); ctxErr != nil {
+		log.Printf("embed: outbox=%d abandoned (%v), leaving claimed for lease-expiry retry: %v",
+			entry.OutboxID, ctxErr, cause)
+		return
+	}
 	rn.failN(entry, cause, rn.opt.MaxAttempts)
 }
 

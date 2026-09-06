@@ -4,8 +4,9 @@
 // a per-user watermark — a run-once-and-exit cron worker beside enrich/liveness.
 //
 // It is gated on config: without the Google OAuth client and GMAIL_TOKEN_KEY it
-// exits cleanly (nothing to sync). Best-effort per user — a revoked token flags
-// that connection for re-consent and the run continues.
+// exits cleanly (nothing to sync). Best-effort per user — a revoked grant flags
+// that connection for re-consent, the run continues, and the exit code says the
+// run was not wholly clean.
 package main
 
 import (
@@ -41,9 +42,15 @@ func run() int {
 	connector := gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin)
 	store := gmailsync.NewDBStore(db.New(pool))
 
-	if err := gmailsync.NewWorker(store, cipher, connector.ReaderFactory()).WithLearnedDomains(store).RunOnce(ctx); err != nil {
+	stats, err := gmailsync.NewWorker(store, cipher, connector.ReaderFactory()).WithLearnedDomains(store).RunOnce(ctx)
+	if err != nil {
 		log.Printf("gmail-sync: %v", err)
 		return 1
 	}
-	return 0
+	log.Printf("gmail-sync done: connections=%d synced=%d failed=%d needs_reconsent=%d",
+		stats.Connections, stats.Synced, stats.Failed, stats.Reconsent)
+	// A flagged grant is this worker's dead letter: no later run retries it, because only a
+	// browser consent clears the flag. Both counts must reach the exit code — a run in which
+	// every mailbox failed used to exit 0 and publish a successful last-run metric.
+	return worker.ExitCode(stats.Failed, stats.Reconsent)
 }

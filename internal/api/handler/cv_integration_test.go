@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -693,5 +694,50 @@ func TestUpdateCV_RefusesAWholeDocumentSaveOverTheBulletCap(t *testing.T) {
 	decodeJSON(t, doCV(t, app, fiber.MethodGet, upPath, tok, nil), &got)
 	if len(got.Data.Document.Experience) != 0 {
 		t.Fatalf("a refused save must not have written anything: %+v", got.Data.Document.Experience)
+	}
+}
+
+// unreadableSeeder stands in for the seed source failing to answer — the stored structure
+// unreachable, the experience bank's query erroring — as against a candidate who simply
+// has nothing to seed from.
+type unreadableSeeder struct{}
+
+func (unreadableSeeder) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
+	return resumeextract.Structured{}, false, errors.New("connection reset by peer")
+}
+
+// A read that FAILED is not a candidate with nothing to seed from. Collapsing the two
+// answered 201 with an empty skeleton to someone whose CV we hold, and there is no way back
+// from it: the client opens the editor on a blank document and the candidate's only clue is
+// that their history is missing. Every neighbouring caller of this same seed propagates
+// (cv_reset.go), and so must this one.
+func TestCVCreate_SeedFailureIsNotAnEmptyCV(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &cvHandlers{queries: queries, jobReader: queries,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: experience.NewStore(experience.NewQueriesRepository(queries))}),
+		seeder:  unreadableSeeder{}}
+	app := buildCVApp(h, iss)
+
+	user := seedAccount(t, pool, "seed-unreadable@example.test", true)
+	tok, _ := iss.Issue(user, testTokenVersion)
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "Seeded", Seed: true})
+	defer resp.Body.Close()
+	if resp.StatusCode == fiber.StatusCreated {
+		t.Fatalf("create = 201 despite an unreadable seed source; the candidate is handed a "+
+			"blank CV and told it worked (status %d)", resp.StatusCode)
+	}
+	var created int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM cvs WHERE user_id = $1`, user).Scan(&created); err != nil {
+		t.Fatalf("count cvs: %v", err)
+	}
+	if created != 0 {
+		t.Errorf("stored %d CVs, want none — nothing should be written on a failed seed", created)
 	}
 }

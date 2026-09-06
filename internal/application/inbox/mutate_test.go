@@ -1,11 +1,15 @@
 package inbox
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
@@ -54,7 +58,7 @@ func TestTriageWithoutASlugLeavesTheLinkAlone(t *testing.T) {
 // The slug is resolved before anything is written, so an unknown one changes
 // nothing at all.
 func TestTriageWithAnUnknownSlugWritesNothing(t *testing.T) {
-	q := &fakeQueries{jobErr: errNoRows}
+	q := &fakeQueries{jobErr: pgx.ErrNoRows}
 
 	_, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "rejection", Slug: "nope"})
 
@@ -92,13 +96,55 @@ func TestTriageSurvivesAFailedStageAdvance(t *testing.T) {
 }
 
 // Mail linked to a job the caller does not track has no stage to advance — that is
-// not an error, it is simply nothing to do.
+// not an error, it is simply nothing to do, and it must leave no trace: this is the
+// ordinary case, and a log line per triage would bury the one below.
 func TestTriageIgnoresAnUntrackedJob(t *testing.T) {
-	q := &fakeQueries{jobID: 42, stageErr: errNoRows}
+	q := &fakeQueries{jobID: 42, stageErr: pgx.ErrNoRows}
+	logged := captureLog(t)
 
 	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {
 		t.Fatalf("Triage: %v", err)
 	}
+	if q.advancedTo != "" {
+		t.Errorf("advanced to %q, want no advance — there is no application row to move", q.advancedTo)
+	}
+	if strings.Contains(logged.String(), "read stage") {
+		t.Errorf("logged %q, want no stage-read line — an untracked job is not a failure, and a "+
+			"line per triage would bury the one that is", logged.String())
+	}
+}
+
+// The database failing to answer is a DIFFERENT fact from the job being untracked, and it
+// used to be indistinguishable: both returned silently, so the stage quietly stopped
+// advancing for every triage for as long as the failure lasted, and nothing anywhere said
+// so. The triage itself is still recorded — the verdict is already durable and a failed
+// advance must not undo it.
+func TestTriageLeavesATraceWhenTheStageReadFails(t *testing.T) {
+	q := &fakeQueries{jobID: 42, stageErr: errors.New("connection refused")}
+	logged := captureLog(t)
+
+	if _, err := New(q, nil).Triage(context.Background(), 7, 812, Verdict{Signal: "offer", Slug: "go-dev-acme"}); err != nil {
+		t.Fatalf("Triage failed because the stage read did: %v", err)
+	}
+	if q.advancedTo != "" {
+		t.Errorf("advanced to %q, want no advance — we never learned the current stage", q.advancedTo)
+	}
+	if !strings.Contains(logged.String(), "read stage") ||
+		!strings.Contains(logged.String(), "connection refused") {
+		t.Errorf("logged %q, want the stage read named as the thing that failed", logged.String())
+	}
+}
+
+// captureLog redirects the standard logger for one test and restores whatever was there
+// before, rather than assuming it was os.Stderr. A test that uses it cannot be parallel.
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev, prevFlags := log.Writer(), log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() { log.SetOutput(prev); log.SetFlags(prevFlags) })
+	return &buf
 }
 
 // A message that is not the caller's matches no row, and is reported as missing
