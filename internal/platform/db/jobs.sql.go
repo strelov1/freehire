@@ -273,14 +273,76 @@ func (q *Queries) CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBy
 	return count, err
 }
 
-const closeStaleUnsignalledJobs = `-- name: CloseStaleUnsignalledJobs :execrows
-UPDATE jobs
-SET closed_at     = now(),
-    closed_reason = 'expired',
-    updated_at    = now()
-WHERE closed_at IS NULL
-  AND source = ANY($1::text[])
-  AND COALESCE(posted_at, created_at) < $2
+const closeStaleUnseenUnprobeableJobs = `-- name: CloseStaleUnseenUnprobeableJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'expired',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = ANY($1::text[])
+      AND COALESCE(posted_at, created_at) < $2
+      AND last_seen_at < $3
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseStaleUnseenUnprobeableJobsParams struct {
+	Sources    []string           `json:"sources"`
+	Cutoff     pgtype.Timestamptz `json:"cutoff"`
+	SeenCutoff pgtype.Timestamptz `json:"seen_cutoff"`
+}
+
+// The same age rule as CloseStaleUnsignalledJobs, for a source that IS re-crawled but
+// whose postings a probe can never judge — whatjobs today, whose stored url is the ad
+// network's own tracking landing page and answers identically whether or not the posting
+// behind it is live (cmd/liveness's expireDespiteRegisteredPrefixes).
+//
+// It takes a SECOND clock, and that is the whole point of it being a separate statement.
+// CloseStaleUnsignalledJobs asks only how old a posting is, which is sound for a source
+// nothing re-crawls: last_seen_at there is frozen at ingest, so age is the only fact
+// available. Re-using it for whatjobs closed postings the crawl was still listing twice a
+// day — whatjobs leaves posted_at unset, so the 45-day clock runs from first ingest — and
+// the next crawl reopened each one through UpsertJob. That flap costs a full re-upsert
+// instead of a cheap RefreshUnchangedJob, restamps updated_at (the sitemap's <lastmod>),
+// drops and recomputes the semantic chunks, and mails everyone who applied to it that
+// their posting closed.
+//
+// seen_cutoff is what makes the guess honest: only a posting the crawl has ALSO stopped
+// listing for longer than the sweep's own grace window is presumed filled — i.e. one the
+// sweep would already have closed had its company_slug scope been able to reach it. The
+// caller owns both windows, as everywhere else in this family.
+//
+// Both predicates fail CLOSED on an empty list and on a NULL cutoff, exactly as the
+// statement above does.
+func (q *Queries) CloseStaleUnseenUnprobeableJobs(ctx context.Context, arg CloseStaleUnseenUnprobeableJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeStaleUnseenUnprobeableJobs, arg.Sources, arg.Cutoff, arg.SeenCutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const closeStaleUnsignalledJobs = `-- name: CloseStaleUnsignalledJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'expired',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = ANY($1::text[])
+      AND COALESCE(posted_at, created_at) < $2
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
 `
 
 type CloseStaleUnsignalledJobsParams struct {
@@ -307,12 +369,18 @@ type CloseStaleUnsignalledJobsParams struct {
 // Strictly older than the cutoff, so a row exactly at the boundary survives one more run —
 // under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
 // WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
+//
+// The removal enqueue rides this statement for the reason CloseUnseenJobs gives, and it was
+// missing here until 2026-09-06: a posting closed by age stayed in the facet index until the
+// next full rebuild, which is how a closed job goes on being served by search.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+// count(*) over the closed rows is the same int64 the caller already had.
 func (q *Queries) CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleUnsignalledJobsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, closeStaleUnsignalledJobs, arg.Sources, arg.Cutoff)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, closeStaleUnsignalledJobs, arg.Sources, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const closeUnseenJobByID = `-- name: CloseUnseenJobByID :one
@@ -2712,22 +2780,30 @@ func (q *Queries) MarkJobDuplicateOfRole(ctx context.Context, arg MarkJobDuplica
 }
 
 const markLivenessExpired = `-- name: MarkLivenessExpired :one
+WITH queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT j.id FROM jobs j
+    WHERE j.id = $2
+      AND j.closed_at IS NULL
+      AND j.liveness_strikes + 1 >= $1
+    ON CONFLICT (job_id) DO NOTHING
+)
 UPDATE jobs
-SET liveness_strikes = liveness_strikes + 1,
+SET liveness_strikes = jobs.liveness_strikes + 1,
     -- AND closed_at IS NULL on both branches below: if another mechanism closed this row
     -- between candidate selection and this write, its closed_at/closed_reason are the true
     -- record of when and why, and this probe must not overwrite either.
     closed_at = CASE
-        WHEN liveness_strikes + 1 >= $1 AND closed_at IS NULL THEN now()
-        ELSE closed_at
+        WHEN jobs.liveness_strikes + 1 >= $1 AND jobs.closed_at IS NULL THEN now()
+        ELSE jobs.closed_at
     END,
     closed_reason = CASE
-        WHEN liveness_strikes + 1 >= $1 AND closed_at IS NULL THEN 'probe_expired'
-        ELSE closed_reason
+        WHEN jobs.liveness_strikes + 1 >= $1 AND jobs.closed_at IS NULL THEN 'probe_expired'
+        ELSE jobs.closed_reason
     END,
     updated_at = now()
-WHERE id = $2
-RETURNING id, liveness_strikes, closed_at
+WHERE jobs.id = $2
+RETURNING jobs.id, jobs.liveness_strikes, jobs.closed_at
 `
 
 type MarkLivenessExpiredParams struct {
@@ -2745,6 +2821,18 @@ type MarkLivenessExpiredRow struct {
 // close the job (closed_at) once it reaches the threshold the caller owns — the
 // two-strike grace that absorbs a transient death signal. Returns the new strike
 // count and closed_at so the worker can log the outcome.
+//
+// The removal enqueue rides this statement like every other close (see CloseUnseenJobs),
+// and it is gated on the close actually happening: most calls only advance a strike and
+// must queue nothing. The gate reads the PRE-update row — every CTE and the statement
+// itself see one snapshot — and repeats the CASE's own close condition, because
+// RETURNING cannot answer the question: it reports the new value, and a closed_at this
+// statement left alone looks exactly like one it just wrote.
+//
+// The two can disagree only if another transaction closes this row between the snapshot
+// and the UPDATE's row lock, in which case the enqueue happens and the close does not.
+// That is the harmless direction: whoever closed it queued the same removal, and the
+// queue is ON CONFLICT DO NOTHING on job_id.
 func (q *Queries) MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpiredParams) (MarkLivenessExpiredRow, error) {
 	row := q.db.QueryRow(ctx, markLivenessExpired, arg.Threshold, arg.ID)
 	var i MarkLivenessExpiredRow

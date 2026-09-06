@@ -30,14 +30,23 @@ persists until the next full swap-rebuild replaces the whole index.
 were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day, 4,897 per
 3-hour reindex cycle**, and every one of them stayed searchable until the next rebuild.
 
-- **The enqueue rides the closing statement**, as a CTE over the `UPDATE`'s `RETURNING`. All
-  five closing queries and `PruneJobs` carry it. A sweep closes a whole provider's stale
-  postings in one round trip, so a per-row enqueue would undo that; riding the statement also
-  makes the enqueue atomic (a rolled-back close queues nothing) and exact (only rows that
-  actually closed are queued).
+- **The enqueue rides the closing statement**, as a CTE over the `UPDATE`'s `RETURNING`. Every
+  closing query and `PruneJobs` carry it. A sweep closes a whole provider's stale postings in
+  one round trip, so a per-row enqueue would undo that; riding the statement also makes the
+  enqueue atomic (a rolled-back close queues nothing) and exact (only rows that actually
+  closed are queued).
 - **Those queries are `:one`, not `:execrows`** — the CTE moves the row count out of the
   command tag, so they end in `SELECT count(*) FROM closed`. That is the same `int64` the
-  callers already received, so no call site changed.
+  callers already received, so no call site changed. `MarkLivenessExpired` is the exception
+  that keeps its `RETURNING`: it closes only sometimes, so its enqueue is a CTE that reads the
+  pre-update row and repeats the close condition, rather than one fed by `RETURNING` — which
+  reports the new value and so cannot tell a `closed_at` this statement wrote from one it
+  left alone.
+- **The list of closing queries is hand-kept, and was wrong for as long as nobody re-read it.**
+  `cmd/liveness`' age rule and its probe close were both outside the queue until 2026-09-06,
+  which is 45-day-old telegram postings and every URL-probed orphan staying searchable until
+  the next full rebuild. `TestEveryClosingQueryQueuesTheRemoval` enumerates the family; adding
+  a closing statement means adding a line there.
 - **`cmd/prune` enqueues too.** It is the only hard-delete path and deletes by id list with no
   `closed_at` condition, so it can remove an OPEN, indexed job outright. After that statement
   the row is gone and nothing downstream could work out it was ever indexed.

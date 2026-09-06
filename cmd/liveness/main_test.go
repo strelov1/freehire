@@ -3,7 +3,9 @@ package main
 import (
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -52,6 +54,35 @@ func TestOrphanCandidatesCarryEveryFieldAVerdictIsWrittenAgainst(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("orphanCandidates() = %+v, want %+v", got, want)
+	}
+}
+
+// The age rule may only close a posting the crawl has ALSO stopped listing, and how long
+// "stopped listing" takes is the provider's own sweep window — not a number restated here.
+// whatjobs declares 14 days because a posting that drifts past its crawl budget reads as
+// unseen for days at a time; on the 48-hour default the age rule would close postings the
+// next crawl immediately reopens, which is the flap it was closing them into.
+func TestUnseenWindowTakesTheProvidersOwnSweepWindow(t *testing.T) {
+	declared := map[string]time.Duration{
+		"whatjobs":    14 * 24 * time.Hour,
+		"whatjobs-de": 14 * 24 * time.Hour,
+		"gem":         24 * time.Hour, // narrower than the default, and not in this list
+	}
+	got := unseenWindow([]string{"whatjobs", "whatjobs-de"}, declared)
+	if want := 14 * 24 * time.Hour; got != want {
+		t.Errorf("unseenWindow() = %v, want %v — the default would close postings the crawl still lists", got, want)
+	}
+}
+
+// A provider that declares nothing is swept on the default, and a provider that declares
+// something NARROWER than the default does not drag the guess below it: this close has no
+// evidence to appeal to, so it takes the most patient window in play.
+func TestUnseenWindowNeverNarrowsBelowTheDefault(t *testing.T) {
+	declared := map[string]time.Duration{"impatient": 24 * time.Hour}
+	for _, srcs := range [][]string{{"undeclared"}, {"impatient"}, {"impatient", "undeclared"}} {
+		if got := unseenWindow(srcs, declared); got != sources.DefaultSweepGrace {
+			t.Errorf("unseenWindow(%v) = %v, want the %v default", srcs, got, sources.DefaultSweepGrace)
+		}
 	}
 }
 

@@ -568,6 +568,29 @@ type Querier interface {
 	// for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 	// upsert of the same (source, external_id) reopens it if the posting reappears.
 	CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error)
+	// The same age rule as CloseStaleUnsignalledJobs, for a source that IS re-crawled but
+	// whose postings a probe can never judge — whatjobs today, whose stored url is the ad
+	// network's own tracking landing page and answers identically whether or not the posting
+	// behind it is live (cmd/liveness's expireDespiteRegisteredPrefixes).
+	//
+	// It takes a SECOND clock, and that is the whole point of it being a separate statement.
+	// CloseStaleUnsignalledJobs asks only how old a posting is, which is sound for a source
+	// nothing re-crawls: last_seen_at there is frozen at ingest, so age is the only fact
+	// available. Re-using it for whatjobs closed postings the crawl was still listing twice a
+	// day — whatjobs leaves posted_at unset, so the 45-day clock runs from first ingest — and
+	// the next crawl reopened each one through UpsertJob. That flap costs a full re-upsert
+	// instead of a cheap RefreshUnchangedJob, restamps updated_at (the sitemap's <lastmod>),
+	// drops and recomputes the semantic chunks, and mails everyone who applied to it that
+	// their posting closed.
+	//
+	// seen_cutoff is what makes the guess honest: only a posting the crawl has ALSO stopped
+	// listing for longer than the sweep's own grace window is presumed filled — i.e. one the
+	// sweep would already have closed had its company_slug scope been able to reach it. The
+	// caller owns both windows, as everywhere else in this family.
+	//
+	// Both predicates fail CLOSED on an empty list and on a NULL cutoff, exactly as the
+	// statement above does.
+	CloseStaleUnseenUnprobeableJobs(ctx context.Context, arg CloseStaleUnseenUnprobeableJobsParams) (int64, error)
 	// Age rule (see job-lifecycle): close open jobs from the sources that carry NO close
 	// signal at all — no re-crawl that could stop seeing them, no change feed, and no posting
 	// URL a probe could reach a verdict on. Today that is exactly `telegram`, whose stored URL
@@ -587,6 +610,13 @@ type Querier interface {
 	// Strictly older than the cutoff, so a row exactly at the boundary survives one more run —
 	// under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
 	// WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
+	//
+	// The removal enqueue rides this statement for the reason CloseUnseenJobs gives, and it was
+	// missing here until 2026-09-06: a posting closed by age stayed in the facet index until the
+	// next full rebuild, which is how a closed job goes on being served by search.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	// count(*) over the closed rows is the same int64 the caller already had.
 	CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleUnsignalledJobsParams) (int64, error)
 	//
 	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
@@ -1600,12 +1630,35 @@ type Querier interface {
 	// see ExistingExternalIDs for why.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
 	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
-	// failed_at) once attempts reach max_attempts. The lease (claimed_at) is
+	// failed_at) once the applicable bound is reached. The lease (claimed_at) is
 	// intentionally left in place — its expiry gates the retry to a later run and
 	// doubles as the crash reaper, so a failed entry is never reprocessed within the
 	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure, RETURNING included:
 	// failed_at is how the caller learns an entry dead-lettered, which is what decides the
 	// worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
+	//
+	// Which bound applies depends on who is at fault (internal/application/maillink.messageAtFault),
+	// exactly as RecordEnrichmentFailure decides it:
+	//
+	//   message_at_fault → the attempt ceiling. Something about THIS message cannot be
+	//                      processed, so each try is a real try at something that may be
+	//                      impossible.
+	//   otherwise        → the entry's queue age. Almost every failure this queue sees is
+	//                      shared — Postgres, or the model gateway — and says nothing about
+	//                      the message. An attempt counter does not measure how long an
+	//                      outage lasts either: the lease makes a claimed entry re-claimable
+	//                      minutes later, so three attempts can be spent inside a quarter of
+	//                      an hour. Nothing in this repository ever clears failed_at and
+	//                      EnqueuePendingEmailClassification is ON CONFLICT DO NOTHING, so a
+	//                      short gateway outage used to bury the entire queue permanently —
+	//                      the same shape that dead-lettered 172,875 enrichable postings
+	//                      during two LiteLLM outages in July 2026, and the same shape as the
+	//                      2726 messages lost to an unset Claimed.Source, which needed manual
+	//                      SQL to recover.
+	//
+	// The age bound still exists so an entry nothing can ever serve stops eventually. A
+	// non-positive window means "never bury on age" rather than "bury everything", for the
+	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
@@ -3489,6 +3542,18 @@ type Querier interface {
 	// close the job (closed_at) once it reaches the threshold the caller owns — the
 	// two-strike grace that absorbs a transient death signal. Returns the new strike
 	// count and closed_at so the worker can log the outcome.
+	//
+	// The removal enqueue rides this statement like every other close (see CloseUnseenJobs),
+	// and it is gated on the close actually happening: most calls only advance a strike and
+	// must queue nothing. The gate reads the PRE-update row — every CTE and the statement
+	// itself see one snapshot — and repeats the CASE's own close condition, because
+	// RETURNING cannot answer the question: it reports the new value, and a closed_at this
+	// statement left alone looks exactly like one it just wrote.
+	//
+	// The two can disagree only if another transaction closes this row between the snapshot
+	// and the UPDATE's row lock, in which case the enqueue happens and the close does not.
+	// That is the harmless direction: whoever closed it queued the same removal, and the
+	// queue is ON CONFLICT DO NOTHING on job_id.
 	MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpiredParams) (MarkLivenessExpiredRow, error)
 	// Stamp notified_at on the jobs that were just delivered for a subscription, so
 	// they leave the pending queue and are never sent again.
@@ -4639,6 +4704,23 @@ type Querier interface {
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 	// unlinked or suggestion-only email leaves job_id NULL.
+	//
+	// The worker owns the classification (status_signal, the suggestion, the stamp) but NOT a
+	// link a person or an agent already made: the four link columns are kept whenever
+	// link_source already reads 'manual' or 'agent'. This is the same precaution
+	// AgentTriageEmail carries one statement below, reached from the other side — there a
+	// classify-only verdict must not detach an application, here a re-classification must not
+	// overwrite one.
+	//
+	// It was needed because a hand-made link does not stamp classified_at (neither
+	// LinkEmailToJob, ConfirmEmailLink nor RejectEmailLink does) and
+	// EnqueuePendingEmailClassification selects on classified_at IS NULL — so the next
+	// five-minute tick re-processed every manually linked message and wrote its own answer
+	// over the person's. The deterministic cascade usually cannot reproduce that link:
+	// ListUserApplicationsForMatch excludes closed postings, and hosted mail carries no
+	// thread_id, so the common outcome was job_id NULL. ReconcileMailEvent runs in the same
+	// transaction, so the employer_reply event went with it and the company started reading
+	// as silent in the reply-rate rollup.
 	SetEmailClassification(ctx context.Context, arg SetEmailClassificationParams) error
 	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
 	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks

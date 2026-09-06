@@ -19,6 +19,12 @@ const (
 	defaultLeaseSeconds = 120
 	defaultBatchSize    = 20
 	defaultMaxAttempts  = 3
+	// defaultUpstreamGraceDays bounds the failures the message did NOT cause, by the
+	// entry's queue age rather than by tries — see messageAtFault. Two weeks is the same
+	// figure ENRICH_UPSTREAM_GRACE_DAYS defaults to, and is sized to outlast an outage
+	// plus the time it takes someone to notice; there is no env knob here because the
+	// mail queue has never needed one moved.
+	defaultUpstreamGraceDays = 14
 )
 
 var defaultThresholds = thresholds{autoLink: 0.85, stage: 0.8}
@@ -68,11 +74,21 @@ type Store interface {
 	CurrentStage(ctx context.Context, userID, jobID int64) (string, error)
 	// Save persists the result and deletes the outbox row in one transaction.
 	Save(ctx context.Context, outboxID, userID int64, r Result, model string) error
-	// Fail records a failed attempt and reports whether the entry dead-lettered — reached
-	// max_attempts and will not be retried. The bool is not decoration: it is what the
-	// worker's exit code is built from, and without it a queue can dead-letter every entry
-	// and still exit 0.
-	Fail(ctx context.Context, outboxID int64, cause string, maxAttempts int) (deadLettered bool, err error)
+	// Fail records a failed attempt under the given policy and reports whether the entry
+	// dead-lettered — reached its bound and will not be retried. The bool is not
+	// decoration: it is what the worker's exit code is built from, and without it a queue
+	// can dead-letter every entry and still exit 0.
+	Fail(ctx context.Context, outboxID int64, cause string, policy FailurePolicy) (deadLettered bool, err error)
+}
+
+// FailurePolicy is how one failure should be bounded. Which of the two bounds applies is
+// decided by MessageAtFault, and the two are not interchangeable: MaxAttempts counts tries
+// at a task that may be impossible, UpstreamGraceDays waits out a dependency that is
+// expected back. See messageAtFault and FailEmailClassification.
+type FailurePolicy struct {
+	MessageAtFault    bool
+	MaxAttempts       int
+	UpstreamGraceDays int
 }
 
 // Classifier is the LLM port.
@@ -98,18 +114,22 @@ type Runner struct {
 	leaseSeconds int
 	batchSize    int
 	maxAttempts  int
+	// upstreamGraceDays bounds the failures the message did not cause, by the entry's
+	// queue age. See messageAtFault.
+	upstreamGraceDays int
 }
 
 // New builds a Runner with the default lease/batch/threshold tuning.
 func New(store Store, classifier Classifier, model string) *Runner {
 	return &Runner{
-		store:        store,
-		classifier:   classifier,
-		model:        model,
-		cfg:          defaultThresholds,
-		leaseSeconds: defaultLeaseSeconds,
-		batchSize:    defaultBatchSize,
-		maxAttempts:  defaultMaxAttempts,
+		store:             store,
+		classifier:        classifier,
+		model:             model,
+		cfg:               defaultThresholds,
+		leaseSeconds:      defaultLeaseSeconds,
+		batchSize:         defaultBatchSize,
+		maxAttempts:       defaultMaxAttempts,
+		upstreamGraceDays: defaultUpstreamGraceDays,
 	}
 }
 
@@ -169,7 +189,15 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 		if err == nil {
 			return outbox.Succeeded
 		}
-		deadLettered, ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), r.maxAttempts)
+		// Which bound this failure is held to follows from its cause, so a caller cannot
+		// forget to decide: everything but the message's own fault is bounded by the
+		// entry's age instead, which is what lets an outage of any length cost nothing
+		// permanently.
+		deadLettered, ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), FailurePolicy{
+			MessageAtFault:    messageAtFault(err),
+			MaxAttempts:       r.maxAttempts,
+			UpstreamGraceDays: r.upstreamGraceDays,
+		})
 		if ferr != nil {
 			// The dead-letter state is unknown and is not guessed — it still counts as
 			// failed (the entry is left to its lease expiry either way).
@@ -276,7 +304,16 @@ func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
 	// low-confidence guesses on the same sender could still reach PromoteThreshold
 	// and promote a domain the rest of the pipeline treats as too weak to act on.
 	// Best-effort — a learn failure must not fail the email.
-	if r.learner != nil && cls.Signal != "" && cls.Signal != mailclassify.SignalOther && cls.Confidence >= r.cfg.stage {
+	//
+	// gmail only, and that is about the SENDER rather than about the classification: what
+	// is learned is a domain read off From, and the cache it feeds decides which senders a
+	// future sync will accept. Gmail delivered the message and its From is what the
+	// provider authenticated. Hosted mail is whatever SMTP claimed (internal/application/mailingest
+	// reads From out of the MIME headers), and external mail is whatever the caller's own
+	// harness pushed — so on those two tiers anyone who can post to an address could
+	// nominate the domain they want trusted.
+	if r.learner != nil && c.Source == "gmail" &&
+		cls.Signal != "" && cls.Signal != mailclassify.SignalOther && cls.Confidence >= r.cfg.stage {
 		if err := r.learner.Learn(ctx, c.FromAddr); err != nil {
 			log.Printf("maillink: learn %q: %v", c.FromAddr, err)
 		}

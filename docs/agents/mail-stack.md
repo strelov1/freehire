@@ -250,6 +250,43 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   added there and not mapped fails a test rather than the queue. **Recovery is not automatic** —
   `EnqueuePendingEmailClassification` is `ON CONFLICT DO NOTHING`, so a dead row stays dead
   until `failed_at`/`attempts`/`claimed_at` are cleared by hand.
+- **The worker owns the classification, never a link someone else made.** A hand-made link
+  does not stamp `classified_at` (neither `LinkEmailToJob`, `ConfirmEmailLink` nor
+  `RejectEmailLink` does) and `EnqueuePendingEmailClassification` selects on
+  `classified_at IS NULL`, so every manually linked message comes back round on the next
+  five-minute tick. `SetEmailClassification` therefore keeps `job_id` / `application_id` /
+  `link_source` / `match_confidence` whenever the row already reads `manual` or `agent` —
+  the same precaution `AgentTriageEmail` carries from the other side. Without it the worker
+  re-derived the link from a cascade that usually cannot reproduce it
+  (`ListUserApplicationsForMatch` excludes closed postings, hosted mail carries no
+  `thread_id`), so the common outcome was `NULL` — and since `ReconcileMailEvent` runs in the
+  same transaction, the `employer_reply` event was retracted with it and the company started
+  reading as silent in the reply-rate rollup. It still rewrites its OWN (`auto`) link: a
+  later run correcting an earlier guess is the queue working.
+- **A failure the message did not cause is bounded by TIME, not by attempts.**
+  `maillink.messageAtFault` decides which of `FailEmailClassification`'s two branches
+  applies, modelled on `enrich.postingAtFault` and defaulting to "not the message's fault".
+  Only an undecodable model answer (`mailclassify.ErrUnparseableResponse`) spends the
+  attempt ceiling; Postgres, the gateway, a schema-build failure and an unrecognised
+  `emails.source` are all held to a 14-day queue-age window instead. The distinction is
+  load-bearing because the lease makes a claimed entry re-claimable minutes later, so three
+  attempts are spent well inside a quarter-hour outage — and, as the bullet above says,
+  nothing here ever clears `failed_at`. An unrecognised source is deliberately on the
+  *upstream* side: the one time that fired, the column was fine and the store's own mapping
+  had dropped the field.
+- **The self-learning ATS-domain cache is fed by Gmail mail only.** What `learner.Learn`
+  records is a domain read off `From`, and the cache decides which senders a future sync
+  accepts. Gmail authenticated that `From`; hosted mail's is whatever SMTP claimed and
+  external mail's is whatever the caller's harness pushed, so on those tiers anyone able to
+  post to an address could nominate the domain they want trusted. (Whether the cache should
+  be per-user at all is a separate, open question about what it is for.)
+- **`cmd/mail-ingest` reads a bounded object, and refuses rather than truncates.** `Receive`
+  holds up to ten raw MIME messages at once in the only `Restart=always` daemon on the host,
+  and the S3 read is capped at SES's own 40 MiB inbound ceiling — so nothing the bound
+  rejects was ever deliverable mail. A bare `LimitReader` would be worse than no bound at
+  all: MIME headers are at the front, so a half-read message parses and would be stored as
+  though it were whole. An oversize object is acked and dropped (the raw stays in S3), like
+  an undecodable notification: it is the same size on every redelivery.
 - **A linked message counts as a reply whether or not it is classified.** Requiring a
   classification reads as the stricter rule and is the opposite: `external` mail is never
   classified server-side by design, so that tier's replies would never count and their

@@ -3,6 +3,7 @@ package mailingest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -87,7 +88,16 @@ func (s *SESSource) Receive(ctx context.Context) ([]Inbound, error) {
 			bucket = s.bucket
 		}
 		raw, err := s.fetch(ctx, bucket, note.Receipt.Action.ObjectKey)
-		if err != nil {
+		switch {
+		case errors.Is(err, errMessageTooLarge):
+			// Not retryable, so it is acked like an undecodable notification above: the
+			// object is the same size on every redelivery, and leaving it un-acked would
+			// cycle it through the queue — re-downloading it each time — until the
+			// queue's own redrive policy noticed. The raw MIME stays in S3.
+			log.Printf("mailingest: s3 object %s dropped: %v", note.Receipt.Action.ObjectKey, err)
+			batch = append(batch, Inbound{AckHandle: *m.ReceiptHandle})
+			continue
+		case err != nil:
 			// Skip just this message (leave it un-acked so SQS redelivers it after
 			// the visibility timeout) rather than discarding the whole batch.
 			log.Printf("mailingest: s3 fetch %s: %v", note.Receipt.Action.ObjectKey, err)
@@ -118,7 +128,39 @@ func (s *SESSource) fetch(ctx context.Context, bucket, key string) ([]byte, erro
 		return nil, err
 	}
 	defer obj.Body.Close()
-	return io.ReadAll(obj.Body)
+	return readBounded(obj.Body, maxRawMessage)
+}
+
+// maxRawMessage caps one raw MIME message held in memory. Receive pulls ten notifications
+// at a time and this used to be a bare io.ReadAll, before the recipient is even resolved,
+// in the one Restart=always daemon on the host with no MemoryMax — so a batch of large
+// objects was bounded by nothing at all.
+//
+// The figure is SES's own inbound ceiling: SES refuses to accept a message larger than
+// this, so nothing this bound rejects was ever deliverable mail. It is a guard against a
+// corrupt or planted object in the bucket, not a policy about email size.
+const maxRawMessage = 40 << 20 // 40 MiB
+
+// errMessageTooLarge marks an object over maxRawMessage. It is an error rather than a
+// truncation on purpose: a half-read MIME message parses — the headers are at the front —
+// and would be stored as though it were whole, which is a worse outcome than not storing
+// it, and an invisible one.
+var errMessageTooLarge = errors.New("mailingest: raw message exceeds the size limit")
+
+// readBounded reads up to max bytes from r, refusing anything longer. It reads max+1 so
+// "exactly at the limit" is distinguishable from "over it" without trusting a
+// Content-Length the object may not carry.
+func readBounded(r io.Reader, max int64) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		// The real size is unknown by construction — reading it is the thing being
+		// refused — so the message names the limit that was passed, not the object.
+		return nil, fmt.Errorf("%w: over %d bytes", errMessageTooLarge, max)
+	}
+	return b, nil
 }
 
 // decodeNotification unwraps the SNS envelope and then the SES notification.

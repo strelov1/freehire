@@ -3,6 +3,7 @@ package mailclassify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,13 @@ import (
 )
 
 const maxBodyRunes = 4000
+
+// ErrUnparseableResponse marks a model answer this package could not decode. It is
+// exported because it is the one failure here that belongs to the MESSAGE rather than to
+// the gateway or to us: the model could not produce JSON for this particular input, and a
+// retry draws a fresh sample against the same input. The queue drain reads it to decide
+// which bound a failed entry is held to — see internal/application/maillink.messageAtFault.
+var ErrUnparseableResponse = errors.New("mailclassify: unparseable response")
 
 // gen is the minimal slice of *llm.Client this package needs, so Classify is
 // unit-testable with a fake.
@@ -64,7 +72,7 @@ func (c *Classifier) Classify(ctx context.Context, in Input) (Classification, er
 	}
 	var out Classification
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return Classification{}, fmt.Errorf("mailclassify: parse: %w", err)
+		return Classification{}, fmt.Errorf("%w: %w", ErrUnparseableResponse, err)
 	}
 	out = out.Sanitize()
 	out.MatchedJobID = validateMatch(out.MatchedJobID, in.Candidates)

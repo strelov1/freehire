@@ -18,6 +18,14 @@ const maxBody = 512 << 10 // 512 KiB
 // transport failure (DNS, refused, timeout) returns status 0 with the error, which
 // Classify treats as not-expired — a probe that could not reach the page is never a
 // death signal.
+//
+// A body that could not be READ is the same kind of failure and returns status 0 too.
+// It used to return the real status with an empty body, and the caller classifies what
+// it is handed: Classify(200, url, "") falls through to insufficient_content and yields
+// Expired, so a truncated body, a gzip error or an origin slow enough to hit the
+// client's timeout mid-read (the deadline covers the body, not just the headers) read
+// as "this posting is gone". Since strikes are only cleared by a LIVE verdict, never by
+// an Uncertain one, two such reads on separate runs closed a live posting.
 func Fetch(ctx context.Context, client *http.Client, rawURL string) (status int, finalURL, body string, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -34,7 +42,7 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) (status int,
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
-		return resp.StatusCode, resp.Request.URL.String(), "", err
+		return 0, resp.Request.URL.String(), "", err
 	}
 	return resp.StatusCode, resp.Request.URL.String(), string(b), nil
 }

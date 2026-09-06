@@ -128,10 +128,14 @@ func TestCloseUnseenJobsQueuesNothingForJobsItLeftOpen(t *testing.T) {
 }
 
 // Every way a job can be closed must queue its removal. This enumerates the family rather
-// than testing each member in its own function on purpose: a sixth closing query added later
-// is a one-line addition here, and leaving it out is the exact mistake that would put jobs in
-// the index forever with nothing to notice it. Keep this list in step with the queries that
-// set closed_at in internal/platform/db/queries/jobs.sql.
+// than testing each member in its own function on purpose: a further closing query added
+// later is a one-line addition here, and leaving it out is the exact mistake that would put
+// jobs in the index forever with nothing to notice it. Keep this list in step with the
+// queries that set closed_at in internal/platform/db/queries/jobs.sql.
+//
+// It is a hand-written list, so it can only be as complete as its last reader: cmd/liveness'
+// two closes (the age rule and the probe's own) were both absent from it until 2026-09-06,
+// and both were absent from the queue for the same length of time.
 func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 	closers := []struct {
 		name  string
@@ -175,6 +179,31 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 			})
 			return err
 		}},
+		// The age rule (cmd/liveness). The cutoff is in the FUTURE because the fixture's
+		// posted_at is NULL and its created_at is now — COALESCE(posted_at, created_at)
+		// then reads as "just posted", and this statement's question is only whether the
+		// row is older than what the caller passes.
+		{"CloseStaleUnsignalledJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseStaleUnsignalledJobs(ctx, CloseStaleUnsignalledJobsParams{
+				Sources: []string{"greenhouse"},
+				Cutoff:  pgTimestamptz(time.Now().Add(time.Hour)),
+			})
+			return err
+		}},
+		{"CloseStaleUnseenUnprobeableJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseStaleUnseenUnprobeableJobs(ctx, CloseStaleUnseenUnprobeableJobsParams{
+				Sources:    []string{"greenhouse"},
+				Cutoff:     pgTimestamptz(time.Now().Add(time.Hour)),
+				SeenCutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+			})
+			return err
+		}},
+		// The probe's own close. Threshold 1 makes this strike the closing one; the
+		// strike-only call is a separate case below, since it must queue NOTHING.
+		{"MarkLivenessExpired", func(ctx context.Context, q *Queries, jobID int64) error {
+			_, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: jobID, Threshold: 1})
+			return err
+		}},
 	}
 
 	pool := startPostgres(t)
@@ -208,6 +237,124 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 					"a closing path that skips the queue leaves that document in the index forever", c.name, got)
 			}
 		})
+	}
+}
+
+// MarkLivenessExpired is called on EVERY expired probe, and most of those only advance a
+// strike. Queuing a removal for a job that is still open would delete a live posting's
+// document from the index, which no later close would put back.
+func TestMarkLivenessExpiredQueuesNothingForAStrikeThatDidNotClose(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:struck", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	res, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: job.ID, Threshold: 2})
+	if err != nil {
+		t.Fatalf("mark expired: %v", err)
+	}
+	if res.ClosedAt.Valid {
+		t.Fatal("the first of two strikes closed the job, so this case proves nothing")
+	}
+	if got := countDeletionQueue(t, pool); got != 0 {
+		t.Errorf("a strike that left the job open queued %d removals, want 0 — "+
+			"that would drop a live posting out of the index", got)
+	}
+}
+
+// The age rule is the only close that rests on a guess, and for a source the crawl still
+// re-lists it is a guess against evidence. whatjobs leaves posted_at unset, so the 45-day
+// clock runs from first ingest and every posting older than that qualifies — including the
+// ones the crawl listed an hour ago. The second clock is what keeps the guess from
+// contradicting the crawl; without it the posting is closed and the next crawl reopens it,
+// twice a day, telling everyone who applied that it closed each time.
+func TestTheAgeRuleWillNotCloseAPostingTheCrawlStillSees(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:still-listed", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	// Old enough to be presumed filled, and seen by the crawl minutes ago.
+	agePosting(t, pool, job.ID, 60*24*time.Hour)
+	ageJob(t, pool, job.ID, 5*time.Minute)
+
+	closed, err := q.CloseStaleUnseenUnprobeableJobs(ctx, CloseStaleUnseenUnprobeableJobsParams{
+		Sources:    []string{"greenhouse"},
+		Cutoff:     pgTimestamptz(time.Now().Add(-45 * 24 * time.Hour)),
+		SeenCutoff: pgTimestamptz(time.Now().Add(-14 * 24 * time.Hour)),
+	})
+	if err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+	if closed != 0 {
+		t.Errorf("closed %d postings the crawl listed 5 minutes ago, want 0", closed)
+	}
+
+	// The age-only statement — the one this path used to call — closes it, which is the
+	// flap. Asserting it here keeps the two statements' difference from reading as an
+	// accident of the fixture.
+	ageOnly, err := q.CloseStaleUnsignalledJobs(ctx, CloseStaleUnsignalledJobsParams{
+		Sources: []string{"greenhouse"},
+		Cutoff:  pgTimestamptz(time.Now().Add(-45 * 24 * time.Hour)),
+	})
+	if err != nil {
+		t.Fatalf("age-only expire: %v", err)
+	}
+	if ageOnly != 1 {
+		t.Fatalf("the age-only rule closed %d postings, want 1 — the fixture no longer "+
+			"reproduces what the second clock exists to prevent", ageOnly)
+	}
+}
+
+// The other half of the same rule: a posting the crawl has genuinely stopped listing IS
+// closed. Without this the test above would pass on a statement that closes nothing.
+func TestTheAgeRuleClosesAPostingTheCrawlStoppedSeeing(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:dropped", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	agePosting(t, pool, job.ID, 60*24*time.Hour)
+	ageJob(t, pool, job.ID, 30*24*time.Hour)
+
+	closed, err := q.CloseStaleUnseenUnprobeableJobs(ctx, CloseStaleUnseenUnprobeableJobsParams{
+		Sources:    []string{"greenhouse"},
+		Cutoff:     pgTimestamptz(time.Now().Add(-45 * 24 * time.Hour)),
+		SeenCutoff: pgTimestamptz(time.Now().Add(-14 * 24 * time.Hour)),
+	})
+	if err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("closed %d postings unseen for 30 days, want 1", closed)
+	}
+	if got := countDeletionQueue(t, pool); got != 1 {
+		t.Errorf("queued %d removals for 1 closed posting, want 1", got)
+	}
+}
+
+// agePosting backdates the clock the age rule reads (created_at, since these fixtures carry
+// no posted_at), which ageJob deliberately leaves alone — the two clocks are the whole
+// subject of the tests above.
+func agePosting(t *testing.T, pool *pgxpool.Pool, id int64, ago time.Duration) {
+	t.Helper()
+	_, err := pool.Exec(context.Background(),
+		"UPDATE jobs SET created_at = now() - $2::interval WHERE id = $1", id, ago.String())
+	if err != nil {
+		t.Fatalf("backdate created_at: %v", err)
 	}
 }
 
