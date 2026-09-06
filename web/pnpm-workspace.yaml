@@ -26,3 +26,14 @@ overrides:
   # subtree with executable content, allowing XSS despite sanitization.
   # isomorphic-dompurify is used directly for XSS sanitization in this app.
   dompurify@<3.4.13: 3.4.13
+  # Nine advisories fixed in 8.10.2, two of them critical: BalancedPool drops
+  # function-valued connection options, so a custom checkServerIdentity is
+  # silently stripped and a malicious certificate passes validation
+  # (SNYK-JS-UNDICI-19635218); and an interceptor trusts caller-controlled
+  # request metadata over the dispatcher's own origin (SNYK-JS-UNDICI-19635224).
+  # Reached transitively as isomorphic-dompurify > jsdom > undici, whose own
+  # range is ^8.9.0 — so this is a floor inside what jsdom already accepts, not
+  # a version it has never seen. The alternative Snyk proposes, a major bump of
+  # isomorphic-dompurify to 4.x, moves nothing: 4.1.0 declares the same
+  # jsdom ^30.0.0 and dompurify ^3.4.12, and differs only in its Node engines.
+  undici@<8.10.2: 8.10.2

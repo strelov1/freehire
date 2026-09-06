@@ -6,6 +6,7 @@ settings:
 
 overrides:
   postcss@<8.5.23: 8.5.23
+  undici@<8.10.2: 8.10.2
 
 importers:
 
@@ -2725,8 +2726,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  undici@8.10.0:
-    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
+  undici@8.10.2:
+    resolution: {integrity: sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ==}
     engines: {node: '>=22.19.0'}
 
   unplugin@2.3.11:
@@ -4546,7 +4547,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.2
-      undici: 8.10.0
+      undici: 8.10.2
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -5272,7 +5273,7 @@ snapshots:
 
   typescript@6.0.3: {}
 
-  undici@8.10.0: {}
+  undici@8.10.2: {}
 
   unplugin@2.3.11:
     dependencies:
