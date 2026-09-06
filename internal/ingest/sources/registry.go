@@ -220,6 +220,9 @@ func All(c HTTPClient) map[string]Source {
 		NewSenior(c),
 		NewTrakstar(c),
 		NewFactorial(c),
+		// gr8people: another vendor served under two marketing domains (gr8people.com and
+		// workgr8.com — see atsboard's matching two rows), board = the tenant's whole host.
+		NewGr8People(c),
 		NewZoho(c),
 		NewTraffit(c),
 		NewErecruiter(c),

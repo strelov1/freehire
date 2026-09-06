@@ -186,6 +186,12 @@ func TestRecognize(t *testing.T) {
 		{"teamtailor host", "https://bryter.teamtailor.com/jobs/12345-senior-go", "teamtailor", "bryter.teamtailor.com", "https://bryter.teamtailor.com", true},
 		{"factorial host it", "https://muffin.factorial.it/job/1", "factorial", "muffin.factorial.it", "https://muffin.factorial.it", true},
 		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorial", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
+		// gr8people: one vendor served under two marketing domains, confirmed live (identical
+		// frontend, identical GraphQL schema) — the same one-adapter-two-domains shape as Factorial.
+		{"gr8people host", "https://etrade.gr8people.com/jobs/4709", "gr8people", "etrade.gr8people.com", "https://etrade.gr8people.com", true},
+		{"workgr8 base-domain variant", "https://batesville.workgr8.com/jobs/1146", "gr8people", "batesville.workgr8.com", "https://batesville.workgr8.com", true},
+		{"gr8people bare apex not a board", "https://gr8people.com/", "", "", "", false},
+		{"workgr8 bare apex not a board", "https://workgr8.com/", "", "", "", false},
 
 		// host+path mode — Workday: board is "<host>/<site>" (site case preserved)
 		{"workday vacancy", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM/job/Austin/Senior-Software-Engineer_JR-202614238", "workday", "generalmotors.wd5.myworkdayjobs.com/Careers_GM", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", true},
@@ -350,6 +356,8 @@ func TestRecognizeMapsHostsToTheIngestProviderName(t *testing.T) {
 		{"https://muffin.factorial.it/job/1", "factorial"},
 		{"https://9net.factorialhr.com.br/job/2", "factorial"},
 		{"https://4farma.factorialhr.pt/job/3", "factorial"},
+		{"https://etrade.gr8people.com/jobs/4709", "gr8people"},
+		{"https://batesville.workgr8.com/jobs/1146", "gr8people"},
 	}
 	for _, c := range cases {
 		src, _, _, ok := Recognize(c.raw)
