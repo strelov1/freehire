@@ -60,6 +60,7 @@
         { label: 'Contribute', href: resolve('/contribute') },
         { label: 'Submit a job', href: resolve('/submit') },
         { label: 'Status', href: resolve('/status') },
+        { label: 'Support', href: resolve('/support') },
         { label: 'Privacy', href: resolve('/privacy') },
         { label: 'Terms', href: resolve('/terms') },
       ],
