@@ -130,7 +130,7 @@ func TestRefreshCompanyFacetsLeavesYCFacets(t *testing.T) {
 		t.Fatalf("upsert yc: %v", err)
 	}
 
-	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 

@@ -85,57 +85,46 @@ WHERE job_count > 0
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
   AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
-  -- industries answers from EITHER source, which is why two arrays arrive for one
-  -- facet: ` + "`" + `industries` + "`" + ` is what an importer wrote, ` + "`" + `industry_domains` + "`" + ` is the caller's
-  -- industries translated into the coarse job-derived vocabulary by
-  -- internal/dict/industrytag, matched against the domains the company's own postings
-  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
-  -- of the facet's reach, not a fallback. An industry the mapping does not cover
-  -- contributes nothing to the second array, and ` + "`" + `domains && '{}'` + "`" + ` is false, so the
-  -- curated arm answers alone without a special case.
+  -- industries answers from EITHER source: ` + "`" + `industries` + "`" + ` is what an importer wrote,
+  -- ` + "`" + `industries_derived` + "`" + ` is RefreshCompanyFacets' materialized translation of the
+  -- company's own domains — already empty for a company with a curated industry, or
+  -- with more than two domains (a domains union that wide describes hiring range, not
+  -- business; see the change design). Precedence and the domain-count threshold are
+  -- baked in at materialization time, so this predicate is a plain OR, same shape as
+  -- every other array facet.
   --
   -- It must exist on THIS path too: when only industries is set the request never
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality($6::text[]), 0) = 0
        OR industries && $6::text[]
-       -- The derived arm answers only where the curated one is SILENT. The two are
-       -- not equal evidence: ` + "`" + `domains` + "`" + ` is a union over every open job the company
-       -- holds, so for a company with hundreds of postings it drifts from what the
-       -- company is toward the range of work it advertises — Uber accumulates
-       -- gamedev, edtech and govtech that way, and briefly answered
-       -- ?industries=gaming in production because of it. Consulting that union for a
-       -- company an importer has already classified adds no reach (its own values
-       -- already match it) and asserts industries it is not in.
-       OR (cardinality(industries) = 0
-           AND domains && $7::text[]))
-  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_types && $8::text[])
-  AND (coalesce(cardinality($9::text[]), 0) = 0 OR company_sizes && $9::text[])
-  AND (coalesce(cardinality($10::text[]), 0) = 0 OR remote_regions && $10::text[])
-  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_batch && $11::text[])
-  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_status && $12::text[])
-  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_stage && $13::text[])
-  AND (coalesce(cardinality($14::text[]), 0) = 0 OR yc_flags && $14::text[])
-  AND (coalesce(cardinality($15::text[]), 0) = 0 OR maturity = ANY($15::text[]))
-  AND (coalesce(cardinality($16::text[]), 0) = 0 OR subindustry = ANY($16::text[]))
+       OR industries_derived && $6::text[])
+  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_types && $7::text[])
+  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_sizes && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR remote_regions && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_batch && $10::text[])
+  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_status && $11::text[])
+  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_stage && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
+  AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
 `
 
 type CountCompaniesParams struct {
-	Search          string   `json:"search"`
-	Collections     []string `json:"collections"`
-	Regions         []string `json:"regions"`
-	Countries       []string `json:"countries"`
-	Domains         []string `json:"domains"`
-	Industries      []string `json:"industries"`
-	IndustryDomains []string `json:"industry_domains"`
-	CompanyTypes    []string `json:"company_types"`
-	CompanySizes    []string `json:"company_sizes"`
-	RemoteRegions   []string `json:"remote_regions"`
-	YcBatch         []string `json:"yc_batch"`
-	YcStatus        []string `json:"yc_status"`
-	YcStage         []string `json:"yc_stage"`
-	YcFlags         []string `json:"yc_flags"`
-	Maturity        []string `json:"maturity"`
-	Subindustries   []string `json:"subindustries"`
+	Search        string   `json:"search"`
+	Collections   []string `json:"collections"`
+	Regions       []string `json:"regions"`
+	Countries     []string `json:"countries"`
+	Domains       []string `json:"domains"`
+	Industries    []string `json:"industries"`
+	CompanyTypes  []string `json:"company_types"`
+	CompanySizes  []string `json:"company_sizes"`
+	RemoteRegions []string `json:"remote_regions"`
+	YcBatch       []string `json:"yc_batch"`
+	YcStatus      []string `json:"yc_status"`
+	YcStage       []string `json:"yc_stage"`
+	YcFlags       []string `json:"yc_flags"`
+	Maturity      []string `json:"maturity"`
+	Subindustries []string `json:"subindustries"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -149,7 +138,6 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.Countries,
 		arg.Domains,
 		arg.Industries,
-		arg.IndustryDomains,
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
@@ -200,7 +188,7 @@ func (q *Queries) EstimateHiringCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived
 FROM companies
 WHERE slug = $1
 `
@@ -243,6 +231,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.DownvoteCount,
 		&i.FeedbackCount,
 		&i.FeedbackRatingAvg,
+		&i.IndustriesDerived,
 	)
 	return i, err
 }
@@ -257,67 +246,56 @@ WHERE job_count > 0
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
   AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
-  -- industries answers from EITHER source, which is why two arrays arrive for one
-  -- facet: ` + "`" + `industries` + "`" + ` is what an importer wrote, ` + "`" + `industry_domains` + "`" + ` is the caller's
-  -- industries translated into the coarse job-derived vocabulary by
-  -- internal/dict/industrytag, matched against the domains the company's own postings
-  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
-  -- of the facet's reach, not a fallback. An industry the mapping does not cover
-  -- contributes nothing to the second array, and ` + "`" + `domains && '{}'` + "`" + ` is false, so the
-  -- curated arm answers alone without a special case.
+  -- industries answers from EITHER source: ` + "`" + `industries` + "`" + ` is what an importer wrote,
+  -- ` + "`" + `industries_derived` + "`" + ` is RefreshCompanyFacets' materialized translation of the
+  -- company's own domains — already empty for a company with a curated industry, or
+  -- with more than two domains (a domains union that wide describes hiring range, not
+  -- business; see the change design). Precedence and the domain-count threshold are
+  -- baked in at materialization time, so this predicate is a plain OR, same shape as
+  -- every other array facet.
   --
   -- It must exist on THIS path too: when only industries is set the request never
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality($6::text[]), 0) = 0
        OR industries && $6::text[]
-       -- The derived arm answers only where the curated one is SILENT. The two are
-       -- not equal evidence: ` + "`" + `domains` + "`" + ` is a union over every open job the company
-       -- holds, so for a company with hundreds of postings it drifts from what the
-       -- company is toward the range of work it advertises — Uber accumulates
-       -- gamedev, edtech and govtech that way, and briefly answered
-       -- ?industries=gaming in production because of it. Consulting that union for a
-       -- company an importer has already classified adds no reach (its own values
-       -- already match it) and asserts industries it is not in.
-       OR (cardinality(industries) = 0
-           AND domains && $7::text[]))
-  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_types && $8::text[])
-  AND (coalesce(cardinality($9::text[]), 0) = 0 OR company_sizes && $9::text[])
-  AND (coalesce(cardinality($10::text[]), 0) = 0 OR remote_regions && $10::text[])
-  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_batch && $11::text[])
-  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_status && $12::text[])
-  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_stage && $13::text[])
-  AND (coalesce(cardinality($14::text[]), 0) = 0 OR yc_flags && $14::text[])
+       OR industries_derived && $6::text[])
+  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_types && $7::text[])
+  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_sizes && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR remote_regions && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_batch && $10::text[])
+  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_status && $11::text[])
+  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_stage && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
   -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
   -- (unknown) maturity matches no requested value, so ` + "`" + `NULL = ANY(...)` + "`" + ` excludes it.
-  AND (coalesce(cardinality($15::text[]), 0) = 0 OR maturity = ANY($15::text[]))
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
-  AND (coalesce(cardinality($16::text[]), 0) = 0 OR subindustry = ANY($16::text[]))
+  AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
 ORDER BY
-  CASE WHEN $17::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
+  CASE WHEN $16::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
   job_count DESC, name
-LIMIT $19 OFFSET $18
+LIMIT $18 OFFSET $17
 `
 
 type ListCompaniesParams struct {
-	Search          string   `json:"search"`
-	Collections     []string `json:"collections"`
-	Regions         []string `json:"regions"`
-	Countries       []string `json:"countries"`
-	Domains         []string `json:"domains"`
-	Industries      []string `json:"industries"`
-	IndustryDomains []string `json:"industry_domains"`
-	CompanyTypes    []string `json:"company_types"`
-	CompanySizes    []string `json:"company_sizes"`
-	RemoteRegions   []string `json:"remote_regions"`
-	YcBatch         []string `json:"yc_batch"`
-	YcStatus        []string `json:"yc_status"`
-	YcStage         []string `json:"yc_stage"`
-	YcFlags         []string `json:"yc_flags"`
-	Maturity        []string `json:"maturity"`
-	Subindustries   []string `json:"subindustries"`
-	Sort            string   `json:"sort"`
-	Offset          int32    `json:"offset"`
-	Limit           int32    `json:"limit"`
+	Search        string   `json:"search"`
+	Collections   []string `json:"collections"`
+	Regions       []string `json:"regions"`
+	Countries     []string `json:"countries"`
+	Domains       []string `json:"domains"`
+	Industries    []string `json:"industries"`
+	CompanyTypes  []string `json:"company_types"`
+	CompanySizes  []string `json:"company_sizes"`
+	RemoteRegions []string `json:"remote_regions"`
+	YcBatch       []string `json:"yc_batch"`
+	YcStatus      []string `json:"yc_status"`
+	YcStage       []string `json:"yc_stage"`
+	YcFlags       []string `json:"yc_flags"`
+	Maturity      []string `json:"maturity"`
+	Subindustries []string `json:"subindustries"`
+	Sort          string   `json:"sort"`
+	Offset        int32    `json:"offset"`
+	Limit         int32    `json:"limit"`
 }
 
 type ListCompaniesRow struct {
@@ -368,7 +346,6 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.Countries,
 		arg.Domains,
 		arg.Industries,
-		arg.IndustryDomains,
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
@@ -411,7 +388,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 }
 
 const listCompaniesForReindex = `-- name: ListCompaniesForReindex :many
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived
 FROM companies
 WHERE slug > $1 AND job_count > 0
 ORDER BY slug
@@ -470,6 +447,7 @@ func (q *Queries) ListCompaniesForReindex(ctx context.Context, arg ListCompanies
 			&i.DownvoteCount,
 			&i.FeedbackCount,
 			&i.FeedbackRatingAvg,
+			&i.IndustriesDerived,
 		); err != nil {
 			return nil, err
 		}
@@ -747,16 +725,41 @@ csize_final AS (
            END AS arr
     FROM companies co
     LEFT JOIN csize cs ON cs.company_slug = co.slug
+),
+derived_eligible AS (
+    SELECT co.slug AS company_slug, COALESCE(dom.arr, '{}') AS domains
+    FROM companies co
+    LEFT JOIN dom ON dom.company_slug = co.slug
+    WHERE cardinality(co.industries) = 0
+      AND cardinality(COALESCE(dom.arr, '{}')) <= 2
+),
+domain_industry_map AS (
+    -- Zips the two parallel parameter arrays back into (domain, industry) rows by
+    -- position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
+    -- two-array form of unnest(text[], text[]) the way a live Postgres does.
+    SELECT d.domain, i.industry
+    FROM unnest($1::text[]) WITH ORDINALITY AS d(domain, ord)
+    JOIN unnest($2::text[]) WITH ORDINALITY AS i(industry, ord)
+      ON i.ord = d.ord
+),
+derived_ind AS (
+    SELECT de.company_slug,
+           array_agg(DISTINCT map.industry ORDER BY map.industry) AS arr
+    FROM derived_eligible de
+    CROSS JOIN LATERAL unnest(de.domains) AS d(domain)
+    JOIN domain_industry_map map ON map.domain = d.domain
+    GROUP BY de.company_slug
 )
 UPDATE companies c
-SET job_count      = COALESCE(counts.cnt, 0),
-    regions        = COALESCE(reg.arr, '{}'),
-    remote_regions = COALESCE(remote_reg.arr, '{}'),
-    countries      = COALESCE(cty.arr, '{}'),
-    domains        = COALESCE(dom.arr, '{}'),
-    company_types  = COALESCE(ctype.arr, '{}'),
-    company_sizes  = csize_final.arr,
-    maturity       = mat.val
+SET job_count          = COALESCE(counts.cnt, 0),
+    regions            = COALESCE(reg.arr, '{}'),
+    remote_regions     = COALESCE(remote_reg.arr, '{}'),
+    countries          = COALESCE(cty.arr, '{}'),
+    domains            = COALESCE(dom.arr, '{}'),
+    company_types      = COALESCE(ctype.arr, '{}'),
+    company_sizes      = csize_final.arr,
+    maturity           = mat.val,
+    industries_derived = COALESCE(derived_ind.arr, '{}')
 FROM companies c2
 LEFT JOIN counts      ON counts.company_slug     = c2.slug
 LEFT JOIN reg         ON reg.company_slug        = c2.slug
@@ -766,16 +769,23 @@ LEFT JOIN dom         ON dom.company_slug        = c2.slug
 LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
 LEFT JOIN csize_final ON csize_final.company_slug = c2.slug
 LEFT JOIN mat         ON mat.company_slug        = c2.slug
+LEFT JOIN derived_ind ON derived_ind.company_slug = c2.slug
 WHERE c.slug = c2.slug
-  AND (c.job_count      IS DISTINCT FROM COALESCE(counts.cnt, 0)
-    OR c.regions        IS DISTINCT FROM COALESCE(reg.arr, '{}')
-    OR c.remote_regions IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
-    OR c.countries      IS DISTINCT FROM COALESCE(cty.arr, '{}')
-    OR c.domains        IS DISTINCT FROM COALESCE(dom.arr, '{}')
-    OR c.company_types  IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes  IS DISTINCT FROM csize_final.arr
-    OR c.maturity       IS DISTINCT FROM mat.val)
+  AND (c.job_count          IS DISTINCT FROM COALESCE(counts.cnt, 0)
+    OR c.regions            IS DISTINCT FROM COALESCE(reg.arr, '{}')
+    OR c.remote_regions     IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
+    OR c.countries          IS DISTINCT FROM COALESCE(cty.arr, '{}')
+    OR c.domains            IS DISTINCT FROM COALESCE(dom.arr, '{}')
+    OR c.company_types      IS DISTINCT FROM COALESCE(ctype.arr, '{}')
+    OR c.company_sizes      IS DISTINCT FROM csize_final.arr
+    OR c.maturity           IS DISTINCT FROM mat.val
+    OR c.industries_derived IS DISTINCT FROM COALESCE(derived_ind.arr, '{}'))
 `
+
+type RefreshCompanyFacetsParams struct {
+	MappingDomains    []string `json:"mapping_domains"`
+	MappingIndustries []string `json:"mapping_industries"`
+}
 
 // Recompute every company's denormalized state in one set-based pass: the open-job
 // count plus the facet arrays derived from those open jobs — regions/countries from
@@ -802,6 +812,14 @@ WHERE c.slug = c2.slug
 // through could not find, and Stripe listed at 570 on /companies against 444 on its
 // own page. The three predicates below are the ones cmd/reindex's splitJobs applies
 // on top of closed/duplicate; keep the two in step.
+//
+// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
+// derivation — computed from this pass's own `dom` and the company's curated
+// `industries`, not from `jobs` directly — so it is not one of the eight oj-scoped
+// aggregates above. `mapping_domains`/`mapping_industries` are
+// internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
+// has exactly one copy of the domain→industry table to read, not a second one typed
+// into SQL.
 // gov marks a company whose open jobs come from an exclusively-government source
 // (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 // greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
@@ -814,8 +832,20 @@ WHERE c.slug = c2.slug
 // accurate value than the LLM's per-posting guess, so it wins when present; otherwise
 // fall back to the distinct union of enrichment.company_size over open jobs (the csize
 // CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
-func (q *Queries) RefreshCompanyFacets(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, refreshCompanyFacets)
+// derived_eligible is the set of companies the industries_derived arm may speak for
+// at all: no curated industry of their own (co.industries empty — precedence, unless
+// from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
+// domains union describes hiring range rather than business, see the change design).
+// A company outside this set gets industries_derived = '{}' by simply not appearing
+// in derived_ind below.
+// Translates each eligible company's domains to industries via the mapping the two
+// query parameters carry — internal/dict/industrytag.DomainIndustryPairs(), passed in
+// rather than duplicated as a second copy of the table in SQL. A company whose
+// domains all fail to join (none of them map to an industry, e.g. {other} or a
+// retired vocabulary value) simply produces no rows here and reads as '{}' below,
+// with no special case.
+func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, refreshCompanyFacets, arg.MappingDomains, arg.MappingIndustries)
 	if err != nil {
 		return 0, err
 	}

@@ -77,7 +77,7 @@ func TestRefreshCompanyFacets(t *testing.T) {
 		[]string{"north_america"}, []string{"us"}, `{}`)
 
 	t.Run("unions derived from open jobs only", func(t *testing.T) {
-		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+		if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
 		if got := companyTextArray(t, pool, "acme", "regions"); !slices.Equal(got, []string{"asia", "europe"}) {
@@ -110,7 +110,7 @@ func TestRefreshCompanyFacets(t *testing.T) {
 	})
 
 	t.Run("re-running rewrites nothing", func(t *testing.T) {
-		rows, err := q.RefreshCompanyFacets(ctx)
+		rows, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{})
 		if err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
@@ -122,13 +122,82 @@ func TestRefreshCompanyFacets(t *testing.T) {
 	t.Run("closing all jobs empties the facet arrays", func(t *testing.T) {
 		closeJobByExtID(t, pool, "acme:1")
 		closeJobByExtID(t, pool, "acme:2")
-		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+		if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
 		for _, col := range []string{"regions", "countries", "domains", "company_types", "company_sizes"} {
 			if got := companyTextArray(t, pool, "acme", col); len(got) != 0 {
 				t.Errorf("acme %s = %v after all jobs closed, want empty", col, got)
 			}
+		}
+	})
+}
+
+// TestRefreshCompanyFacetsIndustriesDerived covers the #2088 remainder: the
+// industries_derived column bakes both the #2082 precedence (a curated company is
+// never matched through its domains) and the new domain-count threshold (a company
+// above it is not matched either) in at recompute time, so both query backends can
+// filter `industries` with a plain OR against this column. The mapping passed here is
+// a small literal fixture, not internal/dict/industrytag — internal/platform must
+// never import internal/dict (see AGENTS.md), even from a test.
+func TestRefreshCompanyFacetsIndustriesDerived(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, jobs RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	mapping := RefreshCompanyFacetsParams{
+		MappingDomains:    []string{"devtools", "fintech", "healthcare"},
+		MappingIndustries: []string{"developer-tools", "fintech", "healthcare"},
+	}
+
+	insertCompany(t, pool, "curated", "Curated Co")
+	if _, err := pool.Exec(ctx, `UPDATE companies SET industries = '{fintech}' WHERE slug = 'curated'`); err != nil {
+		t.Fatalf("seed curated industries: %v", err)
+	}
+	insertJobWithFacets(t, pool, "curated:1", "curated",
+		[]string{"europe"}, []string{"de"}, `{"domains":["fintech"]}`)
+
+	insertCompany(t, pool, "focused", "Focused Co")
+	insertJobWithFacets(t, pool, "focused:1", "focused",
+		[]string{"europe"}, []string{"de"}, `{"domains":["devtools","fintech"]}`)
+
+	insertCompany(t, pool, "wide", "Wide Co")
+	insertJobWithFacets(t, pool, "wide:1", "wide",
+		[]string{"europe"}, []string{"de"}, `{"domains":["devtools","fintech","healthcare"]}`)
+
+	if _, err := q.RefreshCompanyFacets(ctx, mapping); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	t.Run("a curated company's industries_derived is empty regardless of its domains", func(t *testing.T) {
+		if got := companyTextArray(t, pool, "curated", "industries_derived"); len(got) != 0 {
+			t.Errorf("curated industries_derived = %v, want empty", got)
+		}
+	})
+
+	t.Run("a company at or under the domain-count threshold gets its domains mapped", func(t *testing.T) {
+		if got := companyTextArray(t, pool, "focused", "industries_derived"); !slices.Equal(got, []string{"developer-tools", "fintech"}) {
+			t.Errorf("focused industries_derived = %v, want [developer-tools fintech]", got)
+		}
+	})
+
+	t.Run("a company above the domain-count threshold gets no derived industries", func(t *testing.T) {
+		if got := companyTextArray(t, pool, "wide", "industries_derived"); len(got) != 0 {
+			t.Errorf("wide industries_derived = %v, want empty (3 domains > threshold)", got)
+		}
+	})
+
+	t.Run("re-running rewrites nothing", func(t *testing.T) {
+		rows, err := q.RefreshCompanyFacets(ctx, mapping)
+		if err != nil {
+			t.Fatalf("refresh: %v", err)
+		}
+		if rows != 0 {
+			t.Errorf("idempotent refresh affected %d rows, want 0", rows)
 		}
 	})
 }

@@ -4139,6 +4139,14 @@ type Querier interface {
 	// through could not find, and Stripe listed at 570 on /companies against 444 on its
 	// own page. The three predicates below are the ones cmd/reindex's splitJobs applies
 	// on top of closed/duplicate; keep the two in step.
+	//
+	// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
+	// derivation — computed from this pass's own `dom` and the company's curated
+	// `industries`, not from `jobs` directly — so it is not one of the eight oj-scoped
+	// aggregates above. `mapping_domains`/`mapping_industries` are
+	// internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
+	// has exactly one copy of the domain→industry table to read, not a second one typed
+	// into SQL.
 	// gov marks a company whose open jobs come from an exclusively-government source
 	// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 	// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
@@ -4151,7 +4159,19 @@ type Querier interface {
 	// accurate value than the LLM's per-posting guess, so it wins when present; otherwise
 	// fall back to the distinct union of enrichment.company_size over open jobs (the csize
 	// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
-	RefreshCompanyFacets(ctx context.Context) (int64, error)
+	// derived_eligible is the set of companies the industries_derived arm may speak for
+	// at all: no curated industry of their own (co.industries empty — precedence, unless
+	// from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
+	// domains union describes hiring range rather than business, see the change design).
+	// A company outside this set gets industries_derived = '{}' by simply not appearing
+	// in derived_ind below.
+	// Translates each eligible company's domains to industries via the mapping the two
+	// query parameters carry — internal/dict/industrytag.DomainIndustryPairs(), passed in
+	// rather than duplicated as a second copy of the table in SQL. A company whose
+	// domains all fail to join (none of them map to an industry, e.g. {other} or a
+	// retired vocabulary value) simply produces no rows here and reads as '{}' below,
+	// with no special case.
+	RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error)
 	// The cheap half of the ingest write path, tried before UpsertJob: a crawl that re-sees a
 	// posting identical to the stored row refreshes its liveness and writes NOTHING else. Matching
 	// nothing (pgx.ErrNoRows) is the signal to run the full upsert — which is also what a brand-new

@@ -66,6 +66,26 @@ var industryDomains = func() map[string][]string {
 	return out
 }()
 
+// DomainIndustryPairs returns the domain→industry mapping as two parallel, sorted-by
+// -domain slices, `pairs[i]` being `(domains[i], industries[i])` — the shape a caller
+// passes as two `text[]` query parameters rather than duplicating the table in SQL.
+// It is the one place this table crosses into a query, so a materialization that
+// needs the mapping (RefreshCompanyFacets) reads it from here instead of growing a
+// second, driftable copy.
+func DomainIndustryPairs() (domains, industries []string) {
+	domains = make([]string, 0, len(domainIndustry))
+	for domain := range domainIndustry {
+		domains = append(domains, domain)
+	}
+	slices.Sort(domains)
+
+	industries = make([]string, len(domains))
+	for i, domain := range domains {
+		industries[i] = domainIndustry[domain]
+	}
+	return domains, industries
+}
+
 // DomainsForIndustries returns the domain values through which the given canonical
 // industries can also be recognised, sorted and de-duplicated so the result can be
 // compared and written into a text[] parameter directly.

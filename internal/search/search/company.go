@@ -8,7 +8,6 @@ import (
 
 	"github.com/meilisearch/meilisearch-go"
 
-	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -37,25 +36,31 @@ const (
 // is plain JSON, and the handler re-wraps them into pgtype.Text when projecting the
 // response so byte-for-byte parity with the Postgres path is preserved.
 type CompanyDocument struct {
-	Slug          string   `json:"slug"`
-	Name          string   `json:"name"`
-	Tagline       string   `json:"tagline"`
-	Industries    []string `json:"industries"`
-	HqCountry     string   `json:"hq_country"`
-	JobCount      int32    `json:"job_count"`
-	Collections   []string `json:"collections"`
-	Regions       []string `json:"regions"`
-	Countries     []string `json:"countries"`
-	Domains       []string `json:"domains"`
-	CompanyTypes  []string `json:"company_types"`
-	CompanySizes  []string `json:"company_sizes"`
-	RemoteRegions []string `json:"remote_regions"`
-	YcBatch       []string `json:"yc_batch"`
-	YcStatus      []string `json:"yc_status"`
-	YcStage       []string `json:"yc_stage"`
-	YcFlags       []string `json:"yc_flags"`
-	Maturity      string   `json:"maturity"`
-	Subindustry   string   `json:"subindustry"`
+	Slug       string   `json:"slug"`
+	Name       string   `json:"name"`
+	Tagline    string   `json:"tagline"`
+	Industries []string `json:"industries"`
+	// IndustriesDerived is RefreshCompanyFacets' materialized translation of the
+	// company's own domains into industries — already empty for a company with a
+	// curated Industries or with more than two domains (see the change design).
+	// CompanyFilterFromValues ORs it into the same group as Industries; it is never
+	// served in the API response, only queried.
+	IndustriesDerived []string `json:"industries_derived"`
+	HqCountry         string   `json:"hq_country"`
+	JobCount          int32    `json:"job_count"`
+	Collections       []string `json:"collections"`
+	Regions           []string `json:"regions"`
+	Countries         []string `json:"countries"`
+	Domains           []string `json:"domains"`
+	CompanyTypes      []string `json:"company_types"`
+	CompanySizes      []string `json:"company_sizes"`
+	RemoteRegions     []string `json:"remote_regions"`
+	YcBatch           []string `json:"yc_batch"`
+	YcStatus          []string `json:"yc_status"`
+	YcStage           []string `json:"yc_stage"`
+	YcFlags           []string `json:"yc_flags"`
+	Maturity          string   `json:"maturity"`
+	Subindustry       string   `json:"subindustry"`
 	// FeedbackCount/FeedbackRatingAvg mirror companies.feedback_count/
 	// feedback_rating_avg (internal/engage/companyfeedback) — display-only here.
 	// FeedbackRatingAvg 0 means "no rating" (an average is never really 0:
@@ -78,26 +83,27 @@ type CompanyDocument struct {
 // facet arrays pass through as-is; an empty array simply matches no facet filter.
 func FromCompany(c db.Company) CompanyDocument {
 	return CompanyDocument{
-		Slug:          c.Slug,
-		Name:          c.Name,
-		Tagline:       c.Tagline.String,
-		Industries:    c.Industries,
-		HqCountry:     c.HqCountry.String,
-		JobCount:      c.JobCount,
-		Collections:   c.Collections,
-		Regions:       c.Regions,
-		Countries:     c.Countries,
-		Domains:       c.Domains,
-		CompanyTypes:  c.CompanyTypes,
-		CompanySizes:  c.CompanySizes,
-		RemoteRegions: c.RemoteRegions,
-		YcBatch:       c.YcBatch,
-		YcStatus:      c.YcStatus,
-		YcStage:       c.YcStage,
-		YcFlags:       c.YcFlags,
-		Maturity:      c.Maturity.String,
-		Subindustry:   c.Subindustry.String,
-		FeedbackCount: c.FeedbackCount,
+		Slug:              c.Slug,
+		Name:              c.Name,
+		Tagline:           c.Tagline.String,
+		Industries:        c.Industries,
+		IndustriesDerived: c.IndustriesDerived,
+		HqCountry:         c.HqCountry.String,
+		JobCount:          c.JobCount,
+		Collections:       c.Collections,
+		Regions:           c.Regions,
+		Countries:         c.Countries,
+		Domains:           c.Domains,
+		CompanyTypes:      c.CompanyTypes,
+		CompanySizes:      c.CompanySizes,
+		RemoteRegions:     c.RemoteRegions,
+		YcBatch:           c.YcBatch,
+		YcStatus:          c.YcStatus,
+		YcStage:           c.YcStage,
+		YcFlags:           c.YcFlags,
+		Maturity:          c.Maturity.String,
+		Subindustry:       c.Subindustry.String,
+		FeedbackCount:     c.FeedbackCount,
 		// pgtype.Float4's zero value is {Valid: false}, whose .Float32 is 0 —
 		// exactly the "no rating" sentinel this document already wants, so no
 		// explicit NULL handling is needed here.
@@ -123,6 +129,7 @@ func companySettings() *meilisearch.Settings {
 		SearchableAttributes: []string{"name", "slug", "tagline"},
 		FilterableAttributes: []string{
 			"collections", "regions", "countries", "domains", "industries",
+			"industries_derived",
 			"company_types", "company_sizes", "remote_regions",
 			"yc_batch", "yc_status", "yc_stage", "yc_flags",
 			"maturity", "subindustry",
@@ -182,25 +189,17 @@ func CompanyFilterFromValues(v url.Values) any {
 		for _, val := range included {
 			group = append(group, Eq(f.attr, val))
 		}
-		// An industry reaches a company from two ORDERED sources: the curated column an
-		// importer wrote, and — only where that is empty — the coarse domain the
-		// company's own postings imply. Both arms join the SAME group, so they OR; the
-		// second carries `industries IS EMPTY` as a conjunct, which is what makes them
-		// ordered rather than equal.
-		//
-		// They are not equal evidence. `domains` is a union over every open job, so a
-		// company with hundreds of postings accumulates domains that describe its
-		// hiring range rather than its business — Uber collects gamedev, edtech and
-		// govtech that way, and briefly answered ?industries=gaming in production.
-		// Reading it for a company someone has already classified adds no reach and
-		// asserts industries it is not in.
-		//
-		// The curated column alone covers about a quarter of the catalogue, so the
-		// second arm is still most of the facet's reach. Requested industries the
-		// mapping does not cover add nothing, leaving the curated arm to answer alone.
+		// An industry reaches a company from two ORDERED sources: the curated
+		// `industries` an importer wrote, and `industries_derived` — RefreshCompanyFacets'
+		// materialized translation of the company's own domains, already empty for a
+		// company with a curated industry or with more than two domains (a domains union
+		// that wide describes hiring range, not business; see the change design). Both
+		// arms join the SAME group, so they OR, with no runtime emptiness/count check
+		// needed here — precedence and the domain-count threshold are baked in at
+		// materialization time.
 		if f.param == "industries" {
-			for _, domain := range industrytag.DomainsForIndustries(included) {
-				group = append(group, And(IsUnset("industries"), Eq("domains", domain)))
+			for _, val := range included {
+				group = append(group, Eq("industries_derived", val))
 			}
 		}
 		g = append(g, group)

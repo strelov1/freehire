@@ -118,3 +118,28 @@ func TestDomainsForIndustriesEmitsOnlyRealDomains(t *testing.T) {
 		}
 	}
 }
+
+// DomainIndustryPairs is consumed as two Postgres text[] query parameters, so its
+// two return values must line up positionally and cover the same 17-pair table
+// domains_test.go already asserts against elsewhere in this file.
+func TestDomainIndustryPairs(t *testing.T) {
+	domains, industries := DomainIndustryPairs()
+
+	if len(domains) != len(domainIndustry) {
+		t.Fatalf("len(domains) = %d, want %d (one per domainIndustry entry)", len(domains), len(domainIndustry))
+	}
+	if len(industries) != len(domains) {
+		t.Fatalf("len(industries) = %d, want %d (parallel to domains)", len(industries), len(domains))
+	}
+	if !slices.IsSorted(domains) {
+		t.Errorf("domains %q is not sorted", domains)
+	}
+
+	got := make(map[string]string, len(domains))
+	for i, domain := range domains {
+		got[domain] = industries[i]
+	}
+	if !reflect.DeepEqual(got, domainIndustry) {
+		t.Errorf("DomainIndustryPairs() pairs = %v, want %v", got, domainIndustry)
+	}
+}

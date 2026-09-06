@@ -114,33 +114,42 @@ func containsSlug(hits []CompanyDocument, slug string) bool {
 	return false
 }
 
-// The industry facet's derived arm is a parenthesised conjunction inside an OR group
-// — a filter shape nothing else in this codebase builds. A unit test can only assert
-// the string; whether Meilisearch PARSES it is a property of the engine, and getting
-// it wrong is a 500 on every industry-filtered request rather than a wrong result.
+// The industry facet's two attributes are a plain OR within one group — precedence
+// and the domain-count threshold are baked into IndustriesDerived by
+// RefreshCompanyFacets before the document ever reaches this index, so this test
+// fixes IndustriesDerived directly rather than deriving it from Domains, the way the
+// real recompute would have already resolved it. A unit test can only assert the
+// filter string; whether Meilisearch actually matches array attributes named
+// "industries_derived" is a property of the engine.
 func TestIntegration_CompanySearch_IndustryPrecedence(t *testing.T) {
 	ctx := context.Background()
 	c := startMeili(t)
 	buildCompanyIndex(t, c, []CompanyDocument{
 		// Curated: matches through its own column.
 		{Slug: "curated-fin", Name: "Curated Fin", JobCount: 5, Industries: []string{"fintech"}},
-		// Uncurated: matches through the domain that means the same thing.
-		// Two shapes of "no curated industry": a nil slice serializes to null, an
-		// empty one to []. Meilisearch does not treat them as the same thing, so both
-		// are here — testing only one would let a filter that handles only that one pass.
-		{Slug: "derived-nil", Name: "Derived Nil", JobCount: 5, Domains: []string{"fintech"}},
-		{Slug: "derived-empty", Name: "Derived Empty", JobCount: 5, Industries: []string{}, Domains: []string{"fintech"}},
-		// Curated as something else, with a domains union that drifted — the
-		// production shape that made ?industries=gaming return Uber. Its curated
-		// column answers for it; the drift must not.
+		// Uncurated, within the domain-count threshold: RefreshCompanyFacets would have
+		// mapped its domains to IndustriesDerived. Two shapes of "no curated industry": a
+		// nil slice serializes to null, an empty one to []. Meilisearch does not treat
+		// them as the same thing, so both are here — testing only one would let a filter
+		// that handles only that one pass.
+		{Slug: "derived-nil", Name: "Derived Nil", JobCount: 5, IndustriesDerived: []string{"fintech"}},
+		{Slug: "derived-empty", Name: "Derived Empty", JobCount: 5, Industries: []string{}, IndustriesDerived: []string{"fintech"}},
+		// Curated as something else: IndustriesDerived is empty because
+		// RefreshCompanyFacets never fills it for a company with a curated industry —
+		// the production shape that made ?industries=gaming return Uber before #2082.
 		{Slug: "big-classified", Name: "Big Classified", JobCount: 5,
 			Industries: []string{"logistics"}, Domains: []string{"fintech", "gamedev"}},
+		// No curated industry, but above the #2088 domain-count threshold:
+		// RefreshCompanyFacets leaves IndustriesDerived empty even though one of its
+		// domains maps to the requested industry.
+		{Slug: "wide-domains", Name: "Wide Domains", JobCount: 5,
+			Domains: []string{"fintech", "gamedev", "healthcare"}},
 	})
 
 	filter := CompanyFilterFromValues(url.Values{"industries": {"fintech"}})
 	res, err := c.SearchCompanies(ctx, CompanySearchParams{Filter: filter, Limit: 10})
 	if err != nil {
-		t.Fatalf("SearchCompanies: %v (does Meilisearch accept the conjunction?)", err)
+		t.Fatalf("SearchCompanies: %v (does Meilisearch accept industries_derived?)", err)
 	}
 
 	got := slugs(res.Hits)
@@ -153,6 +162,9 @@ func TestIntegration_CompanySearch_IndustryPrecedence(t *testing.T) {
 		t.Errorf("industries=fintech → %v, want exactly the three above", got)
 	}
 	if contains(got, "big-classified") {
-		t.Error("a company curated as logistics was matched through its domains")
+		t.Error("a company curated as logistics was matched through its raw domains")
+	}
+	if contains(got, "wide-domains") {
+		t.Error("a company above the domain-count threshold was matched through its raw domains")
 	}
 }
