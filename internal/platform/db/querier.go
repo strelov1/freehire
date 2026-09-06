@@ -3374,8 +3374,12 @@ type Querier interface {
 	// `include_other` until 2026-09-06 while the handler parsed and validated both, so
 	// `read-all?unclassified=1` — the triage queue's own button — emptied the whole unread
 	// mailbox instead of the page in front of the person pressing it. There is no undo.
-	// TestMarkAllEmailsReadTakesEveryListingFilter pins the two parameter sets against each
-	// other, since the failure is a filter that is simply absent and nothing refuses it.
+	// The two predicate sets are hand-maintained copies of each other — the mark-as-read
+	// methods stay outside inbox.Queries on purpose — so they are free to drift again.
+	// TestMarkAllEmailsReadTakesEveryListingFilter (mark_all_read_filter_rule_test.go)
+	// compares the two generated parameter structs and fails when a filter reaches one and
+	// not the other, because the failure mode is a predicate that is simply ABSENT: nothing
+	// refuses it, nothing logs, and no behavioural test exists for the case nobody thought of.
 	MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error)
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.
