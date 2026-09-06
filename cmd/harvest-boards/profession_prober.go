@@ -80,12 +80,25 @@ func (i *professionCategoryIndex) get(ctx context.Context, c sources.XMLGetter) 
 	return sitemaps, nil
 }
 
+// discover returns only the categories the crawl will accept — the platform's two IT
+// sections. It still earns its keep at two: it proves the platform still publishes them
+// under those names and fails loudly if one is renamed, which no seed file would.
+//
+// It deliberately does NOT offer the other 21. The adapter refuses them (see
+// profession.go for the audit that decided it), so offering them would be offering a
+// curator boards that cannot be crawled.
 func (p professionProber) discover(ctx context.Context, _ httpClient) ([]string, error) {
 	sitemaps, err := p.index.get(ctx, p.client)
 	if err != nil {
 		return nil, err
 	}
-	return slices.Sorted(maps.Keys(sitemaps)), nil
+	var out []string
+	for _, cat := range slices.Sorted(maps.Keys(sitemaps)) {
+		if sources.ProfessionCrawlsCategory(cat) {
+			out = append(out, cat)
+		}
+	}
+	return out, nil
 }
 
 func (p professionProber) probe(ctx context.Context, _ httpClient, board string) (string, int, error) {

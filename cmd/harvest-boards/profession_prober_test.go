@@ -40,7 +40,7 @@ func TestProfessionProberDiscover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
-	want := []string{"education", "itdev"}
+	want := []string{"itdev"}
 	if !slices.Equal(got, want) {
 		t.Errorf("discover() = %v, want %v", got, want)
 	}
@@ -136,7 +136,7 @@ func TestProfessionProberIgnoresTheSharedClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
-	if !slices.Equal(got, []string{"education", "itdev"}) {
+	if !slices.Equal(got, []string{"itdev"}) {
 		t.Errorf("discover() = %v", got)
 	}
 }

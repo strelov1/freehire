@@ -544,40 +544,35 @@ func professionGeneralEntry() CompanyEntry {
 	}
 }
 
-// TestProfessionGeneralBoardKeepsOnlyConfirmedTechnicalPostings drives both gates over one
-// general-population category. The counts are the whole argument for crawling these boards
-// at all: four listed postings cost two detail requests, and one posting is stored.
-func TestProfessionGeneralBoardKeepsOnlyConfirmedTechnicalPostings(t *testing.T) {
-	fixture := professionGeneralFixture()
-	jobs, err := NewProfession(fixture).Fetch(context.Background(), professionGeneralEntry())
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
+// TestProfessionRefusesAGeneralCategory pins that a board outside the platform's two IT
+// sections is refused outright, before a request is made.
+//
+// It was briefly crawled behind a two-gate title filter, and a live audit of all 21 general
+// categories on 2026-09-06 is why it is not any more: 11,403 postings listed, 227 passed
+// the cheap gate, 159 were stored — and of those, 45 resolved through the bare English
+// "analyst" (VAT, credit control, valuation), 23 through project management, 13 through
+// business analysis, 11 through product and 13 through design/creative. Only 17 satisfied
+// classify.IsTech. A gas fitter and a pump tester were among them. See AGENTS.md.
+func TestProfessionRefusesAGeneralCategory(t *testing.T) {
+	fixture := &professionRecorder{routedHTTP: (&routedHTTP{}).
+		route("sitemap-listings-index-hu.xml", professionSitemapIndexXML).
+		route("sitemap-listings-education-hu.xml", professionCategorySitemapXML(
+			"https://www.profession.hu/allas/rendszergazda-acme-kft-gyor-2990001"))}
+
+	_, err := NewProfession(fixture).Fetch(context.Background(), professionGeneralEntry())
+	if err == nil {
+		t.Fatal("a general category was crawled; it must be refused")
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "2990001" {
-		t.Fatalf("Fetch returned %d jobs, want just the sysadmin: %+v", len(jobs), jobs)
+	if !strings.Contains(err.Error(), professionGeneralBoard) {
+		t.Errorf("the error does not name the board: %v", err)
 	}
-	if jobs[0].Title != "Rendszergazda" {
-		t.Errorf("title = %q, want %q", jobs[0].Title, "Rendszergazda")
-	}
-	// The two postings whose slug states nothing technical are never requested; the one
-	// whose slug matched on its employer's name is, and is then turned away by its title.
-	wantPages := []string{
-		"https://www.profession.hu/allas/rendszergazda-acme-kft-gyor-2990001",
-		"https://www.profession.hu/allas/ertekesitesi-munkatars-devops-solutions-kft-2990102",
-	}
-	got := slices.Clone(fixture.pages)
-	slices.Sort(got)
-	slices.Sort(wantPages)
-	if !slices.Equal(got, wantPages) {
-		t.Errorf("requested pages = %v, want %v", got, wantPages)
+	// Refused before any request: which categories the catalogue takes is a fact about
+	// the catalogue, not something the platform has to be asked about.
+	if len(fixture.xml) != 0 || len(fixture.pages) != 0 {
+		t.Errorf("requests were made for a refused board: xml=%v pages=%v", fixture.xml, fixture.pages)
 	}
 }
 
-// TestProfessionITBoardIsUnfiltered pins the exemption: the two dedicated IT sections are
-// already the slice the catalogue wants, so a posting there is stored on the platform's
-// own filing and never has to satisfy freehire's title dictionary. "Senior Engineer" is
-// the case that matters — a bare "engineer" resolves to no category by design, so on a
-// filtered board it would be dropped.
 func TestProfessionITBoardIsUnfiltered(t *testing.T) {
 	routed := (&routedHTTP{}).
 		route("sitemap-listings-index-hu.xml", professionSitemapIndexXML).
@@ -602,37 +597,6 @@ func TestProfessionITBoardIsUnfiltered(t *testing.T) {
 	}
 }
 
-// TestProfessionSlugCarriesTechnicalTerm pins the cheap gate on its own, including the
-// spellings the platform's slug forces on it: the terms are transliterated because the
-// slug is ASCII, and they match whole hyphen runs so a term cannot fire inside a longer
-// Hungarian compound.
-func TestProfessionSlugCarriesTechnicalTerm(t *testing.T) {
-	cases := []struct {
-		name string
-		url  string
-		want bool
-	}{
-		{"accented term matches its transliterated slug", "https://www.profession.hu/allas/szoftverfejleszto-acme-kft-1", true},
-		{"multi-word term matches a hyphen run", "https://www.profession.hu/allas/java-fejleszto-acme-kft-2", true},
-		{"english term on a hungarian board", "https://www.profession.hu/allas/senior-devops-mernok-acme-3", true},
-		{"sysadmin", "https://www.profession.hu/allas/linux-rendszergazda-acme-kft-4", true},
-		{"non-technical role", "https://www.profession.hu/allas/ertekesitesi-tanacsado-acme-kft-5", false},
-		{"the bare operator noun is not a term", "https://www.profession.hu/allas/gepesz-uzemelteto-acme-kft-6", false},
-		{"a term inside a longer compound does not fire", "https://www.profession.hu/allas/uzlethalozati-trener-acme-kft-7", false},
-		{"an empty slug matches nothing", "https://www.profession.hu/allas/-8", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := professionSlugCarriesTechnicalTerm(tc.url); got != tc.want {
-				t.Errorf("professionSlugCarriesTechnicalTerm(%q) = %v, want %v", tc.url, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestProfessionCategorySitemaps pins what the platform's own sitemap index is read for:
-// every category it publishes, against the URL of that category's sitemap, so nothing
-// downstream has to keep a copy of the list or resolve the index again to use it.
 func TestProfessionCategorySitemaps(t *testing.T) {
 	// The index carries entries that are not category sitemaps — the platform publishes
 	// article and company indexes beside them — and they must not become boards.

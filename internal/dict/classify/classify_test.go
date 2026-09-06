@@ -499,13 +499,24 @@ func TestParse_HungarianOperationsTitles(t *testing.T) {
 		// Network. "hálózatüzemeltető" is the closed compound again.
 		{"Hálózati mérnök", "network_engineering"},
 		{"Hálózati rendszermérnök", "network_engineering"},
-		{"Cisco hálózatüzemeltető mérnök", "network_engineering"},
+		// "hálózatüzemeltető" is NOT admitted: a "hálózat" is any network, and a gas
+		// utility runs one. Three of the four live occurrences are gas fitters
+		// ("Hálózatüzemeltető /Gázszerelő", OPUS TIGÁZ Zrt.), and the fourth says
+		// "Cisco" — which the dictionary reads on its own.
+		{"Hálózatüzemeltető /Gázszerelő", ""},
+		{"Hálózatüzemeltető/gázszerelő", ""},
 		// Testing. The bare "tesztelő" is admitted on the same footing English's
 		// bare "tester" already has: every live occurrence is a testing seat.
 		{"Manuális tesztelő", "qa"},
 		{"Automata tesztelő", "qa"},
 		{"Szoftvertesztelő", "qa"},
 		{"Tesztmenedzser (performancia tesztelés)", "qa"},
+		// The bare noun is NOT admitted, on the evidence of a general-population board
+		// rather than the developer boards the first sample came from: "Szivattyú
+		// tesztelő" is whoever tests pumps. English's bare "tester" keeps its entry,
+		// because the boards it is read on are not general-population ones.
+		{"Szivattyú tesztelő", ""},
+		{"Termék tesztelő", ""},
 		// Security, in its three live spellings.
 		{"Kiberbiztonsági munkatárs", "security"},
 		{"Senior Kiberbiztonsági szakértő", "security"},

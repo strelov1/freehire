@@ -258,13 +258,14 @@ var categoryTable = []aliasEntry{
 	{"network administrator", "network_engineering"},
 	{"сетевой инженер", "network_engineering"},
 	{"сетевой администратор", "network_engineering"},
-	// Hungarian. The bare adjective "hálózati" is not here: a "hálózat" is any
-	// network, including a retail chain's ("Országos Üzlethálózati Tréner"), so only
-	// the engineering seats resolve. "hálózatüzemeltető" is the closed compound of
-	// the operator noun held back in the devops block above.
+	// Hungarian. Neither the bare adjective "hálózati" nor the compound
+	// "hálózatüzemeltető" is here: a "hálózat" is ANY network. The adjective covers a
+	// retail chain's ("Országos Üzlethálózati Tréner") and the compound covers a gas
+	// utility's — three of its four live occurrences are "Hálózatüzemeltető
+	// /Gázszerelő" at OPUS TIGÁZ, a gas fitter, and the fourth says "Cisco", which the
+	// dictionary reads on its own. Only the engineering seats resolve.
 	{"hálózati mérnök", "network_engineering"},
 	{"hálózati rendszermérnök", "network_engineering"},
-	{"hálózatüzemeltető", "network_engineering"},
 	{"backend", "backend"},
 	{"back-end", "backend"},
 	{"back end", "backend"},
@@ -321,14 +322,19 @@ var categoryTable = []aliasEntry{
 	{"sdet", "qa"},
 	{"тестировщик", "qa"},
 	{"тестирование", "qa"},
-	// Hungarian. "tesztelő" is admitted bare on the same footing as English "tester"
-	// above: every occurrence in the live Hungarian sample is a testing seat. The
-	// adjective "tesztelési" is NOT, because the sample spends it on calibration and
-	// manufacturing process work ("Kalibrálási- és tesztelési folyamatfejlesztő
-	// mérnök"). "szoftvertesztelő" is the closed compound, which does not contain the
-	// bare noun on a word boundary.
-	{"tesztelő", "qa"},
+	// Hungarian, qualified only. The bare noun was admitted here for one day on the
+	// footing English's bare "tester" has, and a general-population board took it back:
+	// the first sample came from the platform's two IT categories, where every
+	// "tesztelő" is a testing seat, and the other 21 hold "Szivattyú tesztelő" —
+	// whoever tests pumps. English keeps its bare entry because the boards it is read
+	// on are not general-population ones; this language is read on one that is.
+	//
+	// The adjective "tesztelési" is out for the same reason it always was: the sample
+	// spends it on calibration and manufacturing process work ("Kalibrálási- és
+	// tesztelési folyamatfejlesztő mérnök").
 	{"szoftvertesztelő", "qa"},
+	{"manuális tesztelő", "qa"},
+	{"automata tesztelő", "qa"},
 	{"tesztmenedzser", "qa"},
 	// Physical security is not information security, and the bare alias below cannot
 	// tell them apart: "Security Guard" and "Security Officer" have been resolving to

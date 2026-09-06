@@ -143,6 +143,20 @@ var (
 	// project_management — and the IT-product-adjacent business_analysis/
 	// solutions_engineering/developer_relations/technical_writing — count as technical
 	// here (IT-industry roles), so they are enriched; the back-office roles are not.
+	// TechCategories are the categories a TECH COMPANY staffs, which is not the same
+	// question as "is this a technical craft" — and reading it as the second is a trap
+	// with a measurement attached. It carries `product`, `project_management`, `design`,
+	// `creative` and `business_analysis`, correct on a software employer's board and
+	// wrong anywhere the population is not software: an adapter that used it to decide
+	// whether to STORE a posting from a general-population job board took in 23 project
+	// managers (construction, manufacturing, HR payroll), 13 business analysts, 11
+	// product managers and 13 artists and designers out of 159 — plus 45 that came
+	// through the bare `analyst` alias under `data_analytics`, which on a finance board
+	// is VAT, credit control and valuation. Of the same 159, `classify.IsTech` accepted
+	// 17. See internal/ingest/sources/profession.go.
+	//
+	// For "is the CRAFT technical", reach for `classify.IsTech` (strict, software-anchored,
+	// never guesses) and treat this list as the facet vocabulary it is.
 	TechCategories = []string{
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
