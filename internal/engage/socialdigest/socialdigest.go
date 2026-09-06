@@ -73,8 +73,9 @@ type Posting struct {
 // Digest is a finished list, ready to publish. An empty Items means the day had
 // nothing worth publishing — a quiet day, not a failure.
 type Digest struct {
-	// Day is the day the digest DESCRIBES, not the day it is sent. They always differ:
-	// the freshest day in the view rollup is a completed day.
+	// Day is the day the digest DESCRIBES, not the day it is sent. They always differ,
+	// because the day this is built from is a COMPLETED one — the rollup also holds a
+	// stub of the day in progress, and LatestViewDay is what excludes it.
 	Day   time.Time
 	Items []Posting
 }
@@ -101,8 +102,12 @@ type Publisher interface {
 // so the rules above can be tested against a fake without a database — the queries
 // themselves are covered by the integration tests that exercise real SQL.
 type Repository interface {
-	// LatestViewDay reports the freshest day the view rollup holds. The bool is false
-	// when there is none, which is a broken pipeline rather than an empty day.
+	// LatestViewDay reports the freshest COMPLETED day the view rollup holds. The bool
+	// is false when there is none, which is a broken pipeline rather than an empty day.
+	//
+	// Completed, not merely freshest: cmd/rollup-views leaves a stub of the day in
+	// progress, and a digest built from it finds nothing above the floor and reports a
+	// quiet day — losing the finished day beside it for good. See the query's comment.
 	LatestViewDay(ctx context.Context) (time.Time, bool, error)
 
 	// TopPageViewed returns the day's eligible postings ranked by page views, most
