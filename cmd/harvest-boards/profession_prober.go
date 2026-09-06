@@ -42,9 +42,20 @@ import (
 // precisely the failure that took the crawl down between 2026-09-04 and 2026-09-06. The
 // cost is the one adapterProber's doc comment already names for its own case: this
 // prober's requests fall outside the run's paced, counting client.
+// Build it with newProfessionProber. The zero value is NOT usable — its index is a nil
+// pointer, and the first thing discover does is take a lock through it — and a zero value
+// is exactly what a struct literal in the registry decays to when a field is dropped. That
+// is not hypothetical: it shipped, and the first harvest panicked before making a request.
 type professionProber struct {
 	index  *professionCategoryIndex
 	client sources.XMLGetter
+}
+
+func newProfessionProber() professionProber {
+	return professionProber{
+		index:  &professionCategoryIndex{},
+		client: sources.NewSingleUseConnClient(),
+	}
 }
 
 // professionCategoryIndex memoizes the category-to-sitemap map for one harvest run. Only a

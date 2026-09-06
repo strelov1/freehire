@@ -24,10 +24,6 @@ const professionEducationSitemapXML = `<?xml version="1.0" encoding="UTF-8"?>
 <url><loc>https://www.profession.hu/kategoria/oktatas</loc></url>
 </urlset>`
 
-func newProfessionProber() professionProber {
-	return professionProber{index: &professionCategoryIndex{}, client: professionProberFixture()}
-}
-
 func professionProberFixture() fakeGetter {
 	return fakeGetter{
 		"https://www.profession.hu/sitemap-listings-index-hu.xml":     professionIndexXML,
@@ -40,7 +36,7 @@ func professionProberFixture() fakeGetter {
 // are enumerated rather than seeded. The non-category sitemaps in the index must not
 // become boards.
 func TestProfessionProberDiscover(t *testing.T) {
-	got, err := newProfessionProber().discover(context.Background(), professionProberFixture())
+	got, err := professionProber{index: &professionCategoryIndex{}, client: professionProberFixture()}.discover(context.Background(), professionProberFixture())
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -54,7 +50,7 @@ func TestProfessionProberDiscover(t *testing.T) {
 // request; probing it through the adapter — which is what proberFor falls back to without
 // this type — would crawl every posting in all 23 categories.
 func TestProfessionProberProbe(t *testing.T) {
-	company, open, err := newProfessionProber().probe(context.Background(), professionProberFixture(), "education")
+	company, open, err := professionProber{index: &professionCategoryIndex{}, client: professionProberFixture()}.probe(context.Background(), professionProberFixture(), "education")
 	if err != nil {
 		t.Fatalf("probe: %v", err)
 	}
@@ -142,5 +138,41 @@ func TestProfessionProberIgnoresTheSharedClient(t *testing.T) {
 	}
 	if !slices.Equal(got, []string{"education", "itdev"}) {
 		t.Errorf("discover() = %v", got)
+	}
+}
+
+// TestProberForProfessionIsUsable exercises the prober the REGISTRY hands out, not one the
+// test built for itself.
+//
+// It exists because every other test here constructs its own professionProber, and that is
+// exactly the shape of hole that let a zero-value entry ship: `professionProber{}` carries
+// a nil index and a nil client, so the first harvest panicked on a nil mutex before making
+// a single request. Tests that build their own subject prove the type works and say nothing
+// about the wiring.
+func TestProberForProfessionIsUsable(t *testing.T) {
+	p, ok := proberFor("profession")
+	if !ok {
+		t.Fatal("no prober registered for profession")
+	}
+	d, ok := p.(discoverer)
+	if !ok {
+		t.Fatal("the registered prober does not discover; harvest-boards would demand a seed file")
+	}
+	pp, ok := p.(professionProber)
+	if !ok {
+		t.Fatalf("registry holds %T, not professionProber", p)
+	}
+	if pp.index == nil {
+		t.Error("the registered prober has no index; discover panics on a nil mutex")
+	}
+	if pp.client == nil {
+		t.Error("the registered prober has no client of its own; it would read over the pooled one")
+	}
+	// A context already cancelled proves the call REACHES the transport rather than
+	// panicking on the way — no request leaves the machine.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := d.discover(ctx, nil); err == nil {
+		t.Error("discover on a cancelled context returned no error")
 	}
 }
