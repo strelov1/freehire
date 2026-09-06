@@ -91,6 +91,11 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: parse: %w", err)
 	}
+	// Drop anything the model copied out of the MASK rather than out of the CV. The
+	// system prompt asks it not to, and one line further down asks it to copy highlights
+	// verbatim — a prompt is the wrong place for a rule about what gets persisted, so the
+	// rule is enforced here, before the contact fields are filled and before Sanitize.
+	scrubRedactionPlaceholders(&s)
 	// Contact fields come from deterministic detection, NOT the model — it only ever saw the
 	// redacted CV, so it cannot (and must not) supply them. Location is included: the
 	// candidate's residence is typically an ADDRESS span masked before the model runs.

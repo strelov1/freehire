@@ -111,6 +111,31 @@ func TestConfigShard_KeepsACompanysBoardsTogether(t *testing.T) {
 	}
 }
 
+// Two spellings of one employer are one company to the sweep, so they must be one
+// company to the sharder. The sweep closes by the STORED company_slug
+// (normalize.CompanySlug plus the alias canon), which folds the corporate form away;
+// keying the shard on normalize.Slug did not, so "The Ensign Group" and "The Ensign
+// Group, Inc." went to different shards and whichever ran second closed the other's
+// live postings. Measured on the live catalogue: 75 companies across the sharded
+// providers, this one 12 boards split 10 and 2.
+func TestConfigShard_KeepsOneEmployerSpelledTwoWaysTogether(t *testing.T) {
+	cfg := Config{Provider: "workday", Sources: []CompanyEntry{
+		{Company: "The Ensign Group", Provider: "workday", Board: "ensign-1"},
+		{Company: "The Ensign Group, Inc.", Provider: "workday", Board: "ensign-2"},
+	}}
+	const n = 2
+	shards := map[int][]string{}
+	for i := 1; i <= n; i++ {
+		for _, e := range cfg.Shard(i, n).Sources {
+			shards[i] = append(shards[i], e.Board)
+		}
+	}
+	if len(shards) != 1 {
+		t.Errorf("one employer's boards landed in %d shards (%v) — the shard key must fold "+
+			"the corporate form, as the stale-job sweep's company_slug does", len(shards), shards)
+	}
+}
+
 func TestConfigShard_SingleShardIsFullConfig(t *testing.T) {
 	cfg := mkConfig("a", "b", "c")
 	if got := companiesOf(cfg.Shard(1, 1)); !reflect.DeepEqual(got, []string{"a", "b", "c"}) {

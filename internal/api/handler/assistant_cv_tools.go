@@ -573,13 +573,6 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			for i, op := range in.Ops {
-				// Validate the address against the document's structure before anything is
-				// applied, so a typo names itself instead of failing deep inside the batch.
-				if _, err := cvedit.ParsePath(string(op.Path)); err != nil {
-					return nil, fmt.Errorf("edit %d: %w", i+1, err)
-				}
-			}
 			requirement := strings.TrimSpace(in.Requirement)
 			status := cv.AutopilotStatus(in.RequirementStatus)
 			if requirement != "" && status != cv.AutopilotClosedBank && status != cv.AutopilotClosedCandidate {

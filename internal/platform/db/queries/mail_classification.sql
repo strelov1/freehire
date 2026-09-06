@@ -142,6 +142,39 @@ WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint;
 
 -- name: AdvanceUserJobStage :exec
 -- Move an application forward to a new stage (the worker only calls this after
--- checking the transition is strictly forward and high-confidence).
-UPDATE applications SET stage = sqlc.arg(stage)::text
- WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint;
+-- checking the transition is strictly forward and high-confidence), and record the
+-- transition in the ledger under the same predicate that moves the column — exactly as
+-- TrackJob and TrackApplicationByID do it.
+--
+-- It was a bare UPDATE until 2026-09-06, so the mail path was the one stage-writer that
+-- moved an application and recorded nothing. The consequence is not an incomplete
+-- history: ListInterviewPrepCandidates selects `kind='stage_set' AND signal='interview'`
+-- and nothing else, so cmd/nudge found no candidate an employer's own invitation had
+-- produced. Worse, jobtracking.SuggestStage returns nil once the stage already matches
+-- what the mail implies — so after an auto-advance there was nothing to click either, and
+-- the interview-prep nudge simply did not exist for the mailbox-connected users it was
+-- built for.
+--
+-- occurred_at is the MESSAGE's received_at, read here rather than passed, for the reason
+-- RecordEmailApplicationEvent gives: now() would compress a year of imported history into
+-- the day a mailbox was connected, and LastStageSetAt silences a stage suggestion older
+-- than it — so an import would silence every suggestion at once.
+--
+-- `prior` reads the pre-update value, so an advance that lands on the stage the row
+-- already carries records nothing; the ledger holds transitions.
+WITH prior AS (
+    SELECT a.stage FROM applications a
+     WHERE a.user_id = sqlc.arg(user_id)::bigint AND a.job_id = sqlc.arg(job_id)::bigint
+), upd AS (
+    UPDATE applications SET stage = sqlc.arg(stage)::text
+     WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint
+    RETURNING *
+)
+-- job_id and company_slug come off the application, like TrackApplicationByID: the row is
+-- the application, and the employer is denormalised on it.
+INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+SELECT u.user_id, u.id, u.job_id, u.company_slug, 'stage_set', u.stage, em.received_at, sqlc.arg(event_source)::text
+  FROM upd u
+  JOIN emails em ON em.id = sqlc.arg(email_id)::bigint AND em.user_id = u.user_id
+ WHERE u.stage IS NOT NULL
+   AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior);

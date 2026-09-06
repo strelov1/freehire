@@ -253,12 +253,24 @@ WHERE id = $1 AND user_id = $2 AND read_at IS NULL;
 -- Bulk mark-as-read for the caller, honoring the same optional filters as the
 -- listing, so "mark all read" means "everything currently shown". Only unread,
 -- live rows are touched; returns how many it marked.
+--
+-- ALL SIX of ListEmails' filters, not four. It carried neither `unclassified` nor
+-- `include_other` until 2026-09-06 while the handler parsed and validated both, so
+-- `read-all?unclassified=1` — the triage queue's own button — emptied the whole unread
+-- mailbox instead of the page in front of the person pressing it. There is no undo.
+-- TestMarkAllEmailsReadTakesEveryListingFilter pins the two parameter sets against each
+-- other, since the failure is a filter that is simply absent and nothing refuses it.
 UPDATE emails SET read_at = now()
 WHERE user_id = $1
   AND read_at IS NULL
   AND deleted_at IS NULL
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
+  AND (sqlc.arg(unclassified)::bool = false OR classified_at IS NULL)
+  -- The listing's `other` default, and the same reading of it: asking FOR the label is
+  -- asking for it (inbox.Query.ShowsOther), so `?status=other` marks the page it shows
+  -- rather than nothing at all.
+  AND (sqlc.arg(include_other)::bool OR coalesce(status_signal, '') <> 'other')
   AND (
     sqlc.arg(link)::text = ''
     OR (sqlc.arg(link) = 'linked'    AND application_id IS NOT NULL)

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 
@@ -331,13 +330,6 @@ func (h *cvHandlers) PatchCV(c *fiber.Ctx) error {
 	if err := decoder.Decode(&in); err != nil {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "invalid operations: "+err.Error())
 	}
-	for i, op := range in.Ops {
-		if _, err := cvedit.ParsePath(string(op.Path)); err != nil {
-			return fiber.NewError(fiber.StatusUnprocessableEntity,
-				fmt.Sprintf("operation %d: %s", i+1, err))
-		}
-	}
-
 	actor := cvedit.ActorCandidate
 	if auth.ViaAPIKey(c) {
 		actor = cvedit.ActorAgent

@@ -176,9 +176,11 @@ type ListOrphanedApplicationsRow struct {
 //
 // Takes OFFSET as well as LIMIT so a caller paging the merged board (ListInteractions)
 // can advance past the first page of orphans instead of re-reading the same top-N rows
-// on every page — the query alone cannot fix that, since ListInteractions decides how
-// much of the requested (limit, offset) window belongs to the posting-backed rows
-// versus the orphaned ones.
+// on every page. The query alone cannot fix that: ListInteractions is what divides the
+// requested (limit, offset) window between the posting-backed rows and these — it asks
+// for what the posting-backed page left over, at the offset that page ended on, and does
+// not ask at all when the page is already full. It handed the same window to both until
+// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 func (q *Queries) ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error) {
 	rows, err := q.db.Query(ctx, listOrphanedApplications, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {

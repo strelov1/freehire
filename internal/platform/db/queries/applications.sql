@@ -54,9 +54,11 @@ UPDATE emails e
 --
 -- Takes OFFSET as well as LIMIT so a caller paging the merged board (ListInteractions)
 -- can advance past the first page of orphans instead of re-reading the same top-N rows
--- on every page — the query alone cannot fix that, since ListInteractions decides how
--- much of the requested (limit, offset) window belongs to the posting-backed rows
--- versus the orphaned ones.
+-- on every page. The query alone cannot fix that: ListInteractions is what divides the
+-- requested (limit, offset) window between the posting-backed rows and these — it asks
+-- for what the posting-backed page left over, at the offset that page ended on, and does
+-- not ask at all when the page is already full. It handed the same window to both until
+-- 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
        (SELECT count(*)
           FROM emails e

@@ -47,6 +47,18 @@ Four packages split this surface — keep the split:
   email verification and a pending password reset never overwrite each other. TTL 15 min,
   5 wrong guesses, 60 s resend cooldown.
 - `ErrInvalidCode` deliberately covers wrong / consumed / burnt without distinguishing them.
+- **Every code flow runs in a transaction, and the pool that opens it is a REQUIRED
+  constructor argument.** The five-attempt limit is enforced by reading the outstanding code
+  `FOR UPDATE` and writing under that lock, and a reset is "spend the code + write the
+  password + bump `token_version`" or nothing. `NewQueriesCodeStore` took the pool
+  *variadically* until 2026-09-06, so `Begin` could answer `(nil, nil)` and the service
+  carried eight `if tx != nil` branches to tolerate it — which made both guarantees a
+  property of the construction. It has already shipped that way once (`a55cc537`: both call
+  sites omitted the pool, so none of it ever ran). `TestNewQueriesCodeStoreRequiresThePool`
+  pins the signature, because the wrong construction has no runtime shape to assert on.
+- **A failed guess commits.** `ConfirmVerification` and `ResetPassword` commit the
+  transaction on `ErrInvalidCode` before returning it: the bumped attempt counter is what
+  bounds guessing, and rolling it back with the refusal would make the limit unreachable.
 - OAuth callbacks race: `ResolveOAuthAccount` handles both `ErrIdentityConflict` (same
   identity, concurrent callback) and `ErrEmailRace` (different identity, same verified
   email) by retrying rather than failing. Both paths are unit-tested — preserve them if you

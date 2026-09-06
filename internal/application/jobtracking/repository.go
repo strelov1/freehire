@@ -301,6 +301,15 @@ func applicationInteraction(jobID pgtype.Int8, appliedAt pgtype.Timestamptz, sta
 
 // ListInteractions returns the caller's interactions joined with the jobs in the
 // canonical jobview shape, narrowed by the already-validated filter.
+//
+// (limit, offset) addresses ONE window over the merged list — the posting-backed rows
+// first, the orphaned applications after them — and the two queries divide that window
+// between themselves. Handing the same (limit, offset) to both, which is what this did
+// until 2026-09-06, is not a merge: a client walking by response length (the SPA's own
+// Paginator does exactly that) got 2*limit rows on the first page, jumped past the window
+// it never received, and never saw those rows at all; past the posting-backed total it got
+// an empty page under a meta.total that says there is more, which is a loop that does not
+// terminate.
 func (r *QueriesRepository) ListInteractions(
 	ctx context.Context,
 	userID int64,
@@ -365,29 +374,87 @@ func (r *QueriesRepository) ListInteractions(
 	// so they are read separately and merged here. Only the board and applied views owe
 	// them: a pruned application was never a view or a bookmark.
 	if filter == FilterBoard || filter == FilterApplied || filter == FilterAll {
-		orphans, err := r.q.ListOrphanedApplications(ctx, db.ListOrphanedApplicationsParams{
-			UserID: userID, Limit: limit, Offset: offset,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, o := range orphans {
-			items = append(items, TrackedJob{
-				ID:          "a" + strconv.FormatInt(o.ID, 10),
-				CompanySlug: o.CompanySlug,
-				RoleTitle:   o.RoleTitle,
-				Interaction: Interaction{
-					AppliedAt: pgconv.TimePtr(o.AppliedAt),
-					Stage:     textPtr(o.Stage),
-					Notes:     textPtr(o.Notes),
-				},
-				EmailCount:     int(o.EmailCount),
-				LastActivityAt: pgconv.TimePtr(o.LastActivityAt),
-				FollowedUpAt:   pgconv.TimePtr(o.FollowedUpAt),
+		orphanLimit := limit - int32(len(items))
+		if orphanLimit > 0 {
+			orphanOffset, err := r.orphanOffset(ctx, userID, filter, offset, len(items))
+			if err != nil {
+				return nil, err
+			}
+			orphans, err := r.q.ListOrphanedApplications(ctx, db.ListOrphanedApplicationsParams{
+				UserID: userID, Limit: orphanLimit, Offset: orphanOffset,
 			})
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, orphanedTracked(orphans)...)
 		}
 	}
 	return items, nil
+}
+
+// orphanOffset says how far into the orphaned applications this page's remainder starts:
+// the requested offset less the number of posting-backed rows the filter has in total,
+// floored at zero.
+//
+// That total is usually already in hand and costs nothing. A page that returned any
+// posting-backed row at all reached the end of them at offset+fetched, so the orphans
+// begin at zero; only a page that came back EMPTY at a non-zero offset has to ask, and it
+// asks the same aggregate CountInteractions reads, under the same filter, so the boundary
+// the list draws and the boundary the count implies cannot disagree.
+func (r *QueriesRepository) orphanOffset(
+	ctx context.Context,
+	userID int64,
+	filter Filter,
+	offset int32,
+	fetched int,
+) (int32, error) {
+	if offset == 0 || fetched > 0 {
+		return 0, nil
+	}
+	row, err := r.q.CountUserJobs(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	return max(0, offset-int32(postingBackedCount(row, filter))), nil
+}
+
+// postingBackedCount picks the CountUserJobs column matching the ListUserJobs filter.
+// "viewed" and "dismissed" never reach here (their views carry no orphans), and an
+// unrecognised filter reads as zero rather than as a guess.
+func postingBackedCount(row db.CountUserJobsRow, filter Filter) int64 {
+	switch filter {
+	case FilterAll:
+		return row.All
+	case FilterApplied:
+		return row.Applied
+	case FilterBoard:
+		return row.Board
+	default:
+		return 0
+	}
+}
+
+// orphanedTracked projects orphaned application rows onto the shared card shape. They
+// carry no Job: there is no posting left to describe, which is why the employer and the
+// role title were copied onto the application record in the first place.
+func orphanedTracked(orphans []db.ListOrphanedApplicationsRow) []TrackedJob {
+	items := make([]TrackedJob, 0, len(orphans))
+	for _, o := range orphans {
+		items = append(items, TrackedJob{
+			ID:          "a" + strconv.FormatInt(o.ID, 10),
+			CompanySlug: o.CompanySlug,
+			RoleTitle:   o.RoleTitle,
+			Interaction: Interaction{
+				AppliedAt: pgconv.TimePtr(o.AppliedAt),
+				Stage:     textPtr(o.Stage),
+				Notes:     textPtr(o.Notes),
+			},
+			EmailCount:     int(o.EmailCount),
+			LastActivityAt: pgconv.TimePtr(o.LastActivityAt),
+			FollowedUpAt:   pgconv.TimePtr(o.FollowedUpAt),
+		})
+	}
+	return items
 }
 
 // CountInteractions returns the per-filter counts for the caller in one pass.

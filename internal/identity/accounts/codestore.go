@@ -21,12 +21,15 @@ type QueriesCodeStore struct {
 }
 
 // NewQueriesCodeStore constructs a QueriesCodeStore.
-func NewQueriesCodeStore(q *db.Queries, pool ...*pgxpool.Pool) *QueriesCodeStore {
-	var p *pgxpool.Pool
-	if len(pool) > 0 {
-		p = pool[0]
-	}
-	return &QueriesCodeStore{q: q, pool: p}
+//
+// The pool is REQUIRED, and was variadic until 2026-09-06. That made the five-attempt
+// limit's FOR UPDATE serialisation, and the atomicity of "spend the code, write the
+// password, bump token_version", properties of how the object had been constructed rather
+// than of the code: Begin returned (nil, nil) without one and the service tolerated it in
+// eight places. It has already shipped that way once — a55cc537 records both call sites
+// omitting the pool, so none of it ever ran in production.
+func NewQueriesCodeStore(q *db.Queries, pool *pgxpool.Pool) *QueriesCodeStore {
+	return &QueriesCodeStore{q: q, pool: pool}
 }
 
 // Compile-time assertion that QueriesCodeStore satisfies CodeStore.
@@ -34,9 +37,6 @@ var _ CodeStore = (*QueriesCodeStore)(nil)
 
 // WithTx returns a transactional copy of QueriesCodeStore.
 func (s *QueriesCodeStore) WithTx(tx pgx.Tx) CodeStore {
-	if tx == nil {
-		return s
-	}
 	return &QueriesCodeStore{
 		q:    s.q.WithTx(tx),
 		pool: s.pool,
@@ -45,9 +45,6 @@ func (s *QueriesCodeStore) WithTx(tx pgx.Tx) CodeStore {
 
 // Begin opens a new database transaction using the underlying pool.
 func (s *QueriesCodeStore) Begin(ctx context.Context) (pgx.Tx, error) {
-	if s.pool == nil {
-		return nil, nil
-	}
 	return s.pool.Begin(ctx)
 }
 

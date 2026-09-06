@@ -24,7 +24,13 @@ const ListCapCode = "bullet_cap"
 // index is unsafe: Sanitize also drops empty experience/project rows, which
 // shifts later roles and looks like bullet loss.
 // Dropping whitespace-only bullets is allowed — that is cleanup, not content loss.
-func refuseIfSanitizeDropsContent(applied, _ State) error {
+//
+// It reads ONE document — the pre-Sanitize one — and takes no second state, though it
+// carried an unread `after` parameter until 2026-09-06. The parameter was the lie: it
+// said the guard compares before with after, and the two callers passed different
+// nonsense (`after`, and `State{}`) at the exact place where the guard-versus-Sanitize
+// order is what makes CommitDocument's check work at all.
+func refuseIfSanitizeDropsContent(applied State) error {
 	for i, e := range applied.Experience {
 		if countNonEmpty(e.Bullets) > cv.MaxBullets {
 			return listCapErr(experienceLabel(e, i))

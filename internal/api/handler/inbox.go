@@ -188,8 +188,13 @@ func (h *inboxHandlers) GetEmail(c *fiber.Ctx) error {
 }
 
 // MarkAllReadInbox marks every unread message matching the caller's active
-// filters (source/status/search) as read and reports how many it marked. The
-// unread filter is implicit — the query only ever touches unread rows.
+// filters as read and reports how many it marked. The unread filter is implicit —
+// the query only ever touches unread rows.
+//
+// Every filter parseInboxQuery reads is passed on, because "mark all read" means the page
+// in front of the caller and there is no undo. `include_other` goes through ShowsOther for
+// the same reason the listing does: `?status=other` is a request FOR that label, and
+// passing IncludeOther raw would mark nothing.
 func (h *inboxHandlers) MarkAllReadInbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -201,6 +206,7 @@ func (h *inboxHandlers) MarkAllReadInbox(c *fiber.Ctx) error {
 	}
 	marked, err := h.queries.MarkAllEmailsRead(c.Context(), db.MarkAllEmailsReadParams{
 		UserID: userID, Src: q.Source, Status: q.Status, Q: q.Q, Link: q.Link,
+		Unclassified: q.Unclassified, IncludeOther: q.ShowsOther(),
 	})
 	if err != nil {
 		return err

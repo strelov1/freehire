@@ -18,7 +18,28 @@ type Querier interface {
 	// Add a job to a list. Idempotent: re-adding an already-present job changes nothing.
 	AddJobListItem(ctx context.Context, arg AddJobListItemParams) error
 	// Move an application forward to a new stage (the worker only calls this after
-	// checking the transition is strictly forward and high-confidence).
+	// checking the transition is strictly forward and high-confidence), and record the
+	// transition in the ledger under the same predicate that moves the column — exactly as
+	// TrackJob and TrackApplicationByID do it.
+	//
+	// It was a bare UPDATE until 2026-09-06, so the mail path was the one stage-writer that
+	// moved an application and recorded nothing. The consequence is not an incomplete
+	// history: ListInterviewPrepCandidates selects `kind='stage_set' AND signal='interview'`
+	// and nothing else, so cmd/nudge found no candidate an employer's own invitation had
+	// produced. Worse, jobtracking.SuggestStage returns nil once the stage already matches
+	// what the mail implies — so after an auto-advance there was nothing to click either, and
+	// the interview-prep nudge simply did not exist for the mailbox-connected users it was
+	// built for.
+	//
+	// occurred_at is the MESSAGE's received_at, read here rather than passed, for the reason
+	// RecordEmailApplicationEvent gives: now() would compress a year of imported history into
+	// the day a mailbox was connected, and LastStageSetAt silences a stage suggestion older
+	// than it — so an import would silence every suggestion at once.
+	//
+	// `prior` reads the pre-update value, so an advance that lands on the stage the row
+	// already carries records nothing; the ledger holds transitions.
+	// job_id and company_slug come off the application, like TrackApplicationByID: the row is
+	// the application, and the employer is denormalised on it.
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
 	// Persist an agent-produced verdict for one message, scoped to the caller (0 rows
 	// when the message is not theirs → 404). This is SetEmailClassification's sibling:
@@ -2352,6 +2373,14 @@ type Querier interface {
 	//
 	// Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
 	// predicate.
+	//
+	// MAIL-SOURCED events are excluded too, because since 2026-09-06 the mail path records its
+	// own auto-advances here and this read has to keep meaning what it says. A mail-derived
+	// event silencing a mail-derived suggestion is circular: both are computed from the same
+	// messages, and the auto-advance is precisely the case where the candidate has NOT been
+	// asked yet. `system` stays in — an auto-expire is a decision about the application, not a
+	// reading of a message. The caller passes appevent's own vocabulary, so the exclusion
+	// cannot drift from the sources the writers use.
 	LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error)
 	// Queries behind the daily social digest (internal/engage/socialdigest, cmd/social-digest).
 	//
@@ -3022,9 +3051,11 @@ type Querier interface {
 	//
 	// Takes OFFSET as well as LIMIT so a caller paging the merged board (ListInteractions)
 	// can advance past the first page of orphans instead of re-reading the same top-N rows
-	// on every page — the query alone cannot fix that, since ListInteractions decides how
-	// much of the requested (limit, offset) window belongs to the posting-backed rows
-	// versus the orphaned ones.
+	// on every page. The query alone cannot fix that: ListInteractions is what divides the
+	// requested (limit, offset) window between the posting-backed rows and these — it asks
+	// for what the posting-backed page left over, at the offset that page ended on, and does
+	// not ask at all when the page is already full. It handed the same window to both until
+	// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
@@ -3338,6 +3369,13 @@ type Querier interface {
 	// Bulk mark-as-read for the caller, honoring the same optional filters as the
 	// listing, so "mark all read" means "everything currently shown". Only unread,
 	// live rows are touched; returns how many it marked.
+	//
+	// ALL SIX of ListEmails' filters, not four. It carried neither `unclassified` nor
+	// `include_other` until 2026-09-06 while the handler parsed and validated both, so
+	// `read-all?unclassified=1` — the triage queue's own button — emptied the whole unread
+	// mailbox instead of the page in front of the person pressing it. There is no undo.
+	// TestMarkAllEmailsReadTakesEveryListingFilter pins the two parameter sets against each
+	// other, since the failure is a filter that is simply absent and nothing refuses it.
 	MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error)
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.

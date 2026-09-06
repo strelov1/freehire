@@ -69,6 +69,11 @@ type StoredCode struct {
 }
 
 // CodeStore persists at most one outstanding code per (user, purpose).
+//
+// Begin must return a REAL transaction. Every code path here reads the outstanding code
+// FOR UPDATE and writes under that lock, which is what bounds guessing to five attempts
+// and what makes "spend the code and reset the password" one act; an implementation that
+// answered (nil, nil) would turn both into properties of how the store was built.
 type CodeStore interface {
 	UpsertCode(ctx context.Context, userID int64, purpose, codeHash string, expiresAt time.Time) error
 	Code(ctx context.Context, userID int64, purpose string) (StoredCode, error)
@@ -115,9 +120,7 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (
 	if err != nil {
 		return "", err
 	}
-	if tx != nil {
-		defer func() { _ = tx.Rollback(ctx) }()
-	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	store := s.codes.WithTx(tx)
 
 	existing, err := store.GetEmailCodeForUpdate(ctx, userID, purpose)
@@ -141,10 +144,8 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (
 	if err := store.UpsertCode(ctx, userID, purpose, hash, s.now().Add(codeTTL)); err != nil {
 		return "", err
 	}
-	if tx != nil {
-		if err := tx.Commit(ctx); err != nil {
-			return "", err
-		}
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
 	}
 	return code, nil
 }
@@ -198,15 +199,15 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 	if err != nil {
 		return err
 	}
-	if tx != nil {
-		defer func() { _ = tx.Rollback(ctx) }()
-	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	txStore := s.codes.WithTx(tx)
 	txRepo := s.repo.WithTx(tx)
 
 	consumeErr := s.consumeCodeTx(ctx, txStore, userID, PurposeVerifyEmail, code)
 	if consumeErr != nil {
-		if tx != nil && errors.Is(consumeErr, ErrInvalidCode) {
+		if errors.Is(consumeErr, ErrInvalidCode) {
+			// The failed guess is kept: the attempt counter is what bounds guessing, and
+			// rolling it back with the refusal would make the five-attempt limit unreachable.
 			_ = tx.Commit(ctx)
 		}
 		return consumeErr
@@ -216,12 +217,7 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 		return err
 	}
 
-	if tx != nil {
-		if err := tx.Commit(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 // sendVerificationOnRegister mails the new account's first code, best-effort: a mail

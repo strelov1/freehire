@@ -190,12 +190,16 @@ type Query struct {
 	Offset       int
 }
 
-// showsOther reports whether this query wants the mail the default omits.
+// ShowsOther reports whether this query wants the mail the default omits.
 //
 // Asking FOR the label is asking for it. Without this, `?status=other` and the hide default
 // cancel each other out and the filter returns an empty page — a filter that answers
 // "nothing" to its own subject is worse than one that does not exist.
-func (q Query) showsOther() bool { return q.IncludeOther || q.Status == "other" }
+//
+// Exported alongside Validate, and for the same caller: marking a filtered page read is a
+// different statement over the same filters, and it has to read `other` the same way or
+// `read-all?status=other` marks nothing.
+func (q Query) ShowsOther() bool { return q.IncludeOther || q.Status == "other" }
 
 // Validate checks the filters against their controlled vocabularies. Search calls
 // it; it is exported for the one caller that reuses the same filters for a
@@ -246,7 +250,7 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 	rows, err := s.q.ListEmails(ctx, db.ListEmailsParams{
 		UserID: userID, Src: q.Source, Unread: q.Unread, Status: q.Status, Q: q.Q,
 		Unclassified: q.Unclassified, Link: q.Link, WithBody: q.WithBody,
-		IncludeOther: q.showsOther(),
+		IncludeOther: q.ShowsOther(),
 		Lim:          int32(limit), Off: int32(max(q.Offset, 0)),
 	})
 	if err != nil {
@@ -254,7 +258,7 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 	}
 	counts, err := s.q.CountEmails(ctx, db.CountEmailsParams{
 		UserID: userID, Src: q.Source, Unread: q.Unread, Status: q.Status, Q: q.Q,
-		Unclassified: q.Unclassified, Link: q.Link, IncludeOther: q.showsOther(),
+		Unclassified: q.Unclassified, Link: q.Link, IncludeOther: q.ShowsOther(),
 	})
 	if err != nil {
 		return Page{}, err

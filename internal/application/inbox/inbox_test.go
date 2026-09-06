@@ -158,8 +158,8 @@ func TestAskingForOtherOverridesTheDefault(t *testing.T) {
 		"asking for it all": {IncludeOther: true},
 	} {
 		want := name == "asking for other" || name == "asking for it all"
-		if got := q.showsOther(); got != want {
-			t.Errorf("%s: showsOther() = %v, want %v", name, got, want)
+		if got := q.ShowsOther(); got != want {
+			t.Errorf("%s: ShowsOther() = %v, want %v", name, got, want)
 		}
 	}
 }

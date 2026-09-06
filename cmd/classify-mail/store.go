@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/maillink"
@@ -133,10 +134,20 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 		return fmt.Errorf("set classification: %w", err)
 	}
 	if r.AdvanceStageTo != "" {
+		// The move records a stage_set event beside the column, dated by the message's own
+		// received_at and attributed to the mailbox that carried it — the same provenance
+		// ReconcileMailEvent derives below, from the same field, through the same refusal
+		// for an unrecognised store.
+		source, err := appevent.SourceForMail(r.MailSource)
+		if err != nil {
+			return fmt.Errorf("advance stage: %w", err)
+		}
 		if err := qtx.AdvanceUserJobStage(ctx, db.AdvanceUserJobStageParams{
-			UserID: userID,
-			JobID:  r.JobID,
-			Stage:  r.AdvanceStageTo,
+			UserID:      userID,
+			JobID:       r.JobID,
+			Stage:       r.AdvanceStageTo,
+			EmailID:     r.EmailID,
+			EventSource: source,
 		}); err != nil {
 			return fmt.Errorf("advance stage: %w", err)
 		}

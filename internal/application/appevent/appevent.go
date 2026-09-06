@@ -61,6 +61,15 @@ const (
 // Sources is the canonical, ordered source vocabulary.
 var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant, SourceCalendarGoogle, SourceSystem}
 
+// MailSources is the mail three on their own — every source SourceForMail can return.
+//
+// It exists because a reader has to be able to ask "was this event read out of a message,
+// or set by somebody". LastStageSetAt does: it means "when the stage was last set other
+// than by mail", and since the mail path records its own auto-advances that is a predicate
+// rather than a description. Spelling the three into a query would put the vocabulary in
+// two places, which is the failure the pin test next door already guards against.
+var MailSources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal}
+
 // ValidSource reports whether s is a known event source.
 func ValidSource(s string) bool {
 	for _, src := range Sources {

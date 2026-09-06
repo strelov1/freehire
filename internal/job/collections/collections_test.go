@@ -509,8 +509,10 @@ func TestEasternRoots_EmbeddedDatasetResolves(t *testing.T) {
 	if len(records) < 50 {
 		t.Errorf("eastern-roots slugs = %d, want a substantial list", len(records))
 	}
-	// The embedded slugs must be canonical (Match normalizes them, but a
-	// non-canonical entry signals a bad edit to the committed file).
+	// The embedded slugs must be canonical (Collection.Members normalizes them, but a
+	// non-canonical entry signals a bad edit to the committed file). This is the URL-key
+	// axis; TestHandListSlugsAreCompanySlugStable covers the same file on the
+	// company-key axis, which is the one matching actually uses.
 	for _, r := range records {
 		if got := normalize.Slug(r.Name); got != r.Name {
 			t.Errorf("non-canonical slug %q (normalizes to %q)", r.Name, got)

@@ -68,12 +68,15 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 		return Message{}, ErrNotFound
 	}
 
-	if jobID.Valid {
-		s.advanceStage(ctx, userID, jobID.Int64, mailclassify.StatusSignal(v.Signal))
-	}
 	msg, err := s.Get(ctx, userID, id)
 	if err != nil {
 		return Message{}, err
+	}
+	// The stage move is dated and attributed by the message that implies it, so it needs
+	// that message's own store — which is why it is made after the read the response is
+	// built from rather than before it. Nothing the advance does changes what was read.
+	if jobID.Valid {
+		s.advanceStage(ctx, userID, jobID.Int64, id, msg.Source, mailclassify.StatusSignal(v.Signal))
 	}
 	// Triage writes status, link and provenance in one update rather than going through
 	// mutate, so it needs its own reconcile. It is the same call, deliberately: a triage
@@ -201,7 +204,10 @@ func (s *Service) syncLedger(ctx context.Context, userID, id int64, mailSource s
 // progress, by the same monotonic-forward rules the classification worker uses. It
 // is best-effort: the verdict is already durable, and a failed advance must not
 // fail the triage the caller successfully recorded.
-func (s *Service) advanceStage(ctx context.Context, userID, jobID int64, sig mailclassify.StatusSignal) {
+//
+// emailID and mailSource are what the ledger event the write records is dated and
+// attributed by — the message is the evidence for the move, so it is what the event names.
+func (s *Service) advanceStage(ctx context.Context, userID, jobID, emailID int64, mailSource string, sig mailclassify.StatusSignal) {
 	current, err := s.q.GetUserJobStage(ctx, db.GetUserJobStageParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		// No application row means the caller linked mail to a job they do not
@@ -220,8 +226,16 @@ func (s *Service) advanceStage(ctx context.Context, userID, jobID int64, sig mai
 	if !ok {
 		return
 	}
+	source, err := appevent.SourceForMail(mailSource)
+	if err != nil {
+		// An unrecognised store must not be stamped as an observed one — the same refusal
+		// ReconcileMailEvent makes. Without a provenance the move cannot be recorded, and a
+		// move recorded nowhere is what this whole change is fixing, so it is not made.
+		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID, err)
+		return
+	}
 	err = s.q.AdvanceUserJobStage(ctx, db.AdvanceUserJobStageParams{
-		UserID: userID, JobID: jobID, Stage: next,
+		UserID: userID, JobID: jobID, Stage: next, EmailID: emailID, EventSource: source,
 	})
 	if err != nil {
 		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID, err)

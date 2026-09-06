@@ -32,6 +32,9 @@ type fakeQueries struct {
 	triaged    int
 	stage      string
 	advancedTo string
+	// lastAdvance is the whole advance call, so a test can assert on the ledger fact it
+	// carries — which message dated the move and which mailbox observed it.
+	lastAdvance db.AdvanceUserJobStageParams
 	// synced records the ledger reconciles asked for, so a test can assert that every
 	// link mutation ends with one.
 	synced   []db.RecordEmailApplicationEventParams
@@ -121,5 +124,6 @@ func (f *fakeQueries) AdvanceUserJobStage(_ context.Context, arg db.AdvanceUserJ
 		return f.advanceErr
 	}
 	f.advancedTo = arg.Stage
+	f.lastAdvance = arg
 	return nil
 }

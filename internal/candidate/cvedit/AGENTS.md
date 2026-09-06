@@ -15,6 +15,16 @@ vocabulary drifts, and `set_stack` once went missing from a tool schema for a re
 enumerates the shapes from the same reflection, and that is what the model's schema is
 generated from — so schema and struct cannot disagree.
 
+**`Editor.authorize` runs `ParsePath` over every op, so an entry point cannot forget to.**
+`Path` is a bare string, and everything past authorize trusts it: the EMPTY path addresses
+the whole `State`, which the policy admits to the agent because `pathTouches("",
+"header.email")` is false in both directions — a `set` on it replaces the contact block the
+policy exists to deny — and a negative index parses to no steps at all, so `resolveList`
+reads `steps[len-1]` and takes the process down. Three entry points ran the loop themselves
+until 2026-09-06 and a fourth would not have; the argument is `CommitDocument`'s, which
+refuses `ActorAgent` outright rather than trusting every future caller. A refusal wraps
+`ErrInvalidOp`, which `mapCVError` already renders as a 422 carrying the reason.
+
 The paths address `State`, which is the document plus the two columns the candidate edits
 beside it. `agent_session_id`, `autopilot_report` and the copy's identity are deliberately
 outside it: nobody edited them, and they would read as nonsense in a feed of edits.

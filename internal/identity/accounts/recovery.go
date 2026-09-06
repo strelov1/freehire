@@ -75,15 +75,15 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	if err != nil {
 		return err
 	}
-	if tx != nil {
-		defer func() { _ = tx.Rollback(ctx) }()
-	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	txStore := s.codes.WithTx(tx)
 	txRepo := s.repo.WithTx(tx)
 
 	consumeErr := s.consumeCodeTx(ctx, txStore, user.ID, PurposeResetPassword, code)
 	if consumeErr != nil {
-		if tx != nil && errors.Is(consumeErr, ErrInvalidCode) {
+		if errors.Is(consumeErr, ErrInvalidCode) {
+			// The failed guess is kept: the attempt counter is what bounds guessing, and
+			// rolling it back with the refusal would make the five-attempt limit unreachable.
 			_ = tx.Commit(ctx)
 		}
 		return consumeErr
@@ -93,12 +93,7 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 		return err
 	}
 
-	if tx != nil {
-		if err := tx.Commit(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 // ChangePassword replaces a known password. It returns the account's new session
