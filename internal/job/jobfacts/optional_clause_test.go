@@ -98,3 +98,18 @@ func TestACoordinatedRequirementIsLostWithItsClause(t *testing.T) {
 		t.Errorf("RequiredCertifications = %v, want [cisa]", got)
 	}
 }
+
+// The whole point of the fix is a posting whose preferred section sits beside a real
+// requirement — which is also the only shape that gets re-rendered. If the re-render
+// re-escapes the requirement's text, the fix silently costs the fact it was meant to
+// protect. Prod rows found this; nothing here did.
+func TestARequirementSurvivesTheRenderItsPreferredSectionForces(t *testing.T) {
+	const preferred = `<h3>Nice to have</h3><ul><li>Kubernetes, a PMP</li></ul>`
+	if got := EducationLevel(`<h3>Requirements</h3><p>Bachelor's degree required.</p>` + preferred); got != "bachelor" {
+		t.Errorf("EducationLevel = %q, want %q", got, "bachelor")
+	}
+	got := RequiredCertifications(`<h3>Requirements</h3><p>A commercial driver's license.</p>` + preferred)
+	if len(got) != 1 || got[0] != "cdl" {
+		t.Errorf("RequiredCertifications = %v, want [cdl]", got)
+	}
+}

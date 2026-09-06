@@ -93,8 +93,25 @@ func MaskPreferred(descriptionHTML string) string {
 	if err := xhtml.Render(&b, doc); err != nil {
 		return descriptionHTML
 	}
-	return b.String()
+	return restoreLiterals.Replace(b.String())
 }
+
+// restoreLiterals undoes the escaping the re-render ADDS. A description carries an
+// apostrophe, a quote and often a bare ">" as literal characters; x/net/html escapes
+// all three on the way out, and the matchers reading this text see `bachelor&#39;s`,
+// which their vocabulary does not contain. That broke exactly the postings this masker
+// exists for — only a posting WITH a preferred section is re-rendered at all — and
+// every unit test stayed green, because none of them spelled a degree with an
+// apostrophe inside a document that had a preferred section.
+//
+// `&amp;` and `&lt;` are deliberately not here: those are escapes the SOURCE already
+// wrote, which the parser decoded and the renderer restored. Undoing them would not be
+// a round trip, it would be a change.
+var restoreLiterals = strings.NewReplacer(
+	"&#39;", "'",
+	"&#34;", `"`,
+	"&gt;", ">",
+)
 
 // openSection expresses the walk's boolean state in headingDecision's vocabulary, so
 // the two callers share one decision function rather than one of them re-deciding

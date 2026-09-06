@@ -85,3 +85,37 @@ func TestMaskPreferredLeavesAnUnaffectedDescriptionByteIdentical(t *testing.T) {
 		}
 	}
 }
+
+// Re-rendering a parsed document is not a no-op on its TEXT: x/net/html escapes an
+// apostrophe, a quote and a bare ">" that the description carried literally. The
+// matchers downstream read that text, and `bachelor's` spelled `bachelor&#39;s` matches
+// nothing — which broke exactly the postings this masker exists for, since only a
+// posting WITH a preferred section is ever re-rendered. Found against prod rows, not
+// here: every unit test was green.
+func TestMaskPreferredDoesNotReescapeText(t *testing.T) {
+	const preferredSection = `<h3>Nice to have</h3><p>Kubernetes.</p>`
+	cases := []struct{ name, html, want string }{
+		{
+			name: "apostrophe",
+			html: `<h3>Requirements</h3><p>Bachelor's degree required.</p>` + preferredSection,
+			want: `Bachelor's degree required.`,
+		},
+		{
+			name: "quotes and a bare greater-than",
+			html: `<h3>Requirements</h3><p>A "senior" engineer, 5 > 3 years.</p>` + preferredSection,
+			want: `A "senior" engineer, 5 > 3 years.`,
+		},
+		{
+			name: "an ampersand the source already escaped stays escaped",
+			html: `<h3>Requirements</h3><p>R&amp;D experience.</p>` + preferredSection,
+			want: `R&amp;D experience.`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MaskPreferred(tc.html); !strings.Contains(got, tc.want) {
+				t.Errorf("MaskPreferred did not preserve %q; got %q", tc.want, got)
+			}
+		})
+	}
+}
