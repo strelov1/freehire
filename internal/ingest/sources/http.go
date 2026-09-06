@@ -261,6 +261,23 @@ func newClientWithProxy(proxy *url.URL) *Client {
 	}
 }
 
+// NewSingleUseConnClient builds a client that dials a fresh connection per request, for a
+// platform whose server mishandles one it has already answered on. It is exposed for host
+// tools (harvest-boards' Profession prober, which reads the same sitemaps the crawl does
+// and hits the same wall).
+//
+// Everything else about it is NewClient: same guard, same User-Agent, same retry budget.
+// See safehttp.NewTransportWithoutKeepAlive for what the failure looks like and why a
+// truncated body makes it worth a dedicated client rather than a retry.
+func NewSingleUseConnClient() *Client { return newSingleUseConnClient() }
+
+func newSingleUseConnClient() *Client {
+	c := newClientWithProxy(nil)
+	c.httpClient = safehttp.NewClientWithoutKeepAlive(15 * time.Second)
+	c.streamClient = safehttp.NewClientWithoutKeepAlive(streamTimeout)
+	return c
+}
+
 // NewCookieClient exposes newCookieClient to host tools (e.g. harvest-boards' Taleo
 // prober, which reuses the session-bound Taleo adapter to validate a board).
 func NewCookieClient() *Client { return newCookieClient() }

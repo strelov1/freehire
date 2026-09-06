@@ -324,7 +324,10 @@ func All(c HTTPClient) map[string]Source {
 		// by the platform's own category sitemap (board) and hydrating each posting page.
 		// The board is a category and not an employer on purpose — the two IT categories
 		// are the technical slice of a general-population board. See profession.go.
-		NewProfession(c),
+		// It gets a client of its own: the platform mishandles a connection it has
+		// already answered on, which fails the crawl outright and — worse — sometimes
+		// answers with a truncated sitemap instead. See singleUseConnSource.
+		singleUseConnSource(c, NewProfession),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
@@ -448,6 +451,25 @@ func cookieSessionSource[T any](c HTTPClient, build func(T) Source) Source {
 		return build(zero)
 	}
 	return build(any(newCookieClient()).(T))
+}
+
+// singleUseConnSource builds a registry entry for an adapter whose platform mishandles a
+// reused HTTP connection (profession) and so cannot share the pooled client. It mirrors
+// cookieSessionSource exactly, including its nil-transport case: on the taxonomy path
+// (c == nil) it hands build a true nil, since T is an interface type parameter whose zero
+// value is nil and Provider()/marker assertions never touch it.
+//
+// The failure it answers is worth stating, because it does not present as a transport
+// problem: over a pooled connection the platform answers the first request or two and then
+// returns a bare EOF, and one of the answers it does give can be a truncated body — a
+// sitemap that parses cleanly as a much shorter one. Pacing does not help and a retry
+// cannot, since the retry reuses the same pool.
+func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
+	if c == nil {
+		var zero T
+		return build(zero)
+	}
+	return build(any(newSingleUseConnClient()).(T))
 }
 
 // reg indexes sources by provider key. A duplicate key means two adapters claim the
