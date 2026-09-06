@@ -13,3 +13,11 @@ strictDepBuilds: false
 # arbitrary local .map files. Pulled in transitively by vite (Storybook builder).
 overrides:
   postcss@<8.5.23: 8.5.23
+  # The same floor web/pnpm-workspace.yaml carries and for the same nine
+  # advisories, two critical — see that file for which ones and why the bump is
+  # a floor inside jsdom's own ^8.9.0 range rather than a version it has not
+  # seen. Reached here through vitest's jsdom environment, so it is a test-time
+  # dependency; the pin is here anyway because snyk scans this package
+  # separately and a dependency this component ships with should not read as
+  # vulnerable on its own terms.
+  undici@<8.10.2: 8.10.2
