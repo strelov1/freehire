@@ -370,6 +370,24 @@ func TestQueryModeRowsAreConfigured(t *testing.T) {
 	}
 }
 
+// A host whose mode this package has not been taught to read must be DECLINED, not read by
+// whichever rule happens to sit last. The first-path-segment rule used to be that fallback,
+// so a platform added with a new mode — one whose board is a query parameter, a host label,
+// or anything else — would have had the vendor's own leading path segment taken as a tenant:
+// a board that does not exist, which the contribution flow records and pays for.
+func TestRecognizeDeclinesAModeItCannotRead(t *testing.T) {
+	original := atsBoards
+	t.Cleanup(func() { atsBoards = original })
+	atsBoards = append(append([]struct{ host, source, mode string }(nil), original...),
+		struct{ host, source, mode string }{"jobs.notyetsupported.test", "notyetsupported", "amodenobodywrote"})
+
+	raw := "https://jobs.notyetsupported.test/careers/acme/job/1"
+	if src, board, canonical, ok := Recognize(raw); ok {
+		t.Errorf("Recognize(%q) = (%q, %q, %q, ok=true), want declined — no rule reads this mode",
+			raw, src, board, canonical)
+	}
+}
+
 // TestRecognizeReturnsTheBoardTheBoardFileStores pins the extraction of the six platforms added
 // most recently against boards copied VERBATIM out of the shipped sources/<provider>.yml, one
 // per board-id shape each file contains.

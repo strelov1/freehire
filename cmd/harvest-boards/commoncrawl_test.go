@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 func TestCommonCrawlSlugFromURL(t *testing.T) {
@@ -79,6 +81,49 @@ func TestCommonCrawlCandidatesMergesAcrossSnapshotsAndDedupes(t *testing.T) {
 	want := []string{"acme", "beta"}
 	if !slices.Equal(got, want) {
 		t.Errorf("commonCrawlCandidates = %v, want %v", got, want)
+	}
+}
+
+// truncatedTextGetter answers one URL the way the real client answers a CDX page past
+// GetText's size cap: the bytes read before the cut, and a *BodyTooLargeError naming it.
+type truncatedTextGetter struct {
+	fakeGetter
+	url string
+}
+
+func (t truncatedTextGetter) GetText(ctx context.Context, url string) (string, error) {
+	body, err := t.fakeGetter.GetText(ctx, url)
+	if url == t.url && err == nil {
+		return body, &sources.BodyTooLargeError{URL: url, Limit: 2 << 20}
+	}
+	return body, err
+}
+
+// A CDX page past the cap keeps its complete records. GetText now reports truncation
+// instead of silently returning a short body, and this sweep is the one caller that can
+// still use one: the page is JSON-lines, so every record before the cut stands alone.
+// Treating it as a failed fetch would throw away real candidates — and, when it is the
+// snapshot's only page, count the whole snapshot as failed.
+func TestCommonCrawlCandidatesKeepsTheRecordsBeforeATruncatedPageIsCut(t *testing.T) {
+	const pageURL = "https://index.commoncrawl.org/CC-MAIN-2026-30-index?url=boards.greenhouse.io/*&output=json&page=0&pageSize=1"
+	f := truncatedTextGetter{
+		url: pageURL,
+		fakeGetter: fakeGetter{
+			"https://index.commoncrawl.org/collinfo.json": commonCrawlCollInfoBody,
+			"https://index.commoncrawl.org/CC-MAIN-2026-30-index?url=boards.greenhouse.io/*&output=json&showNumPages=true&pageSize=1": `{"pages":1}`,
+			pageURL: `{"url": "https://boards.greenhouse.io/acme/jobs/1"}
+{"url": "https://boards.greenhouse.io/beta/jobs/2"}
+{"url": "https://boards.greenhouse.io/cut-o`,
+		},
+	}
+
+	got, err := commonCrawlCandidates(context.Background(), f, "boards.greenhouse.io", commonCrawlSlug)
+	if err != nil {
+		t.Fatalf("commonCrawlCandidates: %v", err)
+	}
+	want := []string{"acme", "beta"}
+	if !slices.Equal(got, want) {
+		t.Errorf("commonCrawlCandidates = %v, want %v — the records before the cut are still candidates", got, want)
 	}
 }
 

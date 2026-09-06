@@ -37,9 +37,13 @@ type client struct {
 }
 
 // newProviderClient is the production constructor: an SSRF-guarded client against the real
-// API.
+// API, which refuses to follow a redirect anywhere — see refuseRedirect below. Every call
+// here carries the secret key in an Authorization header, and the reason that header must
+// not travel off the host it was addressed to is the same for both providers.
 func newProviderClient(apiKey string) *client {
-	return newClient(apiKey, apiBaseURL, safehttp.NewClient(requestTimeout))
+	httpc := safehttp.NewClient(requestTimeout)
+	httpc.CheckRedirect = refuseRedirect
+	return newClient(apiKey, apiBaseURL, httpc)
 }
 
 // newClient builds a client against an arbitrary base URL with an arbitrary HTTP client.
@@ -47,6 +51,23 @@ func newProviderClient(apiKey string) *client {
 // production and makes a loopback test server unreachable.
 func newClient(apiKey, baseURL string, httpc *http.Client) *client {
 	return &client{http: httpc, baseURL: baseURL, apiKey: apiKey}
+}
+
+// refuseRedirect stops the SECRET key travelling anywhere it was not addressed to. Every
+// bearer-carrying client in this package sets it — the reasoning is about the header, not
+// about which provider is on the other end.
+//
+// Go's default policy follows up to ten hops and carries the Authorization header to the
+// original host and its subdomains — and it permits an HTTPS request to be redirected to
+// plain HTTP. safehttp re-dials every hop through the SSRF guard, which stops an internal
+// address, but the guard says nothing about a PUBLIC host reading a header meant for the
+// billing provider. That header is `Bearer sk_…`, the key that can grant and revoke a plan.
+//
+// So no hop at all. Neither of these is a general HTTP client: each calls one documented API
+// that does not redirect, so a redirect here is a misconfiguration or an attack, and neither
+// is worth following with a credential in hand.
+func refuseRedirect(req *http.Request, _ []*http.Request) error {
+	return fmt.Errorf("billing: refusing a redirect to %s — the provider key travels to one host only", req.URL.Host)
 }
 
 // do performs one form-encoded call and decodes the JSON reply into out.

@@ -330,15 +330,24 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 	})
 }
 
-// maxTextBody caps the raw body GetText reads. Careers pages can be large, but the
-// ATS link we scan for sits in the markup, not megabytes of trailing content; the
-// cap keeps a runaway page from ballooning memory.
+// maxTextBody caps the raw body GetText reads — tighter than the client's own
+// maxResponseBody, because these endpoints are markup a caller slices rather than a feed
+// that inlines every posting. Careers pages can be large, but the ATS link we scan for sits
+// in the markup, not megabytes of trailing content (the largest measured in production is
+// ~880 KB); the cap keeps a runaway page from ballooning memory.
 const maxTextBody = 2 << 20 // 2 MiB
 
 // GetText fetches url and returns its raw response body as a string (capped at
 // maxTextBody). It serves adapters whose endpoint is a raw page they scan or slice
 // themselves rather than parse as a DOM (paylocity, taleo, infojobs, …) and the
 // harvest/board-resolve probes that regex-scan a careers page for an embedded ATS link.
+//
+// A body past the cap is a *BodyTooLargeError alongside the bytes read so far: truncation
+// is REPORTED, never silent. A caller slicing markup for a link cannot tell a page that
+// does not carry one from a page whose copy was cut short, and the answers differ — the
+// first is a fact about the employer, the second is a fact about this fetch. The one caller
+// that can genuinely use a truncated body says so explicitly (cmd/harvest-boards' Common
+// Crawl sweep, whose pages are independent JSON lines).
 func (c *Client) GetText(ctx context.Context, url string) (string, error) {
 	return c.GetTextWithHeaders(ctx, url, nil)
 }
@@ -354,12 +363,15 @@ func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map
 		accept:  "text/html",
 		headers: headers,
 		decode: func(resp *http.Response) error {
-			b, err := io.ReadAll(io.LimitReader(resp.Body, maxTextBody))
-			if err != nil {
-				return err
-			}
+			// cappedReader rather than a bare io.LimitReader — the shape becf1d41 removed
+			// everywhere else, and which this file's BodyTooLargeError doc records as the
+			// cause of Anduril's six-week "unexpected EOF". do's own cap is 64 MiB and can
+			// never fire for a 2 MiB read, so without this the truncation had no signal at
+			// all. The bytes read so far are kept: io.ReadAll returns them with the error,
+			// and a caller that can use a prefix is entitled to the prefix.
+			b, err := io.ReadAll(newCappedReader(resp.Body, url, maxTextBody))
 			body = string(b)
-			return nil
+			return err
 		},
 	})
 	return body, err

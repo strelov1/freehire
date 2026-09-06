@@ -47,4 +47,5 @@ A reader that needs “is the file-owned parse current?” uses stamp-gated `Str
 - **Owned contacts win as a block** on compose. Mixing a typed email with a stale extract name is the bug this table exists to prevent.
 - **Delete clears the file and the extract, not owned contacts.**
 - **Two header merges stay separate.** Reset means “match the résumé” (seed-first). Heal means “do not keep showing a blank name we already know” (keep-first). Sharing one function picks the wrong winner.
+- **Header heal READS the composition, it does not rebuild it.** `resumeContactHeader` takes `StructureForSeed` and keeps its contact fields. Layering owned / current / provisional a second time there was three reads of one row, each re-deciding the same stamp — and three chances for heal and seed to disagree about who the candidate is.
 - **Owner GET of a CV may persist a heal.** It is a blank-header repair: idempotent, body untouched, list/PDF do not write. See `healRecordHeader`.

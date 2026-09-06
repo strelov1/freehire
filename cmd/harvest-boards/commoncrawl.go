@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
 	"sort"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // commonCrawlCollInfoURL lists every Common Crawl monthly snapshot, newest first, each with
@@ -43,6 +46,19 @@ func commonCrawlSlug(rawURL string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// truncatedButUsable reports whether err is only GetText's size cap and something was read
+// before it tripped — the one shape of fetch failure this sweep can still use.
+//
+// A CDX page is JSON-lines, so every complete record before the cut is independently valid
+// and commonCrawlParsePage drops the partial one; discovery is a best-effort widening of the
+// candidate set, and half a page of real slugs beats none. This is deliberately spelled here
+// rather than left to the transport: everywhere else a truncated body is a wrong answer that
+// looks like a right one, which is why GetText reports the cut at all.
+func truncatedButUsable(body string, err error) bool {
+	var tooLarge *sources.BodyTooLargeError
+	return errors.As(err, &tooLarge) && body != ""
 }
 
 // commonCrawlParsePage extracts candidate slugs from one CDX page response body: JSON-lines,
@@ -136,8 +152,11 @@ func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string,
 			pageURL := fmt.Sprintf("%s?url=%s/*&output=json&page=%d&pageSize=1", api, hostPrefix, page)
 			body, err := c.GetText(ctx, pageURL)
 			if err != nil {
-				log.Printf("commoncrawl: %s page %d: %v", api, page, err)
-				continue
+				if !truncatedButUsable(body, err) {
+					log.Printf("commoncrawl: %s page %d: %v", api, page, err)
+					continue
+				}
+				log.Printf("commoncrawl: %s page %d: %v — keeping the complete records read before the cut", api, page, err)
 			}
 			fetched++
 			for _, slug := range commonCrawlParsePage(body, slugOf) {

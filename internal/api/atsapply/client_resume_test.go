@@ -36,9 +36,9 @@ func TestAttachApprovedResume_NoFileFieldIsANoOp(t *testing.T) {
 	c := &Client{cvs: fakeCVReader{err: errors.New("must not be called")}}
 	plan := Plan{Fields: []ResolvedField{{ID: "first_name", Kind: "text", Value: "Ada"}}}
 
-	cleanup, parked, err := c.attachApprovedResume(context.Background(), autoapply.Claimed{}, &plan)
-	if err != nil || parked != nil || cleanup != nil {
-		t.Fatalf("attachApprovedResume = (cleanup!=nil:%v, %v, %v), want (false, nil, nil)", cleanup != nil, parked, err)
+	cleanup, parked := c.attachApprovedResume(context.Background(), autoapply.Claimed{}, &plan)
+	if parked != nil || cleanup != nil {
+		t.Fatalf("attachApprovedResume = (cleanup!=nil:%v, %v), want (false, nil)", cleanup != nil, parked)
 	}
 }
 
@@ -51,10 +51,7 @@ func TestAttachApprovedResume_RenderFailureParksNamingTheField(t *testing.T) {
 	}
 	plan := Plan{Fields: []ResolvedField{{ID: "resume", Kind: "file"}}}
 
-	cleanup, parked, err := c.attachApprovedResume(context.Background(), autoapply.Claimed{TailoredCVID: uuid.New()}, &plan)
-	if err != nil {
-		t.Fatalf("attachApprovedResume returned an error, want a parked result: %v", err)
-	}
+	cleanup, parked := c.attachApprovedResume(context.Background(), autoapply.Claimed{TailoredCVID: uuid.New()}, &plan)
 	if cleanup != nil {
 		t.Error("cleanup returned alongside a parked result, want nil")
 	}
@@ -72,10 +69,7 @@ func TestAttachApprovedResume_UnconfiguredRendererParks(t *testing.T) {
 	c := &Client{} // cvs and renderer both nil
 	plan := Plan{Fields: []ResolvedField{{ID: "resume", Kind: "file"}}}
 
-	_, parked, err := c.attachApprovedResume(context.Background(), autoapply.Claimed{TailoredCVID: uuid.New()}, &plan)
-	if err != nil {
-		t.Fatalf("attachApprovedResume returned an error, want a parked result: %v", err)
-	}
+	_, parked := c.attachApprovedResume(context.Background(), autoapply.Claimed{TailoredCVID: uuid.New()}, &plan)
 	if parked == nil || parked.Status != autoapply.StatusParked {
 		t.Fatalf("parked = %+v, want StatusParked", parked)
 	}
@@ -90,9 +84,9 @@ func TestAttachApprovedResume_SuccessSetsTheFieldValueToATempFileAndCleansUp(t *
 	}
 	plan := Plan{Fields: []ResolvedField{{ID: "resume", Kind: "file"}}}
 
-	cleanup, parked, err := c.attachApprovedResume(context.Background(), autoapply.Claimed{TailoredCVID: uuid.New()}, &plan)
-	if err != nil || parked != nil {
-		t.Fatalf("attachApprovedResume = (parked=%v, err=%v), want success", parked, err)
+	cleanup, parked := c.attachApprovedResume(context.Background(), autoapply.Claimed{TailoredCVID: uuid.New()}, &plan)
+	if parked != nil {
+		t.Fatalf("attachApprovedResume = (parked=%v), want success", parked)
 	}
 	if cleanup == nil {
 		t.Fatal("cleanup = nil, want a cleanup func for the temp file")

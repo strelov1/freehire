@@ -15,3 +15,5 @@ reports the whole graph at once, including imports that exist only in test files
 ## Packages
 
 `aigateway` `arch/layering` `backfillpage` `blobstore` `cache` `config` `database` `db` `externalid` `flexjson` `htmltext` `isoweek` `linktoken` `llm` `llmschema` `migrate` `modroot` `observability` `outbox` `pgconv` `pgerr` `safehttp` `stringset` `testdb` `tokencrypt` `tracerlink` `worker`
+
+`tracerlink` names a CV in its vocabulary and reads as the exception to the line above. It is not one, and the argument for keeping it here sits beside its entry in [arch/layering/blocks.go](arch/layering/blocks.go) — read it before moving the package.

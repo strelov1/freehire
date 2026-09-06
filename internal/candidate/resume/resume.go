@@ -236,20 +236,16 @@ func orEmpty(s []string) []string {
 // would hide the parsed profile forever after an LLM_MODEL upgrade rather than refreshing
 // it. Serving a best-effort, display-only structure from an older model is the better
 // degradation; resume_structured_model is kept as provenance for a future backfill.
+//
+// This is ProfileReadForUser's Current branch under another name — one read of the row, one
+// stamp comparison, one rule about a corrupt blob. Deriving it there rather than repeating
+// it here is what keeps the two answers from parting ways.
 func (s *Store) Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error) {
-	row, err := s.repo.GetStructured(ctx, userID)
-	if err != nil {
+	read, err := s.ProfileReadForUser(ctx, userID)
+	if err != nil || !read.Current {
 		return resumeextract.Structured{}, false, err
 	}
-	if len(row.ResumeStructured) == 0 || !stampsEqual(row.ResumeStructuredUploadedAt, row.ResumeUploadedAt) {
-		return resumeextract.Structured{}, false, nil
-	}
-	var st resumeextract.Structured
-	if err := json.Unmarshal(row.ResumeStructured, &st); err != nil {
-		// A corrupt blob is treated as absent (the next upload re-derives it), not an error.
-		return resumeextract.Structured{}, false, nil
-	}
-	return st, true, nil
+	return read.Structure, true, nil
 }
 
 // ProfileRead is the cookie résumé status composition: a current structure when the
@@ -298,26 +294,16 @@ func (s *Store) ProfileReadForUser(ctx context.Context, userID int64) (ProfileRe
 // stamp is not current with the upload. ok is false when the stamp is current (callers
 // use Structured), when no blob exists, or when the blob carries no contact fields.
 // Semantic sections are never included — the same slice ProfileRead serves while pending.
+//
+// The other side of ProfileReadForUser's answer: not-Current already means the Structure it
+// carries is the provisional slice, so the only thing left to decide here is whether that
+// slice says anything at all.
 func (s *Store) ProvisionalContacts(ctx context.Context, userID int64) (resumeextract.Structured, bool, error) {
-	row, err := s.repo.GetStructured(ctx, userID)
-	if err != nil {
+	read, err := s.ProfileReadForUser(ctx, userID)
+	if err != nil || read.Current || !hasContactFields(read.Structure) {
 		return resumeextract.Structured{}, false, err
 	}
-	if len(row.ResumeStructured) == 0 {
-		return resumeextract.Structured{}, false, nil
-	}
-	if stampsEqual(row.ResumeStructuredUploadedAt, row.ResumeUploadedAt) {
-		return resumeextract.Structured{}, false, nil
-	}
-	var st resumeextract.Structured
-	if err := json.Unmarshal(row.ResumeStructured, &st); err != nil {
-		return resumeextract.Structured{}, false, nil
-	}
-	contacts := provisionalContacts(st)
-	if !hasContactFields(contacts) {
-		return resumeextract.Structured{}, false, nil
-	}
-	return contacts, true, nil
+	return read.Structure, true, nil
 }
 
 // provisionalContacts keeps identity fields from a superseded extract for the pending

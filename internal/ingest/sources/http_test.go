@@ -352,6 +352,53 @@ func TestClientGetJSONSurfacesOversizedBodyAsTypedError(t *testing.T) {
 	}
 }
 
+// The text path caps tighter than the client does (maxTextBody, 2 MiB) and must name its
+// own cut for the same reason: an adapter that slices markup for an embedded ATS link reads
+// a truncated page as a page that does not carry one, which is a different fact about a
+// different thing. do's 64 MiB cap can never fire for a 2 MiB read, so a bare io.LimitReader
+// here left the truncation with no signal at all. The bytes read come back with the error —
+// cmd/harvest-boards' Common Crawl sweep is the one caller entitled to a prefix.
+func TestClientGetTextSurfacesATruncatedPageAsTypedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", maxTextBody+1)))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	body, err := c.GetText(context.Background(), srv.URL)
+	var tooLarge *BodyTooLargeError
+	if !errors.As(err, &tooLarge) {
+		t.Fatalf("GetText error = %v, want a *BodyTooLargeError", err)
+	}
+	if tooLarge.Limit != maxTextBody {
+		t.Errorf("reported limit = %d, want maxTextBody (%d)", tooLarge.Limit, maxTextBody)
+	}
+	if len(body) == 0 {
+		t.Error("body is empty, want the bytes read before the cap tripped")
+	}
+}
+
+// A page at exactly the text cap is complete, not truncated — the same inclusive boundary
+// the client's own cap keeps, so a 2 MiB page is not refused for being 2 MiB.
+func TestClientGetTextAcceptsAPageExactlyAtTheTextCap(t *testing.T) {
+	want := strings.Repeat("y", maxTextBody)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(want))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	body, err := c.GetText(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("GetText: %v", err)
+	}
+	if body != want {
+		t.Errorf("body length = %d, want %d", len(body), len(want))
+	}
+}
+
 // The cap is inclusive: a body of exactly maxBody bytes is complete, not truncated.
 func TestClientGetJSONAcceptsBodyExactlyAtCap(t *testing.T) {
 	body := `{"content":"acme"}`

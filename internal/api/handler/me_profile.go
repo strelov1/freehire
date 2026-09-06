@@ -17,11 +17,12 @@ import (
 
 // structuredResumeReader is the slice of the résumé store profile and CV seed need
 // (*resume.Store satisfies it), kept narrow so handlers are unit-testable without a
-// database. Structured reports a parse current with the stored CV; ProvisionalContacts
-// returns identity-only fields from a superseded blob while that stamp is pending.
+// database. Structured reports a parse current with the stored CV; StructureForSeed
+// composes the whole precedence (owned block, else current extract, else the identity-only
+// slice of a superseded one), which is what a caller that needs identity-while-pending asks
+// for rather than layering the superseded blob on itself.
 type structuredResumeReader interface {
 	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
-	ProvisionalContacts(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 	// Geography is where the CV says the candidate IS, under the same freshness rule as
 	// Structured — a geography derived from a superseded CV reads as absent.
 	Geography(ctx context.Context, userID int64) (resume.Geography, bool, error)
