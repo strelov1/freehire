@@ -17,7 +17,13 @@ against whatever page the user is on and sends results back.
   primitive is a change in the extension and the harness, not here.
 - **Never hang a caller.** A call with no extension attached is answered with
   `{id, error}` rather than dropped — the harness is blocked on that id. A result
-  with no harness left is dropped (nobody is waiting).
+  with no harness left is dropped (nobody is waiting). That one answer is the
+  exported `ErrNotConnected`, and `Caller.Call` re-raises it as the sentinel rather
+  than as a fresh error built from the text: a Go error cannot cross a JSON frame, so
+  the wire text IS the encoding, and an in-process caller has to tell "nobody is there
+  to run this" (a state its user fixes) from a tool that ran and failed (which may be
+  a fault worth reporting). Everything else in an `{id, error}` frame is the
+  extension's own words, which this package cannot classify.
 - **Last connection wins.** Re-joining in a role replaces the previous socket; the
   displaced connection's `leave` is a no-op, so it cannot evict its successor.
 - **A connected end is not yet a joined end.** `Join` runs in the websocket

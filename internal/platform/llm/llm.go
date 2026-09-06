@@ -268,6 +268,27 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string, opts ...
 	return out, nil
 }
 
+// contextOverrules replaces a provider's claim of success with our own context's
+// error, when that context had already expired.
+//
+// A gateway that stops emitting when our deadline fires can hand back whatever it
+// accumulated and call it success — production logged exactly that as `dur=3m0.018s
+// err=<nil>`, and the truncated JSON then failed downstream as "unexpected end of JSON
+// input", naming neither the deadline nor the stage. Our context is the authority on
+// whether the call had time to finish, so it overrules the provider.
+//
+// Both streaming entry points run this. Chat's truncation is quieter than the JSON
+// path's and worse: half a sentence is valid prose, so it was stored as the
+// assistant's finished answer and replayed to the model for the rest of the session,
+// and a round's tool calls were run with the `{}` arguments healToolArguments makes
+// of a half-written call — with the observation in the tracer marked successful.
+func contextOverrules(ctx context.Context, err error) error {
+	if err == nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
 // GenerateJSONStream is the streaming sibling of GenerateJSON: it sends the same
 // system+user prompt in JSON mode but streams the response. Content tokens accumulate
 // into the returned JSON string (the caller parses it exactly as with GenerateJSON);
@@ -311,14 +332,7 @@ func (c *Client) GenerateJSONStream(
 	})
 
 	resp, err := model.GenerateContent(ctx, messages, llms.WithJSONMode(), stream)
-	// A gateway that stops emitting when our own deadline fires can hand back whatever it
-	// accumulated and call it success — production logged exactly that as `dur=3m0.018s
-	// err=<nil>`, and the truncated JSON then failed downstream as "unexpected end of JSON
-	// input", naming neither the deadline nor the stage. Our context is the authority on
-	// whether the call had time to finish, so it overrules the provider's claim.
-	if err == nil && ctx.Err() != nil {
-		err = ctx.Err()
-	}
+	err = contextOverrules(ctx, err)
 	// The fit model is slow (tens of seconds per call); log the duration so per-stage
 	// cost stays observable without a tracer.
 	log.Printf("llm: stream model=%s dur=%s err=%v", c.modelID, time.Since(start).Round(time.Millisecond), err)

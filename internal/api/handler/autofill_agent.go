@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/autofillagent"
+	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
@@ -46,10 +49,26 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 		autofillagent.Profile(profile.Fields()),
 	)
 	if err != nil {
-		// The run needs the caller's browser attached, a form on the page, and a
-		// configured model. Any of those missing is a state problem, not a bad
-		// request or a server fault.
-		return fiber.NewError(fiber.StatusConflict, err.Error())
+		switch {
+		// The run needs the caller's browser attached and a form on the page. Either
+		// missing is a state the user can fix, and the sentence names what to do.
+		case errors.Is(err, browsertools.ErrNotConnected), errors.Is(err, autofillagent.ErrNoFillableFields):
+			return fiber.NewError(fiber.StatusConflict, err.Error())
+		// Autofill is not configured on this deployment — the same answer the other
+		// model-backed endpoints give for the same reason.
+		case errors.Is(err, autofillagent.ErrUnavailable):
+			return fiber.NewError(fiber.StatusServiceUnavailable, err.Error())
+		default:
+			// Handed to the shared mapper, as the cover letter's endpoint does with the
+			// same shape of failure. Run makes two live model calls, so this branch holds
+			// a gateway 5xx, our own 90-second llm.DefaultTimeout arriving as
+			// context.DeadlineExceeded, and "the model's plan is not valid JSON" —
+			// faults, every one. Flattening them into a 409 answered a state conflict for
+			// a broken gateway, kept them out of Sentry, and printed the raw error in the
+			// extension's panel. classify already knows a caller who navigated away is a
+			// 499 and not a fault, so nothing here has to guess at that.
+			return err
+		}
 	}
 	return c.JSON(fiber.Map{"data": report})
 }

@@ -24,6 +24,10 @@ type fakeQueries struct {
 	session  db.AssistantSession
 	messages []db.AssistantMessage
 	deleted  int64
+	// appendErr fails every transcript write, standing in for the database being
+	// unreachable — the case that decides whether a turn dying before the loop still
+	// tells its client anything.
+	appendErr error
 
 	gotUserID int64
 	labelSet  string
@@ -94,6 +98,9 @@ func (f *fakeQueries) AppendAssistantMessage(ctx context.Context, arg db.AppendA
 	// the user walking away.
 	if err := ctx.Err(); err != nil {
 		return db.AssistantMessage{}, err
+	}
+	if f.appendErr != nil {
+		return db.AssistantMessage{}, f.appendErr
 	}
 	seq := int32(len(f.messages) + 1)
 	f.messages = append(f.messages, db.AssistantMessage{

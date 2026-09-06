@@ -165,7 +165,13 @@ var ErrNothingToContinue = errors.New("assistant: nothing to continue")
 // event has already been emitted.
 func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, prompt string, turn TurnConfig, emit func(Event)) error {
 	if err := r.recordPrompt(ctx, sess, prompt, emit); err != nil {
-		return err
+		// Through fail, not raw: a turn that dies before the loop owes its client the
+		// same terminal result every other exit emits. Returning here bare closed a
+		// 200 stream that carried nothing but `:open` and heartbeats, and the web
+		// client — which only raises on a READ error — resolved it as a clean end,
+		// blamed a busy chat, and never called endTurn(), so the session stayed
+		// "turn in flight" and queued every later message behind a turn that was over.
+		return r.fail(emit, err)
 	}
 	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
 }

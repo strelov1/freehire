@@ -13,6 +13,10 @@ import (
 // jobs (saved or dismissed) via a server-built `id NOT IN [...]` filter. It is
 // authenticated (both swipe actions are per-user); the response is the standard
 // list envelope of job views, batched via limit/offset for prefetch.
+//
+// It reads the full search vocabulary, so it reports the same way /jobs/search does:
+// buildSearchFilter drops a param no filter reads, and a deck silently widened to the
+// whole catalogue looks exactly like a deck that was narrowed and found a lot.
 func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	if h.search == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -50,7 +54,7 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	for i, hit := range res.Hits {
 		views[i] = hit.Job
 	}
-	return listResponse(c, views, res.Total, limit, offset)
+	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, searchParams))
 }
 
 // withDeckExclusion adds an `id NOT IN [...]` group to the facet filter so the

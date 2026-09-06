@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -123,7 +124,12 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	}
 
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		stream := newSSEStream(w, conn, sseWriteTimeout)
+		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
+		// Registered first so it unwinds last: the claim release and the heartbeat stop
+		// are deferred below and must run before the reader is told the analysis failed.
+		defer recoverStream(hub, "matchanalysis: stream", func() {
+			stream.event("stream_error", map[string]string{"message": "analysis failed"})
+		})
 		start := time.Now()
 		log.Printf("matchanalysis: stream start user=%d job=%d has_cv=%v leader=%v", userID, job.ID, hasCV, claim.IsLeader())
 		stream.event("meta", map[string]bool{"has_cv": hasCV})
@@ -156,6 +162,11 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		// keeps bytes flowing so the stream survives silent stages. The ticker goroutine
 		// and the stage callback both write, which sseStream serializes.
 		stopHeartbeat := stream.keepalive(sseKeepalive)
+		// Deferred rather than stopped the moment Run returns: a panic in the chain would
+		// otherwise leave the ticker writing into a bufio.Writer fasthttp has already
+		// recycled onto another connection. A comment landing beside the closing event
+		// costs nothing — EventSource ignores it.
+		defer stopHeartbeat()
 
 		// The claim is released inside Run, from a defer that also covers this callback — so a
 		// panic anywhere in the chain, the emit, the cache write or the debit still wakes a
@@ -165,7 +176,6 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			events++
 			stream.event(string(e.Kind), capFinalEvent(e, blockers))
 		})
-		stopHeartbeat()
 		if err != nil {
 			log.Printf("matchanalysis: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
 			reportStreamFault(hub, err)
@@ -201,9 +211,13 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 // client that leaves during the wait costs nothing extra.
 func (h *matchHandlers) followMatchAnalysis(ctx context.Context, stream *sseStream, req fitanalysis.Request, blockers []hardconstraint.Blocker) {
 	stopHeartbeat := stream.keepalive(sseKeepalive) // the wait can run as long as a full chain
-	analysis, err := h.fit.Follow(ctx, req)
-	stopHeartbeat()
+	// Deferred rather than stopped the moment Follow returns: a panic below would
+	// otherwise leave the ticker writing into a bufio.Writer fasthttp has already
+	// recycled onto another connection. A comment landing between two of the replay's
+	// own events costs nothing — EventSource ignores it.
+	defer stopHeartbeat()
 
+	analysis, err := h.fit.Follow(ctx, req)
 	if err != nil {
 		stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
 		return
@@ -263,6 +277,34 @@ func reportStreamFault(hub *sentry.Hub, err error) {
 	hub.CaptureException(err)
 }
 
+// recoverStream catches a panic on a goroutine this package hands to fasthttp, reports
+// it, and lets the stream close itself off through terminal.
+//
+// It is needed because none of those goroutines is covered by the server's recover
+// middleware: SetBodyStreamWriter runs the closure in a bare `go sw(bw)` (fasthttp's
+// stream.go) at a point where the handler chain has already returned nil. A panic there
+// is therefore not a 500 with a Sentry event — it is the process, and every other
+// request in flight with it. Everything else the server serves turns a panic into a 500,
+// and a test pins that; this is the same promise for the streams.
+//
+// terminal is the one frame this goroutine still owes its client, or nil when it owes
+// none (the heartbeat: its body writer is still there to close the stream). It runs
+// last, after the deferred work that gives a charge back or releases a claim, because
+// those defers are what make the terminal frame true.
+func recoverStream(hub *sentry.Hub, what string, terminal func()) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	log.Printf("%s: panic: %v\n%s", what, r, debug.Stack())
+	if hub != nil {
+		hub.Recover(r)
+	}
+	if terminal != nil {
+		terminal()
+	}
+}
+
 // sseWriteTimeout bounds a single SSE write. It is generous — a live reader never comes
 // close, and the deadline is refreshed per write, so a slow-but-alive client is never cut
 // off mid-analysis. Its job is only to put a ceiling on a write that would otherwise never
@@ -284,10 +326,14 @@ type sseStream struct {
 	w       *bufio.Writer
 	conn    net.Conn
 	timeout time.Duration
+	// hub is where a panic on the heartbeat goroutine is reported. The stream carries
+	// it rather than keepalive taking it, because keepalive is also started from
+	// followMatchAnalysis, which is handed the stream and nothing else.
+	hub *sentry.Hub
 }
 
-func newSSEStream(w *bufio.Writer, conn net.Conn, timeout time.Duration) *sseStream {
-	return &sseStream{w: w, conn: conn, timeout: timeout}
+func newSSEStream(w *bufio.Writer, conn net.Conn, timeout time.Duration, hub *sentry.Hub) *sseStream {
+	return &sseStream{w: w, conn: conn, timeout: timeout, hub: hub}
 }
 
 // event writes one named SSE event with a JSON data payload and flushes it, reporting
@@ -328,6 +374,10 @@ func (s *sseStream) keepalive(every time.Duration) (stop func()) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		// Its own goroutine, so its own recover: a panic here is not the body writer's
+		// to catch, and it owes no terminal frame — the writer that started it is still
+		// there to close the stream.
+		defer recoverStream(s.hub, "sse keepalive", nil)
 		t := time.NewTicker(every)
 		defer t.Stop()
 		for {

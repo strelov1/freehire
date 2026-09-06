@@ -857,3 +857,40 @@ func TestRequestConfirmationToolTouchesNoStore(t *testing.T) {
 		t.Errorf("request_confirmation wrote to the CV store; it must have no side effect (before=%q after=%q)", before, repo.written)
 	}
 }
+
+// The claim is the whole tool. The client draws the card from these arguments, so an
+// empty claim renders NOTHING — no card, no Yes/No, not even a collapsed chip — and the
+// candidate is never asked. Returning the success receipt anyway told the agent the
+// question had been put: it took the silence for a confirmation and stamped the next
+// experience_add agent_inferred, barring the achievement from every CV.
+//
+// The schema already marks both fields required and that is not enough: DecodeArgs does
+// not enforce `required`, and healToolArguments rewrites a mangled argument string to
+// "{}", so an empty call arrives whatever the provider did.
+func TestRequestConfirmationToolRefusesAnEmptyClaim(t *testing.T) {
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+
+	for _, args := range []string{
+		`{}`,                                 // what healToolArguments makes of a mangled call
+		`{"question":"Is that right?"}`,      // the claim simply omitted
+		`{"claim":"","question":"Confirm?"}`, // present and empty
+		`{"claim":"   ","question":"Ok?"}`,   // whitespace draws nothing either
+	} {
+		if _, err := tool.Run(context.Background(), 3, json.RawMessage(args)); err == nil {
+			t.Errorf("args %s: err = nil, want the call refused so the agent asks again", args)
+		}
+	}
+}
+
+// The other half of the same gate: an empty QUESTION is allowed on purpose — the client
+// falls back to the claim alone, so refusing it would cost a round of the step cap for a
+// card that renders perfectly well.
+func TestRequestConfirmationToolAllowsAnEmptyQuestion(t *testing.T) {
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"claim":"Ran the cluster"}`)); err != nil {
+		t.Errorf("err = %v, want a claim with no question accepted", err)
+	}
+}

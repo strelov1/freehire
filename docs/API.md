@@ -164,6 +164,8 @@ Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by
 
 List jobs, newest first, with limit/offset pagination.
 
+Takes no filters at all — `limit` and `offset` are the whole vocabulary. Anything else is ignored rather than refused, and listed in `meta.ignored_params`: a filter param sent here returns the entire catalogue, which is indistinguishable from a narrow result unless you check. Use `/jobs/search` to filter.
+
 **Query parameters**
 
 | Name | Type | Required | Description |
@@ -1792,7 +1794,7 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
 
 A batch of open jobs for the swipe triage deck.
 
-Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. `503` when search is unavailable.
+Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. A param no filter reads is ignored rather than refused, and listed in `meta.ignored_params`, exactly as in search. `503` when search is unavailable.
 
 **Query parameters**
 

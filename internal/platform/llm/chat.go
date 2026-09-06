@@ -30,7 +30,9 @@ type ChatStream struct {
 //
 // The caller owns the loop: it inspects choice.ToolCalls, runs them, appends the
 // results to msgs, and calls Chat again. Bounded by the client timeout and
-// observed like the JSON helpers.
+// observed like the JSON helpers — including contextOverrules, so a gateway that
+// falls silent at our deadline and returns what it has is a failed call here too
+// rather than a completion the turn loop would store as an answer.
 func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, stream ChatStream) (*llms.ContentChoice, error) {
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
@@ -74,6 +76,7 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	}
 
 	resp, err := c.model.GenerateContent(ctx, msgs, opts...)
+	err = contextOverrules(ctx, err)
 	if err != nil {
 		wrapped := fmt.Errorf("llm: chat: %w", err)
 		g := gen()

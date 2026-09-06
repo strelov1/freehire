@@ -137,6 +137,19 @@ heartbeat goroutine against the event callback and re-arms the write deadline be
 write. `event` reports whether the frame reached the client, and a marshal failure reports
 **true** — an unencodable frame is our bug, not a dead reader.
 
+**Every goroutine a stream starts recovers its own panic** (`recoverStream`), because the
+server's recover middleware cannot reach any of them: `SetBodyStreamWriter` runs its
+closure in a bare `go sw(bw)` after the handler chain has already returned nil, so a panic
+there is not a 500 — it is `cmd/server`, with every other request in flight. The recover
+reports to the request's cloned hub and writes the one terminal frame that stream still
+owes (`result`/`stop_reason: error` for a turn, `stream_error` for the other two); the
+heartbeat passes nil, since its body writer is still there to close the stream. Register it
+FIRST inside the closure so it unwinds LAST, after the defers that release the allowance,
+the turn slot or the analysis claim — those are what make the terminal frame true. For the
+same reason the heartbeat's `stop` is always deferred: a panic that skipped it would leave
+the ticker writing into a `bufio.Writer` fasthttp has already recycled onto another
+connection.
+
 A failed write does NOT stop an assistant turn. It used to: the failure cancelled the loop's
 context, which meant a phone freezing a backgrounded tab threw away live work — an unattended
 tailoring run once lost its report after twenty-five committed CV edits. A write that fails now

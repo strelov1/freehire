@@ -35,6 +35,16 @@ func insertChunkTestJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlu
 	return id
 }
 
+// markJobPrivate flips jobs.is_private, the column InsertPrivateJob sets for a job
+// description a candidate pasted in rather than one the crawl found.
+func markJobPrivate(t *testing.T, pool *pgxpool.Pool, jobID int64) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE jobs SET is_private = true WHERE id = $1`, jobID); err != nil {
+		t.Fatalf("mark job %d private: %v", jobID, err)
+	}
+}
+
 // unitVector768 builds a 768-dim vector literal (job_semantic_chunks.embedding's fixed
 // arity) that is 1.0 in exactly one dimension and 0 elsewhere. Two unit vectors along
 // the same dimension are identical (cosine distance 0); two along different dimensions
@@ -243,6 +253,15 @@ func TestNearestJobsToJob(t *testing.T) {
 	insertChunks(t, closedMatch, []int16{0}, []int{0})
 	closeJob(t, pool, closedMatch)
 
+	// Different company, open, and PRIVATE: a job description a candidate pasted into
+	// the JD-tailor intake (InsertPrivateJob). Its chunk is an exact match (dist 0) for
+	// the source's chunk 0, so nothing but the privacy predicate keeps it out — and it
+	// must stay out, because what this query names becomes jobs.similar_job_ids, which
+	// the unauthenticated /jobs/:slug/similar publishes whole.
+	privateMatch := insertChunkTestJob(t, pool, "private-match", "epsilon-co")
+	insertChunks(t, privateMatch, []int16{0}, []int{0})
+	markJobPrivate(t, pool, privateMatch)
+
 	// Different company, open, orthogonal to both source chunks (dist 1 from either) —
 	// a background candidate that should rank behind trueNearest (dist 0) but still
 	// appear in the result (open, different company).
@@ -266,6 +285,9 @@ func TestNearestJobsToJob(t *testing.T) {
 	}
 	if _, ok := got[closedMatch]; ok {
 		t.Errorf("closed job %d present in results %v, want excluded", closedMatch, order)
+	}
+	if _, ok := got[privateMatch]; ok {
+		t.Errorf("private job %d present in results %v, want excluded even though it is an exact vector match", privateMatch, order)
 	}
 	if len(order) != 2 || order[0] != trueNearest || order[1] != farAway {
 		t.Fatalf("result order = %v, want [%d(true-nearest) %d(far-away)]", order, trueNearest, farAway)

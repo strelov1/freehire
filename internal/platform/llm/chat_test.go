@@ -191,6 +191,32 @@ func TestChatTimesOutOnStalledModel(t *testing.T) {
 	}
 }
 
+// The conversational half of the same rule the JSON stream already holds
+// (TestGenerateJSONStream_DeadlineIsAFailureEvenWhenProviderReportsSuccess): our context
+// decides whether a call had time to finish, not the provider.
+//
+// It matters more here. A truncated JSON document fails downstream as a parse error and
+// at least announces itself; half a sentence is valid prose, so the turn loop stored it
+// as the assistant's finished answer and replayed it to the model for the rest of the
+// session — and a round cut off mid-tool-call ran with the `{}` arguments
+// healToolArguments makes of it. The only trace was an observation marked successful.
+func TestChatRefusesATruncatedAnswerTheGatewayCallsSuccessful(t *testing.T) {
+	c := &Client{model: truncatingModel{content: "Here is what I foun"}, timeout: 20 * time.Millisecond}
+
+	choice, err := c.Chat(context.Background(),
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{})
+
+	if err == nil {
+		t.Fatalf("Chat returned %+v with a nil error, want a deadline failure", choice)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("error = %v, want one wrapping context.DeadlineExceeded", err)
+	}
+	if choice != nil {
+		t.Errorf("choice = %+v, want nothing usable returned beside the error", choice)
+	}
+}
+
 // reasoningModel emits reasoning deltas alongside its content, as a thinking
 // model behind the gateway does.
 type reasoningModel struct{ thoughts, content []string }

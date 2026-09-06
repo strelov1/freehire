@@ -110,6 +110,18 @@ func (h *assistantHandlers) requestConfirmationTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			// The claim is the whole tool: the client renders the card from these
+			// arguments, so an empty one draws nothing — no card, no buttons, not even a
+			// chip — and the candidate is never asked. The agent then reads a success
+			// receipt, takes silence for a confirmation, and its next experience_add is
+			// stamped agent_inferred because no verbatim quote was ever said. Schema
+			// `required` does not stop this: DecodeArgs does not enforce it, and
+			// healToolArguments turns a mangled argument string into "{}", so an empty
+			// call arrives whatever the provider did. An empty question is allowed on
+			// purpose — the client falls back to the claim alone.
+			if strings.TrimSpace(in.Claim) == "" {
+				return nil, errors.New("claim is required: pass the exact claim text the candidate must confirm, verbatim")
+			}
 			return map[string]any{"status": "awaiting_candidate_response"}, nil
 		},
 	}

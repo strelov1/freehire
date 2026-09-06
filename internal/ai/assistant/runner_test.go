@@ -441,6 +441,31 @@ func TestAModelFailureEndsTheTurnWithAnErrorResult(t *testing.T) {
 	}
 }
 
+// The invariant is "exactly one result event on EVERY path", and the path that dies
+// before the loop is a path too. A failed first transcript write (a Postgres hiccup, the
+// 5s persistTimeout, three colliding seq retries) used to return bare, which closed a 200
+// SSE stream carrying nothing but `:open` and heartbeats. The web client raises only on a
+// READ failure, so it resolved that as a clean end, showed the wrong reason ("the chat was
+// busy") and never called endTurn() — leaving the session marked as having a turn in
+// flight, and every later message queued behind a turn that was already over.
+func TestAFailedPromptWriteStillEndsTheTurn(t *testing.T) {
+	m := &scriptedModel{}
+	q := &fakeQueries{appendErr: errors.New("postgres is unreachable")}
+	r := testRunner(m, q)
+
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "hi")
+	if err == nil {
+		t.Fatal("Run returned nil; the caller must still learn the turn failed")
+	}
+	res := lastResult(t, events)
+	if !res.IsError || res.StopReason != StopError {
+		t.Errorf("result = %+v, want an errored terminal event so the client stops waiting", res)
+	}
+	if m.calls != 0 {
+		t.Errorf("model called %d times, want none — the prompt was never recorded", m.calls)
+	}
+}
+
 func TestCancellationStopsBeforeTheNextModelCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &scriptedModel{replies: []*llms.ContentChoice{

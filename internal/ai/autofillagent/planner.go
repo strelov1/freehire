@@ -66,7 +66,7 @@ type LLMPlanner struct {
 
 func (p LLMPlanner) Plan(ctx context.Context, fields []Field, profile Profile) ([]Fill, error) {
 	if p.Client == nil {
-		return nil, fmt.Errorf("agent autofill is unavailable: no language model is configured")
+		return nil, ErrUnavailable
 	}
 	user, err := json.Marshal(map[string]any{"fields": fields, "profile": profile})
 	if err != nil {
@@ -85,7 +85,7 @@ func (p LLMPlanner) Plan(ctx context.Context, fields []Field, profile Profile) (
 // a guess.
 func (p LLMPlanner) Choose(ctx context.Context, question Field, options []string, profile Profile) (string, error) {
 	if p.Client == nil {
-		return "", fmt.Errorf("agent autofill is unavailable: no language model is configured")
+		return "", ErrUnavailable
 	}
 	user, err := json.Marshal(map[string]any{
 		"question": question.Label,

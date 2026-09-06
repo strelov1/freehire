@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // jobsHandlers serves the public job catalogue reads (list, detail, repost
@@ -69,6 +71,10 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
 // index jobs_open_created_idx (no full-table sort) and meta.total comes from the
 // precomputed catalogue-scale snapshot (see openJobTotal), so neither query scans
 // the whole open-job set at catalogue scale.
+//
+// It reads no filter at all, which is exactly why it reports: a caller who sends
+// `?countries=de` here gets the whole catalogue back, and without meta.ignored_params
+// that reads as a real answer about Germany (see ignoredListJobsParams).
 func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 
@@ -88,7 +94,33 @@ func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhostToRows(c, jobs, views)
 
-	return listResponse(c, views, total, limit, offset)
+	return listResponseWithIgnored(c, views, total, limit, offset, ignoredListJobsParams(c))
+}
+
+// listJobsParams are the only query params GET /jobs reads. Its siblings declare
+// their own transport params and let search.UnknownParams own the filter vocabulary;
+// here the two are the same list, because this endpoint has no filter.
+var listJobsParams = []string{"limit", "offset"}
+
+// ignoredListJobsParams reports the query params this listing did not read.
+//
+// It deliberately does not go through ignoredParams. That report is built from the
+// SEARCH filter's vocabulary, so it would call `countries=de` legitimate on an endpoint
+// that has never looked at a facet — and a filter silently widening to the whole
+// catalogue is the one thing the report exists to prevent. Nothing is suggested for the
+// same reason: a near miss to a facet name is no help when every facet name is equally
+// ignored here. Reported rather than refused, like everywhere else — an old link
+// carrying a retired param must keep working.
+func ignoredListJobsParams(c *fiber.Ctx) []search.UnknownParam {
+	var out []search.UnknownParam
+	for param := range queryValues(c) {
+		// "?=value" parses to an empty name: nothing to report, nothing to correct.
+		if param == "" || slices.Contains(listJobsParams, param) {
+			continue
+		}
+		out = append(out, search.UnknownParam{Param: param})
+	}
+	return search.SortAndCap(out)
 }
 
 // openJobTotal resolves the list's meta.total: the exact count from the published

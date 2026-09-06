@@ -22,6 +22,11 @@ import (
 // case without letting a wedged gateway hold a goroutine forever.
 const letterStreamTimeout = 6 * time.Minute
 
+// errStreamPanic stands in for a recovered panic value, which is not an error and has no
+// sentence of its own. Handing it to letterFailureMessage keeps the wording of an
+// unrecognised failure in one place instead of hard-coding a second copy at the recover.
+var errStreamPanic = errors.New("the stream panicked")
+
 // StreamCVCoverLetter drafts the letter over Server-Sent Events.
 //
 // This exists because the POST cannot work. The chain is three model calls in series and takes
@@ -64,7 +69,13 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 
 	sseHeaders(c)
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		stream := newSSEStream(w, conn, sseWriteTimeout)
+		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
+		// Registered first so it unwinds last: the charge release and the heartbeat stop
+		// are deferred below, and the candidate must have their allowance back before
+		// they are told the draft failed.
+		defer recoverStream(hub, "coverletter: stream", func() {
+			stream.event("stream_error", letterErrorEvent{Error: letterFailureMessage(errStreamPanic)})
+		})
 
 		// Stage events fire only at the boundaries between model calls, so between one stage
 		// closing and the next opening the socket is silent for a whole call — measured at up

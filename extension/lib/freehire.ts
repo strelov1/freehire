@@ -94,9 +94,12 @@ export function partitionBlockers(blockers: Blocker[] | undefined): { unmet: Blo
 
 /**
  * What a failed call tells the user. hire answers `{"error": "<why>"}`, and that
- * sentence is the whole diagnosis: `/me/autofill/run` alone returns 409 for three
- * unrelated states — no browser attached, no form on the page, no model
- * configured — so a bare status collapses them into one line nobody can act on.
+ * sentence is the whole diagnosis: `/me/autofill/run` alone returns 409 for two
+ * unrelated states — no browser attached, no form on the page — so a bare status
+ * collapses them into one line nobody can act on. A run that failed on OUR side
+ * (the gateway, our own deadline, an answer we could not read) is a 500 carrying
+ * the generic sentence instead, deliberately: those used to arrive here as a 409
+ * printing our internals at someone who could do nothing about them.
  * The status still travels for a bug report; the path only stands in when the
  * body says nothing, as a proxy's HTML error page does. Pure over its input.
  */

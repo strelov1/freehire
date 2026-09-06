@@ -82,11 +82,15 @@ func TestGenerateJSONStream_AccumulatesContentAndStreamsThinking(t *testing.T) {
 // reporting success. Prod logged exactly this shape — `dur=3m0.018s err=<nil>` — and the
 // truncated JSON then surfaced downstream as "unexpected end of JSON input", which names
 // neither the deadline nor the stage that blew it.
-type truncatingModel struct{}
+//
+// content is what it hands back: half a JSON document for the JSON entry point, half a
+// sentence for the conversational one (chat_test.go) — the same fault, and the prose
+// half is the worse of the two because nothing downstream can tell it is incomplete.
+type truncatingModel struct{ content string }
 
-func (truncatingModel) GenerateContent(ctx context.Context, _ []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+func (m truncatingModel) GenerateContent(ctx context.Context, _ []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
 	<-ctx.Done()
-	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: `{"score"`}}}, nil
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: m.content}}}, nil
 }
 func (truncatingModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
 	return "", nil
@@ -96,7 +100,7 @@ func (truncatingModel) Call(context.Context, string, ...llms.CallOption) (string
 // Trusting the nil error hands a truncated document to the caller, turning a timeout we
 // control into a parse error that looks like a bad model response.
 func TestGenerateJSONStream_DeadlineIsAFailureEvenWhenProviderReportsSuccess(t *testing.T) {
-	c := &Client{model: truncatingModel{}, timeout: 20 * time.Millisecond}
+	c := &Client{model: truncatingModel{content: `{"score"`}, timeout: 20 * time.Millisecond}
 
 	got, err := c.GenerateJSONStream(context.Background(), "s", "u", nil)
 

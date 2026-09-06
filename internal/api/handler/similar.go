@@ -31,6 +31,14 @@ const (
 // the nearest-first order is preserved across the drop by re-sorting the fetched
 // rows to the original id order rather than trusting GetJobsByIDs' own order,
 // which is undefined for a WHERE id = ANY($1) fetch.
+//
+// A private posting is dropped the same way. NearestJobsToJob now refuses to name
+// one (semantic.sql), but that only governs lists computed from here on: a
+// user-pasted job description from the JD-tailor intake is a technical, open,
+// embedded row, so it was a legitimate neighbour of public postings and the
+// stored lists still hold it. This endpoint is unauthenticated and answers with
+// the whole jobview, so publishing one would publish the unguessable slug its
+// privacy rests on.
 func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
@@ -60,8 +68,8 @@ func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 
 	byID := make(map[int64]int, len(rows))
 	for i, row := range rows {
-		if row.ClosedAt.Valid {
-			continue // closed since the list was computed — drop, don't error.
+		if row.ClosedAt.Valid || row.IsPrivate {
+			continue // closed since, or private — drop, don't error.
 		}
 		byID[row.ID] = i
 	}
@@ -73,7 +81,7 @@ func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 		}
 		i, ok := byID[sid]
 		if !ok {
-			continue // closed, or a dangling id (hard-deleted, stale backfill entry).
+			continue // closed, private, or a dangling id (hard-deleted, stale backfill entry).
 		}
 		view, err := jobview.FromRow(rows[i])
 		if err != nil {
