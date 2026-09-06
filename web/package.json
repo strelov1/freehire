@@ -12,6 +12,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "og:smoke": "node scripts/og-smoke.mjs",
     "og:gen": "node scripts/gen-og.mjs",
     "pwa:icons": "node scripts/gen-pwa-icons.mjs",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@lucide/svelte": "^1.25.0",
+    "@playwright/test": "^1.63.0",
     "@sveltejs/adapter-node": "^5.5.4",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",

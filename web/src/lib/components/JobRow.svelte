@@ -240,7 +240,10 @@
      so an optional footer row can sit inside the same bordered box as a sibling of
      the link — interactive footer controls never nest inside the navigation <a>.
      `group` lets the hover-revealed hide control fade in on card hover. -->
-<div class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent">
+<div
+  data-testid="job-card"
+  class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent"
+>
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   target={newTab ? '_blank' : undefined}
