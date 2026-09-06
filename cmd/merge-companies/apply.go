@@ -9,8 +9,10 @@ import (
 // the loop below can be exercised without a database.
 type writer interface {
 	// InsertAlias records the retirement. ON CONFLICT DO NOTHING at the SQL layer, so a
-	// re-run neither errors nor moves a canon that is already frozen.
-	InsertAlias(ctx context.Context, a alias, canonical, foldedKey string) error
+	// re-run neither errors nor moves a canon that is already frozen. The folded key written
+	// is the ALIAS's own (a.FoldedKey), which for a folded group is the group's key and for a
+	// curated one is not — see the field's comment.
+	InsertAlias(ctx context.Context, a alias, canonical string) error
 	// RekeyChunk moves up to chunk of the alias's jobs onto the canonical slug and reports
 	// how many it moved. 0 means the slug is drained.
 	RekeyChunk(ctx context.Context, aliasSlug, canonical string, chunk int) (int64, error)
@@ -31,7 +33,7 @@ func applyMerges(ctx context.Context, w writer, plan []merge, chunk int) (int64,
 	var moved int64
 	for _, m := range plan {
 		for _, a := range m.Aliases {
-			if err := w.InsertAlias(ctx, a, m.Canonical, m.FoldedKey); err != nil {
+			if err := w.InsertAlias(ctx, a, m.Canonical); err != nil {
 				return moved, fmt.Errorf("record alias %s -> %s: %w", a.Slug, m.Canonical, err)
 			}
 			for {

@@ -32,9 +32,19 @@ type company struct {
 
 // alias is one slug retiring into a canonical one.
 type alias struct {
-	Slug     string
-	Reason   string
-	JobCount int
+	Slug   string
+	Reason string
+	// FoldedKey is CompanyKey of THIS alias's own name, and it is what ingest resolves a
+	// future posting through — ResolveCompanySlugAliases keys on folded_key, never on
+	// alias_slug, so a spelling nobody merged still lands on the canon its fold owns.
+	//
+	// It sits on the alias rather than on the group because a CURATED group's members do not
+	// share a fold: that is the definition of a curated group. Writing the group's key on
+	// every row would leave "Exadel Inc (Website)" folding to a key no row holds, so the next
+	// crawl of that board would mint the duplicate again and the merge would read as done.
+	// For a folded group this is exactly the group's key, so the two agree where they used to.
+	FoldedKey string
+	JobCount  int
 }
 
 // merge is one folded group's decision.
@@ -59,9 +69,47 @@ type merge struct {
 // its group outright, whatever the counts now say. minJobs drops groups whose combined open
 // jobs fall short, so a wave can be reviewed at a size a human can actually read.
 //
+// curated overrides the grouping for the pairs a human has named (see curated.go). Those
+// companies leave their folded groups entirely and form one group per canonical slug, where
+// the canon is the one the list names rather than the one an election would reach. A curated
+// group is the only kind whose members do not share a fold, which is why an alias carries its
+// own folded key.
+//
 // The result is deterministic — groups sorted by key, ties broken on the slug — because the
 // plan a human reviews in a dry run has to be the plan --apply then performs.
-func planMerges(companies []company, frozen map[string]bool, minJobs int) []merge {
+func planMerges(companies []company, frozen map[string]bool, minJobs int, curated map[string]string) []merge {
+	canons := curatedCanons(curated)
+	// The canon each curated group elects, so the loop below does not re-derive it from names
+	// that were grouped precisely because their names do not agree.
+	curatedWinner := make(map[string]string, len(canons))
+
+	// The folds a curated canon owns, found in a first pass because a canon is named by SLUG
+	// while a fold is computed from the NAME.
+	//
+	// This is what stops the list from breaking merges the rule already made. Naming a canon
+	// pulls it out of its folded group, and everything the rule had grouped WITH it — "Acme
+	// Inc" beside "Acme" — would be left in a group of one and silently dropped. Curating one
+	// duplicate of an employer would therefore un-merge its others. So the curated group
+	// absorbs the canon's fold whole: the rule's members and the list's members end up in the
+	// same group, which is the truth both were describing.
+	curatedFold := make(map[string]string, len(canons))
+	for _, c := range companies {
+		if c.Slug == "" || !canons[c.Slug] {
+			continue
+		}
+		key := normalize.CompanyKey(c.Name)
+		// Two canons folding the same way would make the result depend on slice order, so the
+		// smaller slug wins and the outcome is stable. It is a mistake either way — the guard
+		// in curated_test.go rejects one canon retiring into another — but a deterministic
+		// plan is what makes a dry run worth reading.
+		if key == "" {
+			continue
+		}
+		if prev, ok := curatedFold[key]; !ok || c.Slug < prev {
+			curatedFold[key] = c.Slug
+		}
+	}
+
 	groups := make(map[string][]company)
 	for _, c := range companies {
 		if c.Slug == "" {
@@ -73,12 +121,30 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 			// on it would merge every untransliterable name into one company.
 			continue
 		}
+		// A curated member joins its canon's group; the canon joins its own; and so does
+		// anything the RULE would have grouped with the canon.
+		if canon, ok := curated[c.Slug]; ok {
+			key = curatedGroupKey(canon)
+			curatedWinner[key] = canon
+		} else if canons[c.Slug] {
+			key = curatedGroupKey(c.Slug)
+			curatedWinner[key] = c.Slug
+		} else if canon, ok := curatedFold[key]; ok {
+			key = curatedGroupKey(canon)
+			curatedWinner[key] = canon
+		}
 		groups[key] = append(groups[key], c)
 	}
 
 	var out []merge
 	for key, members := range groups {
-		if len(members) < 2 {
+		_, isCuratedGroup := curatedWinner[key]
+		// A folded group of one says nothing: the fold IS the evidence, so a lone member has
+		// nothing to be a duplicate of. A curated group of one does say something — the list
+		// names the canon, and that canon need not hold a catalogue row yet (a slug no row
+		// holds is a legitimate canon; see electCanonical). Judging it by member count would
+		// silently drop exactly the entry a human took the trouble to write down.
+		if len(members) < 2 && !isCuratedGroup {
 			continue
 		}
 		// Sort by job count descending, then by slug, so the election and the alias order
@@ -90,7 +156,10 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 			return cmp.Compare(a.Slug, b.Slug)
 		})
 
-		winner := electCanonical(members, frozen)
+		winner := curatedWinner[key]
+		if !isCuratedGroup {
+			winner = electCanonical(members, frozen)
+		}
 		m := merge{Canonical: winner, FoldedKey: key}
 		for _, c := range members {
 			m.Jobs += c.JobCount
@@ -98,13 +167,18 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int) []merg
 				continue
 			}
 			m.Aliases = append(m.Aliases, alias{
-				Slug:     c.Slug,
-				Reason:   reasonFor(c, winner),
-				JobCount: c.JobCount,
+				Slug:      c.Slug,
+				Reason:    reasonFor(c, winner),
+				FoldedKey: normalize.CompanyKey(c.Name),
+				JobCount:  c.JobCount,
 			})
 		}
-		// len(m.Aliases) is always >= 1 here: the group holds at least two companies and
-		// exactly one of them wins.
+		// A curated group whose only member IS its canon has nothing to retire — the entry has
+		// already been applied, or the duplicate has closed out of the catalogue. Reporting it
+		// as a group would put a line in the plan that moves nothing.
+		if len(m.Aliases) == 0 {
+			continue
+		}
 		if m.Jobs < minJobs {
 			continue
 		}

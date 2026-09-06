@@ -9,21 +9,26 @@ import (
 // fakeStore records the writes an apply run made, in order, so a test can prove both WHAT was
 // written and that a dry run wrote nothing at all.
 type fakeStore struct {
-	jobs      map[string]int // company_slug -> open jobs still carrying it
-	aliases   map[string]string
+	jobs    map[string]int // company_slug -> open jobs still carrying it
+	aliases map[string]string
+	// folded records the folded_key each alias row was written with. It is the column ingest
+	// resolves through, so a merge that writes the wrong one looks complete and re-mints the
+	// duplicate on the next crawl.
+	folded    map[string]string
 	rekeys    []string // canonical<-alias, one entry per chunk statement that moved rows
 	failRekey error
 }
 
 func newFakeStore(jobs map[string]int) *fakeStore {
-	return &fakeStore{jobs: jobs, aliases: map[string]string{}}
+	return &fakeStore{jobs: jobs, aliases: map[string]string{}, folded: map[string]string{}}
 }
 
-func (f *fakeStore) InsertAlias(_ context.Context, a alias, canonical, foldedKey string) error {
+func (f *fakeStore) InsertAlias(_ context.Context, a alias, canonical string) error {
 	if _, ok := f.aliases[a.Slug]; ok {
 		return nil // ON CONFLICT DO NOTHING: the canon is frozen at first merge
 	}
 	f.aliases[a.Slug] = canonical
+	f.folded[a.Slug] = a.FoldedKey
 	return nil
 }
 
@@ -47,8 +52,41 @@ func plan() []merge {
 		Canonical: "dollar-tree",
 		FoldedKey: "dollartree",
 		Jobs:      22966,
-		Aliases:   []alias{{Slug: "dollartree", Reason: reasonSpelling, JobCount: 283}},
+		Aliases: []alias{{
+			Slug: "dollartree", Reason: reasonSpelling, FoldedKey: "dollartree", JobCount: 283,
+		}},
 	}}
+}
+
+// TestApplyMerges_WritesEachAliasOwnFoldedKey is the guard for the curated case. Ingest
+// resolves company_slug_aliases by folded_key and never by alias_slug, so a curated group —
+// whose members do not share a fold, by definition — must write each row's OWN key. Writing
+// the group's key instead leaves the retiring spelling folding to a key no row holds: the
+// merge reports success, the redirect works, and the very next crawl of that board mints the
+// duplicate again.
+func TestApplyMerges_WritesEachAliasOwnFoldedKey(t *testing.T) {
+	store := newFakeStore(map[string]int{"exadel-inc-website": 50, "exadelinc": 1})
+	curated := []merge{{
+		Canonical: "exadel",
+		FoldedKey: curatedGroupKey("exadel"),
+		Jobs:      150,
+		Aliases: []alias{
+			{Slug: "exadel-inc-website", Reason: reasonSpelling, FoldedKey: "exadelincwebsite", JobCount: 50},
+			{Slug: "exadelinc", Reason: reasonSpelling, FoldedKey: "exadelinc", JobCount: 1},
+		},
+	}}
+
+	if _, err := applyMerges(context.Background(), store, curated, 100); err != nil {
+		t.Fatalf("applyMerges: %v", err)
+	}
+	for slug, want := range map[string]string{
+		"exadel-inc-website": "exadelincwebsite",
+		"exadelinc":          "exadelinc",
+	} {
+		if got := store.folded[slug]; got != want {
+			t.Errorf("alias %q written with folded_key %q, want %q", slug, got, want)
+		}
+	}
 }
 
 func TestApplyMerges_MovesEveryJobInChunks(t *testing.T) {
