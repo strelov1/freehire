@@ -38,6 +38,12 @@ for display names, and [internal/job/collections](../../internal/job/collections
   spelling nobody ever merged still reaches the canon its folded form owns; `GET
   /companies/:slug` asks by `alias_slug` to serve a 301 — and only AFTER the company read
   misses, so a company that came back is never shadowed by the row that once retired it.
+- **`folded_key` is the ALIAS's own fold, never the group's.** For a folded group the two are
+  the same by construction, so the distinction only shows up on a curated group — whose members
+  do not share a fold, that being what makes it curated. Writing the group's key there leaves
+  the retiring spelling folding to a key no row holds: the merge reports success, the 301
+  works, and the next crawl of that board mints the duplicate again. Pinned by
+  `TestApplyMerges_WritesEachAliasOwnFoldedKey`.
 - **The canon freezes at first merge.** `InsertCompanySlugAlias` is `ON CONFLICT DO NOTHING`
   and the worker holds elected slugs out of a later election. A re-election would move a URL
   that has already been redirecting and indexing.
@@ -65,9 +71,30 @@ moment the code ships. The second cannot be: `jpmorganchase` and `jp-morgan-chas
 honest output of that rule — one source wrote "JPMorganChase", another "JP Morgan Chase" — so
 collapsing them means electing a winner, and the winner has to be remembered.
 
+There is a third class the fold cannot see at all, because the two spellings do not fold
+together: one employer whose boards disagree about the NAME. Exadel runs two Greenhouse boards
+calling themselves "Exadel" and "Exadel Inc (Website)", which key at `exadel` and
+`exadelincwebsite` — four slugs in total, 110 shared open job titles, and about half its
+catalogue duplicated. `cmd/merge-companies/curated.go` names those pairs by hand.
+
+**It is a list and not a rule on purpose.** Every entry has the same shape — a base name with
+a numeric or parenthesised suffix — and that shape is not safe to automate: of the 1,206
+prefix pairs differing by a trailing number (measured 2026-09-06 across 447,148 companies),
+`Intel`/`intel471`, `Four Seasons`/`Four Seasons Certified Home Health Agency`,
+`SpaceX`/`SpaceXAI` and `Blend`/`Blend360` are different employers. A wrong merge costs more
+than a missed one, since the alias is what the 301 reads. So the NAME proposes and the
+POSTINGS decide: an entry is confirmed by counting distinct job titles the two slugs share
+among their open postings, and the count is recorded beside it. `blend`/`blend-360` scored 10
+against a floor of 20 and was left out — on the same evidence the name alone got wrong.
+
+The invariants (canonical slug is a fixed point of `CompanySlug`, no entry points at a slug
+that is itself retiring) are enforced by `TestCuratedAliasesAreWellFormed`, not by review.
+
 `cmd/merge-companies` groups companies by `normalize.CompanyKey` of the NAME (which is what
 covers both classes in one pass), elects the highest `job_count` variant, and records the rest
-as aliases. It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
+as aliases. A curated group overrides that grouping: its canon is the one the list names, not
+the one an election reaches — Sopra Steria's artefact board carries 1,336 open jobs against the
+real company's 337, so an election would retire the company into its own artefact. It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the
 retired slug, so an updated row leaves the set — the loop ends on its own, a re-run moves
 nothing, and an interrupted wave resumes. The alias row is written BEFORE its jobs move: a run
