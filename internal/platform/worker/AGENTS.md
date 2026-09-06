@@ -90,7 +90,7 @@ trailing board path if there is one, so ~140 ingest boards land in distinct seri
 answers *is the worker alive*: a hung run never stamps a completion, so last-run age
 covers both "hung" and "timer stopped".
 
-**Per pipeline, by `cmd/queue-metrics`** — `freehire_queue_{depth,dead_letters,oldest_age_seconds}`
+**Per pipeline, by `cmd/queue-metrics`** — `freehire_queue_{depth,dead_letters,blocked,oldest_age_seconds}`
 labelled by `queue`, `freehire_boards_total` labelled by `state`,
 `freehire_catalogue_newest_job_timestamp_seconds`, and
 `freehire_notify_{pending_subscriptions,oldest_pending_age_seconds}`. This answers *is the
@@ -104,6 +104,17 @@ An oldest-pending age climbing past a few passes is the signal; `failed` never m
 never claimed again, and identical to what an empty queue prints. **A queue this worker does
 not measure has no signal at all**: the per-run family above stayed green throughout, since
 the binary kept exiting 0. Adding an outbox means adding it here.
+
+All ten pipeline queues are measured, which they were not: `search_delete_outbox`,
+`apply_form_outbox`, `adzuna_description_outbox`, `auto_apply_queue` and
+`push_ticket_outbox` were unmeasured while the rule above was already written down. Two of
+them do not fit the three-gauge shape and so are the reason the counts are OPTIONAL:
+`auto_apply_queue` has a third terminal state (a parked attempt needs new data, not another
+try — `freehire_queue_blocked`), and `push_ticket_outbox` carries neither `attempts` nor
+`failed_at`, so it publishes NO dead-letter sample rather than a permanent zero. Absent and
+zero differ in the other direction too: a zero would read as "given up on nothing", a claim
+about a measurement nobody took. **`freehire_queue_blocked` is new, so nothing in
+freehire-ops graphs or alerts on it yet** — adding the gauge here does not surface it there.
 These names are a contract with the dashboard and alert rules in `freehire-ops`, which
 cannot be compiled against this repo — `cmd/queue-metrics/render_test.go` pins the exact
 exposition text so a rename is a visible edit rather than a silent breakage.

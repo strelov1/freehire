@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const adzunaDescriptionOutboxMetrics = `-- name: AdzunaDescriptionOutboxMetrics :one
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM adzuna_description_outbox
+`
+
+type AdzunaDescriptionOutboxMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same shape and same reasoning as SearchOutboxMetrics. Same bounded-drain question as
+// apply_form_outbox: ADZUNA_DESCRIPTION_MAX_PER_RUN defaults to 500 and is deliberately
+// conservative, so the depth is what says whether that figure is still the right one.
+func (q *Queries) AdzunaDescriptionOutboxMetrics(ctx context.Context) (AdzunaDescriptionOutboxMetricsRow, error) {
+	row := q.db.QueryRow(ctx, adzunaDescriptionOutboxMetrics)
+	var i AdzunaDescriptionOutboxMetricsRow
+	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
+}
+
 const appleRevocationJobMetrics = `-- name: AppleRevocationJobMetrics :one
 SELECT
     count(*) FILTER (WHERE status IN ('pending', 'retry', 'processing')) AS depth,
@@ -41,6 +68,92 @@ func (q *Queries) AppleRevocationJobMetrics(ctx context.Context) (AppleRevocatio
 	row := q.db.QueryRow(ctx, appleRevocationJobMetrics)
 	var i AppleRevocationJobMetricsRow
 	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
+}
+
+const applyFormOutboxMetrics = `-- name: ApplyFormOutboxMetrics :one
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM apply_form_outbox
+`
+
+type ApplyFormOutboxMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same shape and same reasoning as SearchOutboxMetrics. The depth here is the one that
+// carries information rather than the dead letters: cmd/capture-apply-form takes
+// APPLY_FORM_MAX_PER_RUN entries a run against a backlog that started at ~185k, so
+// whether the drain is gaining on it is a question only this gauge answers.
+func (q *Queries) ApplyFormOutboxMetrics(ctx context.Context) (ApplyFormOutboxMetricsRow, error) {
+	row := q.db.QueryRow(ctx, applyFormOutboxMetrics)
+	var i ApplyFormOutboxMetricsRow
+	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
+}
+
+const autoApplyQueueMetrics = `-- name: AutoApplyQueueMetrics :one
+SELECT
+    count(*) FILTER (
+        WHERE failed_at IS NULL
+          AND blocked_at IS NULL
+          AND tailored_cv_id IS NOT NULL
+          AND review_decision = 'approved'
+    )                                                                AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL)                    AS dead_letters,
+    count(*) FILTER (WHERE failed_at IS NULL AND blocked_at IS NOT NULL) AS blocked,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (
+            WHERE failed_at IS NULL
+              AND blocked_at IS NULL
+              AND tailored_cv_id IS NOT NULL
+              AND review_decision = 'approved'
+        )),
+        0
+    )::float8                                                        AS oldest_age_seconds
+FROM auto_apply_queue
+`
+
+type AutoApplyQueueMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	Blocked          int64   `json:"blocked"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
+// than two, so it cannot be a copy of it.
+//
+// Depth is ClaimAutoApplyBatch's own predicate minus the lease: a submission attempt is
+// only ever claimed once the candidate has approved a tailored CV for it, so an entry
+// still awaiting that review is deliberately NOT depth — it is waiting on a person, and
+// counting it would make ordinary candidate behaviour look like a stalled worker.
+//
+// Blocked is the third state and the reason this needs its own gauge. `Park is not a
+// retry` (internal/application/autoapply/AGENTS.md): an attempt the sidecar could not
+// fully resolve is excluded from the claim by blocked_at without touching attempts, so
+// it is neither work still owed nor work retried to exhaustion. Folding it into either
+// of the other two counts would be a wrong reading, and leaving it out entirely is how a
+// population that no run will ever pick up again becomes invisible.
+//
+// failed_at wins over blocked_at where a row somehow carries both, so the three counts
+// stay mutually exclusive and a stacked graph reads correctly.
+func (q *Queries) AutoApplyQueueMetrics(ctx context.Context) (AutoApplyQueueMetricsRow, error) {
+	row := q.db.QueryRow(ctx, autoApplyQueueMetrics)
+	var i AutoApplyQueueMetricsRow
+	err := row.Scan(
+		&i.Depth,
+		&i.DeadLetters,
+		&i.Blocked,
+		&i.OldestAgeSeconds,
+	)
 	return i, err
 }
 
@@ -279,6 +392,67 @@ func (q *Queries) ProviderIngestHealth(ctx context.Context) ([]ProviderIngestHea
 		return nil, err
 	}
 	return items, nil
+}
+
+const pushTicketOutboxMetrics = `-- name: PushTicketOutboxMetrics :one
+SELECT
+    count(*)                                                    AS depth,
+    COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::float8 AS oldest_age_seconds
+FROM push_ticket_outbox
+`
+
+type PushTicketOutboxMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Depth and age only: this queue carries neither attempts nor failed_at, because
+// DeletePushTickets removes a ticket on every terminal receipt outcome and an
+// unprocessed batch (Expo unreachable) simply stays queued for the next run. There is no
+// give-up state to measure, so the caller publishes no dead-letter sample for it rather
+// than a zero that would claim a measurement nobody took.
+//
+// That makes the AGE the whole signal here. Every row is live by construction, so a
+// depth that merely grows says the fleet is busy, while an oldest entry older than a few
+// scheduled runs says cmd/push-receipts is not draining — the one failure this queue can
+// have and the one it would otherwise report as a perfectly healthy backlog.
+func (q *Queries) PushTicketOutboxMetrics(ctx context.Context) (PushTicketOutboxMetricsRow, error) {
+	row := q.db.QueryRow(ctx, pushTicketOutboxMetrics)
+	var i PushTicketOutboxMetricsRow
+	err := row.Scan(&i.Depth, &i.OldestAgeSeconds)
+	return i, err
+}
+
+const searchDeleteOutboxMetrics = `-- name: SearchDeleteOutboxMetrics :one
+SELECT
+    count(*) FILTER (WHERE failed_at IS NULL)     AS depth,
+    count(*) FILTER (WHERE failed_at IS NOT NULL) AS dead_letters,
+    COALESCE(
+        EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE failed_at IS NULL)),
+        0
+    )::float8                                     AS oldest_age_seconds
+FROM search_delete_outbox
+`
+
+type SearchDeleteOutboxMetricsRow struct {
+	Depth            int64   `json:"depth"`
+	DeadLetters      int64   `json:"dead_letters"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+// Same shape and same reasoning as SearchOutboxMetrics, over the removal side of the
+// facet index.
+//
+// Its dead letters are the sharper half of the pair. An entry this queue gives up on
+// leaves a CLOSED posting in the live index — searchable, clickable, and 404ing on
+// arrival — until the next full rebuild sweeps it out, and search_delete_outbox's
+// UNIQUE (job_id) plus the ON CONFLICT DO NOTHING every enqueue carries means that
+// posting can never be queued for removal again in the meantime.
+func (q *Queries) SearchDeleteOutboxMetrics(ctx context.Context) (SearchDeleteOutboxMetricsRow, error) {
+	row := q.db.QueryRow(ctx, searchDeleteOutboxMetrics)
+	var i SearchDeleteOutboxMetricsRow
+	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
+	return i, err
 }
 
 const searchOutboxMetrics = `-- name: SearchOutboxMetrics :one

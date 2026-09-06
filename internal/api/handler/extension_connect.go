@@ -131,13 +131,19 @@ func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	// Authorization: Bearer, Roy via cookie/WS-subprotocol). The token carries the
 	// account's session generation, so "sign out everywhere" evicts the extension too —
 	// re-running connect mints a fresh one.
+	//
+	// Both failures are returned rather than phrased as fiber.NewError(500, …): what
+	// has to read them is the error inbox, and a *fiber.Error carries no cause for it
+	// to show. The caller meets the generic 500 body instead — see classify. The read
+	// additionally gains the house mapping for a vanished account (pgx.ErrNoRows →
+	// 404), which is the honest answer when the session outlives its user row.
 	version, err := h.queries.GetUserTokenVersion(c.Context(), userID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
+		return fmt.Errorf("read token version for the extension connect of user %d: %w", userID, err)
 	}
 	token, err := h.issuer.Issue(userID, version)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
+		return fmt.Errorf("issue extension connect token for user %d: %w", userID, err)
 	}
 	return redirect(url.Values{"token": {token}, "state": {state}})
 }

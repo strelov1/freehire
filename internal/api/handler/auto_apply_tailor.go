@@ -185,7 +185,13 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 
 	if err := h.runAutopilotToCompletion(ctx, analysis, sess, job.Description, runner, reg, system, noop); err != nil {
 		log.Printf("auto-apply: tailoring run for queue entry %d (cv %s): %v", queueID, tailored.ID, err)
-		return fiber.NewError(fiber.StatusInternalServerError, "the tailoring run failed")
+		// The CAUSE, not fiber.NewError(500, "the tailoring run failed"): the streamed
+		// autopilot reports this same error to Sentry (reportStreamFault in
+		// assistant.go), and phrasing it here took the synchronous route's copy out of
+		// the inbox. Returned unwrapped so classify still recognises what it is — an
+		// orchestrator that hung up mid-run arrives as context.Canceled and must stay a
+		// 499 nobody is paged for, not a fault.
+		return err
 	}
 
 	affected, err := h.queries.SetAutoApplyTailoredCV(c.Context(), db.SetAutoApplyTailoredCVParams{

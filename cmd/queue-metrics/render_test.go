@@ -16,9 +16,13 @@ import (
 func fullSnapshot() snapshot {
 	return snapshot{
 		queues: []queueMetrics{
-			{name: "search_outbox", depth: 3, deadLetters: 2, oldestAgeSeconds: 21600.5},
-			{name: "enrichment_outbox", depth: 1049297, deadLetters: 41, oldestAgeSeconds: 5529600},
-			{name: "semantic_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
+			{name: "search_outbox", depth: 3, deadLetters: ptr(int64(2)), oldestAgeSeconds: 21600.5},
+			{name: "enrichment_outbox", depth: 1049297, deadLetters: ptr(int64(41)), oldestAgeSeconds: 5529600},
+			{name: "semantic_outbox", depth: 0, deadLetters: ptr(int64(0)), oldestAgeSeconds: 0},
+			// The two shapes only the newer queues have: one parked population that is
+			// neither owed nor exhausted, and one queue with no give-up state at all.
+			{name: "auto_apply_queue", depth: 6, deadLetters: ptr(int64(1)), blocked: ptr(int64(22)), oldestAgeSeconds: 300},
+			{name: "push_ticket_outbox", depth: 48, oldestAgeSeconds: 1200},
 		},
 		healthyBoards:              74894,
 		failingBoards:              7002,
@@ -38,16 +42,24 @@ const wantFullRender = `# HELP freehire_queue_depth Live entries waiting in a pi
 freehire_queue_depth{queue="search_outbox"} 3
 freehire_queue_depth{queue="enrichment_outbox"} 1049297
 freehire_queue_depth{queue="semantic_outbox"} 0
+freehire_queue_depth{queue="auto_apply_queue"} 6
+freehire_queue_depth{queue="push_ticket_outbox"} 48
 # HELP freehire_queue_dead_letters Entries a pipeline outbox queue has given up on.
 # TYPE freehire_queue_dead_letters gauge
 freehire_queue_dead_letters{queue="search_outbox"} 2
 freehire_queue_dead_letters{queue="enrichment_outbox"} 41
 freehire_queue_dead_letters{queue="semantic_outbox"} 0
+freehire_queue_dead_letters{queue="auto_apply_queue"} 1
+# HELP freehire_queue_blocked Entries a pipeline outbox queue has parked for want of data a retry cannot supply.
+# TYPE freehire_queue_blocked gauge
+freehire_queue_blocked{queue="auto_apply_queue"} 22
 # HELP freehire_queue_oldest_age_seconds Age of the oldest live entry in a pipeline outbox queue.
 # TYPE freehire_queue_oldest_age_seconds gauge
 freehire_queue_oldest_age_seconds{queue="search_outbox"} 21600.500
 freehire_queue_oldest_age_seconds{queue="enrichment_outbox"} 5529600.000
 freehire_queue_oldest_age_seconds{queue="semantic_outbox"} 0.000
+freehire_queue_oldest_age_seconds{queue="auto_apply_queue"} 300.000
+freehire_queue_oldest_age_seconds{queue="push_ticket_outbox"} 1200.000
 # HELP freehire_notify_pending_subscriptions Active subscriptions with at least one undelivered match.
 # TYPE freehire_notify_pending_subscriptions gauge
 freehire_notify_pending_subscriptions 12
@@ -93,7 +105,7 @@ func TestRenderOmitsCatalogueFreshnessWhenEmpty(t *testing.T) {
 func TestRenderPublishesExplicitZeroesForADrainedQueue(t *testing.T) {
 	s := snapshot{
 		queues: []queueMetrics{
-			{name: "search_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
+			{name: "search_outbox", depth: 0, deadLetters: ptr(int64(0)), oldestAgeSeconds: 0},
 		},
 		newestJob: time.Unix(1786821346, 0),
 	}
@@ -125,9 +137,10 @@ func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 	}
 
 	want := map[string]int{
-		"freehire_queue_depth":                            3,
-		"freehire_queue_dead_letters":                     3,
-		"freehire_queue_oldest_age_seconds":               3,
+		"freehire_queue_depth":                            5,
+		"freehire_queue_dead_letters":                     4,
+		"freehire_queue_blocked":                          1,
+		"freehire_queue_oldest_age_seconds":               5,
 		"freehire_boards_total":                           3,
 		"freehire_catalogue_newest_job_timestamp_seconds": 1,
 		"freehire_notify_pending_subscriptions":           1,
@@ -160,6 +173,7 @@ func TestRenderGroupsEachFamilyUnderOneHelpAndType(t *testing.T) {
 	for _, family := range []string{
 		"freehire_queue_depth",
 		"freehire_queue_dead_letters",
+		"freehire_queue_blocked",
 		"freehire_queue_oldest_age_seconds",
 		"freehire_boards_total",
 		"freehire_catalogue_newest_job_timestamp_seconds",
@@ -282,5 +296,66 @@ func TestRenderProviderBoardsIsOneWellFormedFamily(t *testing.T) {
 	}
 	if family.GetType() != dto.MetricType_GAUGE {
 		t.Errorf("family parsed as %v, want GAUGE", family.GetType())
+	}
+}
+
+// A queue with no give-up state must be ABSENT from the dead-letter family, not zero.
+// push_ticket_outbox carries neither attempts nor failed_at, so a zero there would
+// publish a measurement nobody took and would sit in the family looking permanently
+// healthy — the same distinction the provider timestamp family already draws.
+func TestRenderOmitsDeadLettersForAQueueThatCannotDeadLetter(t *testing.T) {
+	got := render(fullSnapshot())
+
+	if strings.Contains(got, `freehire_queue_dead_letters{queue="push_ticket_outbox"}`) {
+		t.Errorf("a queue with no give-up state must publish no dead-letter sample\ngot:\n%s", got)
+	}
+	// Its two real measurements must still be there: the age is the only thing that can
+	// report cmd/push-receipts having stopped draining.
+	for _, want := range []string{
+		`freehire_queue_depth{queue="push_ticket_outbox"} 48`,
+		`freehire_queue_oldest_age_seconds{queue="push_ticket_outbox"} 1200.000`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render() missing %q\ngot:\n%s", want, got)
+		}
+	}
+}
+
+// The parked family carries only the queue that HAS a park state, so a dashboard reading
+// it never has to know which queues could answer. Publishing zeroes for the other nine
+// would make "nothing parked" and "cannot park" the same series.
+func TestRenderPublishesParkedOnlyForTheQueueThatCanPark(t *testing.T) {
+	got := render(fullSnapshot())
+
+	if !strings.Contains(got, `freehire_queue_blocked{queue="auto_apply_queue"} 22`) {
+		t.Errorf("render() dropped the parked count, which nothing else reports\ngot:\n%s", got)
+	}
+	for _, unwanted := range []string{
+		`freehire_queue_blocked{queue="search_outbox"}`,
+		`freehire_queue_blocked{queue="push_ticket_outbox"}`,
+	} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("render() published %q for a queue with no park state\ngot:\n%s", unwanted, got)
+		}
+	}
+}
+
+// A family no queue answers is omitted head and all rather than left as a bare HELP/TYPE
+// pair, matching the rule the provider timestamp family already follows.
+func TestRenderOmitsAnEmptyOptionalFamilyEntirely(t *testing.T) {
+	s := snapshot{
+		queues:    []queueMetrics{{name: "push_ticket_outbox", depth: 48, oldestAgeSeconds: 1200}},
+		newestJob: time.Unix(1786821346, 0),
+	}
+
+	got := render(s)
+
+	for _, unwanted := range []string{"freehire_queue_blocked", "freehire_queue_dead_letters"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("render() emitted %s with no samples\ngot:\n%s", unwanted, got)
+		}
+	}
+	if !strings.Contains(got, `freehire_queue_depth{queue="push_ticket_outbox"} 48`) {
+		t.Errorf("render() dropped the families that DO have samples\ngot:\n%s", got)
 	}
 }

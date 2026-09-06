@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -473,7 +474,10 @@ func (h *authHandlers) setSessionAt(c *fiber.Ctx, userID int64, version int32) e
 func (h *authHandlers) issueSessionAt(c *fiber.Ctx, userID int64, version int32) (string, error) {
 	token, err := h.issuer.Issue(userID, version)
 	if err != nil {
-		return "", fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
+		// Returned rather than phrased as fiber.NewError(500, …): a signing failure is
+		// a fault the error inbox must see with its cause, and a *fiber.Error carries
+		// none. The caller sees the generic 500 body instead — see classify.
+		return "", fmt.Errorf("issue session token for user %d: %w", userID, err)
 	}
 	auth.SetTokenCookie(c, token, h.issuer.TTL(), h.cookieSecure, auth.CookieDomainForHost(c.Hostname(), h.cookieDomains))
 	return token, nil

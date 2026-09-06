@@ -154,7 +154,9 @@ func main() {
 	// Sentry request middleware, wired only when error reporting is configured. It
 	// sits AFTER recover.New so its deferred capture runs first on a panic (reporting
 	// it with request context); Repanic re-raises so recover.New still renders the
-	// standard 500 envelope. Non-panic 5xx are reported separately in handler.RenderError.
+	// standard 500 envelope. Non-panic 500s are reported separately in handler.RenderError
+	// — including the ones a handler declared itself; a 503 means "unconfigured here" and
+	// is deliberately not one of them.
 	if cfg.SentryDSN != "" {
 		app.Use(sentryfiber.New(sentryfiber.Options{Repanic: true}))
 	}

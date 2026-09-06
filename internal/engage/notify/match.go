@@ -20,8 +20,17 @@ import (
 // (avoid-skills) preference, so a subscription never receives a job older than
 // it or carrying a skill its subscriber currently avoids.
 //
-// One failing query is logged and skipped, not fatal — the same isolation as the
-// per-board ingest crawl.
+// One failing query is logged, COUNTED and skipped, not fatal — the same isolation as
+// the per-board ingest crawl, which also counts its failed boards rather than only
+// logging them. Without the count a pass in which every query failed printed
+// `queries=53 matched=0 ... failed=0` and exited 0, which is byte-identical to a pass
+// with genuinely nothing new to match; Stats.MatchingCollapsed is what the worker
+// turns that into an exit code with.
+//
+// A cancelled context ends the stage instead of counting the rest as failures: the
+// remaining queries would each fail instantly against the same dead context, so one
+// SIGTERM would otherwise read as "every saved search is broken". Same reasoning, and
+// the same shape, as forCompanyBatches in cmd/reindex.
 func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	subs, err := r.store.ListActiveSubscriptions(ctx)
 	if err != nil {
@@ -39,11 +48,19 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	}
 
 	stats.Queries = len(groups)
+	done := 0
 	for query, gsubs := range groups {
 		if err := r.matchQuery(ctx, query, gsubs, excludedByUser, stats); err != nil {
+			// `done`, not the failure count: what a cancellation has to report is how
+			// far the stage got, and this branch runs before the failure is counted.
+			if cause := ctx.Err(); cause != nil {
+				return fmt.Errorf("cancelled after %d of %d queries: %w", done, stats.Queries, cause)
+			}
+			stats.FailedQueries++
 			log.Printf("notify: match query %q failed: %v", query, err)
 			continue
 		}
+		done++
 	}
 	return nil
 }

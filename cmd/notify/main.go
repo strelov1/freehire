@@ -84,5 +84,13 @@ func run() int {
 		log.Printf("notify: %v", err)
 		return 1
 	}
+	// A single failed saved-search query is isolated by design and must not fail the
+	// pass that served the rest. Every one of them failing is not that case — it means
+	// the index or its credential is gone — and it produced no failure count at all
+	// before Stats.FailedQueries existed, so the run exited 0 having matched nothing.
+	if stats.MatchingCollapsed() {
+		log.Printf("notify: all %d saved-search queries failed — nothing was matched this pass", stats.Queries)
+		return 1
+	}
 	return worker.ExitCode(stats.Failed, 0)
 }

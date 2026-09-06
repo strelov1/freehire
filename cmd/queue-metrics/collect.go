@@ -17,9 +17,14 @@ import (
 // Narrow by intent, matching internal/platform/worker's FullScanQueries.
 type metricsQueries interface {
 	SearchOutboxMetrics(context.Context) (db.SearchOutboxMetricsRow, error)
+	SearchDeleteOutboxMetrics(context.Context) (db.SearchDeleteOutboxMetricsRow, error)
 	EnrichmentOutboxMetrics(context.Context) (db.EnrichmentOutboxMetricsRow, error)
 	SemanticOutboxMetrics(context.Context) (db.SemanticOutboxMetricsRow, error)
 	MailClassificationOutboxMetrics(context.Context) (db.MailClassificationOutboxMetricsRow, error)
+	ApplyFormOutboxMetrics(context.Context) (db.ApplyFormOutboxMetricsRow, error)
+	AdzunaDescriptionOutboxMetrics(context.Context) (db.AdzunaDescriptionOutboxMetricsRow, error)
+	AutoApplyQueueMetrics(context.Context) (db.AutoApplyQueueMetricsRow, error)
+	PushTicketOutboxMetrics(context.Context) (db.PushTicketOutboxMetricsRow, error)
 	AppleRevocationJobMetrics(context.Context) (db.AppleRevocationJobMetricsRow, error)
 	BoardHealthMetrics(context.Context) (db.BoardHealthMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
@@ -36,6 +41,10 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	if err != nil {
 		return snapshot{}, fmt.Errorf("search outbox metrics: %w", err)
 	}
+	searchDelete, err := q.SearchDeleteOutboxMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("search delete outbox metrics: %w", err)
+	}
 	enrichment, err := q.EnrichmentOutboxMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("enrichment outbox metrics: %w", err)
@@ -47,6 +56,22 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	mail, err := q.MailClassificationOutboxMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("mail classification outbox metrics: %w", err)
+	}
+	applyForms, err := q.ApplyFormOutboxMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("apply form outbox metrics: %w", err)
+	}
+	adzunaDescriptions, err := q.AdzunaDescriptionOutboxMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("adzuna description outbox metrics: %w", err)
+	}
+	autoApply, err := q.AutoApplyQueueMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("auto apply queue metrics: %w", err)
+	}
+	pushTickets, err := q.PushTicketOutboxMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("push ticket outbox metrics: %w", err)
 	}
 	appleRevocations, err := q.AppleRevocationJobMetrics(ctx)
 	if err != nil {
@@ -90,17 +115,31 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	}
 
 	return snapshot{
+		// Every queue in the pipeline, because a queue this worker does not measure has
+		// no signal at all: each of these is drained by a worker that exits 0 whether it
+		// kept up or not, so the per-run family stays green through any backlog. Adding
+		// an outbox means adding it here.
 		queues: []queueMetrics{
-			{name: "search_outbox", depth: search.Depth, deadLetters: search.DeadLetters, oldestAgeSeconds: search.OldestAgeSeconds},
-			{name: "enrichment_outbox", depth: enrichment.Depth, deadLetters: enrichment.DeadLetters, oldestAgeSeconds: enrichment.OldestAgeSeconds},
-			{name: "semantic_outbox", depth: semantic.Depth, deadLetters: semantic.DeadLetters, oldestAgeSeconds: semantic.OldestAgeSeconds},
-			{name: "email_classification_outbox", depth: mail.Depth, deadLetters: mail.DeadLetters, oldestAgeSeconds: mail.OldestAgeSeconds},
+			{name: "search_outbox", depth: search.Depth, deadLetters: &search.DeadLetters, oldestAgeSeconds: search.OldestAgeSeconds},
+			{name: "search_delete_outbox", depth: searchDelete.Depth, deadLetters: &searchDelete.DeadLetters, oldestAgeSeconds: searchDelete.OldestAgeSeconds},
+			{name: "enrichment_outbox", depth: enrichment.Depth, deadLetters: &enrichment.DeadLetters, oldestAgeSeconds: enrichment.OldestAgeSeconds},
+			{name: "semantic_outbox", depth: semantic.Depth, deadLetters: &semantic.DeadLetters, oldestAgeSeconds: semantic.OldestAgeSeconds},
+			{name: "email_classification_outbox", depth: mail.Depth, deadLetters: &mail.DeadLetters, oldestAgeSeconds: mail.OldestAgeSeconds},
+			{name: "apply_form_outbox", depth: applyForms.Depth, deadLetters: &applyForms.DeadLetters, oldestAgeSeconds: applyForms.OldestAgeSeconds},
+			{name: "adzuna_description_outbox", depth: adzunaDescriptions.Depth, deadLetters: &adzunaDescriptions.DeadLetters, oldestAgeSeconds: adzunaDescriptions.OldestAgeSeconds},
+			// The only queue with a third state: a parked attempt needs new data, not
+			// another try, so it is neither depth nor a dead letter. See
+			// AutoApplyQueueMetrics for why folding it into either would misread it.
+			{name: "auto_apply_queue", depth: autoApply.Depth, deadLetters: &autoApply.DeadLetters, blocked: &autoApply.Blocked, oldestAgeSeconds: autoApply.OldestAgeSeconds},
+			// No dead letters at all — the table carries neither attempts nor failed_at.
+			// A nil says so; a zero would claim a measurement nobody took.
+			{name: "push_ticket_outbox", depth: pushTickets.Depth, oldestAgeSeconds: pushTickets.OldestAgeSeconds},
 			// Not an outbox by name, but the same thing by shape and by hazard: a queue
 			// one worker drains, whose given-up entries nothing ever claims again. A
 			// queue this worker does not measure has no signal at all — cmd/apple-revoke
 			// exits 0 either way, so the per-run family stays green through a backlog of
 			// identities stranded in revocation_pending.
-			{name: "apple_revocation_jobs", depth: appleRevocations.Depth, deadLetters: appleRevocations.DeadLetters, oldestAgeSeconds: appleRevocations.OldestAgeSeconds},
+			{name: "apple_revocation_jobs", depth: appleRevocations.Depth, deadLetters: &appleRevocations.DeadLetters, oldestAgeSeconds: appleRevocations.OldestAgeSeconds},
 		},
 		notifyPendingSubscriptions: notifyBacklog.PendingSubscriptions,
 		notifyOldestAgeSeconds:     notifyBacklog.OldestAgeSeconds,

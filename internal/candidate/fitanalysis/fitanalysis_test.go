@@ -27,10 +27,14 @@ const (
 // fakeStore is the analysis cache in memory. row==nil stands for "never analysed", which the
 // real store reports as pgx.ErrNoRows.
 type fakeStore struct {
-	row      *db.GetUserJobAnalysisRow
-	readErr  error
-	upserted []db.UpsertUserJobAnalysisParams
-	list     []db.ListUserJobAnalysesRow
+	row     *db.GetUserJobAnalysisRow
+	readErr error
+	// upsertErr fails the cache WRITE, which is the one outcome a caller cannot see for
+	// itself: it already holds the analysis, while a coalescing follower has only the
+	// cache to read.
+	upsertErr error
+	upserted  []db.UpsertUserJobAnalysisParams
+	list      []db.ListUserJobAnalysesRow
 }
 
 func (f *fakeStore) GetUserJobAnalysis(context.Context, db.GetUserJobAnalysisParams) (db.GetUserJobAnalysisRow, error) {
@@ -44,6 +48,9 @@ func (f *fakeStore) GetUserJobAnalysis(context.Context, db.GetUserJobAnalysisPar
 }
 
 func (f *fakeStore) UpsertUserJobAnalysis(_ context.Context, arg db.UpsertUserJobAnalysisParams) error {
+	if f.upsertErr != nil {
+		return f.upsertErr
+	}
 	f.upserted = append(f.upserted, arg)
 	return nil
 }

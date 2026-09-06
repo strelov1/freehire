@@ -98,6 +98,48 @@ func TestRenderError_ReturnedErrorReportedOnce(t *testing.T) {
 	}
 }
 
+// A 500 a handler declared for itself — fiber.NewError(500, "…") to give the caller
+// readable words instead of "internal server error" — must reach Sentry like any
+// other 500. It reached it never, which is how thirteen genuine faults (a failed
+// token mint, an autopilot run, a billing event that could not be recorded) left no
+// trace at all: seven of them do not log either.
+func TestRenderError_DeclaredInternalErrorIsReported(t *testing.T) {
+	app, tr := sentryApp(t, func(*fiber.Ctx) error {
+		return fiber.NewError(fiber.StatusInternalServerError, "could not record the event")
+	})
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", resp.StatusCode)
+	}
+	if got := tr.count(); got != 1 {
+		t.Errorf("sentry events = %d, want exactly 1", got)
+	}
+}
+
+// The counterpart: a 503 says this deployment has no Meilisearch or LLM, which every
+// request to that route repeats and nobody can act on from an error inbox. Reporting
+// on `code >= 500` would have made ~42 call sites into a permanent alert.
+func TestRenderError_UnconfiguredServiceIsNotReported(t *testing.T) {
+	app, tr := sentryApp(t, func(*fiber.Ctx) error {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured")
+	})
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", resp.StatusCode)
+	}
+	if got := tr.count(); got != 0 {
+		t.Errorf("sentry events = %d, want 0", got)
+	}
+}
+
 // errorApp mounts a route that returns errFn's error through RenderError, so the
 // status mapping can be asserted end to end.
 func errorApp(errFn func(*fiber.Ctx) error) *fiber.App {
@@ -139,9 +181,11 @@ func TestErrorHandler_DefaultsTo500(t *testing.T) {
 	}
 }
 
-// classify decides both the HTTP mapping and whether an error is an unexpected
-// fault worth reporting to Sentry. Only the fall-through 500 must be reported;
-// routine 4xx and mapped 404s must not, so the error inbox stays signal, not noise.
+// classify decides both the HTTP mapping and whether an error is a fault worth
+// reporting to Sentry. Every 500 must be reported — including one a handler
+// DECLARED with fiber.NewError to phrase it for a human, which used to be reported
+// as nothing at all; routine 4xx, mapped 404s and the deployment-shaped 503s must
+// not be, so the error inbox stays signal, not noise.
 func TestClassify_ReportsOnlyUnexpected500(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -151,6 +195,15 @@ func TestClassify_ReportsOnlyUnexpected500(t *testing.T) {
 	}{
 		{"generic error is an unexpected 500", errString("boom"), fiber.StatusInternalServerError, true},
 		{"fiber 4xx is routine", fiber.NewError(fiber.StatusBadRequest, "bad"), fiber.StatusBadRequest, false},
+		// A handler that wrapped a real failure in fiber.NewError purely to give the
+		// caller readable words thereby took it out of the error inbox. Thirteen call
+		// sites did, and seven of them logged nothing either.
+		{"declared 500 is still a fault", fiber.NewError(fiber.StatusInternalServerError, "could not record the event"), fiber.StatusInternalServerError, true},
+		// The equality, not `>= 500`: ~42 sites answer 503 to say this deployment has no
+		// Meilisearch or LLM configured. That is a statement about the environment,
+		// repeated on every request to the route, and nobody can act on it from Sentry.
+		{"503 means unconfigured, not broken", fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured"), fiber.StatusServiceUnavailable, false},
+		{"wrapped declared 500 is still a fault", fmt.Errorf("issue session: %w", fiber.NewError(fiber.StatusInternalServerError, "failed to start session")), fiber.StatusInternalServerError, true},
 		{"no rows maps to 404", pgx.ErrNoRows, fiber.StatusNotFound, false},
 		{"foreign-key violation maps to 404", &pgconn.PgError{Code: "23503"}, fiber.StatusNotFound, false},
 		{"client disconnect is not a fault", context.Canceled, statusClientClosedRequest, false},

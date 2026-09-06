@@ -201,4 +201,5 @@ empty profile the model would read as "no preferences".
 
 - Genuinely domain-specific status choices (e.g. `Me` returning 401 for a gone user token) stay in the handler.
 - Recovered panic is **not** double-reported (recover middleware marks it via `handler.LocalPanicReported`).
-- Sentry reports only fall-through unexpected 500s — routine errors never reported.
+- Sentry reports **every 500**, including one a handler declared with `fiber.NewError(500, …)` to phrase it for a human. `classify` decides on the STATUS, not the error type: a declared 500 used to report nothing, which is how thirteen call sites quietly left the error inbox. Routine 4xx and mapped 404s are never reported, and the test is an equality — the ~42 sites answering 503 mean "this deployment has no Meilisearch/LLM", which is not a fault.
+- **`fiber.NewError` cannot wrap**, so a 500 declared that way reaches Sentry as a message with no cause. When there is a cause worth keeping, return `fmt.Errorf("…: %w", err)` and let the fall-through render the generic body instead of phrasing the message and dropping the error.

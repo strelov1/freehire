@@ -249,21 +249,36 @@ func (s *Service) List(ctx context.Context, userID int64) ([]db.ListUserJobAnaly
 // When r.Claim leads, the claim is released here, from a defer: a panic anywhere between the
 // chain, the cache write and the debit still wakes a waiting follower instead of stranding
 // that pair behind a leader that never finishes.
+//
+// The two gates below answer DIFFERENT questions and are therefore two flags, not one. A
+// single `succeeded` was set after the cache write without looking at it, so a failed write
+// was published to followers as a success — and Follow, whose whole discipline is not to
+// trust the cache unless the leader says so, then served whatever older row was there as
+// this run's live result.
 func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Event)) (*matchanalysis.Analysis, error) {
-	succeeded := false
+	// cached: did the CACHE end up holding this run's result? That is the only thing a
+	// follower can read, so it is what the claim publishes.
+	cached := false
 	if r.Claim.IsLeader() {
-		defer func() { r.Claim.Release(succeeded) }()
+		defer func() { r.Claim.Release(cached) }()
 	}
-	// Nothing produced means nothing owed — and whoever RAN THE CHAIN says so for everyone.
-	// Only a leader or a caller that is not coalescing at all reaches Run (a follower goes to
+	// produced: did the chain yield an analysis THIS caller is about to be handed? Nothing
+	// produced means nothing owed — and whoever RAN THE CHAIN says so for everyone. Only a
+	// leader or a caller that is not coalescing at all reaches Run (a follower goes to
 	// Follow), so this is exactly the caller that knows the outcome. It releases the ref
 	// rather than just its own reservation: when the leader is the free autopilot pre-run, the
 	// charge standing against that ref belongs to a follower about to be told there is nothing.
 	//
+	// It is deliberately NOT `cached`. An allowance buys having the analysis, and a caller
+	// that received one got what it paid for even if the write behind it failed — Follow's
+	// own comment names that case. Refunding on a failed write would void a charge the
+	// returned result earned.
+	//
 	// Deferred so a panic anywhere below — in the chain, the emit callback or the cache write
 	// — gives the credit back too.
+	produced := false
 	defer func() {
-		if !succeeded {
+		if !produced {
 			s.release(ctx, r.UserID, r.Job.ID)
 		}
 	}()
@@ -281,8 +296,8 @@ func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Ev
 	if analysis == nil {
 		return nil, nil // LLM unconfigured — nothing to cache
 	}
-	s.Cache(ctx, r.UserID, r.Job, r.CVUploadedAt, r.Input.Language, analysis)
-	succeeded = true
+	produced = true
+	cached = s.Cache(ctx, r.UserID, r.Job, r.CVUploadedAt, r.Input.Language, analysis) == nil
 	return analysis, nil
 }
 
@@ -372,6 +387,11 @@ func (s *Service) Refresh(ctx context.Context, r Request) {
 // compute runs the chain and caches what it produced, reporting whether the cache is left
 // holding this call's own result — which is what a coalescing follower waits to learn. It
 // never charges: both callers are the autopilot's own unmetered halves.
+//
+// Unlike Run, one flag is the whole answer here. Neither caller is handed the analysis, so
+// there is no caller who got what they paid for: if the write failed, the follower gets
+// nothing and the charge standing against the ref — theirs, not this half's — is given back
+// on their behalf, which is what Ensure's defer does with this return value.
 func (s *Service) compute(ctx context.Context, r Request, stage string) bool {
 	analysis, err := r.Analyzer.Analyze(ctx, r.Input)
 	if err != nil {
@@ -381,22 +401,29 @@ func (s *Service) compute(ctx context.Context, r Request, stage string) bool {
 	if analysis == nil {
 		return false // LLM unconfigured — nothing to cache
 	}
-	s.Cache(ctx, r.UserID, r.Job, r.CVUploadedAt, r.Input.Language, analysis)
-	return true
+	return s.Cache(ctx, r.UserID, r.Job, r.CVUploadedAt, r.Input.Language, analysis) == nil
 }
 
 // Cache upserts the analysis stamped with the analysed CV's upload time, the job content
 // hash, the language it was written in, and the model that produced it. It takes a plain
 // context (never a request's) so a caller streaming over SSE can cache after its handler has
-// returned. Best-effort: a cache failure is logged, not surfaced.
+// returned. Best-effort towards the CALLER: it logs, and the caller that already holds the
+// analysis returns it regardless.
+//
+// It still reports the failure, because one other party cannot see it and has to: a
+// coalescing FOLLOWER reads what this wrote, so a leader whose write failed leaves an older
+// or absent row that the follower would otherwise serve as this run's live result. Follow
+// already refuses to trust the cache unless the leader says it succeeded — this is what
+// makes "succeeded" able to mean the write, and not merely the chain.
 //
 // What it stores is the UNCAPPED analysis. The hard-constraint ceiling is applied to the
 // served copy only, by the caller, so a dictionary change takes effect on the next read with
 // no cache invalidation.
-func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, language string, analysis *matchanalysis.Analysis) {
+func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, language string, analysis *matchanalysis.Analysis) error {
 	blob, err := json.Marshal(analysis)
 	if err != nil {
-		return
+		log.Printf("matchanalysis: encode analysis for user %d job %d: %v", userID, job.ID, err)
+		return err
 	}
 	if err := s.store.UpsertUserJobAnalysis(ctx, db.UpsertUserJobAnalysisParams{
 		UserID:         userID,
@@ -408,7 +435,9 @@ func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploade
 		Language:       language,
 	}); err != nil {
 		log.Printf("matchanalysis: cache analysis for user %d job %d: %v", userID, job.ID, err)
+		return err
 	}
+	return nil
 }
 
 // release gives back a credit reserved for a run that produced nothing, and is best-effort:

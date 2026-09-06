@@ -21,12 +21,28 @@ type fakeSearcher struct {
 	// byQuery maps a query's "q" value to the hits it should return; queries are
 	// keyed by the parsed q so a test can return different hits per query.
 	results []search.SearchResult
-	calls   []search.SearchParams
+	// errs is indexed by call number like results: a non-nil entry fails that one
+	// query, which is how the per-query isolation can be exercised without failing
+	// them all. err fails every call.
+	errs  []error
+	err   error
+	calls []search.SearchParams
 }
 
-func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
+func (f *fakeSearcher) Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error) {
 	f.calls = append(f.calls, p)
+	// A real index client fails a cancelled call rather than serving it, which is what
+	// makes a cancelled pass look like every query failing.
+	if err := ctx.Err(); err != nil {
+		return search.SearchResult{}, err
+	}
 	i := len(f.calls) - 1
+	if f.err != nil {
+		return search.SearchResult{}, f.err
+	}
+	if i < len(f.errs) && f.errs[i] != nil {
+		return search.SearchResult{}, f.errs[i]
+	}
 	if i < len(f.results) {
 		return f.results[i], nil
 	}
@@ -50,6 +66,12 @@ type fakeStore struct {
 	// recordedWebhookSuccesses records the user ids a successful webhook
 	// delivery stamped last_success_at for.
 	recordedWebhookSuccesses []int64
+
+	// deliveryErr and digestJobsErr fail the two reads deliverOne makes before it can
+	// send anything. Neither burns a delivery attempt, so the counter is the only trace
+	// they leave.
+	deliveryErr   error
+	digestJobsErr error
 
 	active      []db.ListActiveSubscriptionsRow
 	recorded    []recordedMatch
@@ -118,10 +140,13 @@ func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscripti
 }
 
 func (s *fakeStore) GetSubscriptionForDelivery(_ context.Context, id int64) (db.GetSubscriptionForDeliveryRow, error) {
-	return s.delivery[id], nil
+	return s.delivery[id], s.deliveryErr
 }
 
 func (s *fakeStore) GetJobsForDigest(_ context.Context, ids []int64) ([]db.GetJobsForDigestRow, error) {
+	if s.digestJobsErr != nil {
+		return nil, s.digestJobsErr
+	}
 	out := make([]db.GetJobsForDigestRow, 0, len(ids))
 	for _, id := range ids {
 		if j, ok := s.digestJobs[id]; ok {

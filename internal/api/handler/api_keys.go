@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -51,7 +52,10 @@ type createAPIKeyRequest struct {
 func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string, expiresAt pgtype.Timestamptz) (string, db.CreateAPIKeyRow, error) {
 	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {
-		return "", db.CreateAPIKeyRow{}, fiber.NewError(fiber.StatusInternalServerError, "failed to generate key")
+		// Returned rather than phrased as fiber.NewError(500, …): the reader we need
+		// here is Sentry, and a *fiber.Error carries no cause for it to show. The
+		// caller sees the generic 500 body instead — see classify.
+		return "", db.CreateAPIKeyRow{}, fmt.Errorf("generate api key for user %d: %w", userID, err)
 	}
 	row, err := h.queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
 		UserID:      userID,

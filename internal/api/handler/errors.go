@@ -51,8 +51,9 @@ func authError(status int, code, message string) error {
 //   - anything else is an unexpected failure: 500 with a generic message, never
 //     leaking internals.
 //
-// Only that last, unexpected case is reported to Sentry (via the request-scoped
-// hub the sentryfiber middleware installs). Routine 4xx and mapped 404s are
+// Anything that ends as a 500 is reported to Sentry (via the request-scoped hub
+// the sentryfiber middleware installs), whether the handler declared it or fell
+// through to one. Routine 4xx, mapped 404s and the deployment-shaped 503s are
 // deliberately not reported, so the error inbox reflects genuine faults rather
 // than normal client traffic. When Sentry is disabled the hub is absent and the
 // capture is skipped — panics are handled separately by the middleware itself.
@@ -86,16 +87,36 @@ func reportUnexpected(c *fiber.Ctx, err error) {
 }
 
 // classify maps an error to its HTTP status and message and reports whether it is
-// an unexpected fault worth sending to Sentry. Only the fall-through 500 is
-// unexpected; a *fiber.Error, the 404-mapped DB errors, a client disconnect, and
-// a malformed search query are all routine.
+// a server fault worth sending to Sentry. The 404-mapped DB errors, a client
+// disconnect and a malformed search query are all routine; every 500 is a fault,
+// including one a handler DECLARED with fiber.NewError to give the caller a
+// readable message.
+//
+// That last clause is the whole reason this branch tests the code instead of
+// answering false for every *fiber.Error. Thirteen call sites wrapped a genuine
+// failure — a DB read, a token mint, an autopilot run — in fiber.NewError(500,
+// "…") purely to phrase it for a human, and thereby took it out of the error
+// inbox; seven of them do not log either, so the failure left no trace anywhere.
+// The streamed autopilot already decided the other way (see reportStreamFault in
+// assistant.go), and the synchronous route sent the SAME error past it.
+//
+// It is an EQUALITY, not `code >= 500`. Forty-two sites answer 503 to mean "this
+// deployment has no Meilisearch/LLM configured" — a statement about the
+// environment, repeated on every request to that route, and not a fault anyone
+// can act on from Sentry.
+//
+// A *fiber.Error cannot wrap, so a 500 declared this way reaches Sentry as its
+// own message with no cause behind it. Call sites that have a cause worth keeping
+// should therefore return `fmt.Errorf("…: %w", err)` and let the fall-through
+// render the generic body, rather than phrasing the message and dropping the
+// error.
 func classify(err error) (status int, msg string, report bool) {
 	var fe *fiber.Error
 	var invalidValue *inbox.InvalidError
 	var badBatch *inbox.BatchError
 	switch {
 	case errors.As(err, &fe):
-		return fe.Code, fe.Message, false
+		return fe.Code, fe.Message, fe.Code == fiber.StatusInternalServerError
 	case errors.Is(err, pgx.ErrNoRows), pgerr.IsForeignKeyViolation(err), errors.Is(err, inbox.ErrNotFound):
 		return fiber.StatusNotFound, "not found", false
 	// The mail service validates against its own vocabularies and refuses to record
