@@ -10,11 +10,19 @@ import (
 // description, so it fetches each posting's detail (bounded-concurrency) to assemble the
 // body, like the SmartRecruiters and Rippling adapters.
 type bambooHR struct {
-	http JSONGetter
+	http bambooHRHTTP
+}
+
+// bambooHRHTTP is the transport surface this adapter needs: the resolved getter for the
+// LISTING, whose redirect is the platform's "not serving this board" answer, and the plain
+// getter for each posting's detail, where a redirect carries no such meaning.
+type bambooHRHTTP interface {
+	JSONGetter
+	JSONResolvedGetter
 }
 
 // NewBambooHR builds the BambooHR adapter over the given HTTP client.
-func NewBambooHR(c JSONGetter) Source { return bambooHR{http: c} }
+func NewBambooHR(c bambooHRHTTP) Source { return bambooHR{http: c} }
 
 func (bambooHR) Provider() string { return "bamboohr" }
 
@@ -22,6 +30,39 @@ func (bambooHR) Provider() string { return "bamboohr" }
 // result array — no loop that could stop early. Detail fetches are best-effort per posting.
 // See the fullBoardListing interface for the bar.
 func (bambooHR) fullBoardListing() {}
+
+// bambooHRBoardGone reports whether a careers-list request was redirected off the board's
+// own careers path, and to where. That is how BambooHR says it is not serving a board: the
+// request answers 302, the client follows it, and the JSON decode fails on HTML.
+//
+// The rule is the redirect itself, not a list of destinations, because the destination
+// varies with WHY the board is not served and the reasons keep their own vocabulary. All
+// four seen in prod on 2026-09-06, across 135 boards, are covered without naming any:
+//
+//	https://www.bamboohr.com                          no such tenant (an invented board
+//	                                                  subdomain lands here too)
+//	https://<board>.bamboohr.com/login.php            tenant exists, public board turned off
+//	https://<board>.bamboohr.com/settings/account/expired.php   account lapsed
+//	https://<board>.bamboohr.com/settings/account/{,temporarily_}suspended
+//
+// A destination is included in the error rather than folded away: they do not mean the same
+// thing to a curator deciding whether to retire, and learning them the first time cost 138
+// hand-run probes. "temporarily_suspended" in particular is a board to leave alone.
+//
+// Staying on the careers path is the success condition, so a redirect BambooHR may add later
+// — a host change, a trailing-slash canonicalisation — is not mistaken for a dead board as
+// long as it still serves the board. An empty final URL (no response at all) is not a
+// verdict: a transport failure must keep reading as one.
+func bambooHRBoardGone(board, final string) (string, bool) {
+	if final == "" {
+		return "", false
+	}
+	served := fmt.Sprintf("https://%s.bamboohr.com/careers", board)
+	if strings.HasPrefix(final, served) {
+		return "", false
+	}
+	return final, true
+}
 
 // bambooHRPosting is one item from the careers list (no description here); the list
 // carries the work-mode signal, the detail carries the body.
@@ -53,7 +94,14 @@ func (b bambooHR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		Result []bambooHRPosting `json:"result"`
 	}
 	url := fmt.Sprintf("https://%s.bamboohr.com/careers/list", e.Board)
-	if err := b.http.GetJSON(ctx, url, &list); err != nil {
+	final, err := b.http.GetJSONResolved(ctx, url, &list)
+	if err != nil {
+		// The redirect is checked before the decode error is reported, because the decode
+		// error is what the redirect CAUSES: the landing page is HTML, so the failure reads
+		// as "invalid character '<'" and says nothing about the board.
+		if dest, gone := bambooHRBoardGone(e.Board, final); gone {
+			return nil, fmt.Errorf("bamboohr: board %q: %w (redirected to %s)", e.Board, ErrBoardGone, dest)
+		}
 		return nil, fmt.Errorf("bamboohr: list board %s: %w", e.Board, err)
 	}
 

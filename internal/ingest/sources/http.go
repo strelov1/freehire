@@ -31,6 +31,13 @@ type JSONGetter interface {
 	GetJSON(ctx context.Context, url string, v any) error
 }
 
+// JSONResolvedGetter fetches a URL following redirects and decodes its JSON body, also
+// returning the FINAL URL — the JSON counterpart of HTMLResolvedGetter, for a platform that
+// answers "this board is not served" with a redirect instead of a status code.
+type JSONResolvedGetter interface {
+	GetJSONResolved(ctx context.Context, url string, v any) (string, error)
+}
+
 // StreamGetter issues a GET and hands the raw response body to fn for streaming decode.
 // Unlike GetJSON it uses a long timeout and neither buffers nor size-caps the body, so it
 // suits large, slow feeds (e.g. the throttled JobStream) that a 15s, size-capped GetJSON
@@ -108,6 +115,7 @@ type HeaderFormPoster interface {
 // narrows it to the role(s) it actually uses.
 type HTTPClient interface {
 	JSONGetter
+	JSONResolvedGetter
 	StreamGetter
 	XMLGetter
 	HTMLGetter
@@ -315,6 +323,27 @@ func (c *Client) GetJSONWithHeaders(ctx context.Context, url string, headers map
 			return json.NewDecoder(resp.Body).Decode(v)
 		},
 	})
+}
+
+// GetJSONResolved fetches url and decodes its JSON body into v, additionally returning the
+// FINAL URL after redirects — the JSON counterpart of GetHTMLResolved, for adapters whose
+// platform answers "no such board" by redirecting rather than by a status code (BambooHR;
+// see bamboohr.go). The decode still runs, so a redirect that lands on real JSON is an
+// ordinary success and the caller simply ignores the URL.
+func (c *Client) GetJSONResolved(ctx context.Context, url string, v any) (string, error) {
+	var final string
+	err := c.do(ctx, request{
+		method: http.MethodGet,
+		url:    url,
+		accept: "application/json",
+		decode: func(resp *http.Response) error {
+			// Recorded before the decode so a redirect that landed on HTML — the case this
+			// exists for — still reports where it went, rather than only that it failed.
+			final = resp.Request.URL.String()
+			return json.NewDecoder(resp.Body).Decode(v)
+		},
+	})
+	return final, err
 }
 
 // GetXML fetches url and decodes its XML body into v (used by adapters whose platform
