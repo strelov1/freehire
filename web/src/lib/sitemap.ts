@@ -57,6 +57,9 @@ export const STATIC_PATHS = [
   '/chatgpt',
   '/contribute',
   '/status',
+  // Named as the App Store listing's Support URL, so it must resolve and stay
+  // indexable — a 404 there is a rejection.
+  '/support',
   '/privacy',
   // The role×country hub. Its category and pair pages are gated on live counts, so
   // they ride in their own per-category sub-sitemaps rather than here.
