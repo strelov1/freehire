@@ -13,6 +13,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '$lib/ui';
+  import { activeRouteTab } from '$lib/routeTabs';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
@@ -56,15 +57,9 @@
   const s = $derived(t(messages, locale()));
   const profile = $derived(profileStore.profile);
   const resumeMeta = $derived(resumeStore.meta);
-  const path = $derived(page.url.pathname);
-  const activeSectionId = $derived(SECTIONS.find((sec) => sec.href === path)?.id ?? 'profile');
+  const activeSectionId = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'profile'));
   const tabs = $derived(
-    SECTIONS.map((sec) => ({
-      id: sec.id,
-      label: s.tabs[sec.id],
-      icon: sec.icon,
-      href: resolve(sec.href),
-    })),
+    SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })),
   );
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');

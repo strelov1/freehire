@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '$lib/ui';
+  import { activeRouteTab } from '$lib/routeTabs';
 
   let { children }: { children: Snippet } = $props();
 
@@ -12,29 +13,18 @@
   // so it is linkable, bookmarkable, and survives a reload. Board is the index
   // route; Pipeline gets its own path. History and Matches live under Activity.
   //
-  // The strip is the same underline `TabStrip` every other `/my/*` section navigates
+  // The strip is the same underline `TabStrip` every other account section navigates
   // with, icons included.
   const SECTIONS = [
-    { id: 'board', label: 'Board', path: '/my/tracking', icon: Columns3 },
-    { id: 'list', label: 'List', path: '/my/tracking/list', icon: List },
-    { id: 'pipeline', label: 'Pipeline', path: '/my/tracking/pipeline', icon: Workflow },
-    { id: 'calendar', label: 'Calendar', path: '/my/tracking/calendar', icon: Calendar },
+    { id: 'board', label: 'Board', href: '/my/tracking', icon: Columns3 },
+    { id: 'list', label: 'List', href: '/my/tracking/list', icon: List },
+    { id: 'pipeline', label: 'Pipeline', href: '/my/tracking/pipeline', icon: Workflow },
+    { id: 'calendar', label: 'Calendar', href: '/my/tracking/calendar', icon: Calendar },
   ] as const;
   const PANEL_ID = 'tracking-tabpanel';
 
-  const path = $derived(page.url.pathname);
-  // Board (index) matches exactly so it is not also active on the child routes.
-  const active = $derived(
-    SECTIONS.find((sec) => sec.path !== '/my/tracking' && path.startsWith(sec.path))?.id ?? 'board',
-  );
-  const tabs = $derived(
-    SECTIONS.map((sec) => ({
-      id: sec.id,
-      label: sec.label,
-      icon: sec.icon,
-      href: resolve(sec.path),
-    })),
-  );
+  const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'board'));
+  const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, href: resolve(sec.href) })));
 </script>
 
 <svelte:head>
