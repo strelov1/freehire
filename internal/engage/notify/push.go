@@ -71,13 +71,12 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 // The title names the saved search that fired: it is what distinguishes one
 // digest from another, and the product name this slot used to carry said
 // nothing in either reader — a phone prints the app's name above a push banner
-// already, and the notification center is inside the app.
+// already, and the notification center is inside the app. The name is always
+// there to use: saved_searches.name is NOT NULL under a CHECK that it holds at
+// least one non-blank character.
 func renderDigest(d Digest) (title, body, slug string) {
 	title = d.SavedSearchName
-	if title == "" {
-		title = "New jobs"
-	}
-	body = fmt.Sprintf("%d new job%s", d.Total, Plural(d.Total))
+	body = JobCount(d.Total)
 	if d.Total == 1 {
 		slug = d.Jobs[0].Slug
 	}

@@ -66,6 +66,11 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest, kind string, ms
 // used by both the push channel (Send, above) and the notification-center record
 // written by Runner.deliverBatch in nudge.go — one rendering, two readers, so the
 // in-app record never drifts from what push already shows.
+//
+// The default arm is not reachable today — application_nudges.kind is CHECKed
+// against exactly the three above — but it is the copy a fourth kind would ship
+// with until someone gave it its own, so it says what the notification is about
+// rather than naming the product.
 func renderNudgeBatch(kind string, ms []Message) (title, body string) {
 	if len(ms) == 1 {
 		return renderNudge(ms[0])
@@ -78,7 +83,7 @@ func renderNudgeBatch(kind string, ms []Message) (title, body string) {
 	case KindJobClosed:
 		return "📪 Jobs closed", fmt.Sprintf("%d jobs you were tracking were closed.", len(ms))
 	default:
-		return "freehire", fmt.Sprintf("%d updates on jobs you are tracking.", len(ms))
+		return "🔔 Jobs you're tracking", fmt.Sprintf("%d updates on jobs you are tracking.", len(ms))
 	}
 }
 
@@ -93,6 +98,6 @@ func renderNudge(m Message) (title, body string) {
 	case KindJobClosed:
 		return "📪 Job closed", fmt.Sprintf("%s at %s was closed.", m.JobTitle, m.Company)
 	default:
-		return "freehire", fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
+		return "🔔 A job you're tracking", fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
 	}
 }

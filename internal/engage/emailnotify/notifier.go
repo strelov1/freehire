@@ -82,7 +82,7 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 	}
 	viewAll := n.viewAllURL(d)
 
-	subject := fmt.Sprintf(`%d new job%s for "%s"`, d.Total, notify.Plural(d.Total), d.SavedSearchName)
+	subject := fmt.Sprintf(`%s for "%s"`, notify.JobCount(d.Total), d.SavedSearchName)
 
 	var b bytes.Buffer
 	// The template is a trusted constant and the data is escaped in context, so
@@ -90,10 +90,9 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ViewAllURL: viewAll})
 
 	html := n.layout.Render(mailtpl.Body{
-		Preheader: fmt.Sprintf("%d new job%s matching your %q alert", d.Total, notify.Plural(d.Total), d.SavedSearchName),
-		Heading: fmt.Sprintf("%d new job%s for “%s”",
-			d.Total, notify.Plural(d.Total), d.SavedSearchName),
-		Content: template.HTML(b.String()), //nolint:gosec // rendered by the trusted template below, which escaped every field in context
+		Preheader: fmt.Sprintf("%s matching your %q alert", notify.JobCount(d.Total), d.SavedSearchName),
+		Heading:   fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName),
+		Content:   template.HTML(b.String()), //nolint:gosec // rendered by the trusted template below, which escaped every field in context
 		// The shell already carries the notification-settings link, so the footer
 		// only has to answer "why am I getting this".
 		Footer: "You’re getting this because you set up a job alert on freehire.",
@@ -106,7 +105,7 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 // non-HTML clients (and spam scorers) see the same content.
 func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, viewAllURL string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d new job%s for %q\n\n", d.Total, notify.Plural(d.Total), d.SavedSearchName)
+	fmt.Fprintf(&b, "%s for %q\n\n", notify.JobCount(d.Total), d.SavedSearchName)
 	for _, l := range rows {
 		b.WriteString("- " + l.Title)
 		if l.Company != "" {
