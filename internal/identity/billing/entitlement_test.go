@@ -5,7 +5,13 @@ import (
 	"time"
 )
 
-const proPrice = "price_pro_monthly"
+// The two tiers' prices, as the tests configure them. They live here rather than beside the
+// tests that sell Ultra because both the untagged tests and the integration ones name them,
+// and a const declared in an integration-tagged file exists only under that tag.
+const (
+	proPrice   = "price_pro_monthly"
+	ultraPrice = "price_ultra_monthly"
+)
 
 func at(t *testing.T, s string) time.Time {
 	t.Helper()
@@ -144,6 +150,93 @@ func TestProUntilFrom(t *testing.T) {
 			want := at(t, tc.want)
 			if !got.Equal(want) {
 				t.Fatalf("want %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
+			}
+		})
+	}
+}
+
+// TestBilledSubscription pins which subscription a subscriber's billing section describes
+// when more than one could answer. It has to be the one their PLAN came from: a page naming
+// a price and a renewal date from a subscription other than the one their allowances run on
+// is a contradiction we published about somebody's money.
+func TestBilledSubscription(t *testing.T) {
+	now := at(t, "2026-09-05T00:00:00Z")
+	live := func(price, end string) subscription {
+		return subscription{Status: "active", CurrentPeriodEnd: at(t, end), PriceIDs: []string{price}}
+	}
+
+	cases := []struct {
+		name string
+		sub  subscriber
+		want string // the price the chosen subscription is for, or "" for no subscription
+	}{
+		{
+			name: "an Ultra subscription is found at all",
+			sub:  sub(live(ultraPrice, "2026-10-01T00:00:00Z")),
+			want: ultraPrice,
+		},
+		{
+			// The upgrade case, and the reason reach alone is the wrong rule: an annual Pro
+			// bought in March still runs when Ultra is added in September, and it reaches
+			// further. plan.TierOf resolves that account to ultra, so this section must too.
+			name: "an Ultra subscription beside a Pro one that reaches further",
+			sub: sub(
+				live(proPrice, "2027-03-01T00:00:00Z"),
+				live(ultraPrice, "2026-10-01T00:00:00Z"),
+			),
+			want: ultraPrice,
+		},
+		{
+			// Ultra has run out and Pro has not: the plan is pro, and so is the section.
+			name: "a lapsed Ultra beside a live Pro",
+			sub: sub(
+				live(proPrice, "2027-03-01T00:00:00Z"),
+				subscription{
+					Status: "past_due", CurrentPeriodEnd: at(t, "2026-08-01T00:00:00Z"),
+					PriceIDs: []string{ultraPrice},
+				},
+			),
+			want: proPrice,
+		},
+		{
+			// Neither is live, which is what a card mid-retry looks like — and it is exactly
+			// when a subscriber opens this page. The furthest of the two still shows.
+			name: "nothing live still describes the furthest subscription",
+			sub: sub(
+				subscription{
+					Status: "past_due", CurrentPeriodEnd: at(t, "2026-07-01T00:00:00Z"),
+					PriceIDs: []string{proPrice},
+				},
+				subscription{
+					Status: "past_due", CurrentPeriodEnd: at(t, "2026-08-01T00:00:00Z"),
+					PriceIDs: []string{ultraPrice},
+				},
+			),
+			want: ultraPrice,
+		},
+		{
+			name: "a Pro subscriber on a deployment that also sells Ultra",
+			sub:  sub(live(proPrice, "2026-10-01T00:00:00Z")),
+			want: proPrice,
+		},
+		{
+			name: "no subscription at all",
+			sub:  sub(),
+			want: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := billedSubscription(tc.sub, []string{proPrice}, []string{ultraPrice}, now)
+			if tc.want == "" {
+				if got.Status != "" {
+					t.Fatalf("want the zero subscription, got %+v", got)
+				}
+				return
+			}
+			if len(got.PriceIDs) != 1 || got.PriceIDs[0] != tc.want {
+				t.Fatalf("want the subscription for %s, got %+v", tc.want, got)
 			}
 		})
 	}

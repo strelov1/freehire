@@ -43,6 +43,15 @@ answer 404, and its worker exits without opening a connection.
   that would put the tier definition in a dashboard nothing here can test, where one mis-click
   upgrades everybody.
 
+- **The billing section describes the subscription the PLAN came from, across every tier.**
+  `billedSubscription` asks each configured price list through the same `bestEntitling` the
+  derivation uses and then resolves between the answers the way `plan.TierOf` resolves the
+  tier — ultra while it is live, then pro. Reading only the Pro list left an Ultra subscriber
+  looking at a 404; picking the furthest reach out of a merged list is the same bug wearing a
+  union, since both tiers stand at once during an upgrade and the Pro one can reach further.
+  When neither is live the furthest still shows: `past_due` entitles by status with its period
+  already run out, and that is the state a subscriber most needs to see.
+
 - **The source column is derived whole, never adjusted.** That is what makes a repeat free, an
   out-of-order delivery harmless, and refunds, cancellations and failed cards need no code
   of their own — they are already reflected in what we re-read.

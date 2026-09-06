@@ -24,8 +24,6 @@ import (
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
-const ultraPrice = "price_ultra_monthly"
-
 // subscriptionsFor answers the provider's subscription listing with one active subscription
 // for the given price.
 func subscriptionsFor(price string, until time.Time) http.HandlerFunc {

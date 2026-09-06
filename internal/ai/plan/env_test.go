@@ -1,6 +1,9 @@
 package plan
 
-import "testing"
+import (
+	"regexp"
+	"testing"
+)
 
 func TestConfigFromEnvDefaultsToTheShippedConfig(t *testing.T) {
 	cfg := ConfigFromEnv()
@@ -70,6 +73,39 @@ func TestFreeAllowanceOverride(t *testing.T) {
 	}
 	if got := cfg.FreeDaily(FeatureTailor); got != DefaultConfig().FreeDaily(FeatureTailor) {
 		t.Errorf("overriding one feature changed another (tailor = %d)", got)
+	}
+}
+
+func TestADashedFeatureIsOverriddenByItsUnderscoredName(t *testing.T) {
+	// The two features whose ledger value carries a dash. A suffix taken verbatim from it
+	// asks for PLAN_PRO_DAILY_AUTO-APPLY, a name systemd's EnvironmentFile= will not parse,
+	// so the documented lever would be unsettable on the host it exists for — and this one
+	// is a ceiling under a plan people have already bought.
+	t.Setenv("PLAN_PRO_DAILY_AUTO_APPLY", "9")
+	t.Setenv("PLAN_FREE_DAILY_COVER_LETTER", "5")
+	t.Setenv("PLAN_ULTRA_DAILY_AUTO_APPLY", "250")
+	cfg := ConfigFromEnv()
+
+	if got := cfg.Allowance(TierPro, FeatureAutoApply).Limit; got != 9 {
+		t.Errorf("pro daily allowance for auto-apply = %d, want 9", got)
+	}
+	if got := cfg.Allowance(TierUltra, FeatureAutoApply).Limit; got != 250 {
+		t.Errorf("ultra daily allowance for auto-apply = %d, want 250", got)
+	}
+	if got := cfg.FreeDaily(FeatureCoverLetter); got != 5 {
+		t.Errorf("free daily allowance for cover-letter = %d, want 5", got)
+	}
+}
+
+func TestEveryFeatureHasASettableOverrideName(t *testing.T) {
+	// The guard for the next feature named with a dash: an override an operator cannot set
+	// is indistinguishable from one that was ignored.
+	settable := regexp.MustCompile(`^[A-Z0-9_]+$`)
+	for _, f := range AllFeatures() {
+		if suffix := envSuffix(f); !settable.MatchString(suffix) {
+			t.Errorf("%q overrides PLAN_*_DAILY_%s, which is not a legal environment "+
+				"variable name", f, suffix)
+		}
 	}
 }
 

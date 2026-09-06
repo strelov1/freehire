@@ -86,8 +86,10 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 	out := Overview{Invoices: []Invoice{}}
 
 	// The same selection the plan derivation makes, called rather than repeated: this
-	// section must describe the subscription the plan came from, not another one.
-	best := bestEntitling(sub, s.cfg.Prices)
+	// section must describe the subscription the plan came from, not another one — which
+	// means asking BOTH configured price lists, since an account on Ultra has no Pro price
+	// to be found under.
+	best := billedSubscription(sub, s.cfg.Prices, s.cfg.UltraPrices, time.Now().UTC())
 
 	// No eligible subscription: a free account, or a former subscriber whose last one has
 	// ended. Both must read as "no section", not as a section full of zeroes — the surface

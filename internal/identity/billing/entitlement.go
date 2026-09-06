@@ -107,6 +107,35 @@ func entitlementFrom(sub subscriber, proPrices, ultraPrices []string) entitlemen
 	}
 }
 
+// billedSubscription is the subscription a subscriber's own billing section describes: the
+// one their PLAN came from, whichever tier that is.
+//
+// It asks each configured price list through the same `bestEntitling` the derivation above
+// uses, and then resolves between the two answers exactly as plan.TierOf resolves the tier
+// from the columns they become — ultra while it is live, then pro. Merging the two lists and
+// taking the furthest reach would be a different rule, and the difference is not academic:
+// both tiers can stand at once, which the provider's portal makes ordinary during an upgrade,
+// and the Ultra one need not reach furthest. Under a merged list, an account that upgraded
+// part-way through a Pro year would be shown its old Pro subscription as "your plan" — Pro's
+// price, Pro's renewal date — while every metered feature ran on Ultra's allowance.
+//
+// When NEITHER is live it falls back to the furthest of the two rather than to nothing, and
+// that case is real: `past_due` entitles by status while its period has already run out, so
+// the plan has lapsed but the subscription is the very thing the subscriber needs to see.
+func billedSubscription(sub subscriber, proPrices, ultraPrices []string, now time.Time) subscription {
+	pro, ultra := bestEntitling(sub, proPrices), bestEntitling(sub, ultraPrices)
+	switch {
+	case ultra.CurrentPeriodEnd.After(now):
+		return ultra
+	case pro.CurrentPeriodEnd.After(now):
+		return pro
+	case ultra.CurrentPeriodEnd.After(pro.CurrentPeriodEnd):
+		return ultra
+	default:
+		return pro
+	}
+}
+
 // bestEntitling is the subscription that decides the plan: of the ones that entitle, the one
 // reaching furthest. The zero subscription when none does.
 //
