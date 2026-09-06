@@ -246,10 +246,11 @@ Source ingest: the provider registry and its adapters, entry validation, the per
   TWO backends behind the same alias — `searchJobPostings` (the vanilla path) and
   `searchGoogleJobDiscovery` (gated by a `google-job-discovery` feature flag, `false` on every
   tenant sampled) — this adapter reads the vanilla one only.
-- **The default, unfiltered query already answers only what a real visitor sees.** Every posting
-  returned across all three tenants was `status: "OPEN"`, `postType: "EXTERNAL"` with no filter
-  argument supplied — unlike `jobappnetwork`'s shared Elasticsearch proxy, there is no equivalent
-  unscoped-read risk to guard against here, so the adapter adds no visibility filter of its own.
+- **The query already answers only what a real visitor sees, with an EMPTY filters object.**
+  Every posting returned across all three tenants was `status: "OPEN"`, `postType: "EXTERNAL"`
+  with `filters: {}` (no actual filter clause set) — unlike `jobappnetwork`'s shared Elasticsearch
+  proxy, there is no equivalent unscoped-read risk to guard against here, so the adapter never
+  sets a filter clause of its own.
 - **Pagination is Relay-style cursors (`after`/`endCursor`/`hasNextPage`), not an exact total to
   chase.** `totalCount` is reported but the walk stops on `hasNextPage: false` or an empty `nodes`
   page — confirmed by paging a 173-posting tenant end to end with no gaps or overlap. Passing an

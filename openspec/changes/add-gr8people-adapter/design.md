@@ -22,9 +22,10 @@ the bearer token itself.
 **The search call.** `POST https://<host>/graphql`, `Authorization: Bearer <token>`, GraphQL
 operation `searchJobs` aliasing the schema's `searchJobPostings(query, start, first, after, sort,
 filters)` field, returning `results.nodes` (the `jobPostingFields` fragment), `results.pageInfo`
-(Relay-style `hasNextPage`/`endCursor`) and `results.totalCount`. Confirmed live: the DEFAULT,
-filterless query already answers only what a public visitor's search shows — open, external
-postings — on every tenant tried (5-, 12-, 173-, and 20-posting boards), so no extra filter
+(Relay-style `hasNextPage`/`endCursor`) and `results.totalCount`. Confirmed live: a query with an
+EMPTY `filters` object (`{}`, no filter clause actually set) already answers only what a public
+visitor's search shows — open, external postings — on every tenant tried (5-, 12-, 173-, and
+20-posting boards), so no extra filter
 clause is needed the way `jobappnetwork`'s shared ES proxy required one. Cursor pagination was
 exercised end to end (page 2 continued cleanly from page 1's `endCursor`, no gaps, no overlap on
 the sampled boards).

@@ -14,9 +14,12 @@ const gr8peopleJobsHTML = `<html><body><script id="__NEXT_DATA__" type="applicat
 
 // gr8peopleFake is a test transport: GetText always answers the /jobs shell above; the GraphQL
 // POST is routed by the "after" cursor in the request's variables, so a page transition can be
-// exercised the same way dayforce/jobappnetwork's fakes do.
+// exercised the same way dayforce/jobappnetwork's fakes do. An "after" value listed in failAt
+// answers a transport error instead of a page, so a later-page failure can be told apart from a
+// later page simply running out of nodes.
 type gr8peopleFake struct {
 	pages    map[string]string // "after" cursor ("" for the first page) -> graphql response JSON
+	failAt   map[string]bool   // "after" cursor -> answer a transport error instead of a page
 	postFail bool
 	headers  []map[string]string
 	bodies   []map[string]any
@@ -35,6 +38,9 @@ func (f *gr8peopleFake) PostJSONWithHeaders(_ context.Context, _ string, headers
 	f.bodies = append(f.bodies, b)
 	variables, _ := b["variables"].(map[string]any)
 	after, _ := variables["after"].(string)
+	if f.failAt[after] {
+		return errors.New("gr8peopleFake: page failed")
+	}
 	raw, ok := f.pages[after]
 	if !ok {
 		raw = `{"data":{"searchJobs":{"results":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""},"totalCount":0}}}}`
@@ -155,6 +161,21 @@ func TestGr8PeopleFetchPaginatesViaCursor(t *testing.T) {
 	}
 }
 
+func TestGr8PeopleDropsPostingWithNoKey(t *testing.T) {
+	fake := &gr8peopleFake{pages: map[string]string{
+		"": `{"data":{"searchJobs":{"results":{"nodes":[
+			{"title":"No Key","descriptionHTML":"d"}
+		],"pageInfo":{"hasNextPage":false,"endCursor":""},"totalCount":1}}}}`,
+	}}
+	jobs, err := NewGr8People(fake).Fetch(context.Background(), CompanyEntry{Board: "t.gr8people.com"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("got %d jobs, want 0 (posting with no key dropped)", len(jobs))
+	}
+}
+
 func TestGr8PeopleFetchEmptyBoard(t *testing.T) {
 	fake := &gr8peopleFake{pages: map[string]string{
 		"": `{"data":{"searchJobs":{"results":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""},"totalCount":0}}}}`,
@@ -172,6 +193,26 @@ func TestGr8PeopleFetchSearchTransportErrorFailsBoard(t *testing.T) {
 	fake := &gr8peopleFake{postFail: true}
 	if _, err := NewGr8People(fake).Fetch(context.Background(), CompanyEntry{Board: "t.gr8people.com"}); err == nil {
 		t.Fatal("Fetch: want transport error, got nil")
+	}
+}
+
+// Only the FIRST page failing is a board-level error; a later page failing ends the walk with
+// whatever was already gathered, the same convention jobappnetwork/dayforce follow.
+func TestGr8PeopleFetchLaterPageFailureKeepsPartialResults(t *testing.T) {
+	partial := &gr8peopleFake{
+		pages: map[string]string{
+			"": `{"data":{"searchJobs":{"results":{"nodes":[
+				{"key":"1","title":"One","descriptionHTML":"d"}
+			],"pageInfo":{"hasNextPage":true,"endCursor":"CURSOR2"},"totalCount":2}}}}`,
+		},
+		failAt: map[string]bool{"CURSOR2": true}, // page 2 fails rather than running dry
+	}
+	jobs, err := NewGr8People(partial).Fetch(context.Background(), CompanyEntry{Board: "t.gr8people.com"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Errorf("got %d jobs, want the 1 gathered before the failure", len(jobs))
 	}
 }
 

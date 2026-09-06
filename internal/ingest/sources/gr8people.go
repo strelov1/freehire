@@ -131,7 +131,9 @@ func (s gr8people) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	jobs := make([]Job, 0, len(postings))
 	for _, p := range postings {
-		jobs = append(jobs, s.toJob(e, p))
+		if j, ok := s.toJob(e, p); ok {
+			jobs = append(jobs, j)
+		}
 	}
 	return jobs, nil
 }
@@ -187,7 +189,12 @@ func gr8peopleSearchBody(after string) map[string]any {
 	}
 }
 
-func (gr8people) toJob(e CompanyEntry, p gr8peoplePosting) Job {
+// toJob maps a posting to a Job, returning ok=false when it has no key (which would collide on
+// the dedup key), the same guard cornerstone's requisition mapping applies.
+func (gr8people) toJob(e CompanyEntry, p gr8peoplePosting) (Job, bool) {
+	if p.Key == "" {
+		return Job{}, false
+	}
 	location := p.location()
 	mode := workplaceTypeMode(strings.ReplaceAll(p.WorkplaceType, "_", "-"))
 	return Job{
@@ -201,7 +208,7 @@ func (gr8people) toJob(e CompanyEntry, p gr8peoplePosting) Job {
 		WorkMode:       mode,
 		EmploymentType: gr8peopleEmploymentType(p.PositionType),
 		PostedAt:       parseRFC3339(p.PostedOn),
-	}
+	}, true
 }
 
 // gr8peopleEmploymentType maps the tenant-typed positionType name to our vocabulary. It is free
