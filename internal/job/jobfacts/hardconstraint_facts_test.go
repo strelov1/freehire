@@ -21,8 +21,8 @@ func TestRequiredCertifications(t *testing.T) {
 	// A comma is a clause break, and blanking a clause must not cost the clauses
 	// around it their own credentials.
 	got = RequiredCertifications("CISSP, CISA and CISM required, PMP preferred.")
-	if len(got) != 3 {
-		t.Errorf("RequiredCertifications = %v, want the three required ones", got)
+	if len(got) != 3 || got[0] != "cissp" || got[1] != "cisa" || got[2] != "cism" {
+		t.Errorf("RequiredCertifications = %v, want [cissp cisa cism]", got)
 	}
 }
 

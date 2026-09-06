@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/job/reqextract"
 )
@@ -142,10 +143,20 @@ func clauseBreak(r rune) bool {
 // sentenceBreak reports whether the rune at i ends a sentence: a terminator followed by
 // whitespace. The trailing whitespace is what keeps "3.5 years" and "min. B2" — the
 // standard Polish phrasing — from being read as two clauses.
+//
+// The follower is DECODED rather than read as a byte. A description pasted out of a
+// word processor separates its sentences with a non-breaking space as readily as with
+// an ordinary one, and U+00A0 is two bytes: converting the first of them to a rune
+// yields 'Â', which is not whitespace, so the sentence would not have broken and a
+// preferred clause would have blanked the required one after it.
 func sentenceBreak(s string, i int, r rune) bool {
 	if r != '.' && r != '!' && r != '?' {
 		return false
 	}
 	rest := s[i+1:]
-	return rest == "" || unicode.IsSpace(rune(rest[0]))
+	if rest == "" {
+		return true
+	}
+	next, _ := utf8.DecodeRuneInString(rest)
+	return unicode.IsSpace(next)
 }

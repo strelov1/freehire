@@ -69,3 +69,32 @@ func TestMaskingDoesNotInventSentenceBoundaries(t *testing.T) {
 		})
 	}
 }
+
+// A non-breaking space ends a sentence as an ordinary one does — descriptions pasted
+// out of a word processor are full of them — and reading the byte after the period
+// instead of the rune would have missed it, blanking the required clause along with the
+// preferred one before it.
+func TestSentenceBreakOnANonBreakingSpace(t *testing.T) {
+	got := RequiredCertifications("PMP preferred. CISSP required.")
+	if len(got) != 1 || got[0] != "cissp" {
+		t.Errorf("RequiredCertifications = %v, want [cissp] only", got)
+	}
+}
+
+// The mask works in clauses, so a marker blanks the whole clause it sits in — including
+// a requirement coordinated into that same clause by "but" or "while". This is the
+// direction the design chooses when it cannot tell: understating a requirement leaves a
+// candidate's fit uncapped, which a reader can detect, while overstating one caps the
+// score for something nobody asked for, which is the defect this fixes. Pinned rather
+// than left to be discovered, because the way OUT is a vocabulary of conjunctions in
+// four languages and that is a bigger bet than the one this makes.
+func TestACoordinatedRequirementIsLostWithItsClause(t *testing.T) {
+	if got := RequiredCertifications("CISSP preferred but CISA required."); len(got) != 0 {
+		t.Errorf("RequiredCertifications = %v, want none — the clause is blanked whole", got)
+	}
+	// Punctuated, which is how a posting states this far more often, it survives.
+	got := RequiredCertifications("CISSP preferred; CISA required.")
+	if len(got) != 1 || got[0] != "cisa" {
+		t.Errorf("RequiredCertifications = %v, want [cisa]", got)
+	}
+}
