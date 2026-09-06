@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -467,7 +469,7 @@ func TestSanitizeCapsImplausibleExperienceYears(t *testing.T) {
 	years := func(n int) *int { return &n }
 
 	t.Run("a figure past the ceiling is dropped, not clamped", func(t *testing.T) {
-		for _, n := range []int{maxExperienceYears + 1, 40, 60, 84} {
+		for _, n := range []int{vocab.MaxExperienceYears + 1, 40, 60, 84} {
 			e := Enrichment{ExperienceYearsMin: years(n)}
 			e.Sanitize()
 			if e.ExperienceYearsMin != nil {
@@ -479,7 +481,7 @@ func TestSanitizeCapsImplausibleExperienceYears(t *testing.T) {
 	})
 
 	t.Run("a believable figure is untouched, including at the ceiling", func(t *testing.T) {
-		for _, n := range []int{0, 1, 5, 18, 21, 25, maxExperienceYears} {
+		for _, n := range []int{0, 1, 5, 18, 21, 25, vocab.MaxExperienceYears} {
 			e := Enrichment{ExperienceYearsMin: years(n)}
 			e.Sanitize()
 			if e.ExperienceYearsMin == nil || *e.ExperienceYearsMin != n {

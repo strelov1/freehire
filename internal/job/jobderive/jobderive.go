@@ -191,10 +191,19 @@ func Derive(in Input) Derived {
 		employmentType = jobfacts.EmploymentType(in.Title, in.Description)
 	}
 	// Experience precedence: structured source signal → description text parse.
+	//
+	// The ceiling is applied AFTER the choice, to whichever source won, because both
+	// can overshoot and for different reasons: the text parse cannot tell a candidate's
+	// years from an employer's ("With over 40 years of … experience, chipmakers rely on
+	// KLA" — the company's age), and a structured field can carry a unit nobody
+	// declared (seven smartrecruiters postings stored 84, a number their descriptions
+	// never contain). One bound after the merge catches both; a bound inside either
+	// parser would leave the other open. See vocab.MaxExperienceYears.
 	experience := in.ExperienceYearsMin
 	if experience == nil {
 		experience = jobfacts.ExperienceYearsMin(in.Description)
 	}
+	experience = believableExperience(experience)
 	// Education and English precedence: structured source signal → description text
 	// parse. Both matchers read English prose only, so on a posting written in another
 	// language they are the weaker source by a wide margin, not merely the later one.
@@ -326,4 +335,14 @@ func unionSkills(source, dict []string) []string {
 		set[s] = struct{}{}
 	}
 	return stringset.Sorted(set)
+}
+
+// believableExperience drops a years-of-experience figure outside the range a posting
+// is believed to be stating about the candidate, leaving the facet unstated rather than
+// clamped: a clamp would assert a requirement the posting never made.
+func believableExperience(n *int) *int {
+	if n == nil || (*n >= 0 && *n <= vocab.MaxExperienceYears) {
+		return n
+	}
+	return nil
 }

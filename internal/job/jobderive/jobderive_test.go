@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 func TestDerive_SlugsAndFacets(t *testing.T) {
@@ -627,4 +628,69 @@ func TestDerive_IsPure(t *testing.T) {
 	if got := fn.Out(0); got != reflect.TypeOf(Derived{}) {
 		t.Errorf("Derive returns %v, want jobderive.Derived", got)
 	}
+}
+
+// Three producers write experience_years_min and each can overshoot on its own, so the
+// bound sits where they converge rather than in any one of them. Both cases below are
+// real prod rows from 2026-09-05.
+func TestDerive_DropsImplausibleExperienceYears(t *testing.T) {
+	years := func(n int) *int { return &n }
+
+	// The description talks about the EMPLOYER's age. "N years of experience" is
+	// syntactically identical whether the subject is the candidate, the company or the
+	// product, so the text parse cannot tell them apart — only the ceiling can.
+	t.Run("a company's age in the description is not read as a requirement", func(t *testing.T) {
+		d := Derive(Input{
+			Title:  "System Engineer",
+			Source: "manual", ExternalID: "1",
+			Description: "With over 40 years of semiconductor process control experience, " +
+				"chipmakers around the world rely on KLA to solve really hard problems.",
+		})
+		if d.ExperienceYearsMin != nil {
+			t.Errorf("ExperienceYearsMin = %d, want nil — 40 is the company's age, not a requirement",
+				*d.ExperienceYearsMin)
+		}
+	})
+
+	// A source adapter's structured field normally WINS over the text parse, so an
+	// out-of-range value there reaches the column without the description saying
+	// anything at all. Seven smartrecruiters postings stored 84 this way.
+	t.Run("a structured signal past the ceiling is dropped too", func(t *testing.T) {
+		d := Derive(Input{
+			Title:  "Java Developer",
+			Source: "smartrecruiters", ExternalID: "2",
+			ExperienceYearsMin: years(84),
+			Description:        "Build services.",
+		})
+		if d.ExperienceYearsMin != nil {
+			t.Errorf("ExperienceYearsMin = %d, want nil — no career is 84 years long",
+				*d.ExperienceYearsMin)
+		}
+	})
+
+	t.Run("a believable structured signal is kept", func(t *testing.T) {
+		for _, n := range []int{0, 5, 18, 25, vocab.MaxExperienceYears} {
+			d := Derive(Input{
+				Title:  "Programme Director",
+				Source: "manual", ExternalID: "3",
+				ExperienceYearsMin: years(n),
+				Description:        "Lead the programme.",
+			})
+			if d.ExperienceYearsMin == nil || *d.ExperienceYearsMin != n {
+				t.Errorf("ExperienceYearsMin = %v for input %d, want it kept — postings really "+
+					"do state 18 and 25", d.ExperienceYearsMin, n)
+			}
+		}
+	})
+
+	t.Run("a believable figure in the description is kept", func(t *testing.T) {
+		d := Derive(Input{
+			Title:  "Backend Engineer",
+			Source: "manual", ExternalID: "4",
+			Description: "We need 5+ years of Go experience.",
+		})
+		if d.ExperienceYearsMin == nil || *d.ExperienceYearsMin != 5 {
+			t.Errorf("ExperienceYearsMin = %v, want 5", d.ExperienceYearsMin)
+		}
+	})
 }

@@ -271,3 +271,29 @@ var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
 // regexp literal, which is how this repository ended up with four disagreeing copies of
 // the legal-form vocabulary.
 func IsCurrencyCode(s string) bool { return currencyRE.MatchString(s) }
+
+// MaxExperienceYears is the largest years-of-experience figure believed to be a
+// statement about the CANDIDATE. It lives here rather than beside any one parser
+// because THREE independent producers write this facet and each could exceed it on
+// its own: a source adapter's structured field, the description parse in
+// internal/job/jobfacts, and the enrichment model in internal/ai/enrich.
+//
+// The failure it bounds is not hallucination. "N years of experience" in a posting can
+// describe the candidate, the employer, or the product, and the three are syntactically
+// identical — only the subject separates them, and no producer is told whose number to
+// take. Measured on prod 2026-09-05: a KLA listing reading "With over 40 years of
+// semiconductor process control experience, chipmakers around the world rely on KLA"
+// stored 40 (the COMPANY's age), and seven smartrecruiters postings stored 84 from a
+// structured field whose descriptions contain no such number at all.
+//
+// A figure past this is DROPPED, never clamped: a clamp would state a requirement the
+// posting never made, while an absent field correctly says "not stated".
+//
+// 30 is deliberately generous, and the number was moved up once during review after a
+// first attempt at 20 was caught discarding real data. Verified against prod, 18, 21
+// and 25 are all figures postings genuinely state about the candidate ("Minimum of 25
+// years progressively senior experience"). The ceiling sits ABOVE the believable range
+// rather than at the middle of it, because the two errors are not symmetric: this facet
+// is a search FILTER, so a wrong high value makes one posting unmatchable, while a
+// dropped true one hides a posting from the very people it was written for.
+const MaxExperienceYears = 30
