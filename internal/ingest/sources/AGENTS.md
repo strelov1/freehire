@@ -288,7 +288,10 @@ Source ingest: the provider registry and its adapters, entry validation, the per
   open-postings list. The bundled `offers-widget.js` confirms this is the whole dataset, not a
   first page: it sets `this.allOffers = window.allOffers` once and every filter/paginate
   operation afterward is a client-side `.slice()` over that in-memory array — no "load more"
-  request exists.
+  request exists. The extraction takes the FIRST `window.allOffers =` match on the page — a page
+  carrying an earlier decoy occurrence (a comment, an unrelated inline snippet) would silently
+  decode the wrong value; not observed on any tenant sampled, and the same first-match posture
+  every regex-anchored embedded-token adapter in this file already takes (cornerstone, gr8people).
 - **The locale segment is load-bearing, not cosmetic — the Dayforce-culture trap on a new
   platform.** `/fr/idiap` answers ZERO postings while `/en/idiap` answers four; IDIAP's site is
   configured for `en-gb` only (its own `hreflang="en-gb"`/`x-default` tags, no alternate-language

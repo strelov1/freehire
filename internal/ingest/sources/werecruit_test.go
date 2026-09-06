@@ -151,6 +151,9 @@ func TestWerecruitMalformedBoardIssuesNoRequest(t *testing.T) {
 	if _, err := NewWerecruit(fake).Fetch(context.Background(), CompanyEntry{Board: "not-well-formed"}); err == nil {
 		t.Fatal("Fetch: want error for malformed board, got nil")
 	}
+	if fake.calls != 0 {
+		t.Errorf("issued %d requests for a malformed board, want 0", fake.calls)
+	}
 }
 
 func TestWerecruitRegisteredInAll(t *testing.T) {
