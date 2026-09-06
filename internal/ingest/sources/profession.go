@@ -6,10 +6,14 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/html"
 
+	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // profession adapts Profession.hu, Hungary's dominant job board. It is one central
@@ -25,6 +29,24 @@ import (
 // picks the slice. Measured over 128 live postings from the two IT sitemaps,
 // classify.ConfirmedNonTech rejected zero: the slice is already what the catalogue
 // wants.
+//
+// THE OTHER 21 CATEGORIES ARE CRAWLED THROUGH TWO GATES, because the platform's facet
+// is a good answer and not a complete one: technical postings are filed outside the IT
+// sections too, and an unfiltered crawl of those categories would ingest 11,388 general
+// postings to find them. The gates are ordered by what they cost. The slug of a posting
+// URL is already in hand from the sitemap, so professionSlugCarriesTechnicalTerm decides
+// whether the platform is asked for a detail page at all; the real title on that page
+// then has to satisfy professionTitleIsTechnical before the posting is stored. Both read
+// one dictionary (internal/dict/classify), so the cheap gate cannot come to mean
+// something the expensive one does not.
+//
+// Measured live on 2026-09-06 over the 21 general categories: 11,388 postings listed, 45
+// passed the slug gate, 30 were stored, 15 were turned away by their real title, and no
+// candidate page failed to load. That is ~99.6% of the detail requests avoided, and 30
+// postings on top of the 712 the two IT sections hold — about 4.2%. Read that 30 as a
+// floor rather than a measurement of what is there: the slug gate can only find terms the
+// dictionary carries, and Hungarian coverage, while no longer developer-only, is not
+// complete. Widening it is dictionary work and lands for every source at once.
 //
 // Traps, all verified live on 2026-09-03:
 //
@@ -64,6 +86,44 @@ import (
 //     dictionary and the enrichment pass.
 type profession struct {
 	http professionHTTP
+	// index memoizes the sitemap index for the life of the adapter, which is the life of
+	// one crawl: the pipeline builds the registry once and shares an adapter across every
+	// board it visits. See professionIndex for why that matters here and nowhere else.
+	index *professionIndex
+}
+
+// professionIndex holds the platform's sitemap index once it has been read, so a crawl
+// resolves it once however many categories it visits.
+//
+// resolveSubSitemap re-reads the index on every call, which is the right shape for a
+// provider with one board and was invisible while this crawl was the two IT categories.
+// With all 23 it is 23 requests for one document, and the platform does not tolerate that:
+// measured live on 2026-09-06 it answered the first and then closed the connection on the
+// rest, which reads downstream as every category being unreachable rather than as the
+// crawl asking too often.
+//
+// Only a successful read is cached. Caching the error would spend one transient failure on
+// every remaining board in the run, and a crawl that can be retried per board should be.
+// The lock is held across the fetch on purpose: concurrent boards then wait for the one
+// request instead of racing to make their own, which is the whole point.
+type professionIndex struct {
+	mu       sync.Mutex
+	sitemaps map[string]string
+}
+
+// get returns each category id to the URL of its sitemap.
+func (i *professionIndex) get(ctx context.Context, c XMLGetter) (map[string]string, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.sitemaps != nil {
+		return i.sitemaps, nil
+	}
+	sitemaps, err := ProfessionCategorySitemaps(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	i.sitemaps = sitemaps
+	return sitemaps, nil
 }
 
 // professionHTTP is the transport profession needs: the sitemaps as XML, and each
@@ -74,7 +134,9 @@ type professionHTTP interface {
 }
 
 // NewProfession builds the Profession.hu adapter over the given HTTP client.
-func NewProfession(c professionHTTP) Source { return profession{http: c} }
+func NewProfession(c professionHTTP) Source {
+	return profession{http: c, index: &professionIndex{}}
+}
 
 func (profession) Provider() string { return "profession" }
 
@@ -145,12 +207,29 @@ func (s profession) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	if err != nil {
 		return nil, err
 	}
+	filtered := professionFiltersBoard(e.Board)
+	if filtered {
+		locs = slices.DeleteFunc(locs, func(loc string) bool {
+			return !professionSlugCarriesTechnicalTerm(loc)
+		})
+	}
 	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
 		id := professionExternalID(loc)
 		if seen(id) {
 			return Job{ExternalID: id, URL: loc, SeenRefresh: true}, true
 		}
-		return s.detail(ctx, loc, id)
+		job, ok := s.detail(ctx, loc, id)
+		if !ok {
+			return Job{}, false
+		}
+		// The title gate runs on new postings only, for the same reason the seen
+		// refresh above carries no title: a stored posting is not re-judged here. The
+		// slug gate, by contrast, runs before the seen check and so applies to both —
+		// which costs nothing, because a URL's slug never changes.
+		if filtered && !professionTitleIsTechnical(job.Title) {
+			return Job{}, false
+		}
+		return job, true
 	}), nil
 }
 
@@ -159,11 +238,12 @@ func (s profession) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 // difference between a mistyped board and an empty one, which nothing downstream could
 // tell apart otherwise.
 func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) {
-	sitemap, err := resolveSubSitemap(ctx, s.http, professionSitemapIndex, professionSitemapNeedle(e.Board))
+	sitemaps, err := s.index.get(ctx, s.http)
 	if err != nil {
 		return nil, fmt.Errorf("profession: category %s: %w", e.Board, err)
 	}
-	if sitemap == "" {
+	sitemap, ok := sitemaps[strings.ToLower(strings.TrimSpace(e.Board))]
+	if !ok {
 		return nil, fmt.Errorf("profession: category %s is not in the sitemap index", e.Board)
 	}
 	locs, err := sitemapJobLocs(ctx, s.http, sitemap, professionExternalID)
@@ -173,10 +253,138 @@ func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) 
 	return locs, nil
 }
 
-// professionSitemapNeedle is the file-name fragment a category's sitemap ends with. It
-// carries both delimiters so a short board id cannot match a longer category's name.
-func professionSitemapNeedle(board string) string {
-	return "-" + strings.ToLower(strings.TrimSpace(board)) + "-hu.xml"
+// professionCategoryPattern captures the category id out of a sitemap file name. The
+// index also lists the platform's company and article sitemaps, which name no category
+// and must not become boards.
+var professionCategoryPattern = regexp.MustCompile(`/sitemap-listings-([a-z0-9-]+)-hu\.xml$`)
+
+// ProfessionCategorySitemaps reads the platform's sitemap index — ONE request — and returns
+// every category it publishes against the URL of that category's sitemap. It is exported
+// for cmd/harvest-boards, which enumerates this provider's boards rather than being handed
+// a seed list for them: the index IS the catalogue of categories, so a board list kept
+// anywhere else would be a copy that drifts.
+//
+// It returns the URLs and not just the names so a caller that goes on to read those
+// sitemaps does not have to resolve the index again per category. That is the shape the
+// platform's rate limiting requires, not a convenience — see professionIndex.
+//
+// The index is also where the crawl resolves a board, so the URL shape lives in this file
+// only. A caller that rebuilt it would be a second answer to "where is a category's
+// sitemap", and the two would disagree silently the first time the platform moved one.
+func ProfessionCategorySitemaps(ctx context.Context, c XMLGetter) (map[string]string, error) {
+	doc, err := getSitemap(ctx, c, professionSitemapIndex)
+	if err != nil {
+		return nil, fmt.Errorf("profession: sitemap index: %w", err)
+	}
+	out := map[string]string{}
+	for _, s := range doc.Sitemaps {
+		loc := strings.TrimSpace(s.Loc)
+		if m := professionCategoryPattern.FindStringSubmatch(loc); m != nil {
+			out[m[1]] = loc
+		}
+	}
+	return out, nil
+}
+
+// ProfessionSitemapPostings returns how many postings a category sitemap lists. It is the
+// cheap liveness measure a board harvest needs — one XML request against the whole crawl an
+// adapter probe would otherwise cost for each of 23 categories — and it takes the sitemap
+// URL rather than the category so that the index is not re-read to find it.
+func ProfessionSitemapPostings(ctx context.Context, c XMLGetter, sitemapURL string) (int, error) {
+	locs, err := sitemapJobLocs(ctx, c, sitemapURL, professionExternalID)
+	if err != nil {
+		return 0, err
+	}
+	return len(locs), nil
+}
+
+// professionITBoards are the platform's two dedicated IT category sitemaps. A posting
+// filed in one of them is stored on the platform's own filing and is never asked to
+// satisfy freehire's title dictionary as well: measured over 128 live postings from these
+// two, classify.ConfirmedNonTech rejected none, and the dictionary resolves a category for
+// only about half — so filtering here would drop technical postings to no purpose. Every
+// other category is a general-population board and is filtered.
+var professionITBoards = map[string]bool{"itdev": true, "itops": true}
+
+// professionFiltersBoard reports whether a board's postings must clear both technical
+// gates before they are stored.
+func professionFiltersBoard(board string) bool {
+	return !professionITBoards[strings.ToLower(strings.TrimSpace(board))]
+}
+
+// professionSlugPattern captures the slug a posting URL carries ahead of its id. The slug
+// is the platform's own rendering of the title, the employer and the city, which is why it
+// is not an identity (professionExternalID is) and why matching it can only ever be a
+// prefilter: the employer's name is in there too.
+var professionSlugPattern = regexp.MustCompile(`/allas/([^/]+)-\d+(?:/|$)`)
+
+// professionSlugTerms are the technical title terms in the shape a URL slug states them:
+// transliterated to ASCII and hyphen-separated, because the platform's slug is ASCII and
+// the dictionary's Hungarian is not ("szoftverfejlesztő" is never in a URL).
+//
+// The vocabulary is classify's, restricted to the technical categories, rather than a
+// second list kept here. That is the whole reason this stays honest — a term added for any
+// source reaches this prefilter, and the gate below reads the same dictionary against the
+// real title, so the cheap gate cannot drift into meaning something the expensive one does
+// not. It is not a perfect shadow of that gate: classify.IsTech also admits a handful of
+// generalist titles ("programmer", "founding engineer") through terms it does not export,
+// so a posting whose slug states only one of those is not offered. That costs recall on a
+// board we otherwise would not crawl at all, which is why it is a seam and not a bug.
+var professionSlugTerms = sync.OnceValue(func() []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for category, aliases := range classify.CategoryAliases() {
+		if !slices.Contains(vocab.TechCategories, category) {
+			continue
+		}
+		for _, alias := range aliases {
+			term := normalize.Slug(alias)
+			if term == "" {
+				continue
+			}
+			if _, dup := seen[term]; dup {
+				continue
+			}
+			seen[term] = struct{}{}
+			out = append(out, term)
+		}
+	}
+	return out
+})
+
+// professionSlugCarriesTechnicalTerm reports whether a posting URL's slug states a term the
+// technical dictionary knows. It is the cheap gate: a sitemap yields nothing but URLs, and
+// a general category holds thousands of postings, so this decides whether the platform is
+// asked for a detail page at all. Measured against the live catalogue on 2026-09-06 it let
+// 45 of 11,388 non-IT postings through, avoiding about 99.6% of the detail requests taking
+// those boards unfiltered would have cost.
+//
+// Terms match whole hyphen runs, never substrings. Hungarian is agglutinative and writes
+// closed compounds, so a substring match would fire on every word that merely contains a
+// term — "üzlethálózati" (a chain of shops) contains "hálózati", and the retail trainer it
+// names is not a network engineer.
+func professionSlugCarriesTechnicalTerm(loc string) bool {
+	m := professionSlugPattern.FindStringSubmatch(loc)
+	if m == nil {
+		return false
+	}
+	padded := "-" + strings.ToLower(m[1]) + "-"
+	for _, term := range professionSlugTerms() {
+		if strings.Contains(padded, "-"+term+"-") {
+			return true
+		}
+	}
+	return false
+}
+
+// professionTitleIsTechnical reports whether a posting's real title states technical work.
+// It is the expensive gate, run on the title the detail page's ld+json states rather than
+// on the slug — the slug carries the employer's name, so "Értékesítési munkatárs" at
+// "DevOps Solutions Kft." reaches this point and is turned away here. On the live audit it
+// rejected 15 of the 45 postings the slug gate offered.
+func professionTitleIsTechnical(title string) bool {
+	return classify.IsTech(title) ||
+		slices.Contains(vocab.TechCategories, classify.Parse(title).Category)
 }
 
 // detail fetches one posting page and maps it. It reports ok=false — so the caller skips

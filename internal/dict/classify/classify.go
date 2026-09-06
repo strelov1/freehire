@@ -91,8 +91,15 @@ func matchAllOrdered(title string, table []aliasEntry) []string {
 // CategoryAliases maps each category canonical to the title aliases that resolve
 // to it (the inverse of the internal alias table); SeniorityAliases does the same
 // for grades. Exposed so the web role picker can search roles by shorthand — the
-// same curated EN+RU terms used to tag titles, so "sre"/"sysadmin"/"sr" find their
-// role rather than only its display label.
+// same curated terms used to tag titles, so "sre"/"sysadmin"/"sr" find their role
+// rather than only its display label.
+//
+// The vocabulary is not English-only and has not been for some time: the table
+// carries Hungarian, German, Spanish, Portuguese, French and Russian forms where
+// prod titles showed them in use. A caller that matches these terms against
+// anything but a title should say so — matching them against a URL slug, say,
+// means transliterating them first (see internal/ingest/sources' Profession
+// prefilter), because a slug is ASCII and "szoftverfejlesztő" is not.
 //
 // The blind aliases are omitted: their sentinel is not a category, and it feeds the
 // generated web contracts, where it would show up as a pickable value.
