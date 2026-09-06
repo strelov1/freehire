@@ -247,3 +247,68 @@ func TestBambooHREmptyDetailPayloadIsUnreadable(t *testing.T) {
 		})
 	}
 }
+
+// The four destinations BambooHR redirected a not-served board to, observed across 135 prod
+// boards on 2026-09-06. None is matched by name — the rule is leaving the careers path — so
+// this table is evidence the rule covers them, not a spec of what the rule looks for.
+func TestBambooHRFetchReportsBoardGoneOnRedirect(t *testing.T) {
+	for name, final := range map[string]string{
+		"no such tenant":    "https://www.bamboohr.com",
+		"public board off":  "https://acme.bamboohr.com/login.php",
+		"account expired":   "https://acme.bamboohr.com/settings/account/expired.php",
+		"account suspended": "https://acme.bamboohr.com/settings/account/temporarily_suspended",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := (&routedHTTP{}).routeRedirect("/careers/list", final)
+			_, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+			if !errors.Is(err, ErrBoardGone) {
+				t.Fatalf("err = %v, want it to wrap ErrBoardGone", err)
+			}
+			// The destination has to survive into the message: these four do not mean the
+			// same thing to whoever decides whether to retire the board, and re-probing to
+			// find out is what this check exists to avoid.
+			if !strings.Contains(err.Error(), final) {
+				t.Errorf("err = %q, want the redirect destination in it", err)
+			}
+			if !strings.Contains(err.Error(), "acme") {
+				t.Errorf("err = %q, want the board named in it", err)
+			}
+		})
+	}
+}
+
+// A board still served answers on its own careers path, and a listing failure there is an
+// ordinary failure — not a dead board. Without this the first transport hiccup would file a
+// live board as gone.
+func TestBambooHRFetchKeepsAnOrdinaryFailureDistinct(t *testing.T) {
+	fake := (&routedHTTP{}).routeErr("/careers/list", errors.New("connection refused"))
+	_, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err == nil {
+		t.Fatal("a failed listing must fail the crawl")
+	}
+	if errors.Is(err, ErrBoardGone) {
+		t.Errorf("err = %v, want a transport failure, not ErrBoardGone", err)
+	}
+}
+
+// A redirect that stays on the board's careers path is still the board being served, so a
+// canonicalisation BambooHR may add later must not read as a death.
+func TestBambooHRBoardGoneAllowsRedirectsWithinTheCareersPath(t *testing.T) {
+	for _, final := range []string{
+		"https://acme.bamboohr.com/careers",
+		"https://acme.bamboohr.com/careers/list",
+		"https://acme.bamboohr.com/careers/list?x=1",
+	} {
+		if _, gone := bambooHRBoardGone("acme", final); gone {
+			t.Errorf("%s read as a gone board", final)
+		}
+	}
+	// No response at all is not a verdict about the board.
+	if _, gone := bambooHRBoardGone("acme", ""); gone {
+		t.Error("an empty final URL read as a gone board")
+	}
+	// One board's careers path must not vouch for another's.
+	if _, gone := bambooHRBoardGone("acme", "https://other.bamboohr.com/careers"); !gone {
+		t.Error("a redirect to a different tenant's careers page was accepted")
+	}
+}

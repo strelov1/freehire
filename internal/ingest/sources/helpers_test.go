@@ -104,6 +104,16 @@ func (f *fakeHTTP) GetJSON(_ context.Context, url string, v any) error {
 	return json.Unmarshal([]byte(f.body), v)
 }
 
+// GetJSONResolved reports the requested URL as the final one: fakeHTTP models a plain
+// response, and a test that needs a redirect uses routedHTTP.routeRedirect instead.
+func (f *fakeHTTP) GetJSONResolved(_ context.Context, url string, v any) (string, error) {
+	f.gotURL = url
+	if f.err != nil {
+		return url, f.err
+	}
+	return url, json.Unmarshal([]byte(f.body), v)
+}
+
 func (f *fakeHTTP) GetJSONWithHeaders(_ context.Context, url string, headers map[string]string, v any) error {
 	f.gotURL = url
 	f.gotHeaders = headers

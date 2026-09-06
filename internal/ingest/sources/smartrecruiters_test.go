@@ -23,8 +23,17 @@ type routedHTTP struct {
 		match string
 		err   error
 	}
-	mu    sync.Mutex
-	calls int
+	redirects []struct{ match, final string }
+	mu        sync.Mutex
+	calls     int
+}
+
+// routeRedirect makes a GetJSONResolved request whose URL contains match resolve to final and
+// fail its decode — the shape of a platform that answers "not serving this board" by
+// redirecting onto an HTML page rather than with a status code.
+func (r *routedHTTP) routeRedirect(match, final string) *routedHTTP {
+	r.redirects = append(r.redirects, struct{ match, final string }{match, final})
+	return r
 }
 
 func (r *routedHTTP) route(match, body string) *routedHTTP {
@@ -56,6 +65,25 @@ func (r *routedHTTP) routedErr(url string) error {
 
 func (r *routedHTTP) GetJSON(_ context.Context, url string, v any) error {
 	return r.decode(url, json.Unmarshal, v)
+}
+
+// GetJSONResolved answers with the final URL a routeRedirect declared for this request, or
+// with the requested URL when none did. A declared redirect also fails the decode, since the
+// platform this models lands the follow on an HTML page.
+func (r *routedHTTP) GetJSONResolved(_ context.Context, url string, v any) (string, error) {
+	r.mu.Lock()
+	final, redirected := "", false
+	for _, rd := range r.redirects {
+		if strings.Contains(url, rd.match) {
+			final, redirected = rd.final, true
+			break
+		}
+	}
+	r.mu.Unlock()
+	if redirected {
+		return final, errors.New("invalid character '<' looking for beginning of value")
+	}
+	return url, r.decode(url, json.Unmarshal, v)
 }
 
 func (r *routedHTTP) GetXML(_ context.Context, url string, v any) error {
