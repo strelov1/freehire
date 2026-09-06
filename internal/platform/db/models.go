@@ -299,6 +299,7 @@ type Company struct {
 	DownvoteCount     int32              `json:"downvote_count"`
 	FeedbackCount     int32              `json:"feedback_count"`
 	FeedbackRatingAvg pgtype.Float4      `json:"feedback_rating_avg"`
+	IndustriesDerived []string           `json:"industries_derived"`
 }
 
 type CompanyFeedback struct {

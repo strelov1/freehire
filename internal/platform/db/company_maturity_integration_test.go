@@ -101,7 +101,7 @@ func TestRefreshCompanyMaturity(t *testing.T) {
 	// No signal → NULL (unknown).
 	insertCompany(t, pool, "unknown", "Unknown Co")
 
-	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 

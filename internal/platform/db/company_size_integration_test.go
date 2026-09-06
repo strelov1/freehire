@@ -37,7 +37,7 @@ func TestRefreshCompanySizesFromHeadcount(t *testing.T) {
 	insertCompany(t, pool, "hcnojobs", "Headcount No Jobs")
 	setCompanySignals(t, pool, "hcnojobs", "", 800, 0, nil)
 
-	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 

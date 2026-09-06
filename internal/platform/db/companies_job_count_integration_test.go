@@ -58,7 +58,7 @@ func TestRefreshCompanyFacetsJobCount(t *testing.T) {
 	insertJobForCompany(t, pool, "globex:1", "globex")
 
 	t.Run("counts only open jobs", func(t *testing.T) {
-		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+		if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 			t.Fatalf("recount: %v", err)
 		}
 		if got := companyJobCount(t, pool, "acme"); got != 3 {
@@ -76,7 +76,7 @@ func TestRefreshCompanyFacetsJobCount(t *testing.T) {
 		closeJobByExtID(t, pool, "acme:1")
 		closeJobByExtID(t, pool, "acme:2")
 		closeJobByExtID(t, pool, "acme:3")
-		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+		if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 			t.Fatalf("recount: %v", err)
 		}
 		if got := companyJobCount(t, pool, "acme"); got != 0 {
@@ -85,7 +85,7 @@ func TestRefreshCompanyFacetsJobCount(t *testing.T) {
 	})
 
 	t.Run("re-running rewrites nothing", func(t *testing.T) {
-		rows, err := q.RefreshCompanyFacets(ctx)
+		rows, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{})
 		if err != nil {
 			t.Fatalf("recount: %v", err)
 		}
@@ -116,7 +116,7 @@ func TestListCompaniesOrdersByJobCount(t *testing.T) {
 		insertJobForCompany(t, pool, ext, "gamma")
 	}
 	insertJobForCompany(t, pool, "alpha:1", "alpha")
-	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("recount: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestRefreshCompanyFacetsCountsOnlySearchableJobs(t *testing.T) {
 	insertUnsearchableJob(t, pool, "clinic:1", "clinic", "uncategorized")
 	insertUnsearchableJob(t, pool, "clinic:2", "clinic", "uncategorized")
 
-	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("recount: %v", err)
 	}
 

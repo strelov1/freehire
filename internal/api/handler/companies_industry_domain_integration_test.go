@@ -2,8 +2,13 @@
 
 // Integration test for the widened industry facet: GET /api/v1/companies?industries=
 // reaches a company through the curated companies.industries an importer wrote, and —
-// only where that is empty — through the job-derived companies.domains its own
-// postings imply. Only a real Postgres exercises the query that does it. Run with:
+// only where that is empty — through companies.industries_derived, RefreshCompanyFacets'
+// materialized translation of the company's own domains (empty whenever the company
+// has a curated industry, or carries more than two distinct domains — see the
+// limit-derived-industry-domain-count change). Fixtures here set industries_derived
+// directly, as the recompute would have already resolved it, rather than exercising
+// RefreshCompanyFacets itself (that lives in internal/platform/db's own integration
+// tests). Only a real Postgres exercises the query that does it. Run with:
 // go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -31,18 +36,27 @@ func TestListCompaniesIndustryFacetReadsBothColumns(t *testing.T) {
 
 	// One fixture set, seeded into Postgres and evaluated against the Meili filter, so
 	// the backend-agreement subtest below compares the two over identical data.
+	// industriesDerived is set directly, mirroring what RefreshCompanyFacets would
+	// have already computed from industries/domains — this test is about the two
+	// QUERY paths, not about the recompute itself.
 	fixtures := []companyFixture{
 		// Curated only — the case that worked before this change.
 		{slug: "curated-fin", industries: []string{"fintech"}, domains: []string{}},
-		// Derived only, spelled the same in both vocabularies.
-		{slug: "derived-fin", industries: []string{}, domains: []string{"fintech"}},
+		// Derived only, spelled the same in both vocabularies, within the domain-count
+		// threshold (one domain).
+		{slug: "derived-fin", industries: []string{}, domains: []string{"fintech"},
+			industriesDerived: []string{"fintech"}},
 		// Derived only, spelled differently — the case a string comparison would miss.
-		{slug: "derived-tools", industries: []string{}, domains: []string{"devtools"}},
+		{slug: "derived-tools", industries: []string{}, domains: []string{"devtools"},
+			industriesDerived: []string{"developer-tools"}},
 		// Both, and disagreeing: the curated value answers and the derived one is not
 		// consulted, so this company is reachable as healthcare and NOT as edtech.
+		// industries_derived is empty because RefreshCompanyFacets never fills it for a
+		// company with a curated industry.
 		{slug: "both", industries: []string{"healthcare"}, domains: []string{"edtech"}},
 		// Domains the mapping deliberately refuses, plus one retired from the
-		// vocabulary altogether. None of them may produce an industry.
+		// vocabulary altogether. Neither produces an industry, so industries_derived
+		// is empty even though there are only two domains (within the threshold).
 		{slug: "unmapped", industries: []string{}, domains: []string{"other", "saas"}},
 		// Shaped like Uber on production: classified by an importer, and carrying a
 		// domains union that drifted across the catalogue because it is aggregated
@@ -51,11 +65,27 @@ func TestListCompaniesIndustryFacetReadsBothColumns(t *testing.T) {
 		// Uber — so it is a fixture, not a hypothetical.
 		{slug: "big-classified", industries: []string{"ai", "data-analytics", "logistics"},
 			domains: []string{"adtech", "edtech", "fintech", "gamedev", "govtech", "healthcare", "travel"}},
+		// No curated industry, exactly two domains — the #2088 threshold's inclusive
+		// boundary. Both map, so both reach it.
+		{slug: "focused-uncurated", industries: []string{}, domains: []string{"climatetech", "crypto"},
+			industriesDerived: []string{"climate-tech", "crypto"}},
+		// No curated industry, three domains — above the #2088 threshold. All three
+		// would map individually, but the domains union is too wide to trust, so
+		// industries_derived is empty (as RefreshCompanyFacets would compute it).
+		{slug: "wide-uncurated", industries: []string{}, domains: []string{"ecommerce", "gambling", "hrtech"}},
 	}
 	for _, f := range fixtures {
+		industriesDerived := f.industriesDerived
+		if industriesDerived == nil {
+			// companies.industries_derived is NOT NULL; a fixture that leaves it unset
+			// means "RefreshCompanyFacets would have produced no industries here", i.e.
+			// the empty array, not the zero value nil pgx would otherwise send as NULL.
+			industriesDerived = []string{}
+		}
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, job_count, industries, domains) VALUES ($1, $1, 1, $2, $3)`,
-			f.slug, f.industries, f.domains); err != nil {
+			`INSERT INTO companies (slug, name, job_count, industries, domains, industries_derived)
+			 VALUES ($1, $1, 1, $2, $3, $4)`,
+			f.slug, f.industries, f.domains, industriesDerived); err != nil {
 			t.Fatalf("seed %q: %v", f.slug, err)
 		}
 	}
@@ -159,10 +189,30 @@ func TestListCompaniesIndustryFacetReadsBothColumns(t *testing.T) {
 		}
 	})
 
+	// The #2088 remainder: a company with NO curated industry is still not reachable
+	// through its domains once there are more than two of them — the union describes
+	// hiring range, not business, at that point.
+	t.Run("a company at the domain-count threshold is matched through its derived industries", func(t *testing.T) {
+		assert(t, "/api/v1/companies?industries=climate-tech", []string{"focused-uncurated"})
+		assert(t, "/api/v1/companies?industries=crypto", []string{"focused-uncurated"})
+	})
+
+	t.Run("a company above the domain-count threshold is not matched through its domains", func(t *testing.T) {
+		for _, industry := range []string{"ecommerce", "gambling", "hr-tech"} {
+			got, _ := query(t, "/api/v1/companies?industries="+industry)
+			if slices.Contains(got, "wide-uncurated") {
+				t.Errorf("industries=%s matched a company with 3 domains and no curated industry", industry)
+			}
+		}
+	})
+
 	t.Run("the domains facet still filters the raw value", func(t *testing.T) {
 		assert(t, "/api/v1/companies?domains=other", []string{"unmapped"})
 		// Including a value the industry vocabulary has no name for at all.
 		assert(t, "/api/v1/companies?domains=saas", []string{"unmapped"})
+		// A company above the industries threshold is still reachable by its raw
+		// domains — only the industries facet's derived arm is threshold-limited.
+		assert(t, "/api/v1/companies?domains=ecommerce", []string{"wide-uncurated"})
 	})
 
 	t.Run("industries ANDs with another facet rather than widening it", func(t *testing.T) {
@@ -178,6 +228,7 @@ func TestListCompaniesIndustryFacetReadsBothColumns(t *testing.T) {
 	t.Run("the Meilisearch path matches the same companies", func(t *testing.T) {
 		for _, industry := range []string{
 			"fintech", "developer-tools", "healthcare", "edtech",
+			"climate-tech", "crypto", "ecommerce", "gambling", "hr-tech",
 			// Ones the mapping refuses, where agreeing on "nothing" is the point.
 			"entertainment", "automotive", "transportation",
 		} {
@@ -194,12 +245,16 @@ func TestListCompaniesIndustryFacetReadsBothColumns(t *testing.T) {
 	})
 }
 
-// companyFixture is one seeded company as the Meilisearch document would carry it:
-// the two array attributes this facet reads.
+// companyFixture is one seeded company as both Postgres (industries/domains/
+// industries_derived columns) and the Meilisearch document (the same three
+// attributes) would carry it. industriesDerived mirrors what RefreshCompanyFacets
+// would have already computed — this test exercises the two QUERY paths, not the
+// recompute itself.
 type companyFixture struct {
-	slug       string
-	industries []string
-	domains    []string
+	slug              string
+	industries        []string
+	domains           []string
+	industriesDerived []string
 }
 
 // slugsMatchingMeiliFilter applies a filter built by search.CompanyFilterFromValues
@@ -225,7 +280,11 @@ func slugsMatchingMeiliFilter(t *testing.T, filter any, fixtures []companyFixtur
 
 	var out []string
 	for _, f := range fixtures {
-		attrs := map[string][]string{"industries": f.industries, "domains": f.domains}
+		attrs := map[string][]string{
+			"industries":         f.industries,
+			"domains":            f.domains,
+			"industries_derived": f.industriesDerived,
+		}
 		matchesAll := true
 		for _, group := range groups {
 			matched := false
@@ -248,24 +307,11 @@ func slugsMatchingMeiliFilter(t *testing.T, filter any, fixtures []companyFixtur
 	return out
 }
 
-// evalFragment evaluates one Meilisearch filter fragment against a document's array
-// attributes. It models exactly two shapes — `attr = "value"` and the parenthesised
-// conjunction the industry facet's derived arm builds — and fails the test on
-// anything else, so a filter this evaluator does not understand can never be
-// mistaken for one that matched nothing.
+// evalFragment evaluates one Meilisearch filter fragment (`attr = "value"`) against a
+// document's array attributes, and fails the test on any other shape, so a filter this
+// evaluator does not understand can never be mistaken for one that matched nothing.
 func evalFragment(t *testing.T, fragment string, attrs map[string][]string) bool {
 	t.Helper()
-
-	// A parenthesised conjunction: every conjunct must hold. The nested
-	// `(attr IS EMPTY OR attr IS NULL)` is handled as one conjunct below, so split on
-	// the AND that separates it from the equality rather than on every AND.
-	if strings.HasPrefix(fragment, "((") {
-		unset, rest, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(fragment, "("), ")"), " AND ")
-		if !ok {
-			t.Fatalf("fragment %q is not `(<unset> AND <eq>)`", fragment)
-		}
-		return evalUnset(t, unset, attrs) && evalFragment(t, rest, attrs)
-	}
 
 	attr, value, ok := strings.Cut(fragment, " = ")
 	if !ok {
@@ -276,21 +322,4 @@ func evalFragment(t *testing.T, fragment string, attrs map[string][]string) bool
 		t.Fatalf("fragment %q names an attribute this evaluator does not model", fragment)
 	}
 	return slices.Contains(values, strings.Trim(value, `"`))
-}
-
-// evalUnset evaluates `(attr IS EMPTY OR attr IS NULL)`. Postgres has one way to say
-// "nothing here" for a NOT NULL array column and Meilisearch has two, which is why
-// the filter tests both; either satisfies this.
-func evalUnset(t *testing.T, fragment string, attrs map[string][]string) bool {
-	t.Helper()
-
-	attr, _, ok := strings.Cut(strings.TrimPrefix(fragment, "("), " IS EMPTY")
-	if !ok {
-		t.Fatalf("fragment %q is not `(attr IS EMPTY OR attr IS NULL)`", fragment)
-	}
-	values, known := attrs[attr]
-	if !known {
-		t.Fatalf("fragment %q names an attribute this evaluator does not model", fragment)
-	}
-	return len(values) == 0
 }

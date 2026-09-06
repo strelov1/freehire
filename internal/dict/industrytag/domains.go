@@ -6,12 +6,14 @@ import "slices"
 // ~20 coarse verticals the enrichment LLM emits per job) into this package's curated
 // industry vocabulary. It exists so the companies catalogue can offer ONE industry
 // filter that reaches a company through either source — the curated
-// companies.industries an importer wrote, or the companies.domains its own postings
-// imply. Nothing is stored: the filter translates and matches both columns.
+// companies.industries an importer wrote, or companies.industries_derived,
+// RefreshCompanyFacets' materialized translation of the company's own domains (see
+// DomainIndustryPairs, and the limit-derived-industry-domain-count change for why
+// that translation is materialized rather than applied per query).
 //
 // Written domain→industry because that is the direction with an answer — a domain
 // names at most one industry, while an industry may be reachable through several
-// domains (none are today, but the inversion below does not assume otherwise).
+// domains.
 //
 // One of the twenty domains maps to nothing: "other" is the classifier declining to
 // answer, not a vertical. A domain absent from vocab.DomainValues entirely — "saas",
@@ -52,39 +54,22 @@ var domainIndustry = map[string]string{
 	"travel":        "travel",
 }
 
-// industryDomains is domainIndustry inverted — the direction the filter asks in,
-// since a request names industries and needs the domain values that also mean them.
-// Built once at init rather than per query: the table is fixed at compile time.
-var industryDomains = func() map[string][]string {
-	out := make(map[string][]string, len(domainIndustry))
-	for domain, industry := range domainIndustry {
-		out[industry] = append(out[industry], domain)
+// DomainIndustryPairs returns the domain→industry mapping as two parallel, sorted-by
+// -domain slices, `pairs[i]` being `(domains[i], industries[i])` — the shape a caller
+// passes as two `text[]` query parameters rather than duplicating the table in SQL.
+// It is the one place this table crosses into a query, so a materialization that
+// needs the mapping (RefreshCompanyFacets) reads it from here instead of growing a
+// second, driftable copy.
+func DomainIndustryPairs() (domains, industries []string) {
+	domains = make([]string, 0, len(domainIndustry))
+	for domain := range domainIndustry {
+		domains = append(domains, domain)
 	}
-	for _, domains := range out {
-		slices.Sort(domains)
-	}
-	return out
-}()
+	slices.Sort(domains)
 
-// DomainsForIndustries returns the domain values through which the given canonical
-// industries can also be recognised, sorted and de-duplicated so the result can be
-// compared and written into a text[] parameter directly.
-//
-// Like Canonicalize it is dict-only and never returns nil: an industry this mapping
-// does not cover — including one that is not an industry at all — contributes
-// nothing, and an empty result is an empty slice.
-func DomainsForIndustries(industries []string) []string {
-	seen := make(map[string]struct{}, len(industries))
-	for _, industry := range industries {
-		for _, domain := range industryDomains[industry] {
-			seen[domain] = struct{}{}
-		}
+	industries = make([]string, len(domains))
+	for i, domain := range domains {
+		industries[i] = domainIndustry[domain]
 	}
-
-	out := make([]string, 0, len(seen))
-	for domain := range seen {
-		out = append(out, domain)
-	}
-	slices.Sort(out)
-	return out
+	return domains, industries
 }

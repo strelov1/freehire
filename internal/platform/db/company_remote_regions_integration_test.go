@@ -54,7 +54,7 @@ func TestRefreshCompanyFacetsDerivesRemoteRegions(t *testing.T) {
 	insertCompany(t, pool, "onsiteco", "Onsite Co")
 	insertJobWithMode(t, pool, "onsiteco:1", "onsiteco", "onsite", []string{"eu"})
 
-	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("refresh facets: %v", err)
 	}
 

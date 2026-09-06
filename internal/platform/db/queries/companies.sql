@@ -28,29 +28,19 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
-  -- industries answers from EITHER source, which is why two arrays arrive for one
-  -- facet: `industries` is what an importer wrote, `industry_domains` is the caller's
-  -- industries translated into the coarse job-derived vocabulary by
-  -- internal/dict/industrytag, matched against the domains the company's own postings
-  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
-  -- of the facet's reach, not a fallback. An industry the mapping does not cover
-  -- contributes nothing to the second array, and `domains && '{}'` is false, so the
-  -- curated arm answers alone without a special case.
+  -- industries answers from EITHER source: `industries` is what an importer wrote,
+  -- `industries_derived` is RefreshCompanyFacets' materialized translation of the
+  -- company's own domains — already empty for a company with a curated industry, or
+  -- with more than two domains (a domains union that wide describes hiring range, not
+  -- business; see the change design). Precedence and the domain-count threshold are
+  -- baked in at materialization time, so this predicate is a plain OR, same shape as
+  -- every other array facet.
   --
   -- It must exist on THIS path too: when only industries is set the request never
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0
        OR industries && sqlc.arg('industries')::text[]
-       -- The derived arm answers only where the curated one is SILENT. The two are
-       -- not equal evidence: `domains` is a union over every open job the company
-       -- holds, so for a company with hundreds of postings it drifts from what the
-       -- company is toward the range of work it advertises — Uber accumulates
-       -- gamedev, edtech and govtech that way, and briefly answered
-       -- ?industries=gaming in production because of it. Consulting that union for a
-       -- company an importer has already classified adds no reach (its own values
-       -- already match it) and asserts industries it is not in.
-       OR (cardinality(industries) = 0
-           AND domains && sqlc.arg('industry_domains')::text[]))
+       OR industries_derived && sqlc.arg('industries')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
@@ -88,29 +78,19 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
-  -- industries answers from EITHER source, which is why two arrays arrive for one
-  -- facet: `industries` is what an importer wrote, `industry_domains` is the caller's
-  -- industries translated into the coarse job-derived vocabulary by
-  -- internal/dict/industrytag, matched against the domains the company's own postings
-  -- imply. The curated column covers 27% of the catalogue, so the second arm is most
-  -- of the facet's reach, not a fallback. An industry the mapping does not cover
-  -- contributes nothing to the second array, and `domains && '{}'` is false, so the
-  -- curated arm answers alone without a special case.
+  -- industries answers from EITHER source: `industries` is what an importer wrote,
+  -- `industries_derived` is RefreshCompanyFacets' materialized translation of the
+  -- company's own domains — already empty for a company with a curated industry, or
+  -- with more than two domains (a domains union that wide describes hiring range, not
+  -- business; see the change design). Precedence and the domain-count threshold are
+  -- baked in at materialization time, so this predicate is a plain OR, same shape as
+  -- every other array facet.
   --
   -- It must exist on THIS path too: when only industries is set the request never
   -- reaches Meili, and a facet the fallback does not know is silently ignored.
   AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0
        OR industries && sqlc.arg('industries')::text[]
-       -- The derived arm answers only where the curated one is SILENT. The two are
-       -- not equal evidence: `domains` is a union over every open job the company
-       -- holds, so for a company with hundreds of postings it drifts from what the
-       -- company is toward the range of work it advertises — Uber accumulates
-       -- gamedev, edtech and govtech that way, and briefly answered
-       -- ?industries=gaming in production because of it. Consulting that union for a
-       -- company an importer has already classified adds no reach (its own values
-       -- already match it) and asserts industries it is not in.
-       OR (cardinality(industries) = 0
-           AND domains && sqlc.arg('industry_domains')::text[]))
+       OR industries_derived && sqlc.arg('industries')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
@@ -270,8 +250,23 @@ LIMIT sqlc.arg(page_limit);
 -- Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
 -- honest — a row already holding the wanted value is not rewritten — and makes the
 -- affected-row count real churn, so a second run reports zero.
+--
+-- Setting a non-empty industries here immediately zeroes industries_derived rather
+-- than waiting for the next RefreshCompanyFacets: that column answers only where
+-- industries is empty, and leaving a stale non-empty value in place would let a
+-- company just curated by cmd/import-company-industries keep matching through
+-- domains it no longer speaks for — the #2082 bug, reopened for the gap between
+-- this write and the next periodic recompute (hours). The reverse case (industries
+-- becomes empty) is left for that recompute like every other job-derived facet: it
+-- only widens reach, never produces a false match, so it can stay eventually
+-- consistent.
 UPDATE companies
-SET industries = sqlc.arg(industries), updated_at = now()
+SET industries = sqlc.arg(industries),
+    industries_derived = CASE
+        WHEN cardinality(sqlc.arg(industries)::text[]) > 0 THEN '{}'::text[]
+        ELSE industries_derived
+    END,
+    updated_at = now()
 WHERE slug = sqlc.arg(slug) AND industries IS DISTINCT FROM sqlc.arg(industries);
 
 -- name: UpsertYCCompany :exec
@@ -348,6 +343,14 @@ ON CONFLICT (slug) DO UPDATE SET
 -- through could not find, and Stripe listed at 570 on /companies against 444 on its
 -- own page. The three predicates below are the ones cmd/reindex's splitJobs applies
 -- on top of closed/duplicate; keep the two in step.
+--
+-- industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
+-- derivation — computed from this pass's own `dom` and the company's curated
+-- `industries`, not from `jobs` directly — so it is not one of the eight oj-scoped
+-- aggregates above. `mapping_domains`/`mapping_industries` are
+-- internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
+-- has exactly one copy of the domain→industry table to read, not a second one typed
+-- into SQL.
 WITH oj AS MATERIALIZED (
     -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
     -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
@@ -456,16 +459,53 @@ csize_final AS (
            END AS arr
     FROM companies co
     LEFT JOIN csize cs ON cs.company_slug = co.slug
+),
+-- derived_eligible is the set of companies the industries_derived arm may speak for
+-- at all: no curated industry of their own (co.industries empty — precedence, unless
+-- from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
+-- domains union describes hiring range rather than business, see the change design).
+-- A company outside this set gets industries_derived = '{}' by simply not appearing
+-- in derived_ind below.
+derived_eligible AS (
+    SELECT co.slug AS company_slug, COALESCE(dom.arr, '{}') AS domains
+    FROM companies co
+    LEFT JOIN dom ON dom.company_slug = co.slug
+    WHERE cardinality(co.industries) = 0
+      AND cardinality(COALESCE(dom.arr, '{}')) <= 2
+),
+-- Zips the two parallel parameter arrays back into (domain, industry) rows by
+-- position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
+-- two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
+-- themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
+-- than duplicated as a second copy of the table in SQL.
+domain_industry_map AS (
+    SELECT d.domain, i.industry
+    FROM unnest(sqlc.arg('mapping_domains')::text[]) WITH ORDINALITY AS d(domain, ord)
+    JOIN unnest(sqlc.arg('mapping_industries')::text[]) WITH ORDINALITY AS i(industry, ord)
+      ON i.ord = d.ord
+),
+-- Translates each eligible company's domains to industries via the mapping above. A
+-- company whose domains all fail to join (none of them map to an industry, e.g.
+-- {other} or a retired vocabulary value) simply produces no rows here and reads as
+-- '{}' below, with no special case.
+derived_ind AS (
+    SELECT de.company_slug,
+           array_agg(DISTINCT map.industry ORDER BY map.industry) AS arr
+    FROM derived_eligible de
+    CROSS JOIN LATERAL unnest(de.domains) AS d(domain)
+    JOIN domain_industry_map map ON map.domain = d.domain
+    GROUP BY de.company_slug
 )
 UPDATE companies c
-SET job_count      = COALESCE(counts.cnt, 0),
-    regions        = COALESCE(reg.arr, '{}'),
-    remote_regions = COALESCE(remote_reg.arr, '{}'),
-    countries      = COALESCE(cty.arr, '{}'),
-    domains        = COALESCE(dom.arr, '{}'),
-    company_types  = COALESCE(ctype.arr, '{}'),
-    company_sizes  = csize_final.arr,
-    maturity       = mat.val
+SET job_count          = COALESCE(counts.cnt, 0),
+    regions            = COALESCE(reg.arr, '{}'),
+    remote_regions     = COALESCE(remote_reg.arr, '{}'),
+    countries          = COALESCE(cty.arr, '{}'),
+    domains            = COALESCE(dom.arr, '{}'),
+    company_types      = COALESCE(ctype.arr, '{}'),
+    company_sizes      = csize_final.arr,
+    maturity           = mat.val,
+    industries_derived = COALESCE(derived_ind.arr, '{}')
 FROM companies c2
 LEFT JOIN counts      ON counts.company_slug     = c2.slug
 LEFT JOIN reg         ON reg.company_slug        = c2.slug
@@ -475,15 +515,17 @@ LEFT JOIN dom         ON dom.company_slug        = c2.slug
 LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
 LEFT JOIN csize_final ON csize_final.company_slug = c2.slug
 LEFT JOIN mat         ON mat.company_slug        = c2.slug
+LEFT JOIN derived_ind ON derived_ind.company_slug = c2.slug
 WHERE c.slug = c2.slug
-  AND (c.job_count      IS DISTINCT FROM COALESCE(counts.cnt, 0)
-    OR c.regions        IS DISTINCT FROM COALESCE(reg.arr, '{}')
-    OR c.remote_regions IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
-    OR c.countries      IS DISTINCT FROM COALESCE(cty.arr, '{}')
-    OR c.domains        IS DISTINCT FROM COALESCE(dom.arr, '{}')
-    OR c.company_types  IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes  IS DISTINCT FROM csize_final.arr
-    OR c.maturity       IS DISTINCT FROM mat.val);
+  AND (c.job_count          IS DISTINCT FROM COALESCE(counts.cnt, 0)
+    OR c.regions            IS DISTINCT FROM COALESCE(reg.arr, '{}')
+    OR c.remote_regions     IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
+    OR c.countries          IS DISTINCT FROM COALESCE(cty.arr, '{}')
+    OR c.domains            IS DISTINCT FROM COALESCE(dom.arr, '{}')
+    OR c.company_types      IS DISTINCT FROM COALESCE(ctype.arr, '{}')
+    OR c.company_sizes      IS DISTINCT FROM csize_final.arr
+    OR c.maturity           IS DISTINCT FROM mat.val
+    OR c.industries_derived IS DISTINCT FROM COALESCE(derived_ind.arr, '{}'));
 
 -- name: CompanyJobCountBySlug :one
 -- The denormalized open-job count for a slug (pgx.ErrNoRows if the company is

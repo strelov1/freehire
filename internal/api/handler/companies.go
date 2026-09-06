@@ -11,7 +11,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -185,12 +184,6 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	maturity := facetValues(vals, "maturity")
 	subindustries := facetValues(vals, "subindustries")
 
-	// The industry facet reads two columns, so it needs the requested industries
-	// translated into the job-derived vocabulary as well. Meili's own translation
-	// happens inside search.CompanyFilterFromValues; both call the same helper, and
-	// an integration test compares the two backends' matched sets.
-	industryDomains := industrytag.DomainsForIndustries(industries)
-
 	// One list feeds both isCompanyFilter calls below. They used to be written out
 	// separately and the second forgot `industries`, so a request filtered only by
 	// industry was counted as unfiltered and answered with the catalogue-wide planner
@@ -218,25 +211,24 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	}
 
 	companies, err := h.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
-		Search:          search,
-		Collections:     collections,
-		Regions:         regions,
-		Countries:       countries,
-		Domains:         domains,
-		Industries:      industries,
-		IndustryDomains: industryDomains,
-		CompanyTypes:    companyTypes,
-		CompanySizes:    companySizes,
-		RemoteRegions:   remoteRegions,
-		YcBatch:         ycBatch,
-		YcStatus:        ycStatus,
-		YcStage:         ycStage,
-		YcFlags:         ycFlags,
-		Maturity:        maturity,
-		Subindustries:   subindustries,
-		Sort:            sort,
-		Limit:           int32(limit),
-		Offset:          int32(offset),
+		Search:        search,
+		Collections:   collections,
+		Regions:       regions,
+		Countries:     countries,
+		Domains:       domains,
+		Industries:    industries,
+		CompanyTypes:  companyTypes,
+		CompanySizes:  companySizes,
+		RemoteRegions: remoteRegions,
+		YcBatch:       ycBatch,
+		YcStatus:      ycStatus,
+		YcStage:       ycStage,
+		YcFlags:       ycFlags,
+		Maturity:      maturity,
+		Subindustries: subindustries,
+		Sort:          sort,
+		Limit:         int32(limit),
+		Offset:        int32(offset),
 	})
 	if err != nil {
 		return err
@@ -249,22 +241,21 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	var total int64
 	if isCompanyFilter(search, facets...) {
 		total, err = h.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
-			Search:          search,
-			Collections:     collections,
-			Regions:         regions,
-			Countries:       countries,
-			Domains:         domains,
-			Industries:      industries,
-			IndustryDomains: industryDomains,
-			CompanyTypes:    companyTypes,
-			CompanySizes:    companySizes,
-			RemoteRegions:   remoteRegions,
-			YcBatch:         ycBatch,
-			YcStatus:        ycStatus,
-			YcStage:         ycStage,
-			YcFlags:         ycFlags,
-			Maturity:        maturity,
-			Subindustries:   subindustries,
+			Search:        search,
+			Collections:   collections,
+			Regions:       regions,
+			Countries:     countries,
+			Domains:       domains,
+			Industries:    industries,
+			CompanyTypes:  companyTypes,
+			CompanySizes:  companySizes,
+			RemoteRegions: remoteRegions,
+			YcBatch:       ycBatch,
+			YcStatus:      ycStatus,
+			YcStage:       ycStage,
+			YcFlags:       ycFlags,
+			Maturity:      maturity,
+			Subindustries: subindustries,
 		})
 	} else {
 		total, err = h.queries.EstimateHiringCompanies(c.Context())

@@ -4139,6 +4139,14 @@ type Querier interface {
 	// through could not find, and Stripe listed at 570 on /companies against 444 on its
 	// own page. The three predicates below are the ones cmd/reindex's splitJobs applies
 	// on top of closed/duplicate; keep the two in step.
+	//
+	// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
+	// derivation — computed from this pass's own `dom` and the company's curated
+	// `industries`, not from `jobs` directly — so it is not one of the eight oj-scoped
+	// aggregates above. `mapping_domains`/`mapping_industries` are
+	// internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
+	// has exactly one copy of the domain→industry table to read, not a second one typed
+	// into SQL.
 	// gov marks a company whose open jobs come from an exclusively-government source
 	// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 	// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
@@ -4151,7 +4159,22 @@ type Querier interface {
 	// accurate value than the LLM's per-posting guess, so it wins when present; otherwise
 	// fall back to the distinct union of enrichment.company_size over open jobs (the csize
 	// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
-	RefreshCompanyFacets(ctx context.Context) (int64, error)
+	// derived_eligible is the set of companies the industries_derived arm may speak for
+	// at all: no curated industry of their own (co.industries empty — precedence, unless
+	// from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
+	// domains union describes hiring range rather than business, see the change design).
+	// A company outside this set gets industries_derived = '{}' by simply not appearing
+	// in derived_ind below.
+	// Zips the two parallel parameter arrays back into (domain, industry) rows by
+	// position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
+	// two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
+	// themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
+	// than duplicated as a second copy of the table in SQL.
+	// Translates each eligible company's domains to industries via the mapping above. A
+	// company whose domains all fail to join (none of them map to an industry, e.g.
+	// {other} or a retired vocabulary value) simply produces no rows here and reads as
+	// '{}' below, with no special case.
+	RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error)
 	// The cheap half of the ingest write path, tried before UpsertJob: a crawl that re-sees a
 	// posting identical to the stored row refreshes its liveness and writes NOTHING else. Matching
 	// nothing (pgx.ErrNoRows) is the signal to run the full upsert — which is also what a brand-new
@@ -4536,6 +4559,16 @@ type Querier interface {
 	// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
 	// honest — a row already holding the wanted value is not rewritten — and makes the
 	// affected-row count real churn, so a second run reports zero.
+	//
+	// Setting a non-empty industries here immediately zeroes industries_derived rather
+	// than waiting for the next RefreshCompanyFacets: that column answers only where
+	// industries is empty, and leaving a stale non-empty value in place would let a
+	// company just curated by cmd/import-company-industries keep matching through
+	// domains it no longer speaks for — the #2082 bug, reopened for the gap between
+	// this write and the next periodic recompute (hours). The reverse case (industries
+	// becomes empty) is left for that recompute like every other job-derived facet: it
+	// only widens reach, never produces a false match, so it can stay eventually
+	// consistent.
 	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
