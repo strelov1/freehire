@@ -4,15 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
 
 // jobappnetworkFake is a test transport for the jobappnetwork adapter: the listing is a single
 // POST endpoint, and the "from" offset in the request body picks which canned page to answer.
-// An unrequested offset returns an empty hit list, the natural end-of-walk response.
+// An unrequested offset returns an empty hit list, the natural end-of-walk response; an offset
+// listed in failAt answers a transport error instead, so a later-page failure can be told apart
+// from a later page simply running out of hits.
 type jobappnetworkFake struct {
 	pages    map[int]string // "from" offset -> _search response JSON
+	failAt   map[int]bool   // "from" offset -> answer a transport error instead of a page
 	postFail bool
 	bodies   []map[string]any // every request body sent, in order
 }
@@ -24,6 +28,9 @@ func (f *jobappnetworkFake) PostJSON(_ context.Context, _ string, body, v any) e
 	b, _ := body.(map[string]any)
 	f.bodies = append(f.bodies, b)
 	from, _ := b["from"].(int)
+	if f.failAt[from] {
+		return errors.New("jobappnetworkFake: page failed")
+	}
 	raw, ok := f.pages[from]
 	if !ok {
 		raw = `{"hits":{"total":0,"hits":[]}}`
@@ -117,6 +124,51 @@ func TestJobAppNetworkFetchPaginatesToTotal(t *testing.T) {
 	}
 	if len(jobs) != 2 {
 		t.Fatalf("got %d jobs, want 2 (paginated to hits.total)", len(jobs))
+	}
+}
+
+// hits.total is claimed exact (see AGENTS.md), but the walk must not trust it blindly: an empty
+// page ends the walk even when total overclaims what is left.
+func TestJobAppNetworkFetchStopsOnEmptyPageDespiteTotal(t *testing.T) {
+	fake := &jobappnetworkFake{pages: map[int]string{
+		0: `{"hits":{"total":1000,"hits":[
+			{"_source":{"jobId":1,"title":"Only","description":"d","address":{"country":"US"},"createdDate":"2022-01-01"}}
+		]}}`,
+		// offset 100 is left unconfigured, which the fake answers as an empty hit list.
+	}}
+	jobs, err := NewJobAppNetwork(fake).Fetch(context.Background(), CompanyEntry{Board: "1"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (stop at the empty page, not chase an overclaimed total)", len(jobs))
+	}
+}
+
+// Only the FIRST page failing is a board-level error; a later page failing ends the walk with
+// whatever was already gathered.
+func TestJobAppNetworkFetchLaterPageFailureKeepsPartialResults(t *testing.T) {
+	if _, err := NewJobAppNetwork(&jobappnetworkFake{failAt: map[int]bool{0: true}}).
+		Fetch(context.Background(), CompanyEntry{Board: "1"}); err == nil {
+		t.Error("want an error when the first listing page fails")
+	}
+
+	first := make([]string, jobappnetworkPageSize)
+	for i := range first {
+		first[i] = fmt.Sprintf(`{"_source":{"jobId":%d,"title":"role","description":"d","address":{"country":"US"},"createdDate":"2022-01-01"}}`, i+1)
+	}
+	partial := &jobappnetworkFake{
+		pages: map[int]string{
+			0: fmt.Sprintf(`{"hits":{"total":1000,"hits":[%s]}}`, strings.Join(first, ",")),
+		},
+		failAt: map[int]bool{jobappnetworkPageSize: true}, // page 2 fails rather than running dry
+	}
+	jobs, err := NewJobAppNetwork(partial).Fetch(context.Background(), CompanyEntry{Board: "1"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != jobappnetworkPageSize {
+		t.Errorf("got %d jobs, want the %d gathered before the failure", len(jobs), jobappnetworkPageSize)
 	}
 }
 
