@@ -43,6 +43,13 @@ const defaultChunkSize = 50_000
 // it completes.
 const pauseBetweenChunks = 200 * time.Millisecond
 
+// chunkSize is the binary's own reading of its knob. It exists so a test can assert what
+// THIS worker does with THIS variable: a test that calls worker.EnvInt64 directly re-states
+// the wiring instead of checking it, and keeps passing after the wiring is gone.
+func chunkSize() (int64, error) {
+	return worker.EnvInt64("BACKFILL_SLUG_CHUNK", defaultChunkSize)
+}
+
 func main() { worker.Main(run) }
 
 func run() int {
@@ -55,7 +62,7 @@ func run() int {
 
 	// Read the knob BEFORE touching the database, so a typo fails in a second rather
 	// than after a bounds scan.
-	step, err := worker.EnvInt64("BACKFILL_SLUG_CHUNK", defaultChunkSize)
+	step, err := chunkSize()
 	if err != nil {
 		log.Printf("backfill-slug-folded: %v", err)
 		return 1

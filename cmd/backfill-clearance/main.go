@@ -73,6 +73,11 @@ func run() int {
 	// after a full pass over the index. Unset means unbounded; a value we cannot read is
 	// an error rather than a fallback, because falling back to unbounded is exactly the
 	// opposite of what an operator who set a cap asked for, and nothing prints it.
+	//
+	// UNSET, not 0, is how you ask for unbounded: the shared reader takes only positive
+	// integers, because for the chunk-width knobs it also serves a 0 is an infinite loop.
+	// An explicit 0 here therefore fails the run with the value named, which is the loud
+	// half of the same rule rather than a silent reinterpretation of what was typed.
 	maxPerRun, err := worker.EnvInt64("BACKFILL_CLEARANCE_MAX", 0)
 	if err != nil {
 		log.Printf("backfill-clearance: %v", err)

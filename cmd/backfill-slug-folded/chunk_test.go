@@ -1,10 +1,6 @@
 package main
 
-import (
-	"testing"
-
-	"github.com/strelov1/freehire/internal/platform/worker"
-)
+import "testing"
 
 // The chunk width is an id RANGE, and on prod the ids are spread over 200x more space
 // than there are rows — so this knob is the difference between a pass that finishes
@@ -34,18 +30,18 @@ func TestChunkSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("BACKFILL_SLUG_CHUNK="+tt.env, func(t *testing.T) {
 			t.Setenv("BACKFILL_SLUG_CHUNK", tt.env)
-			got, err := worker.EnvInt64("BACKFILL_SLUG_CHUNK", defaultChunkSize)
+			got, err := chunkSize()
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("EnvInt64(%q) = %d, nil; want the run to fail rather than take the default", tt.env, got)
+					t.Fatalf("chunkSize() with %q = %d, nil; want the run to fail rather than take the default", tt.env, got)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("EnvInt64(%q): %v", tt.env, err)
+				t.Fatalf("chunkSize() with %q: %v", tt.env, err)
 			}
 			if got != tt.want {
-				t.Errorf("EnvInt64(%q) = %d, want %d", tt.env, got, tt.want)
+				t.Errorf("chunkSize() with %q = %d, want %d", tt.env, got, tt.want)
 			}
 		})
 	}
