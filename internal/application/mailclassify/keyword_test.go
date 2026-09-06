@@ -52,6 +52,43 @@ func TestKeywordStatus(t *testing.T) {
 			body:    "Your one-time code is 123456.",
 			want:    "", ok: false,
 		},
+		// The four phrasings below all resolved to a POSITIVE signal before the
+		// contradiction rule, measured by running KeywordStatus. The last two were the
+		// damaging pair: `offer` clears the stage-advance threshold at keyword
+		// confidence, so a rejection moved the application from `applied` to `offer`.
+		{
+			name:    "rejection quoting offer vocabulary is not an offer",
+			subject: "Your application to Acme",
+			body:    "After careful consideration we are unable to extend an offer at this time.",
+			want:    SignalRejection, ok: true,
+		},
+		{
+			name:    "an offer extended to somebody else is a rejection",
+			subject: "Update on your application",
+			body:    "We have decided to extend an offer to another candidate for this role.",
+			want:    SignalRejection, ok: true,
+		},
+		{
+			name:    "the canonical rejection phrase",
+			subject: "Regarding your application",
+			body:    "We regret to inform you we cannot extend an offer.",
+			want:    SignalRejection, ok: true,
+		},
+		{
+			name:    "rejection after an assessment is a rejection, not an assessment",
+			subject: "Coding challenge results",
+			body:    "Thank you for completing the coding challenge. Unfortunately we are not moving forward with your application.",
+			want:    SignalRejection, ok: true,
+		},
+		// The rule is one-directional: a rejection phrase suppresses a positive signal,
+		// never the other way round. A real offer with no rejection wording is unaffected
+		// — pinned above by "job offer" — and so is an invitation.
+		{
+			name:    "an invitation with no rejection wording still resolves as one",
+			subject: "Next steps at Acme",
+			body:    "We would like to invite you to an interview next week — please book a time.",
+			want:    SignalInterviewInvitation, ok: true,
+		},
 	}
 	for _, c := range cases {
 		got, ok := KeywordStatus(c.subject, c.body)

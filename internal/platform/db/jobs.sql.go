@@ -156,6 +156,7 @@ WHERE company_slug = $1
   AND role_fingerprint = $2
   AND closed_at IS NULL
   AND duplicate_of IS NULL
+  AND NOT is_private
   AND NOT (source = $3 AND external_id = $4)
 ORDER BY id
 LIMIT 1
@@ -184,6 +185,11 @@ type CanonicalJobForRoleRow struct {
 // a re-import of the same URL would otherwise find itself. Served by the partial
 // jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
 // non-partial fallback.
+// A canon must not be private either. InsertPrivateJob derives company_slug and
+// role_fingerprint like every other write path, so a pasted JD can land in a public
+// posting's role cluster; electing it here would mark the incoming public posting a
+// duplicate of a row nothing lists, removing BOTH from search — the import's own
+// posting and the private one it was pointed at.
 func (q *Queries) CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error) {
 	row := q.db.QueryRow(ctx, canonicalJobForRole,
 		arg.CompanySlug,
@@ -2166,7 +2172,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 const listJobsByCompany = `-- name: ListJobsByCompany :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived
 FROM jobs
-WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL
+WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $3
 `
@@ -2179,6 +2185,15 @@ type ListJobsByCompanyParams struct {
 
 // duplicate_of IS NULL collapses role-cluster reposts to their canonical row, matching
 // the /jobs list so a company page shows one card per role, not every repost.
+//
+// AND NOT is_private excludes the jd-tailor-intake private-job path. InsertPrivateJob
+// derives a company_slug from whatever employer the pasted text names, so without this a
+// private JD naming a company the catalogue already knows appears in that company's PUBLIC
+// list — full pasted text, and first, since this orders by created_at DESC. The route is
+// anonymous (GET /api/v1/companies/:slug/jobs, mounted under mw.optional), so the leak
+// needs no account at all, and the same query backs the assistant's company-jobs tool.
+// RefreshCompanyFacets already excludes private rows from companies.job_count, so before
+// this clause the page contradicted its own counter.
 func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyParams) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listJobsByCompany, arg.CompanySlug, arg.Limit, arg.Offset)
 	if err != nil {
@@ -2851,6 +2866,7 @@ WHERE j.closed_at IS NULL
     SELECT 1 FROM jobs ats
     WHERE ats.company_slug = j.company_slug
       AND ats.closed_at IS NULL
+      AND NOT ats.is_private
       AND ats.source <> ALL($2::text[])
   )
 GROUP BY j.company_slug
@@ -2880,6 +2896,13 @@ type OrphanAggregatorCompaniesRow struct {
 //
 // The display name is the modal `company` across the aggregator rows, since two aggregators
 // may spell the same employer differently and the name is what the harvest gate compares.
+//
+// NOT ats.is_private sits on the EXCLUSION test, which is where it can change an answer:
+// a private posting's source is 'pasted'/'weblink' (internal/job/privatejob), so it is
+// never a candidate row above, but it does satisfy "a source outside the aggregator set"
+// and would silently disqualify a company nobody's board is actually crawled for. This is
+// the argument CompaniesWithFreshNonAggregatorCoverage above already writes out in full:
+// a JD one user pasted in is not evidence that we cover an employer.
 func (q *Queries) OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error) {
 	rows, err := q.db.Query(ctx, orphanAggregatorCompanies, arg.Requested, arg.Aggregators)
 	if err != nil {
@@ -3974,7 +3997,7 @@ SET title        = $1,
     similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM $3
                                THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
-WHERE public_slug = $26 AND created_by IS NOT NULL
+WHERE public_slug = $26 AND created_by IS NOT NULL AND NOT is_private
 RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived
 `
 
@@ -4010,6 +4033,14 @@ type UpdateManualJobParams struct {
 // Moderator edit of a hand-curated job, addressed by public_slug and scoped to
 // created_by IS NOT NULL so this path can only rewrite a moderator-authored posting,
 // never an automated-source (ingest/telegram) one — regardless of the declared source.
+// AND NOT is_private is the second half of that scope, not a duplicate of it:
+// InsertPrivateJob stamps created_by too, so created_by IS NOT NULL alone also matched
+// every jd-tailor-intake private JD, and a moderator holding the slug could rewrite one
+// user's private text. The refusal in moderation.QueriesRepository.BySlug is what stops
+// the service path reaching this statement at all — the company_upsert CTE below is
+// independent of the UPDATE and would mint a public companies row from a private JD's
+// employer even on a zero-row update, which is exactly what InsertPrivateJob refuses to
+// do. This clause is the guard in the statement for any caller that arrives without it.
 // The partial merge (nil = unchanged) and facet re-derivation happen in the service; this
 // query writes the resulting full field set, so geography/skills/company_slug stay
 // consistent with the edited content. The source identity (url/external_id/public_slug)

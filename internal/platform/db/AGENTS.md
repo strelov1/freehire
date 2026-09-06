@@ -22,6 +22,7 @@ The `internal/platform/db` package — generated sqlc code, hand-written SQL que
   means "not known" and `'{}'` means "stated, but unresolvable". Collapsing them would lose
   the dictionary's live coverage metric. Copy the shape only when the states match.
 - A new column referencing `users` needs its **own index** — Postgres indexes only the referenced side, so an unindexed reference makes every account deletion scan that table (this is what timed out account deletion against the 19 GB `jobs` table). `TestEveryUserForeignKeyIsIndexed` enforces it.
+- **A statement that reads OPEN postings carries `AND NOT is_private`.** A private posting is one user's pasted JD (`internal/job/privatejob`); nothing about the row says so — it is open, derived and company-slugged like any other — so four statements leaked or rewrote one before `TestEveryOpenCatalogueReadExcludesPrivateJobs` walked the query files. A statement that may legitimately see one goes in that test's exemption table with the reason, which is checked against the population rather than taken on trust.
 
 Response shapes and error rendering are the handler layer's concern — see
 [../handler/AGENTS.md](../../api/handler/AGENTS.md).

@@ -87,6 +87,7 @@ func jobFromRow(r db.Job) (Job, error) {
 
 		ID:                  r.ID,
 		ManuallyAdded:       r.CreatedBy.Valid,
+		Private:             r.IsPrivate,
 		Enrichment:          e,
 		RequirementsDerived: requirementsFromRow(r),
 		EnrichedAt:          tsPtr(r.EnrichedAt),

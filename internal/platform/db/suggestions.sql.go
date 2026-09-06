@@ -15,6 +15,7 @@ const mineJobTitles = `-- name: MineJobTitles :many
 SELECT title, count(*) AS count
 FROM jobs
 WHERE closed_at IS NULL
+  AND NOT is_private
   AND title <> ''
 GROUP BY title
 `
@@ -37,6 +38,11 @@ type MineJobTitlesRow struct {
 // — and the floor has to be applied AFTER it: "Product Owner", "product owner" and
 // "PRODUCT OWNER" are three rows here and one suggestion, so a floor applied to these
 // counts would drop a title that clears it comfortably once merged.
+// AND NOT is_private excludes the jd-tailor-intake private-job path: the dictionary this
+// mines is served to every visitor as they type, so a title one user pasted in privately
+// must not become public vocabulary. The frequency floor is not the guard — it is applied
+// after normalisation, so a private title merges into a public one's count rather than
+// standing alone under it.
 func (q *Queries) MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error) {
 	rows, err := q.db.Query(ctx, mineJobTitles)
 	if err != nil {

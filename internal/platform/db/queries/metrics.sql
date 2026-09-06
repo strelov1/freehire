@@ -236,9 +236,14 @@ FROM board_health;
 -- Returns no row when the catalogue is empty, which the caller must distinguish from a
 -- zero timestamp: zero reads as 1970, i.e. an infinitely stale catalogue, whereas an
 -- empty catalogue is a fresh-install state and not an incident.
+--
+-- AND NOT is_private for the same reason the public twin of this question carries it
+-- (jobs.sql's LatestOpenJobAddedAt): a jd-tailor-intake row is a user pasting a job
+-- description in, not the crawler producing one, so counting it would let one paste hide
+-- an ingest that has stopped — the exact incident this gauge exists to raise.
 SELECT created_at
 FROM jobs
-WHERE closed_at IS NULL
+WHERE closed_at IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT 1;
 

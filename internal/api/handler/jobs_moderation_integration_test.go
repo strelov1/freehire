@@ -237,4 +237,47 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 			t.Errorf("status = %d, want 404", resp.StatusCode)
 		}
 	})
+
+	// A private job is the jd-tailor-intake path: one user's pasted JD, kept out of reach
+	// by an unguessable slug. It stamps created_by with the SUBMITTER, so the
+	// created_by IS NOT NULL scope that keeps this endpoint off crawled vacancies matched
+	// it too — a moderator holding the slug could read one user's private text and rewrite
+	// it, and the edit's company_upsert CTE would mint a public companies row from the
+	// employer that InsertPrivateJob deliberately refuses to register.
+	t.Run("editing a private job is a 404 and mints no company", func(t *testing.T) {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, company, company_slug, description,
+			                   public_slug, created_by, is_private)
+			 VALUES ('weblink', 'private:1', 'http://stealth.test/1', 'Private Role', 'Stealthworks', 'stealthworks',
+			         'Confidential body', 'private-role-stealthworks-bbbb2222', $1, true)`, userID); err != nil {
+			t.Fatalf("seed private job: %v", err)
+		}
+
+		resp, err := app.Test(req(fiber.MethodPatch, "/api/v1/jobs/private-role-stealthworks-bbbb2222", modCookie, `{"title":"Hijacked","company":"Stealthworks"}`))
+		if err != nil {
+			t.Fatalf("edit private: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("status = %d, want 404", resp.StatusCode)
+		}
+
+		var title string
+		if err := pool.QueryRow(ctx,
+			"SELECT title FROM jobs WHERE public_slug = 'private-role-stealthworks-bbbb2222'").Scan(&title); err != nil {
+			t.Fatalf("read back private job: %v", err)
+		}
+		if title != "Private Role" {
+			t.Errorf("title = %q, want the private job left untouched", title)
+		}
+
+		var companies int
+		if err := pool.QueryRow(ctx,
+			"SELECT count(*) FROM companies WHERE slug = 'stealthworks'").Scan(&companies); err != nil {
+			t.Fatalf("count companies: %v", err)
+		}
+		if companies != 0 {
+			t.Errorf("companies rows for the private JD's employer = %d, want 0", companies)
+		}
+	})
 }

@@ -143,4 +143,29 @@ func TestUpdateManualJobScopedByCreatedBy(t *testing.T) {
 	if _, err := q.UpdateManualJob(ctx, updateManualParams(ats.PublicSlug, "Hijacked", editor)); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("update of an automated-source job: err = %v, want pgx.ErrNoRows", err)
 	}
+
+	// A private job (the jd-tailor-intake path) carries created_by too — it is the
+	// SUBMITTER there — so created_by IS NOT NULL alone matched one user's pasted JD as
+	// readily as a moderator's own vacancy. The clause is in the statement and not only in
+	// moderation.QueriesRepository.BySlug because the CTE above the UPDATE upserts a
+	// companies row whether or not the UPDATE matches anything, so a caller arriving here
+	// without the Go check would still mint a public company from private content.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company, company_slug, description,
+		                   public_slug, created_by, is_private)
+		 VALUES ('weblink', 'private:1', 'https://stealth.example/1', 'Private Role', 'Stealthworks',
+		         'stealthworks', 'Confidential body', 'private-role-stealthworks', $1, true)`, editor); err != nil {
+		t.Fatalf("insert private job: %v", err)
+	}
+	if _, err := q.UpdateManualJob(ctx, updateManualParams("private-role-stealthworks", "Hijacked", editor)); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("update of a private job: err = %v, want pgx.ErrNoRows", err)
+	}
+	var title string
+	if err := pool.QueryRow(ctx,
+		"SELECT title FROM jobs WHERE public_slug = 'private-role-stealthworks'").Scan(&title); err != nil {
+		t.Fatalf("read back private job: %v", err)
+	}
+	if title != "Private Role" {
+		t.Errorf("private job title = %q, want it left untouched", title)
+	}
 }
