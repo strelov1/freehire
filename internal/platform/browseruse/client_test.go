@@ -3,6 +3,7 @@ package browseruse
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,7 +32,7 @@ func TestCreateRun_HappyPath(t *testing.T) {
 	defer srv.Close()
 
 	c := New("test-key", srv.URL, nil)
-	id, err := c.CreateRun(context.Background(), "do the thing", 0.5)
+	id, err := c.CreateRun(context.Background(), "do the thing", 0.5, RunOptions{})
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestCreateRun_NonEmptyIDRequired(t *testing.T) {
 	defer srv.Close()
 
 	c := New("test-key", srv.URL, nil)
-	if _, err := c.CreateRun(context.Background(), "task", 0); err == nil {
+	if _, err := c.CreateRun(context.Background(), "task", 0, RunOptions{}); err == nil {
 		t.Fatal("want an error for an empty run id")
 	}
 }
@@ -101,7 +102,7 @@ func TestDoJSON_NonSuccessStatusIsAnError(t *testing.T) {
 	defer srv.Close()
 
 	c := New("test-key", srv.URL, nil)
-	if _, err := c.CreateRun(context.Background(), "task", 0); err == nil {
+	if _, err := c.CreateRun(context.Background(), "task", 0, RunOptions{}); err == nil {
 		t.Fatal("want an error for a non-2xx response")
 	}
 }
@@ -148,5 +149,133 @@ func TestWait_TimesOutOnAStuckRun(t *testing.T) {
 	_, err := c.Wait(context.Background(), "run-123", 5*time.Millisecond, 30*time.Millisecond)
 	if err == nil {
 		t.Fatal("want a timeout error for a run stuck running")
+	}
+}
+
+func TestCreateRun_PassesWorkspaceAndAttachedFileIDs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["workspaceId"] != "ws-1" {
+			t.Errorf("workspaceId = %v, want ws-1", body["workspaceId"])
+		}
+		ids, _ := body["attachedFileIds"].([]any)
+		if len(ids) != 1 || ids[0] != "file-1" {
+			t.Errorf("attachedFileIds = %v, want [file-1]", body["attachedFileIds"])
+		}
+		_, _ = w.Write([]byte(`{"id":"run-1","status":"queued"}`))
+	}))
+	defer srv.Close()
+
+	c := New("test-key", srv.URL, nil)
+	if _, err := c.CreateRun(context.Background(), "task", 0, RunOptions{WorkspaceID: "ws-1", AttachedFileIDs: []string{"file-1"}}); err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+}
+
+func TestCreateWorkspace_HappyPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/workspaces" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"id":"ws-123","archived":false,"createdAt":"2026-09-07T00:00:00Z","updatedAt":"2026-09-07T00:00:00Z"}`))
+	}))
+	defer srv.Close()
+
+	c := New("test-key", srv.URL, nil)
+	id, err := c.CreateWorkspace(context.Background())
+	if err != nil {
+		t.Fatalf("CreateWorkspace: %v", err)
+	}
+	if id != "ws-123" {
+		t.Errorf("id = %q, want ws-123", id)
+	}
+}
+
+func TestDeleteWorkspace_HappyPath(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/workspaces/ws-123" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := New("test-key", srv.URL, nil)
+	if err := c.DeleteWorkspace(context.Background(), "ws-123"); err != nil {
+		t.Fatalf("DeleteWorkspace: %v", err)
+	}
+	if !called {
+		t.Error("delete request was never sent")
+	}
+}
+
+func TestRequestFileUpload_HappyPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/workspaces/ws-123/files/upload" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		files, _ := body["files"].([]any)
+		if len(files) != 1 {
+			t.Fatalf("files = %v, want exactly one entry", body["files"])
+		}
+		f := files[0].(map[string]any)
+		if f["name"] != "resume.pdf" || f["contentType"] != "application/pdf" || f["size"] != float64(1234) {
+			t.Errorf("file entry = %+v, want name=resume.pdf contentType=application/pdf size=1234", f)
+		}
+		_, _ = w.Write([]byte(`{"files":[{"id":"file-1","name":"resume.pdf","storedName":"resume.pdf","path":"uploads/resume.pdf","willOverride":false,"uploadUrl":"https://storage.example.test/upload-1"}]}`))
+	}))
+	defer srv.Close()
+
+	c := New("test-key", srv.URL, nil)
+	upload, err := c.RequestFileUpload(context.Background(), "ws-123", "resume.pdf", "application/pdf", 1234)
+	if err != nil {
+		t.Fatalf("RequestFileUpload: %v", err)
+	}
+	if upload.ID != "file-1" || upload.UploadURL != "https://storage.example.test/upload-1" {
+		t.Errorf("upload = %+v, want id=file-1 uploadUrl=https://storage.example.test/upload-1", upload)
+	}
+}
+
+func TestUploadFile_PUTsBytesWithNoAPIKeyHeader(t *testing.T) {
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		if got := r.Header.Get("X-Browser-Use-API-Key"); got != "" {
+			t.Errorf("api key header = %q, want empty — a presigned URL carries its own credential", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/pdf" {
+			t.Errorf("content-type = %q, want application/pdf", got)
+		}
+		b, _ := io.ReadAll(r.Body)
+		gotBody = b
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := New("test-key", "https://unused.example.test", nil)
+	if err := c.UploadFile(context.Background(), srv.URL, "application/pdf", []byte("%PDF-1.4 fake")); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if string(gotBody) != "%PDF-1.4 fake" {
+		t.Errorf("uploaded body = %q, want %q", gotBody, "%PDF-1.4 fake")
+	}
+}
+
+func TestUploadFile_NonSuccessStatusIsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	c := New("test-key", "https://unused.example.test", nil)
+	if err := c.UploadFile(context.Background(), srv.URL, "application/pdf", []byte("data")); err == nil {
+		t.Fatal("want an error for a non-2xx response")
 	}
 }

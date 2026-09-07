@@ -1,5 +1,6 @@
 // Package browseruse is a thin HTTP client for the browser-use.com cloud API (v4):
-// create a run, poll its status, fetch its result. It knows nothing about ATS forms,
+// create a run, poll its status, fetch its result, and manage the workspace/file-upload
+// endpoints a run's own attached files come from. It knows nothing about ATS forms,
 // resolved application plans, or any other domain — the same "transport, not domain"
 // split internal/platform/llm keeps for its own provider-agnostic wrapper.
 package browseruse
@@ -52,14 +53,26 @@ type RunResult struct {
 // documents besides queued/dispatching/running.
 var terminalStatuses = map[string]bool{"completed": true, "failed": true, "cancelled": true}
 
+// RunOptions carries CreateRun's optional per-run settings beyond the task text and cost
+// cap. The zero value (no workspace, no attached files) is every caller's need before
+// file-upload support existed, so it stays a valid, common argument.
+type RunOptions struct {
+	// WorkspaceID and AttachedFileIDs both come from CreateWorkspace/RequestFileUpload —
+	// a run can only see files already uploaded into the workspace it names here.
+	WorkspaceID     string
+	AttachedFileIDs []string
+}
+
 // CreateRun starts one run with the given task instruction and returns its id.
 // maxCostUSD is the v4 API's own per-run spend cap (0 omits it, leaving the account's
 // default in effect).
-func (c *Client) CreateRun(ctx context.Context, task string, maxCostUSD float64) (runID string, err error) {
+func (c *Client) CreateRun(ctx context.Context, task string, maxCostUSD float64, opts RunOptions) (runID string, err error) {
 	body := struct {
-		Task       string  `json:"task"`
-		MaxCostUSD float64 `json:"maxCostUsd,omitempty"`
-	}{Task: task, MaxCostUSD: maxCostUSD}
+		Task            string   `json:"task"`
+		MaxCostUSD      float64  `json:"maxCostUsd,omitempty"`
+		WorkspaceID     string   `json:"workspaceId,omitempty"`
+		AttachedFileIDs []string `json:"attachedFileIds,omitempty"`
+	}{Task: task, MaxCostUSD: maxCostUSD, WorkspaceID: opts.WorkspaceID, AttachedFileIDs: opts.AttachedFileIDs}
 
 	var resp struct {
 		ID string `json:"id"`
@@ -71,6 +84,88 @@ func (c *Client) CreateRun(ctx context.Context, task string, maxCostUSD float64)
 		return "", fmt.Errorf("browseruse: create run: response carried no id")
 	}
 	return resp.ID, nil
+}
+
+// CreateWorkspace creates a new, empty workspace and returns its id — the container a
+// run's attached files live in. A fresh workspace per attempt keeps one candidate's résumé
+// from ever being reachable from another's run.
+func (c *Client) CreateWorkspace(ctx context.Context) (workspaceID string, err error) {
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := c.doJSON(ctx, http.MethodPost, "/workspaces", struct{}{}, &resp); err != nil {
+		return "", err
+	}
+	if resp.ID == "" {
+		return "", fmt.Errorf("browseruse: create workspace: response carried no id")
+	}
+	return resp.ID, nil
+}
+
+// DeleteWorkspace permanently removes a workspace and everything uploaded into it. Callers
+// that create a workspace to attach a candidate's résumé should delete it once the run is
+// done — nothing here needs that file to outlive the one attempt it was rendered for.
+func (c *Client) DeleteWorkspace(ctx context.Context, workspaceID string) error {
+	return c.doJSON(ctx, http.MethodDelete, "/workspaces/"+workspaceID, nil, nil)
+}
+
+// FileUpload is one file's presigned upload target, returned by RequestFileUpload.
+type FileUpload struct {
+	ID        string // pass in RunOptions.AttachedFileIDs to attach this file to a run
+	UploadURL string // PUT the file's bytes here directly (5 min expiry) — see UploadFile
+}
+
+// RequestFileUpload reserves storage for one file in workspaceID and returns a presigned
+// PUT url for it — the v4 API's own two-step upload: reserve here, then PUT the bytes
+// straight to storage (UploadFile) rather than through this API. size must be the file's
+// exact byte count; the presigned URL is pinned to it.
+func (c *Client) RequestFileUpload(ctx context.Context, workspaceID, name, contentType string, size int64) (FileUpload, error) {
+	type item struct {
+		Name        string `json:"name"`
+		ContentType string `json:"contentType,omitempty"`
+		Size        int64  `json:"size"`
+	}
+	body := struct {
+		Files []item `json:"files"`
+	}{Files: []item{{Name: name, ContentType: contentType, Size: size}}}
+
+	var resp struct {
+		Files []struct {
+			ID        string `json:"id"`
+			UploadURL string `json:"uploadUrl"`
+		} `json:"files"`
+	}
+	if err := c.doJSON(ctx, http.MethodPost, "/workspaces/"+workspaceID+"/files/upload", body, &resp); err != nil {
+		return FileUpload{}, err
+	}
+	if len(resp.Files) != 1 || resp.Files[0].ID == "" || resp.Files[0].UploadURL == "" {
+		return FileUpload{}, fmt.Errorf("browseruse: request file upload: unexpected response shape")
+	}
+	return FileUpload{ID: resp.Files[0].ID, UploadURL: resp.Files[0].UploadURL}, nil
+}
+
+// UploadFile PUTs data to a presigned upload URL from RequestFileUpload. This bypasses
+// doJSON deliberately: a presigned URL points at object storage, not this API's own base
+// URL, needs no X-Browser-Use-API-Key (the URL itself is the credential, valid 5 minutes),
+// and answers with no JSON body to decode.
+func (c *Client) UploadFile(ctx context.Context, uploadURL, contentType string, data []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("browseruse: build upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.ContentLength = int64(len(data))
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("browseruse: upload file: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("browseruse: upload file: status %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
 }
 
 // PollStatus reads a run's current status — the cheap, indexed poll target the v4 API

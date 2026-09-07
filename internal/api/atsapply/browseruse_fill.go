@@ -45,22 +45,31 @@ const (
 	outcomeParked      browserUseOutcome = "PARKED"
 )
 
-// browserUseEligible reports whether claimed's provider and an already-resolved plan
-// qualify for this fallback: an eligible provider, and no file-kind field anywhere in the
-// plan. Résumé/CV upload is out of scope for this executor (design.md's Non-Goals) — a
-// fully-resolved plan that happens to include a résumé field (because the attempt carries
-// an approved tailored CV) still falls through to the ordinary "no fill path" park,
-// exactly as it would if this executor did not exist.
+// browserUseEligible reports whether claimed's provider qualifies for this fallback. A
+// résumé/CV upload no longer disqualifies a plan — resumeFileValue/attachResumeIfPresent
+// below upload it to a browser-use workspace so the agent can attach it (design.md's own
+// Non-Goal on this has been closed; see the archived change for the earlier, narrower
+// scope). This is safe specifically because resolveOne's own invariant guarantees any
+// Kind=="file" field reaching a fully-resolved Plan IS the approved résumé: the only
+// branch that ever resolves a file field (ok=true) is isResumeField(f) && hasApprovedCV —
+// a non-résumé file field can only ever come back unmapped or silently skipped, never
+// resolved, so it can never appear in plan.Fields at all. plan is accepted for symmetry
+// with the eligibility checks this might grow later, though nothing here reads it yet.
 func browserUseEligible(provider string, plan Plan) bool {
-	if !browserUseProviders[provider] {
-		return false
-	}
+	return browserUseProviders[provider]
+}
+
+// resumeFileValue returns the local path Client.attachApprovedResume rendered the
+// candidate's approved CV to, and whether plan carries a résumé field at all — the same
+// invariant browserUseEligible's doc comment explains: any Kind=="file" field here is
+// guaranteed to be exactly that rendered résumé, nothing else.
+func resumeFileValue(plan Plan) (path string, ok bool) {
 	for _, f := range plan.Fields {
 		if f.Kind == "file" {
-			return false
+			return f.Value, true
 		}
 	}
-	return true
+	return "", false
 }
 
 // buildTask builds the natural-language fill instruction browser-use executes for one
@@ -90,6 +99,13 @@ func buildTask(plan Plan, merged []MergedField, applyURL string) string {
 		label := labelByID[f.ID]
 		if label == "" {
 			label = f.ID
+		}
+		if f.Kind == "file" {
+			// f.Value is a local filesystem path here (set by Client.attachApprovedResume,
+			// meaningless off this machine) — never print it. attachResumeIfPresent has
+			// already uploaded the same bytes into this run's own workspace instead.
+			fmt.Fprintf(&b, "- %q (id %q): a résumé/CV file is attached to this run's workspace — use it for this field's upload control, exactly as it is, and do not type a value into it or use any other file.\n", label, f.ID)
+			continue
 		}
 		fmt.Fprintf(&b, "- %q (id %q): %s\n", label, f.ID, f.Value)
 	}
@@ -256,8 +272,18 @@ func (e *BrowserUseExecutor) submit(ctx context.Context, plan Plan, merged []Mer
 		return autoapply.SidecarResult{}, false, nil
 	}
 
+	runOpts, cleanupWorkspace, err := e.attachResumeIfPresent(ctx, plan)
+	if err != nil {
+		// Nothing has touched the live form yet — an ordinary retryable error, the same
+		// as CreateRun's own failure just below.
+		return autoapply.SidecarResult{}, true, fmt.Errorf("browser-use: attach resume: %w", err)
+	}
+	if cleanupWorkspace != nil {
+		defer cleanupWorkspace()
+	}
+
 	task := buildTask(plan, merged, applyURL)
-	runID, err := e.client.CreateRun(ctx, task, e.perRunCapUSD)
+	runID, err := e.client.CreateRun(ctx, task, e.perRunCapUSD, runOpts)
 	if err != nil {
 		// Nothing has touched the live form yet — an ordinary retryable error.
 		return autoapply.SidecarResult{}, true, fmt.Errorf("browser-use: create run: %w", err)
@@ -295,6 +321,56 @@ func (e *BrowserUseExecutor) submit(ctx context.Context, plan Plan, merged []Mer
 	default:
 		return autoapply.SidecarResult{Status: autoapply.StatusUnconfirmed}, true, nil
 	}
+}
+
+// attachResumeIfPresent uploads plan's résumé file (already rendered to a local temp path
+// by Client.attachApprovedResume, exactly as the chromedp path does before this executor
+// ever sees the plan) to a fresh browser-use workspace, so the agent can select it from a
+// native file picker instead of this executor typing a path no cloud VM can read. A plan
+// with no file field is a no-op: zero RunOptions, nil cleanup, nil error.
+//
+// A workspace per attempt, never reused: this executor never learns which user's résumé it
+// just uploaded (Plan carries no candidate identity), so there is no key to look up an
+// existing workspace by even if reuse were wanted, and creating one is one cheap extra call
+// against uploading a candidate's résumé into a container another attempt could still see
+// it in. cleanup deletes it once the run is done, successful or not — a résumé is candidate
+// PII, and nothing here needs it to outlive the one attempt it was rendered for.
+func (e *BrowserUseExecutor) attachResumeIfPresent(ctx context.Context, plan Plan) (opts browseruse.RunOptions, cleanup func(), err error) {
+	path, ok := resumeFileValue(plan)
+	if !ok {
+		return browseruse.RunOptions{}, nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return browseruse.RunOptions{}, nil, fmt.Errorf("read rendered resume %s: %w", path, err)
+	}
+
+	workspaceID, err := e.client.CreateWorkspace(ctx)
+	if err != nil {
+		return browseruse.RunOptions{}, nil, fmt.Errorf("create workspace: %w", err)
+	}
+	cleanup = func() {
+		// A best-effort deletion on a context of its own, for the same reason
+		// recordSpendBestEffort below uses one: by the time this defer runs, ctx (the
+		// caller's own, whatever its origin) may already be past its deadline.
+		delCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if delErr := e.client.DeleteWorkspace(delCtx, workspaceID); delErr != nil {
+			log.Printf("atsapply: browser-use could not delete workspace %s: %v", workspaceID, delErr)
+		}
+	}
+
+	upload, err := e.client.RequestFileUpload(ctx, workspaceID, "resume.pdf", "application/pdf", int64(len(data)))
+	if err != nil {
+		cleanup()
+		return browseruse.RunOptions{}, nil, fmt.Errorf("request file upload: %w", err)
+	}
+	if err := e.client.UploadFile(ctx, upload.UploadURL, "application/pdf", data); err != nil {
+		cleanup()
+		return browseruse.RunOptions{}, nil, fmt.Errorf("upload resume: %w", err)
+	}
+
+	return browseruse.RunOptions{WorkspaceID: workspaceID, AttachedFileIDs: []string{upload.ID}}, cleanup, nil
 }
 
 // recordSpendBestEffort fetches and records a run's cost after Wait itself failed to
