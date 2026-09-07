@@ -1032,6 +1032,12 @@ type SemanticOutbox struct {
 	JobPostedAt pgtype.Timestamptz `json:"job_posted_at"`
 }
 
+type SiteStatusDaily struct {
+	Day           pgtype.Date        `json:"day"`
+	WorstSeverity int16              `json:"worst_severity"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Ledger of published daily social digests. Unique on (day, channel, job_id): the publish-once check reads the (day, channel) prefix, the quarantine scans a day RANGE across all channels — [digest day - 7, digest day), the upper bound exclusive so that a digest cannot quarantine itself. Written only after a channel publishes successfully; a dry run never writes here.
 type SocialDigestPost struct {
 	Day         pgtype.Date        `json:"day"`

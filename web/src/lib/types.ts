@@ -1041,15 +1041,25 @@ interface ProviderHealth {
   ingested_total: number;
 }
 
+/** One day's recorded worst-of-day site status. A day with no recorded
+ *  sample simply has no entry in `SiteHealth.history` — it is never
+ *  reported as "operational" by default. */
+interface SiteHistoryEntry {
+  day: string;
+  status: HealthStatus;
+}
+
 /** The site/API's own live health, independent of the ingest fleet's status
  *  (`overall`). `database` is "up" or "down"; `error_rate` is the fraction of
  *  5xx responses over the trailing `window_minutes`, computed from the
- *  server's own recent traffic. */
+ *  server's own recent traffic. `history` is the trailing 90 days' recorded
+ *  daily status, oldest first, omitting any day with no recorded sample. */
 interface SiteHealth {
   status: HealthStatus;
   database: 'up' | 'down';
   error_rate: number;
   window_minutes: number;
+  history: SiteHistoryEntry[];
 }
 
 /** The public status read: the site/API's own live status, plus the
