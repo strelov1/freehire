@@ -180,12 +180,18 @@ func ApplyProxyEgress(registry map[string]Source) error {
 // partway through — see sources/gulftalent.yml for the measurement and why its timer is off.
 // Validate a provider here by what a whole run yields, never by one 200.
 //
-// bayt is absent, but not because it is unpassable. That was the earlier reading and it is
-// wrong: measured 2026-09-01 with this same transport, bayt's UAE listing returns 200 and
-// 251 KB of real HTML from a residential IP, so no JS challenge is involved. It is 403 from
-// the prod datacenter IP AND 403 through SOURCES_PROXY_URL, whose exit that edge classifies
-// as datacenter too — adding bayt here today would route it through an IP it already
-// refuses. It belongs here the day a genuinely residential pool exists, alongside wantedkr.
+// bayt is absent, and gulftalent's entry here is now its FALLBACK rather than its live
+// transport. Both are 403 from the prod datacenter IP AND 403 through SOURCES_PROXY_URL,
+// whose exit their edge classifies as datacenter too — no fingerprint helps, because the
+// refusal precedes any handshake we could disguise, and the browser tier does not help
+// either, because no challenge is ever offered to solve.
+//
+// What answered it was an address we do not own: see firecrawlProviders (firecrawltier.go),
+// which serves both and is applied after this, deliberately overriding gulftalent's entry
+// below. Without FIRECRAWL_API_KEY that override does not happen and gulftalent keeps the
+// fingerprint transport exactly as before — refused, but unchanged.
+//
+// wantedkr is the one still genuinely waiting for a residential pool.
 //
 // echojobs used to be named here for the same reason and no longer is: measured 2026-09-07,
 // its obstacle is a JS challenge rather than an IP classification, and the EXISTING proxy

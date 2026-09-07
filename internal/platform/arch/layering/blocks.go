@@ -53,6 +53,11 @@ var blocks = map[string][]string{
 		// and ingest/sources (reads a source gated behind a JavaScript challenge), so in
 		// either one it would be an upward edge for the other.
 		"browser",
+		// firecrawl is the browseruse category, not the browser one, and the distinction is
+		// economic rather than technical: it is an HTTP client for a METERED third-party
+		// scraping API, where platform/browser launches a free process on our own host. Its
+		// caller is ingest/sources, for the two providers that refuse every address we own.
+		"firecrawl",
 		// browseruse is the HTTP half of talking to the browser-use.com cloud agent API —
 		// create/poll/fetch one run — and knows nothing about ATS forms or resolved
 		// application plans, the same "transport, not domain" category as llm and

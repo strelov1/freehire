@@ -368,3 +368,27 @@ So a hydrating adapter that listed candidates and read **none** of them returns 
 There is deliberately no threshold: "some candidates, none read" is the whole signal, and how
 many consecutive failures matter is `board_health`'s question. No candidates at all still
 succeeds — a quiet source is not a broken one.
+
+## The hosted tier (last resort, and it costs money)
+
+`firecrawlProviders` (firecrawltier.go) is the third transport, for providers that refuse
+**every** address this repository can obtain. `bayt` and `gulftalent` are `403` from the prod
+datacenter IP *and* `403` through `SOURCES_PROXY_URL`; the browser tier does not help either,
+because the refusal comes before any challenge is offered.
+
+Reach for it only after the other two are ruled out — it is the only tier billed per page.
+Before adding a provider, measure what is behind the wall: `bayt`'s own IT category passed
+**0 of 33** titles through `classify.IsTech`, and `gulftalent`'s postings **5 of 400**. See
+[internal/platform/firecrawl/AGENTS.md](../../platform/firecrawl/AGENTS.md) for the full
+numbers and the three bounds that keep it from spending by accident.
+
+**`ApplyFirecrawlEgress` must run LAST**, and `cmd/ingest` does. `gulftalent` is in
+`proxiedFingerprintProviders` too, so both write the same registry entry — here the override is
+*wanted* (that transport is measured as refused, this one as served), so it is ordered and
+pinned by a test instead of being the silent last-write-wins the browser tier's disjointness
+test exists to prevent. Without a key the override does not happen and `gulftalent` keeps the
+fingerprint transport exactly as before.
+
+Neither adapter changed: `baytHTTP` is `HTMLGetter` and `gulftalentHTTP` is `XMLGetter` +
+`HTMLGetter`, and a test asserts the hosted client satisfies both. What is wrong with these
+providers is the address a request leaves from, not how the response is read.
