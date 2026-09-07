@@ -153,7 +153,7 @@ const backfillProfessionITBoardTech = `-- name: BackfillProfessionITBoardTech :e
 UPDATE jobs
 SET is_tech = true
 WHERE source = 'profession'
-  AND (external_id LIKE 'itdev:%' OR external_id LIKE 'itops:%')
+  AND external_id ILIKE ANY($1::text[])
   AND is_tech IS DISTINCT FROM true
 `
 
@@ -162,10 +162,17 @@ WHERE source = 'profession'
 // internal/ingest/sources/profession.go's professionITBoards/ProfessionCrawlsCategory
 // for why: the platform crawls only these two dedicated IT category boards, so every
 // row this predicate matches is confirmed technical by the source's own filing, not a
-// guess. The external_id prefix is the board, from internal/ingest/pipeline's
-// externalid.Namespace(board, ...) — the same convention profession.go's crawl already
-// relies on to resolve a category sitemap, so this is not a second answer to "which
-// board", only a second READER of the one the ingest path already writes.
+// guess.
+//
+// board_patterns is the caller's []externalid.BoardPattern(board) for every name
+// sources.ProfessionITBoardNames() reports — the same helper ExistingExternalIDsByBoard
+// and BackfillBoardCompany already use for a board-scoped external_id match, so a third
+// Profession IT board added there is picked up here with no SQL change, and the
+// escaping stays the one canonical definition rather than a hand-copied literal.
+// ILIKE (not LIKE): externalid.Namespace stores the board AS THE CRAWL PASSED IT, not
+// normalized, while ProfessionCrawlsCategory itself lowercases before comparing — so a
+// board catalogued with different casing would still crawl and still be confirmed
+// technical, and this predicate must recognize its stored rows the same way.
 //
 // Direct column set rather than a jobderive re-derivation: the board is fully
 // recoverable from stored columns, so there is nothing else to re-derive (see
@@ -173,8 +180,8 @@ WHERE source = 'profession'
 // IS DISTINCT FROM guard makes it idempotent and safe to re-run — a row already true is
 // not rewritten — and the affected set is bounded to two boards, so unlike the
 // multi-million-row backfills this needs no chunking.
-func (q *Queries) BackfillProfessionITBoardTech(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillProfessionITBoardTech)
+func (q *Queries) BackfillProfessionITBoardTech(ctx context.Context, boardPatterns []string) (int64, error) {
+	result, err := q.db.Exec(ctx, backfillProfessionITBoardTech, boardPatterns)
 	if err != nil {
 		return 0, err
 	}

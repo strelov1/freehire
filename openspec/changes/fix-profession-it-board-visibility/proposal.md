@@ -58,7 +58,11 @@ until the next enrichment cycle.
 - `internal/ingest/pipeline/pipeline.go` (`normalizeJob`)
 - `internal/job/jobderive/jobderive.go` (`Input`, `deriveIsTech`, `Derive`)
 - `internal/search/search/document.go` (`CategoryUnresolved`)
-- A new one-off backfill command (`cmd/backfill-profession-it-tech` or similar)
+- `internal/platform/db/queries/jobs.sql` (`RefreshUnchangedJob`'s cheap-write
+  match key, widened to include `is_tech`) and `cmd/ingest/store.go`
+- `cmd/backfill-derive/main.go` (`deriveRow`), so its routine re-derivation
+  pass does not silently undo this fix on the rows it reaches
+- A new one-off backfill command (`cmd/backfill-profession-it-tech`)
 - Operationally: a full `make reindex` must run after the backfill, the same
   requirement `backfill-clearance` and `backfill-company-type-hint` carry,
   since `is_tech` is not hashed into `content_hash` and an incremental push

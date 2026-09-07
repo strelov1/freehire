@@ -122,15 +122,31 @@ consistent with how those two precedents are run.
   (`is_tech` is a filterable, user-facing facet per `tech-classification`'s
   existing "is_tech search facet with filter" requirement), so nothing new is
   being asserted to users, only made findable via the general search index.
-- **[Risk]** The backfill's `external_id LIKE 'itdev:%'` / `'itops:%'` match
-  duplicates knowledge of Profession's namespacing convention outside
-  `profession.go`. → **Mitigation**: this is a one-off, run-once command, not
-  a persistent code path — the same trade-off `backfill-duplicate-marker-owner`
-  and other one-off backfills already accept for a single run bridging a
-  schema/derivation change.
+- **[Risk, caught by review — fixed]** An initial draft of the backfill hardcoded
+  `external_id LIKE 'itdev:%' OR LIKE 'itops:%'` as SQL literals — a second,
+  driftable answer to "which boards" (`profession.go`'s `professionITBoards`
+  being the first), and case-sensitive against a board whose stored casing
+  `externalid.Namespace` never normalizes. Fixed by exporting
+  `sources.ProfessionITBoardNames()` and building the predicate from
+  `externalid.BoardPattern` (the same helper `ExistingExternalIDsByBoard`/
+  `BackfillBoardCompany` already use for a board-scoped `external_id` match)
+  with `ILIKE ANY(...)` — a third IT board, or a differently-cased one, reaches
+  the backfill with no second edit.
+- **[Risk, caught by review — fixed]** `cmd/backfill-derive` re-derives every
+  job's facets, including `is_tech`, from `jobderive.Derive` on a bare title
+  and category — it never re-crawls, so it never saw `IsTechHint`. Its routine
+  pass (AGENTS.md: run after a dictionary change, followed by a reindex) would
+  have silently rewritten every Profession itdev/itops row this change fixed
+  back to `is_tech` unknown, since neither its title nor its category resolves
+  on their own. Fixed by adding `sources.ProfessionConfirmsTech(source,
+  externalID)` — recovers the board from the row's own stored `external_id`
+  namespace prefix, the same way the backfill does — and wiring it into
+  `deriveRow`'s `IsTechHint`.
 - **[Trade-off]** `infojobs.go`'s identical defect shape (Non-Goals) is left
   unfixed. Accepted to keep this change scoped to the reported issue; the new
-  `IsTechHint` mechanism is ready for it without further plumbing changes.
+  `IsTechHint` mechanism, and `cmd/backfill-derive`'s now-general awareness that
+  a structured hint can survive re-derivation, are both ready for it without
+  further plumbing changes.
 
 ## Migration Plan
 

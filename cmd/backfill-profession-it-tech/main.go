@@ -22,7 +22,9 @@ import (
 	"context"
 	"log"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -36,11 +38,17 @@ func run() int {
 	}
 	defer cleanup()
 
-	n, err := db.New(pool).BackfillProfessionITBoardTech(ctx)
+	boards := sources.ProfessionITBoardNames()
+	patterns := make([]string, len(boards))
+	for i, board := range boards {
+		patterns[i] = externalid.BoardPattern(board)
+	}
+
+	n, err := db.New(pool).BackfillProfessionITBoardTech(ctx, patterns)
 	if err != nil {
 		log.Printf("backfill-profession-it-tech: %v", err)
 		return 1
 	}
-	log.Printf("backfill-profession-it-tech: set is_tech = true on %d Profession itdev/itops rows", n)
+	log.Printf("backfill-profession-it-tech: set is_tech = true on %d rows across boards %v", n, boards)
 	return 0
 }

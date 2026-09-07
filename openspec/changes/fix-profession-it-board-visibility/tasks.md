@@ -34,3 +34,12 @@
 - [x] 6.1 `gofmt -l .`, `go vet ./...`, `go test ./...` clean.
 - [x] 6.2 `go vet -tags=integration ./...` clean.
 - [x] 6.3 `openspec validate --strict` for this change passes.
+
+## 7. Independent review follow-ups
+
+Found by an independent code review of the finished diff; fixed test-first before merge.
+
+- [x] 7.1 `cmd/backfill-derive`'s `deriveRow` re-derives `is_tech` via a bare `jobderive.Input` with no `IsTechHint`, so its routine ~15h pass would silently rewrite a fixed Profession itdev/itops row back to unknown, undoing the fix. Added `sources.ProfessionConfirmsTech(source, externalID)` (recovers the board from the stored `external_id` namespace prefix) and wired it into `deriveRow`, with a regression test (`TestDeriveRow_PreservesProfessionITTechHint`) plus the negative case (`TestDeriveRow_DoesNotConfuseAnotherSourceForProfessionsITBoards`).
+- [x] 7.2 `BackfillProfessionITBoardTech`'s SQL hardcoded `LIKE 'itdev:%' OR LIKE 'itops:%'` as a literal instead of the existing `externalid.BoardPattern` convention (`ExistingExternalIDsByBoard`/`BackfillBoardCompany`), and was case-sensitive against a board whose stored casing isn't guaranteed. Added `sources.ProfessionITBoardNames()`, switched the query to `external_id ILIKE ANY(sqlc.arg(board_patterns)::text[])` built from that list via `externalid.BoardPattern`, and added a mixed-case regression row to the integration test.
+- [x] 7.3 Fixed a stale comment in `internal/ingest/linkimport.go`'s `index` (a third `search.CategoryUnresolved` caller) that didn't mention the `is_tech` carve-out.
+- [x] 7.4 Fixed `TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites`'s failure message, which still listed only the pre-`is_tech` match-key columns.

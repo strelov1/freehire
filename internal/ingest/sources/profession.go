@@ -301,6 +301,38 @@ func ProfessionCrawlsCategory(board string) bool {
 	return professionITBoards[strings.ToLower(strings.TrimSpace(board))]
 }
 
+// ProfessionITBoardNames returns the platform's dedicated IT board names, sorted, for
+// a caller that must enumerate them rather than test one — cmd/backfill-profession-it-tech
+// scopes its SQL predicate to exactly these boards, and reading the list from here
+// rather than repeating it as a literal is what makes a third IT board (should the
+// platform ever add one) reach that predicate with no second edit.
+func ProfessionITBoardNames() []string {
+	names := make([]string, 0, len(professionITBoards))
+	for board := range professionITBoards {
+		names = append(names, board)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// ProfessionConfirmsTech reports whether a STORED (source, external_id) pair belongs to
+// one of Profession's dedicated IT boards — the same "confirmed technical" fact detail()
+// asserts fresh off the crawl (see IsTechHint below), recomputed here for a caller that
+// only has the persisted row and cannot re-crawl to learn the board. cmd/backfill-derive
+// is exactly that caller: it re-derives is_tech from jobderive.Derive on a bare title and
+// category, and without this it would silently rewrite these rows' is_tech back to
+// unknown on every routine pass, undoing issue #2601's fix for the rows it exists to
+// reach. The board is recovered from the external_id's own namespace prefix
+// (internal/platform/externalid.Namespace put it there at ingest); the source check
+// guards against another provider's external_id coincidentally sharing a board name.
+func ProfessionConfirmsTech(source, externalID string) bool {
+	if source != "profession" {
+		return false
+	}
+	board, _, ok := strings.Cut(externalID, ":")
+	return ok && ProfessionCrawlsCategory(board)
+}
+
 // detail fetches one posting page and maps it. It reports ok=false — so the caller skips
 // just this posting — when the page carries no JobPosting block, which is what a
 // taken-down posting looks like (its URL redirects to a category listing and answers

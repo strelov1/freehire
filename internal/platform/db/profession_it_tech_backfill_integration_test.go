@@ -9,11 +9,23 @@ package db
 import (
 	"context"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
+// professionITBoardPatterns mirrors what cmd/backfill-profession-it-tech passes at
+// runtime for Profession's two IT boards: one externalid.BoardPattern per board name.
+// Hardcoded here rather than imported from internal/ingest/sources.ProfessionITBoardNames
+// — internal/platform sits below internal/ingest in the layering table and cannot import
+// it, even from a test file (internal/platform/arch/layering checks those too); the
+// board names themselves are pinned by sources.ProfessionITBoardNames's own test.
+func professionITBoardPatterns() []string {
+	return []string{externalid.BoardPattern("itdev"), externalid.BoardPattern("itops")}
+}
+
 // TestBackfillProfessionITBoardTech pins that the backfill sets is_tech only on
-// Profession itdev/itops rows, leaves everything else untouched, and is a no-op on a
-// second run.
+// Profession itdev/itops rows regardless of the stored board's casing, leaves
+// everything else untouched, and is a no-op on a second run.
 func TestBackfillProfessionITBoardTech(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -26,6 +38,12 @@ func TestBackfillProfessionITBoardTech(t *testing.T) {
 	itops := ingestParams("itops:1", "Junior rendszergazda")
 	itops.Source = "profession"
 	itops.Category = ""
+	// A board catalogued with different casing still crawls (ProfessionCrawlsCategory
+	// lowercases before comparing) and must still be recognized here — externalid.Namespace
+	// stores the board as the crawl passed it, not normalized.
+	mixedCase := ingestParams("ItDev:2", "AWS Cloud Architect")
+	mixedCase.Source = "profession"
+	mixedCase.Category = ""
 	// A Profession posting from a general-population board (never crawled today, but
 	// the predicate must not assume it never will be) should not be touched.
 	otherBoard := ingestParams("hr:1", "HR Assistant")
@@ -38,18 +56,20 @@ func TestBackfillProfessionITBoardTech(t *testing.T) {
 	otherSource.Category = ""
 	otherSource.PublicSlug = "pslug-other-source-itdev-1"
 
-	for _, p := range []UpsertJobParams{itdev, itops, otherBoard, otherSource} {
+	for _, p := range []UpsertJobParams{itdev, itops, mixedCase, otherBoard, otherSource} {
 		if _, err := ingestUpsert(ctx, q, p); err != nil {
 			t.Fatalf("upsert %s/%s: %v", p.Source, p.ExternalID, err)
 		}
 	}
 
-	n, err := q.BackfillProfessionITBoardTech(ctx)
+	patterns := professionITBoardPatterns()
+
+	n, err := q.BackfillProfessionITBoardTech(ctx, patterns)
 	if err != nil {
 		t.Fatalf("first backfill: %v", err)
 	}
-	if n != 2 {
-		t.Fatalf("first backfill affected %d rows, want 2 (itdev + itops)", n)
+	if n != 3 {
+		t.Fatalf("first backfill affected %d rows, want 3 (itdev + itops + mixed-case ItDev)", n)
 	}
 
 	for _, want := range []struct {
@@ -58,6 +78,7 @@ func TestBackfillProfessionITBoardTech(t *testing.T) {
 	}{
 		{"profession", "itdev:1", true},
 		{"profession", "itops:1", true},
+		{"profession", "ItDev:2", true},
 		{"profession", "hr:1", false},
 		{"greenhouse", "itdev:1", false},
 	} {
@@ -70,7 +91,7 @@ func TestBackfillProfessionITBoardTech(t *testing.T) {
 		}
 	}
 
-	n, err = q.BackfillProfessionITBoardTech(ctx)
+	n, err = q.BackfillProfessionITBoardTech(ctx, patterns)
 	if err != nil {
 		t.Fatalf("second backfill: %v", err)
 	}

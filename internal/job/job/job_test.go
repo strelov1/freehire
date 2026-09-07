@@ -474,7 +474,7 @@ func TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites(t *testing.T) 
 			}
 			if matchKeyHeld(baseParams, got) {
 				t.Errorf("Input.%s moved %v but left RefreshUnchangedJob's match key "+
-					"(content_hash, cities, salary_*_source, english_level) unchanged: an "+
+					"(content_hash, cities, salary_*_source, english_level, is_tech) unchanged: an "+
 					"unchanged re-ingest would skip the row and leave those columns stale",
 					field.Name, moved)
 			}

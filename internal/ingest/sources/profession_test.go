@@ -565,6 +565,39 @@ func TestProfessionITBoardIsUnfiltered(t *testing.T) {
 	}
 }
 
+// TestProfessionITBoardNames pins the enumeration cmd/backfill-profession-it-tech reads
+// to build its search predicate — sorted, so the predicate is deterministic.
+func TestProfessionITBoardNames(t *testing.T) {
+	got := ProfessionITBoardNames()
+	want := []string{"itdev", "itops"}
+	if !slices.Equal(got, want) {
+		t.Errorf("ProfessionITBoardNames() = %v, want %v", got, want)
+	}
+}
+
+// TestProfessionConfirmsTech pins the predicate cmd/backfill-derive uses to recover the
+// ingest-time IsTechHint from a stored row that cannot re-crawl to learn its board.
+func TestProfessionConfirmsTech(t *testing.T) {
+	tests := []struct {
+		name, source, externalID string
+		want                     bool
+	}{
+		{"profession itdev board", "profession", "itdev:123", true},
+		{"profession itops board", "profession", "itops:456", true},
+		{"case-insensitive board match", "profession", "ItDev:123", true},
+		{"profession general-population board", "profession", "hr:123", false},
+		{"another source sharing the board-name prefix", "greenhouse", "itdev:123", false},
+		{"no namespace separator at all", "profession", "123", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ProfessionConfirmsTech(tt.source, tt.externalID); got != tt.want {
+				t.Errorf("ProfessionConfirmsTech(%q, %q) = %v, want %v", tt.source, tt.externalID, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestProfessionCategorySitemaps(t *testing.T) {
 	// The index carries entries that are not category sitemaps — the platform publishes
 	// article and company indexes beside them — and they must not become boards.
