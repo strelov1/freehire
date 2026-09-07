@@ -77,7 +77,6 @@ type Repository interface {
 	DecideProfile(ctx context.Context, id, moderatorID int64, status string) (Profile, error)
 	ListPendingProfiles(ctx context.Context) ([]PendingProfile, error)
 	ListPublishedProfiles(ctx context.Context, f DirectoryFilter) ([]Profile, error)
-	CompanyHasPublishedProfile(ctx context.Context, companySlug string) (bool, error)
 	CancelFutureBookings(ctx context.Context, mentorID, cancelledBy int64, reason string) ([]Booking, error)
 	DeleteProfile(ctx context.Context, id, userID int64) error
 

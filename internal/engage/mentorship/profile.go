@@ -173,10 +173,14 @@ func (s *Service) Directory(ctx context.Context, f DirectoryFilter) ([]Profile, 
 	return s.repo.ListPublishedProfiles(ctx, f)
 }
 
-// CompanyHasMentor answers whether a vacancy page should offer the mentorship entry point.
-func (s *Service) CompanyHasMentor(ctx context.Context, companySlug string) (bool, error) {
-	return s.repo.CompanyHasPublishedProfile(ctx, companySlug)
-}
+// There is deliberately NO "does this company have a mentor?" call here.
+//
+// A vacancy page asking that is asking the directory a narrower question, and Directory
+// already answers it: filter by company, take one, look at the count. Adding a second way
+// to ask meant a second copy of the publication predicate — and the integration test that
+// existed to check the two agreed was the sign that they could stop agreeing. The
+// dead-code guard found the method unreachable before a caller was written, which was the
+// moment to remove it rather than find it a caller.
 
 // Withdraw removes a mentor's profile.
 //

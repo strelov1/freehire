@@ -114,15 +114,6 @@ WHERE m.status = 'approved' AND NOT m.paused
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT sqlc.arg(row_limit);
 
--- name: CompanyHasPublishedMentor :one
--- Whether a vacancy page should offer the mentorship entry point at all. Served by
--- mentors_company_published_idx, and predicated exactly as the directory is so the two
--- can never disagree about what "has a mentor" means.
-SELECT EXISTS (
-    SELECT 1 FROM mentors
-    WHERE company_slug = $1 AND status = 'approved' AND NOT paused
-) AS has_mentor;
-
 -- name: DeleteMentorProfile :execrows
 -- Withdrawal. The owner guard scopes it to the caller. Future bookings must be cancelled
 -- and their seekers notified BEFORE this runs — the ON DELETE CASCADE would otherwise

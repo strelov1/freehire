@@ -419,16 +419,6 @@ func TestOnlyApprovedUnpausedMentorsArePublished(t *testing.T) {
 		t.Fatalf("directory holds %v, want only approved-one", slugs)
 	}
 
-	t.Run("the vacancy-page check agrees", func(t *testing.T) {
-		has, err := q.CompanyHasPublishedMentor(ctx, "publishco")
-		if err != nil {
-			t.Fatalf("CompanyHasPublishedMentor: %v", err)
-		}
-		if !has {
-			t.Error("the company has one published mentor but the check says no")
-		}
-	})
-
 	t.Run("a pending profile is not publicly readable", func(t *testing.T) {
 		if _, err := q.GetPublishedMentorBySlug(ctx, "pending-one"); err == nil {
 			t.Error("a pending profile answered the public read")

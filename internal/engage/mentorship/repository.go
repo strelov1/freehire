@@ -235,12 +235,6 @@ func (r *QueriesRepository) ListPublishedProfiles(ctx context.Context, f Directo
 	return out, nil
 }
 
-// CompanyHasPublishedProfile answers the vacancy page's question, on the same predicate
-// the directory uses.
-func (r *QueriesRepository) CompanyHasPublishedProfile(ctx context.Context, companySlug string) (bool, error) {
-	return r.q.CompanyHasPublishedMentor(ctx, companySlug)
-}
-
 // CancelFutureBookings ends every confirmed session still ahead, returning them so their
 // seekers can be told. It is called BEFORE the profile is deleted: the ON DELETE CASCADE
 // would otherwise take these rows and nobody could be notified.

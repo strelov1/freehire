@@ -883,10 +883,6 @@ type Querier interface {
 	// The posting itself is excluded by its dedup identity because it is written before this
 	// runs. Callers skip the question for an empty company_slug, which names nobody.
 	CompanyHasOtherJobs(ctx context.Context, arg CompanyHasOtherJobsParams) (bool, error)
-	// Whether a vacancy page should offer the mentorship entry point at all. Served by
-	// mentors_company_published_idx, and predicated exactly as the directory is so the two
-	// can never disagree about what "has a mentor" means.
-	CompanyHasPublishedMentor(ctx context.Context, companySlug string) (bool, error)
 	// The denormalized open-job count for a slug (pgx.ErrNoRows if the company is
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.

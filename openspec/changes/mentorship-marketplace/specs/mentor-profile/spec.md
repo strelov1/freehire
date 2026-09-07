@@ -106,6 +106,10 @@ Where the catalogue holds an approved mentor for a company, the system SHALL exp
 that fact on that company's vacancies and on the company page, so a seeker reading a
 posting can reach a mentor at that employer.
 
+The answer SHALL come from the directory narrowed to that company rather than from a
+separate "has a mentor?" endpoint. A second way to ask means a second copy of the
+publication predicate, and two copies of a predicate drift.
+
 #### Scenario: A vacancy at a company with a mentor offers the entry point
 
 - **WHEN** a visitor opens a vacancy whose `company_slug` has at least one approved,

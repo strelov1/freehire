@@ -123,23 +123,6 @@ func (q *Queries) CancelMentorBooking(ctx context.Context, arg CancelMentorBooki
 	return i, err
 }
 
-const companyHasPublishedMentor = `-- name: CompanyHasPublishedMentor :one
-SELECT EXISTS (
-    SELECT 1 FROM mentors
-    WHERE company_slug = $1 AND status = 'approved' AND NOT paused
-) AS has_mentor
-`
-
-// Whether a vacancy page should offer the mentorship entry point at all. Served by
-// mentors_company_published_idx, and predicated exactly as the directory is so the two
-// can never disagree about what "has a mentor" means.
-func (q *Queries) CompanyHasPublishedMentor(ctx context.Context, companySlug string) (bool, error) {
-	row := q.db.QueryRow(ctx, companyHasPublishedMentor, companySlug)
-	var has_mentor bool
-	err := row.Scan(&has_mentor)
-	return has_mentor, err
-}
-
 const createMentorAvailabilityRule = `-- name: CreateMentorAvailabilityRule :one
 INSERT INTO mentor_availability (mentor_id, weekday, on_date, start_time, end_time)
 VALUES ($1, $2, $3, $4, $5)

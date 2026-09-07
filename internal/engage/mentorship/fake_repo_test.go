@@ -181,15 +181,6 @@ func (r *fakeRepo) ListPublishedProfiles(_ context.Context, f DirectoryFilter) (
 	return out, nil
 }
 
-func (r *fakeRepo) CompanyHasPublishedProfile(_ context.Context, company string) (bool, error) {
-	for _, p := range r.profiles {
-		if p.CompanySlug == company && p.Status == StatusApproved && !p.Paused {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func (r *fakeRepo) CancelFutureBookings(_ context.Context, mentorID, cancelledBy int64, reason string) ([]Booking, error) {
 	bookings := r.futureBookings[mentorID]
 	r.cancelledBeforeDelete += len(bookings)
