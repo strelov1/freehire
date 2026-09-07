@@ -275,6 +275,9 @@ func All(c HTTPClient) map[string]Source {
 		NewInstaffo(c),
 		NewGetonbrd(c),
 		NewVagas(c),
+		// GeekHunter: Brazilian tech-recruitment ATS, board = company slug; listing and detail
+		// both come from parsing the page's own schema.org ld+json blocks.
+		NewGeekHunter(c),
 		NewWantedKR(c),
 		NewMyCareersFuture(c),
 		NewWorkingNomads(c),
