@@ -253,7 +253,12 @@ func (r *QueriesRepository) CancelFutureBookings(ctx context.Context, mentorID, 
 	}
 	out := make([]Booking, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, bookingFromRow(row))
+		booking := bookingFromRow(row.MentorBooking)
+		// The seeker's address comes back with the row: every one of these bookings needs
+		// a notification, and fetching addresses one at a time afterwards would be a
+		// query per cancelled session.
+		booking.SeekerEmail = row.SeekerEmail
+		out = append(out, booking)
 	}
 	return out, nil
 }

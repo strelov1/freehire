@@ -40,6 +40,11 @@ type Booking struct {
 	MentorID       int64
 	MentorUserID   int64
 	MentorSlug     string
+	MentorHeadline string
+	// MentorEmail and SeekerEmail are how a notification reaches each party. They are on
+	// the booking rather than fetched per message because every message goes to BOTH,
+	// and looking one up per send is a query per notification.
+	MentorEmail    string
 	SeekerUserID   int64
 	SeekerEmail    string
 	StartsAt       time.Time

@@ -12,13 +12,15 @@ import (
 )
 
 const cancelFutureBookingsForMentor = `-- name: CancelFutureBookingsForMentor :many
-UPDATE mentor_bookings
+UPDATE mentor_bookings b
 SET status = 'cancelled', cancelled_at = now(),
     -- Cast so the parameter is a plain id: the COLUMN is nullable (a live booking has
     -- nobody who cancelled it), but the person doing the cancelling is always known.
     cancelled_by = $1::bigint, cancel_reason = $2
-WHERE mentor_id = $3 AND status = 'confirmed' AND starts_at > now()
-RETURNING id, mentor_id, seeker_user_id, starts_at, ends_at, status, job_id, note, seeker_timezone, meeting_url, cancelled_at, cancelled_by, cancel_reason, created_at
+FROM users u
+WHERE u.id = b.seeker_user_id
+  AND b.mentor_id = $3 AND b.status = 'confirmed' AND b.starts_at > now()
+RETURNING b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, u.email AS seeker_email
 `
 
 type CancelFutureBookingsForMentorParams struct {
@@ -27,34 +29,40 @@ type CancelFutureBookingsForMentorParams struct {
 	MentorID     int64  `json:"mentor_id"`
 }
 
+type CancelFutureBookingsForMentorRow struct {
+	MentorBooking MentorBooking `json:"mentor_booking"`
+	SeekerEmail   string        `json:"seeker_email"`
+}
+
 // Withdrawal and any other wholesale removal: cancel every future confirmed session at
 // once, RETURNING enough to notify each seeker. Their notifications are sent after this
 // commits — a booking cancelled without its seeker being told is worse than one not
 // cancelled.
-func (q *Queries) CancelFutureBookingsForMentor(ctx context.Context, arg CancelFutureBookingsForMentorParams) ([]MentorBooking, error) {
+func (q *Queries) CancelFutureBookingsForMentor(ctx context.Context, arg CancelFutureBookingsForMentorParams) ([]CancelFutureBookingsForMentorRow, error) {
 	rows, err := q.db.Query(ctx, cancelFutureBookingsForMentor, arg.CancelledBy, arg.CancelReason, arg.MentorID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MentorBooking{}
+	items := []CancelFutureBookingsForMentorRow{}
 	for rows.Next() {
-		var i MentorBooking
+		var i CancelFutureBookingsForMentorRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.MentorID,
-			&i.SeekerUserID,
-			&i.StartsAt,
-			&i.EndsAt,
-			&i.Status,
-			&i.JobID,
-			&i.Note,
-			&i.SeekerTimezone,
-			&i.MeetingUrl,
-			&i.CancelledAt,
-			&i.CancelledBy,
-			&i.CancelReason,
-			&i.CreatedAt,
+			&i.MentorBooking.ID,
+			&i.MentorBooking.MentorID,
+			&i.MentorBooking.SeekerUserID,
+			&i.MentorBooking.StartsAt,
+			&i.MentorBooking.EndsAt,
+			&i.MentorBooking.Status,
+			&i.MentorBooking.JobID,
+			&i.MentorBooking.Note,
+			&i.MentorBooking.SeekerTimezone,
+			&i.MentorBooking.MeetingUrl,
+			&i.MentorBooking.CancelledAt,
+			&i.MentorBooking.CancelledBy,
+			&i.MentorBooking.CancelReason,
+			&i.MentorBooking.CreatedAt,
+			&i.SeekerEmail,
 		); err != nil {
 			return nil, err
 		}
@@ -398,9 +406,12 @@ func (q *Queries) DeleteMentorWeeklyAvailability(ctx context.Context, mentorID i
 
 const getMentorBooking = `-- name: GetMentorBooking :one
 SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.user_id AS mentor_user_id,
-       m.timezone AS mentor_timezone, m.company_slug, m.headline
+       m.timezone AS mentor_timezone, m.company_slug, m.headline,
+       mu.email AS mentor_email, su.email AS seeker_email
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
+JOIN users mu ON mu.id = m.user_id
+JOIN users su ON su.id = b.seeker_user_id
 WHERE b.id = $1
 `
 
@@ -411,6 +422,8 @@ type GetMentorBookingRow struct {
 	MentorTimezone string        `json:"mentor_timezone"`
 	CompanySlug    string        `json:"company_slug"`
 	Headline       string        `json:"headline"`
+	MentorEmail    string        `json:"mentor_email"`
+	SeekerEmail    string        `json:"seeker_email"`
 }
 
 // One booking with what both parties' views need. Authorisation is the caller's job: this
@@ -439,6 +452,8 @@ func (q *Queries) GetMentorBooking(ctx context.Context, id pgtype.UUID) (GetMent
 		&i.MentorTimezone,
 		&i.CompanySlug,
 		&i.Headline,
+		&i.MentorEmail,
+		&i.SeekerEmail,
 	)
 	return i, err
 }
@@ -724,10 +739,12 @@ func (q *Queries) ListBookingsBySeeker(ctx context.Context, arg ListBookingsBySe
 
 const listBookingsDueForReminder = `-- name: ListBookingsDueForReminder :many
 SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.timezone AS mentor_timezone, m.user_id AS mentor_user_id,
-       m.slug AS mentor_slug, m.headline, u.email AS seeker_email
+       m.slug AS mentor_slug, m.headline, m.meeting_url AS mentor_meeting_url,
+       u.email AS seeker_email, mu.email AS mentor_email
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
 JOIN users u ON u.id = b.seeker_user_id
+JOIN users mu ON mu.id = m.user_id
 WHERE b.status = 'confirmed'
   AND b.starts_at > now()
   AND b.starts_at <= now() + make_interval(mins => $1::int)
@@ -745,12 +762,14 @@ type ListBookingsDueForReminderParams struct {
 }
 
 type ListBookingsDueForReminderRow struct {
-	MentorBooking  MentorBooking `json:"mentor_booking"`
-	MentorTimezone string        `json:"mentor_timezone"`
-	MentorUserID   int64         `json:"mentor_user_id"`
-	MentorSlug     string        `json:"mentor_slug"`
-	Headline       string        `json:"headline"`
-	SeekerEmail    string        `json:"seeker_email"`
+	MentorBooking    MentorBooking `json:"mentor_booking"`
+	MentorTimezone   string        `json:"mentor_timezone"`
+	MentorUserID     int64         `json:"mentor_user_id"`
+	MentorSlug       string        `json:"mentor_slug"`
+	Headline         string        `json:"headline"`
+	MentorMeetingUrl string        `json:"mentor_meeting_url"`
+	SeekerEmail      string        `json:"seeker_email"`
+	MentorEmail      string        `json:"mentor_email"`
 }
 
 // The reminder worker's page: confirmed sessions starting within the offset and not yet
@@ -787,7 +806,9 @@ func (q *Queries) ListBookingsDueForReminder(ctx context.Context, arg ListBookin
 			&i.MentorUserID,
 			&i.MentorSlug,
 			&i.Headline,
+			&i.MentorMeetingUrl,
 			&i.SeekerEmail,
+			&i.MentorEmail,
 		); err != nil {
 			return nil, err
 		}

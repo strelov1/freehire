@@ -298,7 +298,7 @@ type Querier interface {
 	// once, RETURNING enough to notify each seeker. Their notifications are sent after this
 	// commits — a booking cancelled without its seeker being told is worse than one not
 	// cancelled.
-	CancelFutureBookingsForMentor(ctx context.Context, arg CancelFutureBookingsForMentorParams) ([]MentorBooking, error)
+	CancelFutureBookingsForMentor(ctx context.Context, arg CancelFutureBookingsForMentorParams) ([]CancelFutureBookingsForMentorRow, error)
 	// Cancel the pending reminder for one (user, job): the eager cleanup wired into
 	// apply and unsave (there is no per-job manual control any more — the shared
 	// notification_settings toggle is the only control). Idempotent — no pending row

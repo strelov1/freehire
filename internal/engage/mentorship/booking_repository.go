@@ -157,6 +157,9 @@ func (r *QueriesRepository) BookingByID(ctx context.Context, id uuid.UUID) (Book
 	booking.MentorUserID = row.MentorUserID
 	booking.MentorSlug = row.MentorSlug
 	booking.MentorTimezone = row.MentorTimezone
+	booking.MentorHeadline = row.Headline
+	booking.MentorEmail = row.MentorEmail
+	booking.SeekerEmail = row.SeekerEmail
 	return booking, true, nil
 }
 
@@ -175,13 +178,18 @@ func (r *QueriesRepository) CancelBooking(ctx context.Context, id uuid.UUID, act
 		return Booking{}, err
 	}
 
-	// The statement returns the booking without the mentor's own columns, and the
-	// cancellation notice needs them to address the other party.
+	// The statement returns the booking's own columns and nothing else, while the
+	// cancellation notice has to address BOTH parties in BOTH zones. The second read is
+	// what fetches them — one query on a path that has just written, not a per-message
+	// lookup.
 	booking := bookingFromRow(row)
 	if full, found, err := r.BookingByID(ctx, id); err == nil && found {
 		booking.MentorUserID = full.MentorUserID
 		booking.MentorSlug = full.MentorSlug
 		booking.MentorTimezone = full.MentorTimezone
+		booking.MentorHeadline = full.MentorHeadline
+		booking.MentorEmail = full.MentorEmail
+		booking.SeekerEmail = full.SeekerEmail
 	}
 	return booking, nil
 }

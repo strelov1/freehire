@@ -122,10 +122,17 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 5. Notifications
 
-- [ ] 5.1 Confirmation to both parties, each in their own zone, carrying the meeting link
-      and an `.ics` from `internal/application/ical`; delivery best-effort, a failure
-      logged and never undoing the booking
-- [ ] 5.2 Cancellation notice to the other party
+- [x] 5.1 Confirmation to both parties, each in their own zone, carrying the meeting link
+      and an `.ics`; delivery best-effort, a failure logged and never undoing the booking.
+      **NOT from `internal/application/ical`** — that package PARSES incoming invitations
+      for the calendar sync and the mail reader, and writing one shares no code with
+      reading one. The generator lives in `mentorship/invite.go`; if a second feature ever
+      needs to write invitations, that file is what moves.
+      `emailnotify` gained `SendWithAttachments` (SES raw MIME): a calendar invitation is
+      only an invitation when it is an attachment with `method=REQUEST` — as a link it is
+      a file to download, and no client offers "add to calendar" for it
+- [x] 5.2 Cancellation notice to both parties, carrying a CANCEL invitation with the SAME
+      UID — a different one adds a second event instead of removing the first
 - [ ] 5.3 Assert in test that booking messages are delivered with the account
       notification rule disabled, and that saved-job reminders and nudges still are not
 

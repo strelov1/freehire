@@ -168,9 +168,12 @@ RETURNING *;
 -- returns the row for any id, and every caller must check the reader is its mentor or its
 -- seeker before rendering it.
 SELECT sqlc.embed(b), m.slug AS mentor_slug, m.user_id AS mentor_user_id,
-       m.timezone AS mentor_timezone, m.company_slug, m.headline
+       m.timezone AS mentor_timezone, m.company_slug, m.headline,
+       mu.email AS mentor_email, su.email AS seeker_email
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
+JOIN users mu ON mu.id = m.user_id
+JOIN users su ON su.id = b.seeker_user_id
 WHERE b.id = $1;
 
 -- name: ListMentorBusyBookings :many
@@ -241,13 +244,15 @@ RETURNING b.*;
 -- once, RETURNING enough to notify each seeker. Their notifications are sent after this
 -- commits — a booking cancelled without its seeker being told is worse than one not
 -- cancelled.
-UPDATE mentor_bookings
+UPDATE mentor_bookings b
 SET status = 'cancelled', cancelled_at = now(),
     -- Cast so the parameter is a plain id: the COLUMN is nullable (a live booking has
     -- nobody who cancelled it), but the person doing the cancelling is always known.
     cancelled_by = sqlc.arg(cancelled_by)::bigint, cancel_reason = sqlc.arg(cancel_reason)
-WHERE mentor_id = sqlc.arg(mentor_id) AND status = 'confirmed' AND starts_at > now()
-RETURNING *;
+FROM users u
+WHERE u.id = b.seeker_user_id
+  AND b.mentor_id = sqlc.arg(mentor_id) AND b.status = 'confirmed' AND b.starts_at > now()
+RETURNING sqlc.embed(b), u.email AS seeker_email;
 
 -- name: ListBookingsDueForReminder :many
 -- The reminder worker's page: confirmed sessions starting within the offset and not yet
@@ -257,10 +262,12 @@ RETURNING *;
 -- The NOT EXISTS makes the read idempotent alongside the insert below; the composite key
 -- makes the WRITE idempotent, and both are needed because two runs can overlap.
 SELECT sqlc.embed(b), m.timezone AS mentor_timezone, m.user_id AS mentor_user_id,
-       m.slug AS mentor_slug, m.headline, u.email AS seeker_email
+       m.slug AS mentor_slug, m.headline, m.meeting_url AS mentor_meeting_url,
+       u.email AS seeker_email, mu.email AS mentor_email
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
 JOIN users u ON u.id = b.seeker_user_id
+JOIN users mu ON mu.id = m.user_id
 WHERE b.status = 'confirmed'
   AND b.starts_at > now()
   AND b.starts_at <= now() + make_interval(mins => sqlc.arg(offset_minutes)::int)
