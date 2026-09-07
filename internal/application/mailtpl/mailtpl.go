@@ -34,11 +34,13 @@ import (
 // two mail packages before that, and a mirror is a link that can disagree with
 // itself.
 //
-// It must be an invite that never expires and has no use cap. A mail is read weeks
-// after it is sent, and a default Discord invite dies after seven days: the letter
-// would keep going out and keep landing on "Invite Invalid", which looks exactly
-// like a project that has folded.
-const DiscordURL = "https://discord.gg/Cghjh3dA5N"
+// It must be an invite that never expires, has no use cap, and opens on a channel a
+// stranger can read. A mail is read weeks after it is sent, and a default Discord
+// invite dies after seven days: the letter would keep going out and keep landing on
+// "Invite Invalid", which looks exactly like a project that has folded. The first
+// one that went out opened on #github, where the repository's webhook posts, so
+// everyone who accepted it arrived in a stream of bot messages.
+const DiscordURL = "https://discord.gg/79cgB9RRfx"
 
 // Palette, converted from design-system/tokens/color.tokens.json. The tokens are
 // authored in oklch and mail clients cannot parse that function, so the values are
