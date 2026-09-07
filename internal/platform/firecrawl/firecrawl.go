@@ -31,6 +31,23 @@ const DefaultBaseURL = "https://api.firecrawl.dev"
 // waiting for once we have already paid for it.
 const requestTimeout = 90 * time.Second
 
+// ErrRateLimited is returned when the vendor's own per-minute limit never lifted within the
+// retry window. It is a sentinel so a caller can tell "we were throttled" from "the page is
+// not there" — the first says nothing about the target and must never be read as a posting
+// having gone away.
+var ErrRateLimited = errors.New("firecrawl: vendor rate limit did not lift")
+
+// defaultRetryWait is how long to wait before re-asking after the vendor says the minute's
+// allowance is gone. Its published window is a minute, and the free tier's ten requests in one
+// are easy for a crawl to exhaust, so the wait is measured in tens of seconds rather than the
+// milliseconds an ordinary backoff would use.
+const defaultRetryWait = 20 * time.Second
+
+// maxRateLimitRetries bounds the waiting. Three waits covers a minute-long window from any
+// point inside it; past that the limit is not a burst but the plan, and a crawl should say so
+// rather than sit there.
+const maxRateLimitRetries = 3
+
 // ErrBudgetSpent is returned once a run has fetched as many pages as it was allowed. It is a
 // sentinel so a caller can tell "we chose to stop spending" from "the fetch failed" — the
 // first is a healthy run hitting its bound, the second is a problem.
@@ -43,7 +60,10 @@ type Config struct {
 	BaseURL string // defaults to DefaultBaseURL when empty
 	// MaxPagesPerRun bounds how many pages ONE process may fetch. Must be positive.
 	MaxPagesPerRun int64
-	HTTP           *http.Client // defaults to a client with requestTimeout
+	// RetryWait is how long to wait before re-asking after a vendor rate limit. Defaults to
+	// defaultRetryWait; tests set it small so they do not sleep through a real window.
+	RetryWait time.Duration
+	HTTP      *http.Client // defaults to a client with requestTimeout
 }
 
 // Client fetches pages through the vendor, counting every one against the run's budget.
@@ -52,8 +72,9 @@ type Client struct {
 	baseURL string
 	http    *http.Client
 
-	budget int64
-	spent  atomic.Int64
+	budget    int64
+	retryWait time.Duration
+	spent     atomic.Int64
 }
 
 // New builds a client, refusing the two configurations that could only end badly: no key (a
@@ -75,7 +96,11 @@ func New(cfg Config) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: requestTimeout}
 	}
-	return &Client{apiKey: cfg.APIKey, baseURL: base, http: hc, budget: cfg.MaxPagesPerRun}, nil
+	wait := cfg.RetryWait
+	if wait <= 0 {
+		wait = defaultRetryWait
+	}
+	return &Client{apiKey: cfg.APIKey, baseURL: base, http: hc, budget: cfg.MaxPagesPerRun, retryWait: wait}, nil
 }
 
 // scrapeResponse is the vendor's envelope. The distinction that matters is that IT answers
@@ -100,11 +125,35 @@ type scrapeResponse struct {
 // it says nothing about the target, and a caller that mistook it for a refusal could conclude
 // a posting is gone when only the API was down.
 func (c *Client) Fetch(ctx context.Context, rawURL string) (int, []byte, error) {
-	// Claimed BEFORE the request, so a refused fetch never spends the page it refuses.
+	// Claimed BEFORE the request, so a refused fetch never spends the page it refuses. Claimed
+	// ONCE for the whole call, so waiting out a rate limit does not charge the page twice: a
+	// page fetched after a wait is still one page.
 	if spent := c.spent.Add(1); spent > c.budget {
 		return 0, nil, fmt.Errorf("%w (%d pages)", ErrBudgetSpent, c.budget)
 	}
 
+	for attempt := 0; ; attempt++ {
+		status, body, err := c.attempt(ctx, rawURL)
+		if !errors.Is(err, errVendorRateLimited) {
+			return status, body, err
+		}
+		if attempt >= maxRateLimitRetries {
+			return 0, nil, fmt.Errorf("%w after %d attempts for %s", ErrRateLimited, attempt+1, rawURL)
+		}
+		select {
+		case <-time.After(c.retryWait):
+		case <-ctx.Done():
+			return 0, nil, ctx.Err()
+		}
+	}
+}
+
+// errVendorRateLimited is the internal signal that one attempt was throttled. It never leaves
+// this package: Fetch either waits it out or converts it to ErrRateLimited.
+var errVendorRateLimited = errors.New("firecrawl: throttled")
+
+// attempt makes exactly one request.
+func (c *Client) attempt(ctx context.Context, rawURL string) (int, []byte, error) {
 	payload, err := json.Marshal(map[string]any{
 		"url":     rawURL,
 		"formats": []string{"rawHtml"},
@@ -127,6 +176,9 @@ func (c *Client) Fetch(ctx context.Context, rawURL string) (int, []byte, error) 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, nil, fmt.Errorf("firecrawl: read response for %s: %w", rawURL, err)
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return 0, nil, errVendorRateLimited
 	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, nil, fmt.Errorf("firecrawl: fetch %s: api status %d", rawURL, resp.StatusCode)
