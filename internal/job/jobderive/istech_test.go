@@ -96,6 +96,42 @@ func showBoolp(b *bool) string {
 	return "false"
 }
 
+// TestDerive_IsTech_SourceHint pins the precedence of a structured "confirmed
+// technical" source signal (e.g. a source that crawls only a dedicated IT board)
+// over the title/category dictionaries — see the tech-classification spec's
+// "structured source is_tech signal" requirement.
+func TestDerive_IsTech_SourceHint(t *testing.T) {
+	tests := []struct {
+		name string
+		in   Input
+		want *bool
+	}{
+		{
+			name: "hint yields true when neither dictionary resolves anything",
+			in:   Input{Title: "Windows rendszermérnök", IsTechHint: true},
+			want: boolp(true),
+		},
+		{
+			name: "hint overrides an otherwise-confident non-tech title match",
+			in:   Input{Title: "Warehouse Janitorial Cleaner", IsTechHint: true},
+			want: boolp(true),
+		},
+		{
+			name: "hint absent falls back to the existing dictionary precedence",
+			in:   Input{Title: "Sales Manager", IsTechHint: false},
+			want: boolp(false),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Derive(tt.in).IsTech
+			if !eqBoolp(got, tt.want) {
+				t.Errorf("IsTech = %s, want %s", showBoolp(got), showBoolp(tt.want))
+			}
+		})
+	}
+}
+
 // TestDerive_IsTech_MarketingAliasesDoNotClaimTech pins the technical titles that
 // the marketing title aliases sit next to. A bare discipline noun added to the
 // category dictionary ("growth", "content", "geo") would resolve these to

@@ -1110,6 +1110,7 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical)
 			SalaryMax:          j.SalaryMax,
 			SalaryCurrency:     j.SalaryCurrency,
 			SalaryPeriod:       j.SalaryPeriod,
+			IsTechHint:         j.IsTechHint,
 		},
 		URL:      j.URL,
 		Remote:   j.Remote,

@@ -339,6 +339,14 @@ func (s profession) detail(ctx context.Context, loc, externalID string) (Job, bo
 		EducationLevel:     education,
 		EnglishLevel:       english,
 		PostedAt:           parseDate(ld.DatePosted),
+		// detail is reachable only after list() has already refused every board but
+		// itdev/itops (see ProfessionCrawlsCategory above), so every posting reaching
+		// this point is filed under the platform's own dedicated IT sections — the
+		// same evidence professionITBoards documents for the ingest-time non-tech
+		// filter, now also asserted for is_tech so these postings enter the
+		// enrichment queue instead of stalling when the title dictionary alone
+		// cannot resolve a category (see issue #2601).
+		IsTechHint: true,
 	}, true
 }
 

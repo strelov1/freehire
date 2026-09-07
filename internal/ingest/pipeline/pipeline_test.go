@@ -442,6 +442,30 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 	}
 }
 
+// TestNormalizeJobPassesIsTechHint pins that an adapter's structured
+// "confirmed technical" signal (see issue #2601 — Profession's dedicated IT
+// boards) reaches jobderive and therefore is_tech, even for a title neither
+// the tech nor the non-tech dictionary resolves.
+func TestNormalizeJobPassesIsTechHint(t *testing.T) {
+	e := sources.CompanyEntry{Company: "Acme", Provider: "profession", Board: "itdev"}
+
+	hinted, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Yard Coordinator", Company: "Acme", IsTechHint: true}, nil)
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
+	if got := hinted.Fields().IsTech; got == nil || !*got {
+		t.Errorf("IsTech = %v, want true (adapter's structured IsTechHint wins)", got)
+	}
+
+	unhinted, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Yard Coordinator", Company: "Acme"}, nil)
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
+	if got := unhinted.Fields().IsTech; got != nil {
+		t.Errorf("IsTech = %v, want nil (no hint, dictionary resolves neither)", *got)
+	}
+}
+
 func TestRunIsolatesSourceFailure(t *testing.T) {
 	good := fakeSource{provider: "greenhouse", jobs: []sources.Job{{ExternalID: "1", Title: "ok"}}}
 	bad := fakeSource{provider: "lever", err: errors.New("boom")}

@@ -491,7 +491,8 @@ func matchKeyHeld(a, b db.UpsertJobParams) bool {
 		a.SalaryMaxSource == b.SalaryMaxSource &&
 		a.SalaryCurrencySource == b.SalaryCurrencySource &&
 		a.SalaryPeriodSource == b.SalaryPeriodSource &&
-		a.EnglishLevel == b.EnglishLevel
+		a.EnglishLevel == b.EnglishLevel &&
+		a.IsTech == b.IsTech
 }
 
 // fullDraft populates every jobderive.Input field, including the optional structured signals,
@@ -515,6 +516,7 @@ func fullDraft() job.Draft {
 			EmploymentType:     "full_time",
 			Skills:             []string{"go"},
 			ExperienceYearsMin: &years,
+			IsTechHint:         true,
 		},
 		URL:      "https://acme.example/jobs/1",
 		Remote:   true,
@@ -546,6 +548,8 @@ func mutateInput(d job.Draft, i int) (job.Draft, bool) {
 			n = *v + 1
 		}
 		f.Set(reflect.ValueOf(&n))
+	case bool:
+		f.SetBool(!v)
 	default:
 		return d, false
 	}

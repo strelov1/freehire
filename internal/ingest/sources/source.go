@@ -73,6 +73,16 @@ type Job struct {
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	// IsTechHint is a structured "confirmed technical" signal, set only by an adapter
+	// whose crawl scope itself guarantees a posting is technical — e.g. a source that
+	// crawls exclusively a platform's own dedicated IT category board, rather than a
+	// general-population board the title dictionary must judge unassisted. Unlike
+	// Category it asserts IT-ness without naming a subcategory: a source sets it when
+	// it KNOWS a posting is IT but not which kind, so the dictionary is left to try
+	// (and may still fail, leaving the category empty). It is a fact the adapter
+	// states about its own crawl, never a heuristic inferred from title or
+	// description text.
+	IsTechHint bool
 	// EducationLevel and EnglishLevel follow the same structured-only contract, for the
 	// platforms that state them as a picklist instead of leaving them in prose
 	// (profession.hu publishes both on every posting, as "Angol középfok, Egyetem").

@@ -149,6 +149,38 @@ func (q *Queries) BackfillDuplicateMarkerOwnerChunk(ctx context.Context, arg Bac
 	return result.RowsAffected(), nil
 }
 
+const backfillProfessionITBoardTech = `-- name: BackfillProfessionITBoardTech :execrows
+UPDATE jobs
+SET is_tech = true
+WHERE source = 'profession'
+  AND (external_id LIKE 'itdev:%' OR external_id LIKE 'itops:%')
+  AND is_tech IS DISTINCT FROM true
+`
+
+// One-off: sets is_tech = true on the Profession itdev/itops rows stored before that
+// source began asserting the signal at ingest (issue #2601). See
+// internal/ingest/sources/profession.go's professionITBoards/ProfessionCrawlsCategory
+// for why: the platform crawls only these two dedicated IT category boards, so every
+// row this predicate matches is confirmed technical by the source's own filing, not a
+// guess. The external_id prefix is the board, from internal/ingest/pipeline's
+// externalid.Namespace(board, ...) — the same convention profession.go's crawl already
+// relies on to resolve a category sitemap, so this is not a second answer to "which
+// board", only a second READER of the one the ingest path already writes.
+//
+// Direct column set rather than a jobderive re-derivation: the board is fully
+// recoverable from stored columns, so there is nothing else to re-derive (see
+// design.md's Decision 3 in openspec/changes/fix-profession-it-board-visibility). The
+// IS DISTINCT FROM guard makes it idempotent and safe to re-run — a row already true is
+// not rewritten — and the affected set is bounded to two boards, so unlike the
+// multi-million-row backfills this needs no chunking.
+func (q *Queries) BackfillProfessionITBoardTech(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, backfillProfessionITBoardTech)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const canonicalJobForRole = `-- name: CanonicalJobForRole :one
 SELECT id, public_slug
 FROM jobs
@@ -3068,6 +3100,7 @@ WHERE source = $1
   AND salary_currency_source = $7
   AND salary_period_source = $8
   AND english_level = $9
+  AND is_tech IS NOT DISTINCT FROM $10
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of
 `
@@ -3082,6 +3115,7 @@ type RefreshUnchangedJobParams struct {
 	SalaryCurrencySource string      `json:"salary_currency_source"`
 	SalaryPeriodSource   string      `json:"salary_period_source"`
 	EnglishLevel         string      `json:"english_level"`
+	IsTech               pgtype.Bool `json:"is_tech"`
 }
 
 type RefreshUnchangedJobRow struct {
@@ -3112,18 +3146,21 @@ type RefreshUnchangedJobRow struct {
 // and cmd/reindex has no --since flag despite what its comment says), because a column stamped
 // on every crawl selects the whole catalogue and answers nothing.
 //
-// The match key is (content_hash, cities, salary_*_source, english_level), not the hash alone.
-// Those are what the upsert writes that jobhash.Of does not read — a caller's structured city
-// list overrides the location-derived one, a structured salary (Lever/Ashby/Recruitee) is a
-// base fact rather than something Of hashes, and english_level gained a structured tier of its
-// own (profession.hu states it as a picklist) so it too can move while every hashed field
-// stands still. Folding them into the hash instead would change every stored content_hash at
-// once and make the first crawl after deploy rewrite and re-index the whole catalogue — 6.6M
-// rows through a queue that drains at ~9 documents a second. Note the asymmetry with
-// education_level, which IS hashed: it was hashed before either had a structured tier, and
-// moving it out now would cost exactly the storm this key exists to avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
-// (both NULL) still match — a plain = would push every non-salary-bearing source off the cheap
-// path forever. Whether the key still covers every written column is enforced by
+// The match key is (content_hash, cities, salary_*_source, english_level, is_tech), not the
+// hash alone. Those are what the upsert writes that jobhash.Of does not read — a caller's
+// structured city list overrides the location-derived one, a structured salary
+// (Lever/Ashby/Recruitee) is a base fact rather than something Of hashes, english_level gained
+// a structured tier of its own (profession.hu states it as a picklist) so it too can move while
+// every hashed field stands still, and is_tech can now move the same way: a source's structured
+// IsTechHint (Profession's dedicated itdev/itops boards, issue #2601) can flip it from unknown
+// to true while title/category/every hashed field stay put. Folding them into the hash instead
+// would change every stored content_hash at once and make the first crawl after deploy rewrite
+// and re-index the whole catalogue — 6.6M rows through a queue that drains at ~9 documents a
+// second. Note the asymmetry with education_level, which IS hashed: it was hashed before either
+// had a structured tier, and moving it out now would cost exactly the storm this key exists to
+// avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds and on is_tech so a NULL
+// (unset/unknown) still matches its own kind — a plain = would push every sourceless/unknown job
+// off the cheap path forever. Whether the key still covers every written column is enforced by
 // TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites (internal/job); add a derived
 // column outside the hash and it fails there.
 //
@@ -3161,6 +3198,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.SalaryCurrencySource,
 		arg.SalaryPeriodSource,
 		arg.EnglishLevel,
+		arg.IsTech,
 	)
 	var i RefreshUnchangedJobRow
 	err := row.Scan(

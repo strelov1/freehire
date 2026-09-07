@@ -145,8 +145,18 @@ func FromJob(j db.Job) (JobDocument, error) {
 // enrichment JSON rather than jobview's folded Enrichment.Category, which the
 // dictionary column always overwrites (see internal/dict/classify/AGENTS.md) and so
 // never carries the LLM's own answer.
+//
+// This exclusion does not apply when is_tech is confidently true (see the
+// tech-classification spec): a confirmed-technical job is never the undifferentiated
+// bulk this function exists to keep out, whether that confidence came from the title
+// dictionary alone or from a source's own structured signal (jobderive.Input.IsTechHint
+// — e.g. Profession's dedicated itdev/itops boards, issue #2601). Such a job stays
+// searchable even if its category never resolves further.
 func CategoryUnresolved(j db.Job) bool {
 	if j.Category != "" {
+		return false
+	}
+	if j.IsTech.Valid && j.IsTech.Bool {
 		return false
 	}
 	var e enrich.Enrichment

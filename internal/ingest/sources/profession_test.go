@@ -252,6 +252,12 @@ func TestProfessionFetch(t *testing.T) {
 	if hybrid.SalaryMin != nil || hybrid.SalaryCurrency != "" {
 		t.Errorf("salary set from a slice that publishes none: %v %q", hybrid.SalaryMin, hybrid.SalaryCurrency)
 	}
+	// The board itself is the platform's own IT filing, so a posting from it asserts
+	// confirmed-technical even though its category is left to a dictionary that resolves
+	// only about half of them.
+	if !hybrid.IsTechHint {
+		t.Errorf("IsTechHint = false, want true (posting is filed under the platform's own IT board)")
+	}
 
 	// The body is the page's sections under the employer's own headings, with the list
 	// markup the ld+json copy has lost — and without the two sections that are not the
@@ -284,6 +290,9 @@ func TestProfessionFetch(t *testing.T) {
 	}
 	if sited.ExperienceYearsMin == nil || *sited.ExperienceYearsMin != 0 {
 		t.Errorf("sited experience = %v, want 0", sited.ExperienceYearsMin)
+	}
+	if !sited.IsTechHint {
+		t.Errorf("sited IsTechHint = false, want true (posting is filed under the platform's own IT board)")
 	}
 }
 
