@@ -271,7 +271,7 @@ func All(c HTTPClient) map[string]Source {
 		NewCryptocurrencyJobs(c),
 		NewJobspresso(c),
 		NewStartupAndVC(c),
-		NewFourDayWeek(c),
+		browserUASource(c, NewFourDayWeek),
 		NewFunctionalWorks(c),
 		NewTheHub(c),
 		NewCompleo(c),
@@ -489,6 +489,18 @@ func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
 		return build(zero)
 	}
 	return build(any(newSingleUseConnClient()).(T))
+}
+
+// browserUASource builds a registry entry for an adapter whose platform refuses any client
+// that identifies itself, on a path that platform's own robots.txt allows (4dayweek). It
+// mirrors cookieSessionSource exactly, including its nil-transport case for the taxonomy path.
+// See browserUserAgent for the measurement, and for the line this does NOT cross.
+func browserUASource[T any](c HTTPClient, build func(T) Source) Source {
+	if c == nil {
+		var zero T
+		return build(zero)
+	}
+	return build(any(newBrowserUAClient()).(T))
 }
 
 // reg indexes sources by provider key. A duplicate key means two adapters claim the

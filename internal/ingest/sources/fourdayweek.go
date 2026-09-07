@@ -10,30 +10,31 @@ import (
 // fourDayWeek adapts 4dayweek.io, a curated board of roles offering a shortened work week.
 // Like the other aggregators it is boardless (one public API, no per-tenant board) yet lists
 // many employers, so it stays in the source facet and takes each posting's company from the
-// feed. The list API paginates and carries the platform's structured facets inline
-// (work_arrangement, level, category, stack) but no body and no apply link, so the canonical
-// URL is synthesized from the slug and the description is hydrated from the public job page.
+// feed.
 //
-// 4dayweek gates most descriptions behind its paid "Pro" tier: on a locked posting's page the
-// body is replaced by an "Unlock with Pro" notice and the article.prose container is absent.
-// We ingest ONLY the postings whose full description 4dayweek serves for free (article.prose
-// present) and drop the locked ones rather than store a blank card — so every posting is
-// fetched to read its lock state, and the crawl is scheduled sparsely (daily) to bound that.
+// It reads /api/v2/jobs, which robots.txt explicitly ALLOWS ("Allow: /api/v2") — the /api/jobs
+// this adapter used until 2026-09 is under that same file's "Disallow: /api/", and the crawl
+// began failing when the site started enforcing it. The move is therefore a correction, not a
+// workaround, and it is a better feed besides: v2 carries the DESCRIPTION and the canonical URL
+// inline, so the per-posting HTML fetch this adapter used to make is gone — with it the ~24k
+// extra requests per crawl and the whole "is this posting Pro-locked?" problem, since the API
+// serves the body directly.
 type fourDayWeek struct {
 	http fourDayWeekHTTP
 }
 
-// fourDayWeekHTTP is the slice of the HTTP client the adapter needs: the JSON list and the
-// server-rendered HTML detail page. The shared *Client satisfies it.
+// fourDayWeekHTTP is the slice of the HTTP client the adapter needs. Only the JSON list now:
+// v2 inlines the body, so there is no detail page to fetch.
 type fourDayWeekHTTP interface {
 	JSONGetter
-	HTMLGetter
 }
 
 const (
 	// fourDayWeekListURL pages the public listing; limit=100 is the largest page the API honours.
-	fourDayWeekListURL = "https://4dayweek.io/api/jobs?page=%d&limit=100"
-	// fourDayWeekJobURL is the public job page, keyed by slug — the outbound apply link.
+	// /api/v2 is the path robots.txt allows — see the type doc.
+	fourDayWeekListURL = "https://4dayweek.io/api/v2/jobs?page=%d&limit=100"
+	// fourDayWeekJobURL is the public job page, keyed by slug. v2 also returns the URL inline;
+	// this is the fallback for a posting that omits it.
 	fourDayWeekJobURL = "https://4dayweek.io/job/%s"
 	// fourDayWeekMaxPages bounds pagination so a feed that never reports has_more=false cannot
 	// loop forever. The catalogue is ~21k postings at 100/page, so this leaves ample headroom.
@@ -58,83 +59,62 @@ type fourDayWeekLocation struct {
 	IsPrimary bool   `json:"is_primary"`
 }
 
-// fourDayWeekPosting is one posting from the list API (facets inline, no body, no apply link).
+// fourDayWeekPosting is one posting from the v2 list API: the structured facets, the body and
+// the canonical URL, all inline.
 type fourDayWeekPosting struct {
-	ID              string                `json:"id"`
-	Slug            string                `json:"slug"`
-	Title           string                `json:"title"`
-	CompanyName     string                `json:"company_name"`
+	ID    string `json:"id"`
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+	// Company is an object in v2 (it was a bare company_name in the retired /api/jobs).
+	Company struct {
+		Name string `json:"name"`
+	} `json:"company"`
 	WorkArrangement string                `json:"work_arrangement"`
 	Level           string                `json:"level"`
 	Category        string                `json:"category"`
-	Posted          int64                 `json:"posted"`
+	PostedAt        string                `json:"posted_at"`
+	URL             string                `json:"url"`
+	Description     string                `json:"description"`
 	Locations       []fourDayWeekLocation `json:"locations"`
 	Stack           []struct {
 		Name string `json:"name"`
 	} `json:"stack"`
 }
 
-// Fetch lists the board and hydrates each posting from its page, keeping only the postings whose
-// full description 4dayweek serves for free. A posting whose body is Pro-gated (no article.prose)
-// or whose page fetch fails is dropped rather than ingested as a blank card — so a locked posting
-// never reaches the catalogue, and one that later unlocks (or re-locks) is reflected on the next
-// crawl. Detail fetches run under the shared bounded worker pool.
+// Fetch lists the board. v2 carries every field a Job needs, so there is no second pass: a
+// posting is either usable as listed or dropped by toJob.
 func (s fourDayWeek) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	postings, err := s.crawl(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(postings, defaultDetailWorkers, func(p fourDayWeekPosting) (Job, bool) {
-		job, ok := p.toJob()
-		if !ok {
-			return Job{}, false
+	jobs := make([]Job, 0, len(postings))
+	for _, p := range postings {
+		if job, ok := p.toJob(); ok {
+			jobs = append(jobs, job)
 		}
-		desc, ok := s.detail(ctx, p.Slug)
-		if !ok {
-			return Job{}, false // Pro-gated or body-less — drop, never ingest a blank card
-		}
-		job.Description = desc
-		return job, true
-	}), nil
+	}
+	return jobs, nil
 }
 
 // crawl pages the list feed and returns every raw posting — the list walk behind Fetch.
 func (s fourDayWeek) crawl(ctx context.Context) ([]fourDayWeekPosting, error) {
 	var postings []fourDayWeekPosting
 	for page := 1; page <= fourDayWeekMaxPages; page++ {
+		// v2 names the array "data"; the retired /api/jobs called it "jobs".
 		var resp struct {
-			Jobs    []fourDayWeekPosting `json:"jobs"`
+			Data    []fourDayWeekPosting `json:"data"`
 			HasMore bool                 `json:"has_more"`
 		}
 		if err := s.http.GetJSON(ctx, fmt.Sprintf(fourDayWeekListURL, page), &resp); err != nil {
 			return nil, fmt.Errorf("4dayweek: page %d: %w", page, err)
 		}
-		postings = append(postings, resp.Jobs...)
-		if len(resp.Jobs) == 0 || !resp.HasMore {
+		postings = append(postings, resp.Data...)
+		if len(resp.Data) == 0 || !resp.HasMore {
 			break
 		}
 	}
 	return postings, nil
-}
-
-// detail fetches a posting's page and extracts its description from the article.prose container
-// the site renders the body in. It returns ok=false on a failed request or when article.prose is
-// absent — the signal that the posting is Pro-locked (the page shows an "Unlock with Pro" notice
-// instead of the body) or genuinely bodyless — so Fetch drops it.
-func (s fourDayWeek) detail(ctx context.Context, slug string) (string, bool) {
-	root, err := s.http.GetHTML(ctx, fmt.Sprintf(fourDayWeekJobURL, slug))
-	if err != nil {
-		return "", false
-	}
-	article := firstByClass(root, "prose")
-	if article == nil {
-		return "", false
-	}
-	body := sanitizeHTML(innerHTML(article))
-	if body == "" {
-		return "", false
-	}
-	return body, true
 }
 
 // toJob maps a posting to a Job, returning ok=false for an unusable posting (no native id,
@@ -143,28 +123,33 @@ func (s fourDayWeek) detail(ctx context.Context, slug string) (string, bool) {
 // values it does not state (or that have no clean equivalent) are left empty for the pipeline's
 // dictionaries to decide.
 func (p fourDayWeekPosting) toJob() (Job, bool) {
-	if p.ID == "" || p.Slug == "" || p.CompanyName == "" {
+	if p.ID == "" || p.Slug == "" || p.Company.Name == "" {
 		return Job{}, false
 	}
 	names := make([]string, 0, len(p.Stack))
 	for _, s := range p.Stack {
 		names = append(names, s.Name)
 	}
+	url := p.URL
+	if url == "" {
+		url = fmt.Sprintf(fourDayWeekJobURL, p.Slug)
+	}
 	return Job{
-		ExternalID: p.ID,
-		URL:        fmt.Sprintf(fourDayWeekJobURL, p.Slug),
-		Title:      p.Title,
-		Company:    p.CompanyName,
-		Location:   p.location(),
-		Remote:     p.WorkArrangement == "remote",
-		WorkMode:   fourDayWeekWorkMode(p.WorkArrangement),
-		Seniority:  fourDayWeekSeniority(p.Level),
-		Category:   fourDayWeekCategory(p.Category),
+		ExternalID:  p.ID,
+		URL:         url,
+		Title:       p.Title,
+		Company:     p.Company.Name,
+		Description: sanitizeHTML(p.Description),
+		Location:    p.location(),
+		Remote:      p.WorkArrangement == "remote",
+		WorkMode:    fourDayWeekWorkMode(p.WorkArrangement),
+		Seniority:   fourDayWeekSeniority(p.Level),
+		Category:    fourDayWeekCategory(p.Category),
 		// Canonicalize, not Parse: names are already-discrete asserted tech names, not
 		// prose — Parse's corroboration rule would drop an unambiguous single-word name
 		// for lack of a second strong term.
 		Skills:   skilltag.Canonicalize(names),
-		PostedAt: parseEpochSeconds(p.Posted),
+		PostedAt: parseRFC3339(p.PostedAt),
 	}, true
 }
 
