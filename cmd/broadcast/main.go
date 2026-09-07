@@ -1,9 +1,9 @@
 // Command broadcast sends one campaign to the whole audience: one letter, once,
 // on a date someone picked.
 //
-//	./broadcast -campaign hiring-season-september -dry-run   # how many would receive it
-//	./broadcast -campaign hiring-season-september            # send one capped batch
-//	./broadcast -campaign hiring-season-september -to me@example.com   # send only to me
+//	./broadcast -campaign discord-invite -dry-run   # how many would receive it
+//	./broadcast -campaign discord-invite            # send one capped batch
+//	./broadcast -campaign discord-invite -to me@example.com   # send only to me
 //
 // It is not a timer worker in the usual sense. It is scheduled once, for the day of
 // the announcement, and then it is done — which is also why it refuses to guess:

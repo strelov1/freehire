@@ -1,6 +1,7 @@
 // Command onboarding is the founder signup-sequence worker. One run does a single
-// pass over the four steps — greet, introduce the filter panel, ask about the
-// missing alert, talk about the project — sending each eligible mail once and
+// pass over the five steps — greet, introduce the filter panel, ask about the
+// missing alert, introduce the extension, talk about the project — sending each
+// eligible mail once and
 // recording it. Run it on a schedule (hourly is plenty; the first step is the only
 // time-sensitive one) and it exits.
 //

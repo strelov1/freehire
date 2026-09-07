@@ -72,6 +72,7 @@ func copyAssets(dir string) error {
 		"email-logo.png",
 		"email-icon-github.png",
 		"email-icon-discord.png",
+		"email-icon-chrome.png",
 		"email-icon-linkedin.png",
 		"ilya.jpg",
 	} {

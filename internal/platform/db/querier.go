@@ -2935,6 +2935,11 @@ type Querier interface {
 	// structured columns (see migration 0135) rather than the lexicographic free-text column
 	// 0047 originally indexed — period_sort.go's Go-side re-sort no longer exists.
 	ListExperienceEmployments(ctx context.Context, userID int64) ([]ListExperienceEmploymentsRow, error)
+	// Greeted a while ago: an introduction to the browser extension. Unconditional like
+	// advanced_search above, and for a stricter reason — nothing here records whether an
+	// account has already installed it, so "only those without it" is not a query this
+	// schema can answer.
+	ListExtensionCandidates(ctx context.Context, arg ListExtensionCandidatesParams) ([]ListExtensionCandidatesRow, error)
 	// The whole snapshot, ordered by facet then count DESC so the reader can take the
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.

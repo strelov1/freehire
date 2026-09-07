@@ -14,7 +14,7 @@
   import { CLI_INSTALL, CLI_REPO } from '$lib/cliLinks';
   import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
   import { starterSuggestions } from '$lib/suggestions';
-  import { Button, SectionLabel } from '$lib/ui';
+  import { Button, ProviderIcon, SectionLabel } from '$lib/ui';
   import type { CatalogScale, FacetCounts } from '$lib/types';
 
   // The homepage. One search box on an otherwise empty screen, and under it — for the
@@ -360,6 +360,7 @@
 
       <div class="mt-auto flex flex-wrap items-center gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="md">
+          <ProviderIcon provider="chrome" class="size-4" />
           Add to Chrome
         </Button>
         <a

@@ -28,6 +28,18 @@ import (
 	"strings"
 )
 
+// DiscordURL is the community invite. It lives here, in the shell, because the
+// shell's own footer carries it into every mail we send — and because the letters
+// that also name it in their copy have to name the same room. It was mirrored in
+// two mail packages before that, and a mirror is a link that can disagree with
+// itself.
+//
+// It must be an invite that never expires and has no use cap. A mail is read weeks
+// after it is sent, and a default Discord invite dies after seven days: the letter
+// would keep going out and keep landing on "Invite Invalid", which looks exactly
+// like a project that has folded.
+const DiscordURL = "https://discord.gg/Cghjh3dA5N"
+
 // Palette, converted from design-system/tokens/color.tokens.json. The tokens are
 // authored in oklch and mail clients cannot parse that function, so the values are
 // converted to sRGB hex here. Keep this block in step with the tokens by hand: a
@@ -267,6 +279,7 @@ const darkRules = `
   .m-quote  { color: ` + darkMuted + ` !important; border-left-color: ` + darkBorder + ` !important; }
   .m-code   { background: ` + darkBrandMuted + ` !important; color: ` + darkBrandStrong + ` !important; }
   .m-tile   { background: ` + darkBrandMuted + ` !important; color: ` + darkBrandStrong + ` !important; }
+  .m-link   { color: ` + darkBrandStrong + ` !important; }
   .m-btn    { background: ` + darkBrand + ` !important; }
   .m-btn-a  { color: ` + darkBrandFg + ` !important; }
   .m-logo   { filter: invert(1); }
@@ -311,6 +324,7 @@ var shell = template.Must(template.New("shell").Parse(`<!DOCTYPE html>
 
       <tr><td class="m-muted" style="padding:16px 8px 0 8px;font-size:12px;line-height:1.6;color:` + colorMuted + `;">
         <a href="{{.SiteURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:none;">freehire.me</a> — job search without the noise.
+        <br><a href="` + DiscordURL + `" class="m-muted" style="color:` + colorMuted + `;text-decoration:underline;">Job hunting with us on Discord</a>
         {{if not .Body.Essential}}<br><a href="{{.SettingsURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:underline;">Turn off these notifications</a>{{end}}
       </td></tr>
 

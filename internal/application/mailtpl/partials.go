@@ -55,6 +55,8 @@ var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 
 {{define "quote"}}<blockquote class="m-quote" style="margin:0 0 14px 0;padding:2px 0 2px 14px;border-left:3px solid ` + colorBorder + `;font-size:15px;line-height:1.6;color:` + colorMuted + `;">{{.}}</blockquote>{{end}}
 
+{{define "p-link"}}<p class="m-ink" style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:` + colorInk + `;">{{.Text}} <a href="{{.URL}}" class="m-link" style="color:` + colorBrandStrong + `;text-decoration:underline;">{{.Label}}</a></p>{{end}}
+
 {{define "lead"}}<p class="m-ink" style="margin:0 0 14px 0;font-size:17px;line-height:1.5;font-weight:600;color:` + colorInk + `;">{{.}}</p>{{end}}
 
 {{define "icon-button"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 14px 0;"><tr><td class="m-btn" style="background:` + colorBrand + `;border-radius:8px;"><a href="{{.URL}}" class="m-btn-a" style="display:inline-block;padding:11px 20px;font-size:15px;font-weight:600;color:` + colorBrandFg + `;text-decoration:none;"><img src="{{.IconURL}}" width="18" height="18" alt="" class="m-logo" style="vertical-align:-3px;border:0;padding-right:9px;">{{.Label}}</a></td></tr></table>{{end}}
@@ -91,6 +93,21 @@ type IconLink struct {
 	URL     string
 	Label   string
 	IconURL string
+}
+
+// TextLink is the argument to "p-link": a sentence that ends in a link.
+//
+// It exists because a mail gets exactly one button. A second filled button beside
+// the first does not read as "and also" — it reads as two equal choices, and the
+// reader makes neither. The secondary ask therefore goes out as a line of prose
+// with the link inside it, which is also the only shape a partial can offer: "p"
+// escapes its argument, so a link cannot be smuggled into one.
+type TextLink struct {
+	// Text is the lead-in, rendered before the link and escaped.
+	Text string
+	URL  string
+	// Label is the linked words.
+	Label string
 }
 
 // Job is the argument to the "job-row" partial: one vacancy as every mail shows it.
@@ -135,5 +152,8 @@ var funcs = template.FuncMap{
 	"mailLink": func(url, label string) Link { return Link{URL: url, Label: label} },
 	"mailIconLink": func(url, label, iconURL string) IconLink {
 		return IconLink{URL: url, Label: label, IconURL: iconURL}
+	},
+	"mailTextLink": func(text, url, label string) TextLink {
+		return TextLink{Text: text, URL: url, Label: label}
 	},
 }
