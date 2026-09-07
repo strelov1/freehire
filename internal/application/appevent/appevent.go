@@ -46,10 +46,18 @@ const (
 	// an application whose listing closed. Not trusted for day math: it records when we
 	// noticed, not an employer-side timing fact.
 	SourceSystem = "system"
+	// SourceAutoApply is cmd/auto-apply's own successful, unattended submission —
+	// distinct from SourceSystem so that "auto-apply submitted this" is a stated
+	// contract a reader can filter on, not an accident of SourceSystem happening to be
+	// paired with KindApplied nowhere else today.
+	SourceAutoApply = "auto_apply"
 )
 
 // Sources is the canonical, ordered source vocabulary.
-var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant, SourceCalendarGoogle, SourceSystem}
+var Sources = []string{
+	SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant,
+	SourceCalendarGoogle, SourceSystem, SourceAutoApply,
+}
 
 // MailSources is the mail three on their own — every source SourceForMail can return.
 //

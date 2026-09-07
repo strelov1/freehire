@@ -71,10 +71,10 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]autoapp
 // LockJobForApply first, then MarkJobApplied, is the exact same locked-transaction shape
 // jobtracking.QueriesRepository.MarkApplied already runs for a candidate's own manual apply
 // — reused directly rather than re-derived, so the applied_count/ledger guarantee is the one
-// guarantee, not a second implementation of it. EventSource is appevent.SourceSystem: this
-// submission was not typed by the candidate or drafted by the assistant, it is the platform
-// acting on their behalf — exactly what that source already means for an auto-expired
-// application in the other direction.
+// guarantee, not a second implementation of it. EventSource is appevent.SourceAutoApply, not
+// the shared SourceSystem: internal/engage/nudge's MATCH scan for a successful auto-apply
+// submission needs this to be a stated, queryable fact rather than an accident of SourceSystem
+// happening to pair only with KindApplied here today.
 func (s *dbStore) Submit(ctx context.Context, c autoapply.Claimed) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -90,7 +90,7 @@ func (s *dbStore) Submit(ctx context.Context, c autoapply.Claimed) error {
 		UserID:      c.UserID,
 		JobID:       c.JobID,
 		At:          pgtype.Timestamptz{},
-		EventSource: appevent.SourceSystem,
+		EventSource: appevent.SourceAutoApply,
 	}); err != nil {
 		return fmt.Errorf("mark job %d applied for user %d: %w", c.JobID, c.UserID, err)
 	}

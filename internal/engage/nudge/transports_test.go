@@ -82,6 +82,71 @@ func TestEmailNotifier_InterviewPrepBatchLeadsToTheTrackingBoard(t *testing.T) {
 	}
 }
 
+// The three auto-apply outcome kinds are about an application, same as
+// follow-up/interview-prep, so they lead to the tracking board — never
+// /my/activity, unlike job-closed.
+func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
+	cases := []struct {
+		kind        string
+		wantSubject string
+	}{
+		{KindAutoApplySubmitted, "Submitted"},
+		{KindAutoApplyBlocked, "Needs your attention"},
+		{KindAutoApplyFailed, "Couldn't submit"},
+	}
+	for _, c := range cases {
+		t.Run(c.kind+"/single", func(t *testing.T) {
+			sender := &captureSender{}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+			ms := []Message{{Kind: c.kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
+			if err := n.Send(context.Background(), "email", "u@x.com", c.kind, ms); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+			if !strings.Contains(sender.subject, c.wantSubject) {
+				t.Errorf("subject = %q, want it to contain %q", sender.subject, c.wantSubject)
+			}
+			if !strings.Contains(sender.html, "/my/tracking") {
+				t.Errorf("html = %q, want the tracking-board destination", sender.html)
+			}
+		})
+		t.Run(c.kind+"/batch", func(t *testing.T) {
+			sender := &captureSender{}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+			if err := n.Send(context.Background(), "email", "u@x.com", c.kind, batchOf(c.kind, 2)); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+			if !strings.Contains(sender.subject, "2") {
+				t.Errorf("subject = %q, want the batch count", sender.subject)
+			}
+			if !strings.Contains(sender.html, "/my/tracking") {
+				t.Errorf("html = %q, want the tracking-board destination", sender.html)
+			}
+		})
+	}
+}
+
+func TestTelegramNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
+	for _, kind := range []string{KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed} {
+		t.Run(kind+"/single", func(t *testing.T) {
+			n := NewTelegramNotifier(nil, "https://freehire.me")
+			got := n.render(kind, []Message{{Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}})
+			if !strings.Contains(got, "Go Dev") || !strings.Contains(got, "Acme") {
+				t.Errorf("render = %q, want the job title and company", got)
+			}
+			if !strings.Contains(got, "/my/tracking") {
+				t.Errorf("render = %q, want the tracking-board link", got)
+			}
+		})
+		t.Run(kind+"/batch", func(t *testing.T) {
+			n := NewTelegramNotifier(nil, "https://freehire.me")
+			got := n.render(kind, batchOf(kind, 2))
+			if !strings.Contains(got, "<b>2</b>") {
+				t.Errorf("render = %q, want the batch count", got)
+			}
+		})
+	}
+}
+
 func TestTelegramNotifier_InterviewPrepBatchHeadlinesTheCount(t *testing.T) {
 	n := NewTelegramNotifier(nil, "https://freehire.me")
 	got := n.render(KindInterviewPrep, batchOf(KindInterviewPrep, 2))
@@ -97,7 +162,10 @@ func TestTelegramNotifier_InterviewPrepBatchHeadlinesTheCount(t *testing.T) {
 // The mail's button and the bot's tail read one rule, so they cannot point different
 // ways for the same kind.
 func TestBatchDestination_IsOneRuleForBothChannels(t *testing.T) {
-	for _, kind := range []string{KindFollowUp, KindInterviewPrep, KindJobClosed} {
+	for _, kind := range []string{
+		KindFollowUp, KindInterviewPrep, KindJobClosed,
+		KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed,
+	} {
 		path, _ := batchDestination(kind)
 		tg := NewTelegramNotifier(nil, "https://freehire.me").batchURL(kind)
 		mail, _ := NewEmailNotifier(&captureSender{}, "j@f.me", "https://freehire.me").batchCTA(kind)

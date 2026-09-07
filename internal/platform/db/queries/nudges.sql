@@ -51,6 +51,46 @@ WHERE a.applied_at IS NOT NULL
   AND j.closed_at IS NOT NULL
   AND j.closed_at > now() - make_interval(days => sqlc.arg(window_days)::int);
 
+-- name: ListAutoApplySubmittedCandidates :many
+-- application_events rows auto-apply itself wrote on a successful, unattended
+-- submission (kind='applied', source='auto_apply' — distinct from a candidate's
+-- own manual "did you apply?" confirmation, which is source='user'/'assistant').
+-- The queue row that drove the submission is deleted in the same transaction that
+-- writes this event, so this is the only durable trace to MATCH against. Bounded
+-- to a recency window on occurred_at for the same first-deploy reason as the
+-- other candidate scans.
+SELECT ev.user_id, ev.job_id, ev.occurred_at
+FROM application_events ev
+JOIN notification_settings ns ON ns.user_id = ev.user_id AND ns.enabled
+WHERE ev.kind = 'applied'
+  AND ev.source = 'auto_apply'
+  AND ev.retracted_at IS NULL
+  AND ev.job_id IS NOT NULL
+  AND ev.occurred_at > now() - make_interval(days => sqlc.arg(window_days)::int);
+
+-- name: ListAutoApplyBlockedCandidates :many
+-- Queue entries cmd/auto-apply permanently parked: a required question its
+-- unattended pass could not answer. blocked_at is write-once — nothing ever
+-- clears or re-sets it for the same row (auto_apply_queue_claimable_idx excludes
+-- any row once it is set) — so this can never re-observe a second, different
+-- transition for the same row. Bounded to a recency window on blocked_at for the
+-- same first-deploy reason as the other candidate scans.
+SELECT q.user_id, q.job_id, q.blocked_at
+FROM auto_apply_queue q
+JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
+WHERE q.blocked_at IS NOT NULL
+  AND q.blocked_at > now() - make_interval(days => sqlc.arg(window_days)::int);
+
+-- name: ListAutoApplyFailedCandidates :many
+-- Queue entries cmd/auto-apply dead-lettered after exhausting retries. Same
+-- write-once guarantee as blocked, via failed_at. Bounded to a recency window on
+-- failed_at for the same first-deploy reason as the other candidate scans.
+SELECT q.user_id, q.job_id, q.failed_at
+FROM auto_apply_queue q
+JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
+WHERE q.failed_at IS NOT NULL
+  AND q.failed_at > now() - make_interval(days => sqlc.arg(window_days)::int);
+
 -- name: RecordNudge :execrows
 -- Record one matched nudge candidate. The unique index on
 -- (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the
