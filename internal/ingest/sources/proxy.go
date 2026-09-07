@@ -17,7 +17,10 @@ import (
 // Only providers served by the standard client belong here — the fingerprint-client
 // providers (bayt/gulftalent) would need proxy support wired into fingerprintHTTP instead.
 var proxiedProviders = map[string]func(HTTPClient) Source{
-	"eightfold": func(c HTTPClient) Source { return NewEightfold(c) },
+	// Also paced (pacedEightfoldGetter): the proxy alone recovers an outright IP blocklist,
+	// but eightfold's failures are volume rate-limiting — its own ~290-req/window cap, spent
+	// by this crawl's own aggregate rate across the shared proxy IP. See pacer.go.
+	"eightfold": func(c HTTPClient) Source { return NewEightfold(pacedEightfoldGetter(c)) },
 	"wantapply": func(c HTTPClient) Source { return NewWantapply(c) },
 	// djinni.co IP-blocklists the prod datacenter IP: a fast crawl escalates to a hard "your
 	// IP has been blocked" page, while a residential IP is served the full JSON-LD listing.

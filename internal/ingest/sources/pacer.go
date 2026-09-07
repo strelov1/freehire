@@ -206,6 +206,89 @@ func pacedSeekPoster(c JSONPoster) JSONPoster {
 	}
 }
 
+// Eightfold rate-limits an IP to ~290 requests per window (see eightfold.go), and its crawl
+// egresses through the single shared proxy IP alongside a dozen other providers
+// (proxiedProviders) — so its own concurrency cap (eightfoldDetailWorkers) and retry backoff
+// are not enough on their own; the aggregate request START rate needs its own ceiling,
+// independent of how many boards run in parallel. September 2026: unpaced, ~44 of ~95 boards
+// were failing their LISTING call (both list-API generations 403ing), the shape of a window
+// already spent by the run's own volume rather than a hard IP blocklist (a direct request
+// elsewhere in the same run succeeds). The interval below is deliberately conservative — as
+// cautious as vagas's, the gentlest existing pace on this shared proxy — because the true
+// per-window budget eightfold enforces, and how much of it the other proxied providers'
+// concurrent traffic already spends, are both unmeasured. Tune from observed convergence
+// (the board_health unhealthy count for this provider), downward while boards still fail
+// their listing call and upward only while none do.
+const (
+	eightfoldRequestInterval = time.Second // ~1 req/s
+	eightfoldRequestBurst    = 1
+)
+
+// pacedEightfoldGetter wraps a getter with a fresh limiter shared across one registry build,
+// so every board's listing pages and detail fan-out in a run compete for the same token
+// bucket — both paths hit the same rate-limited edge.
+func pacedEightfoldGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(eightfoldRequestInterval), eightfoldRequestBurst),
+	}
+}
+
+// ADP Workforce Now serves ~2,800 boards from the single shared host workforcenow.adp.com, and
+// the adapter re-lists and re-fetches EVERY requisition's detail on every hourly run (it has no
+// HydratingSource seen-skip yet), so a run's volume is large and grows with the catalogue. Fired
+// unpaced at defaultConcurrency (8 boards at once, each with its own detail fan-out), September
+// 2026 measured 2,441 of 2,798 boards taking a 429 on their listing call alone — the shape of a
+// window spent by the run's own aggregate rate against one shared host, not a hard IP blocklist
+// (workforcenow.adp.com serves the same prod IP fine outside the crawl's own burst). The rate
+// below is conservative — deliberately below what the run needs to finish covering the whole
+// catalogue inside one hourly window, because under-shooting only leaves boards uncrawled this
+// hour (they keep their last-known state and are retried next run) while over-shooting
+// re-triggers the exact 429 storm this exists to stop; a true FetchNew/seen-skip (like the other
+// hydrating adapters) is the real fix for run time; see freehire#status-2026-09-06. Tune from
+// observed convergence (the board_health unhealthy count for this provider), downward while
+// boards still 429 and upward only while none do.
+const (
+	adpRequestInterval = 200 * time.Millisecond // ~5 req/s
+	adpRequestBurst    = 2
+)
+
+// pacedADPGetter wraps a getter with a fresh limiter shared across one registry build, so every
+// board's listing pages and detail fan-out in a run compete for the same token bucket.
+func pacedADPGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(adpRequestInterval), adpRequestBurst),
+	}
+}
+
+// Phenom People serves ~95 boards, each its own vanity hostname (careers.blizzard.com,
+// careers.aegistherapies.com, ...) but — like eightfold's *.eightfold.ai tenants — all fronted
+// by the same underlying platform infrastructure, so the run's own aggregate volume across all
+// of them can trip one shared window. September 2026: 45 of ~95 boards took a 403 on their
+// listing POST during a run, while the same identical request against one of the failing
+// hostnames succeeded outside the crawl window minutes later — the shape of a self-inflicted
+// burst, not a per-tenant blocklist (a genuinely blocked host would still 403 in isolation).
+// Unpaced, defaultConcurrency (8 boards at once) times each board's own paginated fetch is
+// enough volume to trip it. The rate is conservative for the same reason every unmeasured pace
+// in this file is: the true budget is unknown, and under-shooting only lengthens a run while
+// over-shooting re-enters the 403s. Tune from observed convergence (the board_health unhealthy
+// count for this provider), downward while boards still 403 in isolation and upward only while
+// none do.
+const (
+	phenomRequestInterval = time.Second // ~1 req/s
+	phenomRequestBurst    = 1
+)
+
+// pacedPhenomGetter wraps a getter with a fresh limiter shared across one registry build, so
+// every board's paginated listing in a run competes for the same token bucket.
+func pacedPhenomGetter(c JSONPoster) JSONPoster {
+	return rateLimitedJSONPoster{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(phenomRequestInterval), phenomRequestBurst),
+	}
+}
+
 // concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
 // semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
 // the request START rate but lets slow requests pile up concurrently — this caps simultaneous
