@@ -792,7 +792,7 @@ func Register(app *fiber.App, cfg Config) {
 	billingH.register(api, mw)
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is
 	// not a purchase, and a deployment that sells nothing can still have a referral page.
-	promoH.register(api, mw, cfg.Throttler)
+	promoH.register(api, mw)
 	plansH.register(api)
 	usageH.register(api, mw)
 
