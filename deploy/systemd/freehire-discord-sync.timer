@@ -1,0 +1,19 @@
+[Unit]
+Description=timer: freehire-discord-sync hourly
+[Timer]
+# Hourly is the contract the feature is written to, not a round number: a lapsed
+# subscriber keeps the members-only channels until the next run, and an hour is the
+# longest that is worth accepting for a chat perk. Anything tighter would spend requests
+# on a catalogue that has not moved.
+#
+# Offset from freehire-billing-sync rather than sharing its minute: this worker reads the
+# entitlement columns that one writes, so running afterwards means a renewal reconciled at
+# the top of the hour reaches Discord in the same hour instead of the next.
+OnBootSec=15min
+OnUnitActiveSec=1h
+# Persistent=true, like billing-sync. A missed window is not a gap in a graph — it is a
+# lapsed subscriber still holding the role, or a new one still without it — and the work is
+# idempotent, so replaying one on boot can only correct state.
+Persistent=true
+[Install]
+WantedBy=timers.target

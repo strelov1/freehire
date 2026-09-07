@@ -8,7 +8,7 @@ const meta = {
   argTypes: {
     provider: {
       control: 'select',
-      options: ['google', 'github', 'telegram', 'linkedin', 'apple', 'discord'],
+      options: ['google', 'chrome', 'github', 'telegram', 'linkedin', 'apple', 'discord'],
     },
   },
 } satisfies Meta<typeof ProviderIcon>;
@@ -17,6 +17,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Google: Story = { args: { provider: 'google' } };
+export const Chrome: Story = { args: { provider: 'chrome' } };
 export const Github: Story = { args: { provider: 'github' } };
 export const Telegram: Story = { args: { provider: 'telegram' } };
 export const Linkedin: Story = { args: { provider: 'linkedin' } };

@@ -13,6 +13,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/ai/speech"
@@ -23,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/pii"
+	"github.com/strelov1/freehire/internal/engage/discordlink"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
@@ -328,6 +331,9 @@ func main() {
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
+
+		DiscordLinker:   buildDiscordLinker(cfg, pool),
+		DiscordClientID: cfg.DiscordClientID,
 		// Billing reads its own environment: the credentials are the provider's, nothing
 		// else in the fleet needs them, and an absent one means the subsystem is simply off.
 		Billing:     billing.ConfigFromEnv(),
@@ -374,6 +380,31 @@ func main() {
 // buildGmail wires the Connect-Gmail inbox from config: it needs the Google OAuth
 // client (reused from sign-in) and the 32-byte token-encryption key. Any piece
 // missing returns (nil, nil) — the feature stays off and the server runs unchanged.
+// buildDiscordLinker wires the paid-channel feature, or returns nil when it is not
+// configured — which is how the routes come to 404 and the SPA comes to omit the card. The
+// predicate lives in config so the server, the SPA and cmd/discord-sync cannot disagree
+// about whether the feature exists.
+// It returns the INTERFACE, not *discordlink.Service, and that is load-bearing: a nil
+// *Service placed in an interface field is not a nil interface, so the handler's
+// "unconfigured means unmounted" check would read false and the routes would mount onto a
+// service that panics on first use.
+func buildDiscordLinker(cfg config.Settings, pool *pgxpool.Pool) handler.DiscordLinker {
+	if !cfg.DiscordPaidAccessConfigured() {
+		return nil
+	}
+	return discordlink.NewService(
+		discordlink.NewPostgresStore(db.New(pool)),
+		discordlink.NewClient(discordlink.ClientConfig{
+			ClientID:     cfg.DiscordClientID,
+			ClientSecret: cfg.DiscordClientSecret,
+			BotToken:     cfg.DiscordBotToken,
+			GuildID:      cfg.DiscordGuildID,
+			PaidRoleID:   cfg.DiscordPaidRoleID,
+		}),
+		time.Now,
+	)
+}
+
 func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) {
 	g := cfg.OAuth["google"]
 	if g.ClientID == "" || g.ClientSecret == "" || len(cfg.GmailTokenKey) != 32 {

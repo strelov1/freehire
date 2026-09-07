@@ -1275,6 +1275,19 @@ export interface TelegramStatus {
   chat_id?: number;
 }
 
+/**
+ * Whether this account has linked a Discord account, and whether the paid role is on it.
+ *
+ * `enabled` is always true when the endpoint answers at all — the routes are not mounted on a
+ * deployment without Discord credentials, so an unconfigured server 404s rather than
+ * reporting a feature that half exists. The caller treats that 404 as "hide the card".
+ */
+export interface DiscordStatus {
+  enabled: boolean;
+  linked: boolean;
+  role_granted?: boolean;
+}
+
 /** What a résumé yields through the deterministic dictionaries: canonical skills and
  *  every specialization the résumé spans, plus the seniority grade. `skills` and
  *  `categories` are always arrays (empty when nothing resolved); `seniority` is omitted

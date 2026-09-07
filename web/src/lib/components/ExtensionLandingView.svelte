@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button, NumberedGrid, SectionLabel } from '$lib/ui';
+  import { Button, NumberedGrid, ProviderIcon, SectionLabel } from '$lib/ui';
   import { EXTENSION_FAQ } from '$lib/extensionFaq';
   import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
 
@@ -97,6 +97,7 @@
       </div>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="lg">
+          <ProviderIcon provider="chrome" class="mr-2 size-5" />
           Add to Chrome
         </Button>
         <Button href={resolve('/jobs')} variant="outline" size="lg">Browse jobs</Button>

@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { api, ApiError } from '$lib/api';
-  import type { GmailStatus } from '$lib/api';
+  import type { DiscordStatus, GmailStatus } from '$lib/api';
   import { notifications } from '$lib/notifications.svelte';
   import { onRouterReady } from '$lib/routerReady';
   import { Badge, Button, ConfirmDialog, ProviderIcon } from '$lib/ui';
@@ -152,18 +152,80 @@
     }
   }
 
-  // The verdict is read through onRouterReady, not onMount: it ends in a shallow
+  // --- Discord ---
+  let discord = $state<DiscordStatus | null>(null);
+  let discordBusy = $state(false);
+  let discordError = $state<string | null>(null);
+  let discordNotice = $state<{ ok: boolean; text: string } | null>(null);
+
+  const DISCORD_CONNECT_ERRORS: Record<string, string> = {
+    auth: 'Your session expired while you were on Discord. Sign in and try again.',
+    state: 'That connect link expired or was opened out of order. Start the connection again.',
+    denied: 'You declined the Discord permission, so nothing was connected.',
+    exchange: 'Discord did not finish handing over access. Try connecting again.',
+    // Its own message, because this one is the user's to resolve and "try again" would
+    // leave them retrying forever.
+    taken: 'That Discord account is already linked to another freehire account. Disconnect it there first.',
+  };
+
+  async function loadDiscord() {
+    try {
+      discord = await api.discordStatus();
+    } catch (e) {
+      // A 404 means this deployment has no Discord application configured, so the feature
+      // is not offered here at all — the card stays hidden rather than showing an error for
+      // something the user cannot act on.
+      if (e instanceof ApiError && e.status === 404) discord = null;
+      else discordError = errorMessage(e, 'Failed to load Discord status.');
+    }
+  }
+
+  function connectDiscord() {
+    window.location.href = '/api/v1/me/discord/connect';
+  }
+
+  async function disconnectDiscord() {
+    if (discordBusy) return;
+    discordBusy = true;
+    discordError = null;
+    try {
+      await api.discordUnlink();
+      await loadDiscord();
+    } catch (e) {
+      discordError = errorMessage(e, 'Could not disconnect Discord. Please try again.');
+    } finally {
+      discordBusy = false;
+    }
+  }
+
+  function readDiscordVerdict() {
+    const params = page.url.searchParams;
+    const failed = params.get('discord_error');
+    if (failed) {
+      discordNotice = { ok: false, text: DISCORD_CONNECT_ERRORS[failed] ?? 'Connecting Discord failed. Try again.' };
+    } else if (params.get('discord') === 'connected') {
+      discordNotice = { ok: true, text: 'Discord connected — the members-only channels are open to you now.' };
+    } else {
+      return;
+    }
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
+    replaceState(page.url.pathname, {});
+  }
+
+  // Both verdicts are read through onRouterReady, not onMount: each ends in a shallow
   // `replaceState` to scrub the OAuth result out of the address bar, and the router
-  // is not ready for one while this component is mounting. Returning from Google is
+  // is not ready for one while this component is mounting. Returning from a provider is
   // a full page load onto this exact URL, so that was every single time.
   onRouterReady(readGoogleVerdict);
+  onRouterReady(readDiscordVerdict);
 
   onMount(() => {
     void loadGmail();
+    void loadDiscord();
     void notifications.ensureLoaded();
   });
 
-  // Shared by every "already connected" badge below (Mail, Calendar, Telegram).
+  // Shared by every "already connected" badge below (Mail, Calendar, Telegram, Discord).
   const CONNECTED_BADGE_CLASS = 'border-brand-ring/40 text-brand-strong';
 </script>
 
@@ -311,6 +373,48 @@
       {/if}
       {#if tgError}
         <p class="mt-2 text-xs text-destructive">{tgError}</p>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- Discord. Absent entirely unless the deployment has a Discord application: the status
+       endpoint 404s then, and loadDiscord leaves `discord` null. -->
+  {#if discord?.enabled}
+    <div class="rounded-xl border border-border bg-card p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 text-sm font-medium">
+            <ProviderIcon provider="discord" class="h-4 w-4" /> Discord
+            {#if discord.linked}
+              <Badge variant="outline" class={CONNECTED_BADGE_CLASS}>Connected</Badge>
+            {/if}
+          </div>
+          <p class="mt-1 text-xs text-muted-foreground">
+            {discord.linked
+              ? discord.role_granted
+                ? 'Connected — the members-only channels are open on the community server.'
+                : 'Connected. The members-only channels open up while your subscription is active.'
+              : 'Connect once to join the community server and unlock the members-only channels.'}
+          </p>
+        </div>
+        <div class="shrink-0">
+          {#if discord.linked}
+            <Button variant="outline" size="sm" disabled={discordBusy} onclick={disconnectDiscord}>
+              {discordBusy ? 'Disconnecting…' : 'Disconnect'}
+            </Button>
+          {:else}
+            <Button variant="primary" size="sm" onclick={connectDiscord}>Connect</Button>
+          {/if}
+        </div>
+      </div>
+
+      {#if discordNotice}
+        <p class={`mt-2 text-xs ${discordNotice.ok ? 'text-muted-foreground' : 'text-destructive'}`}>
+          {discordNotice.text}
+        </p>
+      {/if}
+      {#if discordError}
+        <p class="mt-2 text-xs text-destructive">{discordError}</p>
       {/if}
     </div>
   {/if}

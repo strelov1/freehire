@@ -162,8 +162,12 @@ var blocks = map[string][]string{
 	// same shape as broadcast and notify, differing only in that its audience is the
 	// public rather than an account. It reads the catalogue (job) and the view rollup
 	// (application), both below it.
+	// discordlink is here rather than beside billing for the same reason: what it does is
+	// outbound engagement (a role on a community server), and it reaches identity/billing
+	// only to ask which tier an account holds. Placing it in identity would invert that —
+	// billing would import a community integration — and the guard would say so.
 	"engage": {
-		"broadcast", "community", "companyfeedback", "emailnotify",
+		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify",
 		"mailpreview", "notify", "nudge", "onboarding", "pushnotify", "referral",
 		"reminder", "report", "socialdigest", "subscription", "telegramnotify", "vote",
 		"webhooknotify",
