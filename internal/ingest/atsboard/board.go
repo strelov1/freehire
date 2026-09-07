@@ -639,10 +639,8 @@ func icimsBoardFromHost(host string) string {
 		return ""
 	}
 	label := strings.TrimSuffix(host, ".icims.com")
-	if !strings.Contains(label, ".") {
-		if slug, ok := strings.CutPrefix(label, "careers-"); ok && slug != "" {
-			return slug
-		}
+	if slug, ok := strings.CutPrefix(label, "careers-"); ok && slug != "" && !strings.Contains(label, ".") {
+		return slug
 	}
 	return host
 }
